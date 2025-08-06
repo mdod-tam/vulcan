@@ -50,6 +50,35 @@ Chart.defaults.animation = false
 Chart.defaults.responsive = false
 Chart.defaults.maintainAspectRatio = false
 
+// Override getComputedStyle to prevent infinite recursion in Chart.js
+const originalGetComputedStyle = window.getComputedStyle
+let recursionDepth = 0
+const MAX_RECURSION_DEPTH = 50
+
+window.getComputedStyle = function (element, pseudoElement) {
+  recursionDepth++
+
+  if (recursionDepth > MAX_RECURSION_DEPTH) {
+    recursionDepth = 0
+    // Return a minimal style object to break the recursion
+    return {
+      getPropertyValue: () => '',
+      display: 'block',
+      width: '0',
+      height: '0'
+    }
+  }
+
+  try {
+    const result = originalGetComputedStyle.call(this, element, pseudoElement)
+    recursionDepth--
+    return result
+  } catch (error) {
+    recursionDepth = 0
+    throw error
+  }
+}
+
 // Make Chart available globally for controllers
 window.Chart = Chart
 

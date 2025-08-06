@@ -63,6 +63,9 @@ export default class extends ChartBaseController {
       this.ariaLabelValue,
       this.ariaDescriptionValue
     )
+
+    // IMPORTANT: Mount the canvas FIRST, before creating the chart
+    // This ensures the canvas is in the DOM when Chart.js initializes
     this.mountCanvas(canvas, desc)
 
     // 3) Grab the 2D drawing context
@@ -74,11 +77,13 @@ export default class extends ChartBaseController {
     // 4) Turn string values into numbers (with fallback to 0)
     const numericData = this.prepareChartData()
 
-    // 5) Use responsive overrides (animations controlled globally)
-    const responsiveOverrides = {}
-
-    // 6) Custom plugin/scale settings (legends, tooltips, axis labels, etc.)
+    // 5) Custom plugin/scale settings (legends, tooltips, axis labels, etc.)
     const customOptions = {
+      // Explicitly set responsive to false to match global defaults
+      responsive: false,
+      maintainAspectRatio: false,
+      // Disable animations to prevent performance issues
+      animation: false,
       plugins: {
         legend: {
           display: true,
@@ -87,6 +92,7 @@ export default class extends ChartBaseController {
           }
         },
         tooltip: {
+          enabled: true,
           callbacks: {
             label: function (context) {
               return "$" + context.raw.toLocaleString()
@@ -124,30 +130,32 @@ export default class extends ChartBaseController {
       }
     }
 
-    // 7) Merge everything: base defaults → responsive overrides → our custom bits
+    // 6) Merge with base options
     const baseOptions = this.getDefaultOptions()
-    const finalOptions = this.mergeOptions(
-      baseOptions,
-      Object.assign({}, responsiveOverrides, customOptions)
-    )
+    const finalOptions = this.mergeOptions(baseOptions, customOptions)
 
-    // 8) Finally instantiate the Chart
-    this.chartInstance = new Chart(ctx, {
-      type: this.typeValue,
-      data: {
-        labels: Object.keys(numericData),
-        datasets: [
-          {
-            label: this.datasetLabelValue,
-            data: Object.values(numericData),
-            backgroundColor: "rgba(79, 70, 229, 0.7)",
-            borderColor: "rgba(79, 70, 229, 1)",
-            borderWidth: 2
-          }
-        ]
-      },
-      options: finalOptions
-    })
+    // 7) Finally instantiate the Chart
+    try {
+      this.chartInstance = new Chart(ctx, {
+        type: this.typeValue,
+        data: {
+          labels: Object.keys(numericData),
+          datasets: [
+            {
+              label: this.datasetLabelValue,
+              data: Object.values(numericData),
+              backgroundColor: "rgba(79, 70, 229, 0.7)",
+              borderColor: "rgba(79, 70, 229, 1)",
+              borderWidth: 2
+            }
+          ]
+        },
+        options: finalOptions
+      })
+    } catch (error) {
+      console.error("Failed to create chart instance:", error)
+      this.handleError("Failed to create chart", error)
+    }
   }
 
   prepareChartData() {

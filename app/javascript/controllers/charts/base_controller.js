@@ -52,9 +52,17 @@ class ChartBaseController extends Controller {
     // When responsive: false, Chart.js requires the canvas to have explicit dimensions.
     // We set them here based on the container's calculated width and the specified height.
     // This prevents Chart.js from entering its own measurement logic, which causes recursion.
-    canvas.width = this.element.clientWidth
-    canvas.height = this.chartHeightValue
-    
+    // Use offsetWidth/offsetHeight for more reliable dimensions
+    const containerWidth = this.element.offsetWidth || this.element.clientWidth || 800
+    const containerHeight = this.chartHeightValue || 300
+
+    canvas.width = containerWidth
+    canvas.height = containerHeight
+
+    // Set explicit style dimensions to prevent Chart.js from trying to calculate them
+    canvas.style.width = `${containerWidth}px`
+    canvas.style.height = `${containerHeight}px`
+
     // Add accessibility attributes
     canvas.setAttribute("role", "img")
     canvas.setAttribute("aria-label", ariaLabel)
@@ -80,12 +88,12 @@ class ChartBaseController extends Controller {
   mountCanvas(canvas, desc) {
     // Clear container and mount canvas with description
     this.element.textContent = ""
-    
+
     // Add fallback content inside canvas for accessibility (Chart.js docs recommendation)
     const fallback = document.createElement("p")
     fallback.textContent = canvas.getAttribute("aria-label") || "Chart data visualization"
     canvas.appendChild(fallback)
-    
+
     this.element.appendChild(canvas)
     this.element.appendChild(desc)
   }
