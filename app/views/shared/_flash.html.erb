@@ -26,7 +26,7 @@
     <%# Traditional Rails flash messages (visible HTML) %>
     <div class="flash-messages" aria-live="polite">
       <% flash.each do |type, message| %>
-        <div role="alert" class="flash-message flash-<%= type %> <%= flash_mode == :both ? 'mb-2 p-3 rounded' : '' %>" data-testid="flash-<%= type %>">
+        <div role="alert" class="flash-message flash-<%= type %> mb-4" data-testid="flash-<%= type %>">
           <%= message %>
         </div>
       <% end %>

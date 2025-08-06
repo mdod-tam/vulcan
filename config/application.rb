@@ -38,6 +38,6 @@ module MatVulcan
     # Flash message configuration
     # Options: :toast (JavaScript notifications), :traditional (Rails HTML), :both
     # Default: :toast for normal environments, :both for test environment
-    # config.flash_mode = :traditional  # Uncomment to use traditional Rails flash
+    config.flash_mode = :traditional  # Use traditional Rails flash messages
   end
 end
