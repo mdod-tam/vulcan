@@ -1,118 +1,61 @@
 # Vulcan: Maryland Accessible Telecommunications CRM
 
-Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telecommunications (MAT) workflows. 
+Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telecommunications (MAT) workflows.
 
 ## Features
 
-1. **Online Application Process**
-   - Digital application submission with real-time validation
-   - Paper application processing and uploads
-   - Document upload and verification with multiple submission methods
-   - Application status tracking with comprehensive audit trails
-   - Guardian/dependent application management
+1. **Applications (Portal + Paper)**
+   - Portal flow with autosave and inline validation
+   - Admin-only paper path guarded by `Current.paper_context` (allows proof approval without a file)
+   - Status tracking with comprehensive audit trails
+   - Guardian/dependent application support
 
-2. **Guardian Relationship Management**
-   - Guardian-dependent relationship establishment and tracking
-   - Multi-user application workflows (guardians applying for dependents)
-   - Comprehensive relationship validation and security controls
-   - Admin interface for relationship management
+2. **Guardian & Dependent Management**
+   - Explicit `GuardianRelationship` records (many-to-many)
+   - Contact strategies for dependents (own vs guardian email/phone)
+   - Notifications for dependent apps route to the managing guardian
 
-3. **Medical Certification System**
-   - Automated certification requests to medical providers
-   - Multi-channel provider communication (email, fax)
-   - Document upload and review workflows
-   - Email delivery tracking with Postmark integration
-   - Comprehensive audit trails and status tracking
+3. **Proofs**
+   - Unified `ProofAttachmentService` for web, paper, and email (fax supported for outbound only)
+   - Resubmission and rate-limit policies; robust error handling
+   - Centralized approval/rejection via reviews with audit logging
 
-4. **Proof Attachment System**
-   - Unified document attachment service for all submission methods
-   - Support for web uploads, email submissions, and faxed documents
-   - Transaction-safe file operations with comprehensive error handling
-   - Proof resubmission workflows with rate limiting
-   - Automated metrics and failure monitoring
+4. **Medical Certification**
+   - Request and track provider responses
+   - Channels: Email (automated via Action Mailbox), Fax (outbound only; inbound handled manually), Mail (admin scan/upload)
+   - Integrated with audit events and notifications
 
-5. **Evaluation Management**
-   - Scheduling and tracking evaluations
-   - Training session management
-   - Evaluator assignment and availability tracking
-   - Documentation of evaluation outcomes
+5. **Notifications**
+   - Email via `NotificationService` + database-backed templates
+   - In-app uses Rails flash (no JS toast layer). Email is the only implemented channel today
 
-6. **Voucher System**
-   - Secure voucher generation, assignment, and redemption
-   - Vendor portal for redeeming vouchers and managing products
-   - Automated invoice generation for vendor payments
+6. **Audit & Events**
+   - Central `AuditEventService` + `Applications::EventDeduplicationService`
+   - Deduplicated audit & event history used across admin timelines and dashboards
 
-7. **Program Policy Enforcement**
-   - Automated eligibility checks with real-time validation
-   - Waiting period enforcement
-   - Training session limits
-   - Income verification rules with Federal Poverty Level (FPL) threshold validation
+7. **Vouchers & Vendors**
+   - Voucher issuance and redemption with security controls
+   - Vendor workflows including W9 review and invoicing
 
-8. **Constituent Portal**
-   - Application status checking with detailed progress tracking
-   - Document submission and resubmission
-   - Dependent management for guardians
-   - Appointment scheduling
-   - Profile management with audit logging
+8. **Admin & Reporting**
+   - Dashboards, filters, timelines, and pain-point analysis for draft drop-off
 
-9. **Two-Factor Authentication**
-   - WebAuthn (security keys, biometrics), TOTP, and SMS verification
-   - Standardized session management built off of `authentication-zero` skeleton
-
-10. **Unified Notification System**
-    - Multi-channel delivery to constituents: Email, physical letters, SMS, and in-app flash alerts
-    - Template-based generation for both emails and printable letters (PDF) with versioning 
-    - Centralized print queue management for batch processing
-    - Delivery and open tracking with robust failure and bounce handling
-
-11. **Advanced Admin Portal**
-    - Application dashboard with real-time application pipeline metrics and charts
-    - Fiscal year reporting for applications, vouchers, and vendor activity
-    - Detailed, filterable views for all system entities
-    - Secure interfaces for managing users, roles, and system policies
-
-12. **Audit & Event System**
-    - Audit trails for application creation, submission, and status changes
-    - Audit trails for proof submission, review, approval, and rejection
-    - Audit trails for medical certification requests and responses
-    - Audit trails for voucher generation, assignment, redemption, and cancellation
-    - Audit trails for vendor W9 review and approval processes
-    - Audit trails for training session scheduling, completion, and status changes
-    - Audit trails for evaluation assignments and additional information requests
-    - Audit trails for all policy changes and system configuration updates
-    - Audit trails for email delivery tracking, bounces, and failures
-    - Audit trails for user profile updates and security key recovery
-    - Intelligent event deduplication to provide a clean, readable history
-    - Centralized logging services for consistency and reliability
+9. **Security & Authentication**
+   - 2FA: WebAuthn, TOTP, and SMS; standardized flows and auditing
 
 ## Current Implementation Status
 
-- ✅ Authentication system (using Rails' built-in authentication)
-- ✅ Two-factor authentication (WebAuthn, TOTP, SMS)
-- ✅ Basic CRUD operations
-- ✅ Core views and layouts
-- ✅ Admin dashboard with reporting and charts
-- ✅ Test data seeding
-- ✅ User role management (Admin, Evaluator, Constituent, Vendor, Trainer, Medical Provider)
-- ✅ Role-capabilities system with Stimulus controllers for toggling capabilities
-- ✅ Guardian relationship management system
-- ✅ Medical certification system with email tracking
-- ✅ Proof attachment system with unified service architecture
-- ✅ Postmark API integration for sending emails with delivery tracking
-- ✅ Print queue system for letter generation and management
-- ✅ Voucher management and redemption system
-- ✅ Vendor W9 review process
-- ✅ Vendor Portal implementation
-- ✅ Email/letter correspondence templates with PDF generation
-- ✅ Inbound email processing (via Action Mailbox)
-- ✅ Communication preference system (email/letter)
-- ✅ Enhanced vendor transaction tracking
-- ✅ Real-time income threshold validation
-- ✅ Comprehensive audit logging with intelligent event deduplication
-- ⏳ HIPAA compliant document signing system for Disability Cerification Forms (in progress)
-- ⏳ Document OCR processing (planned)
-- ⏳ Enhanced reporting system (in progress)
-- ⏳ Enhanced training assignment, tracking, analytics, workflow and communications
+- ✅ 2FA (WebAuthn, TOTP, SMS) and standardized auth flows
+- ✅ Guardian/dependent relationships with contact strategies
+- ✅ Paper application path with `Current.paper_context`
+- ✅ Unified proof attachment + review with audits
+- ✅ Medical certification: email automation; fax outbound only
+- ✅ Action Mailbox for inbound emails
+- ✅ Voucher management and vendor workflows (incl. W9)
+- ✅ Admin dashboards, filters, and draft pain-point analysis
+- ✅ Comprehensive audit logging with event deduplication
+- ⏳ Inbound fax automation
+- ⏳ Enhanced reporting and duplicate-review admin UI
 
 ## Technical Stack
 
@@ -129,10 +72,11 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 
 ## Architecture
 
-- **Service-Oriented Architecture**: Core business logic is encapsulated in dedicated service objects (e.g., `ProofAttachmentService`, `PaperApplicationService`) for clarity and testability.
-- **Stimulus & Utility Services**: The front-end is powered by Stimulus controllers, supported by a suite of centralized JavaScript services for requests, charts, and UI events.
-- **CurrentAttributes for Context**: Leverages Rails' `Current` object to safely manage request-specific state, such as paper application context, without polluting models or controllers.
-- **Testing Suite**: A comprehensive Minitest suite with custom helpers for authentication, attachment mocking, and context management ensures high reliability.
+- **Service-Oriented**: Business logic lives in service objects (e.g., `ProofAttachmentService`, `Applications::PaperApplicationService`).
+- **Stimulus + JS Services**: Centralized `rails_request`, chart config, and target-safety mixin; Rails flash for in-app messages.
+- **CurrentAttributes**: Request context (e.g., `paper_context`) without polluting models/controllers.
+- **Audit Dedup**: `Applications::EventDeduplicationService` powers clean timelines.
+- **Testing**: Minitest with helpers for auth, Current, and attachments.
 
 ## Documentation
 
@@ -140,7 +84,11 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 - [Proof Review Process Guide](docs/features/proof_review_process_guide.md) - Detailed guide to the proof submission, review, and approval lifecycle.
 - [Guardian Relationship System](docs/development/guardian_relationship_system.md) - How guardian and dependent relationships are modeled and managed.
 - [Paper Application Architecture](docs/development/paper_application_architecture.md) - Deep dive into the admin-facing paper application workflow.
-- [Email System Guide](docs/infrastructure/email_system.md) - How inbound and outbound emails, templates, and letters work.
+- [Notification System](docs/features/notifications.md) - Email notifications and Rails flash patterns.
+- [Audit & Event Tracking](docs/features/audit_event_tracking.md) - Central logging and deduplication.
+- [JavaScript Architecture](docs/development/javascript_architecture.md) - Stimulus patterns and core services.
+- [Pain Point Tracking](docs/features/application_pain_point_tracking.md) - Draft drop-off analysis.
+- [Email System Guide](docs/infrastructure/email_system.md) - Inbound and outbound email, templates.
 - [Voucher Security Controls](docs/security/voucher_security_controls.md) - Security measures for the voucher system.
 - [Testing and Debugging Guide](docs/development/testing_and_debugging_guide.md) - Comprehensive guide for running and debugging the test suite.
 
@@ -222,8 +170,6 @@ After seeding, the following test users are available:
 5. Open a Pull Request
 
 ## License
-
-This project is licensed under the MIT License - see the LICENSE.md file for details.
 
 ## Acknowledgments
 
