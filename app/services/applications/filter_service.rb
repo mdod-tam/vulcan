@@ -26,6 +26,7 @@ module Applications
         .then { |result| apply_conditional_explicit_status_filter(result) }
         .then { |result| apply_conditional_date_range_filter(result) }
         .then { |result| apply_conditional_search_filter(result) }
+        .then { |result| apply_guardian_dependent_text_searches(result) }
         .then { |result| apply_guardian_relationship_filters(result) }
     end
 
@@ -121,6 +122,26 @@ module Applications
       )
     end
 
+    # Support text queries for guardian and dependent specific searches
+    def apply_guardian_dependent_text_searches(scope)
+      result = scope
+
+      if params[:managing_guardian_q].present?
+        q = "%#{params[:managing_guardian_q]}%"
+        # Explicit join to users as managing guardians
+        result = result.joins('INNER JOIN users mg_users ON mg_users.id = applications.managing_guardian_id')
+                       .where('mg_users.first_name ILIKE ? OR mg_users.last_name ILIKE ? OR mg_users.email ILIKE ?', q, q, q)
+      end
+
+      if params[:dependent_q].present?
+        q = "%#{params[:dependent_q]}%"
+        result = result.joins(:user)
+                       .where('users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ?', q, q, q)
+      end
+
+      result
+    end
+
     def apply_guardian_relationship_filters(scope)
       scope
         .then { |result| apply_managing_guardian_filter(result) }
@@ -152,7 +173,8 @@ module Applications
     end
 
     def apply_only_dependents_filter(scope)
-      return scope unless params[:only_dependent_apps] == 'true'
+      # Support both legacy only_dependent_apps=true and new for_minors checkbox
+      return scope unless params[:only_dependent_apps] == 'true' || params[:for_minors].present?
 
       scope.where.not(managing_guardian_id: nil)
     end
