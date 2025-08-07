@@ -10,11 +10,11 @@ An at-a-glance yet detailed map of MAT Vulcan’s major feature sets as of Dec 2
 |------|-------|---------------------|
 | 1. User requests cert | Constituent | **Application** (`medical_certification_status`) |
 | 2. Admin sends request | Admin | `Applications::MedicalCertificationService` → `Notification` |
-| 3. Provider returns doc | Provider | **Inbound** `MedicalCertificationMailbox` (email/fax) |
-| 4. Admin reviews doc | Admin | `MedicalCertificationReviewer` + `MedicalCertificationAttachmentService` |
-| 5. App auto- or manual-approves | System | `check_auto_approval_eligibility` |
+| 3. Provider returns doc | Provider | **Multiple channels**: Email (`MedicalCertificationMailbox`), Fax (**PARTIAL** - outbound only), Snail Mail (admin scan/upload) |
+| 4. Admin reviews doc | Admin | Admin UI → approve/reject via `ApplicationsController#show` |
+| 5. App auto- or manual-approves | System | Auto-approval when all proof types approved |
 
-*Provider channel order*: **fax** preferred → email fallback.  
+*Provider channels*: **Email** (automated), **Fax** (outbound automated, inbound admin processed), **Snail Mail** (admin processed).  
 *Audit*: every action logs `ApplicationStatusChange`, `Event`, and `Notification`.
 
 ---

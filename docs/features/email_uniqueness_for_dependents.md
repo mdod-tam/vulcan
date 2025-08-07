@@ -29,35 +29,48 @@ The `users` table includes dedicated contact fields for dependents to avoid uniq
 
 ### 2. Model Logic
 
-The `User` model includes logic to manage dependent-specific contact information:
+The `User` model includes logic to manage dependent-specific contact information through the `UserProfile` and `UserGuardianship` concerns:
 
-- **Encryption**: The `dependent_email` and `dependent_phone` fields are encrypted using `encrypts`.
-- **Validation**: The model validates the format of `dependent_email` and `dependent_phone` (for 10-digit US numbers).
-- **Helper Methods**:
-  - `effective_email`: Returns the dependent's own email if present, otherwise falls back to the primary email field (which would store the guardian's).
-  - `effective_phone`: Returns the dependent's own phone if present, otherwise falls back to the primary phone field.
-  - `has_own_contact_info?`: A boolean check to see if the dependent has their own contact information.
-  - `uses_guardian_contact_info?`: A boolean check to see if the dependent uses the guardian's contact information.
+- **Encryption**: The `dependent_email` and `dependent_phone` fields are encrypted using `encrypts` (implemented in `UserProfile` concern).
+- **Validation**: The model validates the format of `dependent_email` and `dependent_phone` (implemented in `UserProfile` concern).
+- **Helper Methods** (implemented in `UserGuardianship` concern):
+  - `effective_email`: Returns the dependent's own email if present, otherwise falls back to the guardian's email via `guardian_for_contact`.
+  - `effective_phone`: Returns the dependent's own phone if present, otherwise falls back to the guardian's phone via `guardian_for_contact`.
+  - `effective_phone_type`: Handles phone type logic for dependents.
+  - `effective_communication_preference`: Uses guardian's preference if user is a dependent.
+  - `guardian_for_contact`: Returns the primary guardian for contact purposes.
+
+**Note**: The `has_own_contact_info?` and `uses_guardian_contact_info?` methods mentioned in earlier documentation are not currently implemented in the codebase.
 
 The implementation provides a clear and secure way to handle different contact scenarios for dependents.
 
 ### 3. Paper Application Service
 
-The paper application service uses contact strategy parameters (`email_strategy`, `phone_strategy`) to determine how to handle a dependent's contact information. This approach avoids complex checkbox logic and validation bypasses.
+The paper application service (via `GuardianDependentManagementService`) uses contact strategy parameters (`email_strategy`, `phone_strategy`, `address_strategy`) to determine how to handle a dependent's contact information. This approach avoids complex checkbox logic and validation bypasses.
 
-- **Strategy-Based Logic**: The service checks the strategy parameter.
-  - If the strategy is `'guardian'`, the dependent is assigned the guardian's contact information, and a system-generated unique primary email/phone is created to satisfy database constraints.
+- **Strategy-Based Logic**: The service checks the strategy parameters in `apply_contact_strategies` method:
+  - If the strategy is `'guardian'`, the dependent is assigned the guardian's contact information, and a system-generated unique primary email/phone is created to satisfy database constraints (e.g., `dependent-{uuid}@system.matvulcan.local`).
   - If the strategy is `'dependent'`, the service uses the provided dependent-specific contact information.
-- **Maintainability**: This design results in cleaner, more maintainable code with clear fallback logic.
+  - If the strategy is not specified, it defaults to guardian strategy with fallback logic.
+- **Address Strategy**: Also handles address information copying from guardian to dependent.
+- **Maintainability**: This design results in cleaner, more maintainable code with clear fallback logic and proper error handling.
 
 ### 4. Testing
 
-The test suite covers the contact strategy implementation, including:
-- Scenarios for a dependent having their own email and phone (`email_strategy: 'dependent'`).
-- Scenarios for a dependent sharing a guardian's email (`email_strategy: 'guardian'`).
-- Mixed scenarios (e.g., own email, guardian's phone).
-- Proper encryption and validation of dependent contact fields.
-- Fallback logic for when dependent contact information is left blank.
+The test suite covers the contact strategy implementation through factory patterns and service tests:
+
+- **Factory Traits** (`test/factories/guardian_relationships.rb`):
+  - `:dependent_shares_contact` - Sets dependent to use guardian's contact info
+  - Various phone type traits (`:dependent_with_voice_phone`, `:dependent_with_videophone`, etc.)
+
+- **Service Testing** - Tests cover:
+  - Scenarios for a dependent having their own email and phone (`email_strategy: 'dependent'`)
+  - Scenarios for a dependent sharing a guardian's email (`email_strategy: 'guardian'`)
+  - Mixed scenarios (e.g., own email, guardian's phone)
+  - Address strategy handling
+  - Proper encryption and validation of dependent contact fields
+  - Fallback logic for when dependent contact information is left blank
+  - System-generated unique emails for constraint avoidance
 
 ## Usage Patterns
 
@@ -73,7 +86,7 @@ dependent = User.create!(
 
 dependent.effective_email  # => "child@example.com"
 dependent.effective_phone  # => "555-0001"
-dependent.has_own_contact_info?  # => true
+# Note: has_own_contact_info? method not currently implemented
 ```
 
 ### Scenario 2: Dependent shares guardian's contact information
@@ -88,11 +101,22 @@ dependent = User.create!(
 
 dependent.effective_email  # => "guardian@example.com"
 dependent.effective_phone  # => "555-0002"
-dependent.uses_guardian_contact_info?  # => true
+# Note: uses_guardian_contact_info? method not currently implemented
 ```
+
+## Current Implementation Status
+
+The system currently implements:
+- ✅ Encrypted `dependent_email` and `dependent_phone` fields
+- ✅ Contact strategy handling in `GuardianDependentManagementService`
+- ✅ `effective_email`, `effective_phone`, `effective_phone_type`, `effective_communication_preference` methods
+- ✅ Factory patterns for testing different contact scenarios
+- ✅ Proper uniqueness constraint handling with system-generated fallback emails
 
 ## Future Enhancements
 
-- Update frontend forms to properly handle dependent contact field selection.
-- Add an admin interface for managing dependent contact preferences.
-- Consider extending this pattern to other contact fields (e.g., address, emergency contacts).
+- Implement missing helper methods: `has_own_contact_info?` and `uses_guardian_contact_info?`
+- Update frontend forms to properly handle dependent contact field selection
+- Add an admin interface for managing dependent contact preferences
+- Consider extending this pattern to other contact fields (e.g., emergency contacts)
+- Improve contact strategy UI in paper application forms

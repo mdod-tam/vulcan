@@ -1,20 +1,19 @@
-# MAT Vulcan Application Workflow Guide  
-*Last updated Dec 2025 – verified against production code*
+# MAT Vulcan Application Workflow Guide
 
 ---
 
 ## Quick Map
 
 ```text
-Portal User ─────▶ ApplicationCreator ──────┐
-                                            │        ▾
-Admin  ──▶ PaperApplicationService ──▶ App   │  EventDeduplication
-                                            │        ▾
-               ProofAttachmentService ←─────┘  Audit & Notification
-                    ▲     ▲         ▲
-                    │     │         └─ MedicalCertificationService
-                    │     └── VoucherAssignment
-                    └── GuardianRelationship
+Portal User ─────▶ Applications::ApplicationCreator ──────┐
+                                                          │        ▾
+Admin  ──▶ Applications::PaperApplicationService ──▶ App   │  Applications::EventDeduplicationService
+                                                          │        ▾
+                       ProofAttachmentService ←───────────┘  AuditEventService & NotificationService
+                            ▲     ▲         ▲
+                            │     │         └─ Applications::MedicalCertificationService
+                            │     └── VoucherManagement (concern)
+                            └── GuardianRelationship
 ```
 
 All flows converge on **one Application record**, so every downstream service (events, proofs, notifications, vouchers) works the same no matter how the app started.
@@ -25,13 +24,13 @@ All flows converge on **one Application record**, so every downstream service (e
 
 | Component | Purpose | Notes |
 |-----------|---------|-------|
-| **ApplicationCreator** | Portal self-service “happy path” | Runs in DB TX; fires events & notifications |
-| **PaperApplicationService** | Admin data-entry path | Sets `Current.paper_context` to bypass online-only validations |
-| **EventDeduplicationService** | 1-min window, priority pick | Used by audit views, dashboards, certification timelines |
-| **NotificationService** | Email / SMS / in-app / fax | Postmark, Twilio integrations |
-| **ProofAttachmentService** | Upload / approve / reject | Unified for web, email, paper |
-| **MedicalCertificationService** | Request & track med certs | Updates status, sends provider faxes |
-| **VoucherAssignment** | Issue & redeem vouchers | Auto-assign on approval, vendor redemption flow |
+| **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; fires events & notifications |
+| **Applications::PaperApplicationService** | Admin data-entry path | Sets `Current.paper_context` to bypass online-only validations |
+| **Applications::EventDeduplicationService** | 1-min window, priority pick | Used by audit views, dashboards, certification timelines |
+| **NotificationService** | Email notifications | Postmark integration; uses MAILER_MAP for routing |
+| **ProofAttachmentService** | Upload / approve / reject | Unified for web, email, paper; handles blob validation |
+| **Applications::MedicalCertificationService** | Request & track med certs | Updates status, sends provider emails via MedicalProviderMailer |
+| **VoucherManagement** | Issue & redeem vouchers | Model concern; auto-assign when app approved AND medical cert approved |
 
 ---
 
@@ -39,11 +38,11 @@ All flows converge on **one Application record**, so every downstream service (e
 
 ### 2.1 Portal (Constituent)
 
-1. **Auth → Dashboard → “Create Application”**  
-2. **5-step form** (type, personal, income, provider, proofs).  
-3. **Autosave every 2 s**; live FPL check + file validation.  
-4. `ApplicationCreator` service:  
-   * Validates data → upserts user → sets guardian link (if needed) → creates Application → attaches proofs → `AuditEventService.log` + `NotificationService`.
+1. **Auth → Dashboard → "Create Application"**  
+2. **Form-based application** with autosave functionality.  
+3. **Autosave**: UI changes trigger `app/javascript/controllers/forms/autosave_controller.js` which calls the backend `Applications::AutosaveService` via `constituent_portal/applications_controller#autosave_field`. This flow saves individual fields (excluding file inputs), returns validation errors inline, and updates the form action/URLs when a new draft `Application` is created.  
+4. `Applications::ApplicationCreator` service:  
+   * Uses `ApplicationForm` for validation → updates user attributes → creates/updates Application → attaches file uploads → logs events via `AuditEventService` + sends notifications via `NotificationService`.
 
 ### 2.2 Paper (Admin)
 
@@ -54,9 +53,9 @@ All flows converge on **one Application record**, so every downstream service (e
 ```ruby
 Current.paper_context = true
 begin
-  process_paper_application # uses PaperApplicationService
+  process_paper_application # uses Applications::PaperApplicationService
 ensure
-  Current.reset
+  Current.paper_context = nil
 end
 ```
 
@@ -82,22 +81,23 @@ When adding a new event type, **just log it**—the service handles dedup for yo
 
 | Channel | Stack | Typical Use |
 |---------|-------|-------------|
-| In-app  | Turbo + read/unread | All status changes |
-| Email   | Postmark webhooks   | Proof approved / rejected |
-| SMS     | Twilio             | Time-sensitive alerts |
-| Fax     | InterFax wrapper   | Provider medical cert requests |
+| Email   | Postmark + ActionMailer | Proof approved/rejected, account creation, cert requests |
 
-Create once, deliver many:
+**Note:** Only email notifications are currently implemented. The service uses a MAILER_MAP to route notification types to specific mailer methods.
+
+Create and deliver:
 
 ```ruby
 NotificationService.create_and_deliver!(
-  type: 'application_submitted',
+  type: 'proof_rejected',
   recipient: application.user,
-  notifiable: application
+  actor: admin,
+  notifiable: review,
+  metadata: { template_variables: { ... } }
 )
 ```
 
-Delivery metadata (bounce, spam, sms status) is stored for audit & retries.
+Delivery metadata (bounce, spam status) is stored for audit & retries via Postmark webhooks.
 
 ---
 
@@ -106,34 +106,45 @@ Delivery metadata (bounce, spam, sms status) is stored for audit & retries.
 ```ruby
 # Upload (user or admin)
 ProofAttachmentService.attach_proof(...)
-# Approve
-ProofReviewService.new(app, admin, params).approve_proof(:income)
-# Reject
-ProofReviewService.new(app, admin, params).reject_proof(:income, 'blurry')
+# Review (approve or reject) - handled by ProofReview model callbacks
+ProofReview.create!(application: app, admin: admin, proof_type: :income, status: :approved)
+# Or use the service for rejection without attachment
+ProofAttachmentService.reject_proof_without_attachment(...)
 ```
 
-*Paper context auto-approves without a file.*
+*Paper context allows proof approval without a file attachment. The ProofReview model handles post-review actions via callbacks.*
 
 ---
 
 ## 6 · Medical Certification Flow
 
-1. `MedicalCertificationService.request_certification`  
-   * Bumps counter, logs event, fires fax/email.  
-2. Provider replies by **fax or email** → `MedicalCertificationMailbox` consumes → `MedicalCertificationAttachmentService.attach_certification`.  
-3. Admin can **reject** or adjust status via UI; auto-approve logic checks all three proof types + income threshold.
+**Three Proof Types:** `income`, `residency`, and `medical_certification` (each with separate status enums)
+
+1. `Applications::MedicalCertificationService.new(application:, actor:).request_certification`  
+   * Updates `medical_certification_status` to 'requested', increments counter, creates audit events, sends email notification via MedicalProviderMailer.  
+2. Provider replies via **multiple channels**:
+   * **Email** → `MedicalCertificationMailbox` consumes → processes attachment and updates status to 'received'
+   * **Fax** → **PARTIALLY IMPLEMENTED**: Outbound sending works (`FaxService` + `MedicalProviderNotifier`), but inbound processing requires manual admin scan/upload via admin interface → updates status to 'received'
+   * **Snail Mail** → Admin scans and uploads via admin interface → updates status to 'received'
+3. Admin can **approve/reject** via UI; auto-approve logic checks if all three proof types (income, residency, medical certification) are approved before voucher assignment.
+
+**Key Difference:** Medical certification has its own workflow separate from income/residency proofs, with statuses: `not_requested`, `requested`, `received`, `approved`, `rejected`.
 
 ---
 
 ## 7 · Status Machine (Lite)
 
 ```
-draft ─▶ in_progress ─▶ approved* ─▶ voucher_assigned ─▶ redeemed
+draft ─▶ in_progress ─▶ approved ─▶ (voucher auto-assigned via VoucherManagement concern)
       └▶ rejected
+      └▶ needs_information
+      └▶ reminder_sent
+      └▶ awaiting_documents
+      └▶ archived
 ```
 
-*`approved` can be manual (admin) or automatic (`check_auto_approval_eligibility`).*  
-All transitions create **ApplicationStatusChange** + notification.
+*`approved` can be manual (admin) or automatic (via `ApplicationStatusManagement` concern when all requirements met).*  
+All transitions create **ApplicationStatusChange** + audit events. Voucher auto-assignment happens in the `VoucherManagement` concern.
 
 ---
 
@@ -150,24 +161,25 @@ application.managing_guardian = guardian
 ```
 
 * Notifications for dependent apps go to **guardian**, not child.  
-* Dependent contact: `email_strategy` & `phone_strategy` decide whether to clone guardian info or use unique fields.
+* **TODO:** Dependent contact: `email_strategy` & `phone_strategy` to be implemented to decide whether to clone guardian info or use unique fields.
 
 ---
 
 ## 9 · Vouchers
 
-* Auto-issued right after approval if policy met.  
-* Stored in `vouchers` table, 1-year expiry.  
-* Vendor portal hits `redeem_voucher` which creates `VoucherTransaction` + `Invoice`.
+* Auto-assigned via `VoucherManagement#assign_voucher!` when application status is approved AND medical certification status is approved.  
+* Stored in `vouchers` table with configurable expiry period (Policy-based).  
+* Vendor portal handles voucher redemption which creates `VoucherTransaction` records.  
+* Value calculated based on constituent's disability types and stored in `initial_value` field.
 
 ---
 
 ## 10 · Admin Toolkit Highlights
 
-* **FilterService** handles index search & facets.  
-* Dashboard metrics pulled with raw SQL for speed.  
-* Bulk ops (`batch_approve`, `batch_reject`) use `Application.batch_update_status`.  
-* **AuditLogBuilder** + EventDeduplication = fast, deduped history for show view.
+* **Applications::FilterService** handles index search & facets.  
+* Dashboard metrics loaded via `DashboardMetricsLoading` concern with optimized queries.  
+* Bulk ops (`batch_approve`, `batch_reject`) are handled by `admin/applications_controller#batch_approve` and `admin/applications_controller#batch_reject`.  
+* **Applications::AuditLogBuilder** + **Applications::EventDeduplicationService** = fast, deduped history for show view.
 
 ---
 
@@ -175,19 +187,21 @@ application.managing_guardian = guardian
 
 | Service | Endpoint / Job | Purpose |
 |---------|----------------|---------|
-| Postmark | `/webhooks/email_events` | Delivery / bounce / spam |
-| Twilio   | queued job callbacks      | SMS status |
-| Medical Cert Fax | `/webhooks/medical_certifications` | Provider replies |
-| ActiveStorage   | background scans | Virus scan, metadata |
+| Postmark | `/webhooks/email_events` | Delivery / bounce / spam tracking |
+| ActionMailbox | `/rails/action_mailbox` | Inbound email processing |
+| Medical Cert Email | `MedicalCertificationMailbox` | Provider email replies |
+| ActiveStorage   | background processing | File validation, metadata |
+| ProofSubmissionMailbox | Email routing | Proof document submissions via email |
 
 ---
 
 ## 12 · How to Extend
 
-* **New proof type?** Add enum, extend `ProofAttachmentService`, update `determine_proof_type`.  
-* **New notification?** Add type constant + template; call `NotificationService.create_and_deliver!`.  
-* **New status?** Update enum, `ApplicationStatusChange`, auto-approval checks, and front-end filters.  
-* **New event?** Just log it with `AuditEventService.log`; dedup handles rest.
+* **New proof type?** Add enum to Application model, extend `ProofAttachmentService`, update mailbox routing in `determine_proof_type`, add ActiveStorage attachment.  
+* **New notification?** Add to `NotificationService::MAILER_MAP` + template; call `NotificationService.create_and_deliver!`.  
+* **New status?** Update enum in Application model, update auto-approval logic in VoucherManagement concern, add to front-end filters.  
+* **New event?** Just log it with `AuditEventService.log`; `Applications::EventDeduplicationService` handles deduplication automatically.
+* **Medical cert channel?** For automated processing, extend mailbox routing; for manual processing, enhance admin upload interface in `admin/applications#show`.
 
 ---
 

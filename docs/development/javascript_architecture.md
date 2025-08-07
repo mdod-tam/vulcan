@@ -8,9 +8,9 @@ A concise reference to the Stimulus-based, service-driven JS layer that powers o
 
 | Principle | In Practice |
 |-----------|-------------|
-| **Centralised services** | One request / chart / debounce utility used by every controller. |
-| **Base controllers** | Shared form & chart logic via inheritance. |
-| **Target-first** | Every DOM dependency declared in `static targets`. |
+| **Centralized services** | One request / chart / notification service used by every controller. |
+| **Base controllers** | Shared form & chart logic via inheritance (`BaseFormController`, `ChartBaseController`). |
+| **Target safety** | Target safety mixin provides safe target access with warnings. |
 | **Event-driven** | Controllers communicate through custom events, not direct calls. |
 | **Fail-fast** | Missing targets & unhandled errors surface immediately. |
 
@@ -31,28 +31,43 @@ const result = await railsRequest.perform({
 if (result.success) { ... } else if (!result.aborted) { ... }
 ```
 
-* Cancels duplicate requests (`key`).  
-* Parses JSON, HTML, or Turbo Streams automatically.  
-* Global `unhandledrejection` handler silences known @rails/request.js parsing bugs.  
-* Upload progress + memory cleanup.
+* Singleton export: `railsRequest` (cancellable by `key`, plus `cancel`/`cancelAll`).  
+* Safe response parsing for JSON and HTML/Turbo Streams with body clone fallback to avoid `bodyUsed` errors.  
+* Global `unhandledrejection` handler suppresses the known `@rails/request.js` JSON parsing warning when HTML is returned.  
+* Basic scaffolding for upload progress hooks (not widely used in production flows).  
+* Uses server-rendered Rails flash for user-visible messages. Client-side code does not show toasts.
 
 ### 2.2 · `chart_config`
 
 ```javascript
-const config   = chartConfig.getConfigForType('bar', { plugins: { title: { text: 'Revenue' } } })
+const config   = chartConfig.getConfigForType('bar')
 const datasets = chartConfig.createDatasets([{ label: 'YTD', data }])
 ```
 
-* Unified colours & typography.  
-* ARIA labels baked-in.  
-* “Compact” presets for tight layouts.
+* Simplified configuration focused on reliability.  
+* Basic color schemes and formatters.  
+* Non-responsive behavior to prevent resize loops.
 
-### 2.3 · Utility Modules
+### 2.3 · Notifications (Rails Flash)
+
+```ruby
+# Controller
+redirect_to users_path, notice: 'User created successfully'
+
+# Turbo Stream
+flash.now[:error] = 'Validation failed'
+render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
+```
+
+* Rails built-in flash is the only supported in-app notification mechanism.
+* No JavaScript toast layer is present to reduce complexity and improve accessibility.
+
+### 2.4 · Utility Modules
 
 | Utility | Purpose |
 |---------|---------|
 | `utils/visibility.js` | `setVisible(el, bool, { required })` → toggles `hidden` & `required`. |
-| `utils/debounce.js`   | Pre-tuned debounce fns (`createSearchDebounce`, `createFormChangeDebounce`, …). |
+| `utils/debounce.js`   | Pre-tuned debounce fns (`createSearchDebounce`, `createFormChangeDebounce`, `createUIUpdateDebounce`, …). |
 
 ---
 
@@ -60,8 +75,9 @@ const datasets = chartConfig.createDatasets([{ label: 'YTD', data }])
 
 ### 3.1 · `BaseFormController`
 
-* Loader button states, field-level errors, status flash, autosubmit hooks.  
+* Loader button states, field-level errors, status flash.  
 * Integrates `rails_request`; overrides: `validateBeforeSubmit`, `handleSuccess`, `handleError`.
+* Automatic form data collection with array field support.
 
 ```javascript
 class UserFormController extends BaseFormController {
@@ -74,7 +90,9 @@ class UserFormController extends BaseFormController {
 
 ### 3.2 · `ChartBaseController`
 
-* Creates <canvas>, destroys Chart.js instance on disconnect, pulls defaults from `chart_config`.
+* Creates `<canvas>` with accessibility features, destroys Chart.js instance on disconnect.
+* Pulls defaults from `chart_config`, handles data validation.
+* Debounced resize handling and error management.
 
 ---
 
@@ -85,18 +103,17 @@ import { applyTargetSafety } from "../mixins/target_safety"
 
 class MyController extends Controller {
   static targets = ['submit', 'status']
-  connect() {
-    if (!this.hasRequiredTargets('submit')) return
-  }
+  
   save() {
-    this.withTarget('submit', btn => btn.disabled = true)
+    const btn = this.safeTarget('submit')
+    if (btn) btn.disabled = true
   }
 }
 applyTargetSafety(MyController)
 ```
 
-* `withTarget / withTargets` helpers never return `null`.  
-* `hasRequiredTargets` validates dependencies once.
+* `safeTarget()` and `safeTargets()` helpers with optional warnings.  
+* Development-time warnings for missing targets.
 
 HTML pattern:
 
@@ -111,75 +128,79 @@ HTML pattern:
 
 ## 5 · Flash Notifications
 
+* Use Rails flash for in-app messages (notice/alert/info/warning/success).
+* For Turbo Stream responses, set `flash.now[...]` and update the `#flash` frame with `shared/flash`.
+* Dynamic client actions that need user feedback should update the `#flash` container.
+
+---
+
+## 6 · Event-Driven Workflows
+
+Controllers communicate through custom events:
+
 ```javascript
-// controllers/ui/flash_controller.js (outlet target)
-this.flashOutlet.showSuccess('Saved!')
+// Dispatch event
+this.element.addEventListener('income-validation:validated', this.handleIncomeValidation.bind(this))
+
+// Listen for events
+this.dispatch('selectionChange', { detail: { guardianId: 123 } })
 ```
 
-* Toasts rendered once, styled consistently.  
-* Any controller with `static outlets = ['flash']` can push messages.
+Example: Paper application flow uses events between `income-validation`, `dependent-fields`, and `applicant-type` controllers.
 
 ---
 
-## 6 · Event-Driven Workflows (Paper App Example)
-
-1. **UserSearchController** creates guardian → dispatches success.  
-2. **GuardianPickerController** selects guardian → dispatches `selectionChange`.  
-3. **ApplicantTypeController** listens → toggles dependent fields → dispatches `applicantTypeChanged`.  
-4. **DependentFieldsController** shows appropriate inputs.
-
-Each step uses `this.dispatch('event-name', { detail })`, decoupling controllers.
-
----
-
-## 7 · Form Data Helpers
+## 7 · Form Data Handling
 
 ```javascript
-// Convert nested guardian_attributes[...] names → flat JSON
-const data = railsRequest.formDataToJson(formElement, 'guardian_attributes')
-await railsRequest.perform({ method:'post', url:'/admin/users', body: data })
-```
-
-* Handles radio / checkbox nuances.  
-* Sets JSON headers automatically.
-
----
-
-## 8 · Managed Event Handlers
-
-```javascript
-import { EventHandlerMixin } from "../mixins/event_handlers"
-Object.assign(MyCtrl.prototype, EventHandlerMixin)
-
-connect() {
-  this.initializeEventHandlers()
-  this.addManagedEventListener(window, 'resize', this.handleResize)
+// BaseFormController automatically handles form data collection
+collectFormData() {
+  const formData = new FormData(this.formTarget)
+  // Converts to object with array field support
+  // guardian_attributes[name] → { guardian_attributes: { name: "value" } }
 }
-disconnect() { this.cleanupAllEventHandlers() }
 ```
 
-* All listeners cleaned up on `disconnect`, preventing leaks.
+* Automatic array field handling (`field[]` → array).  
+* JSON serialization for API requests.
+* Built into `BaseFormController`.
 
 ---
 
-## 9 · Testing Patterns
+## 8 · Chart.js Integration
 
 ```javascript
-test('rails_request cancels dupes', async () => {
-  const p1 = railsRequest.perform({ url:'/x', key:'k' })
-  const p2 = railsRequest.perform({ url:'/x', key:'k' })
-  expect((await p1).aborted).toBe(true)
-  expect((await p2).success).toBe(true)
-})
+// application.js - Tree-shaken Chart.js imports
+import { Chart, BarController, LineController, ... } from 'chart.js'
 
-test('visibility utility toggles required', () => {
-  setVisible(input, true,  { required:true  })
-  setVisible(input, false, { required:false })
-})
+// Global Chart availability with recursion protection
+window.Chart = Chart
 ```
 
-* Jest + DOM testing library for utilities.  
-* Controllers tested via fixture + fake timers for debounce.
+* Tree-shaken imports for production optimization.
+* Global recursion protection via a `getComputedStyle` override with a depth guard to prevent infinite measurement recursion in production and tests.
+* Disabled responsive/animation by default for stability; controllers size canvases explicitly.
+
+---
+
+## 9 · Controller Organization
+
+Controllers are organized by domain:
+
+```
+controllers/
+├── admin/          # Admin-specific controllers
+├── auth/           # Authentication controllers  
+├── base/           # Base classes (BaseFormController)
+├── charts/         # Chart controllers + ChartBaseController
+├── forms/          # Form-specific controllers
+├── reviews/        # Review workflow controllers
+├── ui/             # UI component controllers
+└── users/          # User management controllers
+```
+
+All controllers registered in `controllers/index.js` with consistent naming.
+Development-only `debug_controller` is conditionally loaded when `NODE_ENV=development`.
 
 ---
 
@@ -191,12 +212,29 @@ test('visibility utility toggles required', () => {
 | Chart leaks | `chartInstance.destroy()` in `disconnect()` |
 | Request leaks | Pass a `key`, call `railsRequest.cancel(key)` in `disconnect()` |
 | Accessibility | All dynamic elements get ARIA roles / SR-friendly updates |
+| Memory leaks | Proper event listener cleanup in `disconnect()` |
 
 ---
 
-## 11 · Future Work
+## 11 · Development Features
 
-* Centralise validation rules (move more into `BaseFormController`).  
-* Turbo-Stream responses for richer server-side updates.  
-* Tree-shake unused Chart.js plugins.  
-* Expand `data-testid` usage for more stable selectors.
+* **Debug controller** (development-only) for diagnostics.
+* **Target safety warnings** in development mode.
+* **Request service logging** for debugging API calls.
+* Controllers clean up event listeners in `disconnect()` to avoid leaks.
+
+---
+
+## 12 · Current Architecture Status
+
+✅ **Implemented:**
+- All core services (`rails_request`, `chart_config`)
+- Base controllers with inheritance patterns
+- Target safety mixin with development warnings  
+- Event-driven communication between controllers
+- Comprehensive controller organization by domain
+- Chart.js integration with tree-shaking and stability fixes
+
+🔄 **In Progress:**
+- Expanding test coverage for utilities and services
+- Refining form validation patterns in `BaseFormController`
