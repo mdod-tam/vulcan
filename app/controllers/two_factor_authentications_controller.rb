@@ -306,7 +306,7 @@ class TwoFactorAuthenticationsController < ApplicationController
         return_to = stored_location || _dashboard_for(@user)
         render json: { status: 'success', redirect_url: return_to }
       else
-        render json: { error: 'Unable to create session' }, status: :unprocessable_entity
+        render json: { error: 'Unable to create session' }, status: :unprocessable_content
       end
     end
   end
@@ -347,7 +347,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     when /credential not found/i, /not found/i
       :not_found
     else
-      :unprocessable_entity
+      :unprocessable_content
     end
   end
 

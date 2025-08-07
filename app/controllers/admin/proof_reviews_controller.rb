@@ -52,7 +52,7 @@ module Admin
       if @proof_review.save
         redirect_to admin_application_path(@application), notice: 'Proof review completed successfully'
       else
-        render :new, status: :unprocessable_entity, alert: 'Proof review failed to save'
+        render :new, status: :unprocessable_content, alert: 'Proof review failed to save'
       end
     end
 

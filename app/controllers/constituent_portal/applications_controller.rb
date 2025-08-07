@@ -155,7 +155,7 @@ module ConstituentPortal
         redirect_with_notice(constituent_portal_application_path(@application),
                              'Application submitted successfully!')
       else
-        render :verify, status: :unprocessable_entity
+        render :verify, status: :unprocessable_content
       end
     end
 
@@ -354,7 +354,7 @@ module ConstituentPortal
       end
 
       prepare_medical_provider_for_edit
-      render :edit, status: :unprocessable_entity
+      render :edit, status: :unprocessable_content
     end
 
     def determine_update_notice(original_status, application)
@@ -397,7 +397,7 @@ module ConstituentPortal
           message: result[:message]
         }, status: :ok
       else
-        render json: { success: false, errors: result[:errors] }, status: :unprocessable_entity
+        render json: { success: false, errors: result[:errors] }, status: :unprocessable_content
       end
     end
 

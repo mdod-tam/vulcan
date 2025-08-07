@@ -116,7 +116,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     # Check errors directly on the instance variable assigned by the controller
     assert_includes assigns(:user).errors[:phone], 'must be a valid 10-digit US phone number'
   end
@@ -140,7 +140,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     # Check errors directly on the instance variable assigned by the controller
     assert_includes assigns(:user).errors[:email], 'has already been taken'
   end
@@ -167,7 +167,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     # Check errors directly on the instance variable assigned by the controller
     assert_includes assigns(:user).errors[:phone], 'has already been taken'
   end
@@ -231,7 +231,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     # Check errors directly on the instance variable assigned by the controller
     assert_includes assigns(:user).errors[:password_confirmation], "doesn't match Password"
   end

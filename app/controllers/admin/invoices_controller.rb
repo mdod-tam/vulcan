@@ -87,12 +87,12 @@ module Admin
     def handle_missing_gad_reference
       flash[:alert] = "GAD reference can't be blank"
       set_transactions
-      render :show, status: :unprocessable_entity
+      render :show, status: :unprocessable_content
     end
 
     def render_update_error
       set_transactions
-      render :show, status: :unprocessable_entity
+      render :show, status: :unprocessable_content
     end
 
     def invoice_update_notice

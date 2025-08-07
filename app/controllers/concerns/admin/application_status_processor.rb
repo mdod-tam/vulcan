@@ -47,7 +47,7 @@ module Admin
       flash.now[:alert] = "#{prefix}: #{error_message}"
 
       if respond_to?(:render, true)
-        render 'admin/applications/show', status: :unprocessable_entity
+        render 'admin/applications/show', status: :unprocessable_content
       else
         Rails.logger.error(
           "Controller does not respond to render. Cannot display failure for action: #{action_name}"

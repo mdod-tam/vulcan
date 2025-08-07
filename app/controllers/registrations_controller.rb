@@ -31,7 +31,7 @@ class RegistrationsController < ApplicationController
 
       redirect_to welcome_path, notice: 'Account created successfully. Welcome!'
     else
-      render :new, status: :unprocessable_entity
+      render :new, status: :unprocessable_content
     end
   end
 

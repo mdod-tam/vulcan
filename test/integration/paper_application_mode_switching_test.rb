@@ -172,7 +172,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     }
 
     # Should fail gracefully with error message
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     assert_match(/mismatched digest|Error processing proof/i, flash[:alert])
   end
 end

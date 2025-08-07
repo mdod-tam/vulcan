@@ -141,7 +141,7 @@ module Admin
         }
       end
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
 
       # Verify we have validation errors
       w9_review = @controller.instance_variable_get('@w9_review')

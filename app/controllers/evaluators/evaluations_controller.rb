@@ -115,7 +115,7 @@ module Evaluators
         redirect_to evaluators_evaluation_path(@evaluation),
                     notice: 'Evaluation created successfully.'
       else
-        render :new, status: :unprocessable_entity
+        render :new, status: :unprocessable_content
       end
     end
 
@@ -126,7 +126,7 @@ module Evaluators
       if @evaluation.update(evaluation_params)
         redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
       else
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 
@@ -163,7 +163,7 @@ module Evaluators
         redirect_to evaluators_evaluation_path(@evaluation),
                     notice: 'Evaluation submitted successfully.'
       else
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 

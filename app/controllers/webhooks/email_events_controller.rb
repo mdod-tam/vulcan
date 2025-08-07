@@ -10,7 +10,7 @@ module Webhooks
            (params[:event] == 'bounce' && params[:bounce].nil?) ||
            (params[:event] == 'bounce' && params[:bounce].is_a?(String))
           Rails.logger.debug 'Test case: Invalid payload detected'
-          head :unprocessable_entity
+          head :unprocessable_content
           return
         end
 
@@ -27,7 +27,7 @@ module Webhooks
       if handler.process
         head :ok
       else
-        head :unprocessable_entity
+        head :unprocessable_content
       end
     end
 

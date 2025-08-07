@@ -59,7 +59,7 @@ class PasswordsController < ApplicationController
 
   def handle_failed_password_update(result)
     flash.now[:alert] = result.message
-    render :edit, status: :unprocessable_entity
+    render :edit, status: :unprocessable_content
   end
 
   def set_user

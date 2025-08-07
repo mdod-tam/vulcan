@@ -90,7 +90,7 @@ module DocumentUploadHandling
       redirect_to application_path_for_redirect,
                   notice: 'Documents uploaded successfully.'
     else
-      render :edit, status: :unprocessable_entity
+      render :edit, status: :unprocessable_content
     end
   end
 

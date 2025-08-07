@@ -92,7 +92,7 @@ module Admin
         # Re-prepare sample data for form re-render on validation failure
         @sample_data = view_context.sample_data_for_template(@email_template.name)
         flash.now[:alert] = "Failed to update template: #{@email_template.errors.full_messages.join(', ')}"
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 
@@ -197,7 +197,7 @@ module Admin
 
     def handle_invalid_form
       flash.now[:alert] = "Invalid email address: #{@test_email_form.errors.full_messages.join(', ')}"
-      render :new_test_email, status: :unprocessable_entity
+      render :new_test_email, status: :unprocessable_content
     end
 
     def handle_test_email_error(error)
@@ -210,7 +210,7 @@ module Admin
       )
 
       flash.now[:alert] = "Failed to send test email: #{error.message}. Check sample data and template syntax."
-      render :new_test_email, status: :unprocessable_entity
+      render :new_test_email, status: :unprocessable_content
     end
   end
 end

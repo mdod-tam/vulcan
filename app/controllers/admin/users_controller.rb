@@ -202,7 +202,7 @@ module Admin
         render json: {
           success: false,
           errors: extract_error_messages(result.data[:errors] || [result.message])
-        }, status: :unprocessable_entity
+        }, status: :unprocessable_content
       end
     end
 
@@ -305,7 +305,7 @@ module Admin
 
     # Render capability error response
     def render_capability_error(message)
-      render json: { message: message, success: false }, status: :unprocessable_entity
+      render json: { message: message, success: false }, status: :unprocessable_content
     end
 
     # Handle capability operation errors
@@ -314,7 +314,7 @@ module Admin
       render json: {
         success: false,
         message: error.message
-      }, status: :unprocessable_entity
+      }, status: :unprocessable_content
     end
 
     def update
@@ -323,7 +323,7 @@ module Admin
       if @user.update(admin_user_params)
         redirect_to admin_user_path(@user), notice: 'User was successfully updated.'
       else
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 
@@ -472,7 +472,7 @@ module Admin
         render json: {
           success: false,
           message: "Invalid role specified: '#{raw_role_param}'. Please select a valid role."
-        }, status: :unprocessable_entity
+        }, status: :unprocessable_content
         return nil
       end
 
@@ -517,7 +517,7 @@ module Admin
       new_klass = namespaced_role.safe_constantize
       if new_klass.blank? || new_klass.ancestors.exclude?(User)
         Rails.logger.error "Admin::UsersController#update_role - Invalid target class for STI: #{namespaced_role}"
-        render json: { success: false, message: 'Invalid target role class.' }, status: :unprocessable_entity
+        render json: { success: false, message: 'Invalid target role class.' }, status: :unprocessable_content
         return nil
       end
       new_klass
@@ -580,7 +580,7 @@ module Admin
       render json: {
         success: false,
         message: converted_user.errors.full_messages.join(', ')
-      }, status: :unprocessable_entity
+      }, status: :unprocessable_content
     end
 
     def require_admin!

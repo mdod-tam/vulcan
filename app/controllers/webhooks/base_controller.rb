@@ -22,7 +22,7 @@ module Webhooks
     end
 
     def handle_invalid_payload
-      head :unprocessable_entity
+      head :unprocessable_content
     end
 
     def verify_webhook_signature

@@ -70,7 +70,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     assert_select '.bg-red-50', text: /error/i # Error message should be displayed
   end
 

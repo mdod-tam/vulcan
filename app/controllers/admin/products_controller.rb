@@ -30,7 +30,7 @@ module Admin
         redirect_to admin_products_path, notice: 'Product successfully created.'
       else
         load_vendors
-        render :new, status: :unprocessable_entity
+        render :new, status: :unprocessable_content
       end
     end
 
@@ -39,7 +39,7 @@ module Admin
         redirect_to admin_products_path, notice: 'Product successfully updated.'
       else
         load_vendors
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 

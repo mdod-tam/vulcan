@@ -36,7 +36,7 @@ module ConstituentPortal
         blob = ActiveStorage::Blob.create_before_direct_upload!(**blob_params.to_h.symbolize_keys)
         render json: direct_upload_json(blob)
       rescue ActionController::ParameterMissing => e
-        render json: { error: e.message }, status: :unprocessable_entity
+        render json: { error: e.message }, status: :unprocessable_content
       end
 
       def resubmit

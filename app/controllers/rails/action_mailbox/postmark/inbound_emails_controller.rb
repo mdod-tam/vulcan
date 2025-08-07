@@ -13,7 +13,7 @@ module Rails
           head :ok
         rescue StandardError => e
           Rails.logger.error("Error processing Postmark inbound email: #{e.message}")
-          head :unprocessable_entity
+          head :unprocessable_content
         end
 
         private

@@ -103,8 +103,8 @@ module TurboStreamResponseHandling
   # @param html_redirect_path [String] Path to redirect for HTML requests (optional)
   # @param html_render_action [Symbol] Action to render for HTML requests (optional)
   # @param error_message [String] Error message to display
-  # @param status [Symbol] HTTP status for render (optional, defaults to :unprocessable_entity)
-  def handle_error_response(error_message:, html_redirect_path: nil, html_render_action: nil, status: :unprocessable_entity)
+  # @param status [Symbol] HTTP status for render (optional, defaults to :unprocessable_content)
+  def handle_error_response(error_message:, html_redirect_path: nil, html_render_action: nil, status: :unprocessable_content)
     respond_to do |format|
       if html_redirect_path
         format.html { redirect_to html_redirect_path, alert: error_message }

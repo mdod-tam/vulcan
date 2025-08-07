@@ -183,16 +183,12 @@ module ActiveSupport
     # Shortcut occasionally used in controller tests
     attr_reader :product
 
-    # Enable limited parallel testing for unit and integration tests
-    system_test_workers = ENV.fetch('SYSTEM_TEST_WORKERS', 4).to_i
-    parallel_workers = ENV.fetch('PARALLEL_WORKERS', :number_of_processors)
-
-    # Use reduced parallelism if we're running system tests
-    if ENV['RAILS_ENV'] == 'test' && (caller.any? { |line| line.include?('system') } || ARGV.any? { |arg| arg.include?('system') })
-      parallelize(workers: system_test_workers, with: :processes)
-    else
-      parallelize(workers: parallel_workers, with: :processes)
-    end
+    # Disable parallel tests due to pg gem segfault with Ruby 3.4.5
+    # TODO: Re-enable after addressing segfault by restoring:
+    # system_test_workers = ENV.fetch('SYSTEM_TEST_WORKERS', 4).to_i
+    # parallel_workers = ENV.fetch('PARALLEL_WORKERS', :number_of_processors)
+    # parallelize(workers: parallel_workers, with: :processes)
+    parallelize(workers: 1)
 
     # Optimized DatabaseCleaner strategy
     if defined?(DatabaseCleaner)

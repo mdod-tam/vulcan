@@ -51,7 +51,7 @@ module Admin
         }, as: :json
       end
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       json_response = response.parsed_body
       assert_not json_response['success']
       assert json_response['errors'].present?

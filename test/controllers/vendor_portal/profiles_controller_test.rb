@@ -53,7 +53,7 @@ module VendorPortal
         }
       }
       # Assert the expected response or behavior when terms are not accepted
-      # This might be assert_response :unprocessable_entity, assert_response :success (if it just ignores the update),
+      # This might be assert_response :unprocessable_content, assert_response :success (if it just ignores the update),
       # or assert_redirected_to edit_vendor_profile_url with flash messages.
       # The terms_accepted_at validation is conditional on vendor_approved?,
       # and the vendor is pending in this test, so the update should succeed.

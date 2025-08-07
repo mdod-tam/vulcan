@@ -111,7 +111,7 @@ module Trainers
                     notice: result.message
       else
         flash.now[:alert] = "Failed to update training session status: #{result.message}"
-        render :show, status: :unprocessable_entity
+        render :show, status: :unprocessable_content
       end
     end
 
@@ -125,7 +125,7 @@ module Trainers
         redirect_to trainers_training_session_path(@training_session), notice: result.message
       else
         flash.now[:alert] = "Failed to complete training session: #{result.message}"
-        render :show, status: :unprocessable_entity
+        render :show, status: :unprocessable_content
       end
     end
 
@@ -140,7 +140,7 @@ module Trainers
                     notice: result.message
       else
         flash.now[:alert] = "Failed to schedule training session: #{result.message}"
-        render :show, status: :unprocessable_entity
+        render :show, status: :unprocessable_content
       end
     end
 
@@ -155,7 +155,7 @@ module Trainers
                     notice: result.message
       else
         flash.now[:alert] = "Failed to reschedule training session: #{result.message}"
-        render :show, status: :unprocessable_entity
+        render :show, status: :unprocessable_content
       end
     end
 
@@ -170,7 +170,7 @@ module Trainers
         redirect_to trainers_training_session_path(@training_session), notice: result.message
       else
         flash.now[:alert] = "Failed to cancel training session: #{result.message}"
-        render :show, status: :unprocessable_entity
+        render :show, status: :unprocessable_content
       end
     end
 

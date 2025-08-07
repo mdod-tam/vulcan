@@ -53,7 +53,7 @@ module ConstituentPortal
         post constituent_portal_applications_path, params: @application_params.merge(submit_application: true)
       end
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_match(/At least one disability must be selected/, response.body)
     end
 
@@ -186,7 +186,7 @@ module ConstituentPortal
         submit_application: true
       }
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_match(/At least one disability must be selected/, response.body)
 
       # Now add a disability along with required fields

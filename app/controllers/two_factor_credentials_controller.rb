@@ -392,7 +392,7 @@ class TwoFactorCredentialsController < ApplicationController
 
   def handle_totp_turbo_failure
     regenerate_qr_code_for_failed_setup
-    render :create_credential, status: :unprocessable_entity
+    render :create_credential, status: :unprocessable_content
   end
 
   # TOTP credential creation helper methods
@@ -536,10 +536,10 @@ class TwoFactorCredentialsController < ApplicationController
     case error_type
     when 'verification'
       Rails.logger.warn("[2FA_CREDENTIAL] WebAuthn credential verification failed for user #{current_user.id}: #{error.message}")
-      render json: { error: "Verification failed: #{error.message}" }, status: :unprocessable_entity
+      render json: { error: "Verification failed: #{error.message}" }, status: :unprocessable_content
     when 'creation'
       Rails.logger.error("[2FA_CREDENTIAL] Error creating WebAuthn credential for user #{current_user.id}: #{error.message}")
-      render json: { error: "Error creating credential: #{error.message}" }, status: :unprocessable_entity
+      render json: { error: "Error creating credential: #{error.message}" }, status: :unprocessable_content
     end
   end
 end

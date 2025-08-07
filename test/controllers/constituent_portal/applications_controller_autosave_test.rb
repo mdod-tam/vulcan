@@ -70,7 +70,7 @@ module ConstituentPortal
             as: :json
 
       # Verify the response indicates error
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       response_data = response.parsed_body
       assert_not response_data['success']
       assert response_data['errors'].present?
@@ -226,7 +226,7 @@ module ConstituentPortal
             as: :json
 
       # Verify the response indicates error
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       response_data = response.parsed_body
       assert_not response_data['success']
       assert response_data['errors'].present?
@@ -242,7 +242,7 @@ module ConstituentPortal
             as: :json
 
       # Verify the response indicates error
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       response_data = response.parsed_body
       assert_not response_data['success']
       assert response_data['errors'].present?

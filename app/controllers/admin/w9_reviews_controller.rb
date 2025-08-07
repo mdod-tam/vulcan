@@ -43,7 +43,7 @@ module Admin
       else
         # If validation fails, render the form with error messages
         flash.now[:alert] = 'W9 review failed to save'
-        render :new, status: :unprocessable_entity
+        render :new, status: :unprocessable_content
       end
     end
 

@@ -92,7 +92,7 @@ module Admin
       if @application.update(application_params)
         redirect_to admin_application_path(@application), notice: 'Application updated.'
       else
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 
@@ -110,7 +110,7 @@ module Admin
         redirect_to admin_applications_path, notice: 'Applications approved.'
       else
         render json: { error: 'Unable to approve applications' },
-               status: :unprocessable_entity
+               status: :unprocessable_content
       end
     end
 

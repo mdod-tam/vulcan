@@ -20,7 +20,7 @@ module ApplicationFormHandling
     end
 
     initialize_address_and_provider_for_form
-    render action_name == 'update' ? :edit : :new, status: :unprocessable_entity
+    render action_name == 'update' ? :edit : :new, status: :unprocessable_content
   end
 
   # Common redirect helpers

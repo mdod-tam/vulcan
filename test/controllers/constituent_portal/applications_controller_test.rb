@@ -369,7 +369,7 @@ module ConstituentPortal
       }
 
       # Verify validation errors are shown
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
 
       # Check that errors are present in the response body - be flexible with specific wording
       assert_match(/maryland resident|residency/i, response.body)

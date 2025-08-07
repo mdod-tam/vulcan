@@ -195,7 +195,7 @@ module TwoFactorVerification
     log_verification_failure(current_user.id, type, error_message)
 
     if format == :json || request.xhr?
-      render json: { error: error_message, details: error.message }, status: :unprocessable_entity
+      render json: { error: error_message, details: error.message }, status: :unprocessable_content
     else
       flash.now[:alert] = error_message
       render :new

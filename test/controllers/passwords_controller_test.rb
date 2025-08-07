@@ -55,7 +55,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       password_confirmation: 'NewValid*Password123'
     }
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     assert_equal 'Current password is incorrect.', flash.now[:alert]
 
     # Verify password was not changed
@@ -70,7 +70,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       password_confirmation: 'DifferentPassword123'
     }
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     assert_equal 'New password and confirmation do not match.', flash.now[:alert]
 
     # Verify password was not changed
@@ -85,7 +85,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       password_confirmation: 'short'
     }
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     # Check for model validation error message in the flash
     assert_equal 'Unable to update password. Please check requirements., Password is too short (minimum is 8 characters)', flash.now[:alert]
 

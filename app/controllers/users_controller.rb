@@ -15,7 +15,7 @@ class UsersController < ApplicationController
       flash[:notice] = 'Profile successfully updated'
       redirect_to after_update_path(@user) # Add @user as argument
     else
-      render :edit, status: :unprocessable_entity
+      render :edit, status: :unprocessable_content
     end
   end
 

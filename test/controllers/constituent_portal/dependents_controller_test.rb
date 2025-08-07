@@ -61,7 +61,7 @@ module ConstituentPortal
           guardian_relationship: guardian_relationship_attributes
         }
       end
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       # We're expecting this error to be displayed in the form
       # Just check response status is correct (422) since the form rendering is tested elsewhere
     end
@@ -237,7 +237,7 @@ module ConstituentPortal
         }
       end
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
 
     test 'should redirect to application if application_id param present' do

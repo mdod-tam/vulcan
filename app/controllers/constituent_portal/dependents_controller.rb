@@ -66,7 +66,7 @@ module ConstituentPortal
         redirect_after_successful_update
       else
         setup_edit_template_variables
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 
@@ -148,7 +148,7 @@ module ConstituentPortal
       @guardian_relationship ||= GuardianRelationship.new(guardian_relationship_params)
 
       flash.now[:alert] = "Failed to create dependent: #{error_messages.join(', ')}"
-      render :new, status: :unprocessable_entity
+      render :new, status: :unprocessable_content
     end
 
     def configure_uniqueness_validation(params_to_update)

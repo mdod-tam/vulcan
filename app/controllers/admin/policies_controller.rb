@@ -57,7 +57,7 @@ module Admin
                                       .order(created_at: :desc)
                                       .limit(10)
         flash.now[:alert] = "Failed to update policy: #{@policy.errors.full_messages.join(', ')}"
-        render :edit, status: :unprocessable_entity
+        render :edit, status: :unprocessable_content
       end
     end
 

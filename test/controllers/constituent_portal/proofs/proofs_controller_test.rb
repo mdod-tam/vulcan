@@ -139,7 +139,7 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
          params: { invalid: 'params' },
          as: :json
 
-    assert_response :unprocessable_entity
+    assert_response :unprocessable_content
     json_response = response.parsed_body
     assert_not_nil json_response['error']
   end

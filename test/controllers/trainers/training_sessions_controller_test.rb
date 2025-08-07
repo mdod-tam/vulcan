@@ -237,7 +237,7 @@ module Trainers
 
       @training_session.reload
       assert_equal 'scheduled', @training_session.status # Status should not change
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to complete training session:' # Check for error message in body
     end
 
@@ -251,7 +251,7 @@ module Trainers
 
       @training_session.reload
       assert_equal 'scheduled', @training_session.status # Status should not change
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to complete training session:' # Check for error message in body
     end
 
@@ -302,7 +302,7 @@ module Trainers
 
       @requested_session.reload
       assert_equal 'requested', @requested_session.status # Status should not change
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to schedule training session:' # Check for error message in body
     end
 
@@ -348,7 +348,7 @@ module Trainers
 
       @training_session.reload
       assert_equal 'scheduled', @training_session.status # Status should not change
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to reschedule training session:' # Check for error message in body
     end
 
@@ -363,7 +363,7 @@ module Trainers
 
       @training_session.reload
       assert_equal 'scheduled', @training_session.status # Status should not change
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to reschedule training session:' # Check for error message in body
     end
 
@@ -403,7 +403,7 @@ module Trainers
 
       @training_session.reload
       assert_equal 'scheduled', @training_session.status # Status should not change
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to cancel training session:' # Check for error message in body
     end
 

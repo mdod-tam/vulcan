@@ -552,7 +552,7 @@ module Admin
         }
       end
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
       assert_match 'Income exceeds the maximum threshold for the household size.', flash[:alert]
     end
 
@@ -601,7 +601,7 @@ module Admin
       }
 
       # Check that the response is unprocessable entity
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
 
     test 'should get fpl_thresholds' do
@@ -700,7 +700,7 @@ module Admin
       end
 
       # Expect unprocessable entity
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
 
     test 'should handle missing constituent gracefully in notification job' do
@@ -837,7 +837,7 @@ module Admin
         }
       end
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
   end
 end

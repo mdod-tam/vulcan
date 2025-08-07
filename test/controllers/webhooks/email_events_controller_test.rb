@@ -103,7 +103,7 @@ module Webhooks
            headers: { 'X-Webhook-Signature' => signature },
            as: :json
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
 
     # Test that the endpoint handles complaint events
@@ -135,7 +135,7 @@ module Webhooks
            headers: { 'X-Webhook-Signature' => signature },
            as: :json
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
 
     # Test that the endpoint rejects malformed bounce data
@@ -151,7 +151,7 @@ module Webhooks
            headers: { 'X-Webhook-Signature' => signature },
            as: :json
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
 
     # Test that the endpoint rejects missing bounce data
@@ -167,7 +167,7 @@ module Webhooks
            headers: { 'X-Webhook-Signature' => signature },
            as: :json
 
-      assert_response :unprocessable_entity
+      assert_response :unprocessable_content
     end
 
     # Test that bounce events update the email status and create an audit trail

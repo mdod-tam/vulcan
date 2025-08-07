@@ -39,7 +39,7 @@ module Admin
         )
         log_user_service_error('to create guardian relationship', 'Relationship creation failed')
         flash.now[:alert] = 'Failed to create guardian relationship.'
-        render :new, status: :unprocessable_entity
+        render :new, status: :unprocessable_content
       end
     end
 
