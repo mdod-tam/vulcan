@@ -9,7 +9,7 @@ module TurboStreamResponseHandling
   # @param modals_to_remove [Array<String>] Array of modal IDs to remove
   def handle_turbo_stream_success(message:, updates: {}, modals_to_remove: [])
     prepare_turbo_stream_data if respond_to?(:prepare_turbo_stream_data, true)
-    flash.now[:notice] = message
+    flash.now[:success] = message
     streams = build_success_turbo_streams(updates, modals_to_remove)
     render turbo_stream: streams
   end
@@ -82,6 +82,7 @@ module TurboStreamResponseHandling
     turbo_message ||= html_message
 
     respond_to do |format|
+      # Keep traditional flash types for HTML redirects to avoid breaking existing tests.
       format.html { redirect_to html_redirect_path, notice: html_message }
 
       format.turbo_stream do

@@ -8,10 +8,12 @@ module ApplicationHelper
   include BadgeHelper
 
   def flash_class_for(flash_type)
-    case flash_type
-    when 'notice' then 'bg-green-100 border border-green-400 text-green-700'
-    when 'alert' then 'bg-red-100 border border-red-400 text-red-700'
-    else 'bg-blue-100 border border-blue-400 text-blue-700'
+    case flash_type.to_s
+    when 'notice', 'success' then 'bg-green-100 border border-green-400 text-green-700'
+    when 'alert', 'error' then 'bg-red-100 border border-red-400 text-red-700'
+    when 'warning' then 'bg-yellow-100 border border-yellow-400 text-yellow-700'
+    when 'info' then 'bg-blue-100 border border-blue-400 text-blue-700'
+    else 'bg-gray-100 border border-gray-400 text-gray-700'
     end
   end
 

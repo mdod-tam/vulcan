@@ -132,17 +132,34 @@ export default class extends Controller {
   }
 
   /**
-   * Safely show notification using AppNotifications service with fallback
+   * Show a user-visible message in the native Rails flash container.
+   * This mirrors server-rendered flash: a div#flash containing flash messages.
    * @param {string} message - The message to display
-   * @param {string} type - The notification type ('error', 'success', 'info', etc.)
+   * @param {string} type - The notification type ('error', 'success', 'info', 'warning')
    */
   showNotification(message, type = 'info') {
-    if (window['AppNotifications'] && typeof window['AppNotifications'].show === 'function') {
-      window['AppNotifications'].show(message, type)
-    } else {
-      // Fallback to alert for development or if AppNotifications isn't loaded
-      alert(message)
-      console.warn('AppNotifications service not available. Message:', message)
+    const flashRoot = document.getElementById('flash')
+    if (!flashRoot) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Flash container not found; message:', message)
+      }
+      return
     }
+
+    // Create flash messages wrapper if missing
+    let wrapper = flashRoot.querySelector('.flash-messages')
+    if (!wrapper) {
+      wrapper = document.createElement('div')
+      wrapper.className = 'flash-messages'
+      wrapper.setAttribute('aria-live', 'polite')
+      flashRoot.innerHTML = ''
+      flashRoot.appendChild(wrapper)
+    }
+
+    const msg = document.createElement('div')
+    msg.setAttribute('role', 'alert')
+    msg.className = `flash-message flash-${type} mb-4`
+    msg.textContent = message
+    wrapper.appendChild(msg)
   }
 }

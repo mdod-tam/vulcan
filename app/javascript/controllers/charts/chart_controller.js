@@ -26,6 +26,11 @@ export default class extends ChartBaseController {
       return this.handleUnavailable()
     }
 
+    // Additional guard: if container is hidden, defer
+    if (!this.isVisible()) {
+      return
+    }
+
     if (!this.validateData(this.dataValue)) {
       return
     }

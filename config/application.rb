@@ -35,9 +35,7 @@ module MatVulcan
       g.fixture_replacement :factory_bot, dir: 'test/factories'
     end
 
-    # Flash message configuration
-    # Options: :toast (JavaScript notifications), :traditional (Rails HTML), :both
-    # Default: :toast for normal environments, :both for test environment
-    config.flash_mode = :traditional  # Use traditional Rails flash messages
+    # Flash message configuration: use traditional Rails flash only
+    config.flash_mode = :traditional
   end
 end

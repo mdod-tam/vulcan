@@ -1,35 +1,9 @@
 <% if flash.any? %>
-  <%# Configuration: Set flash_mode to control how flash messages are displayed %>
-  <%# Options: :toast (JavaScript notifications), :traditional (Rails HTML), :both %>
-  <% flash_mode = Rails.application.config.try(:flash_mode) || (Rails.env.test? ? :both : :toast) %>
-  
-  <% if flash_mode == :toast || flash_mode == :both %>
-    <%# JSON data for toast notifications %>
-    <script type="application/json" id="rails-flash-messages">
-      <%= raw [
-        flash.map do |type, message|
-          {
-            message: message,
-            type: case type.to_s
-                  when 'notice' then 'success'
-                  when 'alert' then 'warning'  
-                  when 'info' then 'info'
-                  else 'error'
-                  end
-          }
-        end
-      ].flatten.to_json %>
-    </script>
-  <% end %>
-
-  <% if flash_mode == :traditional || flash_mode == :both %>
-    <%# Traditional Rails flash messages (visible HTML) %>
-    <div class="flash-messages" aria-live="polite">
-      <% flash.each do |type, message| %>
-        <div role="alert" class="flash-message flash-<%= type %> mb-4" data-testid="flash-<%= type %>">
-          <%= message %>
-        </div>
-      <% end %>
-    </div>
-  <% end %>
+  <div class="flash-messages" aria-live="polite">
+    <% flash.each do |type, message| %>
+      <div role="alert" class="flash-message flash-<%= type %> mb-4 <%= flash_class_for(type) %>" data-testid="flash-<%= type %>">
+        <%= message %>
+      </div>
+    <% end %>
+  </div>
 <% end %>

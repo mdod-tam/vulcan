@@ -490,45 +490,9 @@ describe('RailsRequestService', () => {
   })
 
   describe('tryShowFlash', () => {
-    let mockAppNotifications
-
-    beforeEach(() => {
-      mockAppNotifications = {
-        show: jest.fn()
-      }
-      global.window.AppNotifications = mockAppNotifications
-    })
-
-    afterEach(() => {
-      delete global.window.AppNotifications
-    })
-
-    it('dispatches rails-request:flash event with message and type', () => {
+    it('is a no-op and returns false (native Rails flash)', () => {
       const result = service.tryShowFlash('Test message', 'error')
-
-      expect(result).toBe(true)
-      expect(mockAppNotifications.show).toHaveBeenCalledWith('Test message', 'error')
-    })
-
-    it('defaults to error type when type not specified', () => {
-      const result = service.tryShowFlash('Test message')
-
-      expect(result).toBe(true)
-      expect(mockAppNotifications.show).toHaveBeenCalledWith('Test message', 'error')
-    })
-
-    it('handles event dispatch errors gracefully', () => {
-      // Remove AppNotifications to simulate unavailability
-      delete global.window.AppNotifications
-      
-      const result = service.tryShowFlash('Test message')
-
       expect(result).toBe(false)
-      expect(global.console.warn).toHaveBeenCalledWith(
-        'AppNotifications service not available to show flash message:',
-        'Test message',
-        'error'
-      )
     })
   })
 

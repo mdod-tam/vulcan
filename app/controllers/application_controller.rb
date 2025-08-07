@@ -7,6 +7,9 @@ class ApplicationController < ActionController::Base
 
   protect_from_forgery with: :exception
 
+  # Extended flash types for accessible, semantic notifications
+  add_flash_types :info, :error, :success, :warning
+
   # Include our helpers
   helper PasswordFieldHelper
   helper EmailStatusHelper
@@ -34,6 +37,42 @@ class ApplicationController < ActionController::Base
 
     # Redirect to password change form with notice
     redirect_to edit_password_path, notice: 'For security reasons, you must change your password before continuing.'
+  end
+
+  # Standard flash helper methods
+  # rubocop:disable Rails/ActionControllerFlashBeforeRender
+  def flash_success(message)
+    flash[:success] = message
+  end
+
+  def flash_error(message)
+    flash[:error] = message
+  end
+
+  def flash_warning(message)
+    flash[:warning] = message
+  end
+
+  def flash_info(message)
+    flash[:info] = message
+  end
+  # rubocop:enable Rails/ActionControllerFlashBeforeRender
+
+  # Immediate (render-safe) flash helpers
+  def flash_success_now(message)
+    flash.now[:success] = message
+  end
+
+  def flash_error_now(message)
+    flash.now[:error] = message
+  end
+
+  def flash_warning_now(message)
+    flash.now[:warning] = message
+  end
+
+  def flash_info_now(message)
+    flash.now[:info] = message
   end
 
   # Creates a session, sets the cookie, tracks sign-in, and redirects.

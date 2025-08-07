@@ -24,6 +24,11 @@ class ChartBaseController extends Controller {
     this.cleanupExistingChart()
     // Chart.js container positioning is handled by ERB templates
     // Controller only manages chart behavior, not styling
+
+    // Guard: do not attempt to initialize charts in hidden containers
+    if (!this.isVisible()) {
+      return
+    }
   }
 
   disconnect() {
@@ -126,6 +131,11 @@ class ChartBaseController extends Controller {
     if (this.hasFlashOutlet) {
       this.flashOutlet.showInfo("Chart unavailable: Chart.js not loaded.")
     }
+  }
+
+  // Simple visibility check used to avoid layout-measure loops
+  isVisible() {
+    return this.element && this.element.offsetParent !== null
   }
 
   _showMessage(colorClass, text) {

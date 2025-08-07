@@ -208,16 +208,12 @@ export class RailsRequestService {
    * @param {string} type - Message type (success, error, warning, info)
    */
   tryShowFlash(message, type = 'error') {
-    if (window.AppNotifications && typeof window.AppNotifications.show === 'function') {
-      window.AppNotifications.show(message, type);
-      return true;
-    } else {
-      // Fallback to console if AppNotifications is not available (e.g., during development or if not loaded)
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('AppNotifications service not available to show flash message:', message, type);
-      }
-      return false;
+    // With native Rails flash, rely on server-side flash rendering or Turbo Streams.
+    // Client-side fallback stays as a no-op except for dev logging.
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('RailsRequestService.tryShowFlash noop (server-rendered flash expected):', message, type)
     }
+    return false
   }
 
   /**
