@@ -26,8 +26,10 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
    - Integrated with audit events and notifications
 
 5. **Notifications**
-   - Email via `NotificationService` + database-backed templates
-   - In-app uses Rails flash (no JS toast layer). Email is the only implemented channel today
+   - Notifications can be sent to constituents via email or paper letter
+   - Email via `NotificationService` + database-backed templates with versioning 
+   - Paper letters for snail mail via `PrintQueueItem`
+   - Rails native flash in-app
 
 6. **Audit & Events**
    - Central `AuditEventService` + `Applications::EventDeduplicationService`
@@ -51,23 +53,29 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 - ✅ Unified proof attachment + review with audits
 - ✅ Medical certification: email automation; fax outbound only
 - ✅ Action Mailbox for inbound emails
-- ✅ Voucher management and vendor workflows (incl. W9)
+- ✅ Voucher management and vendor workflows (incl. W9 and invoicing)
 - ✅ Admin dashboards, filters, and draft pain-point analysis
 - ✅ Comprehensive audit logging with event deduplication
-- ⏳ Inbound fax automation
-- ⏳ Enhanced reporting and duplicate-review admin UI
+- ⏳ Inbound fax automation (Twilio integration with webhook processing)
+- ⏳ Live chat functionality with transcript capture and audit logging
+- ⏳ Tooltips and inline help system for guided application flows
+- ⏳ Duplicate detection and review admin UI with merge/ignore workflows
+- ⏳ Custom report builder with whitelisted filters and CSV export
+- ⏳ HIPAA compliant document signing system for Disability Certification Forms (DocuSeal integration)
+- ⏳ Notification analytics dashboard with delivery metrics
+- ⏳ Enhanced audit event browsing and CSV export capabilities
 
 ## Technical Stack
 
 - **Ruby** 3.4.5
 - **Rails** 8.0.2
-- **PostgreSQL**
+- **PostgreSQL** 17.5
 - **Tailwind CSS**
 - **Propshaft Asset Pipeline**
 - **Solid Queue** (for background jobs)
 - **Postmark** (for email delivery)
 - **Action Mailbox** (for inbound email processing)
-- **AWS S3** (for file storage)
+- **Bucketeer/AWS S3** (for file storage)
 - **Twilio** (for SMS and fax services)
 
 ## Architecture
@@ -145,6 +153,7 @@ The application uses Minitest for testing. To run the test suite:
 ```bash
 bin/rails test
 bin/rails test:system # For system tests
+bin/rails test:all # For all tests
 ```
 
 FactoryBot is used for test data generation. Factories can be found in `test/factories/`.

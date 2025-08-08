@@ -28,14 +28,16 @@ Capybara.register_driver :cuprite do |app|
   block_rules = blocked_hosts.map { |h| "MAP #{h} 0.0.0.0" }.join(', ')
 
   # Debug: Check CI environment variables
-  is_ci = ENV['CI'] || ENV['HEROKU_TEST_RUN_ID']
+  is_ci = ENV['CI'] || ENV.fetch('HEROKU_TEST_RUN_ID', nil)
   timeout_value = is_ci ? 120 : 60
-  puts "🔧 Cuprite CI Detection: CI=#{ENV['CI']}, HEROKU_TEST_RUN_ID=#{ENV['HEROKU_TEST_RUN_ID']}, using timeout=#{timeout_value}s" if ENV['VERBOSE_TESTS']
+  if ENV['VERBOSE_TESTS']
+    puts "🔧 Cuprite CI Detection: CI=#{ENV.fetch('CI', nil)}, HEROKU_TEST_RUN_ID=#{ENV.fetch('HEROKU_TEST_RUN_ID', nil)}, using timeout=#{timeout_value}s"
+  end
 
   Capybara::Cuprite::Driver.new(
     app,
     # General options
-    window_size: [1400, 1000],
+    window_size: [1200, 800],
     js_errors: true, # Raise Ruby errors for JS console errors
     inspector: true, # Allow `page.driver.debug` to open a browser inspector
 
@@ -83,36 +85,6 @@ Capybara.register_driver :cuprite do |app|
   )
 end
 
-# --------------------------------------------------------------------------
-# SECTION 2: COMPREHENSIVE CUPRITE RESCUE MODULE
-# --------------------------------------------------------------------------
-# This module patches Capybara's lowest-level synchronize method to catch
-# ALL Ferrum errors, providing complete protection for the entire DSL.
-# --------------------------------------------------------------------------
-module CupriteRescue
-  RETRY_ERRORS = [
-    Ferrum::DeadBrowserError,
-    Ferrum::PendingConnectionsError,
-    Ferrum::NodeNotFoundError,
-    Ferrum::TimeoutError
-  ].freeze
-  MAX_RETRIES = 2
-
-  def synchronize(*)
-    Thread.current[:capybara_retries] ||= 0
-    super
-  rescue *RETRY_ERRORS => e
-    raise if Thread.current[:capybara_retries] >= MAX_RETRIES
-
-    Thread.current[:capybara_retries] += 1
-    warn "🔄  #{e.class} – restarting Cuprite (#{Thread.current[:capybara_retries]})"
-    hard_restart
-    retry
-  ensure
-    Thread.current[:capybara_retries] = 0 if Thread.current[:capybara_retries]&.positive?
-  end
-end
-
 # CupriteSessionExtensions - Add hard restart capability
 module CupriteSessionExtensions
   def hard_restart
@@ -122,7 +94,7 @@ module CupriteSessionExtensions
 end
 
 # --------------------------------------------------------------------------
-# SECTION 3: GLOBAL CAPYBARA CONFIGURATION
+# SECTION 2: GLOBAL CAPYBARA CONFIGURATION
 # --------------------------------------------------------------------------
 # This block sets the global configuration for Capybara itself.
 # --------------------------------------------------------------------------
@@ -140,59 +112,8 @@ Capybara.configure do |config|
   config.automatic_reload = true # Auto-refind stale nodes after DOM changes
 end
 
-# Apply CupriteRescue wrapper once, process-wide and threadsafe
-Capybara::Session.prepend(CupriteRescue)
-
 # Include CupriteSessionExtensions for hard restart capability
 Capybara::Session.include CupriteSessionExtensions
-
-# Improved fill_in patch to eliminate ALL Cuprite Node#set warnings
-module FillInCupritePatch
-  def fill_in(locator, **options)
-    # Only patch for Cuprite driver
-    return super unless driver.is_a?(Capybara::Cuprite::Driver)
-
-    # Extract the value from either :with key or assume second positional argument pattern
-    value = options.delete(:with)&.to_s
-
-    # Find the field with remaining options (filtering out problematic ones)
-    safe_options = options.except(:clear, :fill_options, :currently_with, :exact_text, :normalize_ws)
-    el = find_field(locator, **safe_options)
-
-    # Clear the field using the most reliable method for Cuprite
-    begin
-      # Method 1: JavaScript clearing (most reliable)
-      execute_script("arguments[0].value = ''; arguments[0].dispatchEvent(new Event('input', {bubbles: true}));", el)
-    rescue StandardError
-      # Method 2: Fallback to native clearing
-      begin
-        el.native.clear if el.native.respond_to?(:clear)
-      rescue StandardError
-        # Method 3: Last resort - select all and replace
-        el.send_keys([:control, 'a']) if value.present?
-      end
-    end
-
-    # Set the new value if provided
-    return if value.blank?
-
-    el.send_keys(value)
-    # Trigger change events for JavaScript controllers (Stimulus, etc.)
-    begin
-      execute_script(<<~JS, el)
-        const element = arguments[0];
-        if (element) {
-          element.dispatchEvent(new Event('change', { bubbles: true }));
-          element.dispatchEvent(new Event('blur', { bubbles: true }));
-        }
-      JS
-    rescue StandardError => e
-      warn "Warning: Could not trigger change events: #{e.message}" if ENV['VERBOSE_TESTS']
-    end
-  end
-end
-
-Capybara::Session.prepend(FillInCupritePatch)
 
 # Helper Modules – defined before use
 
@@ -370,8 +291,8 @@ module MemorySafeTestHelpers
     end
   end
 
-  def create_list(factory_name, count, *args)
-    FactoryBot.create_list(factory_name, count, *args)
+  def create_list(factory_name, count, *)
+    FactoryBot.create_list(factory_name, count, *)
   end
 
   # Helper method to create lightweight blob stubs for ActiveStorage
@@ -405,7 +326,7 @@ end
 # --------------------------------------------------------------------------
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # Use the driver we registered above.
-  driven_by :cuprite, screen_size: [1400, 1000]
+  driven_by :cuprite, screen_size: [1200, 800]
 
   # Include all necessary helper modules.
   include SystemTestAuthentication
@@ -433,7 +354,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     end
 
     setup do
-      DatabaseCleaner.strategy = :transaction
+      # Use truncation for system tests since the app server runs in
+      # a separate thread/process and won’t see transactional data.
+      DatabaseCleaner.strategy = :truncation
       DatabaseCleaner.start
     end
 
@@ -476,7 +399,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     track_chrome_processes('AFTER_CONNECTION_CLEAR')
 
     # 5. Inject JavaScript fixes for known issues (e.g., Chart.js).
-    inject_test_javascript_fixes if page&.driver
+    # TEMPORARILY DISABLED - may be interfering with page rendering
+    # inject_test_javascript_fixes if page&.driver
     track_chrome_processes('TEST_SETUP_COMPLETE')
   end
 
@@ -542,9 +466,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
 
   # Helper for tests that need JS to reach across threads (file uploads, ActionCable, etc.)
-  def using_truncation(&block)
+  def using_truncation(&)
     DatabaseCleaner.strategy = :truncation
-    DatabaseCleaner.cleaning(&block)
+    DatabaseCleaner.cleaning(&)
   ensure
     DatabaseCleaner.strategy = :transaction
   end

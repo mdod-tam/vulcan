@@ -264,7 +264,8 @@ module SystemTestAuthentication
       wait_for_page_stable
       assert_current_path(sign_in_path, wait: 10)
     elsif page.has_button?('Sign Out', wait: 1)
-      click_button 'Sign Out'
+      # Use match: :first to handle cases where multiple Sign Out buttons exist (desktop/mobile)
+      click_button 'Sign Out', match: :first
       wait_for_page_stable
       assert_current_path(sign_in_path, wait: 10)
     end

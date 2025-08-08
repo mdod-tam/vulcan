@@ -49,7 +49,8 @@ if Rails.env.test?
     config.default_max_wait_time = ENV['CI'] ? 15 : 10
 
     # Input and interaction settings
-    config.default_set_options = { clear: :backspace }
+    # Avoid passing Node#set options to Cuprite (it logs warnings and ignores them).
+    # Use targeted helpers like safe_fill_in / cuprite_fill_in instead of global clear options.
     config.automatic_label_click = true
     config.automatic_reload = true # Auto-refind stale nodes after DOM changes
 
