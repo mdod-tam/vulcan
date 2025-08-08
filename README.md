@@ -6,7 +6,7 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 
 1. **Applications (Portal + Paper)**
    - Portal flow with autosave and inline validation
-   - Admin-only paper path guarded by `Current.paper_context` (allows proof approval without a file)
+   - Admin-only paper path guarded by `Current.paper_context`; approvals require attachments, rejections may proceed without a file
    - Status tracking with comprehensive audit trails
    - Guardian/dependent application support
 

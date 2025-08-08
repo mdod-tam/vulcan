@@ -47,7 +47,7 @@ All flows converge on **one Application record**, so every downstream service (e
 ### 2.2 Paper (Admin)
 
 1. **Admin → Paper Apps → New**  
-2. Dynamic form (guardian search / create, proof accept w/ or w/o file).  
+2. Dynamic form (guardian search / create, proof accept with file; reject without file).  
 3. Wrap all logic with:
 
 ```ruby
@@ -112,7 +112,7 @@ ProofReview.create!(application: app, admin: admin, proof_type: :income, status:
 ProofAttachmentService.reject_proof_without_attachment(...)
 ```
 
-*Paper context allows proof approval without a file attachment. The ProofReview model handles post-review actions via callbacks.*
+Approvals require an attachment; only rejections may proceed without a file. The ProofReview model handles post-review actions via callbacks.
 
 ---
 

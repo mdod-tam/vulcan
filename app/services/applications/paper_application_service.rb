@@ -248,17 +248,10 @@ module Applications
     def process_accept_proof(type)
       file_present = params["#{type}_proof"].present? || params["#{type}_proof_signed_id"].present?
 
-      if Current.paper_context? && !file_present
-        # Paper context without file - just approve status
-        @application.update!("#{type}_proof_status" => Application.public_send("#{type}_proof_statuses")['approved'])
-        log_proof_submission(type, false)
-        true
-      elsif file_present
-        attach_and_approve_proof(type)
-      else
-        add_error("Please upload a file for #{type} proof")
-        false
-      end
+      # Approval requires an attachment in all contexts. Only rejections may proceed without files.
+      return add_error("Please upload a file for #{type} proof before approving") unless file_present
+
+      attach_and_approve_proof(type)
     end
 
     def attach_and_approve_proof(type) # rubocop:disable Naming/PredicateMethod

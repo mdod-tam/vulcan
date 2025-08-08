@@ -13,7 +13,7 @@ Admin → Admin::PaperApplicationsController → Applications::PaperApplicationS
 ```
 
 * **Why a separate path?** Paper apps bypass online-only validations (proof uploads, attachment checks) while still preserving audit trails.
-* **Key difference from portal:** Uses `Current.paper_context = true` to bypass certain validations and allow proof approval without file attachments.
+* **Key difference from portal:** Uses `Current.paper_context = true` to bypass some validations. Approvals still require attachments; only rejections may proceed without a file.
 
 ---
 
@@ -33,7 +33,7 @@ service.create  # returns true/false
 |----------------|-------|
 | Constituent lookup / create | Delegates to `GuardianDependentManagementService` and `UserCreationService` |
 | GuardianRelationship | Handled by `GuardianDependentManagementService` |
-| Proof processing | Upload, accept w/o file, reject using `ProofAttachmentService` |
+| Proof processing | Upload, accept with file, reject without file using `ProofAttachmentService` |
 | Thread-local context | `Current.paper_context = true` (auto-managed in ensure block) |
 | Audits & notifications | Uses `AuditEventService` and `NotificationService` |
 
@@ -70,8 +70,8 @@ ensure
 end
 ```
 
-* Skips **ProofConsistencyValidation** validations for proof attachments.
-* Allows proof approval without file attachments in **ProofManageable**.
+* Skips certain validations for paper flows via `Current.paper_context`.
+* Approvals still require an attached file; rejections do not.
 * Always reset in `ensure` or test teardown.
 
 ---
@@ -100,11 +100,10 @@ end
 
 ## 5 · Proof Processing
 
-Paper applications can process proofs in three ways:
+Paper applications can process proofs in two ways:
 
 1. **Accept with file**: Uses `ProofAttachmentService.attach_proof` to attach and approve
-2. **Accept without file**: Updates status directly (paper context allows this)
-3. **Reject**: Uses `ProofAttachmentService.reject_proof_without_attachment`
+2. **Reject without file**: Uses `ProofAttachmentService.reject_proof_without_attachment`
 
 ```ruby
 # Accept with file
@@ -118,10 +117,7 @@ result = ProofAttachmentService.attach_proof(
 )
 ```
 
-```ruby
-# Accept without file (paper context allows this)
-@application.update!("#{type}_proof_status" => 'approved')
-```
+<!-- Accept without file is not allowed when approving. Selecting approve without a file will return a validation error. -->
 
 ```ruby
 # Reject
@@ -209,15 +205,7 @@ assert_difference ['GuardianRelationship.count', 'Application.count'] do
 end
 ```
 
-### 8.3 · Proof Acceptance w/o File
-
-```ruby
-Current.paper_context = true
-service = Applications::PaperApplicationService
-            .new(params: { income_proof_action: 'accept' }, admin: @admin)
-assert service.update(@application)
-assert @application.reload.income_proof_status_approved?
-```
+<!-- Removed: approval without file is not supported. Approvals require an attachment. -->
 
 ---
 

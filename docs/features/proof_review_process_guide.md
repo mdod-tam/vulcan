@@ -297,8 +297,8 @@ end
 
 # Note on Audit Events in PaperApplicationService:
 # - When a proof is accepted with a file, `ProofAttachmentService` creates a `#{type}_proof_attached` audit event.
-# - When a proof is accepted without a file (in a paper context), `PaperApplicationService` creates a `proof_submitted` audit event.
-# - When a proof is rejected, `ProofAttachmentService` creates a `#{type}_proof_rejected` audit event.
+# - When a proof is rejected (no file required), `ProofAttachmentService` creates a `#{type}_proof_rejected` audit event.
+# - Selecting approve without a file returns a validation error surfaced via flash.
 ```
 
 ### 4.3 · Email Submission via Action Mailbox
