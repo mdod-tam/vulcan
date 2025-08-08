@@ -143,13 +143,18 @@ module Admin
     end
 
     def reject_for_income
-      service = initialize_rejection_service
-      return handle_service_failure(service) unless service.create
+      # Build constituent params from form data for notification (no application created)
+      constituent_params = build_constituent_params_for_notification
+      notification_params = build_notification_params
 
-      application = service.application
-      log_successful_rejection(application)
-      send_rejection_notification_for_application(application)
-      log_audit_event(application)
+      # Send rejection notification without creating an application
+      ApplicationNotificationsMailer.income_threshold_exceeded(
+        constituent_params,
+        notification_params
+      ).deliver_later
+
+      # Log the rejection event (no application to reference)
+      log_income_threshold_rejection(constituent_params, notification_params)
 
       redirect_to admin_applications_path,
                   notice: 'Application rejected due to income threshold. Rejection notification has been sent.'
@@ -181,46 +186,14 @@ module Admin
 
     private
 
-    def initialize_rejection_service
-      service_params = paper_application_processing_params
-      service_params[:application] ||= {}
-      service_params[:application][:status] = 'rejected'
-
-      Applications::PaperApplicationService.new(
-        params: service_params,
-        admin: current_user,
-        skip_income_validation: true
-      )
-    end
-
-    def log_successful_rejection(application)
-      Rails.logger.debug { "Successfully rejected application #{application.id}" }
-    end
-
-    def send_rejection_notification_for_application(application)
-      ApplicationNotificationsMailer.income_threshold_exceeded(
-        user_contact_attributes(application.user),
-        rejection_notification_params(application)
-      ).deliver_later
-    end
-
-    def user_contact_attributes(user)
-      user.attributes.slice('first_name', 'last_name', 'email', 'phone')
-    end
-
-    def rejection_notification_params(application)
-      threshold_amount = calculate_income_threshold(application.household_size)
-
-      {
-        household_size: application.household_size,
-        annual_income: application.annual_income,
-        threshold_amount: threshold_amount
-      }
-    end
-
     def calculate_income_threshold(household_size)
       threshold_result = IncomeThresholdCalculationService.new(household_size).call
       threshold_result.success? ? threshold_result.data[:threshold] : 0
+    end
+
+    def calculate_income_threshold_from_params(notification_params)
+      household_size = notification_params['household_size'] || notification_params[:household_size]
+      calculate_income_threshold(household_size)
     end
 
     def log_audit_event(application)
@@ -229,6 +202,21 @@ module Admin
         actor: Current.user,
         auditable: application,
         metadata: audit_metadata(application)
+      )
+    end
+
+    def log_income_threshold_rejection(constituent_params, notification_params)
+      AuditEventService.log(
+        action: 'income_threshold_rejection_no_application',
+        actor: Current.user,
+        auditable: nil, # No application was created
+        metadata: {
+          constituent_name: "#{constituent_params['first_name']} #{constituent_params['last_name']}",
+          constituent_email: constituent_params['email'],
+          income: notification_params['annual_income'],
+          household_size: notification_params['household_size'],
+          threshold: calculate_income_threshold_from_params(notification_params)
+        }
       )
     end
 

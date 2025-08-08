@@ -23,7 +23,7 @@
     <!-- Filters -->
     <div class="bg-white shadow rounded-lg mb-8">
       <div class="px-4 py-5 sm:p-6">
-        <%= form_with url: vendor_portal_transactions_path, method: :get, class: "space-y-6" do |f| %>
+        <%= form_with url: vendor_portal_transactions_path, method: :get, class: "space-y-6", data: { controller: "date-range" } do |f| %>
           <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
             <div class="sm:col-span-2">
               <%= f.label :period, "Time Period", class: "block text-sm font-medium text-gray-700" %>
