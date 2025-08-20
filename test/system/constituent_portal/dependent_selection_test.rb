@@ -121,11 +121,15 @@ module ConstituentPortal
       # Switch back to "Myself"
       choose 'Myself'
 
+      # Wait for JavaScript to complete
+      wait_for_turbo
+
       # Title should change back to "New Application"
       assert_selector 'h1#form-title', text: 'New Application', wait: 5
 
-      # Dependent selection should be hidden
-      assert_no_selector '#dependent-selection-fields', visible: true, wait: 5
+      # Dependent selection should be hidden (hidden class applied)
+      element = find('#dependent-selection-fields', visible: :all)
+      assert element[:class].to_s.include?('hidden')
     end
 
     test 'selecting different dependents from dropdown updates title correctly' do

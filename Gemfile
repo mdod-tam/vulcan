@@ -19,7 +19,7 @@ gem 'jbuilder'
 # Deploy this application anywhere as a Docker container [https://kamal-deploy.org]
 gem 'kamal', require: false
 # use postgresql as the database for Active Record
-gem 'pg', '~> 1.5', '>= 1.5.9'
+gem 'pg', '~> 1.6', '>= 1.6.1'
 # gem for sending out emails
 gem 'postmark-rails', '~> 0.22.1'
 # the modern asset pipeline for Rails [https://github.com/rails/propshaft]

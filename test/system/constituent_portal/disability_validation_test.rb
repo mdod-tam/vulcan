@@ -59,7 +59,9 @@ module ConstituentPortal
       attach_file 'Proof of Residency', @valid_image
       attach_file 'Income Verification', @valid_pdf
 
-      # Submit application
+      # Wait for FPL thresholds to load and enable submit via income validation
+      wait_for_fpl_data_to_load(timeout: 15)
+      assert_button 'Submit Application', disabled: false, wait: 15
       click_button 'Submit Application'
 
       # Should be successful
@@ -94,7 +96,9 @@ module ConstituentPortal
       attach_file 'Proof of Residency', @valid_image
       attach_file 'Income Verification', @valid_pdf
 
-      # Submit application
+      # Wait for FPL thresholds to load and enable submit via income validation
+      wait_for_fpl_data_to_load(timeout: 15)
+      assert_button 'Submit Application', disabled: false, wait: 15
       click_button 'Submit Application'
 
       # Should be successful
@@ -177,7 +181,9 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my medical information as described above'
       end
 
-      # Submit application
+      # Wait for FPL thresholds to load and enable submit via income validation
+      wait_for_fpl_data_to_load(timeout: 15)
+      assert_button 'Submit Application', disabled: false, wait: 15
       click_button 'Submit Application'
 
       # Should be successful
@@ -212,7 +218,9 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my medical information as described above'
       end
 
-      # Submit application
+      # Wait for FPL thresholds to load and enable submit via income validation
+      wait_for_fpl_data_to_load(timeout: 15)
+      assert_button 'Submit Application', disabled: false, wait: 15
       click_button 'Submit Application'
 
       # Should show validation error (though the exact message might vary)
@@ -250,7 +258,9 @@ module ConstituentPortal
       attach_file 'Proof of Residency', @valid_image
       attach_file 'Income Verification', @valid_pdf
 
-      # Submit application
+      # Wait for FPL thresholds to load and enable submit via income validation
+      wait_for_fpl_data_to_load(timeout: 15)
+      assert_button 'Submit Application', disabled: false, wait: 15
       click_button 'Submit Application'
 
       # Should be successful

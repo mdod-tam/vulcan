@@ -200,6 +200,7 @@ module Admin
       before_user_count = User.count
       before_relationship_count = GuardianRelationship.count
 
+      assert_button 'Submit Paper Application', disabled: false, wait: 15
       click_button 'Submit Paper Application'
       wait_for_network_idle(timeout: 10)
 
@@ -216,6 +217,7 @@ module Admin
       before_count = Application.count
       before_relationship_count = GuardianRelationship.count
 
+      assert_button 'Submit Paper Application', disabled: false, wait: 15
       click_button 'Submit Paper Application'
       wait_for_network_idle(timeout: 10)
 

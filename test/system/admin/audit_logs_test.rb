@@ -67,21 +67,14 @@ module Admin
     test 'audit logs correctly show proof review actions without duplicates' do
       # Always sign in fresh for each test
       system_test_sign_in(@admin)
-      visit admin_application_path(@application)
-
-      # Wait for page to load completely with intelligent waiting
-      # Use a more specific selector that indicates the page has fully loaded
-      assert_selector 'h1#application-title', wait: 20
+      visit_admin_application_with_retry(@application, user: @admin)
 
       # Use intelligent waiting - assert_selector will wait automatically
       assert_selector '#attachments-section', wait: 15
 
       # Open the income proof review modal
-      within '#attachments-section' do
-        # Use explicit wait and fresh find to avoid stale references
-        assert_selector('button[data-modal-id="incomeProofReviewModal"]', wait: 15)
-        find('button[data-modal-id="incomeProofReviewModal"]', wait: 15).click
-      end
+      # Open modal using the standardized helper for overlap safety
+      click_review_proof_and_wait('income', timeout: 20)
 
       # Approve the income proof within the modal
       within '#incomeProofReviewModal' do

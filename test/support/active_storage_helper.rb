@@ -6,12 +6,6 @@ module ActiveStorageHelper
     storage_dir = Rails.root.join('tmp/storage')
     FileUtils.rm_rf(storage_dir)
     FileUtils.mkdir_p(storage_dir)
-
-    # Set URL options for ActiveStorage
-    ActiveStorage::Current.url_options = { host: 'localhost:3000' }
-
-    # Ensure we're using the test service
-    Rails.application.config.active_storage.service = :test
   end
 
   # Clear Active Storage tables

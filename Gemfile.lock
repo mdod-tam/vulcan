@@ -77,7 +77,7 @@ GEM
     android_key_attestation (0.3.0)
     ast (2.4.3)
     aws-eventstream (1.4.0)
-    aws-partitions (1.1141.0)
+    aws-partitions (1.1143.0)
     aws-sdk-core (3.229.0)
       aws-eventstream (~> 1, >= 1.3.0)
       aws-partitions (~> 1, >= 1.992.0)
@@ -89,7 +89,7 @@ GEM
     aws-sdk-kms (1.110.0)
       aws-sdk-core (~> 3, >= 3.228.0)
       aws-sigv4 (~> 1.5)
-    aws-sdk-s3 (1.196.0)
+    aws-sdk-s3 (1.196.1)
       aws-sdk-core (~> 3, >= 3.228.0)
       aws-sdk-kms (~> 1)
       aws-sigv4 (~> 1.5)
@@ -127,7 +127,7 @@ GEM
       rack-test (>= 0.6.3)
       regexp_parser (>= 1.5, < 3.0)
       xpath (~> 3.2)
-    cbor (0.5.9.9)
+    cbor (0.5.10.1)
     childprocess (5.1.0)
       logger (~> 1.5)
     chunky_png (1.4.0)
@@ -535,7 +535,7 @@ DEPENDENCIES
   mocha
   mupdf (~> 1.0)
   pagy
-  pg (~> 1.5, >= 1.5.9)
+  pg (~> 1.6, >= 1.6.1)
   postmark-rails (~> 0.22.1)
   prawn (~> 2.5)
   propshaft

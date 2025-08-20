@@ -71,6 +71,35 @@ render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
 
 ---
 
+### 2.5 · `income_threshold` (FPL)
+
+```javascript
+// app/javascript/services/income_threshold.js
+import { calculateThreshold, exceeds } from "../services/income_threshold"
+
+const baseFplBySize = { "1": 15650, "2": 21150 /* ... up to 8 */ }
+const modifierPercent = 400
+
+const threshold = calculateThreshold({ baseFplBySize, modifierPercent, householdSize: 3 })
+const isOver    = exceeds({ baseFplBySize, modifierPercent, householdSize: 3, income: 110000 })
+```
+
+- Pure, DOM-free functions mirroring server `IncomeThresholdCalculationService` inputs/semantics.
+- DRY threshold math across constituent and admin paper application flows.
+- Easy to unit test without Stimulus or DOM.
+
+Ownership & events
+- `income-validation` controller owns threshold assessment and the warning container visibility.
+- It dispatches `income-validation:validated` with `{ exceedsThreshold, income, threshold, householdSize }`.
+- `paper-application` listens to the event to toggle submit/reject UI; it does not modify the warning container.
+
+Visibility & selectors
+- Warning containers render with HTML `hidden` initially for deterministic headless runs.
+- Controllers add/remove `hidden` and set `role="alert"` when visible.
+- Prefer `[data-income-validation-target="warningContainer"]` in tests; constituent keeps `#income-threshold-warning`, admin uses `#admin-income-threshold-warning`.
+
+---
+
 ## 3 · Base Controllers
 
 ### 3.1 · `BaseFormController`
@@ -147,6 +176,11 @@ this.dispatch('selectionChange', { detail: { guardianId: 123 } })
 ```
 
 Example: Paper application flow uses events between `income-validation`, `dependent-fields`, and `applicant-type` controllers.
+
+Income validation flow
+- `income-validation` computes using server-injected thresholds (`fpl_thresholds_json`, `fpl_modifier_value`) and the shared `income_threshold` utility, then dispatches `income-validation:validated`.
+- `paper-application` listens for that event to disable/enable submit and to show/hide its rejection action.
+- Only `income-validation` toggles the warning container. In tests, assert visibility via `[data-income-validation-target="warningContainer"]` and the `[hidden]` attribute.
 
 ---
 

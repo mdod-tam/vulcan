@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class DependentEmailHandlingTest < ActiveSupport::TestCase
+    include ActionDispatch::TestProcess::FixtureFile
+
     setup do
       # Set up FPL policies for income validation
       setup_fpl_policies
@@ -38,7 +40,9 @@ module Applications
             self_certify_disability: true
           },
           income_proof_action: 'accept',
-          residency_proof_action: 'accept'
+          income_proof: fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf'),
+          residency_proof_action: 'accept',
+          residency_proof: fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
         },
         admin: @admin
       )
@@ -90,7 +94,9 @@ module Applications
             self_certify_disability: true
           },
           income_proof_action: 'accept',
-          residency_proof_action: 'accept'
+          income_proof: fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf'),
+          residency_proof_action: 'accept',
+          residency_proof: fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
         },
         admin: @admin
       )

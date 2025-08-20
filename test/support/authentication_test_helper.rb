@@ -79,7 +79,7 @@ module AuthenticationTestHelper
   # Convenience aliases for backward compatibility ---------------------------
   alias sign_in_as sign_in_for_controller_test
   alias sign_in_with_headers sign_in_for_integration_test
-  alias update_current_user sign_in_for_unit_test
+  # Do not alias update_current_user – keep the core meaning from AuthenticationCore
 
   # Optional convenience helper: simulate a form-based sign-in (slow!).
   def sign_in_user(user, password: 'password123')
@@ -144,40 +144,4 @@ module AuthenticationTestHelper
   end
 
   private
-
-  def is_integration_test?
-    defined?(post) && respond_to?(:post) && self.class < ActionDispatch::IntegrationTest
-  end
-
-  # Helper methods to ensure authentication headers are included in integration test requests
-
-  def default_headers
-    @default_headers ||= {}
-  end
-
-  # Override HTTP methods to include authentication headers for integration tests
-  def get(path, **args)
-    args[:headers] = default_headers.merge(args[:headers] || {}) if is_integration_test?
-    super
-  end
-
-  def post(path, **args)
-    args[:headers] = default_headers.merge(args[:headers] || {}) if is_integration_test?
-    super
-  end
-
-  def patch(path, **args)
-    args[:headers] = default_headers.merge(args[:headers] || {}) if is_integration_test?
-    super
-  end
-
-  def put(path, **args)
-    args[:headers] = default_headers.merge(args[:headers] || {}) if is_integration_test?
-    super
-  end
-
-  def delete(path, **args)
-    args[:headers] = default_headers.merge(args[:headers] || {}) if is_integration_test?
-    super
-  end
 end

@@ -38,6 +38,12 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 - [ ] Extract shared validation utils and document usage (README in controllers/)
 - [ ] CI wiring: ensure lint + JS tests run; document scripts in package.json  [SCA-001][PATCH-001]
 
+Income threshold (FPL) validation follow-ups
+- [ ] Check for unit tests for `app/javascript/services/income_threshold.js` (threshold and `exceeds`) with parity to server `IncomeThresholdCalculationService` for sizes 1–8.  If no test exist write them.  If tests exist make sure they provide appropriate coverage and all pass. [TEST-001]
+- [ ] Standardize tests to target `[data-income-validation-target="warningContainer"]` and use `[hidden]` for visibility checks; avoid relying on CSS-only classes.  [TEST-001]
+- [ ] Confirm no dual ownership: remove any `data-paper-application-target="incomeThresholdWarning"` or warning toggling from non-owner controllers.  [PATCH-001]
+- [ ] Grep for `#income-threshold-warning` usages in admin paths and replace with `#admin-income-threshold-warning` or target-based selectors as appropriate.  [PATCH-001]
+
 ## Registration & Account Integrity  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 
 - [ ] Duplicate detection approach (heuristics vs. AI-assisted) and privacy constraints  [DATA-001][DATA-002]

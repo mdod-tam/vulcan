@@ -39,7 +39,7 @@ module SystemTestAuthentication
     # Visit sign-in page FIRST before checking authentication state
     # This ensures we're on a real page, not about:blank
     visit sign_in_path
-    wait_for_page_stable
+    assert_selector('body', wait: 10)
 
     # NOW check if already authenticated (page has actual content)
     # Enhanced error handling for browser corruption detection
@@ -67,11 +67,12 @@ module SystemTestAuthentication
     end
 
     # Clear any stored return_to path that could cause additional redirects
-    if page.driver.is_a?(Capybara::Cuprite::Driver)
-      page.execute_script('sessionStorage.clear(); localStorage.clear();')
-    else
-      # For RackTest driver, clear the Rails session directly
+    if page.driver.is_a?(Capybara::RackTest::Driver)
+      # RackTest – manipulate Rails session directly
       page.set_rack_session({})
+    else
+      # Real browser drivers – clear browser storage
+      page.execute_script('sessionStorage.clear(); localStorage.clear();')
     end
     # Wait for the visibility controller on the sign-in form to be ready
     wait_for_stimulus_controller('visibility')
@@ -80,16 +81,14 @@ module SystemTestAuthentication
     if page.driver.is_a?(Capybara::RackTest::Driver)
       page.set_rack_session(skip_2fa: true)
     else
-      # For Cuprite/browser tests, make a POST request to set session variable
+      # For Cuprite/browser tests, set session variable synchronously to avoid race conditions
       page.execute_script(<<~JS)
-        fetch('/test/set_session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
-          },
-          body: 'skip_2fa=true'
-        });
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/test/set_session', false); // synchronous
+          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+          xhr.send('skip_2fa=true');
+        } catch(e) { /* no-op */ }
       JS
     end
 
@@ -102,15 +101,11 @@ module SystemTestAuthentication
       click_button 'Sign In'
     end
 
-    # Wait for ALL redirects to complete - authentication can trigger multiple redirects
-    wait_for_page_stable(timeout: 15)
-
-    # Wait for Turbo navigation to fully complete (this handles redirect chains)
-    wait_for_turbo(timeout: 10)
-
-    # Instead of immediately checking if we're still on sign-in page,
-    # wait for either successful redirect OR flash error message to appear
-    # This handles the timing issue where redirect hasn't completed yet
+    # Prefer native Capybara waiting for either redirect or form disappearance; do not refresh
+    using_wait_time(10) do
+      expected_dashboard_path = user_dashboard_path(user)
+      page.has_current_path?(expected_dashboard_path, wait: 6) || has_no_selector?('form[action="/sign_in"]', wait: 6)
+    end
 
     expected_dashboard_path = user_dashboard_path(user)
 
@@ -194,7 +189,7 @@ module SystemTestAuthentication
 
     # Retry the sign-in process once
     visit sign_in_path
-    wait_for_network_idle
+    assert_selector('form[action="/sign_in"]', wait: 10)
     # Wait for the visibility controller on the sign-in form to be ready
     wait_for_stimulus_controller('visibility')
 
@@ -241,16 +236,14 @@ module SystemTestAuthentication
     if page.driver.is_a?(Capybara::RackTest::Driver)
       page.set_rack_session(skip_2fa: true)
     else
-      # For Cuprite/browser tests, make a POST request to set session variable
+      # For Cuprite/browser tests, set session variable synchronously to avoid race conditions
       page.execute_script(<<~JS)
-        fetch('/test/set_session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''
-          },
-          body: 'skip_2fa=true'
-        });
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/test/set_session', false); // synchronous
+          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+          xhr.send('skip_2fa=true');
+        } catch(e) { /* no-op */ }
       JS
     end
     system_test_sign_in(user)
@@ -332,7 +325,7 @@ module SystemTestAuthentication
   rescue Capybara::ExpectationNotMet
     debug_puts "Redirect to #{path} did not happen in time, manually navigating..."
     visit path
-    wait_for_page_stable
+    wait_for_turbo
   end
 
   def debug_puts(msg)
@@ -437,11 +430,11 @@ module SystemTestAuthentication
   end
 
   # Visit method that handles pending connections gracefully
-  def visit_with_retry(path, max_retries: 3)
+  def visit_with_retry(path, max_retries: 3, user: nil)
     success = false
     max_retries.times do |attempt|
       visit path
-      wait_for_page_stable if respond_to?(:wait_for_page_stable)
+      assert_selector 'body', wait: 10
       success = true
       break # Success
     rescue Ferrum::PendingConnectionsError => e
@@ -449,11 +442,21 @@ module SystemTestAuthentication
       if attempt < max_retries - 1
         debug_puts 'Retrying after clearing sessions...'
         clear_pending_network_connections
-        # Use Capybara's waiting instead of static wait
         assert_selector 'body', wait: 15
       else
         debug_puts "Failed after #{max_retries} attempts, continuing..."
-        # Don't raise - let the test continue and potentially fail on assertions
+      end
+    rescue Ferrum::NodeNotFoundError, Ferrum::DeadBrowserError, Ferrum::TimeoutError => e
+      debug_puts "Visit attempt #{attempt + 1}: Browser error: #{e.class} - #{e.message}"
+      if attempt < max_retries - 1
+        if respond_to?(:force_browser_restart, true)
+          force_browser_restart('visit_with_retry')
+        else
+          Capybara.reset_sessions!
+        end
+        system_test_sign_in(user) if user && respond_to?(:system_test_sign_in)
+      else
+        debug_puts "Failed after #{max_retries} attempts due to browser errors."
       end
     end
     success

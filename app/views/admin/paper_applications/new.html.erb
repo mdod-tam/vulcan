@@ -37,11 +37,7 @@
       <%= render 'self_application_fields' %>
 
             <!-- Income Threshold Warning (hidden by default) -->
-            <div id="income-threshold-warning" class="hidden mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700" data-paper-application-target="incomeThresholdWarning" data-income-validation-target="warningContainer">
-              <h3 class="font-medium">Income Exceeds Threshold</h3>
-              <p>The applicant's income exceeds the maximum threshold for their household size.</p>
-              <p>This application cannot be submitted. Please use the "Send Rejection Notification" button below.</p>
-            </div>
+            <div id="admin-income-threshold-warning" hidden class="hidden mb-6" data-income-validation-target="warningContainer"></div>
 
             <!-- Guardian Picker Wrapper -->
             <fieldset id="guardian-info-section" class="mb-6 p-4 border border-gray-200 rounded hidden" data-controller="guardian-picker" data-applicant-type-target="guardianSection">

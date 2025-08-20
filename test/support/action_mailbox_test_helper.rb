@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 module ActionMailboxTestHelper
+  require 'base64'
+  # Reuse mailbox utilities when available
+  include MailboxTestHelper if defined?(MailboxTestHelper)
   def self.included(base)
     base.class_eval do
       require 'action_mailbox/test_helper'
@@ -40,20 +43,44 @@ module ActionMailboxTestHelper
 
   # Helper to create an inbound email with attachments
   def create_inbound_email_with_attachment(to:, from:, subject:, body:, attachment_path:, content_type:)
-    # Read the file content, but ensure it meets minimum size requirements
-    file_content = File.read(attachment_path)
+    # Prefer unified helper if available
+    if respond_to?(:create_email_attachment) && respond_to?(:create_inbound_email_with_attachments)
+      file_content = File.read(attachment_path)
+      if file_content.bytesize < 1024
+        file_content = case content_type
+                       when 'application/pdf'
+                         generate_minimal_pdf_content
+                       when 'image/jpeg', 'image/png'
+                         file_content + ("\x00" * (1024 - file_content.bytesize + 100))
+                       else
+                         file_content + ('A' * (1024 - file_content.bytesize + 100))
+                       end
+      end
 
-    # If the file is too small (less than 1KB), pad it with valid content
+      attachment = Mail::Part.new
+      attachment.content_type = content_type
+      attachment.content_disposition = "attachment; filename=#{File.basename(attachment_path)}"
+      attachment.content_transfer_encoding = 'base64'
+      attachment.body = Base64.encode64(file_content)
+
+      return create_inbound_email_with_attachments(
+        from: from,
+        to: to,
+        subject: subject,
+        body: body,
+        attachments: [attachment]
+      )
+    end
+
+    # Fallback to direct construction
+    file_content = File.read(attachment_path)
     if file_content.bytesize < 1024
       file_content = case content_type
                      when 'application/pdf'
-                       # Create a minimal valid PDF structure that's over 1KB
                        generate_minimal_pdf_content
                      when 'image/jpeg', 'image/png'
-                       # For images, pad with valid binary data
                        file_content + ("\x00" * (1024 - file_content.bytesize + 100))
                      else
-                       # For other types, just pad with text
                        file_content + ('A' * (1024 - file_content.bytesize + 100))
                      end
     end

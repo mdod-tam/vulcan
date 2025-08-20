@@ -8,7 +8,7 @@ module Applications
 
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app
 
-    def initialize(params:, admin:, skip_income_validation: false)
+    def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false)
       super()
       @params = params.with_indifferent_access
       @admin = admin
@@ -18,6 +18,7 @@ module Applications
       @errors = []
       @temp_passwords = {}
       @skip_income_validation = skip_income_validation
+      @skip_proof_processing = skip_proof_processing
     end
 
     def create
@@ -27,7 +28,7 @@ module Applications
       application_created = ActiveRecord::Base.transaction do
         return failure('Constituent processing failed') unless process_constituent
         return failure('Application creation failed') unless create_application
-        return failure('Proof upload failed') unless process_proof_uploads
+        return failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
 
         @application.persisted?
       end

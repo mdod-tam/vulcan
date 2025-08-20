@@ -43,6 +43,36 @@ class ProofUploadsTest < ApplicationSystemTestCase
     assert_text 'Maximum file size: 5MB'
   end
 
+  test 'constituent can resubmit rejected proof from application page' do
+    visit "/constituent_portal/applications/#{@application.id}"
+    assert_text 'Application Details'
+
+    # Rejected proofs show a Resubmit button
+    assert_text 'Resubmit Income Proof'
+
+    click_on 'Resubmit Income Proof'
+    assert_selector 'h1', text: /Upload New Income Proof/i
+
+    attach_file 'income_proof_upload', @valid_pdf
+    click_button 'Submit Document'
+
+    assert_success_message('Proof submitted successfully')
+    assert_current_path constituent_portal_application_path(@application)
+  end
+
+  test 'prevents resubmitting when proof is not rejected' do
+    @application.update!(income_proof_status: :not_reviewed)
+    visit "/constituent_portal/applications/#{@application.id}"
+    assert_text 'Application Details'
+    assert_no_text 'Resubmit Income Proof'
+  end
+
+  test 'requires authentication for proof submission' do
+    click_on 'Sign Out', match: :first
+    visit "/constituent_portal/applications/#{@application.id}"
+    assert_current_path '/sign_in'
+  end
+
   test 'constituent can upload proof document' do
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     wait_for_turbo

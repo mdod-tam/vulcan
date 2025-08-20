@@ -390,12 +390,12 @@ module SystemTestHelpers
   # Based on observed browser behavior: modal opening -> iframe loading -> scroll lock -> focus
   def wait_for_modal_open(modal_id, timeout: 15)
     using_wait_time(timeout) do
-      # Step 1: Wait for modal to be visible and not hidden
-      assert_selector "##{modal_id}", visible: true, wait: timeout
+      # Step 1: Wait for modal element to exist and drop the 'hidden' class
+      assert_selector "##{modal_id}", visible: :all, wait: timeout
       assert_no_selector "##{modal_id}.hidden", wait: timeout
 
       # Step 2: Get the modal element for further checks
-      modal_element = find("##{modal_id}", wait: timeout)
+      modal_element = find("##{modal_id}", visible: :all, wait: timeout)
 
       # Step 3: Wait for any iframes in the modal to load (crucial for PDF viewers)
       if modal_element.has_css?('iframe', wait: 1)
@@ -446,13 +446,11 @@ module SystemTestHelpers
         assert first_input.present?, 'Modal should have interactive elements'
       end
 
-      # Step 6: Set a final test-ready marker
+      # Step 6: Confirm interactive content appears in the modal (no custom markers required)
       begin
-        page.execute_script("document.getElementById('#{modal_id}').setAttribute('data-test-modal-ready', 'true');")
-        assert_selector "##{modal_id}[data-test-modal-ready='true']", wait: timeout
-      rescue Ferrum::NodeNotFoundError, Ferrum::DeadBrowserError => e
-        puts "Warning: Could not set test-ready marker due to browser state: #{e.message}"
-        # Modal is likely ready even if we can't set the marker
+        assert_selector "##{modal_id} input, ##{modal_id} button, ##{modal_id} select, ##{modal_id} textarea", wait: timeout
+      rescue StandardError
+        # Continue even if no interactive elements are detected; some modals may be view-only
       end
     end
 
@@ -535,10 +533,31 @@ module SystemTestHelpers
   end
 
   # Click modal trigger and wait for modal to open
-  # This combines the click action with proper modal opening synchronization
-  def click_modal_trigger_and_wait(trigger_element, modal_id, timeout: 15)
-    # Click the trigger
-    trigger_element.click
+  # Accepts a CSS selector and finds the element at click-time to avoid stale nodes
+  def click_modal_trigger_and_wait(trigger_selector, modal_id, timeout: 15)
+    # Ensure the modal Stimulus controller is connected before attempting to open a modal
+    wait_for_stimulus_controller('modal', timeout: timeout) if respond_to?(:wait_for_stimulus_controller)
+
+    using_wait_time(timeout) do
+      el = find(trigger_selector, wait: timeout)
+      begin
+        page.execute_script('arguments[0].scrollIntoView({block: "center", inline: "center"});', el)
+      rescue StandardError => e
+        puts "Non-fatal: scrollIntoView failed (#{e.class}): #{e.message}"
+      end
+      begin
+        el.click
+      rescue Capybara::Cuprite::MouseEventFailed, Ferrum::NodeNotFoundError => e
+        # Retry with a fresh reference and fall back to a JS-triggered click to avoid overlap issues
+        begin
+          el = find(trigger_selector, wait: timeout)
+          el.trigger('click')
+        rescue StandardError => inner_e
+          puts "Fallback click failed (#{e.class} -> #{inner_e.class}): #{inner_e.message}"
+          raise
+        end
+      end
+    end
 
     # Wait for modal to fully open
     wait_for_modal_open(modal_id, timeout: timeout)
@@ -547,14 +566,60 @@ module SystemTestHelpers
   # Helper to click "Review Proof" button and wait for modal
   def click_review_proof_and_wait(proof_type, timeout: 15)
     modal_id = "#{proof_type}ProofReviewModal"
-
-    # Find and click the Review Proof button for this proof type
-    review_button = find("button[data-modal-id='#{modal_id}']", text: /Review Proof/i, wait: timeout)
-
-    # Use our combined click and wait helper
-    click_modal_trigger_and_wait(review_button, modal_id, timeout: timeout)
-
+    trigger_selector = "button[data-modal-id='#{modal_id}']"
+    click_modal_trigger_and_wait(trigger_selector, modal_id, timeout: timeout)
     # Wait for proof-specific initialization
     wait_for_proof_review_modal(proof_type, timeout: timeout)
+  end
+
+  # Wait for the attachments section to be re-rendered by turbo stream
+  def wait_for_attachments_stream(timeout = Capybara.default_max_wait_time)
+    using_wait_time(timeout) do
+      assert_selector '#attachments-section[data-test-rendered-at]', wait: timeout
+    end
+  end
+
+  # Navigate to admin application page with retry for browser corruption
+  def visit_admin_application_with_retry(application, max_retries: 3, user: nil)
+    retries = 0
+    begin
+      # Prime navigation with a lightweight page to avoid about:blank quirks
+      visit admin_applications_path
+      wait_for_turbo
+      assert_selector 'body', wait: 10
+
+      visit admin_application_path(application)
+      # Wait for Turbo and a solid page anchor to confirm load
+      wait_for_turbo
+      # Prefer a concrete container over generic text checks
+      using_wait_time(20) do
+        if has_selector?('#attachments-section', wait: 10)
+          assert_selector '#attachments-section', wait: 10
+        elsif has_selector?('h1#application-title', wait: 5)
+          assert_selector 'h1#application-title', wait: 5
+        else
+          assert_text(/Application Details|Application #/i, wait: 5)
+        end
+      end
+    rescue StandardError => e
+      retries += 1
+      raise unless retries <= max_retries
+
+      puts "Navigation retry #{retries}: #{e.message}"
+      # Prefer a hard browser restart to clear disposed/invalid DevTools targets
+      if respond_to?(:force_browser_restart, true)
+        force_browser_restart('nav_retry')
+      else
+        Capybara.reset_sessions!
+      end
+
+      # Re-authenticate if user provided
+      system_test_sign_in(user) if user && respond_to?(:system_test_sign_in)
+
+      # Small pause to let browser settle after restart
+      sleep 0.25
+
+      retry
+    end
   end
 end

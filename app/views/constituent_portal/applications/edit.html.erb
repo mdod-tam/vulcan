@@ -7,10 +7,12 @@
               local: true, 
               class: "space-y-8", 
               data: { 
-                controller: "autosave", 
+                controller: "income-validation currency-formatter autosave", 
                 autosave_target: "form",
                 autosave_url_value: autosave_field_constituent_portal_application_path(@application),
-                autosave_debounce_wait_value: 1000
+                autosave_debounce_wait_value: 1000,
+                "income-validation-fpl-thresholds-value": fpl_thresholds_json,
+                "income-validation-modifier-value": fpl_modifier_value
               }) do |f| %>
    
    <!-- Autosave status indicator -->
@@ -70,7 +72,8 @@
                 min: 1,
                 class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
                 "aria-describedby": "household_size_help",
-                required: true %>
+                required: true,
+                data: { "income-validation-target": "householdSize" } %>
           </div>
           <p class="mt-2 text-sm text-gray-500" id="household_size_help">
             Total number of people living in your household
@@ -87,13 +90,19 @@
                 step: "0.01",
                 class: "pl-7 focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
                 "aria-describedby": "annual_income_help",
-                required: true %>
+                required: true,
+                data: { "income-validation-target": "annualIncome", currency_formatter_target: "input" } %>
           </div>
-          <p class="mt-2 text-sm text-gray-500" id="annual_income_help">
-            Total yearly household income before taxes
-          </p>
+          <div class="mt-2">
+            <p class="text-sm text-gray-500" id="annual_income_help">
+              Total yearly household income before taxes
+            </p>
+          </div>
         </div>
       </fieldset>
+
+       <!-- Income Threshold Warning Container -->
+       <div id="income-threshold-warning" hidden class="hidden" data-income-validation-target="warningContainer"></div>
 
         <!-- Applicant and Guardian Display -->
         <section aria-labelledby="applicant-guardian-title" class="space-y-4 p-4 bg-gray-50 rounded">
@@ -231,7 +240,8 @@
        <%= f.submit "Submit Application", 
            name: "submit_application",
            class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
-           "aria-label": "Submit final application" %>
+           "aria-label": "Submit final application",
+           data: { "income-validation-target": "submitButton" } %>
      </div>
    </div>
  <% end %>

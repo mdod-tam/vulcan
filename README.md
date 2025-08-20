@@ -130,7 +130,7 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 
 3a. Seed email templates:
    ```bash
-   bin/rails db:seed:email_templates
+   rake db:seed_manual_email_templates
    ```
    This command populates the `email_templates` table with the default email and letter templates used by the application.
 

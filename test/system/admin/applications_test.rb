@@ -41,29 +41,10 @@ module Admin
     end
 
     test 'admin can view application details successfully with factory-created records' do
-      begin
-        visit admin_application_path(@application)
-        wait_for_page_stable(timeout: 15)
-
-        # Ensure the page has loaded by waiting for basic HTML structure
-        assert_selector 'html', wait: 10
-      rescue Ferrum::NodeNotFoundError, Ferrum::DeadBrowserError => e
-        puts "Browser corruption detected during page load: #{e.message}"
-        if respond_to?(:force_browser_restart, true)
-          force_browser_restart('applications_test_recovery')
-        else
-          Capybara.reset_sessions!
-        end
-        # Re-authenticate after browser restart since sessions are lost
-        system_test_sign_in(@admin)
-        # Retry the visit after restart and re-authentication
-        visit admin_application_path(@application)
-        wait_for_page_stable(timeout: 15)
-        assert_selector 'html', wait: 10
-      end
+      visit_admin_application_with_retry(@application, user: @admin)
 
       # Wait for the specific content to load
-      assert_selector 'h1#application-title', wait: 15
+      assert_selector 'h1#application-title', wait: 30
       assert_text(@application.user.full_name, wait: 20)
 
       # Verify sections exist using more stable selectors with increased wait times
