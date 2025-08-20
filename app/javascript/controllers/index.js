@@ -9,10 +9,22 @@ import AddCredentialController from "./auth/add_credential_controller"
 import CredentialAuthenticatorController from "./auth/credential_authenticator_controller"
 import TotpFormController from "./auth/totp_form_controller"
 
-// Chart Controllers
-import ChartController from "./charts/chart_controller"
-import ChartToggleController from "./charts/toggle_controller"
-import ReportsChartController from "./charts/reports_chart_controller"
+// Chart Controllers - lazily load only when needed to avoid loading Chart.js on non-chart pages
+let chartControllersRegistered = false
+async function ensureChartControllers() {
+  if (chartControllersRegistered) return
+  const hasCharts = document.querySelector("[data-controller*='chart']") || document.querySelector("[data-controller='reports-chart']")
+  if (!hasCharts) return
+  const [{ default: ChartController }, { default: ChartToggleController }, { default: ReportsChartController }] = await Promise.all([
+    import("./charts/chart_controller"),
+    import("./charts/toggle_controller"),
+    import("./charts/reports_chart_controller"),
+  ])
+  application.register("chart", ChartController)
+  application.register("chart-toggle", ChartToggleController)
+  application.register("reports-chart", ReportsChartController)
+  chartControllersRegistered = true
+}
 
 // Form Controllers
 import ApplicationFormController from "./forms/application_form_controller"
@@ -41,6 +53,7 @@ import PdfLoaderController from "./ui/pdf_loader_controller"
 import ReportsToggleController from "./ui/reports_toggle_controller"
 import UploadController from "./ui/upload_controller"
 import VisibilityController from "./ui/visibility_controller"
+import StreamReadyController from "./ui/stream_ready_controller"
 
 // User Controllers
 import ApplicantTypeController from "./users/applicant_type_controller"
@@ -67,10 +80,8 @@ application.register("add-credential", AddCredentialController)
 application.register("credential-authenticator", CredentialAuthenticatorController)
 application.register("totp-form", TotpFormController)
 
-// Chart Controllers
-application.register("chart", ChartController)
-application.register("chart-toggle", ChartToggleController)
-application.register("reports-chart", ReportsChartController)
+// Lazily register chart controllers on demand
+ensureChartControllers()
 
 // Form Controllers
 application.register("application-form", ApplicationFormController)
@@ -99,6 +110,7 @@ application.register("pdf-loader", PdfLoaderController)
 application.register("reports-toggle", ReportsToggleController)
 application.register("upload", UploadController)
 application.register("visibility", VisibilityController)
+application.register("stream-ready", StreamReadyController)
 
 // User Controllers
 application.register("applicant-type", ApplicantTypeController)

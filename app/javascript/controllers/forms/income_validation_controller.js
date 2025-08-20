@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
+import { calculateThreshold as calculateThresholdUtil } from "../../services/income_threshold"
 
 /**
  * Income Validation Controller
@@ -34,6 +35,16 @@ class IncomeValidationController extends Controller {
 
     this.setupEventListeners()
 
+    // Listen for currency formatter updates to re-validate immediately after formatting/blur
+    this._onCurrencyRawUpdate = () => this.validateIncomeThreshold()
+    this._onCurrencyFormatted = () => this.validateIncomeThreshold()
+    try {
+      this.element.addEventListener('currency-formatter:rawValueUpdated', this._onCurrencyRawUpdate)
+      this.element.addEventListener('currency-formatter:formatted', this._onCurrencyFormatted)
+    } catch (_) {
+      // no-op: event wiring is best-effort
+    }
+
     // Mark as loaded and validate initial state
     this.element.dataset.fplLoaded = "true"
     this.element.classList.add("fpl-data-loaded")
@@ -43,17 +54,25 @@ class IncomeValidationController extends Controller {
 
   disconnect() {
     this.teardownEventListeners()
+    try {
+      if (this._onCurrencyRawUpdate) this.element.removeEventListener('currency-formatter:rawValueUpdated', this._onCurrencyRawUpdate)
+      if (this._onCurrencyFormatted) this.element.removeEventListener('currency-formatter:formatted', this._onCurrencyFormatted)
+    } catch (_) {
+      // no-op
+    }
   }
 
   setupEventListeners() {
     this.withTarget('householdSize', (target) => {
       target.addEventListener("input", this._validate)
       target.addEventListener("change", this._validate)
+      target.addEventListener("blur", this._validate, true)
     })
 
     this.withTarget('annualIncome', (target) => {
       target.addEventListener("input", this._validate)
       target.addEventListener("change", this._validate)
+      target.addEventListener("blur", this._validate, true)
     })
   }
 
@@ -61,11 +80,13 @@ class IncomeValidationController extends Controller {
     this.withTarget('householdSize', (target) => {
       target.removeEventListener("input", this._validate)
       target.removeEventListener("change", this._validate)
+      target.removeEventListener("blur", this._validate, true)
     })
 
     this.withTarget('annualIncome', (target) => {
       target.removeEventListener("input", this._validate)
       target.removeEventListener("change", this._validate)
+      target.removeEventListener("blur", this._validate, true)
     })
   }
 
@@ -80,8 +101,8 @@ class IncomeValidationController extends Controller {
       return
     }
 
-    const threshold = this.calculateThreshold(size)
-    const exceedsThreshold = income > threshold
+    const threshold = this.calculateThresholdForSize(size)
+    const exceedsThreshold = (income - threshold) > 0.0001
 
 
     this.updateValidationUI(exceedsThreshold, threshold)
@@ -108,37 +129,37 @@ class IncomeValidationController extends Controller {
       // Handle both formatted and raw input values
       const value = target.value
       const rawValue = target.dataset.rawValue
+      const inputType = (target.getAttribute('type') || '').toLowerCase()
+      const hasNonNumericChars = /[^0-9.\-]/.test(value)
 
-      if (rawValue) {
+      // Prefer rawValue only for text inputs or when formatted characters are present
+      if (rawValue && (inputType === 'text' || hasNonNumericChars)) {
         return parseFloat(rawValue) || 0
       }
 
-      return parseFloat(value.replace(/[^\d.-]/g, '')) || 0
+      // For number inputs or plain numeric values, trust the visible value
+      const parsed = parseFloat(value)
+      if (!Number.isNaN(parsed)) return parsed
+      return parseFloat((value || '').replace(/[^\d.-]/g, '')) || 0
     }, 0)
   }
 
-  calculateThreshold(householdSize) {
-    const size = Math.min(householdSize, 8)
-    
+  calculateThresholdForSize(householdSize) {
     // Use server-rendered data with fallback to prevent failures
-    let baseFpl = 0
-    if (this.fplThresholds && typeof this.fplThresholds === 'object') {
-      baseFpl = this.fplThresholds[size.toString()] || this.fplThresholds[size] || 0
+    const fallbackFpl = {
+      1: 15650, 2: 21150, 3: 26650, 4: 32150,
+      5: 37650, 6: 43150, 7: 48650, 8: 54150
     }
-    
-    // Fallback to hardcoded values if server data parsing fails
-    if (!baseFpl) {
-      const fallbackFpl = {
-        1: 15650, 2: 21150, 3: 26650, 4: 32150,
-        5: 37650, 6: 43150, 7: 48650, 8: 54150
-      }
-      baseFpl = fallbackFpl[size] || 0
-    }
-    
-    // Use Stimulus value (automatically parsed from data-income-validation-modifier-value)
-    let modifier = this.modifierValue || 400 // Use Stimulus parsed value with fallback
-    
-    return baseFpl * (modifier / 100)
+
+    const baseFplBySize = (this.fplThresholds && typeof this.fplThresholds === 'object' && Object.keys(this.fplThresholds).length > 0)
+      ? this.fplThresholds
+      : fallbackFpl
+
+    const modifierPercent = (typeof this.modifierValue === 'number' && !Number.isNaN(this.modifierValue))
+      ? this.modifierValue
+      : 400
+
+    return calculateThresholdUtil({ baseFplBySize, modifierPercent, householdSize })
   }
 
   updateValidationUI(exceedsThreshold, threshold) {
@@ -159,11 +180,15 @@ class IncomeValidationController extends Controller {
   showWarning(target, threshold) {
     target.innerHTML = this.buildWarningHTML(threshold)
     setVisible(target, true)
+    // Ensure HTML hidden attribute is removed in environments without CSS
+    try { target.removeAttribute('hidden') } catch (_) {}
     target.setAttribute("role", "alert")
   }
 
   hideWarning(target) {
     setVisible(target, false)
+    // Ensure HTML hidden attribute is set in environments without CSS
+    try { if (!target.hasAttribute('hidden')) target.setAttribute('hidden', '') } catch (_) {}
     target.removeAttribute("role")
   }
 
