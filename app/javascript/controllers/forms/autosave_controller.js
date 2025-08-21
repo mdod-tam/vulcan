@@ -6,7 +6,7 @@ import { setVisible } from "../../utils/visibility"
 
 class AutosaveController extends Controller {
   static targets = ["form", "autosaveStatus", "fieldError"]
-  static outlets = ["flash"] // Declare flash outlet
+
   static values = {
     url: String,
     debounceWait: { type: Number, default: 1000 },
@@ -163,11 +163,6 @@ class AutosaveController extends Controller {
       if (error.name !== "AbortError") {
         console.error('Autosave error:', error)
         this.updateStatus("Failed to save", "text-red-600")
-
-        // Also show as a global flash message
-        if (this.hasFlashOutlet) {
-          this.flashOutlet.showError("Autosave failed: " + (error.message || "An unknown error occurred."))
-        }
 
         // Handle error data if available
         if (error.data?.errors) {

@@ -5,7 +5,7 @@ import { setVisible } from "../../utils/visibility"
 // This controller handles the W9 review form submission logic
 class W9ReviewController extends Controller {
   static targets = ["form", "status", "rejectionReason", "approveButton", "rejectButton"]
-  static outlets = ["flash"] // Declare flash outlet
+
 
   connect() {
     if (process.env.NODE_ENV !== 'production') {
@@ -47,11 +47,8 @@ class W9ReviewController extends Controller {
       
       if (!reasonCodeSelected || reasonText === '') {
         const errorMessage = 'Please select a rejection reason and provide a detailed explanation.'
-        if (this.hasFlashOutlet) {
-          this.flashOutlet.showError(errorMessage)
-        } else {
-          alert(errorMessage) // Fallback to alert if flash outlet not connected
-        }
+        console.error(errorMessage)
+        alert(errorMessage) // Use alert for immediate user feedback since this is form validation
       } else {
         this.statusTarget.value = 'rejected'
         this.formTarget.submit()

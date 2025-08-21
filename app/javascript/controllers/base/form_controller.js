@@ -18,7 +18,7 @@ export default class BaseFormController extends Controller {
     "fieldError"
   ]
 
-  static outlets = ["flash"] // Declare flash outlet
+
 
   static values = {
     url: String,
@@ -121,10 +121,6 @@ export default class BaseFormController extends Controller {
     // Show success message locally
     if (data.message) {
       this.showStatus(data.message, 'success')
-      // Also show as a global flash message
-      if (this.hasFlashOutlet) {
-        this.flashOutlet.showSuccess(data.message)
-      }
     }
 
     // Reset form if configured
@@ -151,10 +147,6 @@ export default class BaseFormController extends Controller {
       this.handleValidationErrors(error.data.errors)
     } else {
       this.showStatus(error.message || 'An error occurred', 'error')
-      // Also show as a global flash message
-      if (this.hasFlashOutlet) {
-        this.flashOutlet.showError(error.message || 'An error occurred')
-      }
     }
 
     this.dispatch('error', { detail: error })

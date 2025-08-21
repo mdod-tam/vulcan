@@ -35,7 +35,7 @@ class DependentFieldsController extends Controller {
     "dependentZip"
   ]
 
-  static outlets = ["flash"] // Declare flash outlet
+  
   static values = {
     copyFromGuardian: Boolean
   }
@@ -298,9 +298,6 @@ class DependentFieldsController extends Controller {
 
     } catch (error) {
       console.error("DependentFieldsController: Error in executeApplicantTypeChange:", error);
-      if (this.hasFlashOutlet) {
-        this.flashOutlet.showError("An error occurred while updating dependent fields. Please try again.");
-      }
     }
   }
 }

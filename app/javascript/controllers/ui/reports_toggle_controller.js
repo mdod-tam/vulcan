@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["panel", "button"]
-  static outlets = ["flash"] // Declare flash outlet
+  
 
   connect() {
     if (process.env.NODE_ENV !== 'production') {
@@ -26,8 +26,15 @@ export default class extends Controller {
   toggle(event) {
     if (!this.hasPanelTarget) {
       console.error("Panel target not found")
-      if (this.hasFlashOutlet) {
-        this.flashOutlet.showError("Error: Reports panel not found. Please contact support.")
+      // Inline, scoped error message instead of global flash
+      const existing = this.element.querySelector('[data-reports-error="true"]')
+      if (!existing) {
+        const error = document.createElement('div')
+        error.className = 'text-red-600 text-sm mt-2'
+        error.setAttribute('role', 'alert')
+        error.setAttribute('data-reports-error', 'true')
+        error.textContent = 'Error: Reports panel not found. Please contact support.'
+        this.element.appendChild(error)
       }
       return
     }

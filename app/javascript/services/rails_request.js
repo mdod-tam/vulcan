@@ -252,3 +252,15 @@ export class RequestError extends Error {
 
 // Export singleton instance
 export const railsRequest = new RailsRequestService()
+
+// Development-time guard to prevent HTML requests via railsRequest
+if (process.env.NODE_ENV !== 'production') {
+  const originalPerform = railsRequest.perform.bind(railsRequest)
+  railsRequest.perform = async (opts = {}) => {
+    const accept = (opts.headers && opts.headers.Accept) || ""
+    if (/html/.test(accept)) {
+      throw new Error("Use Turbo frames/streams for HTML, not railsRequest. This service is for JSON APIs only.")
+    }
+    return originalPerform(opts)
+  }
+}

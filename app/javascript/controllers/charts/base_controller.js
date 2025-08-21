@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { createUIUpdateDebounce } from "../../utils/debounce"
 import { chartConfig } from "../../services/chart_config"
 import { applyTargetSafety } from "../../mixins/target_safety"
 
@@ -15,7 +14,7 @@ import { applyTargetSafety } from "../../mixins/target_safety"
  * - Data validation
  */
 class ChartBaseController extends Controller {
-  static outlets = ["flash"] // Declare flash outlet
+
   static values = {
     chartHeight: { type: Number, default: 300 }
   }
@@ -119,18 +118,14 @@ class ChartBaseController extends Controller {
 
   handleError(msg, err) {
     console.error(msg, err || "Unknown error")
+    console.error(`Chart Error: ${msg}`)
     this._showMessage("text-red-500", `Unable to load chart – ${msg}`)
-    if (this.hasFlashOutlet) {
-      this.flashOutlet.showError(`Chart Error: ${msg}`)
-    }
   }
 
   handleUnavailable() {
     console.warn("Chart.js not available, skipping chart initialization")
+    console.warn("Chart unavailable: Chart.js not loaded.")
     this._showMessage("text-gray-500", "Chart unavailable")
-    if (this.hasFlashOutlet) {
-      this.flashOutlet.showInfo("Chart unavailable: Chart.js not loaded.")
-    }
   }
 
   // Simple visibility check used to avoid layout-measure loops

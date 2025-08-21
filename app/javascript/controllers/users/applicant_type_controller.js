@@ -4,7 +4,7 @@ import { createVeryShortDebounce } from "../../utils/debounce";
 
 export default class extends Controller {
   static targets = ["radio", "adultSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField"];
-  static outlets = ["guardian-picker", "flash"]; // Declare flash outlet
+  static outlets = ["guardian-picker"]; // Keep guardian-picker outlet
 
   connect() {
     // Guard against multiple connections
@@ -181,9 +181,6 @@ export default class extends Controller {
 
     } catch (error) {
       console.error("ApplicantTypeController: Error in refresh:", error);
-      if (this.hasFlashOutlet) {
-        this.flashOutlet.showError("An error occurred while updating applicant type sections. Please try again.");
-      }
     }
   }
 

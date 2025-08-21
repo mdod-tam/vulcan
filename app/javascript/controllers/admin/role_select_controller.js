@@ -2,12 +2,10 @@
 import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
 import { applyTargetSafety } from "../../mixins/target_safety"
-import { createFormChangeDebounce } from "../../utils/debounce"
-import { setVisible } from "../../utils/visibility"
 
 class RoleSelectController extends Controller {
   static targets = ["select", "capability"]
-  static outlets = ["flash"] // Declare flash outlet
+
   static values = {
     userId: String,
     updateRoleUrl: String,
@@ -30,7 +28,7 @@ class RoleSelectController extends Controller {
           select: this.safeTarget('select', false),
           capabilities: this.safeTargets('capability', false)
         },
-        hasFlashOutlet: this.hasFlashOutlet
+
       })
     }
   }
@@ -124,7 +122,10 @@ class RoleSelectController extends Controller {
           console.log("Response data:", responseData)
         }
 
-        this.showFlashMessage(responseData.message || "Changes saved successfully", 'success')
+        // Success - server will handle flash message via Turbo Stream
+        if (process.env.NODE_ENV !== 'production') {
+          console.log("Role/capability change successful:", responseData.message || "Changes saved successfully")
+        }
       }
 
     } catch (error) {
@@ -143,24 +144,9 @@ class RoleSelectController extends Controller {
         }
       }
 
-      this.showFlashMessage(error.message || "An error occurred", 'error')
-    }
-  }
-
-  // Use flash outlet for consistent notifications
-  showFlashMessage(message, type) {
-    if (this.hasFlashOutlet) {
-      if (type === 'success') {
-        this.flashOutlet.showSuccess(message)
-      } else if (type === 'error') {
-        this.flashOutlet.showError(message)
-      } else {
-        this.flashOutlet.showInfo(message)
-      }
-    } else {
-      // Fallback to console if flash outlet is not connected
+      // Error - log for debugging, server should handle error flash via Turbo Stream
       if (process.env.NODE_ENV !== 'production') {
-        console.warn(`Flash outlet not connected. Message (${type}): ${message}`)
+        console.error("Role/capability change error:", error.message || "An error occurred")
       }
     }
   }

@@ -21,6 +21,9 @@ jest.mock('../../../app/javascript/utils/visibility', () => ({
 
 import { railsRequest } from "../../../app/javascript/services/rails_request"
 
+// Mock fetch
+global.fetch = jest.fn()
+
 describe("UserSearchController", () => {
   let controller, fixture
   
@@ -440,12 +443,15 @@ describe("UserSearchController", () => {
   
   describe("search functionality", () => {
     it("performs search with proper debouncing", async () => {
-      railsRequest.perform.mockResolvedValue({
-        success: true,
-        data: '<div>Search results</div>'
-      })
+      // Mock the turbo frame target
+      const mockTurboFrame = {
+        src: null,
+        setAttribute: jest.fn(),
+        removeAttribute: jest.fn()
+      }
       
-      controller.displaySearchResults = jest.fn()
+      // Mock the safeTarget method to return our mock turbo frame
+      controller.safeTarget = jest.fn().mockReturnValue(mockTurboFrame)
       
       const searchInput = fixture.querySelector('#searchInput')
       searchInput.value = "John"
@@ -453,12 +459,8 @@ describe("UserSearchController", () => {
       const event = { target: searchInput }
       await controller.performSearch(event)
       
-      expect(railsRequest.perform).toHaveBeenCalledWith({
-        method: 'get',
-        url: '/admin/users/search?q=John&role=guardian',
-        key: 'user-search',
-        headers: { Accept: 'text/vnd.turbo-stream.html, text/html' }
-      })
+      // Verify that the turbo frame's src was set to trigger navigation
+      expect(mockTurboFrame.src).toBe('/admin/users/search?q=John&role=guardian')
     })
     
     it("clears results when search is empty", async () => {

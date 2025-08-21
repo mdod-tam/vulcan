@@ -5,7 +5,7 @@ import { setVisible } from "../../utils/visibility"
 // Declare targets and values for better structure
 class ModalController extends Controller {
   static targets = ["container", "overlay"]
-  static outlets = ["flash"] // Declare flash outlet
+
   static values = {
     id: String,
     preserveScroll: { type: Boolean, default: false }
@@ -75,9 +75,7 @@ class ModalController extends Controller {
 
     if (!modalElement) {
       console.error("ModalController: could not find modal element", modalId)
-      if (this.hasFlashOutlet) {
-        this.flashOutlet.showError("Error: Could not open modal. Please contact support.")
-      }
+      console.error("Error: Could not open modal. Please contact support.")
       return
     }
 
@@ -174,9 +172,7 @@ class ModalController extends Controller {
       const originalSrc = iframe.getAttribute("data-original-src")
       if (!originalSrc) {
         console.error(`Iframe ${index}: Empty data-original-src on iframe`)
-        if (this.hasFlashOutlet) {
-          this.flashOutlet.showError("Error: PDF URL is missing. Please contact support.")
-        }
+        console.error("Error: PDF URL is missing. Please contact support.")
         return
       }
 
@@ -215,18 +211,14 @@ class ModalController extends Controller {
           if (newIframe.parentNode) {
             newIframe.parentNode.insertBefore(errorContainer, newIframe);
           }
-          if (this.hasFlashOutlet) {
-            this.flashOutlet.showError("Error loading PDF. Please try again or open directly.")
-          }
+          console.error("Error loading PDF. Please try again or open directly.")
         });
         
         // Replace after event listeners are attached
         parent.replaceChild(newIframe, iframe);
       } catch (err) {
         console.error("Exception in _loadIframes:", err);
-        if (this.hasFlashOutlet) {
-          this.flashOutlet.showError("An unexpected error occurred while loading PDF. Please try again.")
-        }
+        console.error("An unexpected error occurred while loading PDF. Please try again.")
       }
     })
   }

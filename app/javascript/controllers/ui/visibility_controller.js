@@ -3,7 +3,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["field", "fieldConfirmation", "icon", "status"]
-  static outlets = ["flash"] // Declare flash outlet
+
   
   static values = {
     timeout: { type: Number, default: 5000 } // 5 seconds timeout
@@ -106,9 +106,7 @@ export default class extends Controller {
     
     if (!passwordField) {
       console.error("Password field not found");
-      if (this.hasFlashOutlet) {
-        this.flashOutlet.showError("Error: Password field not found for visibility toggle. Please contact support.")
-      }
+      console.error("Error: Password field not found for visibility toggle. Please contact support.")
       // Log all input fields in the container for debugging
       const inputs = container.querySelectorAll("input");
       if (process.env.NODE_ENV !== 'production') {
