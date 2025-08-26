@@ -102,8 +102,11 @@ module Applications
       new_guardian_attrs = params[:new_guardian_attributes]
       applicant_data = params[:constituent]
       relationship_type = params[:relationship_type]
+      dependent_id = params[:dependent_id]
 
-      if guardian_scenario?(guardian_id, new_guardian_attrs, applicant_data)
+      if existing_dependent_scenario?(guardian_id, dependent_id)
+        process_existing_dependent(guardian_id, dependent_id, relationship_type)
+      elsif guardian_scenario?(guardian_id, new_guardian_attrs, applicant_data)
         process_guardian_dependent(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
       elsif self_applicant_scenario?(applicant_data)
         process_self_applicant(applicant_data)
@@ -117,6 +120,45 @@ module Applications
       (guardian_id.present? || attributes_present?(new_guardian_attrs)) &&
         attributes_present?(applicant_data) &&
         params[:applicant_type] == 'dependent'
+    end
+
+    def existing_dependent_scenario?(guardian_id, dependent_id)
+      guardian_id.present? && dependent_id.present? && params[:applicant_type] == 'dependent'
+    end
+
+    def process_existing_dependent(guardian_id, dependent_id, relationship_type)
+      guardian = User.find_by(id: guardian_id)
+      dependent = User.find_by(id: dependent_id)
+
+      return add_error('Guardian not found') unless guardian
+      return add_error('Dependent not found') unless dependent
+
+      # Ensure relationship exists, or create if relationship_type provided
+      rel = GuardianRelationship.find_by(guardian_id: guardian.id, dependent_id: dependent.id)
+      if rel.blank?
+        return add_error('Relationship type required to relate guardian and dependent') if relationship_type.blank?
+
+        begin
+          GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent, relationship_type: relationship_type)
+        rescue ActiveRecord::RecordInvalid => e
+          return add_error("Failed to create relationship: #{e.record.errors.full_messages.join(', ')}")
+        end
+      end
+
+      # Validate no active application for dependent
+      return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).where.not(status: :archived).exists?
+
+      # Fast-path waiting period check for better UX (model validation remains authoritative)
+      last_app = dependent.applications.order(application_date: :desc).first
+      if last_app.present?
+        waiting_period = Policy.get('waiting_period_years') || 3
+        eligible_date = last_app.application_date + waiting_period.years
+        return add_error("Dependent is not yet eligible. Reapply after #{eligible_date.to_date.strftime('%B %d, %Y')}") if eligible_date > Time.current
+      end
+
+      @guardian_user_for_app = guardian
+      @constituent = dependent
+      true
     end
 
     def self_applicant_scenario?(applicant_data)

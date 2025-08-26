@@ -56,7 +56,13 @@ module DashboardMetricsLoading
                                .where(medical_certification_status: :received)
                                .count
 
+    # Count applications with digitally signed certifications needing admin review
+    digitally_signed_count = Application.where(document_signing_status: :signed)
+                                        .where.not(medical_certification_status: :approved)
+                                        .count
+
     safe_assign(:medical_certs_to_review_count, medical_count)
+    safe_assign(:digitally_signed_needs_review_count, digitally_signed_count)
   end
 
   # Loads training request counts with fallback logic
@@ -271,6 +277,7 @@ module DashboardMetricsLoading
     safe_assign(:pending_services_count, 0)
     safe_assign(:proofs_needing_review_count, 0)
     safe_assign(:medical_certs_to_review_count, 0)
+    safe_assign(:digitally_signed_needs_review_count, 0)
     safe_assign(:training_requests_count, 0)
     safe_assign(:current_fiscal_year, current_fiscal_year)
     safe_assign(:total_users_count, 0)

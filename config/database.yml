@@ -1,56 +1,67 @@
-default: &default
+# PostgreSQL configuration with Solid Queue best practices
+common: &common
   adapter: postgresql
   encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
+  timeout: 5000
+  connect_timeout: 10
+  checkout_timeout: 30
+  prepared_statements: false
+  advisory_locks: false
   <% if ENV["DATABASE_PASSWORD"].to_s.strip != "" %>
   password: <%= ENV["DATABASE_PASSWORD"] %>
   <% end %>
 
 development:
-  primary: &primary
-    <<: *default
+  primary: &primary_development
+    <<: *common
     database: mat_vulcan_development
     host: localhost
     port: 5432
     username: <%= ENV.fetch("DATABASE_USERNAME", "postgres") %>
-    <% if ENV["DATABASE_PASSWORD"].to_s.strip != "" %>
-    password: <%= ENV["DATABASE_PASSWORD"] %>
-    <% end %>
-    pool: 5
-    timeout: 5000
   queue:
-    <<: *primary
-    database: mat_vulcan_development
+    <<: *primary_development
+    database: mat_vulcan_queue_development  # Separate database
+    migrations_paths: db/queue_migrate      # Required by Solid Queue
+    pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+  # Add cable if using Action Cable/Turbo Streams
+  cable:
+    <<: *primary_development
+    database: mat_vulcan_cable_development
+    migrations_paths: db/cable_migrate
 
 test:
-  primary: &test
-    <<: *default
+  primary: &primary_test
+    <<: *common
     database: mat_vulcan_test
     host: localhost
     port: 5432
     gssencmode: disable
     username: <%= ENV.fetch("DATABASE_USERNAME", "postgres") %>
-    <% if ENV["DATABASE_PASSWORD"].to_s.strip != "" %>
-    password: <%= ENV["DATABASE_PASSWORD"] %>
-    <% end %>
-    pool: 5
-    timeout: 5000
   queue:
-    <<: *test
-    database: mat_vulcan_test
+    <<: *primary_test
+    database: mat_vulcan_queue_test        # Separate database
+    migrations_paths: db/queue_migrate      # Required by Solid Queue
+    pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+  cable:
+    <<: *primary_test
+    database: mat_vulcan_cable_test
+    migrations_paths: db/cable_migrate
 
 production:
   primary: &primary_production
-    <<: *default
+    <<: *common
     url: <%= ENV['DATABASE_URL'] %>
-    pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-    timeout: 5000
-  cache:
-    <<: *primary_production
-    url: <%= ENV['DATABASE_URL'] %>
+    pool: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
   queue:
     <<: *primary_production
-    url: <%= ENV['DATABASE_URL'] %>
+    url: <%= ENV['QUEUE_DATABASE_URL'] || ENV['DATABASE_URL'] %>  # Allow separate URL
+    migrations_paths: db/queue_migrate      # Required by Solid Queue
+    pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+  cache:
+    <<: *primary_production
+    url: <%= ENV['CACHE_DATABASE_URL'] || ENV['DATABASE_URL'] %>
   cable:
     <<: *primary_production
-    url: <%= ENV['DATABASE_URL'] %>
+    url: <%= ENV['CABLE_DATABASE_URL'] || ENV['DATABASE_URL'] %>
+    migrations_paths: db/cable_migrate

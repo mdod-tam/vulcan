@@ -1,33 +1,40 @@
-# Recurring tasks configuration
-# Format: https://github.com/sidekiq-scheduler/sidekiq-scheduler#schedule-types
+# Recurring tasks configuration for Solid Queue
+# Format: https://github.com/rails/solid_queue#recurring-tasks
 
-# Generate vendor invoices every 2 weeks
-generate_vendor_invoices:
-  class: GenerateVendorInvoicesJob
-  cron: "0 0 */14 * *"  # At midnight every 14 days
-  description: "Generate biweekly invoices for vendors with pending transactions"
+production:
+  generate_vendor_invoices:
+    class: GenerateVendorInvoicesJob
+    schedule: "0 0 */14 * *"
+    description: "Generate biweekly invoices for vendors with pending transactions"
+  
+  check_voucher_expiration:
+    class: CheckVoucherExpirationJob
+    schedule: "0 1 * * *"
+    description: "Check for expiring vouchers and notify constituents"
+    queue: "default"
+    args: []
+  
+  proof_attachment_metrics:
+    class: ProofAttachmentMetricsJob
+    schedule: "0 0 * * *"
+    description: "Generate daily metrics on proof attachment success/failure rates"
+    queue: "low"
+    args: []
+  
+  proof_consistency_check:
+    class: ProofConsistencyCheckJob
+    schedule: "0 3 * * 0"
+    description: "Check for inconsistent proof attachments and statuses"
+    queue: "low"
+    args: []
 
-# Check voucher expiration daily
-check_voucher_expiration:
-  class: CheckVoucherExpirationJob
-  cron: "0 1 * * *"  # At 1 AM every day
-  description: "Check for expiring vouchers and notify constituents"
-  queue: "default"
-  args: []
-  static: true
+development:
+  # Development recurring tasks (if any)
+  # proof_attachment_metrics:
+  #   class: ProofAttachmentMetricsJob
+  #   schedule: "0 0 * * *"
+  #   description: "Generate daily metrics on proof attachment success/failure rates"
+  #   queue: "low"
 
-# Run proof attachment metrics job daily
-proof_attachment_metrics:
-  class: ProofAttachmentMetricsJob
-  cron: "0 0 * * *"  # At midnight every day
-  description: "Generate daily metrics on proof attachment success/failure rates"
-  queue: "low"
-  args: []
-
-# Run proof consistency check job weekly
-proof_consistency_check:
-  class: ProofConsistencyCheckJob
-  cron: "0 3 * * 0"  # At 3 AM every Sunday
-  description: "Check for inconsistent proof attachments and statuses"
-  queue: "low"
-  args: []
+test:
+  # No recurring tasks in test environment

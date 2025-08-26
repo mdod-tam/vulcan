@@ -5,8 +5,6 @@ module Admin
     include ParamCasting
     include TurboStreamResponseHandling
 
-    before_action :cast_complex_boolean_params, only: %i[create update]
-
     USER_BASE_FIELDS = %i[
       first_name last_name email phone phone_type
       physical_address_1 physical_address_2 city state zip_code
@@ -287,20 +285,126 @@ module Admin
 
     # Main method to construct parameters for the PaperApplicationService
     def paper_application_processing_params
-      service_params = build_base_service_params
-      add_application_params(service_params)
-      add_user_params(service_params)
-      add_proof_params(service_params)
+      permitted = permitted_paper_params
+
+      service_params = base_params_from(permitted)
+      apply_strategies!(service_params, permitted)
+      disability_attrs = merge_application_and_disabilities!(service_params, permitted)
+      merge_user_params!(service_params, permitted, disability_attrs)
+      add_proof_params_from!(service_params, permitted)
 
       Rails.logger.debug { "Final service params: #{service_params.inspect}" }
       service_params
     end
 
+    def inferred_dependent_application_from(permitted)
+      (permitted[:guardian_id].present? || permitted[:guardian_attributes].present?) &&
+        permitted.dig(:constituent, :first_name).present?
+    end
+
+    def permitted_paper_params
+      params.permit(
+        :relationship_type, :guardian_id, :dependent_id, :applicant_type,
+        :email_strategy, :phone_strategy, :address_strategy,
+        :use_guardian_email, :use_guardian_phone, :use_guardian_address,
+        :income_proof_action, :income_proof, :income_proof_signed_id,
+        :income_proof_rejection_reason, :income_proof_rejection_notes,
+        :residency_proof_action, :residency_proof, :residency_proof_signed_id,
+        :residency_proof_rejection_reason, :residency_proof_rejection_notes,
+        application: APPLICATION_FIELDS,
+        applicant_attributes: USER_DISABILITY_FIELDS,
+        constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),
+        guardian_attributes: (USER_BASE_FIELDS + USER_DISABILITY_FIELDS)
+      ).to_h.with_indifferent_access
+    end
+
+    def base_params_from(permitted)
+      base = permitted.slice(:relationship_type, :guardian_id, :dependent_id)
+      base[:applicant_type] = compute_applicant_type(permitted)
+      base
+    end
+
+    def compute_applicant_type(permitted)
+      explicit = permitted[:applicant_type].presence
+      inferred = inferred_dependent_application_from(permitted) ? 'dependent' : explicit
+      explicit && !inferred_dependent_application_from(permitted) ? explicit : inferred
+    end
+
+    def apply_strategies!(service_params, permitted)
+      dependent = service_params[:applicant_type] == 'dependent'
+
+      service_params[:email_strategy] = if permitted[:email_strategy].present?
+                                          permitted[:email_strategy]
+                                        elsif dependent
+                                          to_boolean(permitted[:use_guardian_email]) ? 'guardian' : 'dependent'
+                                        else
+                                          'dependent'
+                                        end
+
+      service_params[:phone_strategy] = if permitted[:phone_strategy].present?
+                                          permitted[:phone_strategy]
+                                        elsif dependent
+                                          to_boolean(permitted[:use_guardian_phone]) ? 'guardian' : 'dependent'
+                                        else
+                                          'dependent'
+                                        end
+
+      service_params[:address_strategy] = if permitted[:address_strategy].present?
+                                            permitted[:address_strategy]
+                                          elsif dependent
+                                            to_boolean(permitted[:use_guardian_address]) ? 'guardian' : 'dependent'
+                                          else
+                                            'dependent'
+                                          end
+    end
+
+    def merge_application_and_disabilities!(service_params, permitted)
+      app = (permitted[:application] || {}).dup
+      disability_attrs = (permitted[:applicant_attributes] || {}).dup
+      app[:self_certify_disability] = disability_attrs.delete(:self_certify_disability) if disability_attrs.key?(:self_certify_disability)
+      service_params[:application] = app
+      disability_attrs
+    end
+
+    def merge_user_params!(service_params, permitted, disability_attrs)
+      if service_params[:applicant_type] == 'dependent'
+        constituent_attrs = (permitted[:constituent] || {}).dup
+        service_params[:constituent] = constituent_attrs.merge(disability_attrs)
+        service_params[:new_guardian_attributes] = permitted[:guardian_attributes] if service_params[:guardian_id].blank? && permitted[:guardian_attributes].present?
+      else
+        service_params[:constituent] = if permitted.dig(:constituent, :first_name).present?
+                                         (permitted[:constituent] || {}).dup.merge(disability_attrs)
+                                       elsif permitted[:guardian_attributes].present?
+                                         permitted[:guardian_attributes].dup.merge(disability_attrs)
+                                       else
+                                         disability_attrs
+                                       end
+      end
+    end
+
+    def add_proof_params_from!(service_params, permitted)
+      %w[income residency].each do |type|
+        action_key = "#{type}_proof_action"
+        file_key   = "#{type}_proof"
+        signed_key = "#{type}_proof_signed_id"
+        reason_key = "#{type}_proof_rejection_reason"
+        notes_key  = "#{type}_proof_rejection_notes"
+
+        service_params[action_key] = permitted[action_key]
+        file_val = permitted[file_key]
+        signed_val = permitted[signed_key]
+        service_params[file_key] = file_val if file_val.present?
+        service_params[signed_key] = signed_val if signed_val.present?
+        service_params[reason_key] = permitted[reason_key]
+        service_params[notes_key]  = permitted[notes_key]
+      end
+    end
+
     def build_base_service_params
       current_applicant_type = determine_applicant_type
 
-      service_params = params.permit(:relationship_type, :guardian_id, :dependent_id)
-                             .to_h.with_indifferent_access
+      service_params = params.slice(:relationship_type, :guardian_id, :dependent_id)
+                             .to_unsafe_h.with_indifferent_access
       service_params[:applicant_type] = current_applicant_type
       service_params[:email_strategy] = determine_email_strategy
       service_params[:phone_strategy] = determine_phone_strategy
@@ -351,7 +455,7 @@ module Admin
       # The APPLICANT is the self-applying adult
       applicant_attrs = service_params.delete(:applicant_disability_attrs) || {}
 
-      service_params[:constituent] = if params[:constituent].present? && params.expect(constituent: [:first_name]).present?
+      service_params[:constituent] = if params[:constituent].present? && params[:constituent].is_a?(ActionController::Parameters) && params[:constituent][:first_name].present?
                                        permitted_constituent_attributes.deep_merge(applicant_attrs)
                                      elsif params[:guardian_attributes].present?
                                        # "Create New Guardian" form was filled for self-applicant
@@ -410,13 +514,15 @@ module Admin
     # Helper to determine if this is a dependent application based on guardian presence
     def inferred_dependent_application?
       (params[:guardian_id].present? || params[:guardian_attributes].present?) &&
-        params[:constituent].present? && params.expect(constituent: [:first_name]).present?
+        params[:constituent].present? && params[:constituent].is_a?(ActionController::Parameters) && params[:constituent][:first_name].present?
     end
 
     def permitted_guardian_attributes
       if params[:guardian_attributes].present?
-        params.expect(guardian_attributes: [*USER_BASE_FIELDS, *USER_DISABILITY_FIELDS])
-              .to_h.with_indifferent_access
+        params[:guardian_attributes]
+          .to_unsafe_h
+          .slice(*USER_BASE_FIELDS, *USER_DISABILITY_FIELDS)
+          .with_indifferent_access
       else
         {}
       end
@@ -425,19 +531,28 @@ module Admin
     def permitted_constituent_attributes
       # For constituents (including dependents), permit all standard user fields plus dependent-specific fields
       permitted_fields = USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS
-      params.expect(constituent: [*permitted_fields]).to_h.with_indifferent_access
+      (params[:constituent].presence || {})
+        .to_unsafe_h
+        .slice(*permitted_fields)
+        .with_indifferent_access
     end
 
     def permitted_applicant_disability_attributes
       if params[:applicant_attributes].present?
-        params.expect(applicant_attributes: [*USER_DISABILITY_FIELDS]).to_h.with_indifferent_access
+        params[:applicant_attributes]
+          .to_unsafe_h
+          .slice(*USER_DISABILITY_FIELDS)
+          .with_indifferent_access
       else
         {}
       end
     end
 
     def permitted_application_attributes
-      params.expect(application: [*APPLICATION_FIELDS]).to_h.with_indifferent_access
+      (params[:application].presence || {})
+        .to_unsafe_h
+        .slice(*APPLICATION_FIELDS)
+        .with_indifferent_access
     end
 
     def add_proof_params(service_params)

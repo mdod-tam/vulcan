@@ -30,7 +30,8 @@ module Admin
       request_documents review_proof update_proof_status
       approve reject assign_evaluator assign_trainer schedule_training complete_training
       update_certification_status resend_medical_certification assign_voucher
-      upload_medical_certification
+      upload_medical_certification send_document_signing_request
+      queue_medical_certification_form
     ]
     before_action :load_audit_logs_with_service, only: %i[show approve reject]
 
@@ -346,6 +347,22 @@ module Admin
       end
     end
 
+    def send_document_signing_request
+      result = DocumentSigning::SubmissionService.new(
+        application: @application,
+        actor: current_user,
+        service: 'docuseal'
+      ).call
+
+      if result.success?
+        redirect_to admin_application_path(@application),
+                    notice: 'Document signing request sent successfully.'
+      else
+        redirect_to admin_application_path(@application),
+                    alert: "Failed to send signing request: #{result.message}"
+      end
+    end
+
     def assign_voucher
       if @application.assign_voucher!(assigned_by: current_user)
         redirect_to admin_application_path(@application),
@@ -353,6 +370,30 @@ module Admin
       else
         redirect_to admin_application_path(@application),
                     alert: 'Failed to assign voucher. Please ensure all requirements are met.'
+      end
+    end
+
+    # Enqueue a Medical Certification Form (DCF) PDF to the print queue.
+    # Uses a pregenerated PDF if available under app/assets/pdfs/medical_certification_form.pdf,
+    # otherwise generates a simple PDF with application and provider details.
+    def queue_medical_certification_form
+      pregenerated_path = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
+      pdf_source = if File.exist?(pregenerated_path)
+                     { type: :pregenerated, io: pregenerated_path }
+                   else
+                     { type: :generated }
+                   end
+
+      result = Applications::MedicalCertificationPdfService.new(
+        application: @application,
+        actor: current_user,
+        pdf_source: pdf_source
+      ).call
+
+      if result.success?
+        redirect_to admin_print_queue_index_path, notice: 'DCF queued for printing.'
+      else
+        redirect_to admin_application_path(@application), alert: result.message || 'Failed to queue DCF for printing.'
       end
     end
 

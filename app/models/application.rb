@@ -30,6 +30,10 @@ class Application < ApplicationRecord
     end
   end
 
+  # Field encryption - URLs contain PII-adjacent data and should be encrypted at rest
+  encrypts :document_signing_audit_url
+  encrypts :document_signing_document_url
+
   # Concerns
   include ApplicationStatusManagement
   include NotificationDelivery
@@ -75,6 +79,14 @@ class Application < ApplicationRecord
     approved: 3,
     rejected: 4
   }, prefix: :medical_certification_status
+
+  enum :document_signing_status, {
+    not_sent: 0,        # No signing request sent yet
+    sent: 1,            # Signing request sent to provider
+    opened: 2,          # Provider opened the signing link
+    signed: 3,          # Provider completed signing
+    declined: 4         # Provider declined to sign
+  }, prefix: :document_signing_status
 
   # Associations - made more flexible to work with both Constituent and Users::Constituent
   belongs_to :user, -> { where("type = 'Users::Constituent' OR type = 'Constituent'") },
@@ -200,6 +212,13 @@ class Application < ApplicationRecord
     with_attached_income_proof
       .with_attached_residency_proof
       .with_attached_medical_certification
+  }
+
+  # Scope for applications that have been digitally signed and need admin review
+  scope :digitally_signed_needs_review, lambda {
+    where(document_signing_status: :signed)
+      .where.not(status: %i[rejected archived])
+      .where.not(medical_certification_status: %i[approved rejected])
   }
 
   # Class Methods for Analysis

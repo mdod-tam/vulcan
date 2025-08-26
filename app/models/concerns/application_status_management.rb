@@ -39,6 +39,12 @@ module ApplicationStatusManagement
         )
       when 'awaiting_medical_response'
         where(status: statuses[:awaiting_documents])
+      when 'digitally_signed_needs_review'
+        where(
+          document_signing_status: document_signing_statuses[:signed]
+        ).where.not(
+          medical_certification_status: medical_certification_statuses[:approved]
+        )
       end
     }
     scope :sorted_by, lambda { |column, direction|

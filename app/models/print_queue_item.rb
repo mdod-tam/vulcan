@@ -33,7 +33,8 @@ class PrintQueueItem < ApplicationRecord
     proof_approved: 7,
     max_rejections_reached: 8,
     proof_submission_error: 9,
-    evaluation_submitted: 10
+    evaluation_submitted: 10,
+    medical_certification_form: 11
   }
 
   enum :status, { pending: 0, printed: 1, canceled: 2 }

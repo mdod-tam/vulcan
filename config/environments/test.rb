@@ -39,6 +39,10 @@ Rails.application.configure do
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: 'example.com' }
 
+  # Configure Solid Queue for testing
+  config.active_job.queue_adapter = :solid_queue
+  config.solid_queue.connects_to = { database: { writing: :queue } }
+
   # Print deprecation notices to the stderr.
   config.active_support.deprecation = :stderr
 

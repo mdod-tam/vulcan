@@ -68,6 +68,23 @@ module ApplicationHelper
                 )}")
   end
 
+  def document_signing_status_badge(application)
+    return nil unless application.document_signing_status.present?
+    return nil if application.document_signing_status == 'not_sent'
+    
+    status = application.document_signing_status
+    label = case status.to_s
+            when 'sent' then 'Sent for Signing'
+            when 'opened' then 'Opened by Provider'
+            when 'signed' then 'Signed by Provider'
+            when 'declined' then 'Declined by Provider'
+            else status.to_s.humanize
+            end
+
+    content_tag(:span, label,
+                class: "px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(:document_signing, status)}")
+  end
+
   # Determines the appropriate proof review button text based on proof status
   # @param application [Application] The application instance
   # @param proof_type [String] The type of proof ("income" or "residency")
