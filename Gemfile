@@ -2,7 +2,7 @@
 
 source 'https://rubygems.org'
 
-ruby '3.4.5'
+ruby '3.4.7'
 
 # gem for hosting images & getting ocr functionality
 gem 'aws-sdk-s3', '~> 1.197'
@@ -35,7 +35,7 @@ gem 'propshaft', '~> 1.2', '>= 1.2.1'
 # use the Puma web server [https://github.com/puma/puma]
 gem 'puma', '~> 6.6', '>= 6.6.1'
 # rails framework
-gem 'rails', '~> 8.0.2'
+gem 'rails', '~> 8.0.3'
 # gem for one-time passwords for SMS 2fa
 gem 'rotp', '~> 6.3'
 # gem for QR code generation for TOTP

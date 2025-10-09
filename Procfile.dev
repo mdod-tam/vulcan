@@ -1,4 +1,4 @@
-web: env RUBY_DEBUG_OPEN=true bin/rails server
+web: env RUBY_DEBUG_OPEN=true OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES bin/rails server
 js: node esbuild.config.js --watch
 css: ./node_modules/.bin/tailwindcss -i ./app/assets/stylesheets/application.tailwind.css -o ./app/assets/builds/application.css --minify --watch
 worker: bin/rails solid_queue:start
