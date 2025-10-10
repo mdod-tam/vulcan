@@ -94,6 +94,24 @@ module Admin
       end
     end
 
+    # Load dependent form for editing or creating new dependent
+    # Used by Turbo Frame to dynamically load pre-filled form when existing dependent selected
+    def dependent_form
+      if params[:dependent_id].present?
+        @dependent = User.find_by(id: params[:dependent_id])
+        @mode = :edit
+      else
+        @dependent = nil
+        @mode = :new
+      end
+
+      render turbo_stream: turbo_stream.replace(
+        "dependent_info_form",
+        partial: "admin/paper_applications/dependent_form",
+        locals: { dependent: @dependent, mode: @mode }
+      )
+    end
+
     # Legacy AJAX endpoint for FPL thresholds - delegates to IncomeThresholdCalculationService
     # TODO: Consider removing this endpoint in favor of server-rendered data
     def fpl_thresholds

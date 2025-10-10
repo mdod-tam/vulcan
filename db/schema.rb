@@ -216,6 +216,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_22_113000) do
     t.jsonb "metadata", default: {}, null: false
     t.string "auditable_type"
     t.bigint "auditable_id"
+    t.index ["action", "auditable_type", "auditable_id"], name: "index_events_on_action_and_auditable"
     t.index ["auditable_type", "auditable_id"], name: "index_events_on_auditable"
     t.index ["metadata"], name: "index_events_on_metadata", using: :gin
     t.index ["user_id"], name: "index_events_on_user_id"

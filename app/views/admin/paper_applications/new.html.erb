@@ -1,7 +1,6 @@
 <div class="min-h-screen bg-gray-100 py-12">
       <div class="form-container max-w-4xl mx-auto">
         <div class="bg-white p-8 rounded shadow-md">
-          <%= render 'shared/flash' %>
           <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-semibold">Upload Paper Application</h1>
             <div>
@@ -29,7 +28,7 @@
                   <label for="applicant_is_adult" class="ml-3 text-sm text-gray-700">An Adult (applying for themselves)</label>
                 </div>
                 <div class="flex items-center">
-                  <input type="radio" id="applicant_is_minor" name="applicant_type" value="dependent" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" <%= 'checked' if @show_create_guardian_form %> data-applicant-type-target="radio">
+                  <input type="radio" id="applicant_is_minor" name="applicant_type" value="dependent" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" <%= 'checked' if @show_create_guardian_form %> data-applicant-type-target="radio" data-guardian-picker-target="applicantTypeRadioDependent">
                   <label for="applicant_is_minor" class="ml-3 text-sm text-gray-700">A Dependent (must select existing guardian in system or enter guardian's information))</label>
                 </div>
               </div>
@@ -65,7 +64,7 @@
                   </div>
 
                   <%= turbo_frame_tag "guardian_search_results", class: "mt-2 space-y-2", target: "_top", "data-admin-user-search-target": "searchResults" do %>
-                    <%# server‑rendered results appear here %>
+                    <p class="text-sm text-gray-500 p-3 hidden" data-admin-user-search-target="emptyMessage">Type a name or email to search for guardians.</p>
                   <% end %>
 
                   <div class="mt-4">
@@ -187,6 +186,10 @@
                     <div class="flex-grow">
                       <h3 class="text-sm font-medium text-gray-800 mb-1">Selected Guardian:</h3>
                       <div data-guardian-picker-target="selectedGuardianDisplay" class="text-sm guardian-details-container"></div>
+                      <div data-guardian-picker-target="displaySelection" class="text-xs text-gray-700 mt-2"></div>
+                      <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block" do %>
+                        <%# dependents list will load here when guardian is selected %>
+                      <% end %>
                     </div>
                     <button type="button"
                             class="text-xs text-gray-500 hover:text-gray-700 ml-2"
@@ -195,129 +198,17 @@
                     </button>
                   </div>
                   <input type="hidden" name="guardian_id" data-guardian-picker-target="guardianIdField">
+                  <input type="hidden" name="dependent_id" data-guardian-picker-target="dependentIdField">
                 </div>
               </div>
             </fieldset>
 
             <!-- Wrapper for sections shown only for Dependent Application with Guardian Selected -->
             <div class="hidden" data-applicant-type-target="sectionsForDependentWithGuardian">
-              <!-- Dependent Information Section (Conditional) -->
-              <fieldset id="dependent-info-section" class="mb-6 p-4 border border-gray-200 rounded" data-controller="dependent-fields">
-                <legend class="text-lg font-medium">Dependent Information</legend>
-                <%= fields_for :constituent do |d| %>
-                <!-- Dependent Basic Information -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <%= d.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
-                    <%= d.text_field :first_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { "applicant-type-target": "dependentField" } %>
-                  </div>
-                  <div>
-                    <%= d.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
-                    <%= d.text_field :last_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { "applicant-type-target": "dependentField" } %>
-                  </div>
-                </div>
-                <div class="mb-4">
-                  <%= d.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
-                  <%= d.date_field :date_of_birth, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { "applicant-type-target": "dependentField" } %>
-                </div>
-                
-                <!-- Dependent Contact Information -->
-                <div class="mb-4">
-                  <h3 class="text-base font-medium text-gray-900 mb-3">Contact Information</h3>
-                  
-                  <!-- Email Section -->
-                  <div class="mb-6">
-                    <div class="flex items-start mb-2">
-                      <%= check_box_tag :use_guardian_email, "1", true, {
-                        class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
-                        data: { 
-                          dependent_fields_target: "sameEmailCheckbox",
-                          action: "change->dependent-fields#toggleEmailField"
-                        }
-                      } %>
-                      <%= label_tag :use_guardian_email, "Use Guardian's Email", class: "ml-2 block text-sm font-medium text-gray-700" %>
-                    </div>
-                    
-                    <div class="ml-6 hidden" data-dependent-fields-target="emailFieldContainer">
-                      <%= d.label :dependent_email, "Dependent's Email", class: "block text-sm font-medium text-gray-700" %>
-                      <%= d.email_field :dependent_email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "dependentEmail" } %>
-                      <p class="mt-1 text-xs text-gray-500">This email will be used for all communications about the dependent's benefits</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Phone Section -->
-                  <div class="mb-6">
-                    <div class="flex items-start mb-2">
-                      <%= check_box_tag :use_guardian_phone, "1", true, {
-                        class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
-                        data: { 
-                          dependent_fields_target: "samePhoneCheckbox",
-                          action: "change->dependent-fields#togglePhoneField"
-                        }
-                      } %>
-                      <%= label_tag :use_guardian_phone, "Use Guardian's Phone", class: "ml-2 block text-sm font-medium text-gray-700" %>
-                    </div>
-                    
-                    <div class="ml-6 hidden" data-dependent-fields-target="phoneFieldContainer">
-                      <%= d.label :dependent_phone, "Dependent's Phone", class: "block text-sm font-medium text-gray-700" %>
-                      <%= d.telephone_field :dependent_phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "dependentPhone" } %>
-                      <p class="mt-1 text-xs text-gray-500">This phone will be used for all communications about the dependent's benefits</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Address Section -->
-                  <div class="mb-6">
-                    <div class="flex items-start mb-2">
-                      <%= check_box_tag :use_guardian_address, "1", true, {
-                        class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
-                        data: { 
-                          dependent_fields_target: "sameAddressCheckbox",
-                          action: "change->dependent-fields#toggleContactFields"
-                        }
-                      } %>
-                      <%= label_tag :use_guardian_address, "Same as Guardian's Address", class: "ml-2 block text-sm font-medium text-gray-700" %>
-                    </div>
-                    
-                    <div class="ml-6 hidden" data-dependent-fields-target="addressFields">
-                      <div class="grid grid-cols-1 gap-4">
-                        <div>
-                          <%= d.label :physical_address_1, "Address Line 1", class: "block text-sm font-medium text-gray-700" %>
-                          <%= d.text_field :physical_address_1, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "dependentAddress1" } %>
-                        </div>
-                        <div>
-                          <%= d.label :physical_address_2, "Address Line 2 (Optional)", class: "block text-sm font-medium text-gray-700" %>
-                          <%= d.text_field :physical_address_2, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "dependentAddress2" } %>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <%= d.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
-                            <%= d.text_field :city, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "dependentCity" } %>
-                          </div>
-                          <div>
-                            <%= d.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
-                            <%= d.text_field :state, value: "MD", class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "dependentState" } %>
-                          </div>
-                          <div>
-                            <%= d.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700" %>
-                            <%= d.text_field :zip_code, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "dependentZip" } %>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <%= turbo_frame_tag "dependent_info_form", target: "_top" do %>
+                <%= render partial: 'admin/paper_applications/dependent_form', 
+                           locals: { dependent: nil, mode: :new } %>
               <% end %>
-              <!-- Relationship Type -->
-              <div class="mt-4">
-                <label for="relationship_type" class="block text-sm font-medium text-gray-700">Relationship to Guardian</label>
-                <select id="relationship_type" name="relationship_type" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" data-dependent-fields-target="relationshipType">
-                  <option value="">Select Relationship</option>
-                  <option value="Parent">Parent</option>
-                  <option value="Legal Guardian">Legal Guardian</option>
-                  <%# Add other relevant relationship types %>
-                </select>
-              </div>
-            </fieldset>
             </div> <!-- End of sectionsForDependentWithGuardian wrapper -->
 
             <!-- Wrapper for common sections shown for Adult OR Dependent with Guardian -->
@@ -445,8 +336,8 @@
                 </div>
                 <!-- Rejection reason (shown when Reject is selected) -->
                 <div id="income_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
-                  <select name="income_proof_rejection_reason" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" data-document-proof-handler-target="rejectionReasonSelect" data-form-validation-target="incomeProofRejectionReason">
+                  <label class="block text-sm font-medium text-gray-700 mb-1" for="income_proof_rejection_reason">Rejection Reason</label>
+                  <select id="income_proof_rejection_reason" name="income_proof_rejection_reason" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" data-document-proof-handler-target="rejectionReasonSelect" data-form-validation-target="incomeProofRejectionReason">
                     <option value="">Select a reason</option>
                     <option value="address_mismatch">Address Mismatch</option>
                     <option value="expired">Expired Documentation</option>
@@ -460,8 +351,8 @@
                   <!-- Reason Preview -->
                   <div id="income_proof_reason_preview" class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
                   <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1"> Notes to Constituent </label>
-                    <textarea name="income_proof_rejection_notes" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" data-document-proof-handler-target="rejectionNotes"></textarea>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="income_proof_rejection_notes"> Notes to Constituent </label>
+                    <textarea id="income_proof_rejection_notes" name="income_proof_rejection_notes" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" data-document-proof-handler-target="rejectionNotes"></textarea>
                     <p class="mt-1 text-xs text-gray-500"> Review and modify this text as needed to provide clear instructions to the constituent. This message will be included in the notification sent to the applicant. </p>
                   </div>
                 </div>
@@ -488,8 +379,8 @@
                 </div>
                 <!-- Rejection reason (shown when Reject is selected) -->
                 <div id="residency_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
-                  <select name="residency_proof_rejection_reason" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" data-document-proof-handler-target="rejectionReasonSelect" data-form-validation-target="residencyProofRejectionReason">
+                  <label class="block text-sm font-medium text-gray-700 mb-1" for="residency_proof_rejection_reason">Rejection Reason</label>
+                  <select id="residency_proof_rejection_reason" name="residency_proof_rejection_reason" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" data-document-proof-handler-target="rejectionReasonSelect" data-form-validation-target="residencyProofRejectionReason">
                     <option value="">Select a reason</option>
                     <option value="address_mismatch">Address Mismatch</option>
                     <option value="expired">Expired Documentation</option>
@@ -500,8 +391,8 @@
                   <!-- Reason Preview -->
                   <div id="residency_proof_reason_preview" class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
                   <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1"> Notes to Constituent </label>
-                    <textarea name="residency_proof_rejection_notes" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" data-document-proof-handler-target="rejectionNotes"></textarea>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="residency_proof_rejection_notes"> Notes to Constituent </label>
+                    <textarea id="residency_proof_rejection_notes" name="residency_proof_rejection_notes" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" data-document-proof-handler-target="rejectionNotes"></textarea>
                     <p class="mt-1 text-xs text-gray-500"> Review and modify this text as needed to provide clear instructions to the constituent. This message will be included in the notification sent to the applicant. </p>
                   </div>
                 </div>
@@ -540,7 +431,7 @@
               </p>
             </div>
             <div class="mb-4">
-              <%= form.label :communication_preference, "Notification Method", class: "block text-sm font-medium text-gray-700 mb-1" %>
+              <span class="block text-sm font-medium text-gray-700 mb-1">Notification Method</span>
               <div class="mt-1">
                 <div class="flex items-center space-x-4">
                   <div>

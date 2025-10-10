@@ -59,8 +59,10 @@ class Current < ActiveSupport::CurrentAttributes
 
   # Reset callback to ensure clean state between requests
   resets do
-    # Log state reset in development for debugging
-    Rails.logger.debug { "Current attributes reset: paper_context=#{paper_context}, resubmitting_proof=#{resubmitting_proof}" } if Rails.env.development?
+    # Log state reset in development for debugging - only when attributes are actually set
+    if Rails.env.development? && (paper_context.present? || resubmitting_proof.present?)
+      Rails.logger.debug { "Current attributes reset: paper_context=#{paper_context}, resubmitting_proof=#{resubmitting_proof}" }
+    end
   end
 
   # Legacy attributes that were already in the class

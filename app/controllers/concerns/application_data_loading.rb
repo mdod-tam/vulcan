@@ -134,7 +134,12 @@ module ApplicationDataLoading
   # @param exclude_statuses [Array<Symbol>] Statuses to exclude (default: [:rejected, :archived])
   # @return [ActiveRecord::Relation] The base scope
   def build_application_base_scope(exclude_statuses: %i[rejected archived])
-    scope = Application.includes(:user, :managing_guardian).distinct
+    scope = Application.includes(
+      :user,
+      :managing_guardian,
+      # Preload guardian_relationships to avoid N+1 when checking relationships in views
+      user: :guardian_relationships_as_dependent
+    ).distinct
 
     scope = scope.where.not(status: exclude_statuses) if exclude_statuses.any?
 

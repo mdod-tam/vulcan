@@ -19,6 +19,7 @@ development:
     host: localhost
     port: 5432
     username: <%= ENV.fetch("DATABASE_USERNAME", "postgres") %>
+    gssencmode: disable  # Disable GSSAPI to prevent macOS fork crashes
   queue:
     <<: *primary_development
     database: mat_vulcan_queue_development  # Separate database

@@ -180,14 +180,28 @@
                     when "application_created"
                       method = log.metadata['submission_method']&.titleize || "Unknown"
                       initial_status = log.metadata['initial_status']&.titleize || "Unknown"
-                      "Application created via #{method} method with status: #{initial_status}"
+                      actor_name = log.user&.full_name || "System"
+                      "Application created via #{method} method with status: #{initial_status} by #{actor_name}"
                     when "evaluator_assigned"
                       "Evaluator #{log.metadata['evaluator_name']} assigned to application"
                     when "trainer_assigned"
                       "Trainer #{log.metadata['trainer_name']} assigned to application"
                     when "application_auto_approved"
-                      trigger = log.metadata['trigger'].to_s.gsub('proof_', '').titleize
-                      "Application automatically approved after all proofs validated (triggered by: #{trigger})"
+                      triggered_by_id = log.metadata['triggered_by_user_id']
+                      trigger = log.metadata['trigger'].to_s
+                      triggered_by_name = nil
+                      if triggered_by_id.present?
+                        user = User.find_by(id: triggered_by_id)
+                        triggered_by_name = user&.full_name
+                      end
+                      trigger_text = if triggered_by_name.present?
+                                       triggered_by_name
+                                     elsif trigger.present?
+                                       trigger.gsub('proof_', '').titleize
+                                     else
+                                       'System'
+                                     end
+                      "Application automatically approved after all proofs validated (triggered by: #{trigger_text})"
                     when "medical_certification_requested"
                       trigger = log.metadata['trigger']&.titleize || 'System'
                       "Medical certification requested (triggered by: #{trigger})"

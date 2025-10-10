@@ -10,7 +10,7 @@ module Admin
 
     def index
       # Use Users::Vendor to match the STI type column
-      @vendors = Users::Vendor.order(:business_name)
+      @vendors = Users::Vendor.with_attached_w9_form.order(:business_name)
 
       # Filter by W9 status if provided
       return if params[:w9_status].blank?

@@ -123,9 +123,9 @@ module Admin
       # This is data-applicant-type-target="sectionsForDependentWithGuardian"
       assert_selector '[data-applicant-type-target="sectionsForDependentWithGuardian"]', visible: true
       within('[data-applicant-type-target="sectionsForDependentWithGuardian"]') do
-        assert_selector 'fieldset legend', text: 'Dependent Information'
-        # Check for dependent search/create within the dependent info section
-        assert_selector 'input#constituent_first_name', visible: true # Check for a field within the dependent section
+        assert_selector 'fieldset legend', text: 'New Dependent Information'
+        # Check for dependent fields within the dependent info section - use new dependent field IDs
+        assert_selector 'input#dependent_constituent_first_name', visible: true # Check for a field within the dependent section
       end
 
       # Relationship Type (within dependent info) should be visible and required
@@ -197,7 +197,7 @@ module Admin
       assert_selector 'fieldset[data-applicant-type-target="adultSection"]', visible: true
       within('fieldset[data-applicant-type-target="adultSection"]') do
         assert_selector 'legend', text: "Applicant's Information"
-        # Check for some key fields within this section
+        # Check for some key fields within this section - these keep default IDs for self-applicant
         assert_selector 'input#constituent_first_name', visible: true
         assert_selector 'input#constituent_email', visible: true
         assert_selector 'input#constituent_physical_address_1', visible: true

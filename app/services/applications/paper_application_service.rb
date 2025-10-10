@@ -145,6 +145,11 @@ module Applications
         end
       end
 
+      # Update dependent information if provided (contact info may have changed)
+      if params[:constituent].present? && attributes_present?(params[:constituent])
+        return false unless update_dependent_contact_info(dependent)
+      end
+
       # Validate no active application for dependent
       return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).where.not(status: :archived).exists?
 
@@ -213,6 +218,41 @@ module Applications
                         'This constituent already has an active or pending application.'
                       end
       add_error(error_message)
+      false
+    end
+
+    def update_dependent_contact_info(dependent)
+      attrs = params[:constituent]
+      return true unless attrs.present?
+
+      # Build hash of updateable fields (contact info only, not identity fields)
+      updates = {}
+
+      # Email (may come as dependent_email)
+      updates[:email] = attrs[:dependent_email] if attrs[:dependent_email].present?
+
+      # Phone (may come as dependent_phone)
+      updates[:phone] = attrs[:dependent_phone] if attrs[:dependent_phone].present?
+
+      # Address fields
+      updates[:physical_address_1] = attrs[:physical_address_1] if attrs[:physical_address_1].present?
+      updates[:physical_address_2] = attrs[:physical_address_2] if attrs[:physical_address_2].present?
+      updates[:city] = attrs[:city] if attrs[:city].present?
+      updates[:state] = attrs[:state] if attrs[:state].present?
+      updates[:zip_code] = attrs[:zip_code] if attrs[:zip_code].present?
+
+      # Only update if there are changes
+      return true if updates.empty?
+
+      if dependent.update(updates)
+        Rails.logger.info "Updated contact info for dependent #{dependent.id}: #{updates.keys.join(', ')}"
+        true
+      else
+        add_error("Failed to update dependent information: #{dependent.errors.full_messages.join(', ')}")
+        false
+      end
+    rescue ActiveRecord::RecordInvalid => e
+      add_error("Failed to update dependent information: #{e.record.errors.full_messages.join(', ')}")
       false
     end
 

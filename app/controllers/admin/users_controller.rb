@@ -5,6 +5,22 @@ module Admin
     include ParamCasting
     include UserServiceIntegration
 
+    DependentSummary = Struct.new(
+      :id,
+      :name,
+      :date_of_birth,
+      :city,
+      :state,
+      :last_app,
+      :last_app_status,
+      :last_app_date,
+      :has_active_app,
+      :eligible_date,
+      :eligible_now,
+      :relationship_types,
+      keyword_init: true
+    )
+
     before_action :authenticate_user!
     before_action :require_admin!
 
@@ -214,8 +230,7 @@ module Admin
 
       @users = build_search_query.limit(10).to_a
       enhance_constituent_users(@users)
-
-      render partial: 'admin/users/user_search_results_list', locals: { users: @users, role: @role_filter }
+      render 'admin/users/search'
     end
 
     # Define the mapping from expected demodulized names to full namespaced names.
@@ -345,6 +360,101 @@ module Admin
     def history
       @user = User.find(params[:id])
       @applications = @user.applications.order(application_date: :desc)
+    end
+
+    # Returns a server-rendered list of a guardian's dependents with eligibility metadata
+    def dependents
+      @guardian = User.find(params[:id])
+
+      dependents = @guardian.dependents
+      waiting_period_years = Policy.get('waiting_period_years') || 3
+
+      @dependents = dependents.map do |dep|
+        last_app = dep.applications.order(application_date: :desc).first
+        has_active_app = dep.applications.where.not(status: :archived).exists?
+        eligible_date = last_app ? (last_app.application_date + waiting_period_years.years) : Time.current
+        eligible_now = !has_active_app && eligible_date <= Time.current
+
+        relationship_types = begin
+          @guardian.relationship_types_for_dependent(dep)
+        rescue StandardError
+          []
+        end
+
+        DependentSummary.new(
+          id: dep.id,
+          name: dep.full_name,
+          date_of_birth: dep.date_of_birth,
+          city: dep.city,
+          state: dep.state,
+          last_app: last_app,
+          last_app_status: last_app&.status,
+          last_app_date: last_app&.application_date,
+          has_active_app: has_active_app,
+          eligible_date: eligible_date,
+          eligible_now: eligible_now,
+          relationship_types: relationship_types
+        )
+      end
+
+      respond_to do |format|
+        format.html { render 'admin/users/dependents' }
+        format.json do
+          render json: {
+            guardian_id: @guardian.id,
+            waiting_period_years: waiting_period_years,
+            dependents: @dependents.map do |d|
+              {
+                id: d.id,
+                name: d.name,
+                date_of_birth: d.date_of_birth,
+                city: d.city,
+                state: d.state,
+                last_app_status: d.last_app_status,
+                last_app_date: d.last_app_date,
+                has_active_app: d.has_active_app,
+                eligible_date: d.eligible_date,
+                eligible_now: d.eligible_now,
+                relationship_types: d.relationship_types
+              }
+            end
+          }
+        end
+      end
+    rescue ActiveRecord::RecordNotFound
+      @guardian = nil
+      @dependents = []
+      respond_to do |format|
+        format.html { render 'admin/users/dependents', status: :ok }
+        format.json { render json: { guardian_id: nil, dependents: [] }, status: :ok }
+      end
+    end
+
+    # Returns last known application values for a guardian or related dependents
+    def last_application_values
+      user = User.find(params[:id])
+
+      # Gather candidate applications: user's own and their dependents'
+      candidate_apps = Application.where(user_id: [user.id] + user.dependents.pluck(:id))
+                                  .order(application_date: :desc)
+      last_app = candidate_apps.first
+
+      if last_app
+        render json: {
+          success: true,
+          application_id: last_app.id,
+          application_date: last_app.application_date,
+          household_size: last_app.household_size,
+          annual_income: last_app.annual_income,
+          maryland_resident: last_app.maryland_resident,
+          medical_provider_name: last_app.medical_provider_name,
+          medical_provider_phone: last_app.medical_provider_phone,
+          medical_provider_fax: last_app.medical_provider_fax,
+          medical_provider_email: last_app.medical_provider_email
+        }
+      else
+        render json: { success: true, application_id: nil }
+      end
     end
 
     private

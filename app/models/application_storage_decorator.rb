@@ -43,22 +43,6 @@ class ApplicationStorageDecorator
     self
   end
 
-  # Attachment metadata access methods
-
-  def filename
-    # Used when an attachment method is called on our proxy attachment
-    # For example: application.income_proof.filename
-    attachment_metadata[:filename]
-  end
-
-  def content_type
-    attachment_metadata[:content_type]
-  end
-
-  def byte_size
-    attachment_metadata[:byte_size]
-  end
-
   def attached?
     # Used as a fallback when the specific attachment method is not used
     # This should generally not be called directly
@@ -101,35 +85,9 @@ class ApplicationStorageDecorator
     end
   end
 
-  # Helper methods for fetching attachment data safely
+  # Helper methods for fetching attachment data safely (removed unused helpers)
 
-  # Get attachment filename without blob access - useful for views
-  def safe_income_proof_filename
-    safe_attachment_attribute('income_proof', :filename)
-  end
-
-  def safe_residency_proof_filename
-    safe_attachment_attribute('residency_proof', :filename)
-  end
-
-  # Get byte size without blob access
-  def safe_income_proof_byte_size
-    safe_attachment_attribute('income_proof', :byte_size)
-  end
-
-  def safe_residency_proof_byte_size
-    safe_attachment_attribute('residency_proof', :byte_size)
-  end
-
-  # Current attachment context for metadata requests
-  def attachment_context=(context)
-    @current_attachment_context = context
-  end
-
-  # Set when the decorator is used directly for attachment operations
-  def attachment_context
-    @current_attachment_context
-  end
+  # Removed unused attachment_context accessors
 
   private
 
@@ -144,34 +102,15 @@ class ApplicationStorageDecorator
                                              ActiveStorage::Attachment.exists?(record_type: 'Application',
                                                                                record_id: application.id,
                                                                                name: name)
+                                           else
+                                             # Use the preloaded set of attachment names to determine existence
+                                             @preloaded_attachments.include?(name.to_s)
                                            end
   end
 
-  def safe_attachment_attribute(name, attribute)
-    return nil unless attachment_exists?(name)
+  # Removed unused safe_attachment_attribute
 
-    # Fetch from cache if available
-    cache_key = :"#{name}_#{attribute}"
-    return @metadata_cache[cache_key] if @metadata_cache.key?(cache_key)
-
-    # Fetch metadata directly from the attachment record without loading the blob
-    attachment = ActiveStorage::Attachment.select("id, name, record_id, blob_id, created_at, #{attribute}")
-                                          .find_by(record_type: 'Application',
-                                                   record_id: application.id,
-                                                   name: name)
-
-    value = attachment&.send(attribute)
-    @metadata_cache[cache_key] = value
-    value
-  end
-
-  def attachment_metadata
-    context = @current_attachment_context || 'unknown'
-    Rails.logger.debug { "Accessing attachment metadata for #{context} on application #{application.id}" }
-
-    # Return empty metadata for safety if context not set
-    { filename: nil, content_type: nil, byte_size: 0 }
-  end
+  # Removed unused attachment_metadata helper
 
   # Pass through method_missing to the original application for methods we don't override
   def method_missing(method_name, *, &)

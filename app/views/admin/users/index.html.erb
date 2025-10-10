@@ -21,27 +21,27 @@
     </div>
 
     <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200" role="grid">
+      <table class="min-w-full table-auto md:table-fixed divide-y divide-gray-200" role="grid">
+        <colgroup>
+          <col class="w-2/12">
+          <col class="w-3/12">
+          <col class="w-64 md:w-96">
+          <col class="w-5/12">
+        </colgroup>
         <caption class="sr-only">List of system users and their roles and capabilities</caption>
         
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th scope="col" class="w-2/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               User Details
             </th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Is Guardian?
+            <th scope="col" class="w-3/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Relationships
             </th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Is Dependent?
-            </th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Guardian(s)
-            </th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th scope="col" class="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Email
             </th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th scope="col" class="w-5/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Manage Roles & Capabilities
             </th>
           </tr>
@@ -62,7 +62,7 @@
               end
             %>
             <tr class="<%= row_classes.join(' ') %>">
-              <td class="px-6 py-4">
+              <td class="w-2/12 px-6 py-4">
                 <div class="space-y-1">
                   <div class="text-sm font-medium text-gray-900">
                     <% if is_guardian %>
@@ -98,33 +98,44 @@
                 </div>
               </td>
 
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                <%= is_guardian ? 'Yes' : 'No' %>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                <%= is_dependent ? 'Yes' : 'No' %>
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-900">
-                <% if is_dependent && user.guardians.any? %>
+              <td class="w-3/12 px-6 py-4 text-sm text-gray-900">
+                <% if is_guardian && !is_dependent && user.dependents.any? %>
+                  <ul class="list-disc list-inside">
+                    <% user.guardian_relationships_as_guardian.each do |gr| %>
+                      <% relation = gr.relationship_type.to_s.downcase %>
+                      <% label = case relation
+                                when 'parent' then 'child'
+                                when 'guardian' then 'ward'
+                                else 'dependent'
+                                end %>
+                      <li>
+                        <%= link_to gr.dependent_user.full_name, admin_user_path(gr.dependent_user), class: "hover:text-indigo-600" %>
+                        <span class="text-xs text-gray-500">(<%= label %>)</span>
+                      </li>
+                    <% end %>
+                  </ul>
+                <% elsif is_dependent && user.guardians.any? %>
                   <ul class="list-disc list-inside">
                     <% user.guardian_relationships_as_dependent.each do |gr| %>
+                      <% relation = gr.relationship_type.to_s.downcase %>
+                      <% label = relation.presence || 'guardian' %>
                       <li>
                         <%= link_to gr.guardian_user.full_name, admin_user_path(gr.guardian_user), class: "hover:text-indigo-600" %>
-                        <span class="text-xs text-gray-500">(<%= gr.relationship_type %>)</span>
+                        <span class="text-xs text-gray-500">(<%= label %>)</span>
                       </li>
                     <% end %>
                   </ul>
                 <% else %>
-                  &nbsp; <%# Non-breaking space for consistent cell height %>
+                  &nbsp;
                 <% end %>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm text-gray-500">
-                  <%= mail_to user.email, class: "hover:text-indigo-600" %>
+              <td class="w-64 md:w-96 px-3 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-500 truncate w-64 md:w-96">
+                  <%= mail_to user.effective_email, class: "hover:text-indigo-600 block", title: user.effective_email %>
                 </div>
               </td>
 
-              <td class="px-6 py-4">
+              <td class="w-5/12 px-6 py-4">
                 <% if user == current_user %>
                   <div class="text-sm text-gray-500 italic">
                     Cannot modify own role

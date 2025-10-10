@@ -211,7 +211,8 @@ class IncomeValidationController extends Controller {
 
   updateSubmitButton(exceedsThreshold) {
     this.withTarget('submitButton', (target) => {
-      console.log(`Income validation: Setting button disabled = ${exceedsThreshold}`)
+      const prev = target.disabled
+      if (prev === exceedsThreshold) return
       target.disabled = exceedsThreshold
 
       if (exceedsThreshold) {
@@ -222,10 +223,6 @@ class IncomeValidationController extends Controller {
         target.removeAttribute("disabled")
       }
     })
-    
-    // Debug: Check if target was found
-    const hasTarget = this.hasSubmitButtonTarget
-    console.log(`Income validation: hasSubmitButtonTarget = ${hasTarget}`)
   }
 
   clearValidationState() {

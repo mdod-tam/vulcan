@@ -5,7 +5,8 @@ class Session < ApplicationRecord
   belongs_to :user
 
   # validate the presence and uniqueness of the session token, ip address, user_agent
-  validates :session_token, presence: true, uniqueness: true
+  # Note: session_token uniqueness is already checked in generate_session_token callback
+  validates :session_token, presence: true
   validates :ip_address, presence: true
   validates :user_agent, presence: true
 

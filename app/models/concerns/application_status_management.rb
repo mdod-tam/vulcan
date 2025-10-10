@@ -43,7 +43,10 @@ module ApplicationStatusManagement
         where(
           document_signing_status: document_signing_statuses[:signed]
         ).where.not(
-          medical_certification_status: medical_certification_statuses[:approved]
+          medical_certification_status: [
+            medical_certification_statuses[:approved],
+            medical_certification_statuses[:rejected]
+          ]
         )
       end
     }

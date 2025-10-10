@@ -101,7 +101,7 @@ Rails.application.routes.draw do
     get 'dashboard', to: 'dashboard#index', as: :dashboard # Add dashboard route
     root to: 'applications#index'
 
-    resources :guardian_relationships, only: %i[new create destroy]
+    resources :guardian_relationships, only: %i[destroy]
 
     resources :recovery_requests, only: %i[index show] do
       member do
@@ -130,6 +130,7 @@ Rails.application.routes.draw do
         post :send_rejection_notification
         post :reject_for_income
         get :fpl_thresholds
+        get :dependent_form
       end
     end
 

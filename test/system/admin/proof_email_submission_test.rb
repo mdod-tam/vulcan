@@ -97,7 +97,8 @@ module Admin
 
     test 'admin can view multiple proof types submitted via separate emails' do
       # Prepare unique data and files outside truncation
-      admin = create(:admin)
+      # Use existing admin from setup instead of creating a new one
+      admin = @admin
       unique_email = "constituent_truncation_#{Time.now.to_i}_#{rand(10_000)}@example.com"
       constituent = create(:constituent, email: unique_email)
       app = create(:application, :old_enough_for_new_application, user: constituent)
@@ -131,10 +132,7 @@ module Admin
 
       # UI interactions AFTER truncation
       system_test_sign_in(admin)
-      visit_with_retry(admin_application_path(app), max_retries: 3)
-      wait_for_page_stable
-
-      assert_text(/Application Details|Application #/i, wait: 40)
+      visit_admin_application_with_retry(app, max_retries: 3, user: admin)
       using_wait_time(20) do
         assert_text 'Income Proof'
         assert_text 'Residency Proof'

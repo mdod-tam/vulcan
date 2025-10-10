@@ -56,6 +56,8 @@ class UserSearchController extends BaseFormController {
     const searchUrl = `${this.searchUrlValue}?q=${encodeURIComponent(q)}&role=${this.defaultRoleValue}`
     
     // Set the turbo frame's src to trigger navigation
+    // Ensure it's visible in case it was previously hidden by clearResults()
+    setVisible(turboFrame, true)
     turboFrame.src = searchUrl
   }
 
@@ -63,7 +65,7 @@ class UserSearchController extends BaseFormController {
     this.withTarget('searchResults', (target) => {
       // Clear the turbo frame by removing its src
       target.removeAttribute('src')
-      target.innerHTML = ""
+      target.innerHTML = '<p class="text-sm text-gray-500 p-3">Type a name or email to search for guardians.</p>'
       setVisible(target, false)
     })
   }

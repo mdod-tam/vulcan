@@ -1,0 +1,4 @@
+<%= turbo_frame_tag(@frame_id.presence || "guardian_search_results") do %>
+  <%= render partial: 'admin/users/user_search_results_list', locals: { users: @users, role: @role_filter } %>
+<% end %>
+

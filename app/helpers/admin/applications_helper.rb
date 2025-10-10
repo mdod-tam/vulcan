@@ -38,21 +38,6 @@ module Admin
       end
     end
 
-    def medical_certification_label(application)
-      case application.medical_certification_status
-      when 'approved'
-        'Medical Certification Approved'
-      when 'rejected'
-        'Medical Certification Rejected'
-      when 'received'
-        'Medical Certification Received'
-      when 'requested'
-        'Medical Certification Requested'
-      else
-        'Medical Certification'
-      end
-    end
-
     def medical_certification_submission_method(application)
       return 'unknown' unless application.medical_certification.attached?
 

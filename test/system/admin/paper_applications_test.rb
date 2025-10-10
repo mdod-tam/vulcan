@@ -568,13 +568,13 @@ module Admin
       wait_for_stimulus_controller('paper-application', timeout: 10)
       wait_for_network_idle(timeout: 3)
       # Ensure date field becomes enabled before asserting value
-      dependent_fieldset = page.find('fieldset', text: 'Dependent Information', visible: true)
+      dependent_fieldset = page.find('fieldset', text: 'New Dependent Information', visible: true)
       within dependent_fieldset do
         assert_selector 'input[name="constituent[date_of_birth]"]:not([disabled])', wait: 10
       end
 
       # Fill in dependent information - use direct fieldset finder
-      dependent_fieldset = page.find('fieldset', text: 'Dependent Information', visible: true)
+      dependent_fieldset = page.find('fieldset', text: 'New Dependent Information', visible: true)
       within dependent_fieldset do
         # Wait for fields to be enabled and stable
         assert_selector 'input[name="constituent[first_name]"]:not([disabled])', wait: 5

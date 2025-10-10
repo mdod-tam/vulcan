@@ -15,16 +15,14 @@
         <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
           <%= link_to admin_applications_path(sort: 'user.last_name', direction: toggle_direction('user.last_name')),
                       class: "flex items-center",
-                      aria: { label: "Sort applications by Name" } do %>
-            Name
+                      aria: { label: "Sort applications by Applicant" } do %>
+            Applicant
             <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
           <% end %>
         </th>
-        <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicant</th>
         <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Managing Guardian</th>
-        <th scope="col" class="w-1/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicant Type</th>
         <th scope="col" class="w-1/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Phone</th>
         <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
         <th scope="col" class="w-1/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -52,36 +50,21 @@
             <% if application.user.present? %>
               <%= application.user.full_name %>
             <% else %>
-              Unknown User
-            <% end %>
-          </td>
-          <td class="px-4 py-2 text-sm text-gray-900">
-            <% if application.user.present? %>
-              <%= application.user.full_name %>
-            <% else %>
               Unknown Applicant
             <% end %>
           </td>
           <td class="px-4 py-2 text-sm text-gray-900">
             <% if application.managing_guardian.present? %>
               <span class="font-semibold"><%= application.managing_guardian.full_name %></span>
-              <%# Corrected query to use guardian_id and dependent_id %>
-              <% guardian_relationship = GuardianRelationship.find_by(guardian_id: application.managing_guardian_id, dependent_id: application.user_id) %>
-              <% if guardian_relationship %>
-                <span class="text-gray-600 text-sm ml-1">(<%= guardian_relationship.relationship_type %>)</span>
+              <%# Use preloaded guardian_relationships_as_dependent to avoid N+1 queries %>
+              <% if application.user.present? %>
+                <% guardian_relationship = application.user.guardian_relationships_as_dependent.find { |rel| rel.guardian_id == application.managing_guardian_id } %>
+                <% if guardian_relationship %>
+                  <span class="text-gray-600 text-sm ml-1">(<%= guardian_relationship.relationship_type %>)</span>
+                <% end %>
               <% end %>
             <% else %>
               N/A
-            <% end %>
-          </td>
-          <td class="px-4 py-2 text-sm text-gray-900">
-            <%= application.for_dependent? ? 'Minor (via Guardian)' : 'Individual' %>
-            <% if application.for_dependent? %>
-              <%# Heroicon "users" outline %>
-              <svg class="inline-block h-5 w-5 text-indigo-600 ml-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372m-10.75-.372a9.369 9.369 0 01-2.625-.372M12 20.75c1.243 0 2.423-.309 3.528-.886M12 20.75c-1.243 0-2.423-.309-3.528-.886m11.028-9.128c-.093-.093-.19-.183-.293-.27M12 12.75c-1.243 0-2.423.309-3.528.886m7.056 0c1.105-.577 2.285-.886 3.528-.886M12 12.75a9.37 9.37 0 01-6.128-2.128M12 12.75a9.37 9.37 0 006.128-2.128m-6.128 2.128L12 12.75m-6.128-2.128a9.371 9.371 0 01-2.625-.372m10.75.372c.093.093.19.183.293.27M12 3.25a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 12.75c2.67 0 5.193.903 7.126 2.472M12 12.75c-2.67 0-5.193.903-7.126 2.472" />
-              </svg>
             <% end %>
           </td>
           <td class="px-4 py-2 text-sm text-gray-900 hidden sm:table-cell">
@@ -93,7 +76,7 @@
           </td>
           <td class="px-4 py-2 text-sm text-gray-900">
             <% if application.user.present? %>
-              <%= application.user.email || "No email" %>
+              <%= application.user.effective_email || "No email" %>
             <% else %>
               No email
             <% end %>
@@ -115,11 +98,13 @@
             
             <% if income_attached || residency_attached %>
               <div class="flex flex-col space-y-1">
-                <div class="text-sm <%= proof_status_class(application.income_proof_status) %>">
-                  Income: <%= application.income_proof_status.titleize %>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm text-gray-600">Income:</span>
+                  <%= proof_status_badge('income', application.income_proof_status) %>
                 </div>
-                <div class="text-sm <%= proof_status_class(application.residency_proof_status) %>">
-                  Residency: <%= application.residency_proof_status.titleize %>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm text-gray-600">Residency:</span>
+                  <%= proof_status_badge('residency', application.residency_proof_status) %>
                 </div>
               </div>
             <% else %>
@@ -127,20 +112,7 @@
             <% end %>
           </td>
           <td class="px-4 py-2 text-sm text-gray-900">
-            <% case application.medical_certification_status %>
-            <% when 'not_requested' %>
-              <span class="text-sm text-gray-500">Not Requested</span>
-            <% when 'requested' %>
-              <span class="text-sm text-yellow-500">Awaiting Response</span>
-            <% when 'received' %>
-              <span class="text-sm text-blue-500">Received</span>
-            <% when 'approved' %>
-              <span class="text-sm text-green-500">Approved</span>
-            <% when 'rejected' %>
-              <span class="text-sm text-red-500">Rejected</span>
-            <% else %>
-              <span class="text-sm text-gray-500">Unknown</span>
-            <% end %>
+            <%= medical_certification_status_badge(application) %>
           </td>
           <td class="px-4 py-2 text-sm font-medium text-right">
             <%= link_to "View Application",

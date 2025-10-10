@@ -123,12 +123,7 @@ class DependentFieldsController extends Controller {
   toggleEmailField(event) {
     const useGuardianEmail = event.target.checked;
 
-    if (!this.hasDependentEmailTarget) {
-      if (process.env.NODE_ENV !== 'production' && this.element.offsetParent !== null) {
-        console.warn("Missing dependentEmail target - check HTML structure");
-      }
-      return;
-    }
+    if (!this.hasDependentEmailTarget) return;
 
     // Use utility to handle email field visibility and required state
     setVisible(this.dependentEmailTarget, !useGuardianEmail, { required: !useGuardianEmail });
@@ -151,12 +146,7 @@ class DependentFieldsController extends Controller {
   togglePhoneField(event) {
     const useGuardianPhone = event.target.checked;
 
-    if (!this.hasDependentPhoneTarget) {
-      if (process.env.NODE_ENV !== 'production' && this.element.offsetParent !== null) {
-        console.warn("Missing dependentPhone target - check HTML structure");
-      }
-      return;
-    }
+    if (!this.hasDependentPhoneTarget) return;
 
     // Use utility to handle phone field visibility and required state
     setVisible(this.dependentPhoneTarget, !useGuardianPhone, { required: !useGuardianPhone });
@@ -187,9 +177,6 @@ class DependentFieldsController extends Controller {
       this.hasDependentZipTarget;
 
     if (!hasMinAddressTargets) {
-      if (process.env.NODE_ENV !== 'production' && this.element.offsetParent !== null) {
-        console.debug("Partial address fields missing - using available data");
-      }
 
       // Copy individual fields if available
       if (this.hasGuardianAddress1Target && this.hasDependentAddress1Target) {

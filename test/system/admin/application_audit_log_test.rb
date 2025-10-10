@@ -121,7 +121,16 @@ module Admin
 
       # Request medical certification
       accept_confirm do
-        click_button 'Send Request'
+        # Try DocuSeal buttons first (primary method), then fall back to email
+        if page.has_button?('Send DocuSeal Request', wait: 5)
+          click_button 'Send DocuSeal Request'
+        elsif page.has_button?('Resend DocuSeal Request', wait: 5)
+          click_button 'Resend DocuSeal Request'
+        elsif page.has_button?('Send Email', wait: 5)
+          click_button 'Send Email'
+        else
+          click_button 'Resend Email'
+        end
       end
       wait_for_turbo
 

@@ -31,7 +31,14 @@ module Applications
       events = build_audit_logs
 
       # Use the deduplication service to remove duplicates
-      EventDeduplicationService.new.deduplicate(events)
+      deduped = EventDeduplicationService.new.deduplicate(events)
+
+      # Conditionally preload associations used by the view to avoid N+1
+      # without over-eager loading when those records are not displayed.
+      notifications = deduped.select { |e| e.is_a?(Notification) }
+      ActiveRecord::Associations::Preloader.new.preload(notifications, :actor) if notifications.any?
+
+      deduped
     rescue StandardError => e
       Rails.logger.error "Failed to build deduplicated audit logs: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
@@ -43,6 +50,28 @@ module Applications
 
     # Construct the application creation event
     def build_creation_event
+      # Prefer the persisted creation event (logged with correct actor: admin for paper, user for portal)
+      persisted = Event
+                  .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
+                  .includes(:user)
+                  .where(action: 'application_created', auditable_type: 'Application', auditable_id: application.id)
+                  .order(created_at: :asc)
+                  .first
+
+      return persisted if persisted.present?
+
+      # Fallback: locate persisted events that reference the application via metadata.application_id
+      persisted_by_metadata = Event
+                              .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
+                              .includes(:user)
+                              .where(action: 'application_created')
+                              .where("(metadata->>'application_id' = ?) OR metadata @> ?", application.id.to_s, { application_id: application.id }.to_json)
+                              .order(created_at: :asc)
+                              .first
+
+      return persisted_by_metadata if persisted_by_metadata.present?
+
+      # Fallback for legacy records where no persisted creation event exists
       Event.new(
         user: application.user,
         auditable: application,
@@ -86,11 +115,11 @@ module Applications
         .to_a
     end
 
-    # Load notifications with eager loading for actor association
+    # Load notifications without eager loading; we conditionally preload
+    # actor after deduplication to avoid unnecessary eager loading.
     def load_notifications
       Notification
         .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata')
-        .includes(:actor)
         .where(notifiable_type: 'Application', notifiable_id: application.id)
         .where(action: %w[
                  medical_certification_requested

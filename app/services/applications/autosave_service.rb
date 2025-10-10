@@ -36,17 +36,49 @@ module Applications
       @application = if params[:id].present?
                        find_existing_application
                      else
-                       create_new_application
+                       find_or_create_draft_application
                      end
     end
 
     def find_existing_application
-      current_user.applications.find_by(id: params[:id]) || create_new_application
+      current_user.applications.find_by(id: params[:id]) || find_or_create_draft_application
     end
 
-    def create_new_application
+    def find_or_create_draft_application
+      # Determine if this is for a dependent based on params
+      # Could come from multiple sources: user_id param or nested application[user_id]
+      dependent_id = params[:user_id].presence || params.dig(:application, :user_id).presence
+
+      # Build query to find existing draft
+      # For dependent applications: match both user_id (the dependent) and managing_guardian_id (current user)
+      # For self applications: match user_id and no managing_guardian_id
+      draft_query = Application.draft.order(created_at: :desc)
+
+      draft_query = if dependent_id.present?
+                      # Looking for a dependent's draft application managed by current user
+                      draft_query.where(user_id: dependent_id, managing_guardian_id: current_user.id)
+                    else
+                      # Looking for current user's own draft application (not as a guardian)
+                      draft_query.where(user_id: current_user.id, managing_guardian_id: nil)
+                    end
+
+      existing_draft = draft_query.first
+
+      # Return existing draft if found, otherwise create new
+      return existing_draft if existing_draft
+
+      create_new_application(dependent_id)
+    end
+
+    def create_new_application(dependent_id = nil)
       current_user.applications.new.tap do |app|
         apply_default_attributes(app)
+
+        # Set up dependent relationship if this is for a dependent
+        if dependent_id.present?
+          app.user_id = dependent_id
+          app.managing_guardian_id = current_user.id
+        end
       end
     end
 

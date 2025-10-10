@@ -11,6 +11,11 @@ default: &default
 
 development:
   <<: *default
+  workers:
+    - queues: "*"
+      threads: 3  # Use more threads since we're not forking
+      processes: 0  # Disable forking in development to avoid PostgreSQL connection corruption
+      polling_interval: 1
 
 test:
   <<: *default

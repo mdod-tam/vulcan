@@ -44,11 +44,12 @@ module UserAuthentication
       return false
     end
 
-    update(
+    update_columns(
       last_sign_in_at: Time.current,
       last_sign_in_ip: ip,
       failed_attempts: 0,
-      locked_at: nil
+      locked_at: nil,
+      updated_at: Time.current
     )
   end
 

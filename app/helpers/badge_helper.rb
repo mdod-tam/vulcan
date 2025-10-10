@@ -56,36 +56,6 @@ module BadgeHelper
     css_class || map_for_type[:default] || 'bg-gray-100 text-gray-800'
   end
 
-  def proof_status_class(status)
-    case status.to_s
-    when 'not_reviewed'
-      'text-gray-600'
-    when 'approved'
-      'text-green-600'
-    when 'rejected'
-      'text-red-600'
-    else
-      'text-gray-500'
-    end
-  end
-
-  def certification_status_class(status)
-    case status.to_s
-    when 'not_requested'
-      'text-gray-600'
-    when 'requested'
-      'text-yellow-600'
-    when 'received'
-      'text-blue-600'
-    when 'approved'
-      'text-green-600'
-    when 'rejected'
-      'text-red-600'
-    else
-      'text-gray-500'
-    end
-  end
-
   def medical_certification_label(application)
     status = application.medical_certification_status.to_s
     label = case status

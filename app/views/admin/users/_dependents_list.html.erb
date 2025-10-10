@@ -1,0 +1,57 @@
+<div class="mt-4">
+  <h4 class="text-sm font-medium text-gray-800 mb-2">Current Dependents</h4>
+  <% if dependents.blank? %>
+    <p class="text-sm text-gray-500">No dependents on file.</p>
+  <% else %>
+    <ul class="divide-y divide-gray-200 border border-gray-200 rounded-md">
+      <% dependents.each do |d| %>
+        <li class="p-3 flex items-start justify-between">
+          <div>
+            <div class="text-sm font-medium text-gray-900">
+              <%= d.name %>
+              <% if d.date_of_birth.present? %>
+                <span class="ml-2 text-xs text-gray-500">DOB: <%= l(d.date_of_birth) rescue d.date_of_birth %></span>
+              <% end %>
+            </div>
+            <div class="text-xs text-gray-600 mt-1">
+              <% if d.last_app_date.present? %>
+                <span>
+                  application submitted <%= time_ago_in_words(d.last_app_date) %> ago;
+                  Status: <%= d.last_app_status.to_s.humanize %>
+                </span>
+              <% else %>
+                <span>No prior applications on file</span>
+              <% end %>
+            </div>
+            <% if d.relationship_types.present? %>
+              <div class="text-xs text-gray-500 mt-1">Relationship: <%= d.relationship_types.join(', ') %></div>
+            <% end %>
+          </div>
+          <div class="ml-4 flex items-center">
+            <% if d.eligible_now %>
+              <button type="button"
+                      class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                      data-action="click->guardian-picker#selectDependentFromList"
+                      data-dependent-id="<%= d.id %>"
+                      data-dependent-name="<%= d.name %>">
+                Select
+              </button>
+            <% else %>
+              <% reason = if d.has_active_app
+                            'Not eligible: active application exists'
+                          elsif d.eligible_date.present?
+                            "Not eligible: reapply after #{(d.eligible_date.to_date).strftime('%b %d, %Y')}"
+                          else
+                            'Not eligible'
+                          end %>
+              <span class="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-500 bg-gray-50" title="<%= reason %>">
+                <%= reason %>
+              </span>
+            <% end %>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</div>
+

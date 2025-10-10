@@ -1,5 +1,5 @@
 <%# Locals for common values and rejection strings %>
-<% time_query    = "?t=#{Time.now.to_i}" %>
+<% time_query    = "&t=#{Time.now.to_i}" %>
 <% proof_files   = { income: @application.income_proof,
                      residency: @application.residency_proof,
                      medical: @application.medical_certification } %>

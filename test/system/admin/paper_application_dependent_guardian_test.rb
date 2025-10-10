@@ -58,17 +58,21 @@ module Admin
 
       # Part 2: Test Guardian Selection Persistence (using working assertions instead of failing CSS selectors)
       # Instead of testing CSS selectors, verify the guardian was actually selected by checking dependent section visibility
-      assert_selector '#dependent-info-section', visible: true, wait: 5
-      assert_text 'Dependent Information'
+      # Wait for the new dependents list UI to load and dependent section to become visible
+      assert_selector '#dependent-info-section', visible: true, wait: 10
+      # Also wait for the guardian dependents list to load (new UI)
+      assert_selector '[data-guardian-picker-target="selectedPane"]', visible: true, wait: 5
+      assert_text 'New Dependent Information'
 
       # Verify guardian info is displayed (working assertion from test 4)
       assert_text 'Guardian TestParent'
 
       # Part 3: Complete Dependent Information (KNOWN WORKING)
       within '#dependent-info-section' do
-        fill_in 'constituent[first_name]', with: 'Dependent'
-        fill_in 'constituent[last_name]', with: 'TestChild'
-        fill_in 'constituent[date_of_birth]', with: 10.years.ago.strftime('%Y-%m-%d')
+        # Use new dependent field IDs
+        fill_in 'dependent_constituent_first_name', with: 'Dependent'
+        fill_in 'dependent_constituent_last_name', with: 'TestChild'
+        fill_in 'dependent_constituent_date_of_birth', with: 10.years.ago.strftime('%Y-%m-%d')
 
         uncheck 'use_guardian_email'
         assert_selector 'input[name="constituent[dependent_email]"]', visible: true, wait: 3
@@ -99,27 +103,28 @@ module Admin
 
       # Part 1: Test Guardian Search (using working assertions instead of failing "Select Guardian" button)
       within '#guardian-info-section' do
-        # Try to search for existing guardian
-        if page.has_field?('Search by Name or Email')
-          fill_in 'Search by Name or Email', with: 'Existing'
+        # Wait for the guardian section to be fully loaded
+        assert_selector '[data-guardian-picker-target="searchPane"]', visible: true, wait: 5
 
-          # Instead of clicking missing "Select Guardian" button, verify search worked by checking if guardian appears
-          if page.has_text?('Existing Guardian', wait: 3)
-            # Try to find any clickable element that would select the guardian
-            # Use working assertions to verify if guardian gets selected
-            if page.has_button?('Select Guardian') || page.has_link?('Select Guardian')
-              click_on 'Select Guardian'
-            elsif page.has_button?('Select') || page.has_link?('Select')
-              click_on 'Select'
-            else
-              # If no select button found, we'll test the core functionality by creating a guardian
-              # This still tests the guardian workflow even if the search/select UI is broken
-              click_link 'Or Create New Guardian'
-              fill_existing_guardian_form
+        # Try to search for existing guardian
+        if page.has_field?('guardian_search_q', wait: 3)
+          fill_in 'guardian_search_q', with: 'Existing'
+
+          # Wait for search results to appear
+          if page.has_selector?('#guardian_search_results li', wait: 5)
+            # Try to click on the search result to select the guardian
+            within('#guardian_search_results') do
+              if page.has_selector?('li', text: /Existing/i, wait: 3)
+                find('li', text: /Existing/i).click
+              else
+                # Fall back to creating new guardian
+                click_link 'Or Create New Guardian'
+                fill_existing_guardian_form
+              end
             end
           else
             # Search didn't work, fall back to creating new guardian to test workflow
-            puts 'INFO: Guardian search not working, falling back to creation workflow...'
+            puts 'INFO: Guardian search results not appearing, falling back to creation workflow...'
             click_link 'Or Create New Guardian'
             fill_existing_guardian_form
           end
@@ -133,14 +138,18 @@ module Admin
 
       # Part 2: Verify Guardian Selection Worked (using working assertions)
       # Instead of checking CSS selectors, verify dependent section becomes visible
-      assert_selector '#dependent-info-section', visible: true, wait: 5
-      assert_text 'Dependent Information'
+      # Wait longer for the new UI to load the dependents list
+      assert_selector '#dependent-info-section', visible: true, wait: 10
+      # Also wait for the guardian dependents list to load (new UI)
+      assert_selector '[data-guardian-picker-target="selectedPane"]', visible: true, wait: 5
+      assert_text 'New Dependent Information'
 
       # Part 3: Complete Dependent Form (KNOWN WORKING)
       within '#dependent-info-section' do
-        fill_in 'constituent[first_name]', with: 'TestDependent'
-        fill_in 'constituent[last_name]', with: 'ForExisting'
-        fill_in 'constituent[date_of_birth]', with: 8.years.ago.strftime('%Y-%m-%d')
+        # Use new dependent field IDs
+        fill_in 'dependent_constituent_first_name', with: 'TestDependent'
+        fill_in 'dependent_constituent_last_name', with: 'ForExisting'
+        fill_in 'dependent_constituent_date_of_birth', with: 8.years.ago.strftime('%Y-%m-%d')
 
         # Test using guardian's email (different from test 1)
         # leave 'use_guardian_email' checked (default)

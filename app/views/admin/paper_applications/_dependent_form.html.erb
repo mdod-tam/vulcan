@@ -1,0 +1,186 @@
+<%# 
+  Dependent Information Form
+  
+  Parameters:
+  - dependent: User object (nil for new dependent, populated for existing)
+  - mode: Symbol (:new or :edit)
+%>
+
+<fieldset id="dependent-info-section" class="mb-6 p-4 border border-gray-200 rounded" data-controller="dependent-fields">
+  <legend class="text-lg font-medium">
+    <% if mode == :edit && dependent.present? %>
+      Dependent Information 
+      <span class="text-sm font-normal text-blue-600">
+        (Reviewing: <%= dependent.full_name %>)
+      </span>
+    <% else %>
+      New Dependent Information
+    <% end %>
+  </legend>
+
+  <% if mode == :edit && dependent.present? %>
+    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+      <strong>Selected existing dependent:</strong> <%= dependent.full_name %>.
+      Review and update their information below if needed (emails, phones, addresses may have changed).
+    </div>
+  <% end %>
+
+  <%= fields_for :constituent do |d| %>
+    <!-- Dependent Basic Information -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <%= d.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_first_name" %>
+        <%= d.text_field :first_name, 
+                         id: "dependent_constituent_first_name",
+                         value: dependent&.first_name,
+                         class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                         data: { "applicant-type-target": "dependentField" } %>
+      </div>
+      <div>
+        <%= d.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_last_name" %>
+        <%= d.text_field :last_name,
+                         id: "dependent_constituent_last_name", 
+                         value: dependent&.last_name,
+                         class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                         data: { "applicant-type-target": "dependentField" } %>
+      </div>
+    </div>
+    
+    <div class="mb-4">
+      <%= d.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_date_of_birth" %>
+      <%= d.date_field :date_of_birth,
+                       id: "dependent_constituent_date_of_birth",
+                       value: dependent&.date_of_birth,
+                       class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                       data: { "applicant-type-target": "dependentField" } %>
+      <% if mode == :edit && dependent.present? %>
+        <p class="mt-1 text-xs text-yellow-600">
+          ⚠️ Verify date of birth carefully before changing
+        </p>
+      <% end %>
+    </div>
+    
+    <!-- Dependent Contact Information -->
+    <div class="mb-4">
+      <h3 class="text-base font-medium text-gray-900 mb-3">Contact Information</h3>
+      
+      <!-- Email Section -->
+      <div class="mb-6">
+        <div class="flex items-start mb-2">
+          <%= check_box_tag :use_guardian_email, "1", (dependent.blank? || dependent&.email.blank?), {
+            class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
+            data: { 
+              dependent_fields_target: "sameEmailCheckbox",
+              action: "change->dependent-fields#toggleEmailField"
+            }
+          } %>
+          <%= label_tag :use_guardian_email, "Use Guardian's Email", class: "ml-2 block text-sm font-medium text-gray-700" %>
+        </div>
+        
+        <div class="ml-6 <%= 'hidden' if dependent.blank? || dependent&.email.blank? %>" data-dependent-fields-target="emailFieldContainer">
+          <%= d.label :dependent_email, "Dependent's Email", class: "block text-sm font-medium text-gray-700" %>
+          <%= d.email_field :dependent_email, 
+                            value: dependent&.email,
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                            data: { dependent_fields_target: "dependentEmail" } %>
+          <p class="mt-1 text-xs text-gray-500">This email will be used for all communications about the dependent's benefits</p>
+        </div>
+      </div>
+      
+      <!-- Phone Section -->
+      <div class="mb-6">
+        <div class="flex items-start mb-2">
+          <%= check_box_tag :use_guardian_phone, "1", (dependent.blank? || dependent&.phone.blank?), {
+            class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
+            data: { 
+              dependent_fields_target: "samePhoneCheckbox",
+              action: "change->dependent-fields#togglePhoneField"
+            }
+          } %>
+          <%= label_tag :use_guardian_phone, "Use Guardian's Phone", class: "ml-2 block text-sm font-medium text-gray-700" %>
+        </div>
+        
+        <div class="ml-6 <%= 'hidden' if dependent.blank? || dependent&.phone.blank? %>" data-dependent-fields-target="phoneFieldContainer">
+          <%= d.label :dependent_phone, "Dependent's Phone", class: "block text-sm font-medium text-gray-700" %>
+          <%= d.telephone_field :dependent_phone, 
+                                value: dependent&.phone,
+                                class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                                data: { dependent_fields_target: "dependentPhone" } %>
+          <p class="mt-1 text-xs text-gray-500">This phone will be used for all communications about the dependent's benefits</p>
+        </div>
+      </div>
+      
+      <!-- Address Section -->
+      <div class="mb-6">
+        <div class="flex items-start mb-2">
+          <%= check_box_tag :use_guardian_address, "1", (dependent.blank? || dependent&.physical_address_1.blank?), {
+            class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
+            data: { 
+              dependent_fields_target: "sameAddressCheckbox",
+              action: "change->dependent-fields#toggleContactFields"
+            }
+          } %>
+          <%= label_tag :use_guardian_address, "Same as Guardian's Address", class: "ml-2 block text-sm font-medium text-gray-700" %>
+        </div>
+        
+        <div class="ml-6 <%= 'hidden' if dependent.blank? || dependent&.physical_address_1.blank? %>" data-dependent-fields-target="addressFields">
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <%= d.label :physical_address_1, "Address Line 1", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_physical_address_1" %>
+              <%= d.text_field :physical_address_1, 
+                               id: "dependent_constituent_physical_address_1", 
+                               value: dependent&.physical_address_1,
+                               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                               data: { dependent_fields_target: "dependentAddress1" } %>
+            </div>
+            <div>
+              <%= d.label :physical_address_2, "Address Line 2 (Optional)", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_physical_address_2" %>
+              <%= d.text_field :physical_address_2, 
+                               id: "dependent_constituent_physical_address_2", 
+                               value: dependent&.physical_address_2,
+                               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                               data: { dependent_fields_target: "dependentAddress2" } %>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <%= d.label :city, "City", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_city" %>
+                <%= d.text_field :city, 
+                                 id: "dependent_constituent_city", 
+                                 value: dependent&.city,
+                                 class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                                 data: { dependent_fields_target: "dependentCity" } %>
+              </div>
+              <div>
+                <%= d.label :state, "State", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_state" %>
+                <%= d.text_field :state, 
+                                 id: "dependent_constituent_state", 
+                                 value: (dependent&.state || "MD"),
+                                 class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                                 data: { dependent_fields_target: "dependentState" } %>
+              </div>
+              <div>
+                <%= d.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_zip_code" %>
+                <%= d.text_field :zip_code, 
+                                 id: "dependent_constituent_zip_code", 
+                                 value: dependent&.zip_code,
+                                 class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                                 data: { dependent_fields_target: "dependentZip" } %>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+  
+  <!-- Relationship Type -->
+  <div class="mt-4">
+    <label for="relationship_type" class="block text-sm font-medium text-gray-700">Relationship to Guardian</label>
+    <select id="relationship_type" name="relationship_type" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" data-dependent-fields-target="relationshipType">
+      <option value="">Select Relationship</option>
+      <option value="Parent">Parent</option>
+      <option value="Legal Guardian">Legal Guardian</option>
+    </select>
+  </div>
+</fieldset>
+

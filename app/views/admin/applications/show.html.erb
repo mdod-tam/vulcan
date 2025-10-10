@@ -1,7 +1,6 @@
 <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="application-title">
   <div data-controller="modal">
   <div class="max-w-7xl mx-auto">
-    <%= render 'shared/flash' %>
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="application-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
@@ -77,8 +76,8 @@
         <div>
           <dt class="text-sm font-medium text-gray-500">Email</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            <% if @application.user&.email.present? %>
-              <%= mail_to @application.user.email, class: "text-indigo-600 hover:text-indigo-500" %>
+            <% if @application.user&.effective_email.present? %>
+              <%= mail_to @application.user.effective_email, class: "text-indigo-600 hover:text-indigo-500" %>
             <% else %>
               No email provided
             <% end %>
@@ -155,7 +154,7 @@
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-500">Income Verification Status</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @application.income_proof_status&.titleize || "Pending" %></dd>
+          <dd class="mt-1 text-sm text-gray-900"><%= proof_status_badge('income', @application.income_proof_status) %></dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-500">Income Details</dt>

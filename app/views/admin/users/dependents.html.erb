@@ -1,0 +1,4 @@
+<%= turbo_frame_tag "guardian_dependents" do %>
+  <%= render partial: 'admin/users/dependents_list', locals: { dependents: @dependents, guardian: @guardian } %>
+<% end %>
+
