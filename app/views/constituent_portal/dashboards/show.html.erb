@@ -139,14 +139,14 @@
                   </svg>
                 </div>
                 <div class="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt class="text-sm font-medium text-gray-500 truncate">Medical Certification</dt>
-                    <dd class="flex items-center">
-                      <div class="text-lg font-medium text-gray-900">
+                  <div role="group" aria-labelledby="medical-cert-label">
+                    <h3 id="medical-cert-label" class="text-sm font-medium text-gray-500 truncate">Medical Certification</h3>
+                    <div class="flex items-center">
+                      <p class="text-lg font-medium text-gray-900">
                         <%= current_user.valid_dcf? ? "Verified" : "Pending" %>
-                      </div>
-                    </dd>
-                  </dl>
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -170,20 +170,20 @@
                   </svg>
                 </div>
                 <div class="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt class="text-sm font-medium text-gray-500 truncate">My Voucher</dt>
-                    <dd class="flex items-center">
+                  <div role="group" aria-labelledby="voucher-label">
+                    <h3 id="voucher-label" class="text-sm font-medium text-gray-500 truncate">My Voucher</h3>
+                    <div class="flex items-center">
                       <% if @voucher %>
-                        <div class="text-lg font-medium text-gray-900">
+                        <p class="text-lg font-medium text-gray-900">
                           $<%= @voucher.remaining_value %> remaining
-                        </div>
+                        </p>
                       <% else %>
-                        <div class="text-lg font-medium text-gray-900">
+                        <p class="text-lg font-medium text-gray-900">
                           No active voucher
-                        </div>
+                        </p>
                       <% end %>
-                    </dd>
-                  </dl>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -273,7 +273,7 @@
                               class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-yellow-600 hover:bg-yellow-700" %>
                         <% else %>
                           <%= link_to "Start Application", new_constituent_portal_application_path(user_id: dependent.id, for_self: false),
-                              class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700" %>
+                              class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-700 hover:bg-green-800" %>
                         <% end %>
                       </div>
                     </li>

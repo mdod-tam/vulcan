@@ -39,7 +39,7 @@
         <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden"></div>
 
         <% if @application.errors.any? %>
-          <div class="bg-red-50 p-4 rounded mb-6" role="alert" aria-atomic="true">
+          <div id="error-summary" class="bg-red-50 p-4 rounded mb-6" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1" autofocus>
             <h2 class="text-red-700 font-medium">
               <%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:
             </h2>
@@ -49,6 +49,15 @@
               <% end %>
             </ul>
           </div>
+          <script>
+            // Focus the error summary for screen reader users
+            document.addEventListener('DOMContentLoaded', function() {
+              var errorSummary = document.getElementById('error-summary');
+              if (errorSummary) {
+                errorSummary.focus();
+              }
+            });
+          </script>
         <% end %>
 
         <!-- Application Status Display -->

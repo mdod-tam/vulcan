@@ -20,18 +20,27 @@
    <div class="bg-white shadow sm:rounded-lg" aria-labelledby="application_form_heading">
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
 
-     <% if @application.errors.any? %>
-       <div class="bg-red-50 p-4 rounded-t-lg" role="alert" aria-labelledby="error_messages">
-         <h3 id="error_messages" class="text-red-800 font-medium">
-           <%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:
-         </h3>
-         <ul class="mt-2 list-disc list-inside text-sm text-red-700">
-           <% @application.errors.full_messages.each do |msg| %>
-             <li><%= msg %></li>
-           <% end %>
-         </ul>
-       </div>
-     <% end %>
+    <% if @application.errors.any? %>
+      <div id="error-summary" class="bg-red-50 p-4 rounded-t-lg" role="alert" aria-live="assertive" aria-labelledby="error_messages" aria-atomic="true" tabindex="-1" autofocus>
+        <h3 id="error_messages" class="text-red-800 font-medium">
+          <%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:
+        </h3>
+        <ul class="mt-2 list-disc list-inside text-sm text-red-700">
+          <% @application.errors.full_messages.each do |msg| %>
+            <li><%= msg %></li>
+          <% end %>
+        </ul>
+      </div>
+      <script>
+        // Focus the error summary for screen reader users
+        document.addEventListener('DOMContentLoaded', function() {
+          var errorSummary = document.getElementById('error-summary');
+          if (errorSummary) {
+            errorSummary.focus();
+          }
+        });
+      </script>
+    <% end %>
 
      <div class="p-6 space-y-6">
        <!-- Application Status Display -->
