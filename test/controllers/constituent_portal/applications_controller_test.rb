@@ -392,31 +392,32 @@ module ConstituentPortal
       assert_select 'p', /Filename:/
     end
 
-    # Test FPL thresholds with a robust, deterministic approach
-    test 'should return FPL thresholds' do
+    # Test FPL helper methods provide correct server-rendered data
+    test 'helper methods should return correct FPL thresholds' do
       # Set up FPL policies with standard values for testing
       setup_fpl_policies
 
-      # Make the request to get thresholds
-      get fpl_thresholds_constituent_portal_applications_path
+      # Access a page that uses the helpers to ensure they work in context
+      get new_constituent_portal_application_path
       assert_response :success
 
-      # Parse the JSON response
-      json_response = response.parsed_body
+      # Test the helper methods directly
+      thresholds_json = @controller.fpl_thresholds_json
+      modifier = @controller.fpl_modifier_value
+
+      # Parse and verify the thresholds JSON
+      thresholds = JSON.parse(thresholds_json)
+      assert_equal 15_650, thresholds['1']
+      assert_equal 21_150, thresholds['2']
+      assert_equal 26_650, thresholds['3']
+      assert_equal 32_150, thresholds['4']
+      assert_equal 37_650, thresholds['5']
+      assert_equal 43_150, thresholds['6']
+      assert_equal 48_650, thresholds['7']
+      assert_equal 54_150, thresholds['8']
 
       # Verify the modifier value
-      assert_equal 400, json_response['modifier']
-
-      # Verify expected threshold values
-      # These are the exact values we set up in the setup_fpl_policies method
-      assert_equal 15_650, json_response['thresholds']['1']
-      assert_equal 21_150, json_response['thresholds']['2']
-      assert_equal 26_650, json_response['thresholds']['3']
-      assert_equal 32_150, json_response['thresholds']['4']
-      assert_equal 37_650, json_response['thresholds']['5']
-      assert_equal 43_150, json_response['thresholds']['6']
-      assert_equal 48_650, json_response['thresholds']['7']
-      assert_equal 54_150, json_response['thresholds']['8']
+      assert_equal 400, modifier
     end
 
     # Test that user association is maintained during update

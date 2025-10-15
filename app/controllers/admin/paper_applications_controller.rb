@@ -106,37 +106,20 @@ module Admin
       end
 
       render turbo_stream: turbo_stream.replace(
-        "dependent_info_form",
-        partial: "admin/paper_applications/dependent_form",
+        'dependent_info_form',
+        partial: 'admin/paper_applications/dependent_form',
         locals: { dependent: @dependent, mode: @mode }
       )
     end
 
-    # Legacy AJAX endpoint for FPL thresholds - delegates to IncomeThresholdCalculationService
-    # TODO: Consider removing this endpoint in favor of server-rendered data
-    def fpl_thresholds
-      thresholds = {}
-      modifier = nil
-
-      (1..8).each do |size|
-        result = IncomeThresholdCalculationService.call(size)
-        if result.success?
-          thresholds[size] = result.data[:base_fpl]
-          modifier ||= result.data[:modifier] # Get modifier from first successful call
-        else
-          thresholds[size] = 0 # Fallback for failed calculations
-        end
-      end
-
-      render json: { thresholds: thresholds, modifier: modifier || 400 }
-    end
-
-    # Helper methods for FPL data - delegates to IncomeThresholdCalculationService
+    # Server-rendered FPL data helper methods
+    # These inject threshold data into HTML data attributes for client-side validation
     # See: app/services/income_threshold_calculation_service.rb for core FPL logic
     helper_method :fpl_thresholds_json, :fpl_modifier_value
 
     def fpl_thresholds_json
       # Generate FPL threshold data for JavaScript using IncomeThresholdCalculationService
+      # Returns JSON string of base FPL values for household sizes 1-8
       thresholds = (1..8).to_h do |size|
         result = IncomeThresholdCalculationService.call(size)
         if result.success?
@@ -149,7 +132,8 @@ module Admin
     end
 
     def fpl_modifier_value
-      # Get FPL modifier percentage via IncomeThresholdCalculationService (uses any household size)
+      # Get FPL modifier percentage via IncomeThresholdCalculationService
+      # Returns the policy-configured modifier (e.g., 400 for 400% FPL)
       result = IncomeThresholdCalculationService.call(1)
       if result.success?
         result.data[:modifier]

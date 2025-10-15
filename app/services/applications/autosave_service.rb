@@ -67,6 +67,12 @@ module Applications
       # Return existing draft if found, otherwise create new
       return existing_draft if existing_draft
 
+      # Check for active application before creating new draft
+      # This prevents creating drafts when user already has submitted/processing application
+      target_user_id = dependent_id || current_user.id
+      active_application = Application.active_for_constituent(target_user_id).first
+      return nil if active_application
+
       create_new_application(dependent_id)
     end
 

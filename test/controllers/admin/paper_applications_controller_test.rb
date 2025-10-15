@@ -604,20 +604,26 @@ module Admin
       assert_response :unprocessable_content
     end
 
-    test 'should get fpl_thresholds' do
-      get fpl_thresholds_admin_paper_applications_path, headers: default_headers
+    test 'helper methods return correct FPL data' do
+      # Test that the helper methods provide correct server-rendered data
+      get new_admin_paper_application_path, headers: default_headers
       assert_response :success
 
-      json_response = response.parsed_body # Use Rails' response.parsed_body helper
-      assert_equal 15_650, json_response['thresholds']['1']
-      assert_equal 21_150, json_response['thresholds']['2']
-      assert_equal 26_650, json_response['thresholds']['3']
-      assert_equal 32_150, json_response['thresholds']['4']
-      assert_equal 37_650, json_response['thresholds']['5']
-      assert_equal 43_150, json_response['thresholds']['6']
-      assert_equal 48_650, json_response['thresholds']['7']
-      assert_equal 54_150, json_response['thresholds']['8']
-      assert_equal 400, json_response['modifier']
+      # The helper methods should be available in the controller
+      thresholds_json = @controller.fpl_thresholds_json
+      modifier = @controller.fpl_modifier_value
+
+      # Parse the JSON and verify values
+      thresholds = JSON.parse(thresholds_json)
+      assert_equal 15_650, thresholds['1']
+      assert_equal 21_150, thresholds['2']
+      assert_equal 26_650, thresholds['3']
+      assert_equal 32_150, thresholds['4']
+      assert_equal 37_650, thresholds['5']
+      assert_equal 43_150, thresholds['6']
+      assert_equal 48_650, thresholds['7']
+      assert_equal 54_150, thresholds['8']
+      assert_equal 400, modifier
     end
 
     test 'should send rejection notification' do

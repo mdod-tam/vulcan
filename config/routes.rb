@@ -129,7 +129,6 @@ Rails.application.routes.draw do
       collection do
         post :send_rejection_notification
         post :reject_for_income
-        get :fpl_thresholds
         get :dependent_form
       end
     end
@@ -341,7 +340,6 @@ Rails.application.routes.draw do
     resources :dependents
     resources :applications, path: 'applications', except: [:destroy] do
       collection do
-        get :fpl_thresholds
         patch :autosave_field
       end
 

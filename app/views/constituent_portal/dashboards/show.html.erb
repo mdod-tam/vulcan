@@ -29,24 +29,33 @@
               <%= link_to "Continue Unsubmitted Application", edit_constituent_portal_application_path(@draft_application),
                   class: "mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
 
-            <% elsif @active_application %>
+            <% elsif @primary_active_application %>
               <div class="mt-4 flex items-center">
-                <%= application_status_badge(@active_application) %>
+                <%= application_status_badge(@primary_active_application) %>
                 <span class="ml-4 text-sm text-gray-600">
-                  Submitted: <%= @active_application.application_date.strftime("%B %d, %Y") %>
+                  Submitted: <%= @primary_active_application.application_date.strftime("%B %d, %Y") %>
+                  <% if @primary_active_application.for_dependent? %>
+                    <span class="ml-2 text-xs text-gray-500">(for <%= @primary_active_application.user.full_name %>)</span>
+                  <% end %>
                 </span>
               </div>
-              <%= link_to "View Application Details", constituent_portal_application_path(@active_application),
+              <%= link_to "View Application Details", constituent_portal_application_path(@primary_active_application),
                   class: "mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
               
               <% if current_user&.dependents&.any? %>
                 <% # Show dependent application buttons based on their status %>
                 <% current_user.dependents.each do |dependent| %>
-                  <% dependent_app = @managed_applications.find { |app| app.user_id == dependent.id && !app.status_draft? } %>
-                  <% if dependent_app %>
+                  <% dependent_active_app = @managed_applications.find { |app| app.user_id == dependent.id && !app.status_draft? } %>
+                  <% dependent_draft_app = @managed_applications.find { |app| app.user_id == dependent.id && app.status_draft? } %>
+                  <% if dependent_active_app %>
                     <div class="mt-5">
-                      <%= link_to "View #{dependent.full_name}'s Application", constituent_portal_application_path(dependent_app),
+                      <%= link_to "View #{dependent.full_name}'s Application", constituent_portal_application_path(dependent_active_app),
                           class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
+                    </div>
+                  <% elsif dependent_draft_app %>
+                    <div class="mt-5">
+                      <%= link_to "Continue #{dependent.full_name}'s Draft", edit_constituent_portal_application_path(dependent_draft_app),
+                          class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200" %>
                     </div>
                   <% else %>
                     <div class="mt-5">
@@ -69,22 +78,30 @@
               <% end %>
 
             <% else %>
-              <% # Check if user has any active managed applications for dependents %>
-              <% if @managed_applications&.any? { |app| !app.status_draft? } %>
-                <p class="mt-2 text-sm text-gray-600">No active application for yourself, but you have active applications for dependents.</p>
-                <div class="mt-3">
+              <% # No draft or active application for user - check if they can start a new one %>
+              <p class="mt-2 text-sm text-gray-600">No active application found.</p>
+              <div class="mt-3">
+                <% # Only show "Apply for Myself" if user doesn't have active or draft for themselves %>
+                <% user_has_app = @applications.where.not(status: [:archived, :rejected]).any? %>
+                <% unless user_has_app %>
                   <%= link_to "Apply for Myself", new_constituent_portal_application_path(for_self: true),
                       class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
-                </div>
+                <% end %>
                 
                 <% # Show dependent application buttons %>
                 <% if current_user&.dependents&.any? %>
                   <% current_user.dependents.each do |dependent| %>
-                    <% dependent_app = @managed_applications.find { |app| app.user_id == dependent.id && !app.status_draft? } %>
-                    <% if dependent_app %>
+                    <% dependent_active_app = @managed_applications.find { |app| app.user_id == dependent.id && !app.status_draft? } %>
+                    <% dependent_draft_app = @managed_applications.find { |app| app.user_id == dependent.id && app.status_draft? } %>
+                    <% if dependent_active_app %>
                       <div class="mt-5">
-                        <%= link_to "View #{dependent.full_name}'s Application", constituent_portal_application_path(dependent_app),
+                        <%= link_to "View #{dependent.full_name}'s Application", constituent_portal_application_path(dependent_active_app),
                             class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
+                      </div>
+                    <% elsif dependent_draft_app %>
+                      <div class="mt-5">
+                        <%= link_to "Continue #{dependent.full_name}'s Draft", edit_constituent_portal_application_path(dependent_draft_app),
+                            class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200" %>
                       </div>
                     <% else %>
                       <div class="mt-5">
@@ -97,34 +114,15 @@
                     <%= link_to "Add Another Dependent", new_constituent_portal_dependent_path,
                         class: "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
                   </div>
+                <% else %>
+                  <div class="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 class="text-sm font-medium text-gray-900 mb-2">Want to apply for a dependent?</h4>
+                    <p class="text-sm text-gray-600 mb-3">You must first add dependents to your account before applying on their behalf.</p>
+                    <%= link_to "Add a Dependent", new_constituent_portal_dependent_path,
+                        class: "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
+                  </div>
                 <% end %>
-              <% else %>
-                <p class="mt-2 text-sm text-gray-600">No active application found.</p>
-                <div class="mt-3">
-                  <%= link_to "Apply for Myself", new_constituent_portal_application_path(for_self: true),
-                      class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
-                  
-                  <% if current_user&.dependents&.any? %>
-                    <% current_user.dependents.each do |dependent| %>
-                      <div class="mt-5">
-                        <%= link_to "Apply for #{dependent.full_name}", new_constituent_portal_application_path(user_id: dependent.id, for_self: false),
-                            class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
-                      </div>
-                    <% end %>
-                    <div class="mt-3">
-                      <%= link_to "Add Another Dependent", new_constituent_portal_dependent_path,
-                          class: "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
-                    </div>
-                  <% else %>
-                    <div class="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <h4 class="text-sm font-medium text-gray-900 mb-2">Want to apply for a dependent?</h4>
-                      <p class="text-sm text-gray-600 mb-3">You must first add dependents to your account before applying on their behalf.</p>
-                      <%= link_to "Add a Dependent", new_constituent_portal_dependent_path,
-                          class: "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
-                    </div>
-                  <% end %>
-                </div>
-              <% end %>
+              </div>
             <% end %>
           </div>
         </div>
@@ -265,10 +263,14 @@
                         <% end %>
                       </div>
                       <div>
-                        <% dependent_app = @managed_applications.find { |app| app.user_id == dependent.id && !app.status_draft? } %>
-                        <% if dependent_app %>
-                          <%= link_to "View Application", constituent_portal_application_path(dependent_app),
+                        <% dependent_active = @managed_applications.find { |app| app.user_id == dependent.id && !app.status_draft? } %>
+                        <% dependent_draft = @managed_applications.find { |app| app.user_id == dependent.id && app.status_draft? } %>
+                        <% if dependent_active %>
+                          <%= link_to "View Application", constituent_portal_application_path(dependent_active),
                               class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700" %>
+                        <% elsif dependent_draft %>
+                          <%= link_to "Continue Draft", edit_constituent_portal_application_path(dependent_draft),
+                              class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-yellow-600 hover:bg-yellow-700" %>
                         <% else %>
                           <%= link_to "Start Application", new_constituent_portal_application_path(user_id: dependent.id, for_self: false),
                               class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700" %>

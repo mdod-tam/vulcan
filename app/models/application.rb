@@ -153,6 +153,19 @@ class Application < ApplicationRecord
       .references(:users)
   }
 
+  # Single constituent application scopes
+  # Find draft application for a specific constituent
+  scope :draft_for_constituent, ->(user_id) {
+    draft.where(user_id: user_id)
+  }
+
+  # Find active (non-draft, non-archived, non-rejected) application for a specific constituent
+  # Excludes: draft (still being worked on), archived (historical), rejected (can start fresh)
+  scope :active_for_constituent, ->(user_id) {
+    where(user_id: user_id)
+      .where.not(status: [:draft, :archived, :rejected])
+  }
+
   # Guardian/Dependent relationship scopes
   scope :managed_by, lambda { |guardian_user|
     where(managing_guardian_id: guardian_user.id)

@@ -3,7 +3,9 @@
 require 'test_helper'
 
 module ConstituentPortal
-  class IncomeThresholdControllerTest < ActionDispatch::IntegrationTest
+  # Tests for FPL threshold calculation and server-rendered data
+  # Note: AJAX endpoint was removed in favor of server-rendered data approach
+  class IncomeThresholdTest < ActionDispatch::IntegrationTest
     include AuthenticationTestHelper
 
     setup do
@@ -15,36 +17,31 @@ module ConstituentPortal
       setup_fpl_policies
     end
 
-    test 'fpl_thresholds endpoint returns correct data' do
-      get fpl_thresholds_constituent_portal_applications_path
+    test 'helper methods provide correct FPL data for server rendering' do
+      # Access a page to get controller context
+      get new_constituent_portal_application_path
       assert_response :success
 
-      # Parse the JSON response
-      json_response = response.parsed_body
+      # Get data from helper methods (used for server-rendered data attributes)
+      thresholds_json = @controller.fpl_thresholds_json
+      modifier = @controller.fpl_modifier_value
 
-      # Verify the response contains the expected data
-      assert_equal 400, json_response['modifier']
-      assert_equal 15_650, json_response['thresholds']['1']
-      assert_equal 21_150, json_response['thresholds']['2']
-      assert_equal 26_650, json_response['thresholds']['3']
-      assert_equal 32_150, json_response['thresholds']['4']
-      assert_equal 37_650, json_response['thresholds']['5']
-      assert_equal 43_150, json_response['thresholds']['6']
-      assert_equal 48_650, json_response['thresholds']['7']
-      assert_equal 54_150, json_response['thresholds']['8']
+      # Parse and verify thresholds
+      thresholds = JSON.parse(thresholds_json)
+      assert_equal 15_650, thresholds['1']
+      assert_equal 21_150, thresholds['2']
+      assert_equal 26_650, thresholds['3']
+      assert_equal 32_150, thresholds['4']
+      assert_equal 37_650, thresholds['5']
+      assert_equal 43_150, thresholds['6']
+      assert_equal 48_650, thresholds['7']
+      assert_equal 54_150, thresholds['8']
+      assert_equal 400, modifier
     end
 
-    test 'income threshold calculation is correct' do
-      # This test verifies that the income threshold calculation is correct
-      # for different household sizes and income values
-
-      # Get the FPL thresholds from the server
-      get fpl_thresholds_constituent_portal_applications_path
-      json_response = response.parsed_body
-
-      # Extract the thresholds and modifier
-      thresholds = json_response['thresholds']
-      modifier = json_response['modifier']
+    test 'income threshold calculation via service is correct' do
+      # This test verifies that the IncomeThresholdCalculationService
+      # calculates thresholds correctly for different household sizes
 
       # Test cases for different household sizes and incomes
       test_cases = [
@@ -58,21 +55,23 @@ module ConstituentPortal
         { household_size: 10, income: 216_601, expected_result: false }  # Above household size 8, use size 8 threshold
       ]
 
-      # Verify each test case
+      # Verify each test case using the service directly
       test_cases.each do |test_case|
         household_size = test_case[:household_size]
         income = test_case[:income]
         expected_result = test_case[:expected_result]
 
-        # Calculate the threshold
-        base_fpl = thresholds[household_size.to_s] || thresholds['8'] # Default to size 8 if larger
-        threshold = base_fpl * (modifier / 100.0)
+        # Use the service to calculate threshold
+        result = IncomeThresholdCalculationService.call(household_size)
+        assert result.success?, "Service should successfully calculate threshold for household size #{household_size}"
+
+        threshold = result.data[:threshold]
 
         # Check if income is below threshold
         actual_result = income <= threshold
 
         assert_equal expected_result, actual_result,
-                     "Expected income #{income} to be #{expected_result ? 'below' : 'above'} threshold for household size #{household_size}"
+                     "Expected income #{income} to be #{expected_result ? 'below' : 'above'} threshold #{threshold} for household size #{household_size}"
       end
     end
   end

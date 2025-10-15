@@ -26,8 +26,8 @@ module ConstituentPortal
     class ApplicationCreationError < StandardError; end
     class DisabilityValidationError < StandardError; end
 
-    before_action :authenticate_user!, except: [:fpl_thresholds]
-    before_action :require_constituent!, except: [:fpl_thresholds]
+    before_action :authenticate_user!
+    before_action :require_constituent!
     before_action :set_application, only: %i[show edit update verify submit]
     before_action :ensure_editable, only: %i[edit update]
     before_action :setup_address_for_form, only: %i[new edit]
@@ -57,6 +57,8 @@ module ConstituentPortal
     end
 
     def new
+      return if redirect_to_existing_application
+
       initialize_new_application
       setup_applicant_context
       setup_form_dependencies
@@ -199,31 +201,16 @@ module ConstituentPortal
       render_autosave_error('An error occurred during autosave', :internal_server_error)
     end
 
-    # Legacy AJAX endpoint for FPL thresholds - delegates to IncomeThresholdCalculationService
-    # TODO: Consider removing this endpoint in favor of server-rendered data
-    def fpl_thresholds
-      thresholds = {}
-      modifier = nil
-
-      (1..8).each do |size|
-        result = IncomeThresholdCalculationService.call(size)
-        if result.success?
-          thresholds[size.to_s] = result.data[:base_fpl]
-          modifier ||= result.data[:modifier] # Get modifier from first successful call
-        else
-          thresholds[size.to_s] = 0 # Fallback for failed calculations
-        end
-      end
-
-      render json: { thresholds: thresholds, modifier: modifier || 400 }
-    end
-
-    # Helper methods for FPL data - delegates to IncomeThresholdCalculationService
+    # Server-rendered FPL data helper methods
+    # These inject threshold data into HTML data attributes for client-side validation
+    # This is the Rails-idiomatic approach: data is rendered once on page load, avoiding
+    # unnecessary AJAX requests for static configuration data.
     # See: app/services/income_threshold_calculation_service.rb for core FPL logic
     helper_method :fpl_thresholds_json, :fpl_modifier_value
 
     def fpl_thresholds_json
       # Generate FPL threshold data for JavaScript using IncomeThresholdCalculationService
+      # Returns JSON string of base FPL values for household sizes 1-8
       thresholds = (1..8).to_h do |size|
         result = IncomeThresholdCalculationService.call(size)
         if result.success?
@@ -236,7 +223,8 @@ module ConstituentPortal
     end
 
     def fpl_modifier_value
-      # Get FPL modifier percentage via IncomeThresholdCalculationService (uses any household size)
+      # Get FPL modifier percentage via IncomeThresholdCalculationService
+      # Returns the policy-configured modifier (e.g., 400 for 400% FPL)
       result = IncomeThresholdCalculationService.call(1)
       if result.success?
         result.data[:modifier]
@@ -334,6 +322,48 @@ module ConstituentPortal
       # AddressHelper concern: Uses standardized address creation from user data
       # Flow: address_from_user(user) -> creates ApplicationDataStructures::Address object
       @address = address_from_user(current_user)
+    end
+
+    # Application existence checks (memoized for performance)
+    # Determines the target user ID (self or dependent) for application operations
+    def target_user_id
+      @target_user_id ||= params[:user_id].presence&.to_i || current_user.id
+    end
+
+    # Finds existing draft application for target user
+    def existing_draft
+      @existing_draft ||= Application.draft_for_constituent(target_user_id).first
+    end
+
+    # Finds existing active (non-draft) application for target user
+    def existing_active_application
+      @existing_active_application ||= Application.active_for_constituent(target_user_id).first
+    end
+
+    # Check and redirect if existing application (draft or active) exists
+    # Returns true if redirected, false otherwise
+    def redirect_to_existing_application
+      # Priority 1: Redirect to edit if draft exists (user has unfinished work)
+      if existing_draft
+        user_name = existing_draft.user.full_name
+        redirect_with_notice(
+          edit_constituent_portal_application_path(existing_draft),
+          "Continuing your draft application for #{user_name}"
+        )
+        return true
+      end
+
+      # Priority 2: Block if active application exists (already submitted/processing)
+      if existing_active_application
+        user_name = existing_active_application.user.full_name
+        redirect_with_alert(
+          constituent_portal_application_path(existing_active_application),
+          "#{user_name} already has an active application. Please wait for this application to be processed."
+        )
+        return true
+      end
+
+      false
     end
 
     def handle_creation_failure(result)

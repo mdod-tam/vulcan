@@ -76,17 +76,23 @@ module ConstituentPortal
     end
 
     def set_active_and_draft_applications
-      # Set active application (most recent non-draft application)
+      # Set user's own active and draft applications
       @active_application = @applications.where.not(status: :draft).first
-
-      # Set draft application (most recent draft application)
       @draft_application = @applications.where(status: :draft).first
+
+      # Also get most recent managed active application (for dependents)
+      @active_managed_application = @managed_applications.where.not(status: :draft).first
+
+      # Determine primary application to show in main status section
+      # Show user's own active application first, then most recent managed application
+      @primary_active_application = @active_application || @active_managed_application
 
       # Log for debugging
       Rails.logger.info "Dashboard loaded for user #{current_user.id}: " \
                         "#{@applications.count} total applications, " \
                         "active_application_id=#{@active_application&.id}, " \
-                        "draft_application_id=#{@draft_application&.id}"
+                        "draft_application_id=#{@draft_application&.id}, " \
+                        "primary_active_application_id=#{@primary_active_application&.id}"
     end
 
     def load_voucher_information
