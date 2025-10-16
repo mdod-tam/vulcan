@@ -854,6 +854,12 @@ module Admin
       user.define_singleton_method(:guardians) do
         guardian_relationships_as_dependent.map(&:guardian_user).compact
       end
+
+      user.define_singleton_method(:guardian_for_contact) do
+        return nil unless dependent?
+
+        @guardian_for_contact ||= guardian_relationships_as_dependent.first&.guardian_user
+      end
     end
 
     # Add capability methods to user
