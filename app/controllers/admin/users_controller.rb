@@ -636,6 +636,7 @@ module Admin
 
     def convert_user_to_new_type(user, new_klass)
       converted_user = user.becomes(new_klass)
+      converted_user.type = new_klass.name # Explicitly set the type column for STI
       clear_type_specific_fields(user, converted_user)
       converted_user
     end
