@@ -96,9 +96,10 @@ module Admin
       render partial: 'admin/users/user_search_results_list', locals: { users: @users, role: @role_filter }
     end
 
-    # Handle full page load with all users
+    # Handle full page load with paginated users
     def handle_full_page_load
-      @users = User.order(:type, :last_name, :first_name).to_a
+      # Limit to 50 users per page to prevent memory exhaustion
+      @users = User.order(:type, :last_name, :first_name).limit(50).to_a
       optimize_users_for_index_view(@users)
     end
 
@@ -779,6 +780,8 @@ module Admin
         has_guardian_ids: load_has_guardian_ids(user_ids),
         guardian_rels: load_guardian_relationships(user_ids),
         guardian_users: load_guardian_users(user_ids),
+        dependent_rels: load_dependent_relationships(user_ids),
+        dependent_users: load_dependent_users(user_ids),
         capabilities_by_user: load_capabilities_by_user(user_ids)
       }
     end
@@ -807,6 +810,20 @@ module Admin
       User.where(id: guardian_user_ids).index_by(&:id)
     end
 
+    # Load dependent relationships grouped by guardian
+    def load_dependent_relationships(user_ids)
+      GuardianRelationship.where(guardian_id: user_ids).group_by(&:guardian_id)
+    end
+
+    # Load dependent users referenced in relationships
+    def load_dependent_users(user_ids)
+      dependent_rels = load_dependent_relationships(user_ids)
+      dependent_user_ids = dependent_rels.values.flatten.map(&:dependent_id).uniq
+      return {} unless dependent_user_ids.any?
+
+      User.where(id: dependent_user_ids).index_by(&:id)
+    end
+
     # Load capabilities grouped by user
     def load_capabilities_by_user(user_ids)
       RoleCapability.where(user_id: user_ids)
@@ -830,16 +847,18 @@ module Admin
       has_guardian_ids = preloaded_data[:has_guardian_ids]
       guardian_rels = preloaded_data[:guardian_rels]
       guardian_users = preloaded_data[:guardian_users]
+      dependent_rels = preloaded_data[:dependent_rels]
+      dependent_users = preloaded_data[:dependent_users]
 
       user.define_singleton_method(:dependents_count) { guardian_counts[id] || 0 }
       user.define_singleton_method(:guardian?) { (guardian_counts[id] || 0).positive? }
       user.define_singleton_method(:dependent?) { has_guardian_ids.include?(id) }
 
-      add_guardian_relationship_methods(user, guardian_rels, guardian_users)
+      add_guardian_relationship_methods(user, guardian_rels, guardian_users, dependent_rels, dependent_users)
     end
 
     # Add guardian relationship methods to user
-    def add_guardian_relationship_methods(user, guardian_rels, guardian_users)
+    def add_guardian_relationship_methods(user, guardian_rels, guardian_users, dependent_rels, dependent_users)
       user.define_singleton_method(:guardian_relationships_as_dependent) do
         rels = guardian_rels[id] || []
         # Set guardian_user for each relationship
@@ -859,6 +878,23 @@ module Admin
         return nil unless dependent?
 
         @guardian_for_contact ||= guardian_relationships_as_dependent.first&.guardian_user
+      end
+
+      # Add guardian_relationships_as_guardian method for guardians
+      user.define_singleton_method(:guardian_relationships_as_guardian) do
+        rels = dependent_rels[id] || []
+        # Set dependent_user for each relationship
+        rels.each do |rel|
+          rel.define_singleton_method(:dependent_user) do
+            dependent_users&.fetch(dependent_id, nil)
+          end
+        end
+        rels
+      end
+
+      # Add dependents method for guardians
+      user.define_singleton_method(:dependents) do
+        guardian_relationships_as_guardian.map(&:dependent_user).compact
       end
     end
 

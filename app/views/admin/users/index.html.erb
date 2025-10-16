@@ -143,7 +143,9 @@
                 <% else %>
                   <div class="space-y-4" 
                        data-controller="role-select"
-                       data-role-select-user-id-value="<%= user.id %>">
+                       data-role-select-user-id-value="<%= user.id %>"
+                       data-role-select-update-role-url-value="<%= update_role_admin_user_path(user) %>"
+                       data-role-select-update-capabilities-url-value="<%= update_capabilities_admin_user_path(user) %>">
                     <!-- Primary Role Section -->
                     <div class="role-section">
                       <label for="role_<%= user.id %>" 
