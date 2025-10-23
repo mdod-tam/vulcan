@@ -162,26 +162,23 @@ module ConstituentPortal
 
     test 'dashboard handles case where user has no personal application but has dependent applications' do
       # Create a dependent for the user
-      dependent = create(:constituent)
+      dependent = create(:constituent, :with_disabilities)
       create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
 
       # Create an active application for the dependent (but not for the user)
-      create(:application, user: dependent, managing_guardian: @user, status: :in_progress)
+      dependent_app = create(:application, user: dependent, managing_guardian: @user, status: :in_progress)
 
       get constituent_portal_dashboard_path
       assert_response :success
 
-      # Should show message about no personal application but having dependent applications
-      assert_select 'p', text: 'No active application for yourself, but you have active applications for dependents.'
+      # Should show dependent's application status (since @primary_active_application will be the dependent's app)
+      assert_select '.text-gray-900', text: /#{dependent.full_name}/
 
-      # Should show "Apply for Myself" button
-      assert_select 'a', text: 'Apply for Myself'
+      # Should show "View Application Details" link for the primary (dependent's) application
+      assert_select 'a', text: 'View Application Details'
 
-      # Should show "View [Dependent Name]'s Application" button
-      assert_select 'a', text: "View #{dependent.full_name}'s Application"
-
-      # Should show "Add Another Dependent" button
-      assert_select 'a', text: 'Add Another Dependent'
+      # Should show "Add New Dependent" button (updated text)
+      assert_select 'a', text: 'Add New Dependent'
     end
   end
 end

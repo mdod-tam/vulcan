@@ -74,6 +74,8 @@ module ConstituentPortal
         @application.medical_provider_fax,
         @application.medical_provider_email
       )
+      # Set applicant user for form display (dependent if application is for dependent, otherwise current user)
+      @applicant_user = @application.for_dependent? ? @application.user : current_user
     end
 
     def create
@@ -238,6 +240,7 @@ module ConstituentPortal
     def initialize_new_application
       @application = current_user.applications.new
       @application.medical_provider_attributes ||= {}
+      @applicant_user = current_user # Default to current user for self applications
     end
 
     def setup_applicant_context
@@ -308,6 +311,7 @@ module ConstituentPortal
       @application.user = dependent
       @application.user_id = dependent.id
       @application.managing_guardian_id = current_user.id
+      @applicant_user = dependent # Set for use in view to display correct disability flags
     end
 
     def for_dependent_application?
@@ -331,13 +335,27 @@ module ConstituentPortal
     end
 
     # Finds existing draft application for target user
+    # For dependent applications, only finds drafts managed by current guardian
     def existing_draft
-      @existing_draft ||= Application.draft_for_constituent(target_user_id).first
+      @existing_draft ||= begin
+        scope = Application.draft_for_constituent(target_user_id)
+        # If this is for a dependent (user_id param present and != current_user),
+        # only look for applications managed by current user
+        scope = scope.where(managing_guardian_id: current_user.id) if params[:user_id].present? && target_user_id != current_user.id
+        scope.first
+      end
     end
 
     # Finds existing active (non-draft) application for target user
+    # For dependent applications, only finds active apps managed by current guardian
     def existing_active_application
-      @existing_active_application ||= Application.active_for_constituent(target_user_id).first
+      @existing_active_application ||= begin
+        scope = Application.active_for_constituent(target_user_id)
+        # If this is for a dependent (user_id param present and != current_user),
+        # only look for applications managed by current user
+        scope = scope.where(managing_guardian_id: current_user.id) if params[:user_id].present? && target_user_id != current_user.id
+        scope.first
+      end
     end
 
     # Check and redirect if existing application (draft or active) exists
@@ -491,23 +509,14 @@ module ConstituentPortal
     end
 
     def find_application_by_standard_query
-      Application.where(id: params[:id])
-                 .where(
-                   'user_id = :uid
-                   OR managing_guardian_id = :uid
-                   OR EXISTS (
-                       SELECT 1 FROM guardian_relationships gr
-                       WHERE gr.guardian_id = :uid
-                         AND gr.dependent_id = applications.user_id
-                   )',
-                   uid: current_user.id
-                 )
-                 .first
+      # Use model scope for Rails-centric query building
+      Application.accessible_by(current_user).find_by(id: params[:id])
     end
 
     def find_application_by_flexible_query
-      app = Application.find_by(id: params[:id], user_id: current_user.id)
-      app&.user == current_user ? app : nil
+      # Fallback: check if application exists and is accessible
+      app = Application.find_by(id: params[:id])
+      app&.accessible_by?(current_user) ? app : nil
     end
 
     def handle_application_not_found
@@ -516,10 +525,24 @@ module ConstituentPortal
     end
 
     def ensure_editable
-      return if @application.status_draft?
+      # Check if application status allows editing
+      unless @application.status_draft?
+        redirect_to constituent_portal_application_path(@application),
+                    alert: 'This application has already been submitted and cannot be edited.'
+        return
+      end
 
-      redirect_to constituent_portal_application_path(@application),
-                  alert: 'This application has already been submitted and cannot be edited.'
+      # Use model's authorization method (Rails-centric approach)
+      return if @application.editable_by?(current_user)
+
+      # Provide specific feedback based on the situation
+      if @application.for_dependent?
+        redirect_to constituent_portal_application_path(@application),
+                    alert: 'This application is managed by a guardian. Only the managing guardian can edit it.'
+      else
+        redirect_to constituent_portal_application_path(@application),
+                    alert: 'You do not have permission to edit this application.'
+      end
     end
 
     def application_params

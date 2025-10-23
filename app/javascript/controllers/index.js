@@ -30,7 +30,6 @@ async function ensureChartControllers() {
 import ApplicationFormController from "./forms/application_form_controller"
 import AutosaveController from "./forms/autosave_controller"
 import CurrencyFormatterController from "./forms/currency_formatter_controller"
-import DateInputController from "./forms/date_input_controller"
 import DateRangeController from "./forms/date_range_controller"
 import DependentFieldsController from "./forms/dependent_fields_controller"
 import DependentSelectorController from "./forms/dependent_selector_controller"
@@ -87,7 +86,6 @@ ensureChartControllers()
 application.register("application-form", ApplicationFormController)
 application.register("autosave", AutosaveController)
 application.register("currency-formatter", CurrencyFormatterController)
-application.register("date-input", DateInputController)
 application.register("date-range", DateRangeController)
 application.register("dependent-fields", DependentFieldsController)
 application.register("dependent-selector", DependentSelectorController)

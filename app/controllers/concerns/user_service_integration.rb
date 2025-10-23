@@ -8,13 +8,18 @@ module UserServiceIntegration
   # Creates a user using UserCreationService with consistent error handling
   # @param user_params [Hash, ActionController::Parameters] The user parameters
   # @param is_managing_adult [Boolean] Whether this is a managing adult (guardian) or dependent
+  # @param skip_user_lookup [Boolean] If true, always creates new user instead of finding existing (for portal)
+  # @param require_disability_validation [Boolean] If true, validates at least one disability is selected
   # @return [BaseService::Result] The service result
-  def create_user_with_service(user_params, is_managing_adult: false)
+  def create_user_with_service(user_params, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false)
     # Convert ActionController::Parameters to hash if needed
     attrs = user_params.respond_to?(:to_h) ? user_params.to_h : user_params
     attrs = attrs.with_indifferent_access if attrs.respond_to?(:with_indifferent_access)
 
-    service = Applications::UserCreationService.new(attrs, is_managing_adult: is_managing_adult)
+    service = Applications::UserCreationService.new(attrs, 
+                                                     is_managing_adult: is_managing_adult,
+                                                     skip_user_lookup: skip_user_lookup,
+                                                     require_disability_validation: require_disability_validation)
     service.call
   end
 

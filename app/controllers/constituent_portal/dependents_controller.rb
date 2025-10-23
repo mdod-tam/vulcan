@@ -35,8 +35,13 @@ module ConstituentPortal
     # POST /constituent_portal/dependents
     def create
       # Using UserServiceIntegration concern for consistent user creation
-      # Flow: create_user_with_service(params, is_managing_adult: false) -> handles password, disability validation, etc.
-      result = create_user_with_service(dependent_user_params, is_managing_adult: false)
+      # Portal always creates NEW users for dependents (skip_user_lookup: true)
+      # Paper applications may find/reuse existing users (skip_user_lookup: false, default)
+      # Require disability validation for portal-created dependents
+      result = create_user_with_service(dependent_user_params,
+                                        is_managing_adult: false,
+                                        skip_user_lookup: true,
+                                        require_disability_validation: true)
 
       if result.success?
         @dependent_user = result.data[:user]
@@ -94,9 +99,12 @@ module ConstituentPortal
     private
 
     def set_dependent
-      # Ensure current_user can only manage their own dependents
-      @dependent = current_user.dependents.find_by(id: params[:id])
-      redirect_to constituent_portal_dashboard_path, alert: 'Dependent not found.' unless @dependent
+      # Use Rails-centric scope for authorization
+      @dependent = User.editable_by_guardian(current_user).find_by(id: params[:id])
+
+      return if @dependent
+
+      redirect_to constituent_portal_dashboard_path, alert: 'Dependent not found.'
     end
 
     def dependent_user_params

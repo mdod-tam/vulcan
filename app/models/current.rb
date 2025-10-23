@@ -57,15 +57,7 @@ class Current < ActiveSupport::CurrentAttributes
     proof_attachment_service_context.present?
   end
 
-  # Reset callback to ensure clean state between requests
-  resets do
-    # Log state reset in development for debugging - only when attributes are actually set
-    if Rails.env.development? && (paper_context.present? || resubmitting_proof.present?)
-      Rails.logger.debug { "Current attributes reset: paper_context=#{paper_context}, resubmitting_proof=#{resubmitting_proof}" }
-    end
-  end
-
-  # Legacy attributes that were already in the class
+  # Legacy attributes that were in the class
   attribute :user_agent, :ip_address
 
   class << self

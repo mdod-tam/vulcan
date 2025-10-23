@@ -9,7 +9,7 @@ require 'test_helper'
 class FormInputsTest < ActionDispatch::IntegrationTest
   setup do
     # Use factories instead of fixtures
-    @user = create(:constituent)
+    @user = create(:constituent, :with_disabilities)
     # Create an application associated with this user that's old enough to allow new applications
     @application = create(:application, :old_enough_for_new_application, user: @user)
 
@@ -191,8 +191,18 @@ class FormInputsTest < ActionDispatch::IntegrationTest
 
   # Test the assert_checkbox_checked helper
   test 'assert_checkbox_checked should verify checkbox state' do
-    # Create a form with checkboxes
-    get new_constituent_portal_application_path
+    # Use the existing draft application from setup
+    # Update the user directly for disability attributes
+    @user.update!(hearing_disability: true)
+    # Update the application for its own attributes and set status to draft
+    @application.update!(
+      maryland_resident: false,
+      self_certify_disability: false,
+      status: :draft # Ensure application is editable
+    )
+
+    # Visit the edit form (not new, since we have an existing draft)
+    get edit_constituent_portal_application_path(@application)
 
     # Verify the page loaded successfully
     assert_response :success
@@ -201,14 +211,10 @@ class FormInputsTest < ActionDispatch::IntegrationTest
     assert_select "input[type='checkbox'][name*='maryland_resident']:not([checked])"
     assert_select "input[type='checkbox'][name*='self_certify_disability']:not([checked])"
 
-    # Check a form with pre-checked checkboxes
-    # Update the user directly for disability attributes
-    @user.update!(hearing_disability: true)
-    # Update the application for its own attributes and set status to draft
+    # Now update to have checked checkboxes
     @application.update!(
       maryland_resident: true,
-      self_certify_disability: true,
-      status: :draft # Ensure application is editable
+      self_certify_disability: true
     )
 
     # Edit the application (which should have pre-checked checkboxes)

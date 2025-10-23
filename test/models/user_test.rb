@@ -142,6 +142,90 @@ class UserTest < ActiveSupport::TestCase
     end
   end
 
+  # --- Authorization Method Tests (Rails-centric pattern) ---
+
+  test 'editable_by_guardian scope returns only dependents of the specified guardian' do
+    # Set up relationships
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user2, relationship_type: 'Parent')
+    GuardianRelationship.create!(guardian_user: @another_guardian, dependent_user: @dependent_user1, relationship_type: 'Legal Guardian')
+
+    # Guardian should see their dependents
+    # Use .to_a to materialize the grouped results
+    dependents = User.editable_by_guardian(@guardian_user).to_a
+    assert_equal 2, dependents.length
+    assert_includes dependents, @dependent_user1
+    assert_includes dependents, @dependent_user2
+
+    # Another guardian should only see their dependent
+    other_dependents = User.editable_by_guardian(@another_guardian).to_a
+    assert_equal 1, other_dependents.length
+    assert_includes other_dependents, @dependent_user1
+  end
+
+  test 'accessible_by_guardian scope works same as editable_by_guardian' do
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    editable = User.editable_by_guardian(@guardian_user)
+    accessible = User.accessible_by_guardian(@guardian_user)
+
+    assert_equal editable.to_a, accessible.to_a
+  end
+
+  test 'editable_by_guardian? returns true for guardian of dependent' do
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    assert @dependent_user1.editable_by_guardian?(@guardian_user)
+  end
+
+  test 'editable_by_guardian? returns false for non-guardian' do
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    # Another guardian who is not related to this dependent
+    assert_not @dependent_user1.editable_by_guardian?(@another_guardian)
+  end
+
+  test 'editable_by_guardian? returns false for user who is not a dependent' do
+    # Guardian user is not a dependent, so editable_by_guardian? should return false
+    assert_not @guardian_user.editable_by_guardian?(@another_guardian)
+  end
+
+  test 'editable_by_guardian? returns false for nil user' do
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    assert_not @dependent_user1.editable_by_guardian?(nil)
+  end
+
+  test 'accessible_by_guardian? works same as editable_by_guardian?' do
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    assert_equal @dependent_user1.editable_by_guardian?(@guardian_user),
+                 @dependent_user1.accessible_by_guardian?(@guardian_user)
+    assert_equal @dependent_user1.editable_by_guardian?(@another_guardian),
+                 @dependent_user1.accessible_by_guardian?(@another_guardian)
+  end
+
+  test 'viewable_by_guardian? works same as accessible_by_guardian?' do
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    assert_equal @dependent_user1.accessible_by_guardian?(@guardian_user),
+                 @dependent_user1.viewable_by_guardian?(@guardian_user)
+  end
+
+  test 'multiple guardians can both edit same dependent' do
+    # Set up shared dependent
+    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+    GuardianRelationship.create!(guardian_user: @another_guardian, dependent_user: @dependent_user1, relationship_type: 'Legal Guardian')
+
+    # Both guardians should be able to edit
+    assert @dependent_user1.editable_by_guardian?(@guardian_user)
+    assert @dependent_user1.editable_by_guardian?(@another_guardian)
+
+    # Both should see the dependent in their scope
+    assert_includes User.editable_by_guardian(@guardian_user), @dependent_user1
+    assert_includes User.editable_by_guardian(@another_guardian), @dependent_user1
+  end
+
   # --- Profile Change Audit Logging Tests ---
 
   test 'logs profile update when user updates their own profile' do

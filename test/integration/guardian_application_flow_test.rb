@@ -140,4 +140,64 @@ class GuardianApplicationFlowTest < ActionDispatch::IntegrationTest
     assert_select 'a[href=?]', constituent_portal_application_path(application)
     assert_select 'td', text: dependent.full_name
   end
+
+  test 'guardian can create new application for dependent even if orphaned application exists (Bug #6)' do
+    # This tests the fix for Bug #6: orphaned applications without managing_guardian_id
+    # should not block creation of new applications by the current guardian
+
+    # Create a dependent
+    unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
+    dependent = create(:constituent, first_name: 'Dependent', last_name: 'Child', phone: unique_phone)
+
+    # Create the guardian relationship
+    GuardianRelationship.create!(
+      guardian_user: @guardian,
+      dependent_user: dependent,
+      relationship_type: 'Parent'
+    )
+
+    # Create an orphaned application (no managing_guardian_id set)
+    # This simulates a bug where applications were created without the guardian link
+    orphaned_app = create(:application,
+                          :archived, # archived so it doesn't show as active
+                          user: dependent,
+                          managing_guardian: nil) # Orphaned!
+
+    # Core test: Navigate to new application form - should NOT redirect to orphaned app
+    # With strict ownership model, orphaned app is not accessible by guardian
+    get new_constituent_portal_application_path(user_id: dependent.id, for_self: false)
+    assert_response :success, 'Should allow creating new application, not redirect to orphaned app'
+
+    # Should be able to create a new application despite orphaned app existing
+    assert_difference -> { Application.count } do
+      post constituent_portal_applications_path, params: {
+        application: {
+          user_id: dependent.id,
+          maryland_resident: true,
+          household_size: 3,
+          annual_income: 40_000,
+          self_certify_disability: true,
+          vision_disability: true,
+          medical_provider_name: 'Dr. Smith',
+          medical_provider_phone: '555-1234',
+          medical_provider_email: 'smith@example.com'
+        },
+        save_draft: true
+      }
+    end
+
+    # Verify the new application has the correct managing_guardian_id
+    new_app = Application.last
+    assert_equal dependent.id, new_app.user_id
+    assert_equal @guardian.id, new_app.managing_guardian_id, 'New application should link to current guardian'
+    assert_not_equal orphaned_app.id, new_app.id, 'Should create a new application, not update the orphaned one'
+
+    # Verify guardian can access the new app
+    assert new_app.accessible_by?(@guardian), 'Guardian should be able to access their managed application'
+
+    # NOTE: The orphaned app will have managing_guardian_id auto-set by the before_save callback
+    # when a guardian relationship exists. This is expected behavior that helps recover from
+    # data inconsistencies. The key test is that we could create a NEW application despite
+    # the orphaned app existing (which our strict ownership model allows).
+  end
 end

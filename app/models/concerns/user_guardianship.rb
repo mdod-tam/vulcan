@@ -34,6 +34,20 @@ module UserGuardianship
     scope :with_guardians, lambda {
       joins(:guardian_relationships_as_dependent).distinct
     }
+
+    # Authorization scopes - consistent with Application model pattern
+    # Returns dependents that can be edited/viewed by the specified guardian
+    # Uses group instead of distinct to avoid JSON column equality operator issues
+    scope :editable_by_guardian, lambda { |guardian_user|
+      joins(:guardian_relationships_as_dependent)
+        .where(guardian_relationships: { guardian_id: guardian_user.id })
+        .group('users.id')
+    }
+
+    # Alias for consistency with Application model
+    scope :accessible_by_guardian, lambda { |guardian_user|
+      editable_by_guardian(guardian_user)
+    }
   end
 
   # Guardian/dependent helper methods
@@ -105,5 +119,26 @@ module UserGuardianship
     @guardian_for_contact ||= guardian_relationships_as_dependent
                               .joins(:guardian_user)
                               .first&.guardian_user
+  end
+
+  # Authorization methods - consistent with Application model pattern
+  # Checks if a user (guardian) can edit this dependent
+  def editable_by_guardian?(guardian_user)
+    return false unless guardian_user
+    return false unless dependent?
+
+    # Guardian can edit if they have a guardian relationship with this dependent
+    guardians.include?(guardian_user)
+  end
+
+  def accessible_by_guardian?(guardian_user)
+    # For now, accessible means editable (strict ownership)
+    # Could be expanded in the future to allow read-only access
+    editable_by_guardian?(guardian_user)
+  end
+
+  def viewable_by_guardian?(guardian_user)
+    # Alias for consistency with Application model and Rails authorization patterns
+    accessible_by_guardian?(guardian_user)
   end
 end

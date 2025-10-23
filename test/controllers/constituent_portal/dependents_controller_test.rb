@@ -27,7 +27,8 @@ module ConstituentPortal
         date_of_birth: '2010-05-15',
         # Add other required User attributes for a dependent
         email: 'jane.doe.dependent@example.com', # Dependents might need unique emails or a strategy for this
-        phone: '5555550011' # Similarly for phone
+        phone: '5555550011', # Similarly for phone
+        hearing_disability: true # At least one disability required
       }
       guardian_relationship_attributes = {
         relationship_type: 'Parent'
@@ -64,6 +65,93 @@ module ConstituentPortal
       assert_response :unprocessable_content
       # We're expecting this error to be displayed in the form
       # Just check response status is correct (422) since the form rendering is tested elsewhere
+    end
+
+    test 'should require at least one disability to be selected when created through portal' do
+      dependent_attributes = {
+        first_name: 'Jane',
+        last_name: 'Doe',
+        date_of_birth: '2010-05-15',
+        email: 'jane.nodisability@example.com',
+        phone: '5555550022'
+        # No disabilities specified - they default to false
+      }
+      guardian_relationship_attributes = {
+        relationship_type: 'Parent'
+      }
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post constituent_portal_dependents_url, params: {
+          dependent: dependent_attributes,
+          guardian_relationship: guardian_relationship_attributes
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_match(/disability must be selected/i, response.body)
+    end
+
+    test 'should create dependent when at least one disability is selected' do
+      dependent_attributes = {
+        first_name: 'Jane',
+        last_name: 'Doe',
+        date_of_birth: '2010-05-15',
+        email: 'jane.withdisability@example.com',
+        phone: '5555550033',
+        hearing_disability: true, # At least one disability selected
+        vision_disability: false,
+        speech_disability: false,
+        mobility_disability: false,
+        cognition_disability: false
+      }
+      guardian_relationship_attributes = {
+        relationship_type: 'Parent'
+      }
+
+      assert_difference ['User.count', 'GuardianRelationship.count'], 1 do
+        post constituent_portal_dependents_url, params: {
+          dependent: dependent_attributes,
+          guardian_relationship: guardian_relationship_attributes
+        }
+      end
+
+      assert_redirected_to constituent_portal_dashboard_url
+      new_dependent = User.find_by(email: 'jane.withdisability@example.com')
+      assert new_dependent.hearing_disability
+    end
+
+    # Bug fix verification test - Bugs #1, #2, #3
+    test 'portal always creates NEW dependent with skip_user_lookup flag' do
+      # This test verifies that portal uses skip_user_lookup: true
+      # which always creates NEW users instead of finding existing ones
+      dependent_attributes = {
+        first_name: 'New',
+        last_name: 'Dependent',
+        date_of_birth: '2010-05-15',
+        email: 'new.dependent.portal@example.com',
+        phone: '5555559999',
+        hearing_disability: true # Required for portal dependents
+      }
+      guardian_relationship_attributes = {
+        relationship_type: 'Parent'
+      }
+
+      # Should create a new user
+      assert_difference 'User.count', 1 do
+        assert_difference 'GuardianRelationship.count', 1 do
+          post constituent_portal_dependents_url, params: {
+            dependent: dependent_attributes,
+            guardian_relationship: guardian_relationship_attributes
+          }
+        end
+      end
+
+      # Verify the dependent was created correctly
+      new_dependent = @guardian.dependents.order(created_at: :desc).first
+      assert_not_nil new_dependent, 'No dependent was created'
+      assert_equal 'New', new_dependent.first_name
+      assert_equal 'Dependent', new_dependent.last_name
+      assert_equal 'new.dependent.portal@example.com', new_dependent.email
     end
 
     test 'should destroy dependent and guardian relationship' do

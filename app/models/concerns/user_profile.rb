@@ -125,7 +125,7 @@ module UserProfile
 
   def validate_constituent_disability?
     return false unless type == 'Users::Constituent'
-    return false if new_record?
+    return false if new_record? && !@validate_disability_required
 
     applications.exists? || @validate_disability_required
   end

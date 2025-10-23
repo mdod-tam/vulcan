@@ -11,7 +11,7 @@ class Application < ApplicationRecord
     end
 
     def valid_phone?
-      phone.present? && phone.match?(/\A[\d\-\(\)\s\.]+\z/)
+      phone.present? && phone.match?(/\A[\d\-()\s.]+\z/)
     end
 
     def valid_email?
@@ -133,7 +133,7 @@ class Application < ApplicationRecord
   validates :annual_income, presence: true, unless: :status_draft?
   validates :self_certify_disability, inclusion: { in: [true, false] }, unless: :status_draft?
   validates :alternate_contact_phone,
-            format: { with: /\A\+?[\d\-\(\)\s]+\z/, allow_blank: true }
+            format: { with: /\A\+?[\d\-()\s]+\z/, allow_blank: true }
   validates :alternate_contact_email,
             format: { with: URI::MailTo::EMAIL_REGEXP, allow_blank: true }
   validate :waiting_period_completed, on: :create
@@ -155,15 +155,15 @@ class Application < ApplicationRecord
 
   # Single constituent application scopes
   # Find draft application for a specific constituent
-  scope :draft_for_constituent, ->(user_id) {
+  scope :draft_for_constituent, lambda { |user_id|
     draft.where(user_id: user_id)
   }
 
   # Find active (non-draft, non-archived, non-rejected) application for a specific constituent
   # Excludes: draft (still being worked on), archived (historical), rejected (can start fresh)
-  scope :active_for_constituent, ->(user_id) {
+  scope :active_for_constituent, lambda { |user_id|
     where(user_id: user_id)
-      .where.not(status: [:draft, :archived, :rejected])
+      .where.not(status: %i[draft archived rejected])
   }
 
   # Guardian/Dependent relationship scopes
@@ -182,9 +182,25 @@ class Application < ApplicationRecord
 
   # Returns all applications related to a guardian, either managed by them
   # or for one of their dependents (even if not managed by this guardian)
+  # NOTE: This scope is intentionally broad and should only be used for viewing, not editing
   scope :related_to_guardian, lambda { |guardian_user|
     managed_by(guardian_user)
       .or(for_dependents_of(guardian_user))
+  }
+
+  # Strict ownership scope: only returns applications the user can edit
+  # User can edit if they are:
+  # - The applicant (user_id) AND no managing guardian exists, OR
+  # - The managing guardian
+  scope :editable_by, lambda { |user|
+    where('(applications.user_id = :user_id AND applications.managing_guardian_id IS NULL)
+           OR applications.managing_guardian_id = :user_id', user_id: user.id)
+  }
+
+  # Returns applications the user can view (broader than editable)
+  # Currently same as editable_by (strict ownership model)
+  scope :accessible_by, lambda { |user|
+    editable_by(user)
   }
 
   # Alias scopes for approved applications
@@ -326,6 +342,28 @@ class Application < ApplicationRecord
       guardian_id: managing_guardian_id,
       dependent_id: user_id
     )&.relationship_type
+  end
+
+  # Authorization methods
+  def editable_by?(user)
+    return false unless user
+
+    # Can edit if user is the owner (no guardian) or the managing guardian
+    is_owner = user_id == user.id && managing_guardian_id.nil?
+    is_managing_guardian = managing_guardian_id == user.id
+
+    is_owner || is_managing_guardian
+  end
+
+  def accessible_by?(user)
+    # For now, accessible means editable (strict ownership)
+    # Could be expanded in the future to allow read-only access for other guardians
+    editable_by?(user)
+  end
+
+  def viewable_by?(user)
+    # Alias for consistency with Rails authorization patterns
+    accessible_by?(user)
   end
 
   # Add a condition method to check if any alternate contact field changed

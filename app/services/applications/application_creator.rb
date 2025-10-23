@@ -232,6 +232,9 @@ module Applications
       # If this is for a dependent, use current_user as guardian
       return @form.current_user.id if @form.for_dependent?
 
+      # If updating existing application, preserve existing managing_guardian_id
+      return target_application.managing_guardian_id if target_application.persisted? && target_application.managing_guardian_id.present?
+
       # Otherwise, no managing guardian
       nil
     end

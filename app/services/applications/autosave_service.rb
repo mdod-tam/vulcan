@@ -15,6 +15,8 @@ module Applications
       return autosave_error_result('File uploads are not supported for autosave') if file_field?
 
       initialize_application
+      return autosave_error_result('Unable to find or create application') if @application.nil?
+
       save_field
     end
 
@@ -41,7 +43,11 @@ module Applications
     end
 
     def find_existing_application
-      current_user.applications.find_by(id: params[:id]) || find_or_create_draft_application
+      # Search in both user's own applications and applications they manage as guardian
+      application = current_user.applications.find_by(id: params[:id]) ||
+                    current_user.managed_applications.find_by(id: params[:id])
+      
+      application || find_or_create_draft_application
     end
 
     def find_or_create_draft_application
@@ -140,7 +146,9 @@ module Applications
 
     def save_user_field(attribute)
       value = cast_user_field_value(attribute, field_value)
-      current_user.update_column(attribute, value)
+      # Update the target user (dependent if this is a dependent application, otherwise current_user)
+      target_user = @application.for_dependent? ? @application.user : current_user
+      target_user.update_column(attribute, value)
       @application.update_column(:last_visited_step, attribute) if @application.persisted?
       { success: true }
     rescue StandardError => e

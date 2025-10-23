@@ -17,8 +17,15 @@ export default class FormValidationController extends Controller {
     "acceptResidencyProof",
     "rejectResidencyProof",
     "residencyProofFile", 
-    "residencyProofRejectionReason"
+    "residencyProofRejectionReason",
+    "checkbox",
+    "checkboxGroup",
+    "validationMessage"
   ]
+
+  static values = {
+    type: String  // e.g., "disability-checkbox"
+  }
 
   connect() {
     // Store bound method reference for proper cleanup
@@ -28,12 +35,29 @@ export default class FormValidationController extends Controller {
     if (this.hasFormTarget) {
       this.formTarget.addEventListener('submit', this._boundValidateForm);
     }
+    
+    // If this is a disability checkbox validator, set up form submission listener
+    if (this.typeValue === "disability-checkbox") {
+      this._boundValidateDisabilityOnSubmit = this.validateDisabilityOnSubmit.bind(this)
+      const form = this.element.closest('form')
+      if (form) {
+        form.addEventListener('submit', this._boundValidateDisabilityOnSubmit)
+      }
+    }
   }
 
   disconnect() {
     // Clean up event listeners
     if (this.hasFormTarget) {
       this.formTarget.removeEventListener('submit', this._boundValidateForm);
+    }
+    
+    // Clean up disability checkbox validator listener
+    if (this.typeValue === "disability-checkbox" && this._boundValidateDisabilityOnSubmit) {
+      const form = this.element.closest('form')
+      if (form) {
+        form.removeEventListener('submit', this._boundValidateDisabilityOnSubmit)
+      }
     }
   }
 
@@ -169,5 +193,54 @@ export default class FormValidationController extends Controller {
     errorMessage.textContent = message;
     errorMessage.className = 'mb-1 last:mb-0';
     container.appendChild(errorMessage);
+  }
+
+  /**
+   * Validate disability checkboxes in real-time
+   * Shows/hides validation message as user checks/unchecks boxes
+   */
+  validateDisabilityCheckboxes() {
+    if (!this.hasCheckboxTarget) return
+
+    const anyChecked = this.checkboxTargets.some(checkbox => checkbox.checked)
+    
+    if (this.hasValidationMessageTarget) {
+      if (anyChecked) {
+        this.validationMessageTarget.classList.add('hidden')
+        this.element.setAttribute('aria-invalid', 'false')
+      } else {
+        this.validationMessageTarget.classList.remove('hidden')
+        this.element.setAttribute('aria-invalid', 'true')
+      }
+    }
+  }
+
+  /**
+   * Validate disability checkboxes on form submission
+   * Prevents submission if no checkboxes are selected
+   * @param {Event} event Form submission event
+   */
+  validateDisabilityOnSubmit(event) {
+    if (!this.hasCheckboxTarget) return
+
+    const anyChecked = this.checkboxTargets.some(checkbox => checkbox.checked)
+    
+    if (!anyChecked) {
+      event.preventDefault()
+      
+      // Show validation message
+      if (this.hasValidationMessageTarget) {
+        this.validationMessageTarget.classList.remove('hidden')
+        this.element.setAttribute('aria-invalid', 'true')
+      }
+      
+      // Focus the first checkbox for accessibility
+      if (this.checkboxTargets.length > 0) {
+        this.checkboxTargets[0].focus()
+      }
+      
+      // Scroll to the fieldset
+      this.element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
   }
 }

@@ -274,20 +274,20 @@
             If you have a disability, please self-certify by checking the box above.
           </p>
           <fieldset class="space-y-2">
-            <legend class="text-sm text-gray-700 font-medium">Select at least one disability that applies to you:</legend>
+            <legend class="text-sm text-gray-700 font-medium">Select at least one disability that applies to <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %>:</legend>
             <div class="grid sm:grid-cols-2 gap-4">
               <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
               <% disabilities.each do |disability| %>
                 <div class="flex items-center">
                   <%= form.check_box "#{disability}_disability",
-                      checked: params.dig(:application, "#{disability}_disability") == "1" || current_user.send("#{disability}_disability"),
+                      checked: params.dig(:application, "#{disability}_disability") == "1" || (@applicant_user || current_user).send("#{disability}_disability"),
                       class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                       "aria-describedby": "#{disability}-description" %>
                   <%= form.label "#{disability}_disability", disability.to_s.titleize,
                       class: "ml-2 text-sm text-gray-700" %>
                 </div>
                 <div id="<%= disability %>-description" class="sr-only">
-                  Check if your dependent has a <%= disability %> disability
+                  Check if <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %> <%= @applicant_type == 'dependent' ? 'has' : 'have' %> a <%= disability %> disability
                 </div>
               <% end %>
             </div>

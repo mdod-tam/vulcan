@@ -3,17 +3,19 @@
 module Applications
   # Handles user creation and lookup for paper applications
   class UserCreationService < BaseService
-    attr_reader :attrs, :is_managing_adult, :errors
+    attr_reader :attrs, :is_managing_adult, :errors, :skip_user_lookup
 
-    def initialize(attrs, is_managing_adult: false)
+    def initialize(attrs, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false)
       super()
       @attrs = attrs.with_indifferent_access
       @is_managing_adult = is_managing_adult
+      @skip_user_lookup = skip_user_lookup
+      @require_disability_validation = require_disability_validation
       @errors = []
     end
 
     def call
-      user = find_existing_user || create_new_user
+      user = skip_user_lookup ? create_new_user : (find_existing_user || create_new_user)
 
       if user&.persisted?
         Result.new(success: true, data: { user: user, temp_password: @temp_password })
@@ -55,7 +57,8 @@ module Applications
     end
 
     def prepare_attributes
-      ensure_disability_selection unless is_managing_adult
+      # Only auto-assign disability for paper applications, not portal (which validates)
+      ensure_disability_selection unless is_managing_adult || @require_disability_validation
       attrs.delete(:notification_method)
       attrs.delete('notification_method')
     end
@@ -75,6 +78,7 @@ module Applications
         user.password_confirmation = @temp_password
         user.verified = true
         user.force_password_change = true
+        user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
       end
     end
 

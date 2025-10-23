@@ -13,7 +13,8 @@ module ConstituentPortal
 
       # Set up test data using factories with the unique email
       @user = create(:constituent, :with_disabilities, email: unique_email)
-      @application = create(:application, user: @user)
+      # Use archived application so it doesn't block creation of new applications
+      @application = create(:application, :archived, user: @user)
       @valid_pdf = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
       @valid_image = fixture_file_upload(Rails.root.join('test/fixtures/files/residency_proof.pdf'), 'application/pdf')
 
@@ -482,9 +483,6 @@ module ConstituentPortal
       dependent = create(:constituent, :with_disabilities,
                          email: 'dependent_for_update_test@example.com')
 
-      # Create an application for the dependent
-      dependent_app = create(:application, user: dependent, status: :draft)
-
       # Set up guardian relationship between current user and dependent
       GuardianRelationship.create!(
         guardian_id: @user.id,
@@ -492,10 +490,20 @@ module ConstituentPortal
         relationship_type: 'parent'
       )
 
-      # Update the dependent's application to have current user as managing_guardian (draft update)
+      # Create an application for the dependent WITH managing_guardian set from the start
+      # This reflects correct behavior - guardian creates application with themselves as manager
+      dependent_app = create(:application,
+                             user: dependent,
+                             status: :draft,
+                             managing_guardian_id: @user.id)
+
+      # Verify the managing_guardian_id was properly set
+      assert_equal @user.id, dependent_app.managing_guardian_id,
+                   'managing_guardian_id should be set during creation'
+
+      # Update the dependent's application (guardian can edit because they're the managing_guardian)
       patch constituent_portal_application_path(dependent_app), params: {
         application: {
-          managing_guardian_id: @user.id,
           household_size: 2,
           annual_income: 30_000,
           # Add disability information since this might be treated as a submission
@@ -514,10 +522,12 @@ module ConstituentPortal
       # Reload the application and verify changes
       dependent_app.reload
 
-      # Verify managing guardian was set correctly
+      # Verify managing guardian is still set correctly
       assert_equal @user.id, dependent_app.managing_guardian_id
       assert dependent_app.for_dependent?, 'Application should be marked as for a dependent'
       assert_equal 'parent', dependent_app.guardian_relationship_type
+      assert_equal 2, dependent_app.household_size
+      assert_equal 30_000, dependent_app.annual_income
     end
 
     test 'should save address information to user during application creation' do

@@ -5,8 +5,16 @@ require 'test_helper'
 module Applications
   class AutosaveServiceTest < ActiveSupport::TestCase
     setup do
-      @user = FactoryBot.create(:constituent)
-      @dependent = FactoryBot.create(:constituent, first_name: 'Dependent', last_name: 'Child')
+      # Create guardian with explicit disability settings to avoid factory defaults
+      @user = FactoryBot.create(:constituent, 
+                                hearing_disability: false,
+                                vision_disability: true)
+      # Create dependent with explicit disability settings to avoid factory defaults
+      @dependent = FactoryBot.create(:constituent, 
+                                     first_name: 'Dependent', 
+                                     last_name: 'Child',
+                                     hearing_disability: false,
+                                     vision_disability: true)
       FactoryBot.create(:guardian_relationship, guardian_user: @user, dependent_user: @dependent)
     end
 
@@ -184,10 +192,12 @@ module Applications
       assert_equal existing_draft.id, result[:application_id]
     end
 
-    test 'does not reuse submitted applications' do
+    test 'does not create new draft when active application exists' do
+      # When user has a submitted/active application, they cannot create a new draft
+      # This prevents duplicate applications and aligns with controller logic
       submitted_app = FactoryBot.create(:application, :in_progress, user: @user)
 
-      assert_difference -> { Application.count }, 1 do
+      assert_no_difference -> { Application.count } do
         result = Applications::AutosaveService.new(
           current_user: @user,
           params: {
@@ -196,8 +206,8 @@ module Applications
           }
         ).call
 
-        assert result[:success]
-        assert_not_equal submitted_app.id, result[:application_id]
+        assert_not result[:success], 'Should not allow creating draft when active application exists'
+        assert result[:errors].present?
       end
     end
 
@@ -245,6 +255,81 @@ module Applications
 
       assert_not result[:success]
       assert result[:errors].present?
+    end
+
+    test 'finds dependent draft by id when guardian is current user' do
+      # This tests the bug fix: searching in managed_applications when id is provided
+      dependent_draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian_id: @user.id
+      )
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: dependent_draft.id,
+          field_name: 'application[household_size]',
+          field_value: '4'
+        }
+      ).call
+
+      assert result[:success], "Expected autosave to succeed but got errors: #{result[:errors]}"
+      assert_equal dependent_draft.id, result[:application_id]
+      assert_equal 4, dependent_draft.reload.household_size
+    end
+
+    test 'updates disability fields on dependent user record not guardian' do
+      # This tests the bug fix: disability fields should be saved to the dependent's record
+      dependent_draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian_id: @user.id
+      )
+
+      # Verify initial state
+      assert_not @dependent.hearing_disability
+      assert_not @user.hearing_disability
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: dependent_draft.id,
+          field_name: 'application[hearing_disability]',
+          field_value: 'true'
+        }
+      ).call
+
+      assert result[:success], "Expected autosave to succeed but got errors: #{result[:errors]}"
+      
+      # Verify the dependent's disability flag was updated, not the guardian's
+      assert @dependent.reload.hearing_disability, 'Dependent should have hearing_disability set to true'
+      assert_not @user.reload.hearing_disability, 'Guardian should not have hearing_disability set'
+    end
+
+    test 'handles maryland_resident checkbox for dependent applications' do
+      # This tests the bug fix: maryland_resident checkbox should work for dependent applications
+      dependent_draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian_id: @user.id,
+        maryland_resident: false
+      )
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: dependent_draft.id,
+          field_name: 'application[maryland_resident]',
+          field_value: 'true'
+        }
+      ).call
+
+      assert result[:success], "Expected autosave to succeed but got errors: #{result[:errors]}"
+      assert dependent_draft.reload.maryland_resident, 'maryland_resident should be set to true'
     end
   end
 end

@@ -1,90 +1,101 @@
 <div class="bg-white shadow overflow-x-auto sm:rounded-lg">
-  <table class="table-fixed min-w-full divide-y divide-gray-200 applications-table" role="table">
+  <table class="min-w-full divide-y divide-gray-200 applications-table" role="table" style="table-layout: fixed;">
     <thead class="bg-gray-50">
       <tr> 
-        <th scope="col" class="w-1/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 7%;">
           <%= link_to admin_applications_path(sort: 'application_date', direction: toggle_direction('application_date')),
                       class: "flex items-center",
-                      aria: { label: "Sort applications by Date" } do %>
+                      aria: { label: "Sort applications by Date" },
+                      data: { turbo_frame: "applications_list" } do %>
             Date
             <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
           <% end %>
         </th>
-        <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 11%;">
           <%= link_to admin_applications_path(sort: 'user.last_name', direction: toggle_direction('user.last_name')),
                       class: "flex items-center",
-                      aria: { label: "Sort applications by Applicant" } do %>
+                      aria: { label: "Sort applications by Applicant" },
+                      data: { turbo_frame: "applications_list" } do %>
             Applicant
             <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
           <% end %>
         </th>
-        <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Managing Guardian</th>
-        <th scope="col" class="w-1/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Phone</th>
-        <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-        <th scope="col" class="w-1/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 12%;">Managing Guardian</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell" style="width: 9%;">Phone</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 15%;">Email</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 8%;">
           <%= link_to admin_applications_path(sort: 'status', direction: toggle_direction('status')),
                       class: "flex items-center",
-                      aria: { label: "Sort applications by Status" } do %>
+                      aria: { label: "Sort applications by Status" },
+                      data: { turbo_frame: "applications_list" } do %>
             Status
             <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
             </svg>
           <% end %>
         </th>
-        <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attachments</th>
-        <th scope="col" class="w-1/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Medical Response</th>
-        <th scope="col" class="w-2/12 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 15%;">Attachments</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 11%;">Medical Response</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 8%;">Action</th>
       </tr>
     </thead>
     <tbody class="bg-white divide-y divide-gray-200">
       <% applications.each do |application| %>
         <tr class="application-row h-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 <%= 'bg-blue-50' if application.for_dependent? %>" tabindex="0"> <!-- Added application-row class here -->
-          <td class="px-4 py-2 text-sm text-gray-900">
+          <td class="px-2 py-2 text-sm text-gray-900 whitespace-nowrap overflow-hidden">
             <%= application.application_date.strftime("%m/%d/%Y") %>
           </td>
-          <td class="px-4 py-2 text-sm text-gray-900">
-            <% if application.user.present? %>
-              <%= application.user.full_name %>
-            <% else %>
-              Unknown Applicant
-            <% end %>
-          </td>
-          <td class="px-4 py-2 text-sm text-gray-900">
-            <% if application.managing_guardian.present? %>
-              <span class="font-semibold"><%= application.managing_guardian.full_name %></span>
-              <%# Use preloaded guardian_relationships_as_dependent to avoid N+1 queries %>
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+            <div class="truncate" title="<%= application.user&.full_name || 'Unknown Applicant' %>">
               <% if application.user.present? %>
-                <% guardian_relationship = application.user.guardian_relationships_as_dependent.find { |rel| rel.guardian_id == application.managing_guardian_id } %>
-                <% if guardian_relationship %>
-                  <span class="text-gray-600 text-sm ml-1">(<%= guardian_relationship.relationship_type %>)</span>
-                <% end %>
+                <%= application.user.full_name %>
+              <% else %>
+                Unknown Applicant
               <% end %>
+            </div>
+          </td>
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+            <% if application.managing_guardian.present? %>
+              <div class="truncate" title="<%= application.managing_guardian.full_name %>">
+                <span class="font-semibold"><%= application.managing_guardian.full_name %></span>
+                <%# Use preloaded guardian_relationships_as_dependent to avoid N+1 queries %>
+                <% if application.user.present? %>
+                  <% guardian_relationship = application.user.guardian_relationships_as_dependent.find { |rel| rel.guardian_id == application.managing_guardian_id } %>
+                  <% if guardian_relationship %>
+                    <span class="text-gray-600 text-xs ml-1">(<%= guardian_relationship.relationship_type %>)</span>
+                  <% end %>
+                <% end %>
+              </div>
             <% else %>
               N/A
             <% end %>
           </td>
-          <td class="px-4 py-2 text-sm text-gray-900 hidden sm:table-cell">
-            <% if application.user.present? %>
-              <%= application.user.phone || "No phone" %>
-            <% else %>
-              No phone
-            <% end %>
+          <td class="px-2 py-2 text-sm text-gray-900 hidden sm:table-cell whitespace-nowrap overflow-hidden">
+            <div class="truncate">
+              <% if application.user.present? %>
+                <%= application.user.phone || "No phone" %>
+              <% else %>
+                No phone
+              <% end %>
+            </div>
           </td>
-          <td class="px-4 py-2 text-sm text-gray-900">
-            <% if application.user.present? %>
-              <%= application.user.effective_email || "No email" %>
-            <% else %>
-              No email
-            <% end %>
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+            <div class="truncate" title="<%= application.user&.effective_email || 'No email' %>">
+              <% if application.user.present? %>
+                <%= application.user.effective_email || "No email" %>
+              <% else %>
+                No email
+              <% end %>
+            </div>
           </td>
-          <td class="px-4 py-2 text-sm text-gray-900">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
             <%= application_status_badge(application) %>
           </td>
-          <td class="px-4 py-2 text-sm text-gray-900 whitespace-normal">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
             <% 
               # Use our decorator's safe methods to check attachment status
               income_attached = application.respond_to?(:income_proof_attached?) ? 
@@ -111,13 +122,13 @@
               <span class="text-sm text-gray-500">No Proofs</span>
             <% end %>
           </td>
-          <td class="px-4 py-2 text-sm text-gray-900">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
             <%= medical_certification_status_badge(application) %>
           </td>
-          <td class="px-4 py-2 text-sm font-medium text-right">
-            <%= link_to "View Application",
+          <td class="px-2 py-2 text-sm font-medium overflow-hidden">
+            <%= link_to "View",
                 admin_application_path(id: application.id),
-                class: "text-indigo-600 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                class: "text-indigo-600 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 whitespace-nowrap",
                 aria: { label: "View details for #{application.user&.full_name || 'Unknown User'}" } %>
           </td>
         </tr>
