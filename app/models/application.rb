@@ -138,6 +138,7 @@ class Application < ApplicationRecord
             format: { with: URI::MailTo::EMAIL_REGEXP, allow_blank: true }
   validate :waiting_period_completed, on: :create
   validate :constituent_must_have_disability, if: :validate_disability?
+  validate :managing_guardian_cannot_be_applicant
 
   before_save :ensure_managing_guardian_set, if: :user_id_changed?
   # Callbacks
@@ -507,6 +508,14 @@ class Application < ApplicationRecord
     false
   end
 
+  def managing_guardian_cannot_be_applicant
+    return if managing_guardian_id.blank? || user_id.blank?
+
+    return unless managing_guardian_id == user_id
+
+    errors.add(:base, 'An application cannot be managed by the applicant themselves')
+  end
+
   # Ensures the managing_guardian_id is set when the application is for a dependent.
   # This is called before create and when user_id changes to automatically
   # associate the application with a guardian if a relationship exists.
@@ -520,6 +529,9 @@ class Application < ApplicationRecord
 
     # If there is a guardian relationship, set the managing_guardian_id.
     return unless guardian_relationship
+
+    # Additional safety check: ensure we're not creating a circular relationship
+    return if guardian_relationship.guardian_id == user_id
 
     Rails.logger.info "Setting managing_guardian_id to #{guardian_relationship.guardian_id} for application #{id}"
     self.managing_guardian_id = guardian_relationship.guardian_id

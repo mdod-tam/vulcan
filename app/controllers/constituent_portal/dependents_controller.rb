@@ -46,6 +46,14 @@ module ConstituentPortal
       if result.success?
         @dependent_user = result.data[:user]
 
+        # Safety check: Ensure the dependent is not the same as the guardian
+        if @dependent_user.id == current_user.id
+          @dependent_user.destroy if @dependent_user.persisted?
+          log_user_service_error('to create dependent', 'Cannot add yourself as your own dependent')
+          handle_creation_failure(['You cannot add yourself as your own dependent. Please create a dependent with different contact information.'])
+          return
+        end
+
         # Using UserServiceIntegration concern for relationship creation
         # Flow: create_guardian_relationship_with_service -> handles relationship creation and validation
         if create_guardian_relationship_with_service(current_user, @dependent_user, guardian_relationship_params[:relationship_type])
