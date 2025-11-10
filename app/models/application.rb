@@ -313,16 +313,19 @@ class Application < ApplicationRecord
   end
 
   # Application status change tracking
+  # @deprecated Use direct status updates instead - the after_save callback handles audit trail
+  # This method creates duplicate ApplicationStatusChange records and will be removed in a future version.
+  # Instead of: application.update_status(:approved, user: admin)
+  # Use: application.update!(status: :approved) # callback handles status_changes automatically
   def update_status(new_status, user: nil, notes: nil)
-    old_status = status
-    return unless update(status: new_status)
+    Rails.logger.warn '[DEPRECATION] Application#update_status is deprecated. Use direct status updates - callbacks handle audit trail.'
 
-    status_changes.create!(
-      from_status: old_status,
-      to_status: new_status,
-      user: user,
-      notes: notes
-    )
+    # Temporarily store user/notes for callback to use
+    @pending_status_change_user = user
+    @pending_status_change_notes = notes
+
+    # Update status - callback will create status_change record
+    update(status: new_status)
   end
 
   def medical_provider_name
@@ -408,7 +411,10 @@ class Application < ApplicationRecord
     # Guard clause to prevent infinite recursion
     return if @logging_status_change
 
-    acting_user = Current.user || user # Ensure a user is always present
+    # Use pending user/notes from deprecated update_status, or fall back to Current.user
+    acting_user = @pending_status_change_user || Current.user || user
+    status_notes = @pending_status_change_notes
+
     return if acting_user.blank?
 
     @logging_status_change = true
@@ -418,7 +424,8 @@ class Application < ApplicationRecord
       status_changes.create!(
         from_status: status_before_last_save,
         to_status: status,
-        user: acting_user
+        user: acting_user,
+        notes: status_notes
       )
 
       # Also create Event record for other audit purposes
@@ -430,13 +437,17 @@ class Application < ApplicationRecord
           application_id: id,
           old_status: status_before_last_save,
           new_status: status,
-          submission_method: submission_method
+          submission_method: submission_method,
+          notes: status_notes
         }
       )
     rescue StandardError => e
       Rails.logger.error "Failed to log status change for application #{id}: #{e.message}"
     ensure
       @logging_status_change = false
+      # Clear pending attributes after use
+      @pending_status_change_user = nil
+      @pending_status_change_notes = nil
     end
   end
 

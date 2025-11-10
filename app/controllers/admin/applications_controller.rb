@@ -41,12 +41,21 @@ module Admin
       # This populates instance variables like @open_applications_count, @proofs_needing_review_count, etc.
       load_dashboard_metrics
 
+      # Determine what statuses to exclude from base scope
+      # When admin explicitly filters by a normally-excluded status, we need to include it
+      excluded_statuses = %i[draft rejected archived]
+      filtered_status = params[:status]&.to_sym || params[:filter]&.to_sym
+
+      # Remove the filtered status from exclusions so it can be shown
+      excluded_statuses.delete(filtered_status) if filtered_status && excluded_statuses.include?(filtered_status)
+
       # Skip heavy ActiveStorage eager-loading; we preload attachment existence separately
-      scoped = filtered_scope(build_application_base_scope)
+      scoped = filtered_scope(build_application_base_scope(exclude_statuses: excluded_statuses))
       @pagy, page_of_apps = paginate(scoped)
       # ApplicationDataLoading concern: Efficiently preloads attachments for multiple applications
       # Flow: preload_attachments_for_applications -> groups attachments by application_id to avoid N+1 queries
-      attachments_index   = preload_attachments_for_applications(page_of_apps)
+      # Force to array to avoid PostgreSQL JSON distinct issues when relation has joins
+      attachments_index   = preload_attachments_for_applications(page_of_apps.to_a)
 
       # ApplicationDataLoading concern: Decorates applications with storage information
       # Flow: decorate_applications_with_storage -> wraps each app with ApplicationStorageDecorator

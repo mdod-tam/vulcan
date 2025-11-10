@@ -131,13 +131,16 @@ module ApplicationStatusManagement
     create_auto_approval_audit_event(previous_status)
   end
 
-  # Updates the application status using the model's status update method
-  # This ensures proper status change records are created
+  # Updates the application status using Rails update! method
+  # The after_save callback handles status change record creation automatically
   def update_application_status_to_approved
-    # Use Current.user (the admin who triggered the action) instead of nil
-    # This ensures proper audit trail with the actual user who caused the auto-approval
-    acting_user = Current.user
-    update_status('approved', user: acting_user, notes: 'Auto-approved based on all requirements being met')
+    # Use Current.user (the admin who triggered the action) for audit trail
+    # Store notes for the callback to use
+    @pending_status_change_user = Current.user
+    @pending_status_change_notes = 'Auto-approved based on all requirements being met'
+
+    # Update status - log_status_change callback handles ApplicationStatusChange creation
+    update!(status: 'approved')
   end
 
   # Creates an audit event for the auto-approval

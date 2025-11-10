@@ -131,15 +131,25 @@ module ApplicationDataLoading
   end
 
   # Build a base scope for application queries with common includes
-  # @param exclude_statuses [Array<Symbol>] Statuses to exclude (default: [:rejected, :archived])
+  # @param exclude_statuses [Array<Symbol>] Statuses to exclude (default: [:draft, :rejected, :archived])
   # @return [ActiveRecord::Relation] The base scope
-  def build_application_base_scope(exclude_statuses: %i[rejected archived])
+  #
+  # Usage:
+  #   # Default behavior: exclude drafts, rejected, archived
+  #   build_application_base_scope
+  #
+  #   # Include drafts by removing from exclusions
+  #   build_application_base_scope(exclude_statuses: [:rejected, :archived])
+  #
+  #   # Custom exclusion list
+  #   build_application_base_scope(exclude_statuses: [:rejected])
+  def build_application_base_scope(exclude_statuses: %i[draft rejected archived])
     scope = Application.includes(
       :user,
       :managing_guardian,
       # Preload guardian_relationships to avoid N+1 when checking relationships in views
       user: :guardian_relationships_as_dependent
-    ).distinct
+    )
 
     scope = scope.where.not(status: exclude_statuses) if exclude_statuses.any?
 

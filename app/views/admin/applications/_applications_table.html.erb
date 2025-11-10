@@ -45,7 +45,7 @@
     </thead>
     <tbody class="bg-white divide-y divide-gray-200">
       <% applications.each do |application| %>
-        <tr class="application-row h-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 <%= 'bg-blue-50' if application.for_dependent? %>" tabindex="0"> <!-- Added application-row class here -->
+        <tr id="application_<%= application.id %>" class="application-row h-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 <%= 'bg-blue-50' if application.for_dependent? %>" tabindex="0"> <!-- Added application-row class here -->
           <td class="px-2 py-2 text-sm text-gray-900 whitespace-nowrap overflow-hidden">
             <%= application.application_date.strftime("%m/%d/%Y") %>
           </td>

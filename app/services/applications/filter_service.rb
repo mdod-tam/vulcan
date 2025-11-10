@@ -58,6 +58,8 @@ module Applications
       case filter
       when 'active'
         scope.active
+      when 'draft'
+        scope.where(status: :draft)
       when 'in_progress'
         scope.where(status: :in_progress)
       when 'approved'

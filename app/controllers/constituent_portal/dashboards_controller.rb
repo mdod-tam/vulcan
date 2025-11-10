@@ -54,34 +54,43 @@ module ConstituentPortal
     end
 
     def load_applications
-      # Load user's own applications using optimized scope
-      @applications = current_user.applications.order(created_at: :desc)
+      # Load user's own applications (exclude drafts from main list - show via continue application button)
+      # We still need to detect them for the "Continue Application" button
+      @applications = current_user.applications.where.not(status: :draft).order(created_at: :desc)
 
       # If no applications found, try a more direct approach to handle potential type mismatches
       if @applications.empty?
         Rails.logger.info "No applications found via association for user #{current_user.id}, trying direct query"
-        @applications = Application.where(user_id: current_user.id).order(created_at: :desc)
+        @applications = Application.where(user_id: current_user.id).where.not(status: :draft).order(created_at: :desc)
       end
 
       # ApplicationDataLoading concern: Uses optimized application scope for guardian applications
-      # Flow: build_application_base_scope -> provides consistent base query with includes
-      # exclude_statuses: [] means include all statuses (overriding default exclusions)
-      @managed_applications = build_application_base_scope(exclude_statuses: [])
+      # Exclude drafts from managed applications list (default behavior excludes draft, rejected, archived)
+      @managed_applications = build_application_base_scope
                               .where(managing_guardian_id: current_user.id)
                               .order(created_at: :desc)
 
+      # Query for managed drafts separately (for "Continue [Dependent]'s Draft" buttons)
+      @managed_drafts = Application.where(managing_guardian_id: current_user.id, status: :draft)
+                                   .includes(:user)
+                                   .order(created_at: :desc)
+
       # Log for debugging
       Rails.logger.info "Dashboard loaded guardian applications for user #{current_user.id}: " \
-                        "#{@managed_applications.count} managed applications"
+                        "#{@managed_applications.count} managed applications, " \
+                        "#{@managed_drafts.count} managed drafts"
     end
 
     def set_active_and_draft_applications
-      # Set user's own active and draft applications
-      @active_application = @applications.where.not(status: :draft).first
-      @draft_application = @applications.where(status: :draft).first
+      # @applications already excludes drafts, so just get the first one
+      @active_application = @applications.first
+
+      # Query for draft separately (not included in @applications)
+      @draft_application = current_user.applications.where(status: :draft).first
 
       # Also get most recent managed active application (for dependents)
-      @active_managed_application = @managed_applications.where.not(status: :draft).first
+      # @managed_applications already excludes drafts via build_application_base_scope
+      @active_managed_application = @managed_applications.first
 
       # Determine primary application to show in main status section
       # Show user's own active application first, then most recent managed application
@@ -89,7 +98,7 @@ module ConstituentPortal
 
       # Log for debugging
       Rails.logger.info "Dashboard loaded for user #{current_user.id}: " \
-                        "#{@applications.count} total applications, " \
+                        "#{@applications.count} submitted applications, " \
                         "active_application_id=#{@active_application&.id}, " \
                         "draft_application_id=#{@draft_application&.id}, " \
                         "primary_active_application_id=#{@primary_active_application&.id}"
