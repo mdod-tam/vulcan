@@ -8,6 +8,7 @@ module DashboardMetricsLoading
     load_simple_counts
     load_reporting_service_data
     load_remaining_metrics
+    load_print_queue_count
   rescue StandardError => e
     Rails.logger.error "Dashboard metric error: #{e.message}"
     # Set default values to prevent view errors
@@ -16,8 +17,8 @@ module DashboardMetricsLoading
 
   # Loads basic application counts that are commonly needed
   def load_simple_counts
-    safe_assign(:open_applications_count, Application.active.count)
-    safe_assign(:pending_services_count, Application.where(status: :approved).count)
+    safe_assign(:open_applications_count, cached_count('open_apps') { Application.active.count })
+    safe_assign(:pending_services_count, cached_count('pending_services') { Application.where(status: :approved).count })
   end
 
   # Integrates with the Applications::ReportingService for comprehensive data
@@ -41,25 +42,36 @@ module DashboardMetricsLoading
     load_training_request_counts
   end
 
+  # Loads count for print queue
+  def load_print_queue_count
+    safe_assign(:print_queue_pending_count, cached_count('print_queue_pending') { PrintQueueItem.pending.count })
+  end
+
   # Loads counts for proofs needing review
   def load_proof_review_counts
-    proofs_count = Application.where(income_proof_status: :not_reviewed)
-                              .or(Application.where(residency_proof_status: :not_reviewed))
-                              .distinct.count
+    proofs_count = cached_count('proofs_needing_review') do
+      Application.where(income_proof_status: :not_reviewed)
+                 .or(Application.where(residency_proof_status: :not_reviewed))
+                 .distinct.count
+    end
 
     safe_assign(:proofs_needing_review_count, proofs_count)
   end
 
   # Loads counts for medical certifications needing review
   def load_certification_review_counts
-    medical_count = Application.where.not(status: %i[rejected archived])
-                               .where(medical_certification_status: :received)
-                               .count
+    medical_count = cached_count('medical_certs_to_review') do
+      Application.where.not(status: %i[rejected archived])
+                 .where(medical_certification_status: :received)
+                 .count
+    end
 
     # Count applications with digitally signed certifications needing admin review
-    digitally_signed_count = Application.where(document_signing_status: :signed)
-                                        .where.not(medical_certification_status: :approved)
-                                        .count
+    digitally_signed_count = cached_count('digitally_signed_needs_review') do
+      Application.where(document_signing_status: :signed)
+                 .where.not(medical_certification_status: :approved)
+                 .count
+    end
 
     safe_assign(:medical_certs_to_review_count, medical_count)
     safe_assign(:digitally_signed_needs_review_count, digitally_signed_count)
@@ -67,7 +79,7 @@ module DashboardMetricsLoading
 
   # Loads training request counts with fallback logic
   def load_training_request_counts
-    training_count = calculate_training_requests_count
+    training_count = cached_count('training_requests') { calculate_training_requests_count }
     safe_assign(:training_requests_count, training_count)
   end
 
@@ -266,6 +278,11 @@ module DashboardMetricsLoading
     instance_variable_set("@#{var_name}", 0) # Default to 0 for numeric values
   end
 
+  # Caches count queries to reduce database load
+  def cached_count(key, expires_in: 5.minutes, &)
+    Rails.cache.fetch("dashboard_metrics_#{key}", expires_in: expires_in, &)
+  end
+
   # Keys to exclude when loading reporting service data to avoid duplication
   def excluded_reporting_keys
     %w[open_applications_count pending_services_count]
@@ -279,6 +296,7 @@ module DashboardMetricsLoading
     safe_assign(:medical_certs_to_review_count, 0)
     safe_assign(:digitally_signed_needs_review_count, 0)
     safe_assign(:training_requests_count, 0)
+    safe_assign(:print_queue_pending_count, 0)
     safe_assign(:current_fiscal_year, current_fiscal_year)
     safe_assign(:total_users_count, 0)
     safe_assign(:ytd_constituents_count, 0)

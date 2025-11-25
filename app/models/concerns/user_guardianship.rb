@@ -52,11 +52,11 @@ module UserGuardianship
 
   # Guardian/dependent helper methods
   def guardian?
-    guardian_relationships_as_guardian.exists?
+    guardian_relationships_as_guardian.any?
   end
 
   def dependent?
-    guardian_relationships_as_dependent.exists?
+    guardian_relationships_as_dependent.any?
   end
 
   # Returns all applications for dependents of this guardian user
@@ -116,9 +116,13 @@ module UserGuardianship
   def guardian_for_contact
     return nil unless dependent?
 
-    @guardian_for_contact ||= guardian_relationships_as_dependent
-                              .joins(:guardian_user)
-                              .first&.guardian_user
+    @guardian_for_contact ||= if guardian_relationships_as_dependent.loaded?
+                                guardian_relationships_as_dependent.find { |rel| rel.guardian_user }&.guardian_user
+                              else
+                                guardian_relationships_as_dependent
+                                  .joins(:guardian_user)
+                                  .first&.guardian_user
+                              end
   end
 
   # Authorization methods - consistent with Application model pattern
