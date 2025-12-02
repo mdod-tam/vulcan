@@ -1,4 +1,9 @@
-# PostgreSQL configuration with Solid Queue best practices
+# PostgreSQL configuration for Rails 8 with Solid Queue
+#
+# Connection pool sizing:
+# - Primary: RAILS_MAX_THREADS (default 10)
+# - Queue: SOLID_QUEUE_POOL_SIZE (default 10, needs threads + 2 for polling/heartbeat)
+
 common: &common
   adapter: postgresql
   encoding: unicode
@@ -6,8 +11,6 @@ common: &common
   timeout: 5000
   connect_timeout: 10
   checkout_timeout: 30
-  prepared_statements: false
-  advisory_locks: false
   <% if ENV["DATABASE_PASSWORD"].to_s.strip != "" %>
   password: <%= ENV["DATABASE_PASSWORD"] %>
   <% end %>
@@ -22,10 +25,9 @@ development:
     gssencmode: disable  # Disable GSSAPI to prevent macOS fork crashes
   queue:
     <<: *primary_development
-    database: mat_vulcan_queue_development  # Separate database
-    migrations_paths: db/queue_migrate      # Required by Solid Queue
+    database: mat_vulcan_queue_development  # Separate database for Solid Queue
+    migrations_paths: db/queue_migrate
     pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
-  # Add cable if using Action Cable/Turbo Streams
   cable:
     <<: *primary_development
     database: mat_vulcan_cable_development
@@ -37,12 +39,12 @@ test:
     database: mat_vulcan_test
     host: localhost
     port: 5432
-    gssencmode: disable
     username: <%= ENV.fetch("DATABASE_USERNAME", "postgres") %>
+    gssencmode: disable  # Disable GSSAPI to prevent macOS fork crashes
   queue:
     <<: *primary_test
-    database: mat_vulcan_queue_test        # Separate database
-    migrations_paths: db/queue_migrate      # Required by Solid Queue
+    database: mat_vulcan_queue_test
+    migrations_paths: db/queue_migrate
     pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
   cable:
     <<: *primary_test
@@ -56,8 +58,8 @@ production:
     pool: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
   queue:
     <<: *primary_production
-    url: <%= ENV['QUEUE_DATABASE_URL'] || ENV['DATABASE_URL'] %>  # Allow separate URL
-    migrations_paths: db/queue_migrate      # Required by Solid Queue
+    url: <%= ENV['QUEUE_DATABASE_URL'] || ENV['DATABASE_URL'] %>
+    migrations_paths: db/queue_migrate
     pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
   cache:
     <<: *primary_production

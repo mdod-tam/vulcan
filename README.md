@@ -81,7 +81,7 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 ## Architecture
 
 - **Service-Oriented**: Business logic lives in service objects (e.g., `ProofAttachmentService`, `Applications::PaperApplicationService`).
-- **Stimulus + JS Services**: Centralized `rails_request`, chart config, and target-safety mixin; Rails flash for in-app messages.
+- **Stimulus + JS Services**: Centralized `rails_request` and chart config services; Rails flash for in-app messages.
 - **CurrentAttributes**: Request context (e.g., `paper_context`) without polluting models/controllers.
 - **Audit Dedup**: `Applications::EventDeduplicationService` powers clean timelines.
 - **Testing**: Minitest with helpers for auth, Current, and attachments.

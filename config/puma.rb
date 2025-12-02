@@ -43,7 +43,9 @@ persistent_timeout(95)
 enable_keep_alives(false) if respond_to?(:enable_keep_alives)
 
 rackup      DefaultRackup if defined?(DefaultRackup)
-environment ENV['RACK_ENV'] || 'development'
+
+# fallback to RACK_ENV
+environment ENV.fetch('RAILS_ENV') { ENV.fetch('RACK_ENV', 'development') }
 
 # Solid Queue needs database connection in worker processes
 on_worker_boot do
