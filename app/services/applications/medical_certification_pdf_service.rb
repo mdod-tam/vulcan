@@ -9,7 +9,7 @@ module Applications
 
     # @param application [Application]
     # @param actor [User] The admin triggering the action
-    # @param pdf_source [Hash] Optional: { type: :pregenerated, io: <IO|String|Pathname> } or { type: :generated }
+    # @param pdf_source [Hash] Optional: { type: :pregenerated, source: <IO|String|Pathname> } or { type: :generated }
     def initialize(application:, actor: nil, pdf_source: { type: :generated })
       super()
       @application = application
@@ -54,7 +54,7 @@ module Applications
       type = (pdf_source[:type] || :generated).to_sym
       case type
       when :pregenerated
-        load_pregenerated_pdf(pdf_source[:io]) || generate_pdf
+        load_pregenerated_pdf(pdf_source[:source]) || generate_pdf
       else
         generate_pdf
       end

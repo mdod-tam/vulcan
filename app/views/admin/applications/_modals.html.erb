@@ -1,5 +1,5 @@
 <%# Locals for common values and rejection strings %>
-<% time_query    = "&t=#{Time.now.to_i}" %>
+<% time_query    = "&t=#{Time.current.to_i}" %>
 <% proof_files   = { income: @application.income_proof,
                      residency: @application.residency_proof,
                      medical: @application.medical_certification } %>
@@ -95,12 +95,8 @@ end
     { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?" },
     { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Medical Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this medical certification?" }
   ].each do |cfg| %>
-    <div id="<%= cfg[:id] %>" class="fixed inset-0 hidden" data-modal-target="container" role="dialog" aria-modal="true" aria-labelledby="<%= cfg[:id] %>-heading">
-      <!-- Backdrop -->
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75" data-modal-target="overlay"></div>
-      <!-- Modal Container -->
-      <div class="fixed inset-0 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-6 max-w-3xl w-full relative">
+    <dialog id="<%= cfg[:id] %>" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-controller="modal" data-action="click->modal#clickOutside" aria-labelledby="<%= cfg[:id] %>-heading">
+      <div class="p-6">
           <h3 id="<%= cfg[:id] %>-heading" class="text-lg font-medium text-gray-900 mb-4"><%= cfg[:title] %></h3>
 
           <%# Guardian Alert (only for income/residency) %>
@@ -199,14 +195,13 @@ end
               Close
             </button>
           </div>
-        </div>
       </div>
-    </div>
+    </dialog>
   <% end %>
 
   <!-- Rejection Modal for Proof Reviews -->
-  <div id="proofRejectionModal" class="fixed inset-0 hidden" data-modal-target="container" data-controller="rejection-form"
-       role="dialog" aria-modal="true" aria-labelledby="proofRejectionModal-heading"
+  <dialog id="proofRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form" data-action="click->modal#clickOutside"
+       aria-labelledby="proofRejectionModal-heading"
        data-rejection-form-address-mismatch-income-value="<%= address_mismatch_income %>"
        data-rejection-form-address-mismatch-residency-value="<%= address_mismatch_residency %>"
        data-rejection-form-expired-income-value="<%= expired_income %>"
@@ -218,11 +213,7 @@ end
        data-rejection-form-missing-amount-income-value="<%= missing_amount_income %>"
        data-rejection-form-exceeds-threshold-income-value="<%= exceeds_threshold_income %>"
        data-rejection-form-outdated-ss-award-income-value="<%= outdated_ss_award_income %>">
-    <!-- Backdrop -->
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75" data-modal-target="overlay"></div>
-    <!-- Modal Container -->
-    <div class="fixed inset-0 flex items-center justify-center">
-      <div class="bg-white rounded-lg p-6 max-w-lg w-full relative">
+    <div class="p-6">
         <h3 id="proofRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Rejection Reason</h3>
         <div class="mb-4">
           <p class="text-sm font-medium text-gray-700 mb-1">Predefined Rejection Reasons:</p>
@@ -317,24 +308,19 @@ end
                 class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700" %>
           </div>
         <% end %>
-      </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- Medical Certification Rejection Modal -->
-  <div id="medicalCertificationRejectionModal" class="fixed inset-0 hidden" data-modal-target="container" data-controller="rejection-form"
-       role="dialog" aria-modal="true" aria-labelledby="medicalCertificationRejectionModal-heading"
+  <dialog id="medicalCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form" data-action="click->modal#clickOutside"
+       aria-labelledby="medicalCertificationRejectionModal-heading"
        data-rejection-form-missing-provider-credentials-value="<%= missing_provider_credentials %>"
        data-rejection-form-incomplete-disability-documentation-value="<%= incomplete_disability_documentation %>"
        data-rejection-form-outdated-certification-value="<%= outdated_certification %>"
        data-rejection-form-missing-signature-value="<%= missing_signature %>"
        data-rejection-form-missing-functional-limitations-value="<%= missing_functional_limitations %>"
        data-rejection-form-incorrect-form-used-value="<%= incorrect_form_used %>">
-    <!-- Backdrop -->
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75" data-modal-target="overlay"></div>
-    <!-- Modal Container -->
-    <div class="fixed inset-0 flex items-center justify-center">
-      <div class="bg-white rounded-lg p-6 max-w-lg w-full relative">
+    <div class="p-6">
         <h3 id="medicalCertificationRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Medical Certification Rejection Reason</h3>
         <div class="mb-4">
           <p class="text-sm font-medium text-gray-700 mb-1">Predefined Rejection Reasons:</p>
@@ -422,7 +408,6 @@ end
                 class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700" %>
           </div>
         <% end %>
-      </div>
     </div>
-  </div>
+  </dialog>
 </div>

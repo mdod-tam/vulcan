@@ -74,7 +74,8 @@ module ConstituentPortal
 
       # Verify the page loaded successfully
       assert_response :success
-      assert_select 'h1', 'New Application'
+      # The new UI shows the user's name in the title
+      assert_select 'h1', /New Application for/
     end
 
     # Test creating a draft application
@@ -390,7 +391,8 @@ module ConstituentPortal
 
       # Verify the page shows the filenames
       assert_response :success
-      assert_select 'p', /Filename:/
+      # The view uses <span> elements for filename labels, not <p>
+      assert_select 'span', /Filename:/
     end
 
     # Test FPL helper methods provide correct server-rendered data

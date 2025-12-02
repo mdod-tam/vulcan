@@ -115,23 +115,24 @@ module Webhooks
         )
       when 'rejected'
         # Allow resubmission: attach and move back to received for review
-        attach_signed_pdf(app, data)
-        app.update!(
+        # Only update medical_certification_status if attachment succeeds
+        attachment_succeeded = attach_signed_pdf(app, data)
+        update_attrs = {
           document_signing_status: :signed,
-          document_signing_signed_at: Time.current,
-          medical_certification_status: :received
-        )
+          document_signing_signed_at: Time.current
+        }
+        update_attrs[:medical_certification_status] = :received if attachment_succeeded
+        app.update!(update_attrs)
       else
         # requested/received/not_requested → attach and mark as received (admin will review)
-        attach_signed_pdf(app, data)
-        medical_status_update = {}
-        medical_status_update[:medical_certification_status] = :received unless current_status == 'received'
-        app.update!(
-          {
-            document_signing_status: :signed,
-            document_signing_signed_at: Time.current
-          }.merge(medical_status_update)
-        )
+        # Only update medical_certification_status if attachment succeeds
+        attachment_succeeded = attach_signed_pdf(app, data)
+        update_attrs = {
+          document_signing_status: :signed,
+          document_signing_signed_at: Time.current
+        }
+        update_attrs[:medical_certification_status] = :received if attachment_succeeded && current_status != 'received'
+        app.update!(update_attrs)
       end
 
       AuditEventService.log(
@@ -165,20 +166,26 @@ module Webhooks
       )
     end
 
+    # Attempts to download and attach the signed PDF from DocuSeal.
+    # Returns true on success (including idempotent skip), false on failure.
     def attach_signed_pdf(app, data)
       documents = data['documents'] || []
       url = documents.first && documents.first['url']
 
       unless url.present?
         Rails.logger.warn "DocuSeal webhook: missing document URL. Available keys: #{data.keys.join(', ')}"
-        return
+        log_attachment_failure(app, 'missing_document_url', 'No document URL provided in webhook payload')
+        return false
       end
 
-      # Idempotency: skip if same URL already stored
-      return if app.document_signing_document_url == url
+      # Idempotency: skip if same URL already stored (consider this a success)
+      return true if app.document_signing_document_url == url
 
       response = HTTP.timeout(30).get(url)
-      return unless response.status.success?
+      unless response.status.success?
+        log_attachment_failure(app, 'download_failed', "HTTP #{response.status.code}")
+        return false
+      end
 
       blob = ActiveStorage::Blob.create_and_upload!(
         io: StringIO.new(response.body.to_s),
@@ -191,9 +198,27 @@ module Webhooks
         document_signing_audit_url: data['audit_log_url'],
         document_signing_document_url: url
       )
+      true
     rescue StandardError => e
       Rails.logger.error "Document signing download/attach failed for App ##{app.id}: #{e.message}"
       Rails.logger.error "Payload data keys: #{data.keys.join(', ')}" if data.respond_to?(:keys)
+      log_attachment_failure(app, 'exception', e.message)
+      false
+    end
+
+    def log_attachment_failure(app, reason, details)
+      AuditEventService.log(
+        action: 'document_signing_attachment_failed',
+        actor: User.system_user,
+        auditable: app,
+        metadata: {
+          document_signing_service: 'docuseal',
+          document_signing_submission_id: app.document_signing_submission_id,
+          failure_reason: reason,
+          failure_details: details,
+          failed_at: Time.current.iso8601
+        }
+      )
     end
   end
 end

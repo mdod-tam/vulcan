@@ -366,61 +366,12 @@ module Admin
     # Returns a server-rendered list of a guardian's dependents with eligibility metadata
     def dependents
       @guardian = User.find(params[:id])
-
-      dependents = @guardian.dependents
       waiting_period_years = Policy.get('waiting_period_years') || 3
-
-      @dependents = dependents.map do |dep|
-        last_app = dep.applications.order(application_date: :desc).first
-        has_active_app = dep.applications.where.not(status: :archived).exists?
-        eligible_date = last_app ? (last_app.application_date + waiting_period_years.years) : Time.current
-        eligible_now = !has_active_app && eligible_date <= Time.current
-
-        relationship_types = begin
-          @guardian.relationship_types_for_dependent(dep)
-        rescue StandardError
-          []
-        end
-
-        DependentSummary.new(
-          id: dep.id,
-          name: dep.full_name,
-          date_of_birth: dep.date_of_birth,
-          city: dep.city,
-          state: dep.state,
-          last_app: last_app,
-          last_app_status: last_app&.status,
-          last_app_date: last_app&.application_date,
-          has_active_app: has_active_app,
-          eligible_date: eligible_date,
-          eligible_now: eligible_now,
-          relationship_types: relationship_types
-        )
-      end
+      @dependents = build_dependent_summaries(@guardian, waiting_period_years)
 
       respond_to do |format|
         format.html { render 'admin/users/dependents' }
-        format.json do
-          render json: {
-            guardian_id: @guardian.id,
-            waiting_period_years: waiting_period_years,
-            dependents: @dependents.map do |d|
-              {
-                id: d.id,
-                name: d.name,
-                date_of_birth: d.date_of_birth,
-                city: d.city,
-                state: d.state,
-                last_app_status: d.last_app_status,
-                last_app_date: d.last_app_date,
-                has_active_app: d.has_active_app,
-                eligible_date: d.eligible_date,
-                eligible_now: d.eligible_now,
-                relationship_types: d.relationship_types
-              }
-            end
-          }
-        end
+        format.json { render json: dependents_json_response(@guardian, waiting_period_years) }
       end
     rescue ActiveRecord::RecordNotFound
       @guardian = nil
@@ -445,6 +396,7 @@ module Admin
           success: true,
           application_id: last_app.id,
           application_date: last_app.application_date,
+          applicant_name: last_app.user&.full_name,
           household_size: last_app.household_size,
           annual_income: last_app.annual_income,
           maryland_resident: last_app.maryland_resident,
@@ -459,6 +411,45 @@ module Admin
     end
 
     private
+
+    # Build DependentSummary objects for a guardian's dependents
+    def build_dependent_summaries(guardian, waiting_period_years)
+      guardian.dependents.map do |dep|
+        last_app = dep.applications.order(application_date: :desc).first
+        has_active_app = dep.applications.where.not(status: %i[archived rejected]).exists?
+        eligible_date = last_app ? (last_app.application_date + waiting_period_years.years) : Time.current
+        eligible_now = !has_active_app && eligible_date <= Time.current
+        relationship_types = guardian.relationship_types_for_dependent(dep) rescue [] # rubocop:disable Style/RescueModifier
+
+        DependentSummary.new(
+          id: dep.id, name: dep.full_name, date_of_birth: dep.date_of_birth,
+          city: dep.city, state: dep.state, last_app: last_app,
+          last_app_status: last_app&.status, last_app_date: last_app&.application_date,
+          has_active_app: has_active_app, eligible_date: eligible_date,
+          eligible_now: eligible_now, relationship_types: relationship_types
+        )
+      end
+    end
+
+    # Build JSON response hash for dependents endpoint
+    def dependents_json_response(guardian, waiting_period_years)
+      {
+        guardian_id: guardian.id,
+        waiting_period_years: waiting_period_years,
+        dependents: @dependents.map { |d| dependent_summary_to_hash(d) }
+      }
+    end
+
+    # Convert DependentSummary to hash for JSON serialization
+    def dependent_summary_to_hash(d)
+      {
+        id: d.id, name: d.name, date_of_birth: d.date_of_birth,
+        city: d.city, state: d.state, last_app_status: d.last_app_status,
+        last_app_date: d.last_app_date, has_active_app: d.has_active_app,
+        eligible_date: d.eligible_date, eligible_now: d.eligible_now,
+        relationship_types: d.relationship_types
+      }
+    end
 
     # Build search query based on search parameters
     def build_search_query

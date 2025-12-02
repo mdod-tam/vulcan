@@ -6,7 +6,8 @@ module Admin
       return nil unless application.medical_certification.attached?
 
       host = if Rails.env.production?
-               MatVulcan::Application::PRODUCTION_HOST
+               # Fail fast if APPLICATION_HOST is not configured in production
+               ENV.fetch('APPLICATION_HOST')
              else
                # For non-production environments, use request.host if available
                Rails.application.routes.default_url_options[:host] || (defined?(request) && request.host)
@@ -103,18 +104,18 @@ module Admin
         latest_review = application.proof_reviews.where(proof_type: proof_type, status: 'rejected').order(created_at: :desc).first
         if latest_review
           content_tag(:div) do
-            "Rejected on #{latest_review.created_at.strftime('%B %d, %Y')} " \
-            "by #{latest_review.admin&.email || 'Unknown'}"
-              .html_safe +
-              content_tag(:div, class: 'mt-2') do
-                link_to 'Review Again',
-                        'javascript:;',
-                        class: 'btn btn-primary btn-sm',
-                        data: {
-                          toggle: 'modal',
-                          target: "##{proof_type}ProofReviewModal"
-                        }
-              end
+            safe_join([
+                        "Rejected on #{latest_review.created_at.strftime('%B %d, %Y')} by #{latest_review.admin&.email || 'Unknown'}",
+                        content_tag(:div, class: 'mt-2') do
+                          link_to 'Review Again',
+                                  'javascript:;',
+                                  class: 'btn btn-primary btn-sm',
+                                  data: {
+                                    toggle: 'modal',
+                                    target: "##{proof_type}ProofReviewModal"
+                                  }
+                        end
+                      ])
           end
         else
           content_tag(:span, 'Rejected',
@@ -135,15 +136,49 @@ module Admin
       end
     end
 
-    # Get proof history in chronological order with deduplication
+    # Get proof history in chronological order (oldest first) with deduplication
     def get_chronological_proof_history(application, proof_type)
-      # Use the ConstituentPortal::Activity class to get deduplicated, chronological events
-      all_activities = ConstituentPortal::Activity.from_events(application)
+      ConstituentPortal::Activity
+        .from_events(application)
+        .select { |activity| activity.proof_type.to_s == proof_type.to_s }
+    end
 
-      # Filter to only activities for the specified proof type
-      all_activities.select { |activity| activity.proof_type.to_s == proof_type.to_s }
+    def calculate_percentage(count, total)
+      return 0 unless total.positive?
 
-      # Return in oldest-first order (already chronological from the from_events method)
+      number_to_percentage((count.to_f / total) * 100, precision: 1)
+    end
+
+    def application_status_options
+      Application.statuses.keys.map { |s| [s.titleize, s] }
+    end
+
+    def application_type_options
+      Application.application_types.keys.map { |s| [s.titleize, s] }
+    end
+
+    def submission_method_options
+      Application.submission_methods.keys.map { |s| [s.titleize, s] }
+    end
+
+    def docuseal_button_text(application)
+      case application.document_signing_status
+      when 'not_sent', nil
+        'Send DocuSeal Request (Default)'
+      when 'sent', 'opened'
+        days_since = application.document_signing_requested_at ? (Time.current - application.document_signing_requested_at) / 1.day : 0
+        "Resend DocuSeal (#{days_since.round} days since sent)"
+      when 'declined'
+        'Resend DocuSeal (Provider Declined)'
+      else
+        'Send DocuSeal Request'
+      end
+    end
+
+    def show_medical_certification_request_buttons?(application)
+      application.medical_certification_status == 'not_requested' ||
+        application.medical_certification_status == 'rejected' ||
+        (application.medical_certification_status == 'requested' && !application.medical_certification.attached?)
     end
   end
 end

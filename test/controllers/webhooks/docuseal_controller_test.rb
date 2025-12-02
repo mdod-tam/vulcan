@@ -296,10 +296,67 @@ module Webhooks
       make_signed_webhook_request(@completed_payload)
       assert_response :ok
 
-      # Status should still be updated even if file attachment fails
+      @application.reload
+      # document_signing_status should still be updated (signing completed in DocuSeal)
+      assert_equal 'signed', @application.document_signing_status
+      # medical_certification_status should NOT be updated since attachment failed
+      assert_equal 'requested', @application.medical_certification_status
+      assert_not @application.medical_certification.attached?
+
+      # Verify failure was logged as audit event
+      event = Event.where(action: 'document_signing_attachment_failed').last
+      assert_not_nil event
+      assert_equal @application, event.auditable
+      assert_equal 'exception', event.metadata['failure_reason']
+    end
+
+    test 'does not update medical status when HTTP download returns error status' do
+      @application.update!(medical_certification_status: :requested)
+      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+
+      # Mock HTTP download returning error status
+      mock_response = mock('http_response')
+      mock_response.stubs(:status).returns(mock('status'))
+      mock_response.status.stubs(:success?).returns(false)
+      mock_response.status.stubs(:code).returns(404)
+      HTTP.stubs(:timeout).returns(HTTP)
+      HTTP.stubs(:get).returns(mock_response)
+
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+
       @application.reload
       assert_equal 'signed', @application.document_signing_status
+      # Should remain :requested since attachment failed
+      assert_equal 'requested', @application.medical_certification_status
       assert_not @application.medical_certification.attached?
+
+      # Verify failure was logged
+      event = Event.where(action: 'document_signing_attachment_failed').last
+      assert_not_nil event
+      assert_equal 'download_failed', event.metadata['failure_reason']
+    end
+
+    test 'does not update medical status when document URL is missing' do
+      @application.update!(medical_certification_status: :requested)
+      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+
+      # Payload without documents
+      payload_without_docs = @completed_payload.deep_dup
+      payload_without_docs[:data].delete('documents')
+
+      make_signed_webhook_request(payload_without_docs)
+      assert_response :ok
+
+      @application.reload
+      assert_equal 'signed', @application.document_signing_status
+      # Should remain :requested since attachment failed
+      assert_equal 'requested', @application.medical_certification_status
+
+      # Verify failure was logged
+      event = Event.where(action: 'document_signing_attachment_failed').last
+      assert_not_nil event
+      assert_equal 'missing_document_url', event.metadata['failure_reason']
     end
   end
 end

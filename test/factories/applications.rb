@@ -31,6 +31,20 @@ FactoryBot.define do
     end
 
     # Simple traits for different application states
+    trait :draft do
+      status { :draft }
+    end
+
+    trait :in_progress do
+      status { :in_progress }
+    end
+
+    trait :approved do
+      status { :approved }
+      income_proof_status { :approved }
+      residency_proof_status { :approved }
+    end
+
     trait :completed do
       status { :approved }
       income_proof_status { :approved }

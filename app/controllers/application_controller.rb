@@ -18,7 +18,8 @@ class ApplicationController < ActionController::Base
 
   def default_url_options
     if Rails.env.production?
-      { host: MatVulcan::Application::PRODUCTION_HOST }
+      # Fail fast if APPLICATION_HOST is not configured in production
+      { host: ENV.fetch('APPLICATION_HOST'), protocol: 'https' }
     else
       {}
     end

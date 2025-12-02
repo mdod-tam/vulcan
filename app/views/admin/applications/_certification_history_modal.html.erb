@@ -1,11 +1,7 @@
 <!-- Certification History Modal -->
-<div id="viewCertificationHistoryModal" class="fixed inset-0 hidden" data-modal-target="container">
-  <!-- Backdrop -->
-  <div class="fixed inset-0 bg-gray-500 bg-opacity-75" data-modal-target="overlay"></div>
-  <!-- Modal Container -->
-  <div class="fixed inset-0 flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 max-w-3xl w-full relative">
-      <h3 class="text-lg font-medium text-gray-900 mb-4">Medical Certification Request History</h3>
+<dialog id="viewCertificationHistoryModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-action="click->modal#clickOutside" aria-labelledby="viewCertificationHistoryModal-heading">
+    <div class="p-6">
+      <h3 id="viewCertificationHistoryModal-heading" class="text-lg font-medium text-gray-900 mb-4">Medical Certification Request History</h3>
       <% certification_requests = Notification.where(
           notifiable: @application, 
           action: "medical_certification_requested"
@@ -21,7 +17,7 @@
                 timestamp = nil
                 if request.metadata.present? && request.metadata.is_a?(Hash) && request.metadata['timestamp'].present?
                   begin
-                    timestamp = Time.parse(request.metadata['timestamp'])
+                    timestamp = Time.zone.parse(request.metadata['timestamp'])
                   rescue
                     timestamp = request.created_at
                   end
@@ -84,5 +80,4 @@
         </button>
       </div>
     </div>
-  </div>
-</div>
+</dialog>

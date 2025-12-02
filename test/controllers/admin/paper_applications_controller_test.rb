@@ -640,7 +640,7 @@ module Admin
         phone: '555-123-4567',
         household_size: '2',
         annual_income: '100000',
-        notification_method: 'email',
+        communication_preference: 'email',
         additional_notes: 'Income exceeds threshold'
       }
 
@@ -656,7 +656,7 @@ module Admin
         phone: '555-123-4567',
         household_size: '2',
         annual_income: '100000',
-        notification_method: 'letter',
+        communication_preference: 'letter',
         additional_notes: 'Income exceeds threshold'
       }
 

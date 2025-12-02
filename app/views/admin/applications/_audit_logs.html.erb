@@ -113,12 +113,12 @@
                         provider_text = provider.present? ? " from #{provider}" : ""
                         "Medical certification requested#{provider_text}"
                       when [_, "received"]
-                        received_at = log.metadata['received_at'].present? ? Time.parse(log.metadata['received_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
+                        received_at = log.metadata['received_at'].present? ? Time.zone.parse(log.metadata['received_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
                         timestamp_text = received_at.present? ? " on #{received_at}" : ""
                         "Medical certification received (via #{method})#{timestamp_text}"
                       when [_, "accepted"]
-                        received_at = log.metadata['received_at'].present? ? Time.parse(log.metadata['received_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
-                        processed_at = log.metadata['processed_at'].present? ? Time.parse(log.metadata['processed_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
+                        received_at = log.metadata['received_at'].present? ? Time.zone.parse(log.metadata['received_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
+                        processed_at = log.metadata['processed_at'].present? ? Time.zone.parse(log.metadata['processed_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
                         
                         # If both timestamps exist and are different, show both
                         if received_at.present? && processed_at.present? && received_at != processed_at

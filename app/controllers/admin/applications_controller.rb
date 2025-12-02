@@ -179,16 +179,20 @@ module Admin
 
       # TurboStreamResponseHandling concern: Handles both HTML and Turbo Stream responses uniformly
       # Flow: handle_success_response -> responds with redirect for HTML or turbo streams for AJAX
-      # For Turbo Streams: updates specified elements and removes modals
+      # For Turbo Streams, updates specified elements and removes open modals
       # For HTML: redirects with notice message
+      #
+      # NOTE: Native <dialog> elements can maintain their open state even when HTML is replaced,
+      # so we must explicitly remove the modals via turbo_stream.remove() before replacing them.
       handle_success_response(
         html_redirect_path: admin_application_path(@application),
         html_message: message,
         turbo_updates: {
           'attachments-section' => 'attachments',      # Updates attachment display
-          'audit-logs' => 'audit_logs'                 # Updates audit log section
+          'audit-logs' => 'audit_logs',                # Updates audit log section
+          'modals' => 'modals'                         # Replaces modals with fresh versions
         },
-        turbo_modals_to_remove: standard_application_modals # Closes review modals
+        turbo_modals_to_remove: standard_application_modals # Explicitly close open dialogs
       )
     end
 
@@ -272,7 +276,10 @@ module Admin
       when :new_upload
         upload_new_certification(status)
       else
-        redirect_with_alert(admin_application_path(@application), 'Invalid certification update type')
+        handle_error_response(
+          error_message: 'Invalid certification update type',
+          html_redirect_path: admin_application_path(@application)
+        )
       end
     end
 
@@ -285,9 +292,12 @@ module Admin
       )
 
       if result.success?
-        redirect_with_notice(admin_application_path(@application), 'Medical certification rejected and provider notified.')
+        handle_successful_certification_update('Medical certification rejected and provider notified.')
       else
-        redirect_with_alert(admin_application_path(@application), "Failed to reject certification: #{result.message}")
+        handle_error_response(
+          error_message: "Failed to reject certification: #{result.message}",
+          html_redirect_path: admin_application_path(@application)
+        )
       end
     end
 
@@ -305,7 +315,10 @@ module Admin
       if result[:success]
         handle_successful_status_update(status)
       else
-        redirect_with_alert(admin_application_path(@application), "Failed to update certification status: #{result[:error]&.message}")
+        handle_error_response(
+          error_message: "Failed to update certification status: #{result[:error]&.message}",
+          html_redirect_path: admin_application_path(@application)
+        )
       end
     end
 
@@ -322,21 +335,38 @@ module Admin
       if success
         handle_successful_status_update(status)
       else
-        redirect_with_alert(admin_application_path(@application), 'Failed to update certification status.')
+        handle_error_response(
+          error_message: 'Failed to update certification status.',
+          html_redirect_path: admin_application_path(@application)
+        )
       end
     end
 
-    # Handles successful status updates
+    # Handles successful certification status updates using Turbo
     def handle_successful_status_update(_status)
       # The model's after_save :auto_approve_if_eligible callback handles the approval logic
       @application.reload # Ensure we have the latest status after callbacks
-      if @application.status_approved?
-        # If the callback auto-approved it, show that message
-        redirect_with_notice(admin_application_path(@application), 'Medical certification status updated and application auto-approved.')
-      else
-        # Otherwise, just show the certification status update message
-        redirect_with_notice(admin_application_path(@application), 'Medical certification status updated.')
-      end
+
+      message = if @application.status_approved?
+                  'Medical certification status updated and application auto-approved.'
+                else
+                  'Medical certification status updated.'
+                end
+
+      handle_successful_certification_update(message)
+    end
+
+    # Handler for successful certification updates (approval or rejection) via Turbo
+    def handle_successful_certification_update(message)
+      handle_success_response(
+        html_redirect_path: admin_application_path(@application),
+        html_message: message,
+        turbo_updates: {
+          'medical-certification-section' => 'medical_certification_section',
+          'audit-logs' => 'audit_logs',
+          'modals' => 'modals'
+        }
+      )
     end
 
     def resend_medical_certification
@@ -388,7 +418,7 @@ module Admin
     def queue_medical_certification_form
       pregenerated_path = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
       pdf_source = if File.exist?(pregenerated_path)
-                     { type: :pregenerated, io: pregenerated_path }
+                     { type: :pregenerated, source: pregenerated_path }
                    else
                      { type: :generated }
                    end

@@ -16,7 +16,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div>
         <%= form.label :status, class: "block text-sm font-medium text-gray-700" %>
-        <%= form.select :status, Application.statuses.keys.map { |s| [s.titleize, s] }, {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+        <%= form.select :status, application_status_options, {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
       </div>
 
       <div>
@@ -36,12 +36,12 @@
 
       <div>
         <%= form.label :application_type, class: "block text-sm font-medium text-gray-700" %>
-        <%= form.select :application_type, options_for_select(Application.application_types.keys.map { |s| [s.titleize, s] }, @application.application_type), {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+        <%= form.select :application_type, options_for_select(application_type_options, @application.application_type), {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
       </div>
 
       <div>
         <%= form.label :submission_method, class: "block text-sm font-medium text-gray-700" %>
-        <%= form.select :submission_method, options_for_select(Application.submission_methods.keys.map { |s| [s.titleize, s] }, @application.submission_method), {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+        <%= form.select :submission_method, options_for_select(submission_method_options, @application.submission_method), {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
       </div>
     </div>
 
@@ -86,8 +86,8 @@
     </fieldset>
 
     <div class="flex justify-end space-x-3">
-      <%= link_to "Cancel", admin_application_path(@application), class: "px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" %>
-      <%= form.submit "Update Application", class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700" %>
+      <%= link_to "Cancel", admin_application_path(@application), class: "px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+      <%= form.submit "Update Application", class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
     </div>
   <% end %>
 </div>

@@ -5,6 +5,8 @@ module Admin
     include ParamCasting
     include TurboStreamResponseHandling
 
+    before_action :cast_complex_boolean_params, only: %i[create update]
+
     USER_BASE_FIELDS = %i[
       first_name last_name email phone phone_type
       physical_address_1 physical_address_2 city state zip_code
@@ -156,8 +158,12 @@ module Admin
       # Log the rejection event (no application to reference)
       log_income_threshold_rejection(constituent_params, notification_params)
 
-      redirect_to admin_applications_path,
-                  notice: 'Application rejected due to income threshold. Rejection notification has been sent.'
+      handle_success_response(
+        html_redirect_path: admin_applications_path,
+        html_message: 'Application rejected due to income threshold. Rejection notification has been sent.',
+        turbo_message: 'Application rejected due to income threshold. Rejection notification has been sent.',
+        turbo_redirect_path: admin_applications_path
+      )
     end
 
     def send_rejection_notification
@@ -165,13 +171,17 @@ module Admin
       constituent_params = build_constituent_params_for_notification
       notification_params = build_notification_params
 
-      notification_method = params[:notification_method]
+      notification_method = params[:communication_preference]
 
       if notification_method == 'letter'
         # For letter notifications, queue for printing
         # This would integrate with a print queue system
-        redirect_to admin_applications_path,
-                    notice: 'Rejection letter has been queued for printing'
+        handle_success_response(
+          html_redirect_path: admin_applications_path,
+          html_message: 'Rejection letter has been queued for printing',
+          turbo_message: 'Rejection letter has been queued for printing',
+          turbo_redirect_path: admin_applications_path
+        )
       else
         # For email notifications, send immediately
         ApplicationNotificationsMailer.income_threshold_exceeded(
@@ -179,8 +189,12 @@ module Admin
           notification_params
         ).deliver_later
 
-        redirect_to admin_applications_path,
-                    notice: 'Rejection notification has been sent'
+        handle_success_response(
+          html_redirect_path: admin_applications_path,
+          html_message: 'Rejection notification has been sent',
+          turbo_message: 'Rejection notification has been sent',
+          turbo_redirect_path: admin_applications_path
+        )
       end
     end
 
@@ -327,9 +341,11 @@ module Admin
     end
 
     def compute_applicant_type(permitted)
-      explicit = permitted[:applicant_type].presence
-      inferred = inferred_dependent_application_from(permitted) ? 'dependent' : explicit
-      explicit && !inferred_dependent_application_from(permitted) ? explicit : inferred
+      # Dependent indicators (guardian + constituent data) take precedence
+      return 'dependent' if inferred_dependent_application_from(permitted)
+
+      # Use explicit value if provided, otherwise default to 'self'
+      permitted[:applicant_type].presence || 'self'
     end
 
     def apply_strategies!(service_params, permitted)
@@ -371,13 +387,13 @@ module Admin
     def merge_user_params!(service_params, permitted, disability_attrs)
       if service_params[:applicant_type] == 'dependent'
         constituent_attrs = (permitted[:constituent] || {}).dup
-        service_params[:constituent] = constituent_attrs.merge(disability_attrs)
+        service_params[:constituent] = constituent_attrs.deep_merge(disability_attrs)
         service_params[:new_guardian_attributes] = permitted[:guardian_attributes] if service_params[:guardian_id].blank? && permitted[:guardian_attributes].present?
       else
         service_params[:constituent] = if permitted.dig(:constituent, :first_name).present?
-                                         (permitted[:constituent] || {}).dup.merge(disability_attrs)
+                                         (permitted[:constituent] || {}).dup.deep_merge(disability_attrs)
                                        elsif permitted[:guardian_attributes].present?
-                                         permitted[:guardian_attributes].dup.merge(disability_attrs)
+                                         permitted[:guardian_attributes].dup.deep_merge(disability_attrs)
                                        else
                                          disability_attrs
                                        end
@@ -533,7 +549,10 @@ module Admin
     def permitted_constituent_attributes
       # For constituents (including dependents), permit all standard user fields plus dependent-specific fields
       permitted_fields = USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS
-      (params[:constituent].presence || {})
+
+      return {}.with_indifferent_access if params[:constituent].blank?
+
+      params[:constituent]
         .to_unsafe_h
         .slice(*permitted_fields)
         .with_indifferent_access
@@ -551,7 +570,9 @@ module Admin
     end
 
     def permitted_application_attributes
-      (params[:application].presence || {})
+      return {}.with_indifferent_access if params[:application].blank?
+
+      params[:application]
         .to_unsafe_h
         .slice(*APPLICATION_FIELDS)
         .with_indifferent_access

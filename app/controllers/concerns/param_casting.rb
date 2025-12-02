@@ -31,6 +31,7 @@ module ParamCasting
 
   # User disability fields (found in various nested structures)
   USER_DISABILITY_FIELDS = %w[
+    self_certify_disability
     hearing_disability
     vision_disability
     speech_disability
