@@ -1,184 +1,319 @@
-<main class="container mx-auto px-4 py-8">
-  <div class="bg-white shadow rounded-lg p-6">
-    <h1 class="text-2xl font-bold mb-4">
-      Application #<%= @application.id %>
-      <% if @application.for_dependent? %>
-        <span class="text-lg text-gray-600 font-normal">for <%= @application.user.full_name %></span>
-      <% end %>
-    </h1>
-    
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Application Details</h2>
-      <% if @application.for_dependent? %>
-        <p><strong>Application For:</strong> <%= @application.user.full_name %> (Dependent)</p>
-        <p><strong>Submitted By:</strong> <%= @application.managing_guardian.full_name %> (Guardian)</p>
-      <% else %>
-        <p><strong>Application For:</strong> <%= @application.user.full_name %></p>
-      <% end %>
-      <p><strong>Application Type:</strong> <%= @application.application_type&.titleize || "Not specified" %></p>
-      <p><strong>Submission Method:</strong> <%= @application.submission_method&.titleize || "Not specified" %></p>
-      <p><strong>Status:</strong> <%= @application.status&.titleize || "Not specified" %></p>
-      <p><strong>Application Date:</strong> <%= @application.application_date&.strftime("%B %d, %Y") || "Not specified" %></p>
-      <p><strong>Household Size:</strong> <%= @application.household_size || "Not specified" %></p>
-      <p><strong>Annual Income:</strong> <%= number_to_currency(@application.annual_income) if @application.annual_income %></p>
-    </div>
+<%# Skip Link for keyboard navigation %>
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
 
+<div class="container mx-auto px-4 py-8">
+  <div id="main-content" tabindex="-1" class="bg-white shadow rounded-lg p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900" id="page-title">
+        Application #<%= @application.id %>
+        <% if @application.for_dependent? %>
+          <span class="text-lg text-gray-700 font-normal">for <%= @application.user.full_name %></span>
+        <% end %>
+      </h1>
+    </header>
+
+    <%# Application Details Section %>
+    <section aria-labelledby="details-heading" class="mb-6 p-4 bg-gray-50 rounded">
+      <h2 id="details-heading" class="text-xl font-semibold mb-4 text-gray-900">Application Details</h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Application For</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            <%= @application.user.full_name %>
+            <% if @application.for_dependent? %>
+              <span class="text-gray-700">(Dependent)</span>
+            <% end %>
+          </dd>
+        </div>
+        <% if @application.for_dependent? %>
+          <div>
+            <dt class="text-sm font-medium text-gray-700">Submitted By</dt>
+            <dd class="mt-1 text-sm text-gray-900">
+              <%= @application.managing_guardian.full_name %>
+              <span class="text-gray-700">(Guardian)</span>
+            </dd>
+          </div>
+        <% end %>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Application Type</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @application.application_type&.titleize || "Not specified" %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Submission Method</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @application.submission_method&.titleize || "Not specified" %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Status</dt>
+          <dd class="mt-1 text-sm">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= badge_class_for(:application, @application.status) %>">
+              <%= @application.status&.titleize || "Not specified" %>
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Application Date</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @application.application_date&.strftime("%B %d, %Y") || "Not specified" %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Household Size</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @application.household_size || "Not specified" %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Annual Income</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @application.annual_income ? number_to_currency(@application.annual_income) : "Not specified" %></dd>
+        </div>
+      </dl>
+    </section>
+
+    <%# Guardian/Dependent Relationship Section %>
     <% if @application.for_dependent? %>
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Guardian/Dependent Relationship</h2>
-      <p><strong>Guardian:</strong> <%= @application.managing_guardian.full_name %></p>
-      <p><strong>Dependent:</strong> <%= @application.user.full_name %></p>
-      <% if @application.guardian_relationship_type.present? %>
-        <p><strong>Relationship:</strong> <%= @application.guardian_relationship_type %></p>
-      <% end %>
-      <p class="text-sm text-gray-600 mt-2">
-        This application was submitted by the guardian on behalf of their dependent.
-      </p>
-    </div>
+      <section aria-labelledby="relationship-heading" class="mb-6 p-4 bg-gray-50 rounded">
+        <h2 id="relationship-heading" class="text-xl font-semibold mb-4 text-gray-900">Guardian/Dependent Relationship</h2>
+        <dl class="space-y-3">
+          <div>
+            <dt class="text-sm font-medium text-gray-700">Guardian</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= @application.managing_guardian.full_name %></dd>
+          </div>
+          <div>
+            <dt class="text-sm font-medium text-gray-700">Dependent</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= @application.user.full_name %></dd>
+          </div>
+          <% if @application.guardian_relationship_type.present? %>
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Relationship</dt>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.guardian_relationship_type %></dd>
+            </div>
+          <% end %>
+        </dl>
+        <p class="text-sm text-gray-700 mt-4">
+          This application was submitted by the guardian on behalf of their dependent.
+        </p>
+      </section>
     <% end %>
 
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Alternate Contact Information</h2>
+    <%# Alternate Contact Section %>
+    <section aria-labelledby="alternate-contact-heading" class="mb-6 p-4 bg-gray-50 rounded">
+      <h2 id="alternate-contact-heading" class="text-xl font-semibold mb-4 text-gray-900">Alternate Contact Information</h2>
       <% if @application.alternate_contact_name.present? || @application.alternate_contact_phone.present? || @application.alternate_contact_email.present? %>
-        <% if @application.alternate_contact_name.present? %>
-          <p><strong>Name:</strong> <%= @application.alternate_contact_name %></p>
-        <% end %>
-        <% if @application.alternate_contact_phone.present? %>
-          <p><strong>Phone:</strong> <%= @application.alternate_contact_phone %></p>
-        <% end %>
-        <% if @application.alternate_contact_email.present? %>
-          <p><strong>Email:</strong> <%= mail_to @application.alternate_contact_email %></p>
-        <% end %>
+        <dl class="space-y-3">
+          <% if @application.alternate_contact_name.present? %>
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Name</dt>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.alternate_contact_name %></dd>
+            </div>
+          <% end %>
+          <% if @application.alternate_contact_phone.present? %>
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Phone</dt>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.alternate_contact_phone %></dd>
+            </div>
+          <% end %>
+          <% if @application.alternate_contact_email.present? %>
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Email</dt>
+              <dd class="mt-1 text-sm text-gray-900">
+                <%= mail_to @application.alternate_contact_email, @application.alternate_contact_email, 
+                    class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+              </dd>
+            </div>
+          <% end %>
+        </dl>
       <% else %>
-        <p class="text-gray-500 italic">No alternate contact information provided.</p>
+        <p class="text-sm text-gray-700 italic">No alternate contact information provided.</p>
       <% end %>
-    </div>
+    </section>
 
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Disability Information</h2>
-      <p><strong>Self-Certified Disability:</strong> <%= @application.self_certify_disability ? "Yes" : "No" %></p>
-      
-      <% if @application.user.disability_selected? %>
-        <p><strong>Disability Types:</strong> 
-          <% 
-            disability_types = []
-            disability_types << "Hearing" if @application.user.hearing_disability
-            disability_types << "Vision" if @application.user.vision_disability
-            disability_types << "Speech" if @application.user.speech_disability
-            disability_types << "Mobility" if @application.user.mobility_disability
-            disability_types << "Cognition" if @application.user.cognition_disability
-          %>
-          <%= disability_types.join(", ") %>
-        </p>
-      <% else %>
-        <p><strong>Disability Types:</strong> None selected</p>
-      <% end %>
-    </div>
+    <%# Disability Information Section %>
+    <section aria-labelledby="disability-heading" class="mb-6 p-4 bg-gray-50 rounded">
+      <h2 id="disability-heading" class="text-xl font-semibold mb-4 text-gray-900">Disability Information</h2>
+      <dl class="space-y-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Self-Certified Disability</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @application.self_certify_disability ? "Yes" : "No" %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Disability Types</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            <% if @application.user.disability_selected? %>
+              <%= active_disabilities_list(@application.user).join(", ") %>
+            <% else %>
+              <span class="text-gray-700">None selected</span>
+            <% end %>
+          </dd>
+        </div>
+      </dl>
+    </section>
 
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Medical Provider & Certification</h2>
+    <%# Medical Provider & Certification Section %>
+    <section aria-labelledby="medical-heading" class="mb-6 p-4 bg-gray-50 rounded">
+      <h2 id="medical-heading" class="text-xl font-semibold mb-4 text-gray-900">Medical Provider & Certification</h2>
       <% if @application.medical_provider_name.present? %>
-        <div class="mb-3">
-          <h3 class="text-lg font-medium">Medical Provider Information</h3>
-          <p><strong>Name:</strong> <%= @application.medical_provider_name %></p>
-          <p><strong>Phone:</strong> <%= @application.medical_provider_phone %></p>
-          <p><strong>Email:</strong> <%= @application.medical_provider_email %></p>
+        <div class="mb-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-3">Medical Provider Information</h3>
+          <dl class="space-y-3">
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Name</dt>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.medical_provider_name %></dd>
+            </div>
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Phone</dt>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.medical_provider_phone %></dd>
+            </div>
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Email</dt>
+              <dd class="mt-1 text-sm text-gray-900">
+                <%= mail_to @application.medical_provider_email, @application.medical_provider_email,
+                    class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+              </dd>
+            </div>
+          </dl>
         </div>
       <% else %>
-        <p>No medical provider information provided</p>
+        <p class="text-sm text-gray-700 mb-4">No medical provider information provided.</p>
       <% end %>
-      <% status = @application.medical_certification_status %>
-      <% status_class = case status
-        when "requested" then "bg-yellow-100 text-yellow-800"
-        when "received" then "bg-blue-100 text-blue-800"
-        when "approved" then "bg-green-100 text-green-800"
-        when "rejected" then "bg-red-100 text-red-800"
-        else "bg-gray-100 text-gray-800"
-      end %>
-      <p><strong>Certification Status:</strong>
-        <span class="certification-status px-2 py-1 text-sm rounded-full <%= status_class %>">
+      
+      <div>
+        <span class="text-sm font-medium text-gray-700">Certification Status:</span>
+        <% status = @application.medical_certification_status %>
+        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= badge_class_for(:certification, status) %>"
+              role="status"
+              aria-label="Medical certification status: <%= status.titleize %>">
           <%= status.titleize %>
         </span>
-      </p>
-    </div>
+      </div>
+    </section>
 
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Uploaded Documents</h2>
+    <%# Uploaded Documents Section %>
+    <section aria-labelledby="documents-heading" class="mb-6 p-4 bg-gray-50 rounded">
+      <h2 id="documents-heading" class="text-xl font-semibold mb-4 text-gray-900">Uploaded Documents</h2>
       
-      <div class="mb-3">
-        <h3 class="text-lg font-medium">Income Proof</h3>
+      <%# Income Proof %>
+      <div class="mb-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-3">Income Proof</h3>
         <% if @application.income_proof.attached? %>
-          <p class="text-gray-700">
-            <strong>Filename:</strong> <%= @application.income_proof.filename %>
-            <span class="ml-2 px-2 py-1 text-xs rounded-full <%= @application.income_proof_status == 'approved' ? 'bg-green-100 text-green-800' : (@application.income_proof_status == 'rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800') %>">
+          <div class="flex items-center flex-wrap gap-2">
+            <span class="text-sm font-medium text-gray-700">Filename:</span>
+            <span class="text-sm text-gray-900"><%= @application.income_proof.filename %></span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= badge_class_for(:proof, @application.income_proof_status) %>"
+                  role="status"
+                  aria-label="Income proof status: <%= @application.income_proof_status.titleize %>">
               <%= @application.income_proof_status.titleize %>
             </span>
-          </p>
+          </div>
           <% if @application.income_proof.content_type.start_with?('image/') %>
-            <div class="mt-2">
-              <%= image_tag url_for(@application.income_proof), class: "max-w-xs rounded border border-gray-200", alt: "Income proof document" %>
+            <div class="mt-3">
+              <%= image_tag url_for(@application.income_proof), 
+                  class: "max-w-xs rounded border border-gray-200", 
+                  alt: "Uploaded income proof document: #{@application.income_proof.filename}" %>
             </div>
           <% end %>
         <% else %>
-          <p class="text-gray-500 italic">No income proof document uploaded</p>
+          <p class="text-sm text-gray-700 italic">No income proof document uploaded.</p>
         <% end %>
         
         <% if @application.rejected_income_proof? %>
-          <div class="mt-2">
-            <%= link_to "Resubmit Income Proof", 
-                new_proof_constituent_portal_application_path(@application, proof_type: 'income'),
-                class: "text-blue-500 hover:text-blue-700" %>
+          <div class="mt-3">
+            <%= link_to new_proof_constituent_portal_application_path(@application, proof_type: 'income'),
+                class: "inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" do %>
+              <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+              </svg>
+              Resubmit Income Proof
+            <% end %>
           </div>
         <% end %>
       </div>
       
-      <div class="mb-3">
-        <h3 class="text-lg font-medium">Residency Proof</h3>
+      <%# Residency Proof %>
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 mb-3">Residency Proof</h3>
         <% if @application.residency_proof.attached? %>
-          <p class="text-gray-700">
-            <strong>Filename:</strong> <%= @application.residency_proof.filename %>
-            <span class="ml-2 px-2 py-1 text-xs rounded-full <%= @application.residency_proof_status == 'approved' ? 'bg-green-100 text-green-800' : (@application.residency_proof_status == 'rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800') %>">
+          <div class="flex items-center flex-wrap gap-2">
+            <span class="text-sm font-medium text-gray-700">Filename:</span>
+            <span class="text-sm text-gray-900"><%= @application.residency_proof.filename %></span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= badge_class_for(:proof, @application.residency_proof_status) %>"
+                  role="status"
+                  aria-label="Residency proof status: <%= @application.residency_proof_status.titleize %>">
               <%= @application.residency_proof_status.titleize %>
             </span>
-          </p>
+          </div>
           <% if @application.residency_proof.content_type.start_with?('image/') %>
-            <div class="mt-2">
-              <%= image_tag url_for(@application.residency_proof), class: "max-w-xs rounded border border-gray-200", alt: "Residency proof document" %>
+            <div class="mt-3">
+              <%= image_tag url_for(@application.residency_proof), 
+                  class: "max-w-xs rounded border border-gray-200", 
+                  alt: "Uploaded residency proof document: #{@application.residency_proof.filename}" %>
             </div>
           <% end %>
         <% else %>
-          <p class="text-gray-500 italic">No residency proof document uploaded</p>
+          <p class="text-sm text-gray-700 italic">No residency proof document uploaded.</p>
         <% end %>
         
         <% if @application.rejected_residency_proof? %>
-          <div class="mt-2">
-            <%= link_to "Resubmit Residency Proof", 
-                new_proof_constituent_portal_application_path(@application, proof_type: 'residency'),
-                class: "text-blue-500 hover:text-blue-700" %>
+          <div class="mt-3">
+            <%= link_to new_proof_constituent_portal_application_path(@application, proof_type: 'residency'),
+                class: "inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" do %>
+              <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+              </svg>
+              Resubmit Residency Proof
+            <% end %>
           </div>
         <% end %>
       </div>
-    </div>
+    </section>
 
+    <%# Notes from MAT Staff Section %>
     <% if @application.application_notes.public_notes.any? %>
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Notes from MAT Staff</h2>
-      <div class="space-y-4">
-        <% @application.application_notes.public_notes.recent_first.each do |note| %>
-          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <p class="text-gray-800"><%= note.content %></p>
-            <p class="text-xs text-gray-500 mt-2">
-              Added by <%= note.admin.full_name %> on <%= note.created_at.strftime("%B %d, %Y at %I:%M %p") %>
-            </p>
-          </div>
-        <% end %>
-      </div>
-    </div>
+      <section aria-labelledby="notes-heading" class="mb-6 p-4 bg-gray-50 rounded">
+        <h2 id="notes-heading" class="text-xl font-semibold mb-4 text-gray-900">Notes from MAT Staff</h2>
+        <div class="space-y-4">
+          <% @application.application_notes.public_notes.recent_first.each do |note| %>
+            <article class="bg-white p-4 rounded-lg border border-gray-200">
+              <p class="text-sm text-gray-900"><%= note.content %></p>
+              <footer class="mt-2">
+                <p class="text-xs text-gray-700">
+                  Added by <%= note.admin.full_name %> on 
+                  <time datetime="<%= note.created_at.iso8601 %>">
+                    <%= note.created_at.strftime("%B %d, %Y at %I:%M %p") %>
+                  </time>
+                </p>
+              </footer>
+            </article>
+          <% end %>
+        </div>
+      </section>
     <% end %>
 
-    <div class="mb-4">
-      <h2 class="text-xl font-semibold mb-2">Actions</h2>
-      <%= link_to "See your MAT Dashboard", constituent_portal_dashboard_path, class: "bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600" %>
-    </div>
+    <%# Actions Section %>
+    <section aria-labelledby="actions-heading" class="p-4 bg-gray-50 rounded">
+      <h2 id="actions-heading" class="text-xl font-semibold mb-4 text-gray-900">Actions</h2>
+      <div class="flex flex-wrap gap-3">
+        <%= link_to constituent_portal_dashboard_path,
+            class: "px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+            "aria-label": "Return to your MAT Dashboard" do %>
+          <span class="flex items-center">
+            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Dashboard
+          </span>
+        <% end %>
+        
+        <% if @application.editable_by?(current_user) %>
+          <%= link_to edit_constituent_portal_application_path(@application),
+              class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+              "aria-label": "Edit this application" do %>
+            <span class="flex items-center">
+              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+              Edit Application
+            </span>
+          <% end %>
+        <% end %>
+      </div>
+    </section>
   </div>
-</main>
+</div>

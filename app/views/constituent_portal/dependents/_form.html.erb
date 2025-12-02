@@ -86,8 +86,6 @@
   <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
     <h2 id="disability-section-title" class="text-lg font-medium text-gray-900">Disability Information</h2>
     <fieldset class="space-y-2" 
-              data-controller="form-validation" 
-              data-form-validation-type-value="disability-checkbox"
               aria-required="true"
               aria-describedby="disability-error"
               aria-invalid="<%= dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>">
@@ -103,15 +101,13 @@
         </div>
       <% end %>
       
-      <div class="grid sm:grid-cols-2 gap-4" data-form-validation-target="checkboxGroup">
+      <div class="grid sm:grid-cols-2 gap-4">
         <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
         <% disabilities.each do |disability| %>
           <div class="flex items-center">
             <%= form.check_box "#{disability}_disability",
                 class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                "aria-describedby": "#{disability}-description",
-                "data-form-validation-target": "checkbox",
-                "data-action": "change->form-validation#validateDisabilityCheckboxes" %>
+                "aria-describedby": "#{disability}-description" %>
             <%= form.label "#{disability}_disability", disability.to_s.titleize,
                 class: "ml-2 text-sm text-gray-700" %>
           </div>
@@ -119,14 +115,6 @@
             Check if your dependent has a <%= disability %> disability
           </div>
         <% end %>
-      </div>
-      
-      <div id="disability-validation-message" 
-           role="alert" 
-           aria-live="polite" 
-           class="hidden mt-2 p-3 bg-red-50 border border-red-400 text-red-700 rounded text-sm"
-           data-form-validation-target="validationMessage">
-        Please select at least one disability.
       </div>
     </fieldset>
   </section>
@@ -136,12 +124,15 @@
     <section aria-labelledby="relationship-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
       <h2 id="relationship-section-title" class="text-lg font-medium text-gray-900">Relationship Information</h2>
       <div>
-        <%= gr_form.label :relationship_type, "Relationship to Dependent", class: "block text-sm font-medium text-gray-700" %>
+        <%= gr_form.label :relationship_type, "Your Relationship to Dependent", class: "block text-sm font-medium text-gray-700" %>
         <%= gr_form.select :relationship_type,
             options_for_select([
               ["Parent", "Parent"],
+              ["Grandparent", "Grandparent"],
+              ["Foster Parent", "Foster Parent"],
               ["Legal Guardian", "Legal Guardian"],
-              ["Caretaker", "Caretaker"],
+              ["Relative Caregiver", "Relative Caregiver"],
+              ["Power of Attorney", "Power of Attorney"],
               ["Other", "Other"]
             ], guardian_relationship&.relationship_type),
             { include_blank: "Select Relationship Type" },

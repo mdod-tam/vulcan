@@ -155,10 +155,12 @@
            
            <div class="grid sm:grid-cols-2 gap-4">
              <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
+             <%# Use application's user for dependent applications, not current_user %>
+             <% applicant_user = @application.user || current_user %>
              <% disabilities.each do |disability| %>
                <div class="flex items-center">
                  <%= f.check_box "#{disability}_disability",
-                     checked: params.dig(:application, "#{disability}_disability") == "1" || current_user.send("#{disability}_disability"),
+                     checked: params.dig(:application, "#{disability}_disability") == "1" || applicant_user.send("#{disability}_disability"),
                      class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                      "aria-describedby": "#{disability}-description" %>
                  <%= f.label "#{disability}_disability", disability.to_s.titleize,
@@ -238,17 +240,17 @@
      <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
        <%= link_to "Cancel",
            constituent_portal_application_path(@application),
-           class: "inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+           class: "px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
            role: "button" %>
            
        <%= f.submit "Save Application",
            name: "save_draft",
-           class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+           class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
            "aria-label": "Save application draft" %>
 
        <%= f.submit "Submit Application", 
            name: "submit_application",
-           class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
+           class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
            "aria-label": "Submit final application",
            data: { "income-validation-target": "submitButton" } %>
      </div>

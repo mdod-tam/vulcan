@@ -52,16 +52,8 @@
             <%
               is_guardian = user.guardian?
               is_dependent = user.dependent?
-              
-              row_classes = ["hover:bg-gray-50"]
-              row_classes << "bg-yellow-50 hover:bg-yellow-100" if user.needs_duplicate_review
-              if is_guardian && !is_dependent # Prioritize guardian if both (edge case)
-                row_classes << "bg-blue-100"
-              elsif is_dependent
-                row_classes << "bg-green-100"
-              end
             %>
-            <tr class="<%= row_classes.join(' ') %>">
+            <tr class="<%= user_row_classes(user) %>">
               <td class="w-2/12 px-6 py-4">
                 <div class="space-y-1">
                   <div class="text-sm font-medium text-gray-900">
@@ -102,15 +94,10 @@
                 <% if is_guardian && !is_dependent && user.dependents.any? %>
                   <ul class="list-disc list-inside">
                     <% user.guardian_relationships_as_guardian.each do |gr| %>
-                      <% relation = gr.relationship_type.to_s.downcase %>
-                      <% label = case relation
-                                when 'parent' then 'child'
-                                when 'guardian' then 'ward'
-                                else 'dependent'
-                                end %>
+                      <% relation = gr.relationship_type %>
                       <li>
                         <%= link_to gr.dependent_user.full_name, admin_user_path(gr.dependent_user), class: "hover:text-indigo-600" %>
-                        <span class="text-xs text-gray-500">(<%= label %>)</span>
+                        <span class="text-xs text-gray-500">(<%= inverse_relationship_label(relation) %>)</span>
                       </li>
                     <% end %>
                   </ul>

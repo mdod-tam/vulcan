@@ -21,7 +21,7 @@
   
   <% if @application.medical_certification_status == "requested" %>
     <p>
-      <span class="certification-status px-2 py-1 text-sm rounded-full bg-yellow-100 text-yellow-800">
+      <span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">
         Disability Certification Form <%= @application.medical_certification_status&.titleize %>
       </span>
       <% if @application.medical_certification_request_count && @application.medical_certification_request_count > 0 %>
@@ -32,40 +32,27 @@
     <% if @certification_requests.present? && @certification_requests.any? %>
       <div class="certification-history mt-2 space-y-1">
         <% @certification_requests.each_with_index do |notification, index| %>
-          <% 
-            # Get timestamp from metadata if available, otherwise use notification created_at
-            timestamp = nil
-            if notification.metadata.present? && notification.metadata.is_a?(Hash) && notification.metadata['timestamp'].present?
-              begin
-                timestamp = Time.parse(notification.metadata['timestamp'])
-              rescue
-                timestamp = notification.created_at
-              end
-            else
-              timestamp = notification.created_at
-            end
-          %>
           <div class="request-item">
             <p class="text-sm text-gray-600">
               Request <%= index + 1 %> sent on 
-              <%= timestamp.strftime("%B %d, %Y at %I:%M %p") %>
+              <%= formatted_timestamp(notification) %>
             </p>
           </div>
         <% end %>
       </div>
     <% end %>
   <% elsif @application.medical_certification_status == "received" %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full bg-blue-100 text-blue-800">Received</span></p>
+    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Received</span></p>
     <p class="text-sm text-gray-600 mt-1">
       Certification received on <%= @application.medical_certification_received_at&.strftime("%B %d, %Y at %I:%M %p") %>
     </p>
   <% elsif @application.medical_certification_status == "approved" %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full bg-green-100 text-green-800">Approved</span></p>
+    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Approved</span></p>
     <p class="text-sm text-gray-600 mt-1">
       Certification approved on <%= @application.medical_certification_approved_at&.strftime("%B %d, %Y at %I:%M %p") %>
     </p>
   <% elsif @application.medical_certification_status == "rejected" %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full bg-red-100 text-red-800">Rejected</span></p>
+    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Rejected</span></p>
     <p class="text-sm text-gray-600 mt-1">
       Certification rejected on <%= @application.medical_certification_rejected_at&.strftime("%B %d, %Y at %I:%M %p") %>
     </p>
@@ -73,6 +60,6 @@
       <p class="text-sm mt-2"><strong>Reason:</strong> <%= @application.medical_certification_rejection_reason %></p>
     <% end %>
   <% else %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full bg-gray-100 text-gray-800">Not Requested</span></p>
+    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Not Requested</span></p>
   <% end %>
 </div>

@@ -51,13 +51,19 @@
       <%= d.date_field :date_of_birth,
                        id: "dependent_constituent_date_of_birth",
                        value: dependent&.date_of_birth,
+                       required: true,
                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                       "aria-required": "true",
+                       "aria-describedby": "dependent_dob_hint",
+                       max: Date.current.to_s,
                        data: { "applicant-type-target": "dependentField" } %>
-      <% if mode == :edit && dependent.present? %>
-        <p class="mt-1 text-xs text-yellow-600">
-          ⚠️ Verify date of birth carefully before changing
-        </p>
-      <% end %>
+      <p id="dependent_dob_hint" class="text-xs text-gray-500 mt-1">
+        <% if mode == :edit && dependent.present? %>
+          <span class="text-yellow-600">⚠️ Verify date of birth carefully before changing</span>
+        <% else %>
+          Select date of birth from the calendar
+        <% end %>
+      </p>
     </div>
     
     <!-- Dependent Contact Information -->
@@ -175,11 +181,16 @@
   
   <!-- Relationship Type -->
   <div class="mt-4">
-    <label for="relationship_type" class="block text-sm font-medium text-gray-700">Relationship to Guardian</label>
+    <label for="relationship_type" class="block text-sm font-medium text-gray-700">Guardian's Relationship to Dependent</label>
     <select id="relationship_type" name="relationship_type" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" data-dependent-fields-target="relationshipType">
       <option value="">Select Relationship</option>
       <option value="Parent">Parent</option>
+      <option value="Grandparent">Grandparent</option>
+      <option value="Foster Parent">Foster Parent</option>
       <option value="Legal Guardian">Legal Guardian</option>
+      <option value="Relative Caregiver">Relative Caregiver</option>
+      <option value="Power of Attorney">Power of Attorney</option>
+      <option value="Other">Other</option>
     </select>
   </div>
 </fieldset>

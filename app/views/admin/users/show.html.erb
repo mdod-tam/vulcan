@@ -1,63 +1,65 @@
-<main class="container mx-auto px-4 py-8" role="main" aria-labelledby="user-title">
-  <div class="max-w-7xl mx-auto">
+<%# Skip Link for keyboard navigation %>
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
+
+<div class="container mx-auto px-4 py-8">
+  <div id="main-content" tabindex="-1" class="max-w-7xl mx-auto">
     <!-- Header Section -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="user-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
         User Details: <%= @user.full_name %>
       </h1>
       <div class="flex space-x-4">
         <%= link_to admin_users_path,
             class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-            aria: { label: "Return to users list" } do %>
+            "aria-label": "Return to users list" do %>
+          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
           <span>Back to List</span>
         <% end %>
-        <%# Add Edit/Delete buttons here if needed %>
-    </div>
-  </div>
-
-    <div class="mb-4">
-      <%= link_to 'Back to Application Dashboard', admin_applications_path,
-          class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
-    </div>
+      </div>
+    </header>
 
     <!-- Basic User Information Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="basic-info-title">
       <h2 id="basic-info-title" class="text-xl font-semibold text-gray-900 mb-4">Basic Information</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <dt class="text-sm font-medium text-gray-500">Full Name</dt>
+          <dt class="text-sm font-medium text-gray-700">Full Name</dt>
           <dd class="mt-1 text-sm text-gray-900"><%= @user.full_name %></dd>
         </div>
         <div>
-          <dt class="text-sm font-medium text-gray-500">Email</dt>
+          <dt class="text-sm font-medium text-gray-700">Email</dt>
           <dd class="mt-1 text-sm text-gray-900">
             <% effective = @user.effective_email %>
             <% if effective.present? %>
-              <%= mail_to effective, class: "text-indigo-600 hover:text-indigo-500" %>
+              <%= mail_to effective, effective, class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
             <% else %>
-              No email provided
+              <span class="text-gray-700">No email provided</span>
             <% end %>
           </dd>
         </div>
         <div>
-          <dt class="text-sm font-medium text-gray-500">Phone</dt>
+          <dt class="text-sm font-medium text-gray-700">Phone</dt>
           <dd class="mt-1 text-sm text-gray-900">
             <% if @user.phone.present? %>
               <%= @user.phone %>
               <% if @user.phone_type.present? %>
-                (<%= @user.phone_type %>)
+                <span class="text-gray-700">(<%= @user.phone_type %>)</span>
               <% end %>
             <% else %>
-              Not provided
+              <span class="text-gray-700">Not provided</span>
             <% end %>
           </dd>
         </div>
         <div>
-          <dt class="text-sm font-medium text-gray-500">Date of Birth</dt>
+          <dt class="text-sm font-medium text-gray-700">Date of Birth</dt>
           <dd class="mt-1 text-sm text-gray-900"><%= @user.date_of_birth&.strftime("%B %d, %Y") || "Not provided" %></dd>
         </div>
         <div>
-          <dt class="text-sm font-medium text-gray-500">Address</dt>
+          <dt class="text-sm font-medium text-gray-700">Address</dt>
           <dd class="mt-1 text-sm text-gray-900">
             <% if @user.physical_address_1.present? %>
               <%= @user.physical_address_1 %><br>
@@ -66,12 +68,12 @@
               <% end %>
               <%= "#{@user.city}, #{@user.state} #{@user.zip_code}" %>
             <% else %>
-              No address provided
+              <span class="text-gray-700">No address provided</span>
             <% end %>
           </dd>
         </div>
         <div>
-          <dt class="text-sm font-medium text-gray-500">Communication Preference</dt>
+          <dt class="text-sm font-medium text-gray-700">Communication Preference</dt>
           <dd class="mt-1 text-sm text-gray-900"><%= @user.communication_preference&.titleize || "Not specified" %></dd>
         </div>
       </dl>
@@ -83,131 +85,143 @@
 
       <% if @user.guardian? %>
         <div class="mb-6">
-          <h3 class="text-lg font-medium text-gray-900 mb-2">Dependents Managed by <%= @user.full_name %></h3>
+          <h3 class="text-lg font-medium text-gray-900 mb-3">Dependents Managed by <%= @user.full_name %></h3>
           <% if @user.dependents.any? %>
-      <div class="mb-4 space-x-4"></div>
-      <ul role="list" class="space-y-4" id="dependents_managed_list" aria-label="Dependents managed by <%= @user.full_name %>">
-        <% @user.guardian_relationships_as_guardian.each do |gr| %>
-          <% dependent = gr.dependent_user %>
-          <li class="p-4 border border-gray-200 rounded-lg shadow-sm" id="dependent_<%= dependent.id %>">
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <p class="text-md font-semibold text-gray-900">
-                  <%= link_to dependent.full_name, admin_user_path(dependent), class: "text-indigo-600 hover:text-indigo-800" %>
-                </p>
-                <p class="text-sm text-gray-600">Relationship: <span class="font-medium"><%= gr.relationship_type %></span></p>
-                <p class="text-sm text-gray-500">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
-              </div>
-              <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                <% unless dependent.applications.where.not(status: :archived).exists? %>
-                  <%= link_to "Start Paper Application", new_admin_paper_application_path(guardian_id: @user.id, dependent_id: dependent.id),
-                      class: "inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
-                      aria: { label: "Start paper application for <#{dependent.full_name}> managed by <#{@user.full_name}>" } %>
-                <% end %>
-              </div>
-            </div>
-            <div class="mt-3 text-sm text-gray-700">
-              <% last_app = dependent.applications.order(application_date: :desc).first %>
-              <% active_app = dependent.applications.active.order(application_date: :desc).first %>
-              <% waiting_period_years = Policy.get('waiting_period_years') || 3 %>
-              <% approved_app = [active_app, last_app].compact.find { |a| a.status == 'approved' } %>
-              <% eligible_date = approved_app ? (approved_app.application_date + waiting_period_years.years) : nil %>
-              <% eligible_now = approved_app.present? && eligible_date && eligible_date <= Time.current %>
-
-              <% if active_app %>
-                <div class="flex items-center flex-wrap gap-2">
-                  <span class="text-xs text-gray-500">Active Application:</span>
-                  <%= application_status_badge(active_app) %>
-                  <span class="text-xs text-gray-500"><%= active_app.application_date.strftime('%b %d, %Y') %></span>
-                  <%= link_to 'View', admin_application_path(active_app), class: 'inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500', aria: { label: "View application for <#{dependent.full_name}>" } %>
-                </div>
-                <div class="flex items-center flex-wrap gap-2 mt-1">
-                  <span class="text-xs text-gray-500">Income:</span>
-                  <%= proof_status_badge('income', active_app.income_proof_status) %>
-                  <span class="text-xs text-gray-500">Residency:</span>
-                  <%= proof_status_badge('residency', active_app.residency_proof_status) %>
-                  <span class="text-xs text-gray-500">Medical:</span>
-                  <%= medical_certification_status_badge(active_app) %>
-                </div>
-              <% elsif last_app %>
-                <div class="flex items-center flex-wrap gap-2">
-                  <span class="text-xs text-gray-500">Last Application:</span>
-                  <%= application_status_badge(last_app) %>
-                  <span class="text-xs text-gray-500"><%= last_app.application_date.strftime('%b %d, %Y') %></span>
-                  <%= link_to 'View', admin_application_path(last_app), class: 'inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500', aria: { label: "View application for <#{dependent.full_name}>" } %>
-                </div>
-                <div class="flex items-center flex-wrap gap-2 mt-1">
-                  <span class="text-xs text-gray-500">Income:</span>
-                  <%= proof_status_badge('income', last_app.income_proof_status) %>
-                  <span class="text-xs text-gray-500">Residency:</span>
-                  <%= proof_status_badge('residency', last_app.residency_proof_status) %>
-                  <span class="text-xs text-gray-500">Medical:</span>
-                  <%= medical_certification_status_badge(last_app) %>
-                </div>
-              <% else %>
-                <div class="text-xs text-gray-500">No prior applications</div>
-              <% end %>
-
-              <div class="mt-2">
-                <% if approved_app %>
-                  <% approved_change = ApplicationStatusChange.where(application_id: approved_app.id, to_status: 'approved').order(changed_at: :desc).first %>
-                  <div class="text-xs text-gray-700">
-                    Application approved on <%= (approved_change&.changed_at || approved_app.updated_at).strftime('%b %d, %Y') %>
-                  </div>
-                  <% voucher = approved_app.vouchers.order(issued_at: :desc).first %>
-                  <% if voucher.present? && voucher.issued_at.present? %>
-                    <div class="text-xs text-gray-700">
-                      Voucher issued on <%= voucher.issued_at.strftime('%b %d, %Y') %>
+            <ul role="list" class="space-y-4" id="dependents_managed_list" aria-label="Dependents managed by <%= @user.full_name %>">
+              <% @user.guardian_relationships_as_guardian.each do |gr| %>
+                <% dependent = gr.dependent_user %>
+                <li class="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50" id="dependent_<%= dependent.id %>">
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                      <p class="text-md font-semibold text-gray-900">
+                        <%= link_to dependent.full_name, admin_user_path(dependent), 
+                            class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+                      </p>
+                      <p class="text-sm text-gray-700">Relationship: <span class="font-medium text-gray-900"><%= gr.relationship_type %></span></p>
+                      <p class="text-sm text-gray-700">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
                     </div>
-                  <% end %>
-                  <% if eligible_date %>
-                    <% if eligible_now %>
-                      <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs">Eligible now</span>
+                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                      <% unless dependent.applications.where.not(status: :archived).exists? %>
+                        <%= link_to new_admin_paper_application_path(guardian_id: @user.id, dependent_id: dependent.id),
+                            class: "inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
+                            "aria-label": "Start paper application for #{dependent.full_name} managed by #{@user.full_name}" do %>
+                          Start Paper Application
+                        <% end %>
+                      <% end %>
+                    </div>
+                  </div>
+                  <div class="mt-3 text-sm text-gray-700">
+                    <% last_app = dependent.applications.order(application_date: :desc).first %>
+                    <% active_app = dependent.applications.active.order(application_date: :desc).first %>
+                    <% waiting_period_years = Policy.get('waiting_period_years') || 3 %>
+                    <% approved_app = [active_app, last_app].compact.find { |a| a.status == 'approved' } %>
+                    <% eligible_date = approved_app ? (approved_app.application_date + waiting_period_years.years) : nil %>
+                    <% eligible_now = approved_app.present? && eligible_date && eligible_date <= Time.current %>
+
+                    <% if active_app %>
+                      <div class="flex items-center flex-wrap gap-2">
+                        <span class="text-xs text-gray-700">Active Application:</span>
+                        <%= application_status_badge(active_app) %>
+                        <span class="text-xs text-gray-700"><%= active_app.application_date.strftime('%b %d, %Y') %></span>
+                        <%= link_to admin_application_path(active_app), 
+                            class: "inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", 
+                            "aria-label": "View application for #{dependent.full_name}" do %>
+                          View
+                        <% end %>
+                      </div>
+                      <div class="flex items-center flex-wrap gap-2 mt-1">
+                        <span class="text-xs text-gray-700">Income:</span>
+                        <%= proof_status_badge('income', active_app.income_proof_status) %>
+                        <span class="text-xs text-gray-700">Residency:</span>
+                        <%= proof_status_badge('residency', active_app.residency_proof_status) %>
+                        <span class="text-xs text-gray-700">Medical:</span>
+                        <%= medical_certification_status_badge(active_app) %>
+                      </div>
+                    <% elsif last_app %>
+                      <div class="flex items-center flex-wrap gap-2">
+                        <span class="text-xs text-gray-700">Last Application:</span>
+                        <%= application_status_badge(last_app) %>
+                        <span class="text-xs text-gray-700"><%= last_app.application_date.strftime('%b %d, %Y') %></span>
+                        <%= link_to admin_application_path(last_app), 
+                            class: "inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", 
+                            "aria-label": "View application for #{dependent.full_name}" do %>
+                          View
+                        <% end %>
+                      </div>
+                      <div class="flex items-center flex-wrap gap-2 mt-1">
+                        <span class="text-xs text-gray-700">Income:</span>
+                        <%= proof_status_badge('income', last_app.income_proof_status) %>
+                        <span class="text-xs text-gray-700">Residency:</span>
+                        <%= proof_status_badge('residency', last_app.residency_proof_status) %>
+                        <span class="text-xs text-gray-700">Medical:</span>
+                        <%= medical_certification_status_badge(last_app) %>
+                      </div>
                     <% else %>
-                      <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
+                      <div class="text-xs text-gray-700">No prior applications</div>
                     <% end %>
-                  <% end %>
-                <% end %>
-              </div>
-            </div>
-          </li>
-        <% end %>
-      </ul>
-    <% else %>
-      <p class="text-gray-500 text-sm">This user does not manage any dependents yet.</p>
-    <% end %>
-  </div>
-<% end %>
-      <% if @user.dependent? %>
-        <div class="mb-4">
-          <%= link_to 'Back to Application Dashboard', admin_applications_path,
-              class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500',
-              aria: { label: 'Back to Application Dashboard' } %>
+
+                    <div class="mt-2">
+                      <% if approved_app %>
+                        <% approved_change = ApplicationStatusChange.where(application_id: approved_app.id, to_status: 'approved').order(changed_at: :desc).first %>
+                        <div class="text-xs text-gray-700">
+                          Application approved on <%= (approved_change&.changed_at || approved_app.updated_at).strftime('%b %d, %Y') %>
+                        </div>
+                        <% voucher = approved_app.vouchers.order(issued_at: :desc).first %>
+                        <% if voucher.present? && voucher.issued_at.present? %>
+                          <div class="text-xs text-gray-700">
+                            Voucher issued on <%= voucher.issued_at.strftime('%b %d, %Y') %>
+                          </div>
+                        <% end %>
+                        <% if eligible_date %>
+                          <% if eligible_now %>
+                            <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium">Eligible now</span>
+                          <% else %>
+                            <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs font-medium">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
+                          <% end %>
+                        <% end %>
+                      <% end %>
+                    </div>
+                  </div>
+                </li>
+              <% end %>
+            </ul>
+          <% else %>
+            <p class="text-gray-700 text-sm">This user does not manage any dependents yet.</p>
+          <% end %>
         </div>
+      <% end %>
+
+      <% if @user.dependent? %>
         <div class="mb-6">
-          <h3 class="text-lg font-medium text-gray-900 mb-2">Guardians for <%= @user.full_name %></h3>
-           <% if @user.guardians.any? %>
-            <ul role="list" class="space-y-4" id="guardians_list">
+          <h3 class="text-lg font-medium text-gray-900 mb-3">Guardians for <%= @user.full_name %></h3>
+          <% if @user.guardians.any? %>
+            <ul role="list" class="space-y-4" id="guardians_list" aria-label="Guardians for <%= @user.full_name %>">
               <% @user.guardian_relationships_as_dependent.each do |gr| %>
                 <% guardian = gr.guardian_user %>
-                <li class="p-4 border border-gray-200 rounded-lg shadow-sm" id="guardian_<%= guardian.id %>">
+                <li class="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50" id="guardian_<%= guardian.id %>">
                   <div class="flex-1">
                     <p class="text-md font-semibold text-gray-900">
-                      <%= link_to guardian.full_name, admin_user_path(guardian), class: "text-indigo-600 hover:text-indigo-800" %>
+                      <%= link_to guardian.full_name, admin_user_path(guardian), 
+                          class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
                     </p>
-                    <p class="text-sm text-gray-600">Relationship: <span class="font-medium"><%= gr.relationship_type %></span></p>
-                    <p class="text-sm text-gray-500">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
-                    <div class="mt-2">
-                      <p class="text-xs text-gray-500">Contact:</p>
-                      <p class="text-sm text-gray-700">Email: <%= mail_to guardian.effective_email, guardian.effective_email, class: "text-indigo-600 hover:text-indigo-500" %></p>
-                      <p class="text-sm text-gray-700">Phone: 
+                    <p class="text-sm text-gray-700">Relationship: <span class="font-medium text-gray-900"><%= gr.relationship_type %></span></p>
+                    <p class="text-sm text-gray-700">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
+                    <div class="mt-3 p-3 bg-white rounded border border-gray-200">
+                      <p class="text-xs font-medium text-gray-700 mb-1">Contact Information</p>
+                      <p class="text-sm text-gray-900">
+                        <span class="text-gray-700">Email:</span> 
+                        <%= mail_to guardian.effective_email, guardian.effective_email, 
+                            class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+                      </p>
+                      <p class="text-sm text-gray-900">
+                        <span class="text-gray-700">Phone:</span> 
                         <% if guardian.phone.present? %>
                           <%= guardian.phone %>
                           <% if guardian.phone_type.present? %>
-                            (<%= guardian.phone_type %>)
+                            <span class="text-gray-700">(<%= guardian.phone_type %>)</span>
                           <% end %>
                         <% else %>
-                          Not provided
+                          <span class="text-gray-700">Not provided</span>
                         <% end %>
                       </p>
                     </div>
@@ -216,19 +230,15 @@
               <% end %>
             </ul>
           <% else %>
-            <p class="text-gray-500 text-sm">This user does not have any guardians listed yet.</p>
+            <p class="text-gray-700 text-sm">This user does not have any guardians listed yet.</p>
           <% end %>
-          <%# Removed message about unimplemented add/remove functionality %>
         </div>
       <% end %>
 
       <% if !@user.guardian? && !@user.dependent? %>
-        <p class="text-gray-500 text-sm">This user is neither a guardian nor a dependent in a recorded relationship.</p>
-        <%# Removed message about unimplemented add/remove functionality %>
+        <p class="text-gray-700 text-sm">This user is neither a guardian nor a dependent in a recorded relationship.</p>
       <% end %>
     </section>
 
-    <%# Add sections for Applications, Notes, etc. here if needed %>
-
   </div>
-</main>
+</div>

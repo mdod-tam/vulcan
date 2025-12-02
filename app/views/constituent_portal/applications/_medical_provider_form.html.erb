@@ -1,5 +1,5 @@
-<section aria-labelledby="medical-info-heading" class="space-y-4 p-4 bg-gray-50 rounded">
-  <h2 id="medical-info-heading" class="text-lg font-medium text-gray-900">Medical Professional Information and Authorization to Contact</h2>
+<section aria-labelledby="medical-info-heading" class="space-y-4 p-4 bg-white border border-gray-200 rounded">
+  <h3 id="medical-info-heading" class="text-base font-medium text-gray-900">Medical Professional Information and Authorization to Contact</h3>
   
   <p class="text-sm text-gray-700 mb-4">
     Please provide contact information for your Doctor or a qualified Medical Professional. 
@@ -45,25 +45,27 @@
       <p id="phone-description" class="mt-1 text-xs text-gray-700">Enter 10-digit phone number</p>
     </div>
     <div>
-      <%= form.label :fax, "Fax (Optional)", class: "block text-sm font-medium text-gray-700" %>
-      <%= form.telephone_field :fax, 
+      <%= form.label :email, "Email", class: "block text-sm font-medium text-gray-700" %>
+      <%= form.email_field :email, 
           class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
-          "aria-describedby": "fax-description" %>
-      <p id="fax-description" class="mt-1 text-xs text-gray-700">Enter fax number if available</p>
+          required: true,
+          "aria-required": "true",
+          "aria-describedby": "email-description" %>
+      <p id="email-description" class="mt-1 text-xs text-gray-700">Enter professional email address</p>
     </div>
   </div>
 
-  <%= form.label :email, "Email", class: "block text-sm font-medium text-gray-700 mt-4" %>
-  <%= form.email_field :email, 
-      class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
-      required: true,
-      "aria-required": "true",
-      "aria-describedby": "email-description" %>
-  <p id="email-description" class="mt-1 text-xs text-gray-700">Enter professional email address</p>
+  <div class="mt-4">
+    <%= form.label :fax, "Fax (Optional)", class: "block text-sm font-medium text-gray-700" %>
+    <%= form.telephone_field :fax, 
+        class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
+        "aria-describedby": "fax-description" %>
+    <p id="fax-description" class="mt-1 text-xs text-gray-700">Enter fax number if available</p>
+  </div>
 
   <!-- Enhanced Authorization Section -->
   <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
-    <h3 class="text-base font-medium text-blue-800 mb-3">Medical Information Release Authorization</h3>
+    <h4 class="text-base font-medium text-blue-800 mb-3">Medical Information Release Authorization</h4>
     
     <!-- MAT Contact Information -->
     <div class="bg-white p-3 rounded border mb-4">

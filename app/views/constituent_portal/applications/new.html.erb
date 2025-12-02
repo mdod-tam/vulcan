@@ -5,12 +5,12 @@
       Skip to main content
     </a>
     <!-- Wrap the form container with an id for the skip link -->
-    <div id="main-content" tabindex="-1" class="bg-white p-4 sm:p-8 rounded shadow-md" data-controller="dependent-selector">
-      <h1 class="text-2xl font-semibold mb-6 text-center" id="form-title" data-dependent-selector-target="formTitle">
+    <div id="main-content" tabindex="-1" class="bg-white p-4 sm:p-8 rounded shadow-md">
+      <h1 class="text-2xl font-semibold mb-6 text-center" id="form-title">
         <% if @applicant_type == 'dependent' && @selected_dependent_name.present? %>
           New Application for <%= @selected_dependent_name %>
         <% else %>
-          New Application
+          New Application for <%= current_user.full_name %>
         <% end %>
       </h1>
 
@@ -23,6 +23,7 @@
       <%= form_with(model: [:constituent_portal, @application],
           local: true,
           class: "space-y-6",
+          html: { "aria-label": "Application form" },
           "aria-labelledby": "form-title",
           data: { 
             controller: "income-validation currency-formatter accessibility-announcer autosave", 
@@ -36,7 +37,7 @@
           }) do |form| %>
           
         <!-- Autosave status indicator -->
-        <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden"></div>
+        <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden" role="status" aria-live="polite"></div>
 
         <% if @application.errors.any? %>
           <div id="error-summary" class="bg-red-50 p-4 rounded mb-6" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1" autofocus>
@@ -75,67 +76,37 @@
           </div>
         </div>
 
-        <!-- Residency Verification Section (Required) -->
-        <div class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 class="text-lg font-medium text-gray-900">Residency Verification</h2>
-          <div class="flex items-start">
-            <%= form.check_box :maryland_resident,
-                class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                required: true,
-                "aria-required": "true" %>
-            <%= form.label :maryland_resident, "I certify that I am a resident of Maryland",
-                class: "ml-2 block text-sm text-gray-700" %>
-          </div>
-        </div>
-
-        <!-- Household Information Section -->
-        <fieldset class="space-y-6">
-          <legend class="text-lg font-medium text-gray-900">Household Information</legend>
-          <div>
-            <%= form.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
-            <div class="mt-1">
-              <%= form.number_field :household_size,
-                  min: 1,
-                  required: true,
-                  class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-500 rounded-md",
-                  "aria-describedby": "household_size_help",
-                  data: { 
-                    "income-validation-target": "householdSize"
-                  } %>
-            </div>
-            <p class="mt-2 text-sm text-gray-700" id="household_size_help">
-              Total number of people living in your household
-            </p>
-          </div>
-
-          <div class="p-4 border-2 border-indigo-200 rounded-md bg-indigo-50">
-            <%= form.label :annual_income, "Annual Income", id: "annual_income_label", class: "block text-base font-semibold text-indigo-800" %>
-            <div class="mt-2 relative rounded-md shadow-sm">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span class="text-gray-700 sm:text-sm font-medium">$</span>
-              </div>
-              <%= form.number_field :annual_income,
-                  step: "0.01",
-                  required: true,
-                  class: "pl-7 focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-md border-gray-500 rounded-md py-3",
-                  "aria-describedby": "annual_income_help",
-                  "aria-labelledby": "annual_income_label annual_income_help",
-                  inputmode: "decimal",
-                  data: { 
-                    "income-validation-target": "annualIncome",
-                    currency_formatter_target: "input"
-                  } %>
-            </div>
-            <div class="mt-2">
-              <p class="text-sm font-medium text-indigo-700" id="annual_income_help">
-                Total yearly household income before taxes
+        <!-- Applicant Information Section -->
+        <section aria-labelledby="applicant-info-title" class="space-y-4 p-4 bg-gray-50 rounded">
+          <h2 id="applicant-info-title" class="text-lg font-medium text-gray-900">Applicant</h2>
+          
+          <% if @applicant_type == 'dependent' && @selected_dependent_name.present? %>
+            <%# Dependent application - show dependent name with option to change %>
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-gray-700">
+                This application is for <span class="font-semibold text-gray-900"><%= @selected_dependent_name %></span>
               </p>
+              <%= link_to constituent_portal_dashboard_path, 
+                    class: "text-sm text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
+                    "aria-label": "Return to dashboard to select a different applicant" do %>
+                <span class="flex items-center">
+                  <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                  </svg>
+                  Change applicant
+                </span>
+              <% end %>
             </div>
-          </div>
-        </fieldset>
-
-        <!-- Income Threshold Warning Container -->
-        <div id="income-threshold-warning" hidden class="hidden" data-income-validation-target="warningContainer"></div>
+            <%= hidden_field_tag "application[for_self]", "false" %>
+            <%= form.hidden_field :user_id, value: @application.user_id %>
+          <% else %>
+            <%# Self application - show current user name %>
+            <p class="text-sm text-gray-700">
+              This application is for <span class="font-semibold text-gray-900"><%= current_user.full_name %></span>
+            </p>
+            <%= hidden_field_tag "application[for_self]", "true" %>
+          <% end %>
+        </section>
 
         <!-- Address Information Section -->
         <section aria-labelledby="address-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
@@ -206,98 +177,53 @@
           </div>
         </section>
 
-        <!-- Applicant Selection Section -->
-        <section aria-labelledby="applicant-selection-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="applicant-selection-title" class="text-lg font-medium text-gray-900">Who is this application for?</h2>
-          <div class="space-y-2">
-            <div class="flex items-center">
-              <%= radio_button_tag "application[for_self]", "true", @applicant_type == 'self', 
-                     id: "apply_for_self",
-                     class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                     data: { 
-                       action: "click->dependent-selector#toggleAction",
-                       "dependent-selector-target": "applySelfRadio"
-                     } %>
-              <%= label_tag "apply_for_self", "Myself", class: "ml-3 text-sm text-gray-700" %>
-            </div>
-            <% if @dependents&.any? %>
-              <div class="flex items-center">
-                <%= radio_button_tag "application[for_self]", "false", @applicant_type == 'dependent',
-                       id: "apply_for_dependent",
-                       class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                       data: { 
-                         action: "click->dependent-selector#toggleAction",
-                         "dependent-selector-target": "applyDependentRadio"
-                       } %>
-                <%= label_tag "apply_for_dependent", "A dependent I manage", class: "ml-3 text-sm text-gray-700" %>
-              </div>
-            <% end %>
-          </div>
+        <!-- Disability Certification Group - Contains Disability Info and Medical Provider -->
+        <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <h2 class="text-lg font-semibold text-gray-800 mb-4">Disability Certification</h2>
 
-          <% if @dependents&.any? %>
-            <%= turbo_frame_tag :dependent_select_frame do %>
-              <div id="dependent-selection-fields" class="space-y-4" data-dependent-selector-target="dependentSection" style="<%= @applicant_type == 'dependent' ? 'display: block;' : 'display: none;' %>">
-                <div>
-                  <%= form.label :user_id, "Select Dependent", class: "block text-sm font-medium text-gray-700" %>
-                  <%= form.select :user_id,
-                      options_for_select(@dependents.map { |d| [d.full_name, d.id] }, @application.user_id),
-                      { include_blank: "Select a Dependent" },
-                      { class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                        required: @application.for_dependent?,
-                        data: { 
-                          "dependent-selector-target": "dependentSelect",
-                          action: "change->dependent-selector#selectDependentAction"
-                        } } %>
-                </div>
-                <p class="mt-2 text-sm text-gray-700">
-                  If you don't see the dependent you want to select in the dropdown box, create one first by going to your <%= link_to "dashboard", constituent_portal_dashboard_path, class: "text-indigo-600 hover:text-indigo-500" %> and click on "Add New Dependent".
-                </p>
+          <!-- Disability Information Section -->
+          <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-white border border-gray-200 rounded mb-4">
+            <h3 id="disability-section-title" class="text-base font-medium text-gray-900">Disability Information</h3>
+            <div class="flex items-start">
+              <%= form.check_box :self_certify_disability,
+                  { 
+                    class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                    "aria-describedby": "disability-certification-description",
+                    "aria-required": "true"
+                  }, "1", "0" %>
+              <%= form.label :self_certify_disability,
+                  "I certify that I have a disability that affects my ability to access telecommunications services",
+                  class: "ml-2 block text-sm text-gray-700" %>
+            </div>
+            <p id="disability-certification-description" class="text-sm text-gray-700">
+              If you have a disability, please self-certify by checking the box above.
+            </p>
+            <fieldset class="space-y-2">
+              <legend class="text-sm text-gray-700 font-medium">Select at least one disability that applies to <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %>:</legend>
+              <div class="grid sm:grid-cols-2 gap-4">
+                <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
+                <% disabilities.each do |disability| %>
+                  <div class="flex items-center">
+                    <%= form.check_box "#{disability}_disability",
+                        checked: params.dig(:application, "#{disability}_disability") == "1" || (@applicant_user || current_user).send("#{disability}_disability"),
+                        class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                        "aria-describedby": "#{disability}-description" %>
+                    <%= form.label "#{disability}_disability", disability.to_s.titleize,
+                        class: "ml-2 text-sm text-gray-700" %>
+                  </div>
+                  <div id="<%= disability %>-description" class="sr-only">
+                    Check if <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %> <%= @applicant_type == 'dependent' ? 'has' : 'have' %> a <%= disability %> disability
+                  </div>
+                <% end %>
               </div>
-            <% end %>
+            </fieldset>
+          </section>
+
+          <!-- Medical Provider Information (Nested Attributes) -->
+          <%= form.fields_for :medical_provider_attributes do |mp| %>
+            <%= render "medical_provider_form", form: mp %>
           <% end %>
-        </section>
-
-        <!-- Disability Section -->
-        <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="disability-section-title" class="text-lg font-medium text-gray-900">Disability Information</h2>
-          <div class="flex items-start">
-            <%= form.check_box :self_certify_disability,
-                { 
-                  class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                  "aria-describedby": "disability-certification-description"
-                }, "1", "0" %>
-            <%= form.label :self_certify_disability,
-                "I certify that I have a disability that affects my ability to access telecommunications services",
-                class: "ml-2 block text-sm text-gray-700" %>
-          </div>
-          <p id="disability-certification-description" class="text-sm text-gray-700">
-            If you have a disability, please self-certify by checking the box above.
-          </p>
-          <fieldset class="space-y-2">
-            <legend class="text-sm text-gray-700 font-medium">Select at least one disability that applies to <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %>:</legend>
-            <div class="grid sm:grid-cols-2 gap-4">
-              <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
-              <% disabilities.each do |disability| %>
-                <div class="flex items-center">
-                  <%= form.check_box "#{disability}_disability",
-                      checked: params.dig(:application, "#{disability}_disability") == "1" || (@applicant_user || current_user).send("#{disability}_disability"),
-                      class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                      "aria-describedby": "#{disability}-description" %>
-                  <%= form.label "#{disability}_disability", disability.to_s.titleize,
-                      class: "ml-2 text-sm text-gray-700" %>
-                </div>
-                <div id="<%= disability %>-description" class="sr-only">
-                  Check if <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %> <%= @applicant_type == 'dependent' ? 'has' : 'have' %> a <%= disability %> disability
-                </div>
-              <% end %>
-            </div>
-          </fieldset>
-        </section>
-
-        <!-- Medical Provider Information (Nested Attributes) -->
-        <%= form.fields_for :medical_provider_attributes do |mp| %>
-          <%= render "medical_provider_form", form: mp %>
-        <% end %>
+        </div>
 
         <!-- Alternate Contact Section (optional) -->
         <section aria-labelledby="alternate-contact-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
@@ -307,46 +233,82 @@
           <div class="space-y-4">
             <div>
               <%= form.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
-              <%= form.text_field :alternate_contact_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+              <%= form.text_field :alternate_contact_name, autocomplete: "name", class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <%= form.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.telephone_field :alternate_contact_phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                <%= form.telephone_field :alternate_contact_phone, autocomplete: "tel", class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
               </div>
               <div>
                 <%= form.label :alternate_contact_email, "Email", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.email_field :alternate_contact_email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                <%= form.email_field :alternate_contact_email, autocomplete: "email", class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- Document Upload Section -->
-        <section aria-labelledby="documents-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="documents-section-title" class="text-lg font-medium text-gray-900">Required Documentation</h2>
+        <!-- Required Documentation Section -->
+        <fieldset class="space-y-6 p-4 bg-gray-50 rounded">
+          <legend class="text-lg font-medium text-gray-900">Required Documentation</legend>
+          
+          <!-- Income Verification Subsection -->
           <div class="space-y-4">
-            <div>
-              <%= form.label :residency_proof, "Proof of Residency (Required)",
-                  class: "block text-sm font-medium text-gray-700" %>
-              <p id="residency-hint" class="text-xs text-gray-700 mb-2">
-                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
-                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong>patient photo ID</strong>. 
-                <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
-              </p>
-              <%= form.file_field :residency_proof,
-                  class: "block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
-                  "aria-describedby": "residency-hint",
-                  accept: ".pdf,.jpg,.jpeg,.png" %>
-              <p class="mt-1 text-xs text-gray-700">
-                <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
-              </p>
+            <h3 class="text-base font-medium text-gray-900">Income Verification</h3>
+            
+            <%# Income Information - grouped with income proof for logical flow %>
+            <div class="p-4 border-2 border-gray-200 rounded-md bg-white transition-colors duration-200" 
+                 data-income-validation-target="incomeFieldsContainer">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <%= form.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
+                  <div class="mt-1">
+                    <%= form.number_field :household_size,
+                        min: 1,
+                        required: true,
+                        class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-500 rounded-md",
+                        "aria-describedby": "household_size_help",
+                        "aria-required": "true",
+                        data: { 
+                          "income-validation-target": "householdSize"
+                        } %>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-700" id="household_size_help">
+                    Total number of people living in your household
+                  </p>
+                </div>
+
+                <div>
+                  <%= form.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
+                  <div class="mt-1 relative rounded-md shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span class="text-gray-700 sm:text-sm font-medium" aria-hidden="true">$</span>
+                    </div>
+                    <%= form.number_field :annual_income,
+                        step: "0.01",
+                        required: true,
+                        class: "pl-7 focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-500 rounded-md",
+                        "aria-describedby": "annual_income_help",
+                        "aria-required": "true",
+                        inputmode: "decimal",
+                        data: { 
+                          "income-validation-target": "annualIncome",
+                          currency_formatter_target: "input"
+                        } %>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-700" id="annual_income_help">
+                    Total yearly household income before taxes
+                  </p>
+                </div>
+              </div>
             </div>
 
+            <!-- Income Threshold Warning Container -->
+            <div id="income-threshold-warning" hidden class="hidden" role="alert" aria-live="assertive" data-income-validation-target="warningContainer"></div>
+
             <div>
-              <%= form.label :income_proof, "Income Verification (Required)",
-                  class: "block text-sm font-medium text-gray-700" %>
+              <label for="application_income_proof" class="block text-sm font-medium text-gray-700">Upload Income Proof Document</label>
               <p id="income-hint" class="text-xs text-gray-700 mb-2">
                 We need proof of your household income. Please provide one of the following acceptable documents: 
                 <strong>Tax return</strong> (preferred), <strong>current year SSA award letter</strong> (less than 2 months old), 
@@ -355,6 +317,7 @@
                 <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
               </p>
               <%= form.file_field :income_proof,
+                  id: "application_income_proof",
                   class: "block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
                   "aria-describedby": "income-hint",
                   accept: ".pdf,.jpg,.jpeg,.png" %>
@@ -363,24 +326,60 @@
               </p>
             </div>
           </div>
-        </section>
+
+          <!-- Residency Verification Subsection -->
+          <div class="space-y-4 pt-4 border-t border-gray-200">
+            <h3 class="text-base font-medium text-gray-900">Residency Verification</h3>
+            
+            <%# Maryland residency attestation - grouped with residency proof for logical flow %>
+            <div class="p-3 bg-white border border-gray-200 rounded">
+              <div class="flex items-start">
+                <%= form.check_box :maryland_resident,
+                    class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                    required: true,
+                    "aria-required": "true",
+                    "aria-describedby": "maryland_resident_help" %>
+                <%= form.label :maryland_resident, "I certify that I am a resident of Maryland",
+                    class: "ml-2 block text-sm text-gray-700" %>
+              </div>
+              <p id="maryland_resident_help" class="ml-6 text-xs text-gray-700 mt-1">Note: This will be verified through the residency proof upload/review process</p>
+            </div>
+
+            <div>
+              <label for="application_residency_proof" class="block text-sm font-medium text-gray-700">Upload Residency Proof Document</label>
+              <p id="residency-hint" class="text-xs text-gray-700 mb-2">
+                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
+                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong>patient photo ID</strong>. 
+                <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
+              </p>
+              <%= form.file_field :residency_proof,
+                  id: "application_residency_proof",
+                  class: "block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                  "aria-describedby": "residency-hint",
+                  accept: ".pdf,.jpg,.jpeg,.png" %>
+              <p class="mt-1 text-xs text-gray-700">
+                <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
+              </p>
+            </div>
+          </div>
+        </fieldset>
 
         <!-- Form Actions -->
         <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
           <%= link_to "Cancel",
               constituent_portal_applications_path,
-              class: "inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+              class: "px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
               role: "button",
               "aria-label": "Cancel application and return to applications list" %>
               
           <%= form.submit "Save Application",
               name: "save_draft",
-              class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+              class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
               "aria-label": "Save application draft" %>
 
           <%= form.submit "Submit Application", 
               name: "submit_application",
-              class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
+              class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
               "aria-label": "Submit final application",
               data: { "income-validation-target": "submitButton" } %>
         </div>

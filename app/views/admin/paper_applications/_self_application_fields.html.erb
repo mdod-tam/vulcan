@@ -1,38 +1,78 @@
 <fieldset id="self-info-section" class="mb-6 p-4 border border-gray-200 rounded" data-applicant-type-target="adultSection">
   <legend class="text-lg font-medium">Applicant's Information</legend>
   <%= fields_for :constituent, @paper_application[:constituent] do |c| %>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <%# Row 1: First Name, Middle Initial, Last Name %>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
       <div>
         <%= c.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
         <%= c.text_field :first_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+      </div>
+      <div>
+        <%= c.label :middle_initial, "Middle Initial", class: "block text-sm font-medium text-gray-700" %>
+        <%= c.text_field :middle_initial, maxlength: 1, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
       </div>
       <div>
         <%= c.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
         <%= c.text_field :last_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
       </div>
     </div>
-    <div class="mb-4">
-      <%= c.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
-      <%= c.date_field :date_of_birth, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-    </div>
+
+    <%# Row 2: Date of Birth, Email %>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <%= c.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
+        <%= c.date_field :date_of_birth, 
+            required: true,
+            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+            "aria-required": "true",
+            "aria-describedby": "constituent_dob_hint",
+            max: Date.current.to_s %>
+        <p id="constituent_dob_hint" class="text-xs text-gray-500 mt-1">Select date of birth from the calendar</p>
+      </div>
       <div>
         <%= c.label :email, "Email", class: "block text-sm font-medium text-gray-700" %>
         <%= c.email_field :email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
       </div>
+    </div>
+
+    <%# Row 3: Phone, Phone Type %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <%= c.label :phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
         <%= c.telephone_field :phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
       </div>
+      <div>
+        <span id="constituent_phone_type_label" class="block text-sm font-medium text-gray-700 mb-2">Phone Type</span>
+        <div role="radiogroup" aria-labelledby="constituent_phone_type_label" class="flex flex-wrap gap-4">
+          <div class="flex items-center">
+            <%= c.radio_button :phone_type, "voice", id: "constituent_phone_type_voice", checked: true, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+            <%= c.label :phone_type_voice, "Voice", for: "constituent_phone_type_voice", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= c.radio_button :phone_type, "videophone", id: "constituent_phone_type_videophone", class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+            <%= c.label :phone_type_videophone, "Videophone", for: "constituent_phone_type_videophone", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= c.radio_button :phone_type, "text", id: "constituent_phone_type_text", class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+            <%= c.label :phone_type_text, "Text/SMS", for: "constituent_phone_type_text", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <%# Row 4: Address Line 1 %>
     <div class="mb-4">
       <%= c.label :physical_address_1, "Address Line 1", class: "block text-sm font-medium text-gray-700" %>
       <%= c.text_field :physical_address_1, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
     </div>
+
+    <%# Row 5: Address Line 2 %>
     <div class="mb-4">
       <%= c.label :physical_address_2, "Address Line 2", class: "block text-sm font-medium text-gray-700" %>
       <%= c.text_field :physical_address_2, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
     </div>
+
+    <%# Row 6: City, State, ZIP %>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
       <div>
         <%= c.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
@@ -45,6 +85,27 @@
       <div>
         <%= c.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700" %>
         <%= c.text_field :zip_code, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+      </div>
+    </div>
+
+    <%# Row 7: Language Preference, Communication Preference %>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <%= c.label :locale, "Language Preference", class: "block text-sm font-medium text-gray-700" %>
+        <%= c.select :locale, options_for_select([["English", "en"], ["Spanish", "es"], ["French", "fr"], ["Other", "other"]], c.object&.locale || "en"), { prompt: "Select Language" }, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+      </div>
+      <div>
+        <span id="constituent_comm_pref_label" class="block text-sm font-medium text-gray-700">Communication Preference</span>
+        <div role="radiogroup" aria-labelledby="constituent_comm_pref_label" class="mt-2 flex flex-wrap gap-4">
+          <div class="flex items-center">
+            <%= c.radio_button :communication_preference, "email", id: "constituent_communication_preference_email", checked: true, class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" %>
+            <%= c.label :communication_preference_email, "Email", for: "constituent_communication_preference_email", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= c.radio_button :communication_preference, "letter", id: "constituent_communication_preference_letter", class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" %>
+            <%= c.label :communication_preference_letter, "Letter", for: "constituent_communication_preference_letter", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+        </div>
       </div>
     </div>
   <% end %>
