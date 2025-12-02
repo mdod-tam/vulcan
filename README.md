@@ -1,104 +1,172 @@
 # Vulcan: Maryland Accessible Telecommunications CRM
 
-Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telecommunications (MAT) workflows.
+Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telecommunications (MAT) workflows. It manages the complete lifecycle of assistive technology voucher applications for constituents with difficulties using a standard telephone, from initial application through training and equipment distribution.
 
 ## Features
 
+### Core Application Management
+
 1. **Applications (Portal + Paper)**
-   - Portal flow with autosave and inline validation
+   - Self-service portal flow with autosave and inline validation
    - Admin-only paper path guarded by `Current.paper_context`; approvals require attachments, rejections may proceed without a file
-   - Status tracking with comprehensive audit trails
-   - Guardian/dependent application support
+   - Status tracking: draft → in_progress → approved/rejected/needs_information
+   - Guardian/dependent application support with managing guardian tracking
 
 2. **Guardian & Dependent Management**
    - Explicit `GuardianRelationship` records (many-to-many)
-   - Contact strategies for dependents (own vs guardian email/phone)
+   - Managing guardian assignment for dependent applications
    - Notifications for dependent apps route to the managing guardian
+   - Authorization scopes for viewing/editing applications
 
-3. **Proofs**
-   - Unified `ProofAttachmentService` for web, paper, and email (fax supported for outbound only)
+3. **Proof Management**
+   - Income and residency proof uploads with status tracking
+   - Unified `ProofAttachmentService` for web, paper, and email submissions
    - Resubmission and rate-limit policies; robust error handling
-   - Centralized approval/rejection via reviews with audit logging
+   - Centralized approval/rejection via `ProofReviewService` with audit logging
 
 4. **Medical Certification**
    - Request and track provider responses
-   - Channels: Email (automated via Action Mailbox), Fax (outbound only; inbound handled manually), Mail (admin scan/upload)
+   - Channels: 
+     - **Email**: Automated via Action Mailbox (`MedicalCertificationMailbox`)
+     - **Fax**: Outbound automated, inbound handled manually
+     - **Mail**: Admin scan/upload
+     - **DocuSeal**: Digital document signing (production-ready)
+   - Dual status tracking for e-signature workflow + admin approval
    - Integrated with audit events and notifications
 
-5. **Notifications**
-   - Notifications can be sent to constituents via email or paper letter
-   - Email via `NotificationService` + database-backed templates with versioning 
-   - Paper letters for snail mail via `PrintQueueItem`
-   - Rails native flash in-app
+### Voucher System
 
-6. **Audit & Events**
-   - Central `AuditEventService` + `Applications::EventDeduplicationService`
-   - Deduplicated audit & event history used across admin timelines and dashboards
+5. **Vouchers**
+   - Auto-assignment when application approved + all proofs verified
+   - Value calculation based on constituent disability types
+   - Configurable expiration via Policy settings
+   - Security controls including redemption verification
 
-7. **Vouchers & Vendors**
-   - Voucher issuance and redemption with security controls
-   - Vendor workflows including W9 review and invoicing
+6. **Vendor Portal**
+   - Voucher verification and redemption workflow
+   - Transaction history and reporting
+   - W9 review and approval process
+   - Invoice generation and management
 
-8. **Admin & Reporting**
-   - Dashboards, filters, timelines, and pain-point analysis for draft drop-off
+### Training & Evaluation
 
-9. **Security & Authentication**
-   - 2FA: WebAuthn, TOTP, and SMS; standardized flows and auditing
+7. **Training Sessions**
+   - Trainer assignment and scheduling
+   - Session status tracking (requested → scheduled → completed)
+   - Dedicated trainer portal with dashboard
+
+8. **Evaluations**
+   - Evaluator assignment workflow
+   - Evaluation scheduling and completion
+   - Dedicated evaluator portal with filtering and status views
+
+### Administration
+
+9. **Admin Dashboard**
+   - Application pipeline visualization
+   - Filters, search, and bulk operations
+   - Pain-point analysis for draft drop-off
+   - Print queue management for letters
+
+10. **Notifications**
+    - Email via `NotificationService` + database-backed templates with versioning
+    - Paper letters for snail mail via `PrintQueueItem`
+    - Rails native flash for in-app messages
+    - Postmark integration with delivery tracking and webhooks
+
+11. **Audit & Events**
+    - Central `AuditEventService` for consistent logging
+    - `Applications::EventDeduplicationService` for clean timelines
+    - `ApplicationStatusChange` records for status history
+
+### Security & Authentication
+
+12. **Authentication**
+    - Session-based authentication with secure password handling
+    - Two-factor authentication: WebAuthn, TOTP (authenticator apps), SMS
+    - Account recovery workflow with admin approval
+    - Standardized auth flows and auditing
 
 ## Current Implementation Status
 
-- ✅ 2FA (WebAuthn, TOTP, SMS) and standardized auth flows
-- ✅ Guardian/dependent relationships with contact strategies
-- ✅ Paper application path with `Current.paper_context`
-- ✅ Unified proof attachment + review with audits
-- ✅ Medical certification: email automation; fax outbound only
-- ✅ Action Mailbox for inbound emails
-- ✅ Voucher management and vendor workflows (incl. W9 and invoicing)
-- ✅ Admin dashboards, filters, and draft pain-point analysis
-- ✅ Comprehensive audit logging with event deduplication
-- ⏳ Inbound fax automation (Twilio integration with webhook processing)
-- ⏳ Live chat functionality with transcript capture and audit logging
-- ⏳ Tooltips and inline help system for guided application flows
-- ⏳ Duplicate detection and review admin UI with merge/ignore workflows
-- ⏳ Custom report builder with whitelisted filters and CSV export
-- ⏳ HIPAA compliant document signing system for Disability Certification Forms (DocuSeal integration)
-- ⏳ Notification analytics dashboard with delivery metrics
-- ⏳ Enhanced audit event browsing and CSV export capabilities
+### ✅ Complete
+
+- 2FA (WebAuthn, TOTP, SMS) and standardized auth flows
+- Guardian/dependent relationships with managing guardian assignment
+- Paper application path with `Current.paper_context`
+- Unified proof attachment + review with audits
+- Medical certification: email automation; fax outbound only
+- DocuSeal integration for digital document signing
+- Action Mailbox for inbound emails
+- Voucher management with auto-assignment logic
+- Vendor portal with W9 review and invoicing
+- Trainer and evaluator portals
+- Admin dashboards, filters, and draft pain-point analysis
+- Comprehensive audit logging with event deduplication
+- Print queue for paper correspondence
+
+### ⏳ In Progress / Planned
+
+- Inbound fax automation (Twilio webhook processing)
+- Live chat functionality with transcript capture
+- Tooltips and inline help system
+- Duplicate detection with merge/ignore workflows
+- Custom report builder with CSV export
+- Notification analytics dashboard
+- Enhanced audit event browsing and export
+- Dependent contact strategies (email/phone source selection)
 
 ## Technical Stack
 
 - **Ruby** 3.4.7
-- **Rails** 8.0.2
-- **PostgreSQL** 17.5
+- **Rails** 8.0.3
+- **PostgreSQL** 17+
 - **Tailwind CSS**
-- **Propshaft Asset Pipeline**
-- **Solid Queue** (for background jobs)
-- **Postmark** (for email delivery)
-- **Action Mailbox** (for inbound email processing)
-- **Bucketeer/AWS S3** (for file storage)
-- **Twilio** (for SMS and fax services)
+- **Propshaft** (Asset Pipeline)
+- **Solid Queue** (Background Jobs)
+- **Solid Cache** (Caching)
+- **Solid Cable** (WebSocket)
+- **Postmark** (Email Delivery)
+- **Action Mailbox** (Inbound Email)
+- **AWS S3** (File Storage)
+- **Twilio** (SMS and Fax)
+- **DocuSeal** (Document Signing)
+- **Stimulus + Turbo** (Frontend Interactivity)
 
 ## Architecture
 
-- **Service-Oriented**: Business logic lives in service objects (e.g., `ProofAttachmentService`, `Applications::PaperApplicationService`).
-- **Stimulus + JS Services**: Centralized `rails_request` and chart config services; Rails flash for in-app messages.
-- **CurrentAttributes**: Request context (e.g., `paper_context`) without polluting models/controllers.
-- **Audit Dedup**: `Applications::EventDeduplicationService` powers clean timelines.
-- **Testing**: Minitest with helpers for auth, Current, and attachments.
+- **Service-Oriented**: Business logic encapsulated in service objects (e.g., `ProofAttachmentService`, `Applications::PaperApplicationService`, `NotificationService`). Services inherit from `BaseService` and return structured `Result` objects.
+- **STI User Model**: All user types inherit from `User` with fully namespaced classes (`Users::Constituent`, `Users::Administrator`, `Users::Vendor`, `Users::Evaluator`, `Users::Trainer`, `Users::MedicalProvider`).
+- **CurrentAttributes**: Request-scoped state management (e.g., `Current.paper_context`, `Current.user`) without polluting models/controllers.
+- **Stimulus + Turbo**: Frontend interactivity with Stimulus controllers and Turbo for SPA-like page updates. Centralized `rails_request` service for AJAX calls.
+- **Audit System**: `AuditEventService` for consistent event logging, `Applications::EventDeduplicationService` for clean timelines, `ApplicationStatusChange` for status history.
+- **Testing**: Minitest with FactoryBot, helpers for auth, Current attributes, and file attachments.
 
 ## Documentation
 
-- [Application Workflow Guide](docs/features/application_workflow_guide.md) - High-level overview of all major application flows.
-- [Proof Review Process Guide](docs/features/proof_review_process_guide.md) - Detailed guide to the proof submission, review, and approval lifecycle.
-- [Guardian Relationship System](docs/development/guardian_relationship_system.md) - How guardian and dependent relationships are modeled and managed.
-- [Paper Application Architecture](docs/development/paper_application_architecture.md) - Deep dive into the admin-facing paper application workflow.
-- [Notification System](docs/features/notifications.md) - Email notifications and Rails flash patterns.
-- [Audit & Event Tracking](docs/features/audit_event_tracking.md) - Central logging and deduplication.
-- [JavaScript Architecture](docs/development/javascript_architecture.md) - Stimulus patterns and core services.
-- [Pain Point Tracking](docs/features/application_pain_point_tracking.md) - Draft drop-off analysis.
-- [Email System Guide](docs/infrastructure/email_system.md) - Inbound and outbound email, templates.
-- [Voucher Security Controls](docs/security/voucher_security_controls.md) - Security measures for the voucher system.
-- [Testing and Debugging Guide](docs/development/testing_and_debugging_guide.md) - Comprehensive guide for running and debugging the test suite.
+### Development Guides
+- [Testing and Debugging Guide](docs/development/testing_and_debugging_guide.md) - Comprehensive guide for running and debugging the test suite
+- [Service Architecture](docs/development/service_architecture.md) - Service objects, patterns, and best practices
+- [JavaScript Architecture](docs/development/javascript_architecture.md) - Stimulus patterns and core services
+- [Guardian Relationship System](docs/development/guardian_relationship_system.md) - Guardian/dependent modeling and management
+- [Paper Application Architecture](docs/development/paper_application_architecture.md) - Admin-facing paper application workflow
+- [User Management Features](docs/development/user_management_features.md) - User CRUD, deduplication, and factory recipes
+- [DocuSeal Integration Guide](docs/development/docuseal_integration_guide.md) - Digital document signing for medical certifications
+
+### Feature Documentation
+- [Application Workflow Guide](docs/features/application_workflow_guide.md) - High-level overview of all major application flows
+- [Proof Review Process Guide](docs/features/proof_review_process_guide.md) - Proof submission, review, and approval lifecycle
+- [Notification System](docs/features/notifications.md) - Email notifications and Rails flash patterns
+- [Audit & Event Tracking](docs/features/audit_event_tracking.md) - Central logging and deduplication
+- [Pain Point Tracking](docs/features/application_pain_point_tracking.md) - Draft drop-off analysis
+
+### Infrastructure
+- [Email System Guide](docs/infrastructure/email_system.md) - Inbound and outbound email, templates
+- [Active Storage S3 Setup](docs/infrastructure/active_storage_s3_setup.md) - File storage configuration
+
+### Security
+- [Authentication System](docs/security/authentication_system.md) - 2FA implementation (WebAuthn, TOTP, SMS)
+- [Voucher Security Controls](docs/security/voucher_security_controls.md) - Security measures for the voucher system
 
 ## Prerequisites
 
@@ -160,15 +228,18 @@ FactoryBot is used for test data generation. Factories can be found in `test/fac
 
 ## Default Users
 
-After seeding, the following test users are available:
+After seeding (`bin/rails db:seed`), the following test users are available:
 
 | Role | Email | Password |
 |------|-------|----------|
 | Admin | admin@example.com | password123 |
 | Evaluator | evaluator@example.com | password123 |
+| Trainer | trainer@example.com | password123 |
 | Constituent | user@example.com | password123 |
 | Vendor | ray@testemail.com | password123 |
 | Medical Provider | medical@example.com | password123 |
+
+**Note**: Email templates must be seeded separately with `rake db:seed_manual_email_templates`.
 
 ## Contributing
 

@@ -2,11 +2,8 @@
 
 ## 1. Core Testing Concepts
 ### Test Suite Overview
-- High rate of passing tests with extensive assertions
 - Shared helper modules to reduce duplication
 - Standardized authentication patterns
-- Accurate FPL calculations
-- Consolidated and standardized for reliability
 
 ### Quick Start
 ```bash
@@ -92,14 +89,21 @@ create(:application, :old_enough_for_new_application)
 
 ### System Test Helpers
 ```ruby
-# Synchronization
-wait_for_network_idle(timeout: 10)
-wait_for_turbo(timeout: 5)
+# Synchronization (these wait internally)
+wait_for_page_stable(timeout: 10)  # Waits for Turbo + body selector
+wait_for_turbo(timeout: 5)         # Waits for Turbo progress bar to disappear
+
+# Modal helpers
+wait_for_modal_open('modalId', timeout: 15)
+wait_for_modal_close('modalId', timeout: 10)
+click_modal_trigger_and_wait('button[data-modal-id="x"]', 'modalId')
+
+# Form helpers
+safe_fill_in('Field Label', with: 'value')  # Clears field before filling
 
 # Debugging
 assert_notification(text, type: nil)
-take_screenshot(name)
-safe_browser_action
+take_screenshot
 ```
 
 ## 5. Common Issues & Solutions
@@ -109,11 +113,12 @@ safe_browser_action
 - Add `wait_for_turbo` after navigation
 - Handle waiting period conflicts with `:old_enough_for_new_application`
 
-### Element Not Found
+### Element Not Found / NodeNotFoundError
 - Use stable selectors (IDs, data attributes)
 - `visible: :all` for conditionally hidden elements
 - Explicit waits: `assert_selector 'selector', wait: 5`
-- Safe helpers: `safe_click`, `safe_fill_in`
+- **Avoid holding node references** - re-find elements immediately before acting
+- Use `safe_fill_in` for forms (clears field before filling)
 
 ### JavaScript/Stimulus Issues
 - Verify controller registration
@@ -125,10 +130,13 @@ safe_browser_action
 - Wait for Turbo navigation completion
 - Ensure background jobs complete
 - Avoid arbitrary sleeps
+- **Avoid hold node references** across async operations
 - Pattern for state transitions:
   ```ruby
-  element = find('#element')
-  element.click
+  # Atomic click (don't store node reference)
+  find('#element').click
+  
+  # Wait for state changes
   assert_no_selector('#element.old-state', wait: 5)
   assert_selector('#element.new-state', wait: 5)
   ```
@@ -176,16 +184,17 @@ Capybara doesn't wait for AJAX requests to complete - it waits for DOM elements 
 For complex interactions where elements change state:
 
 ```ruby
-# 1. Identify element that will change
 submit_button = find('#submit-button')
+submit_button.click  # DOM may change after this!
+# submit_button is now potentially stale - NodeNotFoundError
 
-# 2. Perform action that triggers change
-submit_button.click
+# ✅ Atomic find-and-click, then wait for result
+find('#submit-button').click
 
-# 3. Wait for old state to disappear
+# Wait for old state to disappear
 assert_no_selector('#submit-button.enabled', wait: 5)
 
-# 4. Wait for new state to appear  
+# Wait for new state to appear  
 assert_selector('#submit-button.disabled', wait: 5)
 ```
 
@@ -347,8 +356,11 @@ class MySystemTest < ApplicationSystemTestCase
     visit feature_path
     wait_for_turbo
     
-    safe_fill_in('#input', with: 'value')
-    safe_click('#submit')
+    # Use safe_fill_in for text inputs (clears before filling)
+    safe_fill_in('Input Label', with: 'value')
+    
+    # Use atomic find-and-click (don't hold node reference)
+    find('#submit').click
     
     assert_text 'Success'
     assert_current_path success_path
@@ -370,6 +382,10 @@ end
 - Duplicate audit logging
 - Mixing DirectUpload implementations
 - Ignoring missing Policy records
+- Holding node references across async ops ( NodeNotFoundError)
+- Wrapping assert_selector in using_wait_time (double-waiting)
+- Using Timeout.timeout with sleep loops (use Capybara's waiting)
+- Complex teardown and UI interactions (use `Capybara.reset_sessions!`)
 
 ### Environment Variables
 | Variable | Purpose | Values |
@@ -380,18 +396,96 @@ end
 | `SLOWMO` | Debug delays | `1.0` (1 second delay) |
 | `DEBUG_AUTH` | Auth debug | `true` (enable) |
 
-## 9. Additional Solutions
+## 9. Cuprite/Ferrum Anti-Patterns (NodeNotFoundError Prevention)
+
+The "Could not find node with given id" error is the most common cause of test flakiness. It occurs when the test holds a reference to a DOM node that becomes invalid.
+
+### Critical Anti-Patterns to Avoid
+
+**❌ Double-Waiting Anti-Pattern:**
+```ruby
+# WRONG: assert_selector already waits - using_wait_time is redundant
+using_wait_time(timeout) do
+  assert_selector 'body', wait: timeout
+end
+
+# CORRECT: Just use the wait parameter directly
+assert_selector 'body', wait: timeout
+```
+
+**❌ Holding Stale Node References:**
+```ruby
+# WRONG: Node reference captured, then used after async operation
+el = find('#button')
+page.execute_script('scrollIntoView...', el)  # DOM may change
+el.click  # NodeNotFoundError!
+
+# CORRECT: Atomic operations or re-find
+find('#button').click  # Atomic find-and-click
+
+# Or use JS for scroll + click
+page.execute_script("document.querySelector('#button').scrollIntoView()")
+find('#button').click  # Fresh find
+```
+
+**❌ Timeout.timeout with Sleep Loops:**
+```ruby
+# WRONG: Ruby Timeout can interrupt at unsafe points
+Timeout.timeout(5) do
+  loop do
+    break if page.evaluate_script('...') == 'expected'
+    sleep 0.1
+  end
+end
+
+# CORRECT: Use Capybara's has_* methods which wait internally
+page.has_selector?('.expected-element', wait: 5)
+
+# Or single JS evaluation
+page.evaluate_script('return checkCondition()')
+```
+
+**❌ Assertions in Teardown:**
+```ruby
+# WRONG: Clicking during teardown can cause hangs
+teardown do
+  within('#modal') { click_button 'Close' } if has_selector?('#modal')
+end
+
+# CORRECT: Just reset sessions
+teardown do
+  Capybara.reset_sessions!
+end
+```
+
+### Boolean vs Assertion Methods
+
+| Method Type | Behavior | Use Case |
+|-------------|----------|----------|
+| `has_selector?` | Waits, returns boolean | Conditional logic |
+| `assert_selector` | Waits, raises on failure | Test assertions |
+| `find` | Raises immediately if not found | When element must exist |
+
+```ruby
+# Conditions: use boolean methods
+if page.has_selector?('.modal', wait: 5)
+  # modal is present
+end
+
+# Assertions: use assert methods
+assert_selector '.success-message', wait: 5
+```
+
+## 10. Element Finding Patterns
 
 When tests start failing intermittently, try these solutions in order:
 
-### Element Finding Patterns
-
-**❌ Unstable Patterns to Avoid:**
+**❌ Unstable Patterns:**
 - `first('button', text: 'Review Proof').click` - prone to stale references
 - `page.all('selector')[index].click` - position-dependent, unreliable
 - `find('button').click` without waiting - races with DOM changes
 
-**✅ Stable Patterns to Use:**
-- `find(:element, "button", "data-modal-id": "incomeProofReviewModal").click` - attribute-based, stable
+**✅ Stable Patterns:**
+- `find('button[data-modal-id="incomeProofReviewModal"]').click` - attribute-based, stable
 - `click_button 'Specific Text', match: :first` - Rails-style, waits properly
 - `find('[data-testid="element-id"]').click` - if data-testid attributes are available
