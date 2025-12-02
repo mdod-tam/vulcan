@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 import { createFormChangeDebounce } from "../../utils/debounce"
 
@@ -48,23 +47,26 @@ class DependentFieldsController extends Controller {
     this.debouncedApplicantTypeChange = createFormChangeDebounce(() => this.executeApplicantTypeChange())
 
     // Set initial state based on checkboxes if available - use target safety
-    this.withTarget('sameAddressCheckbox', (checkbox) => {
+    if (this.hasSameAddressCheckboxTarget) {
+      const checkbox = this.sameAddressCheckboxTarget
       if (this.hasAddressFieldsTarget) {
         this.toggleContactFields({ target: checkbox })
       }
-    })
+    }
 
-    this.withTarget('sameEmailCheckbox', (checkbox) => {
+    if (this.hasSameEmailCheckboxTarget) {
+      const checkbox = this.sameEmailCheckboxTarget
       if (this.hasDependentEmailTarget) {
         this.toggleEmailField({ target: checkbox })
       }
-    })
+    }
 
-    this.withTarget('samePhoneCheckbox', (checkbox) => {
+    if (this.hasSamePhoneCheckboxTarget) {
+      const checkbox = this.samePhoneCheckboxTarget
       if (this.hasDependentPhoneTarget) {
         this.togglePhoneField({ target: checkbox })
       }
-    })
+    }
 
     // Listen for applicant-type change events from ApplicantTypeController
     this.formElement = this.element.closest("form")
@@ -94,7 +96,7 @@ class DependentFieldsController extends Controller {
    * @param {Event} event The change event from the checkbox
    */
   toggleContactFields(event) {
-    if (!this.hasRequiredTargets('addressFields')) {
+    if (!this.hasAddressFieldsTarget) {
       return
     }
 
@@ -290,6 +292,5 @@ class DependentFieldsController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(DependentFieldsController)
 
 export default DependentFieldsController

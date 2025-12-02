@@ -1,6 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
 import { chartConfig } from "../../services/chart_config"
-import { applyTargetSafety } from "../../mixins/target_safety"
 
 /**
  * ChartBaseController
@@ -302,6 +301,5 @@ class ChartBaseController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(ChartBaseController)
 
 export default ChartBaseController

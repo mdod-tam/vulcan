@@ -7,25 +7,6 @@ import { FetchRequest } from "@rails/request.js"
 export class RailsRequestService {
   constructor() {
     this.activeRequests = new Map()
-    this.setupUnhandledRejectionHandler()
-  }
-
-  /**
-   * Set up global handler to catch specific @rails/request.js errors that escape try/catch blocks
-   */
-  setupUnhandledRejectionHandler() {
-    if (typeof window !== 'undefined') {
-      window.addEventListener('unhandledrejection', (event) => {
-        const error = event.reason
-        // Check if this is the specific @rails/request.js error we want to suppress
-        if (error && error.message && error.message.includes('Expected a JSON response but got "text/html" instead')) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.debug('RailsRequestService: Suppressed unhandled @rails/request.js JSON parsing error')
-          }
-          event.preventDefault() // Prevent the error from being logged to console
-        }
-      })
-    }
   }
 
   /**

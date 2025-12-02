@@ -1,7 +1,6 @@
 // app/javascript/controllers/role_select_controller.js
 import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
-import { applyTargetSafety } from "../../mixins/target_safety"
 
 class RoleSelectController extends Controller {
   static targets = ["select", "capability"]
@@ -25,8 +24,8 @@ class RoleSelectController extends Controller {
         hasSelectTarget: this.hasSelectTarget,
         hasCapabilityTargets: this.hasCapabilityTargets,
         targetsFound: {
-          select: this.safeTarget('select', false),
-          capabilities: this.safeTargets('capability', false)
+          select: this.hasSelectTarget ? this.selectTarget : null,
+          capabilities: this.capabilityTargets
         },
 
       })
@@ -153,6 +152,5 @@ class RoleSelectController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(RoleSelectController)
 
 export default RoleSelectController

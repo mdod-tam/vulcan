@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 
 // Handles showing/hiding proof upload and rejection sections based on status
@@ -21,8 +20,12 @@ class ProofStatusController extends Controller {
         if (process.env.NODE_ENV !== 'production') {
           console.log('No radio checked, defaulting to upload section')
         }
-        this.withTarget('uploadSection', (target) => setVisible(target, true));
-        this.withTarget('rejectionSection', (target) => setVisible(target, false));
+        if (this.hasUploadSectionTarget) {
+          setVisible(this.uploadSectionTarget, true);
+        }
+        if (this.hasRejectionSectionTarget) {
+          setVisible(this.rejectionSectionTarget, false);
+        }
       }
     }, 100) // Increased delay to ensure DOM is fully loaded
   }
@@ -35,12 +38,12 @@ class ProofStatusController extends Controller {
 
   // Get the currently selected radio button using targets
   getSelectedRadio() {
-    // Use target safety for checking radioButtons target
-    return this.withTarget('radioButtons', (target) => {
-      // radioButtonsTarget should contain all radio buttons
-      const radios = this.radioButtonsTargets || [target];
+    if (this.hasRadioButtonsTarget) {
+      // radioButtonsTargets should contain all radio buttons
+      const radios = this.radioButtonsTargets;
       return radios.find(radio => radio.checked) || null;
-    }, null);
+    }
+    return null;
   }
 
   // Toggle sections based on status
@@ -53,12 +56,13 @@ class ProofStatusController extends Controller {
     }
     
     // Use setVisible utility for consistent visibility management
-    this.withTarget('uploadSection', (target) => setVisible(target, isApproved));
-    this.withTarget('rejectionSection', (target) => setVisible(target, !isApproved));
+    if (this.hasUploadSectionTarget) {
+      setVisible(this.uploadSectionTarget, isApproved);
+    }
+    if (this.hasRejectionSectionTarget) {
+      setVisible(this.rejectionSectionTarget, !isApproved);
+    }
   }
 }
-
-// Apply target safety mixin
-applyTargetSafety(ProofStatusController)
 
 export default ProofStatusController

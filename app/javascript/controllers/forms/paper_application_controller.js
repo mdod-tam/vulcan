@@ -4,8 +4,14 @@ import { setVisible } from "../../utils/visibility";
 export default class extends Controller {
   static targets = [
     "submitButton",
-    "rejectionModal",
-    "rejectionButton"
+    "rejectionButton",
+    // Hidden field targets in the rejection modal
+    "rejectionFirstName",
+    "rejectionLastName",
+    "rejectionEmail",
+    "rejectionPhone",
+    "rejectionHouseholdSize",
+    "rejectionAnnualIncome"
   ];
 
   connect() {
@@ -70,40 +76,58 @@ export default class extends Controller {
     // For now, prevent the error - the income validation should be handled elsewhere
   }
 
-  /* Modal helpers */
+  /**
+   * Open the rejection modal and populate hidden fields with data from the main form.
+   * Uses native <dialog> showModal() API for proper accessibility.
+   */
   openRejectionModal() {
-    if (this.hasRejectionModalTarget) {
-      setVisible(this.rejectionModalTarget, true);
+    const dialog = document.getElementById('rejection-modal');
+    if (!dialog) {
+      console.error('Rejection modal not found');
+      return;
     }
-  }
 
-  closeRejectionModal() {
-    if (this.hasRejectionModalTarget) {
-      setVisible(this.rejectionModalTarget, false);
-    }
-  }
+    // Populate hidden fields from main form values
+    this._populateRejectionModalFields();
 
-
-  // Main rejection method - implement form submission
-  rejectForIncome() {
-    console.log('rejectForIncome called');
-
-    // Get the main form element (the form this controller is attached to)
-    const form = this.element.querySelector('form') || this.element;
-    console.log('Form found:', form);
-
-    if (form) {
-      // Set the rejection endpoint
-      form.action = '/admin/paper_applications/reject_for_income';
-      form.method = 'POST';
-
-      console.log('New action:', form.action);
-      console.log('Form method:', form.method);
-
-      // Submit the form
-      form.submit();
+    // Open the dialog using native API
+    if (dialog.tagName === 'DIALOG') {
+      dialog.showModal();
     } else {
-      console.error('No form found in paper application controller element');
+      console.warn('rejection-modal is not a <dialog> element');
+      setVisible(dialog, true);
+    }
+  }
+
+  /**
+   * Populate the rejection modal hidden fields with values from the main form
+   * @private
+   */
+  _populateRejectionModalFields() {
+    // Get values from main form fields
+    const firstName = this.element.querySelector('[name="constituent[first_name]"]')?.value ||
+                      this.element.querySelector('[name="guardian_attributes[first_name]"]')?.value || '';
+    const lastName = this.element.querySelector('[name="constituent[last_name]"]')?.value ||
+                     this.element.querySelector('[name="guardian_attributes[last_name]"]')?.value || '';
+    const email = this.element.querySelector('[name="constituent[email]"]')?.value ||
+                  this.element.querySelector('[name="guardian_attributes[email]"]')?.value || '';
+    const phone = this.element.querySelector('[name="constituent[phone]"]')?.value ||
+                  this.element.querySelector('[name="guardian_attributes[phone]"]')?.value || '';
+    const householdSize = this.element.querySelector('[name="application[household_size]"]')?.value || '';
+    const annualIncome = this.element.querySelector('[name="application[annual_income]"]')?.value || '';
+
+    // Set values in rejection modal hidden fields
+    if (this.hasRejectionFirstNameTarget) this.rejectionFirstNameTarget.value = firstName;
+    if (this.hasRejectionLastNameTarget) this.rejectionLastNameTarget.value = lastName;
+    if (this.hasRejectionEmailTarget) this.rejectionEmailTarget.value = email;
+    if (this.hasRejectionPhoneTarget) this.rejectionPhoneTarget.value = phone;
+    if (this.hasRejectionHouseholdSizeTarget) this.rejectionHouseholdSizeTarget.value = householdSize;
+    if (this.hasRejectionAnnualIncomeTarget) this.rejectionAnnualIncomeTarget.value = annualIncome;
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Populated rejection modal fields:', {
+        firstName, lastName, email, phone, householdSize, annualIncome
+      });
     }
   }
 }

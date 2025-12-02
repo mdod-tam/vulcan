@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 
 // This controller handles the W9 review form submission logic
@@ -14,7 +13,7 @@ class W9ReviewController extends Controller {
   }
 
   approve() {
-    if (!this.hasRequiredTargets('status', 'form')) {
+    if (!this.hasStatusTarget || !this.hasFormTarget) {
       return;
     }
 
@@ -23,7 +22,7 @@ class W9ReviewController extends Controller {
   }
 
   reject() {
-    if (!this.hasRequiredTargets('rejectionReason', 'rejectButton', 'status', 'form')) {
+    if (!this.hasRejectionReasonTarget || !this.hasRejectButtonTarget || !this.hasStatusTarget || !this.hasFormTarget) {
       return;
     }
 
@@ -58,6 +57,5 @@ class W9ReviewController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(W9ReviewController)
 
 export default W9ReviewController

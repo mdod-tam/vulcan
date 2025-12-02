@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 
 class EvaluationManagementController extends Controller {
@@ -14,13 +13,14 @@ class EvaluationManagementController extends Controller {
   }
 
   toggleFieldsBasedOnStatus() {
-    if (!this.hasRequiredTargets('statusSelect')) {
+    if (!this.hasStatusSelectTarget) {
       return;
     }
 
     const selectedStatus = this.statusSelectTarget.value
 
-    this.withTarget('completionFields', (target) => {
+    if (this.hasCompletionFieldsTarget) {
+      const target = this.completionFieldsTarget
       const isCompleted = selectedStatus === "completed"
       
       // Use setVisible utility for consistent visibility management
@@ -28,20 +28,20 @@ class EvaluationManagementController extends Controller {
       
       // Set required attributes using the utility
       this.setRequiredAttributes(isCompleted)
-    });
+    }
   }
 
   setRequiredAttributes(required) {
-    this.withTarget('completionFields', (target) => {
+    if (this.hasCompletionFieldsTarget) {
+      const target = this.completionFieldsTarget
       target.querySelectorAll("[data-completion-required]").forEach(element => {
         // Use setVisible utility's required option for consistency
         setVisible(element, true, { required })
       })
-    });
+    }
   }
 }
 
 // Apply target safety mixin
-applyTargetSafety(EvaluationManagementController)
 
 export default EvaluationManagementController

@@ -1,6 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import Auth, { registerWebAuthn } from "../../auth.js"
 
 class AddCredentialController extends Controller {
@@ -39,17 +38,17 @@ class AddCredentialController extends Controller {
     if (process.env.NODE_ENV !== 'production') {
       console.log("Preparing your security key...")
     }
-    this.withTarget('submitButton', (target) => {
-      target.disabled = true;
-    })
+    if (this.hasSubmitButtonTarget) {
+      this.submitButtonTarget.disabled = true;
+    }
 
     // Get the nickname
-    const nickname = this.safeTarget('nicknameInput')?.value;
+    const nickname = this.hasNicknameInputTarget ? this.nicknameInputTarget.value : null;
     if (!nickname) {
       console.error("Please enter a nickname for your security key.")
-      this.withTarget('submitButton', (target) => {
-        target.disabled = false;
-      })
+      if (this.hasSubmitButtonTarget) {
+        this.submitButtonTarget.disabled = false;
+      }
       return;
     }
 
@@ -80,9 +79,9 @@ class AddCredentialController extends Controller {
         if (!this.hasCallbackUrlValue) {
           console.error("Missing callback URL value. Check the data attribute in the view.");
           console.error("Configuration error. Please try again or contact support.");
-          this.withTarget('submitButton', (target) => {
-            target.disabled = false;
-          })
+          if (this.hasSubmitButtonTarget) {
+            this.submitButtonTarget.disabled = false;
+          }
           return;
         }
 
@@ -101,9 +100,9 @@ class AddCredentialController extends Controller {
           console.error("Security key registration failed:", webauthnResult.message || "Unknown error");
           console.error("Error details:", webauthnResult.details);
 
-          this.withTarget('submitButton', (target) => {
-            target.disabled = false;
-          })
+          if (this.hasSubmitButtonTarget) {
+            this.submitButtonTarget.disabled = false;
+          }
         }
         // Successful registrations will redirect automatically from auth.js
       }
@@ -112,14 +111,11 @@ class AddCredentialController extends Controller {
       console.error("Error in WebAuthn flow:", error);
       console.error(`Error: ${error.message || "Something went wrong. Please try again."}`);
 
-      this.withTarget('submitButton', (target) => {
-        target.disabled = false;
-      })
+      if (this.hasSubmitButtonTarget) {
+        this.submitButtonTarget.disabled = false;
+      }
     }
   }
 }
-
-// Apply target safety mixin
-applyTargetSafety(AddCredentialController)
 
 export default AddCredentialController

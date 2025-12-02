@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 
 /**
@@ -29,12 +28,12 @@ class DocumentProofHandlerController extends Controller {
     this.updateVisibility();
     
     // Add event listener for rejection reason selection
-    this.withTarget('rejectionReasonSelect', (target) => {
-      target.addEventListener('change', () => {
+    if (this.hasRejectionReasonSelectTarget) {
+      this.rejectionReasonSelectTarget.addEventListener('change', () => {
         this.previewRejectionReason();
         this.populateRejectionNotes();
       });
-    });
+    }
   }
 
   /**
@@ -51,7 +50,7 @@ class DocumentProofHandlerController extends Controller {
    * based on the selected radio
    */
   updateVisibility() {
-    if (!this.hasRequiredTargets('acceptRadio', 'uploadSection', 'rejectionSection')) {
+    if (!this.hasAcceptRadioTarget || !this.hasUploadSectionTarget || !this.hasRejectionSectionTarget) {
       return;
     }
 
@@ -61,51 +60,59 @@ class DocumentProofHandlerController extends Controller {
     setVisible(this.uploadSectionTarget, isAccepted);
     setVisible(this.rejectionSectionTarget, !isAccepted);
     
-    // Toggle file input enabled state
-    this.withTarget('fileInput', (target) => {
+    // Toggle file input enabled state and required attribute
+    if (this.hasFileInputTarget) {
+      const target = this.fileInputTarget;
       target.disabled = !isAccepted;
 
-      // Clear file when switching to reject
-      if (!isAccepted && target.value) {
-        target.value = '';
+      if (isAccepted) {
+        target.setAttribute('required', 'required');
+      } else {
+        target.removeAttribute('required');
+        // Clear file when switching to reject
+        if (target.value) {
+          target.value = '';
+        }
       }
-    });
+    }
 
     // Toggle required attributes on fields
-    this.withTarget('rejectionReasonSelect', (target) => {
+    if (this.hasRejectionReasonSelectTarget) {
+      const target = this.rejectionReasonSelectTarget;
       if (isAccepted) {
         target.removeAttribute('required');
       } else {
         target.setAttribute('required', 'required');
       }
-    });
+    }
 
-    this.withTarget('rejectionNotes', (target) => {
+    if (this.hasRejectionNotesTarget) {
+      const target = this.rejectionNotesTarget;
       if (isAccepted) {
         target.removeAttribute('required');
       }
       // If rejectionNotes should be required when rejecting, add:
       // else { target.setAttribute('required', 'required'); }
-    });
+    }
   }
 
   /**
    * Preview the rejection reason text
    */
   previewRejectionReason() {
-    this.withTarget('reasonPreview', (previewTarget) => {
-      this.withTarget('rejectionReasonSelect', (selectTarget) => {
-        const selectedReason = selectTarget.value;
+    if (this.hasReasonPreviewTarget && this.hasRejectionReasonSelectTarget) {
+      const selectTarget = this.rejectionReasonSelectTarget;
+      const previewTarget = this.reasonPreviewTarget;
+      const selectedReason = selectTarget.value;
 
-        if (selectedReason) {
-          // In a real app, we'd use I18n or data attributes to get formatted reason text
-          previewTarget.textContent = this.formatRejectionReason(selectedReason);
-          setVisible(previewTarget, true);
-        } else {
-          setVisible(previewTarget, false);
-        }
-      });
-    });
+      if (selectedReason) {
+        // In a real app, we'd use I18n or data attributes to get formatted reason text
+        previewTarget.textContent = this.formatRejectionReason(selectedReason);
+        setVisible(previewTarget, true);
+      } else {
+        setVisible(previewTarget, false);
+      }
+    }
   }
   
   /**
@@ -133,18 +140,18 @@ class DocumentProofHandlerController extends Controller {
    * Populate the rejection notes field with appropriate text based on selected reason
    */
   populateRejectionNotes() {
-    this.withTarget('rejectionNotes', (notesTarget) => {
-      this.withTarget('rejectionReasonSelect', (selectTarget) => {
-        const selectedReason = selectTarget.value;
-        
-        if (selectedReason && !notesTarget.value) {
-          // Only populate if the field is empty
-          const reasonText = this.formatRejectionReason(selectedReason);
-          const instructionalText = this.getInstructionalText(selectedReason);
-          notesTarget.value = `${reasonText} ${instructionalText}`;
-        }
-      });
-    });
+    if (this.hasRejectionNotesTarget && this.hasRejectionReasonSelectTarget) {
+      const notesTarget = this.rejectionNotesTarget;
+      const selectTarget = this.rejectionReasonSelectTarget;
+      const selectedReason = selectTarget.value;
+      
+      if (selectedReason && !notesTarget.value) {
+        // Only populate if the field is empty
+        const reasonText = this.formatRejectionReason(selectedReason);
+        const instructionalText = this.getInstructionalText(selectedReason);
+        notesTarget.value = `${reasonText} ${instructionalText}`;
+      }
+    }
   }
 
   /**
@@ -167,8 +174,5 @@ class DocumentProofHandlerController extends Controller {
     return instructions[reasonCode] || 'Please provide the required documentation.';
   }
 }
-
-// Apply target safety mixin
-applyTargetSafety(DocumentProofHandlerController)
 
 export default DocumentProofHandlerController

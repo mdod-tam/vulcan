@@ -30,6 +30,7 @@ export default class extends Controller {
     this.togglePanes();
     this.dispatchSelectionChange();
     this.clearDependentsFrame();
+    this.hideMedicalProviderPrefillNotice();
   }
 
   /* Internal helpers ----------------------------------------------------- */
@@ -71,33 +72,76 @@ export default class extends Controller {
           // Fire input/change events so any validators update
           el.dispatchEvent(new Event('input', { bubbles: true }))
           el.dispatchEvent(new Event('change', { bubbles: true }))
+          return true // Actually filled a value
         }
-        return true
+        return false
       }
 
       // Try immediately, retry once if elements not yet present
       let foundAny = false
       foundAny = setIfEmpty('input[name="application[household_size]"]', data.household_size) || foundAny
       foundAny = setIfEmpty('input[name="application[annual_income]"]', data.annual_income) || foundAny
-      foundAny = setIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || foundAny
-      foundAny = setIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || foundAny
-      foundAny = setIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || foundAny
-      foundAny = setIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || foundAny
+      
+      // Track if medical provider fields were prefilled
+      let medicalPrefilled = false
+      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || medicalPrefilled
+      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || medicalPrefilled
+      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || medicalPrefilled
+      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || medicalPrefilled
+      foundAny = foundAny || medicalPrefilled
+      
+      // Show prefill notice if medical provider data was reused
+      if (medicalPrefilled) {
+        this.showMedicalProviderPrefillNotice(data.applicant_name, data.application_date)
+      }
 
       if (!foundAny) {
         // Retry after UI settles
         setTimeout(() => {
+          let retryMedicalPrefilled = false
           setIfEmpty('input[name="application[household_size]"]', data.household_size)
           setIfEmpty('input[name="application[annual_income]"]', data.annual_income)
-          setIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name)
-          setIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone)
-          setIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax)
-          setIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email)
+          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || retryMedicalPrefilled
+          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || retryMedicalPrefilled
+          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || retryMedicalPrefilled
+          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || retryMedicalPrefilled
+          
+          if (retryMedicalPrefilled) {
+            this.showMedicalProviderPrefillNotice(data.applicant_name, data.application_date)
+          }
         }, 150)
       }
     } catch (e) {
       // Silent fail to avoid interrupting admin flow
       console.warn('prefillFromLastApplication failed', e);
+    }
+  }
+
+  showMedicalProviderPrefillNotice(applicantName, applicationDate) {
+    const notice = document.getElementById('medical-provider-prefill-notice')
+    const source = document.getElementById('medical-provider-prefill-source')
+    if (!notice || !source) return
+
+    // Format date if available
+    let dateStr = ''
+    if (applicationDate) {
+      const date = new Date(applicationDate)
+      dateStr = ` (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`
+    }
+
+    // Update source text with applicant info
+    source.textContent = applicantName 
+      ? `${applicantName}'s application${dateStr}`
+      : `previous application${dateStr}`
+
+    // Show the notice
+    notice.classList.remove('hidden')
+  }
+
+  hideMedicalProviderPrefillNotice() {
+    const notice = document.getElementById('medical-provider-prefill-notice')
+    if (notice) {
+      notice.classList.add('hidden')
     }
   }
 

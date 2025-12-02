@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 
 // This controller handles the toggling of custom date range fields
@@ -20,7 +19,7 @@ class DateRangeController extends Controller {
     const isCustomRange = selectElement && selectElement.value === "custom"
     
     // Use target safety to check for required targets
-    if (!this.hasRequiredTargets('customRange')) {
+    if (!this.hasCustomRangeTarget) {
       return;
     }
     
@@ -32,6 +31,5 @@ class DateRangeController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(DateRangeController)
 
 export default DateRangeController

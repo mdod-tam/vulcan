@@ -1,5 +1,4 @@
 import ChartBaseController from "./base_controller"
-import { applyTargetSafety } from "../../mixins/target_safety"
 
 /**
  * ReportsChartController
@@ -222,6 +221,5 @@ class ReportsChartController extends ChartBaseController {
 }
 
 // Apply target safety mixin
-applyTargetSafety(ReportsChartController)
 
 export default ReportsChartController

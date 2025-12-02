@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 
 // Connects to data-controller="checkbox-select-all"
 class CheckboxSelectAllController extends Controller {
@@ -18,7 +17,7 @@ class CheckboxSelectAllController extends Controller {
       console.log("Select All clicked")
     }
     
-    if (!this.hasRequiredTargets('select', 'checkbox')) {
+    if (!this.hasSelectTarget || !this.hasCheckboxTargets) {
       return;
     }
 
@@ -37,7 +36,7 @@ class CheckboxSelectAllController extends Controller {
       console.log("Checkbox changed")
     }
     
-    if (!this.hasRequiredTargets('select', 'checkbox')) {
+    if (!this.hasSelectTarget || !this.hasCheckboxTargets) {
       return;
     }
 
@@ -56,24 +55,22 @@ class CheckboxSelectAllController extends Controller {
     }
     
     // Update all submit buttons using target safety
-    this.withTargets('actionButton', (buttons) => {
-      buttons.forEach(button => {
-        button.disabled = !anyChecked
-      })
-    });
+    this.actionButtonTargets.forEach(button => {
+      button.disabled = !anyChecked
+    })
   }
   
   // Update the form fields for both forms
   updateFormFields() {
     // Update the download form
-    this.withTarget('downloadForm', (form) => {
-      this.updateFormWithIds(form);
-    });
+    if (this.hasDownloadFormTarget) {
+      this.updateFormWithIds(this.downloadFormTarget);
+    }
     
     // Update the mark as printed form
-    this.withTarget('markPrintedForm', (form) => {
-      this.updateFormWithIds(form);
-    });
+    if (this.hasMarkPrintedFormTarget) {
+      this.updateFormWithIds(this.markPrintedFormTarget);
+    }
   }
   
   // Helper method to update a form with letter_ids
@@ -99,6 +96,5 @@ class CheckboxSelectAllController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(CheckboxSelectAllController)
 
 export default CheckboxSelectAllController

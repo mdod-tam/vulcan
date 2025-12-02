@@ -1,6 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { createFormChangeDebounce } from "../../utils/debounce"
 import { setVisible } from "../../utils/visibility"
 
@@ -39,7 +38,7 @@ class AutosaveController extends Controller {
   }
 
   setupFieldListeners() {
-    if (!this.safeTarget('form', false)) return
+    if (!this.hasFormTarget) return
 
     // Get all form inputs except file inputs, buttons, and submit inputs
     const formInputs = this.formTarget.querySelectorAll(
@@ -188,7 +187,8 @@ class AutosaveController extends Controller {
   }
 
   updateStatus(message, cssClass) {
-    this.withTarget('autosaveStatus', (target) => {
+    if (this.hasAutosaveStatusTarget) {
+      const target = this.autosaveStatusTarget
       target.textContent = message
 
       // Reset classes
@@ -201,7 +201,7 @@ class AutosaveController extends Controller {
 
       // Use setVisible utility for consistent visibility management
       setVisible(target, !!message)
-    })
+    }
   }
 
   displayFieldError(element, message) {
@@ -270,6 +270,5 @@ class AutosaveController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(AutosaveController)
 
 export default AutosaveController

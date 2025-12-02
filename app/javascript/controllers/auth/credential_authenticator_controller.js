@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { verifyWebAuthn } from "../../auth"
 
 class CredentialAuthenticatorController extends Controller {
@@ -26,7 +25,7 @@ class CredentialAuthenticatorController extends Controller {
   async startVerification(event) {
     event.preventDefault()
 
-    if (!this.hasRequiredTargets('webauthnForm')) {
+    if (!this.hasWebauthnFormTarget) {
       // If the form target is missing, bail out
       return
     }
@@ -131,10 +130,11 @@ class CredentialAuthenticatorController extends Controller {
       const result = await verifyWebAuthn(options, null, null)
 
       if (result.success) {
-        this.withTarget('verificationButton', (button) => {
+        if (this.hasVerificationButtonTarget) {
+          const button = this.verificationButtonTarget
           button.textContent = "Verified"
           button.disabled = true
-        })
+        }
         console.log("Security key verified successfully!")
       } else {
         console.error(result.message || "Security key verification failed")
@@ -153,6 +153,5 @@ class CredentialAuthenticatorController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(CredentialAuthenticatorController)
 
 export default CredentialAuthenticatorController

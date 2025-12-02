@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 import { calculateThreshold as calculateThresholdUtil } from "../../services/income_threshold"
 
@@ -12,7 +11,7 @@ import { calculateThreshold as calculateThresholdUtil } from "../../services/inc
  */
 class IncomeValidationController extends Controller {
   static targets = [
-    "householdSize", "annualIncome", "warningContainer", "submitButton"
+    "householdSize", "annualIncome", "warningContainer", "submitButton", "incomeFieldsContainer"
   ]
 
   static outlets = ["flash"] // Declare flash outlet
@@ -63,31 +62,35 @@ class IncomeValidationController extends Controller {
   }
 
   setupEventListeners() {
-    this.withTarget('householdSize', (target) => {
+    if (this.hasHouseholdSizeTarget) {
+      const target = this.householdSizeTarget
       target.addEventListener("input", this._validate)
       target.addEventListener("change", this._validate)
       target.addEventListener("blur", this._validate, true)
-    })
+    }
 
-    this.withTarget('annualIncome', (target) => {
+    if (this.hasAnnualIncomeTarget) {
+      const target = this.annualIncomeTarget
       target.addEventListener("input", this._validate)
       target.addEventListener("change", this._validate)
       target.addEventListener("blur", this._validate, true)
-    })
+    }
   }
 
   teardownEventListeners() {
-    this.withTarget('householdSize', (target) => {
+    if (this.hasHouseholdSizeTarget) {
+      const target = this.householdSizeTarget
       target.removeEventListener("input", this._validate)
       target.removeEventListener("change", this._validate)
       target.removeEventListener("blur", this._validate, true)
-    })
+    }
 
-    this.withTarget('annualIncome', (target) => {
+    if (this.hasAnnualIncomeTarget) {
+      const target = this.annualIncomeTarget
       target.removeEventListener("input", this._validate)
       target.removeEventListener("change", this._validate)
       target.removeEventListener("blur", this._validate, true)
-    })
+    }
   }
 
 
@@ -119,13 +122,16 @@ class IncomeValidationController extends Controller {
   }
 
   getHouseholdSize() {
-    return this.withTarget('householdSize', (target) => {
+    if (this.hasHouseholdSizeTarget) {
+      const target = this.householdSizeTarget
       return parseInt(target.value, 10) || 0
-    }, 0)
+    }
+    return 0
   }
 
   getAnnualIncome() {
-    return this.withTarget('annualIncome', (target) => {
+    if (this.hasAnnualIncomeTarget) {
+      const target = this.annualIncomeTarget
       // Handle both formatted and raw input values
       const value = target.value
       const rawValue = target.dataset.rawValue
@@ -141,7 +147,8 @@ class IncomeValidationController extends Controller {
       const parsed = parseFloat(value)
       if (!Number.isNaN(parsed)) return parsed
       return parseFloat((value || '').replace(/[^\d.-]/g, '')) || 0
-    }, 0)
+    }
+    return 0
   }
 
   calculateThresholdForSize(householdSize) {
@@ -165,16 +172,18 @@ class IncomeValidationController extends Controller {
   updateValidationUI(exceedsThreshold, threshold) {
     this.updateWarningDisplay(exceedsThreshold, threshold)
     this.updateSubmitButton(exceedsThreshold)
+    this.updateIncomeFieldsContainerStyle(exceedsThreshold)
   }
 
   updateWarningDisplay(exceedsThreshold, threshold) {
-    this.withTarget('warningContainer', (target) => {
+    if (this.hasWarningContainerTarget) {
+      const target = this.warningContainerTarget
       if (exceedsThreshold) {
         this.showWarning(target, threshold)
       } else {
         this.hideWarning(target)
       }
-    })
+    }
   }
 
   showWarning(target, threshold) {
@@ -210,7 +219,8 @@ class IncomeValidationController extends Controller {
   }
 
   updateSubmitButton(exceedsThreshold) {
-    this.withTarget('submitButton', (target) => {
+    if (this.hasSubmitButtonTarget) {
+      const target = this.submitButtonTarget
       const prev = target.disabled
       if (prev === exceedsThreshold) return
       target.disabled = exceedsThreshold
@@ -222,12 +232,53 @@ class IncomeValidationController extends Controller {
         target.classList.remove("opacity-50", "cursor-not-allowed")
         target.removeAttribute("disabled")
       }
-    })
+    }
   }
 
   clearValidationState() {
-    this.withTarget('warningContainer', (target) => this.hideWarning(target))
+    if (this.hasWarningContainerTarget) {
+      this.hideWarning(this.warningContainerTarget)
+    }
     this.updateSubmitButton(false)
+    this.resetIncomeFieldsContainerStyle()
+  }
+
+  /**
+   * Updates the income fields container background to provide visual feedback
+   * Green = income within threshold, Red = income exceeds threshold
+   */
+  updateIncomeFieldsContainerStyle(exceedsThreshold) {
+    if (!this.hasIncomeFieldsContainerTarget) return
+
+    const container = this.incomeFieldsContainerTarget
+    // Remove all validation-related classes first
+    container.classList.remove(
+      'bg-gray-50', 'border-gray-200',
+      'bg-green-50', 'border-green-300',
+      'bg-red-50', 'border-red-300'
+    )
+
+    if (exceedsThreshold) {
+      // Red background for exceeds threshold
+      container.classList.add('bg-red-50', 'border-red-300')
+    } else {
+      // Green background for within threshold
+      container.classList.add('bg-green-50', 'border-green-300')
+    }
+  }
+
+  /**
+   * Resets the income fields container to neutral state (gray)
+   */
+  resetIncomeFieldsContainerStyle() {
+    if (!this.hasIncomeFieldsContainerTarget) return
+
+    const container = this.incomeFieldsContainerTarget
+    container.classList.remove(
+      'bg-green-50', 'border-green-300',
+      'bg-red-50', 'border-red-300'
+    )
+    container.classList.add('bg-gray-50', 'border-gray-200')
   }
 
 
@@ -239,6 +290,5 @@ class IncomeValidationController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(IncomeValidationController)
 
 export default IncomeValidationController

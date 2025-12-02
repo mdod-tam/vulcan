@@ -1,6 +1,5 @@
 import BaseFormController from "../base/form_controller"
 import { railsRequest } from "../../services/rails_request"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 
 class UserSearchController extends BaseFormController {
@@ -25,7 +24,7 @@ class UserSearchController extends BaseFormController {
     super.connect()
 
     // Add debounced search listener using our new pattern
-    if (this.safeTarget('searchInput')) {
+    if (this.hasSearchInputTarget) {
       this.addDebouncedListener(
         this.searchInputTarget,
         'input',
@@ -49,8 +48,8 @@ class UserSearchController extends BaseFormController {
 
   navigateToSearch(q) {
     // Find the turbo frame that should handle the search results
-    const turboFrame = this.safeTarget('searchResults')
-    if (!turboFrame) return
+    if (!this.hasSearchResultsTarget) return
+    const turboFrame = this.searchResultsTarget
 
     // Construct the search URL
     const searchUrl = `${this.searchUrlValue}?q=${encodeURIComponent(q)}&role=${this.defaultRoleValue}`
@@ -62,21 +61,23 @@ class UserSearchController extends BaseFormController {
   }
 
   clearResults() {
-    this.withTarget('searchResults', (target) => {
+    if (this.hasSearchResultsTarget) {
+      const target = this.searchResultsTarget
       // Clear the turbo frame by removing its src
       target.removeAttribute('src')
       target.innerHTML = '<p class="text-sm text-gray-500 p-3">Type a name or email to search for guardians.</p>'
       setVisible(target, false)
-    })
+    }
   }
 
 
 
   clearSearchAndShowForm() {
-    this.withTarget('searchInput', (input) => {
+    if (this.hasSearchInputTarget) {
+      const input = this.searchInputTarget
       input.value = ""
       input.focus()
-    })
+    }
 
     this.clearResults()
 
@@ -99,10 +100,11 @@ class UserSearchController extends BaseFormController {
 
   // Separate method for when we actually want to clear everything
   clearSearchAndSelection() {
-    this.withTarget('searchInput', (input) => {
+    if (this.hasSearchInputTarget) {
+      const input = this.searchInputTarget
       input.value = ""
       input.focus()
-    })
+    }
 
     this.clearResults()
 
@@ -394,6 +396,5 @@ class UserSearchController extends BaseFormController {
 }
 
 // Apply target safety mixin
-applyTargetSafety(UserSearchController)
 
 export default UserSearchController

@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 import { setVisible } from "../../utils/visibility"
 
 class MobileMenuController extends Controller {
@@ -7,7 +6,7 @@ class MobileMenuController extends Controller {
   
   toggle() {
     // Use target safety to check for required targets
-    if (!this.hasRequiredTargets('menu', 'button')) {
+    if (!this.hasMenuTarget || !this.hasButtonTarget) {
       return;
     }
     
@@ -20,6 +19,5 @@ class MobileMenuController extends Controller {
 }
 
 // Apply target safety mixin
-applyTargetSafety(MobileMenuController)
 
 export default MobileMenuController

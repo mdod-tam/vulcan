@@ -1,5 +1,4 @@
 import { Controller } from "@hotwired/stimulus"
-import { applyTargetSafety } from "../../mixins/target_safety"
 
 class TotpFormController extends Controller {
   static targets = [
@@ -45,7 +44,8 @@ class TotpFormController extends Controller {
     // Small delay to ensure DOM has updated after stream render
     setTimeout(() => {
       // Use target safety mixin for safe access
-      this.withTarget('mainContent', (target) => {
+      if (this.hasMainContentTarget) {
+        const target = this.mainContentTarget
         const newForm = target.querySelector('[data-controller="totp-form"]')
         
         if (newForm && newForm !== this.element) {
@@ -59,36 +59,37 @@ class TotpFormController extends Controller {
             newCodeInput.focus()
           }
         }
-      });
+      }
     }, 100)
   }
 
   disableSubmitButton() {
-    this.withTarget('submitButton', (button) => {
-      button.disabled = true
-    });
+    if (this.hasSubmitButtonTarget) {
+      this.submitButtonTarget.disabled = true
+    }
   }
 
   enableSubmitButton() {
-    this.withTarget('submitButton', (button) => {
+    if (this.hasSubmitButtonTarget) {
+      const button = this.submitButtonTarget
       button.disabled = false
       if (process.env.NODE_ENV !== 'production') {
         console.log("Submit button enabled")
       }
-    });
+    }
   }
   
   focusCodeInput() {
-    this.withTarget('codeInput', (input) => {
+    if (this.hasCodeInputTarget) {
+      const input = this.codeInputTarget
       input.focus()
       if (process.env.NODE_ENV !== 'production') {
         console.log("Code input field focused")
       }
-    });
+    }
   }
 }
 
 // Apply target safety mixin
-applyTargetSafety(TotpFormController)
 
 export default TotpFormController

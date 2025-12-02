@@ -10,7 +10,6 @@ A concise reference to the Stimulus-based, service-driven JS layer that powers o
 |-----------|-------------|
 | **Centralized services** | One request / chart / notification service used by every controller. |
 | **Base controllers** | Shared form & chart logic via inheritance (`BaseFormController`, `ChartBaseController`). |
-| **Target safety** | Target safety mixin provides safe target access with warnings. |
 | **Event-driven** | Controllers communicate through custom events, not direct calls. |
 | **Fail-fast** | Missing targets & unhandled errors surface immediately. |
 
@@ -33,7 +32,7 @@ if (result.success) { ... } else if (!result.aborted) { ... }
 
 * Singleton export: `railsRequest` (cancellable by `key`, plus `cancel`/`cancelAll`).  
 * Safe response parsing for JSON and HTML/Turbo Streams with body clone fallback to avoid `bodyUsed` errors.  
-* Global `unhandledrejection` handler suppresses the known `@rails/request.js` JSON parsing warning when HTML is returned.  
+* Development-time guard rejects HTML requests to catch backend misconfigurations.  
 * Basic scaffolding for upload progress hooks (not widely used in production flows).  
 * Uses server-rendered Rails flash for user-visible messages. Client-side code does not show toasts.
 
@@ -125,37 +124,7 @@ class UserFormController extends BaseFormController {
 
 ---
 
-## 4 · Target Safety
-
-```javascript
-import { applyTargetSafety } from "../mixins/target_safety"
-
-class MyController extends Controller {
-  static targets = ['submit', 'status']
-  
-  save() {
-    const btn = this.safeTarget('submit')
-    if (btn) btn.disabled = true
-  }
-}
-applyTargetSafety(MyController)
-```
-
-* `safeTarget()` and `safeTargets()` helpers with optional warnings.  
-* Development-time warnings for missing targets.
-
-HTML pattern:
-
-```erb
-<form data-controller="my" data-my-target="form">
-  <button data-my-target="submit">Save</button>
-  <div   data-my-target="status"></div>
-</form>
-```
-
----
-
-## 5 · Flash Notifications
+## 4 · Flash Notifications
 
 * Use Rails flash for in-app messages (notice/alert/info/warning/success).
 * For Turbo Stream responses, set `flash.now[...]` and update the `#flash` frame with `shared/flash`.
@@ -163,7 +132,7 @@ HTML pattern:
 
 ---
 
-## 6 · Event-Driven Workflows
+## 5 · Event-Driven Workflows
 
 Controllers communicate through custom events:
 
@@ -184,7 +153,7 @@ Income validation flow
 
 ---
 
-## 7 · Form Data Handling
+## 6 · Form Data Handling
 
 ```javascript
 // BaseFormController automatically handles form data collection
@@ -201,7 +170,7 @@ collectFormData() {
 
 ---
 
-## 8 · Chart.js Integration
+## 7 · Chart.js Integration
 
 ```javascript
 // application.js - Tree-shaken Chart.js imports
@@ -217,7 +186,7 @@ window.Chart = Chart
 
 ---
 
-## 9 · Controller Organization
+## 8 · Controller Organization
 
 Controllers are organized by domain:
 
@@ -238,7 +207,7 @@ Development-only `debug_controller` is conditionally loaded when `NODE_ENV=devel
 
 ---
 
-## 10 · Production Safeguards
+## 9 · Production Safeguards
 
 | Concern | Mitigation |
 |---------|------------|
@@ -250,21 +219,19 @@ Development-only `debug_controller` is conditionally loaded when `NODE_ENV=devel
 
 ---
 
-## 11 · Development Features
+## 10 · Development Features
 
 * **Debug controller** (development-only) for diagnostics.
-* **Target safety warnings** in development mode.
 * **Request service logging** for debugging API calls.
 * Controllers clean up event listeners in `disconnect()` to avoid leaks.
 
 ---
 
-## 12 · Current Architecture Status
+## 11 · Current Architecture Status
 
 ✅ **Implemented:**
 - All core services (`rails_request`, `chart_config`)
 - Base controllers with inheritance patterns
-- Target safety mixin with development warnings  
 - Event-driven communication between controllers
 - Comprehensive controller organization by domain
 - Chart.js integration with tree-shaking and stability fixes
