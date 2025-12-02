@@ -9,22 +9,11 @@ import AddCredentialController from "./auth/add_credential_controller"
 import CredentialAuthenticatorController from "./auth/credential_authenticator_controller"
 import TotpFormController from "./auth/totp_form_controller"
 
-// Chart Controllers - lazily load only when needed to avoid loading Chart.js on non-chart pages
-let chartControllersRegistered = false
-async function ensureChartControllers() {
-  if (chartControllersRegistered) return
-  const hasCharts = document.querySelector("[data-controller*='chart']") || document.querySelector("[data-controller='reports-chart']")
-  if (!hasCharts) return
-  const [{ default: ChartController }, { default: ChartToggleController }, { default: ReportsChartController }] = await Promise.all([
-    import("./charts/chart_controller"),
-    import("./charts/toggle_controller"),
-    import("./charts/reports_chart_controller"),
-  ])
-  application.register("chart", ChartController)
-  application.register("chart-toggle", ChartToggleController)
-  application.register("reports-chart", ReportsChartController)
-  chartControllersRegistered = true
-}
+// Chart Controllers - registered synchronously to ensure Stimulus can connect them
+// Note: Chart.js is loaded in application.js, so no additional bundle cost
+import ChartController from "./charts/chart_controller"
+import ChartToggleController from "./charts/toggle_controller"
+import ReportsChartController from "./charts/reports_chart_controller"
 
 // Form Controllers
 import ApplicationFormController from "./forms/application_form_controller"
@@ -58,9 +47,6 @@ import ApplicantTypeController from "./users/applicant_type_controller"
 import DocumentProofHandlerController from "./users/document_proof_handler_controller"
 import GuardianPickerController from "./users/guardian_picker_controller"
 
-// Chart configuration
-import { chartConfig } from "../services/chart_config"
-
 // Development-only imports
 if (process.env?.NODE_ENV === "development") {
   import("./debug_controller").then(module => {
@@ -78,8 +64,10 @@ application.register("add-credential", AddCredentialController)
 application.register("credential-authenticator", CredentialAuthenticatorController)
 application.register("totp-form", TotpFormController)
 
-// Lazily register chart controllers on demand
-ensureChartControllers()
+// Chart Controllers
+application.register("chart", ChartController)
+application.register("chart-toggle", ChartToggleController)
+application.register("reports-chart", ReportsChartController)
 
 // Form Controllers
 application.register("application-form", ApplicationFormController)

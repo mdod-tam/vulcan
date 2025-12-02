@@ -340,7 +340,11 @@
         <div class="bg-gray-50 rounded p-4">
           <h3 id="vendor-details-heading" class="font-medium text-gray-700 mb-2">Vendor Activity Details</h3>
           <p class="text-sm text-gray-500 mb-4">
-            <%= @recent_active_vendors %> out of <%= @active_vendors %> vendors (<%= number_to_percentage((@recent_active_vendors.to_f / @active_vendors) * 100, precision: 1) unless @active_vendors.zero? %>) have been active in the last month.
+            <% if @active_vendors.zero? %>
+              No vendors have recorded transactions yet.
+            <% else %>
+              <%= @recent_active_vendors %> out of <%= @active_vendors %> vendors (<%= number_to_percentage((@recent_active_vendors.to_f / @active_vendors) * 100, precision: 1) %>) have been active in the last month.
+            <% end %>
           </p>
           
           <div class="flex flex-col space-y-2">

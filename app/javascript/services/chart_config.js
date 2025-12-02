@@ -57,9 +57,40 @@ export class ChartConfigService {
     }
   }
 
-  // Simple object merge
+  // Deep merge for nested chart options (e.g., scales.y.title)
+  // Objects are recursively merged
   mergeOptions(...options) {
-    return Object.assign({}, ...options)
+    return options.reduce((acc, opt) => this._deepMerge(acc, opt), {})
+  }
+
+  _deepMerge(target, source) {
+    if (!source || typeof source !== 'object') {
+      return source
+    }
+    
+    const output = { ...target }
+    
+    for (const key of Object.keys(source)) {
+      const sourceValue = source[key]
+      const targetValue = target?.[key]
+      
+      // If source value is a plain object (not array, not null), merge recursively
+      if (
+        sourceValue !== null &&
+        typeof sourceValue === 'object' &&
+        !Array.isArray(sourceValue) &&
+        targetValue !== null &&
+        typeof targetValue === 'object' &&
+        !Array.isArray(targetValue)
+      ) {
+        output[key] = this._deepMerge(targetValue, sourceValue)
+      } else {
+        // For primitives, arrays, and null: replace entirely
+        output[key] = sourceValue
+      }
+    }
+    
+    return output
   }
 
   // Currency formatter

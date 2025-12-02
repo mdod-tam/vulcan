@@ -109,6 +109,37 @@ describe('ChartConfigService', () => {
       const merged = service.mergeOptions({ a: 1 }, { b: 2 }, { a: 3 });
       expect(merged).toEqual({ a: 3, b: 2 });
     });
+
+    it('deeply merges nested objects', () => {
+      const merged = service.mergeOptions(
+        { scales: { y: { beginAtZero: true } } },
+        { scales: { y: { title: { display: true, text: 'Value' } } } }
+      );
+      expect(merged).toEqual({
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'Value' }
+          }
+        }
+      });
+    });
+
+    it('replaces arrays instead of merging them', () => {
+      const merged = service.mergeOptions(
+        { data: [1, 2, 3] },
+        { data: [4, 5] }
+      );
+      expect(merged).toEqual({ data: [4, 5] });
+    });
+
+    it('handles null values correctly', () => {
+      const merged = service.mergeOptions(
+        { a: { b: 1 } },
+        { a: null }
+      );
+      expect(merged).toEqual({ a: null });
+    });
   });
 
   describe('formatters', () => {
