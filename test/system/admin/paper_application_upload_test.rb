@@ -55,7 +55,7 @@ module Admin
       # Wait until the adult applicant information section is visible & enabled
       find('fieldset[data-applicant-type-target="adultSection"]', visible: true, wait: 10)
 
-      # Also wait for the common sections (Application Details, etc.) to become visible
+      # Also wait for the common sections to become visible
       find('[data-applicant-type-target="commonSections"]', visible: true, wait: 10)
 
       # 3. Fill in Applicant's Information (with explicit field clearing to prevent concatenation)
@@ -71,15 +71,9 @@ module Admin
         find('input[name="constituent[zip_code]"]').set('').set('21201')
       end
 
-      # 4. Fill in Application Details within common sections
+      # 4. Fill in form sections within common sections
       within '[data-applicant-type-target="commonSections"]' do
-        within 'fieldset', text: 'Application Details' do
-          fill_in 'application[household_size]', with: '2'
-          fill_in 'application[annual_income]', with: '10000' # Below threshold
-          check 'application_maryland_resident'
-        end
-
-        # 5. Fill in Disability Information with randomized selection
+        # Fill in Disability Information with randomized selection
         within 'fieldset', text: 'Disability Information (for the Applicant)' do
           check 'applicant_attributes_self_certify_disability'
 
@@ -89,7 +83,7 @@ module Admin
           check "applicant_attributes_#{selected_disability}_disability"
         end
 
-        # 6. Fill in Medical Provider Information (including fax)
+        # Fill in Medical Provider Information (including fax)
         within 'fieldset', text: 'Medical Provider Information' do
           fill_in 'application[medical_provider_name]', with: 'Dr. Jane Smith'
           fill_in 'application[medical_provider_phone]', with: '555-987-6543'
@@ -97,20 +91,27 @@ module Admin
           fill_in 'application[medical_provider_email]', with: 'dr.smith@example.com'
         end
 
-        # 7. Fill in Alternate Contact (optional) - This was missing from previous tests
+        # Fill in Alternate Contact (optional) - This was missing from previous tests
         within 'fieldset', text: 'Alternate Contact (optional)' do
           fill_in 'application[alternate_contact_name]', with: 'Jane Doe'
           fill_in 'application[alternate_contact_phone]', with: '555-123-4567'
           fill_in 'application[alternate_contact_email]', with: 'jane.doe@example.com'
         end
 
-        # 8. Handle Proof Documents
+        # Handle Proof Documents (income/residency info and uploads are now here)
         within 'fieldset', text: 'Proof Documents' do
+          # Income info is now within the Income Proof section
+          fill_in 'application[household_size]', with: '2'
+          fill_in 'application[annual_income]', with: '10000' # Below threshold
+
           # Income proof - select accept and upload file
           within 'div[data-controller="document-proof-handler"][data-document-proof-handler-type-value="income"]' do
             choose 'Accept Income Proof and Upload'
             attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
           end
+
+          # Maryland resident checkbox is now within the Residency Proof section
+          check 'application_maryland_resident'
 
           # Residency proof - select accept and upload file
           within 'div[data-controller="document-proof-handler"][data-document-proof-handler-type-value="residency"]' do
@@ -164,7 +165,7 @@ module Admin
       # Use longer timeout to allow Stimulus controllers to fully initialize
       find('fieldset[data-applicant-type-target="adultSection"]', visible: true, wait: 10)
 
-      # Also wait for the common sections (Application Details, etc.) to become visible
+      # Also wait for the common sections to become visible
       find('[data-applicant-type-target="commonSections"]', visible: true, wait: 10)
 
       # Additional wait to ensure Stimulus controllers have fully processed the visibility changes
@@ -187,13 +188,6 @@ module Admin
 
       # Fill in the common sections that should be visible
       within '[data-applicant-type-target="commonSections"]' do
-        # Fill in application details
-        within 'fieldset', text: 'Application Details' do
-          fill_in 'application[household_size]', with: '2'
-          fill_in 'application[annual_income]', with: '10000' # Below threshold
-          check 'application_maryland_resident'
-        end
-
         # Fill in disability information
         within 'fieldset', text: 'Disability Information (for the Applicant)' do
           check 'applicant_attributes_self_certify_disability'
@@ -205,6 +199,15 @@ module Admin
           fill_in 'application[medical_provider_name]', with: 'Dr. Jane Smith'
           fill_in 'application[medical_provider_phone]', with: '555-987-6543'
           fill_in 'application[medical_provider_email]', with: 'dr.smith@example.com'
+        end
+
+        # Fill in proof documents section (income and residency info moved here)
+        within 'fieldset', text: 'Proof Documents' do
+          # Income information is now within the Income Proof section
+          fill_in 'application[household_size]', with: '2'
+          fill_in 'application[annual_income]', with: '10000' # Below threshold
+          # Maryland resident checkbox is now within the Residency Proof section
+          check 'application_maryland_resident'
         end
       end
     end
@@ -252,7 +255,7 @@ module Admin
       click_on 'Submit Paper Application'
 
       # Should see an error message about missing files (since accept is selected by default)
-      assert_selector '.bg-red-100', text: /Please upload.*document/
+      assert_selector '.bg-red-100', text: /Please upload.*(?:document|file|proof)/
 
       # Should stay on the same page
       assert_current_path new_admin_paper_application_path

@@ -16,7 +16,6 @@ module ConstituentPortal
     end
 
     test 'shows error when trying to submit without selecting disabilities' do
-      skip 'Skipping due to view rendering issues in system tests'
       # Fill in required fields
       check 'I certify that I am a resident of Maryland'
       fill_in 'Household Size', with: 2
@@ -28,12 +27,20 @@ module ConstituentPortal
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
+        check 'I authorize the release and sharing of my medical information as described above'
       end
 
-      # Submit without selecting any disabilities
+      # Upload required documents
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
+
+      # Wait for FPL thresholds to load
+      wait_for_fpl_data_to_load(timeout: 15)
+
+      # Submit without selecting any specific disabilities (Hearing, Vision, etc.)
       click_button 'Submit Application'
 
-      # Should show error
+      # Should show error about needing to select a disability
       assert_text 'At least one disability must be selected before submitting an application'
     end
 
@@ -56,8 +63,8 @@ module ConstituentPortal
       end
 
       # Upload required documents
-      attach_file 'Proof of Residency', @valid_image
-      attach_file 'Income Verification', @valid_pdf
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
 
       # Wait for FPL thresholds to load and enable submit via income validation
       wait_for_fpl_data_to_load(timeout: 15)
@@ -93,8 +100,8 @@ module ConstituentPortal
       end
 
       # Upload required documents
-      attach_file 'Proof of Residency', @valid_image
-      attach_file 'Income Verification', @valid_pdf
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
 
       # Wait for FPL thresholds to load and enable submit via income validation
       wait_for_fpl_data_to_load(timeout: 15)
@@ -128,8 +135,8 @@ module ConstituentPortal
       end
 
       # Upload required documents for draft
-      attach_file 'Proof of Residency', @valid_image
-      attach_file 'Income Verification', @valid_pdf
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
 
       # Save as draft without selecting disabilities
       click_button 'Save Application'
@@ -153,8 +160,8 @@ module ConstituentPortal
       end
 
       # Upload required documents for draft
-      attach_file 'Proof of Residency', @valid_image
-      attach_file 'Income Verification', @valid_pdf
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
 
       click_button 'Save Application'
       wait_for_turbo
@@ -207,8 +214,8 @@ module ConstituentPortal
       check 'Vision'
 
       # Upload required documents
-      attach_file 'Proof of Residency', @valid_image
-      attach_file 'Income Verification', @valid_pdf
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
 
       # Fill medical provider info but intentionally make it invalid to cause validation failure
       within "section[aria-labelledby='medical-info-heading']" do
@@ -255,8 +262,8 @@ module ConstituentPortal
       end
 
       # Upload required documents
-      attach_file 'Proof of Residency', @valid_image
-      attach_file 'Income Verification', @valid_pdf
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
 
       # Wait for FPL thresholds to load and enable submit via income validation
       wait_for_fpl_data_to_load(timeout: 15)

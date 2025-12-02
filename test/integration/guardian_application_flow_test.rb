@@ -76,12 +76,13 @@ class GuardianApplicationFlowTest < ActionDispatch::IntegrationTest
     # The view shows specific links for each dependent, not a generic "Apply for a Dependent" link
     assert_select 'a[href=?]', new_constituent_portal_application_path(user_id: dependent.id, for_self: false), text: "Apply for #{dependent.full_name}"
 
-    # Navigate to the new application form for the dependent
-    get new_constituent_portal_application_path(for_self: false)
+    # Navigate to the new application form for the dependent (with user_id pre-selected)
+    # The new UI flow requires the dependent to be selected on the dashboard first
+    get new_constituent_portal_application_path(user_id: dependent.id, for_self: false)
     assert_response :success
 
-    # Verify the form has a section for selecting the dependent
-    assert_select "select[name='application[user_id]']"
+    # Verify the form displays the dependent's name (new UI doesn't use a select dropdown)
+    assert_select 'span.font-semibold', text: dependent.full_name
 
     # ----- Submit the form with all required parameters -----
     assert_difference -> { Application.count } do

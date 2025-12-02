@@ -55,7 +55,7 @@ class AdminGuardianManagementTest < ApplicationSystemTestCase
     assert_current_path admin_user_path(@guardian)
     assert_text @dependent.full_name
     assert_text 'Parent'
-    assert_selector 'a', text: /Back to Application Dashboard/
+    assert_selector 'a', text: /Back to List/
   end
 
   test 'admin can view guardians on dependent user show page' do
@@ -67,7 +67,7 @@ class AdminGuardianManagementTest < ApplicationSystemTestCase
     assert_text @guardian.full_name
     assert_text 'Parent'
     assert_text @guardian.email
-    assert_selector 'a', text: /Back to Application Dashboard/
+    assert_selector 'a', text: /Back to List/
   end
 
   test 'admin can view dependent information without add functionality' do

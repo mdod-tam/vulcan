@@ -100,18 +100,28 @@ module Admin
       all_links = all('a').map(&:text)
       puts "All links on admin applications page: #{all_links}"
 
-      # Find the "View Application" link for the application
-      # Use the constituent email to uniquely identify the row, but be more specific about the table
+      # Find the "View" link for the application and get the href
+      view_link = nil
       within 'table' do
-        row = find('tr', text: @constituent.email, match: :first)
+        row = first('tr', text: @constituent.email)
         within row do
-          click_link('View Application')
+          view_link = find_link('View')
         end
       end
 
+      # Navigate directly to the application path for more reliable navigation
+      application_path = view_link[:href]
+      visit application_path
+
+      # Wait for Turbo navigation to complete
+      wait_for_turbo
+
+      # Wait for the application show page to load - verify we're on the right page
+      assert_selector 'h1', text: /Application.*Details/i, wait: 15
+
       # Verify the audit log shows the application creation
       # Wait for the audit log section to be present and populated
-      assert_selector '#audit-logs'
+      assert_selector '#audit-logs', wait: 10
 
       # Use Capybara's intelligent waiting to wait for the specific audit log text to appear
       # This handles the timing between application submission and audit log updates

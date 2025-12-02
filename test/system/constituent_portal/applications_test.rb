@@ -106,9 +106,6 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     visit new_constituent_portal_application_path
     wait_for_page_stable # Use comprehensive wait strategy
 
-    # Ensure this is a self-application (not dependent) to avoid guardian validation issues
-    choose 'Myself' if page.has_css?('input[value="true"]', visible: false)
-
     # Fill in required fields using direct Capybara DSL with existing infrastructure
     check 'I certify that I am a resident of Maryland'
 
@@ -251,8 +248,8 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'I authorize the release and sharing of my medical information as described above'
 
     # Upload documents (if the test environment supports it)
-    attach_file 'Proof of Residency', @valid_image
-    attach_file 'Income Verification', @valid_pdf
+    attach_file 'Upload Residency Proof Document', @valid_image
+    attach_file 'Upload Income Proof Document', @valid_pdf
 
     # Save the application using more specific button targeting
     find('input[type="submit"][name="save_draft"]').click

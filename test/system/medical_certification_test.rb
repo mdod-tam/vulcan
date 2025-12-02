@@ -74,7 +74,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     if (page.has_text?('success', wait: 10) && page.has_text?('sent', wait: 5)) ||
        (page.has_text?('successfully', wait: 10) && page.has_text?('Certification', wait: 5))
       # Test passes - found success indicators (likely email fallback worked)
-    elsif page.has_text?('Failed to send signing request', wait: 10) || 
+    elsif page.has_text?('Failed to send signing request', wait: 10) ||
           page.has_text?('Not authenticated', wait: 10) ||
           page.has_text?('API Error', wait: 10)
       # Expected DocuSeal API failure in test environment - test passes
@@ -134,8 +134,8 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     # Verify medical provider info is displayed
     assert_text @application.medical_provider_name, wait: 10
 
-    # Verify certification status
-    assert_selector '.certification-status', text: 'Requested', wait: 10
+    # Verify certification status (the show page displays status in a span with role="status")
+    assert_selector '[role="status"]', text: 'Requested', wait: 10
 
     # Clear any pending network connections to prevent timeout during teardown
     clear_pending_network_connections if respond_to?(:clear_pending_network_connections)

@@ -244,15 +244,17 @@ module Admin
         assert_selector "button[data-reason-type='exceedsThreshold']", text: 'Income Exceeds Threshold'
         assert_selector "button[data-reason-type='outdatedSsAward']", text: 'Outdated SS Award Letter'
 
-        # Close the modal to prevent interference with subsequent tests
-        click_button 'Cancel'
+        # Close the modal using helper that scrolls into view (no within_modal since we're already scoped)
+        click_modal_button('Cancel')
       end
     end
 
     test 'admin can see appropriate rejection reasons when rejecting residency proof' do
       # Always sign in fresh for each test
       system_test_sign_in(@admin)
-      visit admin_application_path(@application)
+
+      # Use navigation helper instead of direct visit
+      visit_admin_application_with_retry(@application, user: @admin)
       assert_selector '#attachments-section', wait: 30
 
       # Wait for Turbo navigation to complete (from testing guide)
@@ -290,8 +292,8 @@ module Admin
         assert_selector "button[data-reason-type='exceedsThreshold']", visible: false
         assert_selector "button[data-reason-type='outdatedSsAward']", visible: false
 
-        # Close the modal to prevent interference with subsequent tests
-        click_button 'Cancel'
+        # Close the modal using scroll-safe helper (not within_modal since we're already scoped)
+        click_modal_button('Cancel')
       end
     end
 
@@ -319,9 +321,11 @@ module Admin
       end
 
       # Wait for rejection modal to appear and elements to be ready
+      wait_for_modal_open('proofRejectionModal', timeout: 10)
+
       within('#proofRejectionModal') do
-        # Wait for the missing name button to be available and click it
-        find("button[data-reason-type='missingName']").click
+        # Click rejection reason button using scroll-safe helper (no within_modal since we're already scoped)
+        click_modal_button("button[data-reason-type='missingName']")
 
         # Wait for textarea to be populated - use intelligent waiting
         assert_selector("textarea[name='rejection_reason']")
@@ -331,38 +335,34 @@ module Admin
         assert reason_field.value.present?, 'Rejection reason field should be populated'
         assert_includes reason_field.value, 'does not show your name'
 
-        # Close the modal to prevent interference with subsequent tests
-        click_button 'Cancel'
+        # Close the modal using scroll-safe helper
+        click_modal_button('Cancel')
       end
     end
 
     test 'admin can modify the rejection reason text' do
       # Always sign in fresh for each test
       system_test_sign_in(@admin)
-      visit admin_application_path(@application)
+      visit_admin_application_with_retry(@application, user: @admin)
       assert_selector '#attachments-section', wait: 20
 
       # Use count expectations for dynamic content (from testing guide)
       assert_selector 'h1', text: /Application.*Details/i, count: 1, wait: 15
       assert_selector '#attachments-section', count: 1, wait: 15
 
-      # Wait for exactly one income proof review button using stable selector
-      assert_selector 'button[data-modal-id="incomeProofReviewModal"]', count: 1, wait: 15
-
-      # Use find with explicit wait for reliable element interaction
-      review_button = find('button[data-modal-id="incomeProofReviewModal"]', wait: 10)
-      review_button.click
-
-      # Wait for modal to appear using count expectation
-      assert_selector '#incomeProofReviewModal', count: 1, wait: 10
+      # Open income proof modal using stable helper
+      click_review_proof_and_wait('income', timeout: 15)
 
       within('#incomeProofReviewModal') do
         click_button 'Reject'
       end
 
+      # Wait for rejection modal to appear
+      wait_for_modal_open('proofRejectionModal', timeout: 10)
+
       within('#proofRejectionModal') do
-        # Click a rejection reason button and wait for population
-        find("button[data-reason-type='missingName']").click
+        # Click a rejection reason button using scroll-safe helper (no within_modal since we're already scoped)
+        click_modal_button("button[data-reason-type='missingName']")
 
         # Wait for the textarea to be populated after button click
         assert_selector("textarea[name='rejection_reason']")
@@ -378,8 +378,8 @@ module Admin
         # Verify the custom message was set correctly
         assert_equal custom_message, reason_field.value
 
-        # Close the modal to prevent interference with subsequent tests
-        click_button 'Cancel'
+        # Close the modal using scroll-safe helper
+        click_modal_button('Cancel')
       end
     end
   end

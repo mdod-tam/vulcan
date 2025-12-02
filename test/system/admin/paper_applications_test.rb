@@ -23,11 +23,9 @@ module Admin
 
       assert_selector 'h1', text: 'Upload Paper Application'
 
-      # Corrected array syntax for section headers
       [
         'Who is this application for?',
         "Applicant's Information",
-        'Application Details',
         'Disability Information',
         'Medical Provider Information',
         'Proof Documents'
@@ -128,14 +126,16 @@ module Admin
       assert_no_difference 'Application.count' do
         click_button 'Reject Application (Income)'
 
-        # Wait for the form submission and page redirect
-        wait_for_network_idle
+        # Wait for the redirect to complete
+        wait_for_turbo
+        assert_current_path admin_applications_path, wait: 10
       end
 
       puts 'SUCCESS: Income threshold rejection completed without creating application!'
 
       # Verify rejection was successful with success message (not error)
-      assert_success_message('Application rejected due to income threshold. Rejection notification has been sent.')
+      # The flash message appears after redirect - allow time for page to load
+      assert_text 'Application rejected due to income threshold', wait: 10
     end
 
     test 'admin can see income threshold warning when income exceeds threshold' do
@@ -212,6 +212,97 @@ module Admin
 
       # Verify rejection button is visible
       assert_selector '#rejection-button', visible: true
+    end
+
+    test 'rejection modal form submits notification successfully' do
+      # This test verifies the rejection notification modal form works correctly.
+      # The modal is triggered when income exceeds threshold and admin wants to
+      # send a rejection notification with additional options (email vs letter).
+      visit new_admin_paper_application_path
+      wait_for_fpl_data_to_load
+
+      # Select adult applicant type
+      choose 'An Adult (applying for themselves)'
+      wait_for_turbo
+
+      # Fill in applicant information
+      fill_in_applicant_information(first_name: 'Test', last_name: 'Rejection')
+
+      # Fill in income that exceeds threshold to enable rejection flow
+      fill_in_application_details(household_size: 1, annual_income: 100_000)
+
+      # Add required address information
+      within_applicant_fieldset do
+        fill_in 'constituent[physical_address_1]', with: '456 Rejection Lane'
+        fill_in 'constituent[city]', with: 'Baltimore'
+        fill_in 'constituent[zip_code]', with: '21202'
+      end
+
+      # Trigger validation by clicking
+      find('body').click
+      wait_for_turbo
+      wait_for_network_idle
+
+      # Wait for the rejection button to become visible (JavaScript-controlled)
+      assert_selector '#rejection-button', visible: true, wait: 10
+
+      # Click the rejection button to open the modal
+      # This triggers openRejectionModal() which populates hidden fields and shows the dialog
+      click_button 'Reject Application (Income)'
+
+      # Wait for native <dialog> to open
+      assert_selector 'dialog#rejection-modal[open]', visible: true, wait: 5
+
+      # Fill out the modal form
+      within('dialog#rejection-modal') do
+        # Email is selected by default, but verify we can interact with the form
+        choose 'communication_preference_email'
+
+        # Add optional notes
+        fill_in 'additional_notes', with: 'Test rejection via modal form'
+      end
+
+      # Submit the rejection notification form
+      # This should redirect to admin_applications_path with a success message
+      within('dialog#rejection-modal') do
+        click_button 'Send Notification'
+      end
+
+      # Wait for redirect
+      wait_for_turbo
+      wait_for_network_idle
+
+      # Verify success message
+      assert_success_message('Rejection notification has been sent')
+
+      # Verify we're redirected to the applications list
+      assert_current_path admin_applications_path
+    end
+
+    test 'rejection modal cancel button closes modal' do
+      # Test that the cancel button in the rejection modal closes it properly
+      visit new_admin_paper_application_path
+      wait_for_turbo
+
+      # Open the rejection modal using native dialog
+      page.execute_script(<<~JS)
+        const modal = document.querySelector('dialog#rejection-modal');
+        if (modal && modal.showModal) {
+          modal.showModal();
+        }
+      JS
+
+      # Verify modal is open (native dialog has 'open' attribute when shown)
+      assert_selector 'dialog#rejection-modal[open]', visible: true, wait: 5
+
+      # Click cancel button
+      within('dialog#rejection-modal') do
+        click_button 'Cancel'
+      end
+
+      # Modal should be closed after cancel (no 'open' attribute)
+      wait_for_turbo
+      assert_no_selector 'dialog#rejection-modal[open]', wait: 5
     end
 
     test 'admin can submit application with rejected proofs' do
@@ -616,14 +707,6 @@ module Admin
       # Fill in the relationship type
       select 'Parent', from: 'relationship_type'
 
-      # Fill in application details - using direct find
-      application_fieldset = page.find('fieldset', text: 'Application Details', visible: true)
-      within application_fieldset do
-        fill_in 'application_household_size', with: '5'
-        fill_in 'application_annual_income', with: '29999'
-        check 'application_maryland_resident'
-      end
-
       # Fill in medical provider information - using direct find
       provider_fieldset = page.find('fieldset', text: 'Medical Provider Information', visible: true)
       within provider_fieldset do
@@ -635,11 +718,16 @@ module Admin
       # Handle proof documents - using direct find
       proof_fieldset = page.find('fieldset', text: 'Proof Documents', visible: true)
       within proof_fieldset do
+        # Fill in application details (moved here from removed Application Details fieldset)
+        fill_in 'application_household_size', with: '5'
+        fill_in 'application_annual_income', with: '29999'
+
         # Income proof
         choose 'accept_income_proof'
         attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
-        # Residency proof
+        # Maryland resident and Residency proof
+        check 'application_maryland_resident'
         choose 'accept_residency_proof'
         attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       end
@@ -798,12 +886,12 @@ module Admin
         fill_in 'constituent[phone]', with: '555-111-2222'
       end
 
-      # Get application details section directly
-      application_details = find('fieldset', text: 'Application Details', visible: true)
-      assert application_details.visible?, 'Application details fieldset should be visible'
+      # Get proof documents section directly
+      proof_documents = find('fieldset', text: 'Proof Documents', visible: true)
+      assert proof_documents.visible?, 'Proof documents fieldset should be visible'
 
       # Fill details with high income
-      within application_details do
+      within proof_documents do
         fill_in 'application[household_size]', with: '1'
         fill_in 'application[annual_income]', with: '100000' # Exceeds 400% of 20k
       end
@@ -884,20 +972,21 @@ module Admin
 
         # Select the existing constituent - direct fieldset approach
         within applicant_fieldset do
-          # Fill in details directly
+          # Fill in details directly including required fields
           fill_in 'constituent[first_name]', with: constituent.first_name
           fill_in 'constituent[last_name]', with: constituent.last_name
           fill_in 'constituent[email]', with: constituent.email
+          fill_in 'constituent[phone]', with: '555-123-4567'
+          find('input[name="constituent[date_of_birth]"]').set('1980-01-15')
         end
 
         # Find other fieldsets directly
-        application_details = find('fieldset', text: 'Application Details', visible: true)
         disability_fieldset = find('fieldset', text: 'Disability Information', visible: true)
         medical_provider_fieldset = find('fieldset', text: 'Medical Provider Information', visible: true)
         proof_documents_fieldset = find('fieldset', text: 'Proof Documents', visible: true)
 
         # Fill the rest of the form minimally
-        within application_details do
+        within proof_documents_fieldset do
           fill_in 'application[household_size]', with: '1'
           fill_in 'application[annual_income]', with: '5000'
           check 'application[maryland_resident]'
@@ -936,8 +1025,12 @@ module Admin
         # Attempt to submit
         click_on 'Submit Paper Application'
 
+        # Wait for form submission to complete
+        wait_for_turbo
+
         # Assert validation error message related to waiting period
-        assert_selector '[role="alert"]', text: /You must wait #{waiting_period_years} years before submitting a new application/i
+        # The error message is wrapped: "Failed to create application: You must wait X years..."
+        assert_selector '[role="alert"]', text: /must wait #{waiting_period_years} years/i, wait: 10
         # Ensure we are still on the new application page (controller renders :new on failure)
         assert_current_path new_admin_paper_application_path
         assert_selector 'h1', text: 'Upload Paper Application'
@@ -964,12 +1057,6 @@ module Admin
         fill_in 'constituent[physical_address_1]', with: '123 Test St'
         fill_in 'constituent[city]', with: 'Baltimore'
         fill_in 'constituent[zip_code]', with: '21201'
-      end
-
-      within 'fieldset', text: 'Application Details' do
-        fill_in 'application[household_size]', with: '2'
-        fill_in 'application[annual_income]', with: '10000'
-        check 'application[maryland_resident]'
       end
 
       within 'fieldset', text: 'Disability Information' do
@@ -1000,7 +1087,11 @@ module Admin
       end
 
       # Test case 2: Upload files and try again
+      # Fill in income/residency fields (moved from removed Application Details fieldset)
       within 'fieldset', text: 'Proof Documents' do
+        fill_in 'application[household_size]', with: '2'
+        fill_in 'application[annual_income]', with: '10000'
+        check 'application[maryland_resident]'
         attach_file 'income_proof', Rails.root.join('test/fixtures/files/blank.pdf')
         attach_file 'residency_proof', Rails.root.join('test/fixtures/files/blank.pdf')
       end

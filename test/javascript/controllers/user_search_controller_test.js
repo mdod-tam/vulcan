@@ -186,19 +186,6 @@ describe("UserSearchController", () => {
     // Mock the dispatch method
     controller.dispatch = jest.fn()
     
-    // Mock utility methods from BaseFormController
-    controller.safeTarget = jest.fn((targetName) => {
-      const targetProperty = `${targetName}Target`
-      return controller[targetProperty]
-    })
-    
-    controller.withTarget = jest.fn((targetName, callback) => {
-      const target = controller.safeTarget(targetName)
-      if (target) {
-        callback(target)
-      }
-    })
-    
     controller.addDebouncedListener = jest.fn()
     controller.showErrorNotification = jest.fn()
     controller.showSuccessNotification = jest.fn()
@@ -443,16 +430,6 @@ describe("UserSearchController", () => {
   
   describe("search functionality", () => {
     it("performs search with proper debouncing", async () => {
-      // Mock the turbo frame target
-      const mockTurboFrame = {
-        src: null,
-        setAttribute: jest.fn(),
-        removeAttribute: jest.fn()
-      }
-      
-      // Mock the safeTarget method to return our mock turbo frame
-      controller.safeTarget = jest.fn().mockReturnValue(mockTurboFrame)
-      
       const searchInput = fixture.querySelector('#searchInput')
       searchInput.value = "John"
       
@@ -460,7 +437,8 @@ describe("UserSearchController", () => {
       await controller.performSearch(event)
       
       // Verify that the turbo frame's src was set to trigger navigation
-      expect(mockTurboFrame.src).toBe('/admin/users/search?q=John&role=guardian')
+      // The controller uses the searchResultsTarget directly
+      expect(controller.searchResultsTarget.src).toBe('/admin/users/search?q=John&role=guardian')
     })
     
     it("clears results when search is empty", async () => {
@@ -483,13 +461,6 @@ describe("UserSearchController", () => {
       
       const searchInput = fixture.querySelector('#searchInput')
       searchInput.value = "test search"
-      
-      // Mock the withTarget method to actually call the callback
-      controller.withTarget.mockImplementation((targetName, callback) => {
-        if (targetName === 'searchInput') {
-          callback(searchInput)
-        }
-      })
       
       controller.clearResults = jest.fn()
       

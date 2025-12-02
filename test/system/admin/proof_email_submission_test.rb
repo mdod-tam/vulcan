@@ -133,10 +133,9 @@ module Admin
       # UI interactions AFTER truncation
       system_test_sign_in(admin)
       visit_admin_application_with_retry(app, max_retries: 3, user: admin)
-      using_wait_time(20) do
-        assert_text 'Income Proof'
-        assert_text 'Residency Proof'
-      end
+      # Use assert_text with wait parameter instead of using_wait_time wrapper
+      assert_text 'Income Proof', wait: 20
+      assert_text 'Residency Proof', wait: 20
 
       with_browser_rescue(max_retries: 3) do
         wait_for_page_stable

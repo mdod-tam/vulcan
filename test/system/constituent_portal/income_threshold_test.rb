@@ -63,15 +63,15 @@ module ConstituentPortal
       # Move focus to trigger validation
       find('body').click
 
-      # Warning should not be visible
-      assert_no_selector '#income-threshold-warning', visible: true
+      # Warning should not be visible (check for hidden attribute or hidden class)
+      assert_selector '#income-threshold-warning[hidden]', visible: :all
 
       # Submit button should be enabled
       assert_no_selector "input[name='submit_application'][disabled]"
 
       # Fill in remaining required fields
-      attach_file 'Proof of Residency', Rails.root.join('test/fixtures/files/residency_proof.pdf')
-      attach_file 'Income Verification', Rails.root.join('test/fixtures/files/income_proof.pdf')
+      attach_file 'Upload Residency Proof Document', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_file 'Upload Income Proof Document', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
       # Fill in medical provider information
       within('section', text: 'Medical Professional Information') do
@@ -104,8 +104,8 @@ module ConstituentPortal
       fill_in 'Annual Income', with: '50000' # 50k < 400% of 20k
       find('body').click
 
-      # Warning should disappear
-      assert_no_selector '#income-threshold-warning', visible: true
+      # Warning should disappear (check for hidden attribute)
+      assert_selector '#income-threshold-warning[hidden]', visible: :all
 
       # Change income back to exceed threshold
       fill_in 'Annual Income', with: '100000' # 100k > 400% of 20k

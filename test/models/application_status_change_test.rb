@@ -59,20 +59,19 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     # Create application with all proofs attached
     application = create(:application, :in_progress, :with_all_proofs, user: @constituent)
 
-    # Approve all proofs to trigger auto-approval
-    application.update_columns(
-      income_proof_status: Application.income_proof_statuses[:approved],
-      residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:approved]
+    # First approve income and residency proofs (without medical)
+    application.update!(
+      income_proof_status: :approved,
+      residency_proof_status: :approved
     )
 
     initial_count = ApplicationStatusChange.count
 
-    # Reload to trigger callbacks
-    application.reload
-
-    # This should trigger auto_approve_if_eligible callback
-    application.save!
+    # Now approve medical certification - this should trigger auto-approval
+    # because all requirements are now met and the callback checks saved_change_to_*
+    application.update!(
+      medical_certification_status: :approved
+    )
 
     # Verify exactly one record was created for the auto-approval
     new_records = ApplicationStatusChange.where(
@@ -128,7 +127,7 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     assert_not change.valid?
     assert_includes change.errors[:from_status], "can't be blank"
     assert_includes change.errors[:to_status], "can't be blank"
-    # Note: changed_at is automatically set by before_validation callback, so it won't be blank
+    # NOTE: changed_at is automatically set by before_validation callback, so it won't be blank
   end
 
   test 'changed_at is automatically set if not provided' do

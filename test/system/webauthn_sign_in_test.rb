@@ -66,8 +66,8 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     fill_in 'Confirm Password', with: 'password123'
     fill_in 'Phone Number', with: '555-555-5555'
 
-    # Fill in Date of Birth (MM/DD/YYYY format)
-    fill_in 'visible_date_of_birth', with: '01/01/1990'
+    # Fill in Date of Birth (native date field expects YYYY-MM-DD format)
+    fill_in 'Date of Birth', with: '1990-01-01'
 
     # Select language preference
     select 'English', from: 'Language Preference'

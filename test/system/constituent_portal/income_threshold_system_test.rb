@@ -62,34 +62,18 @@ module ConstituentPortal
         income_field.trigger('change')
 
         # Wait for validation to complete by checking expected button state
-        using_wait_time(10) do
-          submit_button = find('input[name="submit_application"]')
-
-          if expected_disabled
-            # Wait for button to become disabled
-            assert submit_button.disabled?,
-                   "Expected submit button to be disabled for household size #{household_size} and income #{income}"
-          else
-            # Wait for button to remain enabled (or become enabled if it was initially disabled)
-            assert_not submit_button.disabled?,
-                       "Expected submit button to be enabled for household size #{household_size} and income #{income}"
-          end
-        end
-
-        # Check if the warning is displayed as expected using proper Capybara matchers
+        # Use CSS selectors with :disabled pseudo-class for proper Capybara waiting
         if expected_disabled
+          # Wait for button to become disabled
+          assert_selector 'input[name="submit_application"]:disabled', wait: 10
           # Wait for warning to become visible
           assert_selector '#income-threshold-warning', visible: true, wait: 10,
                                                        text: /Income Exceeds Threshold/
         else
-          # For cases where warning should NOT be visible, wait for calculation and check hidden state
-          sleep 0.5 # Allow JavaScript calculation to complete
-
-          # Check that warning element has the hidden class (which means it should not be visible)
-          if page.has_selector?('#income-threshold-warning', wait: 3)
-            # Element exists, verify it has the hidden class (properly hidden)
-            assert_selector '#income-threshold-warning.hidden', wait: 5
-          end
+          # Wait for button to be enabled (not disabled)
+          assert_selector 'input[name="submit_application"]:not(:disabled)', wait: 10
+          # Check that warning element has the hidden class (properly hidden)
+          assert_selector '#income-threshold-warning.hidden', wait: 5 if page.has_selector?('#income-threshold-warning', wait: 3)
         end
       end
     end
@@ -116,12 +100,12 @@ module ConstituentPortal
 
       # Use proper Capybara waiting - button should be enabled at threshold
       submit_button = find('input[name="submit_application"]')
-      using_wait_time(5) do
-        assert_not submit_button.disabled?,
-                   'Submit button should be enabled when income is exactly at the threshold'
-      end
-      # Warning should not be visible at threshold; check by target and hidden attribute
-      assert_no_selector '[data-income-validation-target="warningContainer"]', visible: true, wait: 5
+      assert_not submit_button.disabled?,
+                 'Submit button should be enabled when income is exactly at the threshold'
+
+      # Warning should not be visible at threshold; check element exists with hidden attribute
+      # The element exists in DOM but should have the hidden attribute when income is at/below threshold
+      assert_selector '[data-income-validation-target="warningContainer"][hidden]', visible: :all, wait: 5
 
       # Edge case 2: Very large household size
       household_size_field.set('')
@@ -135,11 +119,13 @@ module ConstituentPortal
       income_field.trigger('change')
 
       # Button should be enabled for large household sizes below threshold
-      using_wait_time(5) do
-        assert_not submit_button.disabled?,
-                   'Submit button should be enabled for large household sizes below the threshold'
+      # Use CSS selector with :not(:disabled) for proper Capybara waiting
+      assert_selector 'input[name="submit_application"]:not(:disabled)', wait: 5
+      # Warning element may exist in DOM but should be hidden. Check for hidden attribute or class
+      if page.has_selector?('#income-threshold-warning', wait: 2)
+        # Element exists but should be hidden
+        assert_selector '#income-threshold-warning.hidden', wait: 5
       end
-      assert_no_selector '#income-threshold-warning', visible: true, wait: 5
 
       # Edge case 3: Very large income
       household_size_field.set('')
@@ -153,10 +139,8 @@ module ConstituentPortal
       income_field.trigger('change')
 
       # Button should be disabled for very large incomes
-      using_wait_time(5) do
-        assert submit_button.disabled?,
-               'Submit button should be disabled for very large incomes'
-      end
+      # Use CSS selector with :disabled for proper Capybara waiting
+      assert_selector 'input[name="submit_application"]:disabled', wait: 5
       assert_selector '#income-threshold-warning', visible: true, wait: 5,
                                                    text: /Income Exceeds Threshold/
 
@@ -183,10 +167,13 @@ module ConstituentPortal
       income_field.trigger('change')
       find('body').click # Trigger blur event
 
-      # The warning should not be visible initially
-      warning = find_by_id('income-threshold-warning', visible: false)
-      assert_equal false, warning.visible?,
-                   'Warning should not be visible initially for zero values'
+      # The warning should not be visible for zero values
+      # Check for hidden class/attribute, the element may exist in DOM but not be visible
+      warning_element = find_by_id('income-threshold-warning', visible: :all)
+      warning_hidden = warning_element[:class]&.include?('hidden') ||
+                       warning_element[:hidden].present? ||
+                       !warning_element.visible?
+      assert warning_hidden, 'Warning should be hidden for zero values'
     end
   end
 end

@@ -185,9 +185,7 @@ module Admin
       relationship_field = find('[data-dependent-fields-target="relationshipType"]', visible: :all)
       assert relationship_field.ancestor('[data-applicant-type-target="sectionsForDependentWithGuardian"]')[:class].include?('hidden'), "Relationship field's parent section should have 'hidden' class"
 
-      # "Show Application Details, Disability, Provider, Proof sections."
-      # These are the standard fieldsets further down the form.
-      assert_selector 'fieldset legend', text: 'Application Details', visible: true
+      # Standard fieldsets further down the form.
       assert_selector 'fieldset legend', text: 'Disability Information (for the Applicant)', visible: true
       assert_selector 'fieldset legend', text: 'Medical Provider Information', visible: true
       assert_selector 'fieldset legend', text: 'Proof Documents', visible: true

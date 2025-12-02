@@ -87,10 +87,8 @@ module Admin
       # Click on proofs needing review link
       click_on 'Proofs Needing Review'
 
-      # Verify we're on the filtered page
-      assert_current_path admin_applications_path(filter: 'proofs_needing_review')
-
-      # Verify the link is highlighted (with explicit wait for DOM updates)
+      # Note: These links use turbo_frame: "applications_list" so URL doesn't change
+      # Verify the filter is applied by checking the link is highlighted
       within "section[aria-labelledby='common-tasks-heading']" do
         assert_selector 'a', text: /Proofs Needing Review/, wait: 10
         assert_selector 'a[class*="bg-gray-50"]', text: /Proofs Needing Review/, wait: 10
@@ -105,10 +103,7 @@ module Admin
       # Click on medical certs to review link
       click_on 'Medical Certs to Review'
 
-      # Verify we're on the filtered page
-      assert_current_path admin_applications_path(filter: 'medical_certs_to_review')
-
-      # Verify the link is highlighted
+      # Verify the link is highlighted (turbo frame navigation doesn't change URL)
       within "section[aria-labelledby='common-tasks-heading']" do
         assert_selector 'a', text: /Medical Certs to Review/, wait: 10
         assert_selector 'a[class*="bg-gray-50"]', text: /Medical Certs to Review/, wait: 10
@@ -123,10 +118,7 @@ module Admin
       # Click on training requests link
       click_on 'Training Requests'
 
-      # Verify we're on the filtered page
-      assert_current_path admin_applications_path(filter: 'training_requests')
-
-      # Verify the link is highlighted
+      # Verify the link is highlighted (turbo frame navigation doesn't change URL)
       within "section[aria-labelledby='common-tasks-heading']" do
         assert_selector 'a', text: /Training Requests/, wait: 10
         assert_selector 'a[class*="bg-gray-50"]', text: /Training Requests/, wait: 10

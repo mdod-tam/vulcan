@@ -5,36 +5,15 @@ require 'application_system_test_case'
 module AdminTests
   class GuardianProofReviewTest < ApplicationSystemTestCase
     setup do
-      # Force a clean browser session for each test
-      Capybara.reset_sessions!
-
       @admin = create(:admin)
       @application = create(:application, :in_progress_with_pending_proofs, :submitted_by_guardian, :old_enough_for_new_application)
-
       # Don't sign in during setup - let each test handle its own authentication
-      # This ensures each test starts with a clean authentication state
     end
 
     teardown do
-      # Ensure any open modals are closed
-      begin
-        if has_selector?('#incomeProofReviewModal', visible: true)
-          within('#incomeProofReviewModal') do
-            click_button 'Close' if has_button?('Close')
-          end
-        end
-
-        if has_selector?('#residencyProofReviewModal', visible: true)
-          within('#residencyProofReviewModal') do
-            click_button 'Close' if has_button?('Close')
-          end
-        end
-      rescue Ferrum::NodeNotFoundError, Ferrum::DeadBrowserError
-        # Browser might be in a bad state, reset it
-        Capybara.reset_sessions!
-      end
-
-      # Always ensure clean session state between tests
+      # Simple teardown: just reset sessions
+      # Don't try to interact with modals during teardown - it can cause hangs
+      # Capybara.reset_sessions! will close all dialogs automatically
       Capybara.reset_sessions!
     end
 
@@ -50,10 +29,8 @@ module AdminTests
       assert_selector '#attachments-section', text: 'Income Proof'
       assert_selector '#attachments-section', text: 'Residency Proof'
 
-      # Open the income proof review modal using direct trigger to avoid overlap
-      # Use fresh find and JS trigger to avoid overlap
-      find("button[data-modal-id='incomeProofReviewModal']", visible: :all, wait: 15).trigger('click')
-      wait_for_modal_open('incomeProofReviewModal', timeout: 15)
+      # Open the income proof review modal using the stable helper method
+      click_review_proof_and_wait('income', timeout: 15)
 
       # Verify the guardian alert is displayed using resilient checks
       assert_selector '#incomeProofReviewModal', text: 'Guardian Application', wait: 15
@@ -77,9 +54,8 @@ module AdminTests
       assert_selector '#attachments-section', text: 'Income Proof'
       assert_selector '#attachments-section', text: 'Residency Proof'
 
-      # Open the residency proof review modal
-      find("button[data-modal-id='residencyProofReviewModal']", visible: :all, wait: 15).trigger('click')
-      wait_for_modal_open('residencyProofReviewModal', timeout: 15)
+      # Open the residency proof review modal using the stable helper method
+      click_review_proof_and_wait('residency', timeout: 15)
 
       # Verify the guardian alert is displayed using resilient checks
       assert_selector '#residencyProofReviewModal', text: 'Guardian Application', wait: 15
@@ -124,13 +100,11 @@ module AdminTests
       # Ensure proofs are properly saved and processed
       regular_application.reload
 
-      with_browser_rescue { visit admin_application_path(regular_application) }
-      wait_for_page_stable
-
-      # Wait for basic page structure first using a stable content anchor
+      visit_admin_application_with_retry(regular_application, user: @admin)
+      # Wait for page to load with resilient assertion
       assert_text(/Application Details|Application #/i, wait: 30)
 
-      # Use intelligent waiting - assert_selector will wait automatically
+      # Use intelligent waiting - assert_selector will wait
       assert_selector '#attachments-section', wait: 15
       assert_selector '#attachments-section', text: 'Income Proof'
       assert_selector '#attachments-section', text: 'Residency Proof'

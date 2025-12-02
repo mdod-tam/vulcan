@@ -14,12 +14,11 @@ module ConstituentPortal
     end
 
     test 'application type is displayed correctly on show page' do
-      # Visit the new application page
+      # Visit the new application page (self-application is the default)
       visit new_constituent_portal_application_path
       wait_for_turbo # Ensure the page is fully loaded before proceeding
 
-      # Ensure this is a self-application (not dependent) to avoid guardian validation issues
-      choose 'Myself' if page.has_css?('input[value="true"]', visible: false)
+      # Self-application is the default when visiting without user_id param.
 
       # Fill in required fields using our safe filling methods to prevent concatenation
       check 'I certify that I am a resident of Maryland'
@@ -83,13 +82,11 @@ module ConstituentPortal
     end
 
     test 'self_certify_disability is set correctly' do
-      # Visit the new application page
+      # Visit the new application page (self-application is the default)
       visit new_constituent_portal_application_path
       wait_for_turbo # Ensure the page is fully loaded
 
-      # Ensure this is a self-application (not dependent) to avoid guardian validation issues
-      choose 'Myself' if page.has_css?('input[value="true"]', visible: false)
-
+      # Self-application is the default when visiting without user_id param.
       # Fill in required fields using safe methods to prevent concatenation
       check 'I certify that I am a resident of Maryland'
       safe_fill_household_and_income(3, 45_999)

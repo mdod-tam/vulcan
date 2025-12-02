@@ -8,7 +8,7 @@
 module PaperApplicationsTestHelper
   # Helper methods for filling out paper application forms
 
-  def fill_in_applicant_information(first_name: 'John', last_name: 'Doe', email: nil, phone: '555-123-4567')
+  def fill_in_applicant_information(first_name: 'John', last_name: 'Doe', email: nil, phone: '555-123-4567', date_of_birth: '1980-01-15')
     email ||= "#{first_name.downcase}.#{last_name.downcase}.#{Time.now.to_i}@example.com"
 
     within_applicant_fieldset do
@@ -17,6 +17,8 @@ module PaperApplicationsTestHelper
       find('input[name="constituent[last_name]"]').set('').set(last_name)
       find('input[name="constituent[email]"]').set('').set(email)
       find('input[name="constituent[phone]"]').set('').set(phone)
+      # Date of birth is required
+      find('input[name="constituent[date_of_birth]"]').set(date_of_birth)
     end
   end
 
@@ -69,7 +71,7 @@ module PaperApplicationsTestHelper
   end
 
   def within_application_details_fieldset(&)
-    within find('fieldset', text: 'Application Details'), &
+    within find('fieldset', text: 'Proof Documents'), &
   end
 
   def within_disability_fieldset(&)
