@@ -128,6 +128,7 @@
           <td class="px-2 py-2 text-sm font-medium overflow-hidden">
             <%= link_to "View",
                 admin_application_path(id: application.id),
+                data: { turbo_frame: "_top" },
                 class: "text-indigo-600 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 whitespace-nowrap",
                 aria: { label: "View details for #{application.user&.full_name || 'Unknown User'}" },
                 data: { turbo_frame: "_top" } %>
