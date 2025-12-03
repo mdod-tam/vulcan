@@ -1,205 +1,175 @@
 <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="manage-users-title">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold" id="manage-users-title">Manage Users</h1>
-    <div>
-      <a href="<%= admin_applications_path %>" 
-         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-         data-turbo-frame="_top"
-         aria-label="Return to applications dashboard">
-        Back to Dashboard
-      </a>
-    </div>
-  </div>
-  
-  <div class="bg-white rounded-lg shadow">
-    <div class="p-6 border-b border-gray-200">
-      <div class="flex justify-between items-center">
-        <h1 class="text-2xl font-semibold text-gray-900">
-          Manage Users
-        </h1>
+  <div class="max-w-7xl mx-auto">
+    <%# Header Section %>
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold text-gray-900" id="manage-users-title">Manage Users</h1>
+      <div>
+        <a href="<%= admin_applications_path %>" 
+           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+           data-turbo-frame="_top"
+           aria-label="Return to applications dashboard">
+          Back to Dashboard
+        </a>
       </div>
     </div>
-
-    <div class="overflow-x-auto">
-      <table class="min-w-full table-auto md:table-fixed divide-y divide-gray-200" role="grid">
-        <colgroup>
-          <col class="w-2/12">
-          <col class="w-3/12">
-          <col class="w-64 md:w-96">
-          <col class="w-5/12">
-        </colgroup>
-        <caption class="sr-only">List of system users and their roles and capabilities</caption>
-        
-        <thead class="bg-gray-50">
-          <tr>
-            <th scope="col" class="w-2/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              User Details
-            </th>
-            <th scope="col" class="w-3/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Relationships
-            </th>
-            <th scope="col" class="w-64 px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Email
-            </th>
-            <th scope="col" class="w-5/12 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Manage Roles & Capabilities
-            </th>
-          </tr>
-        </thead>
-
-        <tbody class="bg-white divide-y divide-gray-200">
-          <% @users.each do |user| %>
-            <%
-              is_guardian = user.guardian?
-              is_dependent = user.dependent?
-            %>
-            <tr class="<%= user_row_classes(user) %>">
-              <td class="w-2/12 px-6 py-4">
-                <div class="space-y-1">
-                  <div class="text-sm font-medium text-gray-900">
-                    <% if is_guardian %>
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block text-blue-600 mr-1 align-text-bottom" aria-label="Guardian Icon">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                      </svg>
-                    <% end %>
-                    <% if is_dependent %>
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block text-green-600 mr-1 align-text-bottom" aria-label="Dependent Icon">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                      </svg>
-                    <% end %>
-                    <%= link_to user.full_name, admin_user_path(user), class: "hover:text-indigo-600" %>
-                    <% if is_guardian && user.dependents_count > 0 %>
-                      <span class="ml-1 text-xs text-gray-500">(<%= pluralize(user.dependents_count, "dependent") %>)</span>
-                    <% end %>
-                    <% if user.needs_duplicate_review %>
-                      <span class="ml-2 text-xs font-semibold text-yellow-800 bg-yellow-200 px-2 py-0.5 rounded-full">Needs Review</span>
-                    <% end %>
-                  </div>
-                  <div class="text-sm text-gray-600 flex flex-wrap gap-2">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      <%= user.role_type %>
-                    </span>
-                    <% user.available_capabilities.each do |capability| %>
-                      <% if user.has_capability?(capability) %>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          <%= capability.titleize %>
-                        </span>
-                      <% end %>
-                    <% end %>
-                  </div>
-                </div>
-              </td>
-
-              <td class="w-3/12 px-6 py-4 text-sm text-gray-900">
-                <% if is_guardian && !is_dependent && user.dependents.any? %>
-                  <ul class="list-disc list-inside">
-                    <% user.guardian_relationships_as_guardian.each do |gr| %>
-                      <% relation = gr.relationship_type %>
-                      <li>
-                        <%= link_to gr.dependent_user.full_name, admin_user_path(gr.dependent_user), class: "hover:text-indigo-600" %>
-                        <span class="text-xs text-gray-500">(<%= inverse_relationship_label(relation) %>)</span>
-                      </li>
-                    <% end %>
-                  </ul>
-                <% elsif is_dependent && user.guardians.any? %>
-                  <ul class="list-disc list-inside">
-                    <% user.guardian_relationships_as_dependent.each do |gr| %>
-                      <% relation = gr.relationship_type.to_s.downcase %>
-                      <% label = relation.presence || 'guardian' %>
-                      <li>
-                        <%= link_to gr.guardian_user.full_name, admin_user_path(gr.guardian_user), class: "hover:text-indigo-600" %>
-                        <span class="text-xs text-gray-500">(<%= label %>)</span>
-                      </li>
-                    <% end %>
-                  </ul>
-                <% else %>
-                  &nbsp;
-                <% end %>
-              </td>
-              <td class="w-64 md:w-96 px-3 py-4 whitespace-nowrap">
-                <div class="text-sm text-gray-500 truncate w-64 md:w-96">
-                  <%= mail_to user.effective_email, class: "hover:text-indigo-600 block", title: user.effective_email %>
-                </div>
-              </td>
-
-              <td class="w-5/12 px-6 py-4">
-                <% if user == current_user %>
-                  <div class="text-sm text-gray-500 italic">
-                    Cannot modify own role
-                  </div>
-                <% else %>
-                  <div class="space-y-4" 
-                       data-controller="role-select"
-                       data-role-select-user-id-value="<%= user.id %>"
-                       data-role-select-update-role-url-value="<%= update_role_admin_user_path(user) %>"
-                       data-role-select-update-capabilities-url-value="<%= update_capabilities_admin_user_path(user) %>">
-                    <!-- Primary Role Section -->
-                    <div class="role-section">
-                      <label for="role_<%= user.id %>" 
-                             class="block text-sm font-medium text-gray-700 mb-1">
-                        Primary Role
-                      </label>
-                      <%= select_tag "role_#{user.id}",
-                          options_for_select(
-                            %w[Users::Administrator Users::Evaluator Users::Constituent Users::Vendor Users::Trainer],
-                            selected: user.type # Use user.type which is the STI column value
-                          ),
-                          data: { 
-                            role_select_target: "select",
-                            action: "change->role-select#roleChanged"
-                          },
-                          class: "block w-full pl-3 pr-10 py-2 text-base text-gray-900 bg-gray-100 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md cursor-pointer" %>
-                    </div>
-                    
-                    <!-- Capabilities Section -->
-                    <div class="capabilities-section">
-                      <p class="text-sm font-medium text-gray-700 mb-2">
-                        Capabilities
-                      </p>
-                      
-                      <div class="space-y-2">
-                        <% user.available_capabilities.each do |capability| %>
-                          <div class="relative flex items-start">
-                            <div class="flex items-center h-5">
-                              <%= check_box_tag "capability_#{capability}_#{user.id}",
-                                  "1",
-                                  user.has_capability?(capability),
-                                  data: {
-                                    role_select_target: "capability",
-                                    action: "click->role-select#toggleCapability",
-                                    capability: capability
-                                  },
-                                  disabled: user.inherent_capabilities.include?(capability),
-                                  id: "capability_#{capability}_#{user.id}",
-                                  class: "h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer #{user.inherent_capabilities.include?(capability) ? 'opacity-50' : ''}" %>
-                            </div>
-                            <div class="ml-3 text-sm">
-                              <label for="capability_<%= capability %>_<%= user.id %>" 
-                                    class="font-medium text-gray-700 cursor-pointer">
-                                <%= capability.titleize %>
-                                <% if user.inherent_capabilities.include?(capability) %>
-                                  <span class="text-sm text-gray-500 italic ml-1">(from role)</span>
-                                <% end %>
-                              </label>
-                            </div>
-                          </div>
-                        <% end %>
-                      </div>
-                    </div>
-
-                    <div data-role-select-target="feedback" 
-                         class="hidden mt-2 text-sm rounded-md"></div>
-                  </div>
-                <% end %>
-              </td>
-            </tr>
+    
+    <%# Compact Stats Bar - counts at a glance, filtering via dropdowns below %>
+    <section aria-labelledby="user-stats-heading" class="mb-4">
+      <h2 id="user-stats-heading" class="sr-only">User Statistics</h2>
+      <div class="bg-white rounded-lg shadow px-4 py-3">
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+          <%# Total %>
+          <div class="font-medium text-gray-900">
+            <span class="text-lg font-bold text-indigo-600"><%= @total_users_count || 0 %></span>
+            <span class="ml-1">users</span>
+          </div>
+          
+          <div class="hidden sm:block text-gray-300">|</div>
+          
+          <%# Role breakdown - compact inline %>
+          <div class="flex flex-wrap gap-x-4 gap-y-1 text-gray-600">
+            <% role_counts = { 
+                 'Users::Administrator' => { label: 'Admins', short: 'A' },
+                 'Users::Evaluator' => { label: 'Evaluators', short: 'E' },
+                 'Users::Constituent' => { label: 'Constituents', short: 'C' },
+                 'Users::Vendor' => { label: 'Vendors', short: 'V' },
+                 'Users::Trainer' => { label: 'Trainers', short: 'T' }
+               } %>
+            <% role_counts.each do |role_type, display| %>
+              <span title="<%= display[:label] %>">
+                <span class="font-medium"><%= @user_counts_by_role&.dig(role_type) || 0 %></span>
+                <span class="text-gray-400 text-xs"><%= display[:label] %></span>
+              </span>
+            <% end %>
+          </div>
+          
+          <div class="hidden sm:block text-gray-300">|</div>
+          
+          <%# Relationships %>
+          <div class="flex gap-x-4 text-gray-600">
+            <span>
+              <span class="font-medium"><%= @guardian_count || 0 %></span>
+              <span class="text-gray-400 text-xs">guardians</span>
+            </span>
+            <span>
+              <span class="font-medium"><%= @dependent_count || 0 %></span>
+              <span class="text-gray-400 text-xs">dependents</span>
+            </span>
+          </div>
+          
+          <%# Needs Review - highlight if > 0 %>
+          <% if @needs_review_count.to_i > 0 %>
+            <div class="hidden sm:block text-gray-300">|</div>
+            <%= link_to admin_users_path(needs_review: 'true'), 
+                class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
+                data: { turbo_frame: "users_list" } do %>
+              <span class="font-bold mr-1"><%= @needs_review_count %></span> need review
+            <% end %>
           <% end %>
-        </tbody>
-      </table>
-    </div>
+        </div>
+      </div>
+    </section>
+
+    <%# Users List Section %>
+    <section aria-labelledby="users-list-heading" class="bg-white rounded-lg shadow">
+      <h2 id="users-list-heading" class="sr-only">Users List</h2>
+      
+      <%# Filters Section %>
+      <div class="p-4 border-b border-gray-200">
+        <%= form_tag admin_users_path, method: :get, class: "flex flex-wrap items-end gap-4", data: { turbo_frame: "users_list" } do %>
+          <%# Search %>
+          <div class="flex-1 min-w-[200px]">
+            <%= label_tag :q, "Search", class: "block text-sm font-medium text-gray-700 mb-1" %>
+            <div class="relative rounded-md shadow-sm">
+              <%= text_field_tag :q, params[:q], 
+                  placeholder: "Name or email...", 
+                  class: "block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+              <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                <svg class="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          <%# Role Filter %>
+          <div class="w-48">
+            <%= label_tag :role, "Role", class: "block text-sm font-medium text-gray-700 mb-1" %>
+            <%= select_tag :role, options_for_select([
+              ["All Roles", ""],
+              ["Administrator", "administrator"],
+              ["Evaluator", "evaluator"],
+              ["Constituent", "constituent"],
+              ["Vendor", "vendor"],
+              ["Trainer", "trainer"]
+            ], params[:role]), 
+            class: "block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",
+            onchange: "this.form.requestSubmit()" %>
+          </div>
+          
+          <%# Relationship Filter %>
+          <div class="w-48">
+            <%= label_tag :relationship, "Relationship", class: "block text-sm font-medium text-gray-700 mb-1" %>
+            <%= select_tag :relationship, options_for_select([
+              ["All Users", ""],
+              ["Guardians Only", "guardian"],
+              ["Dependents Only", "dependent"]
+            ], params[:relationship]), 
+            class: "block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",
+            onchange: "this.form.requestSubmit()" %>
+          </div>
+          
+          <%# Needs Review Checkbox %>
+          <div class="flex items-center">
+            <%= check_box_tag :needs_review, "true", params[:needs_review].present?, 
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                onchange: "this.form.requestSubmit()" %>
+            <%= label_tag :needs_review, "Needs Review", class: "ml-2 text-sm font-medium text-gray-700" %>
+          </div>
+          
+          <%# Action Buttons %>
+          <div class="flex gap-2">
+            <%= submit_tag "Search", class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer" %>
+            
+            <% if params[:q].present? || params[:role].present? || params[:needs_review].present? || params[:relationship].present? %>
+              <%= link_to "Clear Filters", admin_users_path, 
+                  class: "inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                  data: { turbo_frame: "users_list" } %>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+
+      <%# Active Filters Display %>
+      <% active_filters = [] %>
+      <% active_filters << "Search: \"#{params[:q]}\"" if params[:q].present? %>
+      <% active_filters << "Role: #{params[:role].titleize}" if params[:role].present? %>
+      <% active_filters << "Relationship: #{params[:relationship].titleize}" if params[:relationship].present? %>
+      <% active_filters << "Needs Review" if params[:needs_review].present? %>
+      
+      <% if active_filters.any? %>
+        <div class="px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+          <div class="flex items-center">
+            <span class="text-sm text-indigo-700 font-medium mr-2">Active filters:</span>
+            <div class="flex flex-wrap gap-2">
+              <% active_filters.each do |filter| %>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                  <%= filter %>
+                </span>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <%# Users Table (Turbo Frame) %>
+      <%= turbo_frame_tag "users_list" do %>
+        <%= render partial: 'users_table', locals: { users: @users, pagy: @pagy } %>
+      <% end %>
+    </section>
   </div>
 
-  <!-- Global Feedback Message -->
+  <%# Global Feedback Message %>
   <div id="global-feedback" 
        class="fixed bottom-4 right-4 max-w-sm w-full bg-white rounded-lg shadow-lg p-4 hidden"
        role="alert"

@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 module Admin
-  class UsersController < ApplicationController
+  # Controller for managing users in the admin interface
+  # Inherits from BaseController for Pagy pagination support
+  class UsersController < BaseController
     include ParamCasting
     include UserServiceIntegration
 
@@ -21,87 +23,85 @@ module Admin
       keyword_init: true
     )
 
-    before_action :authenticate_user!
-    before_action :require_admin!
-
+    # Main index action with filtering, pagination, and dashboard metrics
+    # Supports both full page loads and Turbo Frame updates
     def index
-      setup_index_parameters
-      @users = build_index_query.limit(10).to_a
+      # Handle special case: paper application form user search
+      if turbo_frame_request_for_search_results?
+        handle_search_frame_request
+        return
+      end
+
+      # Load dashboard metrics for stats cards
+      load_user_metrics
+
+      # Build filtered and paginated user list
+      base_scope = User.all
+      filtered_scope = apply_user_filters(base_scope)
+      @pagy, @users = paginate_users(filtered_scope)
+
+      # Optimize for N+1 prevention
+      optimize_users_for_index_view(@users.to_a)
 
       respond_to do |format|
-        format.html { handle_html_response }
-        format.json { handle_json_response }
+        format.html
+        format.json { render json: @users.as_json(only: %i[id first_name last_name email]) }
       end
     end
 
-    # Setup parameters for index action
-    def setup_index_parameters
-      @q = params[:q]
-      @role_filter = params[:role] # e.g., "guardian" or "dependent" from paper app form
-      @frame_id = params[:turbo_frame_id] # e.g., "guardian_search_results"
+    private
+
+    # Load metrics for dashboard stats cards
+    def load_user_metrics
+      @user_counts_by_role = User.group(:type).count
+      @needs_review_count = User.where(needs_duplicate_review: true).count
+      @guardian_count = GuardianRelationship.select(:guardian_id).distinct.count
+      @dependent_count = GuardianRelationship.select(:dependent_id).distinct.count
+      @total_users_count = User.count
     end
 
-    # Build query for index action (DRY version of build_search_query)
-    def build_index_query
-      base_query = User.order(:type, :last_name, :first_name)
+    # Apply filters using Users::FilterService
+    def apply_user_filters(scope)
+      result = Users::FilterService.new(scope, params).apply_filters
+      if result.success?
+        result.data
+      else
+        Rails.logger.warn "User filter error: #{result.message}"
+        scope.order(:type, :last_name, :first_name)
+      end
+    end
+
+    # Paginate users with error handling
+    def paginate_users(scope)
+      pagy(scope, items: 25)
+    rescue StandardError => e
+      Rails.logger.error "Pagination failed: #{e.message}"
+      [Pagy.new(count: scope.count, page: 1, items: 25), scope.limit(25)]
+    end
+
+    # Handle Turbo Frame requests for paper application user search
+    def handle_search_frame_request
+      @q = params[:q]
+      @role_filter = params[:role]
+      @frame_id = params[:turbo_frame_id]
 
       if @q.present?
-        apply_search_filter(base_query)
-      elsif turbo_frame_request_for_search_results?
-        base_query.none
+        @users = Users::FilterService.new(User.all, q: @q).apply_filters.data.limit(10).to_a
+        enhance_constituent_users(@users)
       else
-        base_query
+        @users = []
       end
-    end
 
-    # Apply search filter to query (shared logic)
-    def apply_search_filter(query)
-      query_term = "%#{@q.downcase}%"
-      query.where(
-        'LOWER(first_name) ILIKE :q OR LOWER(last_name) ILIKE :q OR LOWER(email) ILIKE :q', q: query_term
-      )
-    end
-
-    # Check if this is a turbo frame request for search results
-    def turbo_frame_request_for_search_results?
-      turbo_frame_request_id&.end_with?('_search_results')
-    end
-
-    # Handle HTML format response
-    def handle_html_response
-      if search_results_frame_request?
-        render_search_results_partial
-      elsif full_page_load_without_query?
-        handle_full_page_load
-      end
-    end
-
-    # Handle JSON format response
-    def handle_json_response
-      render json: @users.as_json(only: %i[id first_name last_name email])
-    end
-
-    # Check if this is a search results frame request
-    def search_results_frame_request?
-      turbo_frame_request_id == "#{@role_filter}_search_results" || @frame_id == "#{@role_filter}_search_results"
-    end
-
-    # Check if this is a full page load without query
-    def full_page_load_without_query?
-      @q.blank?
-    end
-
-    # Render search results partial
-    def render_search_results_partial
       render partial: 'admin/users/user_search_results_list', locals: { users: @users, role: @role_filter }
     end
 
-    # Handle full page load with paginated users
-    def handle_full_page_load
-      # Limit to 50 users per page to prevent memory exhaustion
-      @users = User.order(:type, :last_name, :first_name).limit(50).to_a
-      optimize_users_for_index_view(@users)
+    # Check if this is a turbo frame request for search results (paper app form)
+    def turbo_frame_request_for_search_results?
+      turbo_frame_request_id&.end_with?('_search_results') ||
+        params[:turbo_frame_id]&.end_with?('_search_results')
     end
+
+    public
 
     def show
       @user = User.find(params[:id])
@@ -223,13 +223,19 @@ module Admin
       end
     end
 
-    # New dedicated search endpoint for user search
+    # Dedicated search endpoint for user search (used by paper application form)
     def search
       @q = params[:q]
-      @role_filter = params[:role] # e.g., "guardian" or "dependent" from paper app form
+      @role_filter = params[:role]
       @frame_id = "#{@role_filter}_search_results"
 
-      @users = build_search_query.limit(10).to_a
+      if @q.present?
+        result = Users::FilterService.new(User.all, q: @q).apply_filters
+        @users = result.success? ? result.data.limit(10).to_a : []
+      else
+        @users = []
+      end
+
       enhance_constituent_users(@users)
       render 'admin/users/search'
     end
@@ -451,52 +457,6 @@ module Admin
       }
     end
 
-    # Build search query based on search parameters
-    def build_search_query
-      base_query = User.order(:last_name, :first_name)
-
-      if @q.present?
-        # Split search terms to handle multi-word searches like "Guardian Test"
-        search_terms = @q.strip.split(/\s+/)
-
-        if search_terms.length == 1
-          # Single term search - search in first_name, last_name, or email
-          query_term = "%#{search_terms.first.downcase}%"
-          base_query.where(
-            'LOWER(first_name) ILIKE :q OR LOWER(last_name) ILIKE :q OR LOWER(email) ILIKE :q', q: query_term
-          )
-        else
-          # Multi-term search - try to match full name or individual terms
-          full_name_term = "%#{@q.downcase}%"
-          full_name_query = base_query.where(
-            "LOWER(CONCAT(first_name, ' ', last_name)) ILIKE :q OR LOWER(email) ILIKE :q", q: full_name_term
-          )
-
-          return full_name_query unless full_name_query.empty?
-
-          # If no results from full name search, try individual terms
-          condition = build_multi_term_condition(search_terms)
-          base_query.where(condition)
-        end
-      else
-        # If no query, return empty results
-        base_query.none
-      end
-    end
-
-    # Build Arel condition for multi-term search
-    def build_multi_term_condition(terms)
-      table = User.arel_table
-      terms.inject(nil) do |condition, term|
-        term_pattern = "%#{term.downcase}%"
-        term_cond = table[:first_name].lower.matches(term_pattern)
-                                      .or(table[:last_name].lower.matches(term_pattern))
-                                      .or(table[:email].lower.matches(term_pattern))
-
-        condition ? condition.or(term_cond) : term_cond
-      end
-    end
-
     # Enhance constituent users with relationship data to avoid N+1 queries
     def enhance_constituent_users(users)
       constituent_ids = users.select { |user| user.is_a?(Users::Constituent) }.map(&:id)
@@ -684,10 +644,6 @@ module Admin
         success: false,
         message: converted_user.errors.full_messages.join(', ')
       }, status: :unprocessable_content
-    end
-
-    def require_admin!
-      redirect_to root_path, alert: 'Not authorized' unless current_user&.admin?
     end
 
     def user_params
