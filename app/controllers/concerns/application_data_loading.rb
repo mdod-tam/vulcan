@@ -153,7 +153,8 @@ module ApplicationDataLoading
 
     scope = scope.where.not(status: exclude_statuses) if exclude_statuses.any?
 
-    scope
+    # Default ordering: most recent applications first
+    scope.order(application_date: :desc, id: :desc)
   end
 
   # Load notifications for an application with specific actions

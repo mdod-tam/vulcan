@@ -14,6 +14,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     User.stubs(:system_user).returns(@system_user)
 
     @application = create(:application, :in_progress,
+                          application_date: Date.current,
                           medical_provider_email: 'doctor@example.com',
                           medical_provider_name: 'Dr. Jane Smith')
 

@@ -12,12 +12,18 @@ module Admin
       @admin = create(:admin, email: generate(:email))
       sign_in_for_integration_test(@admin)
 
+      # Use today's date so test apps appear on page 1 when sorted by application_date desc
+      today = Date.current
+
       # Create applications in various statuses
-      @draft_app = create(:application, :draft, user: create(:constituent, email: generate(:email)))
-      @in_progress_app = create(:application, :in_progress, user: create(:constituent, email: generate(:email)))
+      @draft_app = create(:application, :draft, application_date: today,
+                                                user: create(:constituent, email: generate(:email)))
+      @in_progress_app = create(:application, :in_progress, application_date: today,
+                                                            user: create(:constituent, email: generate(:email)))
 
       # For approved - create with proofs attached, then update status
-      @approved_app = create(:application, :in_progress, :with_all_proofs, user: create(:constituent, email: generate(:email)))
+      @approved_app = create(:application, :in_progress, :with_all_proofs, application_date: today,
+                                                                           user: create(:constituent, email: generate(:email)))
       @approved_app.update_columns(
         status: Application.statuses[:approved],
         income_proof_status: Application.income_proof_statuses[:approved],
@@ -26,10 +32,12 @@ module Admin
       )
 
       # For rejected - no proofs required
-      @rejected_app = create(:application, :rejected, user: create(:constituent, email: generate(:email)))
+      @rejected_app = create(:application, :rejected, application_date: today,
+                                                      user: create(:constituent, email: generate(:email)))
 
       # For archived - create with proofs, then update status
       @archived_app = create(:application, :in_progress, :with_income_proof, :with_residency_proof,
+                             application_date: today,
                              user: create(:constituent, email: generate(:email)))
       @archived_app.update_columns(
         status: Application.statuses[:archived],
@@ -128,9 +136,12 @@ module Admin
     end
 
     test 'multiple draft applications all visible when draft filter applied' do
-      # Create additional draft applications
-      draft_app_2 = create(:application, :draft, user: create(:constituent, email: generate(:email)))
-      draft_app_3 = create(:application, :draft, user: create(:constituent, email: generate(:email)))
+      # Create additional draft applications with recent dates
+      today = Date.current
+      draft_app_2 = create(:application, :draft, application_date: today,
+                                                 user: create(:constituent, email: generate(:email)))
+      draft_app_3 = create(:application, :draft, application_date: today,
+                                                 user: create(:constituent, email: generate(:email)))
 
       get admin_applications_path, params: { status: 'draft' }
       assert_response :success
@@ -149,6 +160,7 @@ module Admin
       draft_dependent_app = create(
         :application,
         :draft,
+        application_date: Date.current,
         user: dependent,
         managing_guardian: guardian
       )
@@ -176,9 +188,11 @@ module Admin
     end
 
     test 'pagination maintains draft visibility when filtered' do
-      # Create many draft applications to trigger pagination
+      # Create many draft applications to trigger pagination (with recent dates)
+      today = Date.current
       20.times do
-        create(:application, :draft, user: create(:constituent, email: generate(:email)))
+        create(:application, :draft, application_date: today,
+                                     user: create(:constituent, email: generate(:email)))
       end
 
       get admin_applications_path, params: { status: 'draft', page: 1 }
@@ -197,7 +211,8 @@ module Admin
                                       first_name: 'Searchable',
                                       last_name: 'DraftUser',
                                       email: generate(:email))
-      searchable_draft = create(:application, :draft, user: searchable_constituent)
+      searchable_draft = create(:application, :draft, application_date: Date.current,
+                                                      user: searchable_constituent)
 
       get admin_applications_path, params: { status: 'draft', q: 'Searchable' }
       assert_response :success

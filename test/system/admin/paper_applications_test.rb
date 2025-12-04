@@ -117,25 +117,26 @@ module Admin
       # First ensure the button is present and enabled
       assert_button 'Reject Application (Income)', disabled: false, wait: 10
 
-      # Test without confirmation dialog first to see if basic flow works
-      # Remove data-confirm from button in test or handle differently
-      # Test the complete rejection flow
-      puts 'About to click reject button...'
-
       # Income threshold rejection should NOT create an application
       assert_no_difference 'Application.count' do
+        # Click opens rejection modal
         click_button 'Reject Application (Income)'
+
+        # Wait for modal to appear
+        assert_selector 'dialog#rejection-modal[open]', wait: 10
+
+        # Submit the rejection modal form (email notification is pre-selected)
+        within 'dialog#rejection-modal' do
+          click_button 'Send Notification'
+        end
 
         # Wait for the redirect to complete
         wait_for_turbo
         assert_current_path admin_applications_path, wait: 10
       end
 
-      puts 'SUCCESS: Income threshold rejection completed without creating application!'
-
-      # Verify rejection was successful with success message (not error)
-      # The flash message appears after redirect - allow time for page to load
-      assert_text 'Application rejected due to income threshold', wait: 10
+      # Verify rejection was successful with success message
+      assert_text 'Rejection notification has been sent', wait: 10
     end
 
     test 'admin can see income threshold warning when income exceeds threshold' do

@@ -5,7 +5,7 @@ require 'test_helper'
 module ConstituentPortal
   # Tests for FPL threshold calculation and server-rendered data
   # Note: AJAX endpoint was removed in favor of server-rendered data approach
-  class IncomeThresholdTest < ActionDispatch::IntegrationTest
+  class IncomeThresholdCalculationTest < ActionDispatch::IntegrationTest
     include AuthenticationTestHelper
 
     setup do

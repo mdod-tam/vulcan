@@ -91,6 +91,9 @@ module Applications
       when 'dependent_applications'
         # Filter applications that are for dependents (have a managing_guardian)
         scope.where.not(managing_guardian_id: nil)
+      when 'digitally_signed_needs_review'
+        # Applications that have been digitally signed and need admin review
+        scope.digitally_signed_needs_review
       else
         scope
       end

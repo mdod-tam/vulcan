@@ -59,8 +59,9 @@ module ConstituentPortal
       puts "DEBUG: Application type: #{application.application_type.inspect}"
 
       # Verify the application type is displayed correctly
-      # The application shows the actual value from the database
-      assert_text "Application Type: #{application.application_type&.titleize || 'Not specified'}"
+      # The view uses definition lists so label and value are separate
+      assert_selector 'dt', text: 'Application Type'
+      assert_selector 'dd', text: application.application_type&.titleize || 'Not specified'
 
       # Update the application type directly in the database
       application.update(application_type: 'new')
@@ -69,7 +70,8 @@ module ConstituentPortal
       visit current_path
 
       # Verify the updated application type is displayed
-      assert_text 'Application Type: New'
+      assert_selector 'dt', text: 'Application Type'
+      assert_selector 'dd', text: 'New'
 
       # Update the application type to renewal
       application.update(application_type: 'renewal')
@@ -78,7 +80,8 @@ module ConstituentPortal
       visit current_path
 
       # Verify the updated application type is displayed
-      assert_text 'Application Type: Renewal'
+      assert_selector 'dt', text: 'Application Type'
+      assert_selector 'dd', text: 'Renewal'
     end
 
     test 'self_certify_disability is set correctly' do
@@ -139,8 +142,9 @@ module ConstituentPortal
       # Verify the self_certify_disability field is set correctly
       assert application.self_certify_disability, 'self_certify_disability should be true'
 
-      # Verify the self_certify_disability is displayed correctly on the show page
-      assert_text 'Self-Certified Disability: Yes'
+      # Verify the self_certify_disability is displayed correctly
+      assert_selector 'dt', text: 'Self-Certified Disability'
+      assert_selector 'dd', text: 'Yes'
     end
   end
 end
