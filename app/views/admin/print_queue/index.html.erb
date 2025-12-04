@@ -87,11 +87,11 @@
                         and Turbo's data-turbo-method fails when links are inside forms. The fetch approach 
                         bypasses form nesting entirely by making a direct POST request via JavaScript.
                       -->
-                      <a href="#" 
+                      <button type="button" 
                         class="text-green-600 hover:text-green-900"
                         onclick="event.preventDefault(); fetch('<%= mark_as_printed_admin_print_queue_path(letter) %>', { method: 'POST', headers: { 'X-CSRF-Token': '<%= form_authenticity_token %>' } }).then(() => location.reload());">
                         <span>Mark Printed</span>
-                      </a>
+                      </button>
                     </div>
                   </td>
                 </tr>
