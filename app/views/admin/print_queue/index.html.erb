@@ -80,9 +80,18 @@
                       <%= link_to admin_print_queue_path(letter, format: :pdf), class: "text-blue-600 hover:text-blue-900", target: "_blank" do %>
                         <span>View PDF</span>
                       <% end %>
-                      <%= button_to mark_as_printed_admin_print_queue_path(letter), method: :post, class: "text-green-600 hover:text-green-900 bg-transparent border-none cursor-pointer p-0" do %>
+                      <!-- 
+                        Note: Using inline fetch instead of button_to/link_to because this action is inside 
+                        a parent <form> (the batch selection form starting at line 23). HTML doesn't allow 
+                        nested forms, so Rails' button_to (which generates a form) gets stripped by the browser, 
+                        and Turbo's data-turbo-method fails when links are inside forms. The fetch approach 
+                        bypasses form nesting entirely by making a direct POST request via JavaScript.
+                      -->
+                      <a href="#" 
+                        class="text-green-600 hover:text-green-900"
+                        onclick="event.preventDefault(); fetch('<%= mark_as_printed_admin_print_queue_path(letter) %>', { method: 'POST', headers: { 'X-CSRF-Token': '<%= form_authenticity_token %>' } }).then(() => location.reload());">
                         <span>Mark Printed</span>
-                      <% end %>
+                      </a>
                     </div>
                   </td>
                 </tr>
