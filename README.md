@@ -161,7 +161,7 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 - [Pain Point Tracking](docs/features/application_pain_point_tracking.md) - Draft drop-off analysis
 
 ### Infrastructure
-- [Email System Guide](docs/infrastructure/email_system.md) - Inbound and outbound email, templates
+- [Email System Guide](docs/infrastructure/EMAIL_SYSTEM.md) - Inbound and outbound email, templates
 - [Active Storage S3 Setup](docs/infrastructure/active_storage_s3_setup.md) - File storage configuration
 
 ### Security
