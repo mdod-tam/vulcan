@@ -21,15 +21,19 @@
     <h2 class="text-xl font-semibold mb-4">Pending Letters (<%= @pending_letters.count %>)</h2>
     
     <% if @pending_letters.any? %>
-      <!-- Form with data-turbo=false to ensure file download works -->
-      <%= form_tag '', method: :get, id: "letters-actions-form", class: "relative", data: { turbo: false, controller: "checkbox-select-all" } do %>
+      <div data-controller="checkbox-select-all">
         <div class="bg-white shadow-md rounded-lg overflow-hidden mb-4">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
                 <th scope="col" class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <div class="inline-flex items-center">
-                    <input type="checkbox" id="select-all-pending" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" onclick="toggleAllCheckboxes(this)">
+                    <input type="checkbox"
+                           id="select-all-pending"
+                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                           data-checkbox-select-all-target="select"
+                           data-action="change->checkbox-select-all#selectAll"
+                           aria-label="Select all letters">
                     <span class="text-xs ml-1">All</span>
                   </div>
                 </th>
@@ -54,7 +58,12 @@
               <% @pending_letters.each do |letter| %>
                 <tr>
                   <td class="px-2 py-4 whitespace-nowrap">
-                    <input type="checkbox" name="letter_ids[]" value="<%= letter.id %>" class="letter-checkbox h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" onclick="updateButtonState()">
+                    <input type="checkbox"
+                           value="<%= letter.id %>"
+                           class="letter-checkbox h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                           data-checkbox-select-all-target="checkbox"
+                           data-action="change->checkbox-select-all#checkboxChanged"
+                           aria-label="Select letter for <%= letter.constituent.full_name %>">
                   </td>
                   <td class="pl-1 pr-3 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -80,18 +89,11 @@
                       <%= link_to admin_print_queue_path(letter, format: :pdf), class: "text-blue-600 hover:text-blue-900", target: "_blank" do %>
                         <span>View PDF</span>
                       <% end %>
-                      <!-- 
-                        Note: Using inline fetch instead of button_to/link_to because this action is inside 
-                        a parent <form> (the batch selection form starting at line 23). HTML doesn't allow 
-                        nested forms, so Rails' button_to (which generates a form) gets stripped by the browser, 
-                        and Turbo's data-turbo-method fails when links are inside forms. The fetch approach 
-                        bypasses form nesting entirely by making a direct POST request via JavaScript.
-                      -->
-                      <button type="button" 
-                        class="text-green-600 hover:text-green-900"
-                        onclick="event.preventDefault(); fetch('<%= mark_as_printed_admin_print_queue_path(letter) %>', { method: 'POST', headers: { 'X-CSRF-Token': '<%= form_authenticity_token %>' } }).then(() => location.reload());">
+                      <%= link_to mark_as_printed_admin_print_queue_path(letter),
+                                  data: { turbo_method: :post },
+                                  class: "text-green-600 hover:text-green-900" do %>
                         <span>Mark Printed</span>
-                      </button>
+                      <% end %>
                     </div>
                   </td>
                 </tr>
@@ -101,36 +103,33 @@
         </div>
 
         <div class="flex justify-end space-x-4 mt-4">
-          <!-- Action buttons -->
-          <button type="submit" id="download-btn" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600" disabled="disabled" 
-                  onclick="document.getElementById('letters-actions-form').action='<%= download_batch_admin_print_queue_index_path %>'; document.getElementById('letters-actions-form').method='get';">
-            Download Selected
-          </button>
-          
-          <button type="submit" id="mark-printed-btn" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600" disabled="disabled"
-                  onclick="document.getElementById('letters-actions-form').action='<%= mark_batch_as_printed_admin_print_queue_index_path %>'; document.getElementById('letters-actions-form').method='post';">
-            Mark Selected as Printed
-          </button>
-          <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+          <%# Download form - GET request, turbo disabled for file download %>
+          <%= form_with url: download_batch_admin_print_queue_index_path,
+                        method: :get,
+                        data: { turbo: false, checkbox_select_all_target: "downloadForm" },
+                        class: "inline" do %>
+            <button type="submit"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-checkbox-select-all-target="actionButton"
+                    disabled>
+              Download Selected
+            </button>
+          <% end %>
+
+          <%# Mark as printed form - POST request %>
+          <%= form_with url: mark_batch_as_printed_admin_print_queue_index_path,
+                        method: :post,
+                        data: { checkbox_select_all_target: "markPrintedForm" },
+                        class: "inline" do %>
+            <button type="submit"
+                    class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-checkbox-select-all-target="actionButton"
+                    disabled>
+              Mark Selected as Printed
+            </button>
+          <% end %>
         </div>
-      <% end %>
-
-      <!-- Simple JavaScript without Stimulus -->
-      <script>
-        function toggleAllCheckboxes(selectAllCheckbox) {
-          const checkboxes = document.querySelectorAll('input.letter-checkbox');
-          checkboxes.forEach(checkbox => {
-            checkbox.checked = selectAllCheckbox.checked;
-          });
-          updateButtonState();
-        }
-
-        function updateButtonState() {
-          const anyChecked = Array.from(document.querySelectorAll('input.letter-checkbox')).some(cb => cb.checked);
-          document.getElementById('download-btn').disabled = !anyChecked;
-          document.getElementById('mark-printed-btn').disabled = !anyChecked;
-        }
-      </script>
+      </div>
     <% else %>
       <div class="bg-gray-50 rounded-lg p-6 text-center">
         <p class="text-gray-500">No pending letters in the queue</p>
@@ -208,5 +207,3 @@
     <% end %>
   </div>
 </div>
-
-<!-- No custom JavaScript needed - using Stimulus controller -->

@@ -17,7 +17,7 @@ class CheckboxSelectAllController extends Controller {
       console.log("Select All clicked")
     }
     
-    if (!this.hasSelectTarget || !this.hasCheckboxTargets) {
+    if (!this.hasSelectTarget || !this.hasCheckboxTarget) {
       return;
     }
 
@@ -36,7 +36,7 @@ class CheckboxSelectAllController extends Controller {
       console.log("Checkbox changed")
     }
     
-    if (!this.hasSelectTarget || !this.hasCheckboxTargets) {
+    if (!this.hasSelectTarget || !this.hasCheckboxTarget) {
       return;
     }
 
@@ -50,7 +50,7 @@ class CheckboxSelectAllController extends Controller {
   }
   
   updateButtonState(anyChecked = null) {
-    if (anyChecked === null && this.hasCheckboxTargets) {
+    if (anyChecked === null && this.hasCheckboxTarget) {
       anyChecked = this.checkboxTargets.some(checkbox => checkbox.checked)
     }
     
@@ -80,7 +80,7 @@ class CheckboxSelectAllController extends Controller {
     existingFields.forEach(field => field.remove());
     
     // Get all checked checkboxes using target safety
-    if (!this.hasCheckboxTargets) return;
+    if (!this.hasCheckboxTarget) return;
     
     const checkedBoxes = this.checkboxTargets.filter(checkbox => checkbox.checked);
     
