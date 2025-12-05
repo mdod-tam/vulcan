@@ -37,8 +37,13 @@ module TurboStreamResponseHandling
     end
 
     # Remove specified modals
-    modals_to_remove.each do |modal_id|
-      streams << turbo_stream.remove(modal_id)
+    # NOTE: If 'modals' is being updated in updates hash, skip individual modal removals
+    # to avoid removing modals that were just re-rendered. The container replacement
+    # handles closing any open dialogs via the modal controller's turbo:submit-end handler.
+    unless updates.key?('modals')
+      modals_to_remove.each do |modal_id|
+        streams << turbo_stream.remove(modal_id)
+      end
     end
 
     streams
