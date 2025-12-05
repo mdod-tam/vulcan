@@ -36,9 +36,11 @@ module TurboStreamResponseHandling
       streams << turbo_stream.update(element_id, partial: partial_name)
     end
 
-    # Remove specified modals
-    modals_to_remove.each do |modal_id|
-      streams << turbo_stream.remove(modal_id)
+    # Remove specified modals unless they were recently updated
+    unless updates.key?('modals')
+      modals_to_remove.each do |modal_id|
+        streams << turbo_stream.remove(modal_id)
+      end
     end
 
     streams
