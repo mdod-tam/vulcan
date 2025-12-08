@@ -22,7 +22,7 @@ module Admin
                             residency_proof_status: 'not_reviewed')
 
       # Store original environment variables
-      @original_mailer_host = ENV.fetch('MAILER_HOST', nil)
+      @original_application_host = ENV.fetch('APPLICATION_HOST', nil)
 
       # Force attach both proofs and ensure correct statuses
       attach_lightweight_proof(@application, :income_proof)
@@ -31,8 +31,8 @@ module Admin
       # Ensure the application is saved with proofs attached
       @application.reload
 
-      # Set the MAILER_HOST environment variable for the test
-      ENV['MAILER_HOST'] = 'example.com'
+      # Set the APPLICATION_HOST environment variable for the test
+      ENV['APPLICATION_HOST'] = 'example.com'
 
       # Don't sign in during setup - let each test handle its own authentication
       # This ensures each test starts with a clean authentication state
@@ -58,7 +58,7 @@ module Admin
       end
 
       # Restore original environment variables
-      ENV['MAILER_HOST'] = @original_mailer_host
+      ENV['APPLICATION_HOST'] = @original_application_host
 
       # Always ensure clean session state between tests
       Capybara.reset_sessions!

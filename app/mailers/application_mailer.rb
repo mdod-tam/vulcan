@@ -19,7 +19,7 @@ class ApplicationMailer < ActionMailer::Base
                 elsif Rails.env.test?
                   'example.com'
                 else
-                  ENV.fetch('MAILER_HOST', 'morning-dawn-84330-f594822dd77d.herokuapp.com')
+                  ENV.fetch('APPLICATION_HOST', 'morning-dawn-84330-f594822dd77d.herokuapp.com')
                 end
   end
 

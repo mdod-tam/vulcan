@@ -216,6 +216,9 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 
    Note: Do not commit the changes to config/credentials.yml.enc unless the whole team is changing their master key.
 
+   You'll also need to set the `APPLICATION_HOST` environment variable in production (e.g., `myapp.herokuapp.com`).
+
+
 5. Start the server:
    ```bash
    ./bin/dev # For development with hot-reloading
