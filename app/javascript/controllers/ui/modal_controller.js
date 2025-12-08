@@ -51,7 +51,7 @@ class ModalController extends Controller {
     const dialog = event.target.closest("dialog")
     if (dialog) {
       dialog.close()
-      // Clean up test attributes
+      // Remove test attribute on modal close
       dialog.removeAttribute('data-test-modal-ready')
     }
   }
@@ -79,6 +79,8 @@ class ModalController extends Controller {
       const dialog = form.closest("dialog")
       if (dialog) {
         dialog.close()
+        // Remove test attribute on modal close
+        dialog.removeAttribute('data-test-modal-ready')
       }
     }
   }
