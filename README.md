@@ -202,11 +202,19 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
    ```
    This command populates the `email_templates` table with the default email and letter templates used by the application.
 
-4. Set up environment variables:
-   ```bash
-   cp config/application.yml.example config/application.yml
-   # Edit application.yml with your credentials
-   ```
+4. Set up encryption:
+
+   If you have access to the team's master.key, copy the value into config/master.key.
+
+   Otherwise, set up encryption keys:
+      ```bash
+      # Use your preferred editor (vim, nano, code, etc.)
+      EDITOR="vim" rails credentials:edit # Creates master.key
+      rails db:encryption:init # Copy credentials displayed
+      EDITOR="vim" rails credentials:edit  # Add the generated keys to your credentials
+      ```
+
+   Note: Do not commit the changes to config/credentials.yml.enc unless the whole team is changing their master key.
 
 5. Start the server:
    ```bash
