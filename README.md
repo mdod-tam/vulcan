@@ -189,24 +189,35 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
    yarn install
    ```
 
-3. Setup database:
+3. Set up encryption:
+
+   If you have access to the team's master.key, copy the value into config/master.key.
+
+   Otherwise, set up encryption keys:
+      ```bash
+      # Use your preferred editor (vim, nano, code, etc.)
+      EDITOR="vim" rails credentials:edit # Creates master.key
+      rails db:encryption:init # Copy credentials displayed
+      EDITOR="vim" rails credentials:edit  # Add the generated keys to your credentials
+      ```
+
+   Note: Do not commit the changes to config/credentials.yml.enc unless the whole team is changing their master key.
+
+   Note: You'll need to set the `APPLICATION_HOST` environment variable in production (e.g., `myapp.herokuapp.com`).
+
+4. Setup database:
    ```bash
    bin/rails db:create
    bin/rails db:migrate
    bin/rails db:seed
    ```
 
-3a. Seed email templates:
+4a. Seed email templates:
    ```bash
    rake db:seed_manual_email_templates
    ```
    This command populates the `email_templates` table with the default email and letter templates used by the application.
 
-4. Set up environment variables:
-   ```bash
-   cp config/application.yml.example config/application.yml
-   # Edit application.yml with your credentials
-   ```
 
 5. Start the server:
    ```bash
