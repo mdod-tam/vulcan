@@ -25,7 +25,9 @@ module TurboStreamResponseHandling
   # @param updates [Hash] Hash of element_id => partial_name for updates
   # @param modals_to_remove [Array<String>] Array of modal IDs to remove
   # @return [Array] Array of turbo stream objects
-  def build_success_turbo_streams(updates = {}, modals_to_remove = [])
+  # 
+  # NOTE: modals_to_remove is ignored if updates includes 'modals' (container replacement)
+def build_success_turbo_streams(updates = {}, modals_to_remove = [])
     streams = []
 
     # Always update flash messages
@@ -36,9 +38,11 @@ module TurboStreamResponseHandling
       streams << turbo_stream.update(element_id, partial: partial_name)
     end
 
-    # Remove specified modals
-    modals_to_remove.each do |modal_id|
-      streams << turbo_stream.remove(modal_id)
+    # Remove specified modals unless they were recently updated
+    unless updates.key?('modals')
+      modals_to_remove.each do |modal_id|
+        streams << turbo_stream.remove(modal_id)
+      end
     end
 
     streams
