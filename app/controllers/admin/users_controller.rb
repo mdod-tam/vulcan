@@ -605,7 +605,7 @@ module Admin
     end
 
     def save_converted_user(converted_user, original_user)
-      if converted_user.save
+      if converted_user.save(validate: false)
         handle_successful_user_conversion(converted_user)
       else
         handle_failed_user_conversion(converted_user, original_user)
