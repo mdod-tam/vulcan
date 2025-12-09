@@ -27,6 +27,7 @@ module Admin
         'vendor_portal_url' => 'http://example.com/vendor',
         'application_id' => '12345',
         'user_first_name' => 'Alex',
+        'user_full_name' => 'Alex Johnson',
         'user_email' => 'alex@example.com',
         'constituent_first_name' => 'Jamie',
         'constituent_full_name' => 'Jamie Doe',
@@ -133,7 +134,6 @@ module Admin
       end
     end
 
-    # Vendor-specific data methods
     def vendor_invoice_data
       {
         'header_title' => 'Vendor Notification: Invoice Generated',
@@ -156,6 +156,137 @@ module Admin
         'vendor_contact_email' => 'morgan@baltimoreats.com',
         'invoice_number' => 'INV-2025-042',
         'total_amount_formatted' => '$1,875.50'
+      }
+    end
+
+    def vendor_w9_data(template_name)
+      {
+        'header_title' => "Vendor Notification: W9 #{template_name.to_s.split('_').last.capitalize}",
+        'vendor_business_name' => 'Baltimore Accessible Tech Solutions',
+        'vendor_contact_name' => 'Morgan Johnson',
+        'vendor_contact_email' => 'morgan@baltimoreats.com',
+        'days_until_expiry' => 30
+      }
+    end
+
+    def email_header_data
+      {
+        'title' => 'Sample Email Title',
+        'subtitle' => 'Sample Subtitle'
+      }
+    end
+
+    def email_footer_data
+      {
+        'contact_email' => 'support@example.com',
+        'footer_website_url' => 'http://example.com',
+        'show_automated_message' => true
+      }
+    end
+
+    def application_account_created_data
+      {
+        'title' => 'Account Created',
+        'constituent_first_name' => 'Jamie',
+        'constituent_email' => 'jamie.doe@example.com',
+        'sign_in_url' => 'http://example.com/sign_in',
+        'temp_password' => 'temporaryP@ssw0rd'
+      }
+    end
+
+    def income_threshold_data
+      {
+        'header_title' => 'Income Threshold Exceeded',
+        'constituent_first_name' => 'Jamie',
+        'annual_income_formatted' => '$65,000.00',
+        'threshold_formatted' => '$55,000.00'
+      }
+    end
+
+    def registration_confirmation_data
+      {
+        'header_title' => 'Registration Confirmation',
+        'new_application_url' => 'http://example.com/applications/12'
+      }
+    end
+
+    def proof_submission_error_data
+      {
+        'header_title' => 'Proof Submission Error',
+        'constituent_first_name' => 'Jamie',
+        'proof_type_formatted' => 'Income Verification',
+        'message' => 'The document could not be processed. Please try again.',
+        'additional_instructions' => 'Please ensure the document is clear and readable.'
+      }
+    end
+
+    def certification_submission_error_data
+      {
+        'header_title' => 'Medical Certification Submission Error',
+        'error_message' => 'The medical certification could not be processed.',
+        'medical_provider_email' => 'medical.provider@example.com'
+      }
+    end
+
+    def training_scheduled_data
+      {
+        'header_title' => 'Training Scheduled',
+        'constituent_first_name' => 'Jamie',
+        'trainer_full_name' => 'Training Specialist',
+        'submission_date_formatted' => Date.current.strftime('%B %d, %Y'),
+        'request_count_message' => '(Request #1)'
+      }
+    end
+
+    def training_cancelled_data
+      {
+        'header_title' => 'Training Cancelled',
+        'constituent_first_name' => 'Jamie',
+        'trainer_full_name' => 'Training Specialist',
+        'rejection_reason' => 'Training session was cancelled due to scheduling conflict.',
+        'support_email' => 'trainingsupport@example.com',
+        'scheduled_date_time_formatted' => Date.current.strftime('%B %d, %Y at %I:%M %p %Z')
+      }
+    end
+
+    def training_completed_data
+      {
+        'header_title' => 'Training Completed',
+        'constituent_first_name' => 'Jamie',
+        'completed_date_formatted' => Date.current.strftime('%B %d, %Y'),
+        'trainer_full_name' => 'Training Specialist',
+        'trainer_email' => 'trainingsupport@example.com',
+        'trainer_phone_formatted' => '555-123-4567',
+        'submission_date_formatted' => Date.current.strftime('%B %d, %Y')
+      }
+    end
+
+    def training_no_show_data
+      {
+        'header_title' => 'Training Session Missed',
+        'constituent_first_name' => 'Jamie',
+        'trainer_full_name' => 'Training Specialist',
+        'submission_date_formatted' => Date.current.strftime('%B %d, %Y'),
+        'remaining_attempts_message_text' => 'You have 2 attempts remaining.'
+      }
+    end
+
+    def voucher_redeemed_data
+      {
+        'header_title' => 'Voucher Redeemed',
+        'constituent_first_name' => 'Jamie',
+        'voucher_code' => 'VOUCHER123XYZ',
+        'transaction_amount_formatted' => '$150.00',
+        'remaining_balance_formatted' => '$350.00'
+      }
+    end
+
+    def stale_reviews_data
+      {
+        'header_title' => 'Stale Reviews Summary',
+        'admin_full_name' => 'Sally Smythe',
+        'stale_reviews_count' => 5,
+        'stale_reviews_text_list' => "- Application #1001\n- Application #1002\n- Application #1003\n- Application #1004\n- Application #1005"
       }
     end
   end
