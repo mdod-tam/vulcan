@@ -181,18 +181,14 @@ module Admin
       # Flow: handle_success_response -> responds with redirect for HTML or turbo streams for AJAX
       # For Turbo Streams, updates specified elements and removes open modals
       # For HTML: redirects with notice message
-      #
-      # NOTE: Native <dialog> elements can maintain their open state even when HTML is replaced,
-      # so we must explicitly remove the modals via turbo_stream.remove() before replacing them.
-      handle_success_response(
+      handle_success_response
         html_redirect_path: admin_application_path(@application),
         html_message: message,
         turbo_updates: {
           'attachments-section' => 'attachments',      # Updates attachment display
           'audit-logs' => 'audit_logs',                # Updates audit log section
           'modals' => 'modals'                         # Replaces modals with fresh versions
-        },
-        turbo_modals_to_remove: standard_application_modals # Explicitly close open dialogs
+        }
       )
     end
 
