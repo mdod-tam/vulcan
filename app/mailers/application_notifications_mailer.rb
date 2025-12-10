@@ -16,7 +16,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
     # Set up mail options with CC for alternate contact if provided
     mail_options = {
-      to: @user.email,
+      to: @user.effective_email,
       subject: 'Your Application Has Been Submitted',
       message_stream: 'notifications'
     }
@@ -41,7 +41,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
     variables = build_proof_approved_variables(application, proof_review)
 
-    send_email(application.user.email, text_template, variables)
+    send_email(application.user.effective_email, text_template, variables)
   rescue StandardError => e
     Rails.logger.error("Failed to send proof approval email for application #{application&.id}, proof_review #{proof_review&.id}: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n"))
@@ -79,7 +79,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
     variables = build_max_rejections_variables(application, reapply_date)
 
-    send_email(application.user.email, text_template, variables)
+    send_email(application.user.effective_email, text_template, variables)
   rescue StandardError => e
     Rails.logger.error("Failed to send max rejections email for application #{application&.id}: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n"))
@@ -170,7 +170,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
     message = mail(
-      to: user.email,
+      to: user.effective_email,
       subject: rendered_subject,
       message_stream: 'notifications'
     ) do |format|
@@ -197,7 +197,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     rendered_subject = rendered_subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received')
 
     mail(
-      to: application.user.email,
+      to: application.user.effective_email,
       subject: rendered_subject,
       message_stream: 'notifications'
     ) do |format|
