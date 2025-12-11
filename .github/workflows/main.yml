@@ -1,0 +1,52 @@
+name: Rails Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        ports:
+          - "5432:5432"
+        env:
+          POSTGRES_DB: rails_test
+          POSTGRES_USER: rails
+          POSTGRES_PASSWORD: password
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: "postgres://rails:password@localhost:5432/rails_test"
+      RAILS_MASTER_KEY: ${{ secrets.RAIL_MASTER_KEY }}
+        
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Ruby and gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby_version: '3.4.7'
+          bundler-cache: true
+
+      - name: Install JS dependencies
+        run: yarn install
+
+      - name: Set up database
+        run: bin/rails db:prepare
+
+      - name: Seed email templates
+        run: bundle exec rake db:seed_manual_email_templates
+
+      - name: Precompile assets
+        run: bin/rails assets:precompile
+
+      - name: Run rails test
+        run: bin/rails test
+
+      - name: Run system test
+        run: bin/rails test:system
