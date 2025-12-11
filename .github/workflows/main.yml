@@ -20,8 +20,11 @@ jobs:
           POSTGRES_PASSWORD: password
     env:
       RAILS_ENV: test
-      DATABASE_URL: "postgres://rails:password@localhost:5432/rails_test"
-      RAILS_MASTER_KEY: ${{ secrets.RAIL_MASTER_KEY }}
+      DATABASE_URL: "postgres://rails:password@127.0.0.1:5432/rails_test"
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_USER: vulcan
+      POSTGRES_PASSWORD: password
+      RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
         
     steps:
       - name: Checkout code
