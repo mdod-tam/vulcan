@@ -32,6 +32,11 @@ jobs:
         with:
           ruby_version: '3.4.7'
           bundler-cache: true
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'yarn'
 
       - name: Install JS dependencies
         run: yarn install
