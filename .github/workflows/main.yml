@@ -1,5 +1,5 @@
 name: Rails Test
-
+#simple workflow tests to check if app runs
 on:
   push:
     branches: [ "main" ]
@@ -18,6 +18,7 @@ jobs:
           POSTGRES_DB: rails_test
           POSTGRES_USER: rails
           POSTGRES_PASSWORD: password
+        #waits for postgres to start to avoid any login failures
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -44,7 +45,7 @@ jobs:
 
       - name: Install JS dependencies
         run: yarn install
-
+      #app uses solidqueue and on start looks at database.yml, so to get around this overwrite the file to be local and not dedicated
       - name: Overwrite database.yml for CI
         run: |
           cat <<EOF > config/database.yml
@@ -75,7 +76,7 @@ jobs:
 
       - name: Precompile assets
         run: bin/rails assets:precompile
-
+      #runs tests below, currently gets stuck randomly
       - name: Run rails test
         run: bin/rails test
 
