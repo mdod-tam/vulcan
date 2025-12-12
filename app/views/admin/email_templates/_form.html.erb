@@ -24,11 +24,37 @@
     <%= form.text_field :subject, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
   </div>
 
-  <div>
+  <div data-controller="protected-variables">
     <%= form.label :body, class: "block text-sm font-medium text-gray-700" %>
-    <%= form.text_area :body, rows: 20, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono" %>
+    
+    <!-- Hidden textarea that stores actual data -->
+    <%= form.text_area :body, 
+        rows: 20, 
+        class: "hidden",
+        data: { "protected-variables-target": "textarea" } %>
+    
+    <!-- Visible editable div -->
+    <div 
+      data-protected-variables-target="editor"
+      class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono p-3 min-h-96 bg-white"
+      contenteditable="true"
+      style="white-space: pre-wrap; word-wrap: break-word; outline: none;">
+    </div>
+    
+    <style>
+      .protected-variable {
+        background-color: #e0e7ff;
+        color: #4f46e5;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-weight: 500;
+        cursor: not-allowed;
+        user-select: none;
+      }
+    </style>
+    
     <p class="mt-2 text-sm text-gray-500">
-      Use <code class="text-sm bg-gray-100 px-1 py-0.5 rounded">%{variable_name}</code> syntax for interpolation.
+      Use <code class="text-sm bg-gray-100 px-1 py-0.5 rounded">%{variable_name}s</code> syntax. Variables are highlighted in blue and cannot be edited or deleted.
     </p>
   </div>
 
