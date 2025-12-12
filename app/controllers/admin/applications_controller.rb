@@ -181,7 +181,7 @@ module Admin
       # Flow: handle_success_response -> responds with redirect for HTML or turbo streams for AJAX
       # For Turbo Streams, updates specified elements and removes open modals
       # For HTML: redirects with notice message
-      handle_success_response
+      handle_success_response(
         html_redirect_path: admin_application_path(@application),
         html_message: message,
         turbo_updates: {
