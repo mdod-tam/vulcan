@@ -47,22 +47,25 @@ jobs:
 
       - name: Overwrite database.yml for CI
         run: |
-          echo "test:
-            adapter: postgresql
-            encoding: unicode
-            host: 127.0.0.1
-            username: rails
-            password: password
-            database: rails_test
-            pool: 5" > config/database.yml
-          queue:
+          cat <<EOF > config/database.yml
+          test:
+            primary:
               adapter: postgresql
               encoding: unicode
               host: 127.0.0.1
               username: rails
               password: password
               database: rails_test
-              pool: 5" > config/database.yml
+              pool: 5
+            queue:
+              adapter: postgresql
+              encoding: unicode
+              host: 127.0.0.1
+              username: rails
+              password: password
+              database: rails_test
+              pool: 5
+          EOF
 
       - name: Set up database
         run: bin/rails db:prepare
