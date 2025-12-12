@@ -25,7 +25,7 @@ jobs:
           --health-retries 5
     env:
       RAILS_ENV: test
-      DATABASE_URL: "postgres://rails:password@localhost:5432/rails_test"
+      DATABASE_URL: "postgres://rails:password@127.0.0.1:5432/rails_test"
       RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
         
     steps:
@@ -35,7 +35,7 @@ jobs:
       - name: Install Ruby and gems
         uses: ruby/setup-ruby@v1
         with:
-          ruby_version: '3.4.7'
+          ruby-version: '3.4.7'
           bundler-cache: true
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -45,6 +45,17 @@ jobs:
 
       - name: Install JS dependencies
         run: yarn install
+
+      - name: Overwrite database.yml for CI
+        run: |
+          echo "test:
+            adapter: postgresql
+            encoding: unicode
+            host: 127.0.0.1
+            username: rails
+            password: password
+            database: rails_test
+            pool: 5" > config/database.yml
 
       - name: Set up database
         run: bin/rails db:prepare
