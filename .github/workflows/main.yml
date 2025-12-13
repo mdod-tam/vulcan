@@ -1,0 +1,84 @@
+name: Rails Test
+#simple workflow tests to check if app runs
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        ports:
+          - "5432:5432"
+        env:
+          POSTGRES_DB: rails_test
+          POSTGRES_USER: rails
+          POSTGRES_PASSWORD: password
+        #waits for postgres to start to avoid any login failures
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      RAILS_ENV: test
+      RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+        
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Ruby and gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4.7'
+          bundler-cache: true
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'yarn'
+
+      - name: Install JS dependencies
+        run: yarn install
+      #app uses solidqueue and on start looks at database.yml, so to get around this overwrite the file to be local and not dedicated
+      - name: Overwrite database.yml for CI
+        run: |
+          cat <<EOF > config/database.yml
+          test:
+            primary:
+              adapter: postgresql
+              encoding: unicode
+              host: 127.0.0.1
+              username: rails
+              password: password
+              database: rails_test
+              pool: 5
+            queue:
+              adapter: postgresql
+              encoding: unicode
+              host: 127.0.0.1
+              username: rails
+              password: password
+              database: rails_test
+              pool: 5
+          EOF
+
+      - name: Set up database
+        run: bin/rails db:prepare
+
+      - name: Seed email templates
+        run: bundle exec rake db:seed_manual_email_templates
+
+      - name: Precompile assets
+        run: bin/rails assets:precompile
+
+      - name: Run rails test
+        run: bin/rails test
+      #test:system commented out due to errors with test files
+      #- name: Run system test
+      #  run: bin/rails test:system
