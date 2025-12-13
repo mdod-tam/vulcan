@@ -56,7 +56,7 @@
                     <%= user.role_type %>
                   </span>
                   <% user.available_capabilities.each do |capability| %>
-                    <% if user.has_capability?(capability) %>
+                    <% if user.has_capability?(capability) || user.inherent_capabilities.include?(capability) %>
                       <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                         <%= capability.titleize %>
                       </span>
@@ -140,7 +140,7 @@
                           <div class="flex items-center h-5">
                             <%= check_box_tag "capability_#{capability}_#{user.id}",
                                 "1",
-                                user.has_capability?(capability),
+                                user.has_capability?(capability) || user.inherent_capabilities.include?(capability),
                                 data: {
                                   role_select_target: "capability",
                                   action: "click->role-select#toggleCapability",
