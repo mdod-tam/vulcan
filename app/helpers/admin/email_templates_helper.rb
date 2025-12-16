@@ -3,9 +3,17 @@
 module Admin
   module EmailTemplatesHelper
     # Provides sample data for rendering email template previews or tests.
-    # Returns a hash with string keys matching the %{variable_name} placeholders.
+    # Auto-extracts variables from the template body and generates generic sample values.
     def sample_data_for_template(template_name)
-      base_sample_data.merge(template_specific_data(template_name))
+      template = EmailTemplate.find_by(name: template_name)
+      return base_sample_data unless template
+
+      # Auto-generate sample data for extracted variables
+      generated = template.extract_variables.each_with_object({}) do |var, hash|
+        hash[var] = "Sample #{var.humanize}"
+      end
+
+      base_sample_data.merge(generated)
     end
 
     private
@@ -58,14 +66,14 @@ module Admin
         'all_proofs_approved_message_text' => 'All required proofs have been approved!',
         'active_vendors_text_list' => "- Vendor A\n- Vendor B",
         'stale_reviews_count' => 5,
-        'stale_reviews_text_list' => "- App 1\n- App 2\n- App 3\n- App 4\n- App 5", # Placeholder
-        'constituent_disabilities_text_list' => "- Disability 1\n- Disability 2", # Placeholder
+        'stale_reviews_text_list' => "- App 1\n- App 2\n- App 3\n- App 4\n- App 5",
+        'constituent_disabilities_text_list' => "- Disability 1\n- Disability 2",
         'evaluators_evaluation_url' => 'http://example.com/evaluators/evaluations/1',
         'verification_url' => 'http://example.com/identity/email_verifications/TOKEN',
         'reset_url' => 'http://example.com/identity/password_resets/TOKEN',
         'invoice_number' => 'INV-2025-001',
         'total_amount_formatted' => '$1,234.56',
-        'transactions_text_list' => "- Txn 1: $100\n- Txn 2: $200", # Placeholder
+        'transactions_text_list' => "- Txn 1: $100\n- Txn 2: $200",
         'gad_invoice_reference' => 'GADREF98765',
         'check_number' => 'CHK1001',
         'days_until_expiry' => 30,
@@ -78,7 +86,7 @@ module Admin
         'minimum_redemption_amount_formatted' => '$25.00',
         'transaction_amount_formatted' => '$150.00',
         'transaction_reference_number' => 'TXNREFABCDE',
-        'transaction_history_text' => "- Redeemed $100 at Vendor A\n- Redeemed $50 at Vendor B", # Placeholder
+        'transaction_history_text' => "- Redeemed $100 at Vendor A\n- Redeemed $50 at Vendor B",
         'remaining_value_message_text' => 'Your remaining balance is $350.00.',
         'fully_redeemed_message_text' => 'This voucher has been fully redeemed.',
         'download_form_url' => 'http://example.com/forms/medical_cert.pdf',
@@ -89,73 +97,6 @@ module Admin
         'threshold_formatted' => '$55,000.00',
         'proof_type_formatted' => 'Income Verification',
         'additional_notes' => 'These are some additional notes.'
-      }
-    end
-
-    # Template-specific data overrides
-    def template_specific_data(template_name)
-      case template_name.to_sym
-      when :vendor_notifications_invoice_generated
-        vendor_invoice_data
-      when :vendor_notifications_payment_issued
-        vendor_payment_data
-      when :vendor_notifications_w9_approved, :vendor_notifications_w9_rejected,
-            :vendor_notifications_w9_expired, :vendor_notifications_w9_expiring_soon
-        vendor_w9_data(template_name)
-      when :email_header_text
-        email_header_data
-      when :email_footer_text
-        email_footer_data
-      when :application_notifications_account_created
-        application_account_created_data
-      when :application_notifications_income_threshold_exceeded
-        income_threshold_data
-      when :application_notifications_registration_confirmation
-        registration_confirmation_data
-      when :application_notifications_proof_submission_error
-        proof_submission_error_data
-      when :medical_provider_certification_submission_error
-        certification_submission_error_data
-      when :training_session_notifications_training_scheduled
-        training_scheduled_data
-      when :training_session_notifications_training_cancelled
-        training_cancelled_data
-      when :training_session_notifications_training_completed
-        training_completed_data
-      when :training_session_notifications_training_no_show
-        training_no_show_data
-      when :voucher_notifications_voucher_redeemed
-        voucher_redeemed_data
-      when :admin_notifications_stale_reviews_summary
-        stale_reviews_data
-      else
-        {} # Return empty hash for no overrides
-      end
-    end
-
-    # Vendor-specific data methods
-    def vendor_invoice_data
-      {
-        'header_title' => 'Vendor Notification: Invoice Generated',
-        'vendor_business_name' => 'Baltimore Accessible Tech Solutions',
-        'vendor_contact_name' => 'Morgan Johnson',
-        'vendor_contact_email' => 'morgan@baltimoreats.com',
-        'invoice_number' => 'INV-2025-042',
-        'period_start_formatted' => (Date.current - 1.month).beginning_of_month.strftime('%B %d, %Y'),
-        'period_end_formatted' => (Date.current - 1.month).end_of_month.strftime('%B %d, %Y'),
-        'total_amount_formatted' => '$1,875.50',
-        'transactions_text_list' => "- Voucher #V0012345: $550.00\n- Voucher #V0012346: $725.50\n- Voucher #V0012347: $600.00"
-      }
-    end
-
-    def vendor_payment_data
-      {
-        'header_title' => 'Vendor Notification: Payment Issued',
-        'vendor_business_name' => 'Baltimore Accessible Tech Solutions',
-        'vendor_contact_name' => 'Morgan Johnson',
-        'vendor_contact_email' => 'morgan@baltimoreats.com',
-        'invoice_number' => 'INV-2025-042',
-        'total_amount_formatted' => '$1,875.50'
       }
     end
   end
