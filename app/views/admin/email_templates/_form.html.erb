@@ -54,9 +54,38 @@
     </style>
     
     <p class="mt-2 text-sm text-gray-500">
-      Use <code class="text-sm bg-gray-100 px-1 py-0.5 rounded">%{variable_name}s</code> syntax. Variables are highlighted in blue and cannot be edited or deleted.
+      Variables are highlighted in gray and cannot be edited.
     </p>
+
+    <!-- Available Variables Dropdown -->
+    <div class="mt-4">
+      <label for="variable-insert" class="block text-sm font-medium text-gray-700 mb-2">
+        Insert Variable
+      </label>
+      <select id="variable-insert" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" data-protected-variables-target="variableSelect">
+        <option value="">-- Select a variable to insert --</option>
+        <% required_vars = template_definition[:required_vars] || [] %>
+        <% optional_vars = template_definition[:optional_vars] || [] %>
+        <% if required_vars.any? %>
+          <optgroup label="Required Variables">
+            <% required_vars.each do |var| %>
+              <option value="%&lt;<%= var %>&gt;s"><%= var %></option>
+            <% end %>
+          </optgroup>
+        <% end %>
+        <% if optional_vars.any? %>
+          <optgroup label="Optional Variables">
+            <% optional_vars.each do |var| %>
+              <option value="%&lt;<%= var %>&gt;s"><%= var %></option>
+            <% end %>
+          </optgroup>
+        <% end %>
+      </select>
+    </div>
+  
   </div>
+
+
 
   <%# Preview Section %>
   <div class="mt-6 mb-6 p-4 border border-gray-200 rounded-md bg-white">
@@ -106,39 +135,6 @@
     
     <div class="text-sm text-gray-600 mt-2 italic">
       <p>Preview uses sample data with placeholder values. All variables, headers, and footers are rendered.</p>
-    </div>
-  </div>
-
-  <%# Available Variables Section (for reference during editing) %>
-  <div class="mt-6 p-4 border border-gray-200 rounded-md bg-gray-50">
-    <h3 class="text-lg font-medium text-gray-700 mb-3">Available Variables Reference</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <h4 class="text-md font-medium text-gray-600 mb-2">Required Variables</h4>
-        <% required_vars = template_definition[:required_vars] || [] %>
-        <% if required_vars.any? %>
-          <ul class="list-disc list-inside space-y-1">
-            <% required_vars.each do |var| %>
-              <li class="text-sm"><code class="text-sm bg-gray-200 px-1 py-0.5 rounded"><%= var %></code></li>
-            <% end %>
-          </ul>
-        <% else %>
-          <p class="text-sm text-gray-500">None defined.</p>
-        <% end %>
-      </div>
-      <div>
-        <h4 class="text-md font-medium text-gray-600 mb-2">Optional Variables</h4>
-        <% optional_vars = template_definition[:optional_vars] || [] %>
-        <% if optional_vars.any? %>
-          <ul class="list-disc list-inside space-y-1">
-            <% optional_vars.each do |var| %>
-              <li class="text-sm"><code class="text-sm bg-gray-200 px-1 py-0.5 rounded"><%= var %></code></li>
-            <% end %>
-          </ul>
-        <% else %>
-          <p class="text-sm text-gray-500">None defined.</p>
-        <% end %>
-      </div>
     </div>
   </div>
 
