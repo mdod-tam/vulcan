@@ -28,7 +28,6 @@ export default class extends Controller {
   }
   
   preventCursorInVariable(e) {
-    console.log('preventCursorInVariable')
     // Only prevent if directly clicking on a protected variable
     if (e.target.classList?.contains("protected-variable")) {
       e.preventDefault()
