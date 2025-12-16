@@ -376,8 +376,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     organization_name = Policy.get('organization_name') || 'MAT Program'
     proof_type_formatted = format_proof_type(proof_review.proof_type)
     all_proofs_approved = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
+    all_proofs_approved_message_text = all_proofs_approved ? 'All required documents for your application have now been approved.' : ''
     header_title = "Document Review Update: #{proof_type_formatted.capitalize} Approved"
-    all_proofs_approved_message_text = all_proofs_approved ? 'All required documents for your application have now been approved.' : nil
 
     base_variables = build_base_email_variables(header_title, 'MAT Program')
     proof_variables = {
