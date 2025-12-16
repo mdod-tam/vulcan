@@ -146,7 +146,7 @@ module ActionMailboxTestHelper
     pdf_content += "4 0 obj\n<< /Length 44 >>\nstream\nBT\n/F1 12 Tf\n100 700 Td\n(Test PDF) Tj\nET\nendstream\nendobj\n"
 
     # Pad to ensure it's over 1KB
-    padding = '%' + ('A' * (1024 - (pdf_header + pdf_content).bytesize + 100)) + "\n"
+    padding = "%#{'A' * (1024 - (pdf_header + pdf_content).bytesize + 100)}\n"
     pdf_content += padding
 
     pdf_trailer = "xref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000179 00000 n \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n#{(pdf_header + pdf_content).bytesize}\n%%EOF\n"

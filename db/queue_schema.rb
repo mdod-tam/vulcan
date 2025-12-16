@@ -1,4 +1,4 @@
-# This file is auto-generated from the current state of the queue database. Instead
+# This file is auto-generated from the current state of the database. Instead
 # of editing this file, please use the migrations feature of Active Record to
 # incrementally modify your database, and then regenerate this schema definition.
 #
@@ -14,6 +14,4 @@ ActiveRecord::Schema[8.0].define(version: 0) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  # Note: Solid Queue tables are in the primary database since QUEUE_DATABASE_URL
-  # is not configured. See db/schema.rb for the actual table definitions.
 end

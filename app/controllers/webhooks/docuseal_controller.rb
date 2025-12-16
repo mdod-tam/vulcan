@@ -172,7 +172,7 @@ module Webhooks
       documents = data['documents'] || []
       url = documents.first && documents.first['url']
 
-      unless url.present?
+      if url.blank?
         Rails.logger.warn "DocuSeal webhook: missing document URL. Available keys: #{data.keys.join(', ')}"
         log_attachment_failure(app, 'missing_document_url', 'No document URL provided in webhook payload')
         return false

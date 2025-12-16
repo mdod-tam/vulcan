@@ -23,7 +23,7 @@ module Admin
                              .select('users.id, users.business_name, ' \
                                      'SUM(voucher_transactions.amount) as total_amount, ' \
                                      'COUNT(DISTINCT voucher_transactions.id) as transaction_count')
-                             .order('total_amount DESC')
+                             .order(total_amount: :desc)
 
       respond_to do |format|
         format.html

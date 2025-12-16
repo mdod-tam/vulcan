@@ -7,13 +7,13 @@ module Webhooks
     setup do
       @system_user = create(:admin, email: 'system@example.com')
       User.stubs(:system_user).returns(@system_user)
-      
+
       @application = create(:application, :in_progress,
-                           document_signing_service: 'docuseal',
-                           document_signing_submission_id: 'sub_123456',
-                           document_signing_status: :sent,
-                           medical_certification_status: :requested)
-      
+                            document_signing_service: 'docuseal',
+                            document_signing_submission_id: 'sub_123456',
+                            document_signing_status: :sent,
+                            medical_certification_status: :requested)
+
       # Mock webhook secret
       @webhook_secret = 'test_webhook_secret'
       Rails.application.credentials.stubs(:webhook_secret).returns(@webhook_secret)
@@ -21,7 +21,7 @@ module Webhooks
       # Bypass authentication in the controller chain
       ApplicationController.any_instance.stubs(:authenticate_user!).returns(true)
       ApplicationController.any_instance.stubs(:require_login).returns(true)
-      
+
       @viewed_payload = {
         event_type: 'form.viewed',
         data: {
@@ -205,7 +205,7 @@ module Webhooks
 
     test 'ignores unknown event types' do
       Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-      
+
       unknown_payload = {
         event_type: 'form.unknown',
         data: { 'submission_id' => 'sub_123456' }
@@ -217,7 +217,7 @@ module Webhooks
 
     test 'handles missing application gracefully' do
       Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-      
+
       payload = @viewed_payload.deep_dup
       payload[:data]['submission_id'] = 'nonexistent_id'
 
@@ -259,14 +259,14 @@ module Webhooks
       Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
 
       signature = "sha256=#{compute_signature(@viewed_payload.to_json)}"
-      
+
       post webhooks_docuseal_medical_certification_path,
            params: @viewed_payload,
            headers: webhook_headers(signature),
            as: :json
 
       assert_response :ok
-      
+
       @application.reload
       assert_equal 'opened', @application.document_signing_status
     end

@@ -16,10 +16,10 @@ module UserServiceIntegration
     attrs = user_params.respond_to?(:to_h) ? user_params.to_h : user_params
     attrs = attrs.with_indifferent_access if attrs.respond_to?(:with_indifferent_access)
 
-    service = Applications::UserCreationService.new(attrs, 
-                                                     is_managing_adult: is_managing_adult,
-                                                     skip_user_lookup: skip_user_lookup,
-                                                     require_disability_validation: require_disability_validation)
+    service = Applications::UserCreationService.new(attrs,
+                                                    is_managing_adult: is_managing_adult,
+                                                    skip_user_lookup: skip_user_lookup,
+                                                    require_disability_validation: require_disability_validation)
     service.call
   end
 

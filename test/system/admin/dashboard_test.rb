@@ -87,7 +87,7 @@ module Admin
       # Click on proofs needing review link
       click_on 'Proofs Needing Review'
 
-      # Note: These links use turbo_frame: "applications_list" so URL doesn't change
+      # NOTE: These links use turbo_frame: "applications_list" so URL doesn't change
       # Verify the filter is applied by checking the link is highlighted
       within "section[aria-labelledby='common-tasks-heading']" do
         assert_selector 'a', text: /Proofs Needing Review/, wait: 10
@@ -177,7 +177,7 @@ module Admin
       assert_selector "a[aria-label*='reports']"           # Can view reports
 
       # Test accessibility patterns for primary actions
-      page.all('a[aria-label]').each do |button|
+      page.all('a[aria-label]').find_each do |button|
         assert button['aria-label'].present?, "Button missing aria-label: #{button.text}"
       end
     end
