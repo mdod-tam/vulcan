@@ -146,9 +146,7 @@ module Applications
       end
 
       # Update dependent information if provided (contact info may have changed)
-      if params[:constituent].present? && attributes_present?(params[:constituent])
-        return false unless update_dependent_contact_info(dependent)
-      end
+      return false if params[:constituent].present? && attributes_present?(params[:constituent]) && !update_dependent_contact_info(dependent)
 
       # Validate no active application for dependent
       return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).where.not(status: :archived).exists?
@@ -223,7 +221,7 @@ module Applications
 
     def update_dependent_contact_info(dependent)
       attrs = params[:constituent]
-      return true unless attrs.present?
+      return true if attrs.blank?
 
       # Build hash of updateable fields (contact info only, not identity fields)
       updates = {}

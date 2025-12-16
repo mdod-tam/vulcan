@@ -117,7 +117,7 @@ module UserGuardianship
     return nil unless dependent?
 
     @guardian_for_contact ||= if guardian_relationships_as_dependent.loaded?
-                                guardian_relationships_as_dependent.find { |rel| rel.guardian_user }&.guardian_user
+                                guardian_relationships_as_dependent.find(&:guardian_user)&.guardian_user
                               else
                                 guardian_relationships_as_dependent
                                   .joins(:guardian_user)

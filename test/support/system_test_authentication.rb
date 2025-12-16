@@ -289,7 +289,7 @@ module SystemTestAuthentication
       debug_puts 'Timeout during Capybara.reset_sessions!, forcing manual cleanup'
       # Manual cleanup when reset_sessions! hangs
       begin
-        page.driver.browser.quit if page&.driver&.browser
+        page&.driver&.browser&.quit
       rescue StandardError
         # Ignore errors during manual cleanup
       end

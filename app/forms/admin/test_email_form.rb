@@ -16,7 +16,9 @@ module Admin
     end
 
     def email_template
-      @email_template ||= EmailTemplate.find_by(id: template_id)
+      return @email_template if defined?(@email_template)
+
+      @email_template = EmailTemplate.find_by(id: template_id)
     end
   end
 end

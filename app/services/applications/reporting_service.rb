@@ -302,7 +302,7 @@ module Applications
       notifications = Notification.select(
         'id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata'
       ).order(created_at: :desc)
-       .limit(5)
+                                  .limit(5)
 
       data[:recent_notifications] = notifications.map { |n| NotificationDecorator.new(n) }
     end

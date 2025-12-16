@@ -145,8 +145,8 @@ module ConstituentPortal
 
       # Update fields with safe interaction - bypass JavaScript by setting values directly
       # Debug: Check current values before updating
-      household_field = find('#application_household_size')
-      income_field = find('#application_annual_income')
+      household_field = find_by_id('application_household_size')
+      income_field = find_by_id('application_annual_income')
 
       # Set values directly to bypass autosave interference
       household_field.set('4')

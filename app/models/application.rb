@@ -256,7 +256,7 @@ class Application < ApplicationRecord
     draft
       .where.not(last_visited_step: [nil, ''])
       .group(:last_visited_step)
-      .order('count_all DESC')
+      .order(count_all: :desc)
       .count
   end
 

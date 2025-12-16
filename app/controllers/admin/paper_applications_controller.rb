@@ -385,15 +385,17 @@ module Admin
     end
 
     def merge_user_params!(service_params, permitted, disability_attrs)
+      constituent_attrs = (permitted[:constituent] || {}).dup
       if service_params[:applicant_type] == 'dependent'
-        constituent_attrs = (permitted[:constituent] || {}).dup
         service_params[:constituent] = constituent_attrs.deep_merge(disability_attrs)
-        service_params[:new_guardian_attributes] = permitted[:guardian_attributes] if service_params[:guardian_id].blank? && permitted[:guardian_attributes].present?
+        if service_params[:guardian_id].blank? && permitted[:guardian_attributes].present?
+          service_params[:new_guardian_attributes] =
+            permitted[:guardian_attributes]
+        end
       else
         # For self-applications, use constituent data merged with disability_attrs.
         # Don't use guardian_attributes for self-applications as that would merge
         # the applicant's disability flags with the data for the guardian
-        constituent_attrs = (permitted[:constituent] || {}).dup
         service_params[:constituent] = constituent_attrs.deep_merge(disability_attrs)
       end
     end
