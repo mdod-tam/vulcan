@@ -203,6 +203,7 @@ module ProofManageable
   # Sets the needs_review_since timestamp when proofs are attached
   def set_needs_review_timestamp
     return if @setting_review_timestamp
+    return if Current.proof_attachment_service_context?
     return unless income_proof.attached? || residency_proof.attached?
 
     @setting_review_timestamp = true

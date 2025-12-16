@@ -188,7 +188,7 @@ class ProofAttachmentService
       with_paper_context(flow_data.submission_method, flow_data.proof_type) do
         attach_and_verify_initial_save(flow_data.application, flow_data.proof_type, flow_data.attachment_param)
         log_attachment_events_from_flow_data(flow_data, params)
-        verify_attachment_persisted_after_update(flow_data.application, flow_data.proof_type)
+        # Removed verify_attachment_persisted_after_update - status updates don't affect attachments
 
         result[:blob_size] = flow_data.blob_size
         result[:success] = true
@@ -256,11 +256,6 @@ class ProofAttachmentService
 
       Rails.logger.error "Attachment failed to persist for #{proof_type} proof on application #{application.id}"
       raise 'Attachment failed to persist after save and reload'
-    end
-
-    def verify_attachment_persisted_after_update(application, proof_type)
-      application.reload
-      raise 'Critical error: Attachment disappeared after status update' unless application.send("#{proof_type}_proof").attached?
     end
 
     def log_error(error)

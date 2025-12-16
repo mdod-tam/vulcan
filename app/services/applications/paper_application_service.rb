@@ -133,37 +133,50 @@ module Applications
       return add_error('Guardian not found') unless guardian
       return add_error('Dependent not found') unless dependent
 
-      # Ensure relationship exists, or create if relationship_type provided
-      rel = GuardianRelationship.find_by(guardian_id: guardian.id, dependent_id: dependent.id)
-      if rel.blank?
-        return add_error('Relationship type required to relate guardian and dependent') if relationship_type.blank?
-
-        begin
-          GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent, relationship_type: relationship_type)
-        rescue ActiveRecord::RecordInvalid => e
-          return add_error("Failed to create relationship: #{e.record.errors.full_messages.join(', ')}")
-        end
-      end
-
-      # Update dependent information if provided (contact info may have changed)
-      if params[:constituent].present? && attributes_present?(params[:constituent])
-        return false unless update_dependent_contact_info(dependent)
-      end
-
-      # Validate no active application for dependent
-      return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).where.not(status: :archived).exists?
-
-      # Fast-path waiting period check for better UX (model validation remains authoritative)
-      last_app = dependent.applications.order(application_date: :desc).first
-      if last_app.present?
-        waiting_period = Policy.get('waiting_period_years') || 3
-        eligible_date = last_app.application_date + waiting_period.years
-        return add_error("Dependent is not yet eligible. Reapply after #{eligible_date.to_date.strftime('%B %d, %Y')}") if eligible_date > Time.current
-      end
+      return false unless ensure_guardian_relationship(guardian, dependent, relationship_type)
+      return false unless update_dependent_and_validate_eligibility(dependent)
 
       @guardian_user_for_app = guardian
       @constituent = dependent
       true
+    end
+
+    def ensure_guardian_relationship(guardian, dependent, relationship_type)
+      rel = GuardianRelationship.find_by(guardian_id: guardian.id, dependent_id: dependent.id)
+      return true if rel.present?
+
+      return add_error('Relationship type required to relate guardian and dependent') if relationship_type.blank?
+
+      begin
+        GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent, relationship_type: relationship_type)
+        true
+      rescue ActiveRecord::RecordInvalid => e
+        add_error("Failed to create relationship: #{e.record.errors.full_messages.join(', ')}")
+        false
+      end
+    end
+
+    def update_dependent_and_validate_eligibility(dependent)
+      # Update dependent information if provided (contact info may have changed)
+      return false if params[:constituent].present? && attributes_present?(params[:constituent]) && !update_dependent_contact_info(dependent)
+
+      # Validate no active application for dependent
+      return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).where.not(status: :archived).exists?
+
+      waiting_period_eligible?(dependent)
+    end
+
+    def waiting_period_eligible?(dependent)
+      # Fast-path waiting period check for better UX (model validation remains authoritative)
+      last_app = dependent.applications.order(application_date: :desc).first
+      return true if last_app.blank?
+
+      waiting_period = Policy.get('waiting_period_years') || 3
+      eligible_date = last_app.application_date + waiting_period.years
+      return true if eligible_date <= Time.current
+
+      add_error("Dependent is not yet eligible. Reapply after #{eligible_date.to_date.strftime('%B %d, %Y')}")
+      false
     end
 
     def self_applicant_scenario?(applicant_data)
@@ -223,9 +236,24 @@ module Applications
 
     def update_dependent_contact_info(dependent)
       attrs = params[:constituent]
-      return true unless attrs.present?
+      return true if attrs.blank?
 
-      # Build hash of updateable fields (contact info only, not identity fields)
+      updates = build_dependent_contact_updates(attrs)
+      return true if updates.empty?
+
+      if dependent.update(updates)
+        Rails.logger.info "Updated contact info for dependent #{dependent.id}: #{updates.keys.join(', ')}"
+        true
+      else
+        add_error("Failed to update dependent information: #{dependent.errors.full_messages.join(', ')}")
+        false
+      end
+    rescue ActiveRecord::RecordInvalid => e
+      add_error("Failed to update dependent information: #{e.record.errors.full_messages.join(', ')}")
+      false
+    end
+
+    def build_dependent_contact_updates(attrs)
       updates = {}
 
       # Email (may come as dependent_email)
@@ -241,19 +269,7 @@ module Applications
       updates[:state] = attrs[:state] if attrs[:state].present?
       updates[:zip_code] = attrs[:zip_code] if attrs[:zip_code].present?
 
-      # Only update if there are changes
-      return true if updates.empty?
-
-      if dependent.update(updates)
-        Rails.logger.info "Updated contact info for dependent #{dependent.id}: #{updates.keys.join(', ')}"
-        true
-      else
-        add_error("Failed to update dependent information: #{dependent.errors.full_messages.join(', ')}")
-        false
-      end
-    rescue ActiveRecord::RecordInvalid => e
-      add_error("Failed to update dependent information: #{e.record.errors.full_messages.join(', ')}")
-      false
+      updates
     end
 
     def create_application
@@ -355,7 +371,6 @@ module Applications
         return false
       end
 
-      @application.update!("#{type}_proof_status" => Application.public_send("#{type}_proof_statuses")['approved'])
       true
     end
 
