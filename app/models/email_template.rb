@@ -18,7 +18,7 @@ class EmailTemplate < ApplicationRecord
   validates :version, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validate :validate_variables_in_body
 
-  # Store previous version before saving changes
+  # Store previous version and check for user inputted variables before saving changes
   before_update :store_previous_content
   before_update :increment_version
 
@@ -265,10 +265,19 @@ class EmailTemplate < ApplicationRecord
     return unless template_config # Skip validation if template name is not in the constant
 
     required_vars = template_config[:required_vars] || []
+    allowed_vars = required_vars + (template_config[:optional_vars] || [])
 
+    # Check that all required variables are present
     required_vars.each do |var|
       # Check for either %{variable} or %<variable>s format
       errors.add(:body, "must include the variable %{#{var}} or %<#{var}>s") unless body.to_s.include?("%{#{var}}") || body.to_s.include?("%<#{var}>")
+    end
+
+    # Check that no unauthorized variables are used
+    current_vars = extract_variables
+    unauthorized_vars = current_vars - allowed_vars
+    if unauthorized_vars.any?
+      errors.add(:body, "contains unauthorized variables: #{unauthorized_vars.join(', ')}. Only use: #{allowed_vars.join(', ')}")
     end
   end
 
