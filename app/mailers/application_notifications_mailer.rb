@@ -622,6 +622,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     organization_name = Policy.get('organization_name') || 'MAT Program'
     proof_type_formatted = format_proof_type(proof_type)
     header_title = "Document Received: #{proof_type_formatted.capitalize}"
+    # all_proofs_approved_message_text = 
+    # Need to add this
 
     base_variables = build_base_email_variables(header_title, organization_name)
     received_variables = {
