@@ -248,6 +248,11 @@ class EmailTemplate < ApplicationRecord
     raise
   end
 
+  # Extract all variables used in the template body
+  def extract_variables
+    body.scan(/%[{<](\w+)[}>]/).flatten.uniq
+  end
+
   private
 
   def set_default_version
