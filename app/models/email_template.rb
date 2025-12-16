@@ -18,7 +18,7 @@ class EmailTemplate < ApplicationRecord
   validates :version, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validate :validate_variables_in_body
 
-  # Store previous version and check for user inputted variables before saving changes
+  # Store previous version before saving changes
   before_update :store_previous_content
   before_update :increment_version
 
