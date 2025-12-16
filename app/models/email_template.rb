@@ -51,6 +51,11 @@ class EmailTemplate < ApplicationRecord
       required_vars: %w[user_first_name organization_name proof_type_formatted header_text footer_text],
       optional_vars: %w[all_proofs_approved_message_text title logo subtitle show_automated_message]
     },
+    'application_notifications_proof_received' => {
+      description: 'Sent when a submitted proof document is received.',
+      required_vars: %w[user_first_name organization_name proof_type_formatted header_text footer_text],
+      optional_vars: %w[title logo subtitle show_automated_message]
+    },
     'application_notifications_proof_needs_review_reminder' => {
       description: 'Sent to admins as a reminder about applications awaiting proof review.',
       required_vars: %w[admin_full_name stale_reviews_count stale_reviews_text_list admin_dashboard_url header_text footer_text],
