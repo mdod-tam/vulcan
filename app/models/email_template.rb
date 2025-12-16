@@ -146,7 +146,7 @@ class EmailTemplate < ApplicationRecord
     'vendor_notifications_w9_expired' => {
       description: 'Sent to a vendor when their W9 form has expired.',
       required_vars: %w[vendor_business_name expiration_date_formatted vendor_portal_url
-                        status_box_warning_text status_box_info_text header_text footer_text],
+                        status_box_warning_text status_box_info_text status_box_error_text header_text footer_text],
       optional_vars: %w[vendor_association_message title logo subtitle show_automated_message] # title was required before, now optional helper arg
     },
 
@@ -167,26 +167,26 @@ class EmailTemplate < ApplicationRecord
       description: 'Sent to a constituent when their voucher is redeemed.',
       required_vars: %w[user_first_name transaction_date_formatted transaction_amount_formatted vendor_business_name
                         transaction_reference_number voucher_code remaining_balance_formatted expiration_date_formatted
-                        remaining_value_message_text fully_redeemed_message_text], # Removed HTML vars
-      optional_vars: %w[minimum_redemption_amount_formatted] # No header/footer used in this template
+                        remaining_value_message_text fully_redeemed_message_text redeemed_value_formatted], # Removed HTML vars
+      optional_vars: %w[minimum_redemption_amount_formatted header_text footer_text] # No header/footer used in this template
     },
 
     # TrainingSessionNotificationsMailer Templates
     'training_session_notifications_trainer_assigned' => {
       description: 'Sent to a trainer when a new training session is assigned to them.',
-      required_vars: %w[trainer_full_name constituent_full_name constituent_address_formatted constituent_phone_formatted
+      required_vars: %w[trainer_full_name trainer_email trainer_phone_formatted constituent_full_name constituent_address_formatted constituent_phone_formatted
                         constituent_email training_session_schedule_text header_text footer_text constituent_disabilities_text_list status_box_text],
       optional_vars: %w[title logo subtitle show_automated_message]
     },
     'training_session_notifications_training_scheduled' => {
       description: 'Sent to a constituent when their training session is scheduled.',
-      required_vars: %w[constituent_full_name trainer_full_name scheduled_date_formatted scheduled_time_formatted trainer_email
+      required_vars: %w[constituent_full_name trainer_full_name trainer_email trainer_phone_formatted scheduled_date_formatted scheduled_time_formatted trainer_email
                         trainer_phone_formatted header_text footer_text],
       optional_vars: %w[title logo subtitle show_automated_message]
     },
     'training_session_notifications_training_completed' => {
       description: 'Sent to a constituent when their training session is marked as completed.',
-      required_vars: %w[constituent_full_name trainer_full_name completed_date_formatted application_id trainer_email
+      required_vars: %w[constituent_full_name trainer_full_name trainer_email trainer_phone_formatted completed_date_formatted application_id trainer_email
                         trainer_phone_formatted header_text footer_text],
       optional_vars: %w[title logo subtitle show_automated_message]
     },
@@ -197,7 +197,7 @@ class EmailTemplate < ApplicationRecord
     },
     'training_session_notifications_training_no_show' => { # NOTE: Mailer uses 'training_no_show' in find_by, but we use full name here
       description: 'Sent to a constituent if they are marked as a no-show for their training session.',
-      required_vars: %w[constituent_full_name scheduled_date_time_formatted support_email header_text footer_text],
+      required_vars: %w[constituent_full_name trainer_email scheduled_date_time_formatted support_email header_text footer_text],
       optional_vars: %w[title logo subtitle show_automated_message]
     }
   }.freeze
