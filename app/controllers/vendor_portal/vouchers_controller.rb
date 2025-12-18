@@ -85,7 +85,13 @@ module VendorPortal
         redirect_to vendor_portal_dashboard_path
       else
         flash[:alert] = result.message
-        redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
+        # Redirect to verify page if identity verification is required, otherwise back to redeem form
+        redirect_path = if result.data&.dig(:error_type) == :identity_verification_required
+                          verify_vendor_portal_voucher_path(@voucher.code)
+                        else
+                          redeem_vendor_portal_voucher_path(@voucher.code)
+                        end
+        redirect_to redirect_path
       end
     end
 

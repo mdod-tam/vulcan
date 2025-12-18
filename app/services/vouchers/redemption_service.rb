@@ -32,7 +32,7 @@ module Vouchers
       # Validate external concerns
       return failure('Your account is not approved for processing vouchers yet') unless vendor_authorized?
       return failure('This voucher is not active or has already been processed') unless voucher_active?
-      return failure('Identity verification is required before redemption') unless identity_verified?
+      return failure('Identity verification is required before redemption', { error_type: :identity_verification_required }) unless identity_verified?
 
       # Validate redemption parameters
       return failure('Redemption amount must be greater than zero') if amount <= 0
