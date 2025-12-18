@@ -6,7 +6,7 @@ module VendorPortal
   class VouchersControllerTest < ActionDispatch::IntegrationTest
     def setup
       # Create a constituent to be the voucher application owner
-      @constituent = create(:constituent)
+      @constituent = create(:constituent, date_of_birth: 25.years.ago.to_date)
 
       # Create a vendor
       @vendor = create(:vendor, :approved) # Use factory instead of fixture with approved status
@@ -73,44 +73,56 @@ module VendorPortal
       assert_equal 500.0, @voucher.remaining_value.to_f
     end
 
-    # Test redemption process with correct column names and route
-    def test_voucher_redemption
+    # Test redemption process delegates to service correctly
+    # Note: Full redemption flow (including session/verification) is tested in system tests
+    # This controller test focuses on service delegation and result handling
+    def test_voucher_redemption_delegates_to_service
       # Setup voucher with initial_value and remaining_value
-      @voucher.update(initial_value: 500.0, remaining_value: 500.0)
+      @voucher.update(initial_value: 500.0, remaining_value: 500.0, issued_at: Time.current)
 
       # Create a test product for the redemption
       @product = create(:product, name: 'Test Product', price: 50.0)
 
-      # Stub can_redeem? check to always return true for this amount
-      # Note: The controller doesn't actually call voucher.redeem! or can_redeem?,
-      # it performs the checks directly. We need to ensure the controller's
-      # internal checks pass based on the voucher state.
+      # Mock successful service call
+      mock_result = BaseService::Result.new(
+        success: true,
+        message: 'Voucher successfully processed',
+        data: { transaction: build(:voucher_transaction), voucher: @voucher }
+      )
+      Vouchers::RedemptionService.stubs(:call).returns(mock_result)
 
-      # Stub vendor approval check (already done in setup, but good practice)
-      @vendor.stubs(:vendor_approved?).returns(true)
-
-      # Create a mock transaction for the controller to build upon
-      # The controller creates its own transaction, so we stub the save method
-      VoucherTransaction.new(voucher: @voucher, vendor: @vendor, amount: 100.0)
-      VoucherTransaction.any_instance.stubs(:save).returns(true) # Stub save to succeed
-
-      # Process redemption using the confirmed correct path helper
-      # Include product_ids parameter since it's now required
+      # Process redemption
       post process_redemption_vendor_portal_voucher_path(@voucher.code),
-           params: { amount: 100.0, product_ids: [@product.id] }
+           params: { amount: 100.0, product_ids: [@product.id], notes: 'Test notes' }
 
       # Check for redirect to dashboard on success
       assert_redirected_to vendor_portal_dashboard_path
 
       # Verify success flash message
-      assert_match(/successfully processed/, flash[:notice])
+      assert_equal 'Voucher successfully processed', flash[:notice]
+    end
 
-      # Verify voucher remaining value was updated correctly in the controller logic
-      # (even though the controller logic itself might be flawed, the test checks if it *thinks* it updated)
-      # We need to reload the voucher to see the changes made by the controller's update call
-      @voucher.reload
-      assert_equal 400.0, @voucher.remaining_value.to_f
-      assert_equal :active, @voucher.status.to_sym # Should still be active as remaining > 0
+    # Test that controller handles service failure correctly
+    def test_voucher_redemption_handles_service_failure
+      @voucher.update(initial_value: 500.0, remaining_value: 500.0, issued_at: Time.current)
+
+      # Mock failed service call
+      mock_result = BaseService::Result.new(
+        success: false,
+        message: 'Identity verification is required before redemption',
+        data: nil
+      )
+      Vouchers::RedemptionService.stubs(:call).returns(mock_result)
+
+      # Process redemption
+      post process_redemption_vendor_portal_voucher_path(@voucher.code),
+           params: { amount: 100.0, product_ids: [] }
+
+      # Check for redirect back to redeem page on failure
+      assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
+
+      # Verify error flash message
+      assert_equal 'Identity verification is required before redemption', flash[:alert]
     end
   end
 end

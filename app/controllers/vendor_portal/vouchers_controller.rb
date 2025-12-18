@@ -70,103 +70,21 @@ module VendorPortal
     end
 
     def process_redemption
-      # Validate the vendor can process vouchers
-      # In test environment, skip the full can_process_vouchers check and just check vendor_approved
-      unless Rails.env.test? ? current_user.vendor_approved? : current_user.can_process_vouchers?
-        flash[:alert] = 'Your account is not approved for processing vouchers yet'
-        redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
-        return
-      end
-
-      # Validate the voucher can be redeemed using the correct enum helper
-      unless @voucher.voucher_active? # Use the prefixed helper method
-        flash[:alert] = 'This voucher is not active or has already been processed'
-        redirect_to vendor_portal_vouchers_path
-        return
-      end
-
-      # Validate identity has been verified
-      unless identity_verified?(@voucher)
-        flash[:alert] = 'Identity verification is required before redemption'
-        redirect_to verify_vendor_portal_voucher_path(@voucher.code)
-        return
-      end
-
-      # Validate the redemption amount
-      redemption_amount = params[:amount].to_f
-      available_amount = @voucher.remaining_value
-
-      if redemption_amount <= 0
-        flash[:alert] = 'Redemption amount must be greater than zero'
-        redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
-        return
-      end
-
-      if redemption_amount > available_amount
-        flash[:alert] = "Cannot redeem more than the available amount (#{number_to_currency(available_amount)})"
-        redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
-        return
-      end
-
-      # Validate that at least one product is selected
-      if params[:product_ids].blank?
-        flash[:alert] = 'Please select at least one product for this voucher redemption'
-        redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
-        return
-      end
-
-      # Create transaction
-      transaction = VoucherTransaction.new(
+      # Delegate to service for all business logic
+      result = Vouchers::RedemptionService.call(
         voucher: @voucher,
         vendor: current_user,
-        amount: redemption_amount,
+        amount: params[:amount],
+        product_ids: params[:product_ids],
         notes: params[:notes],
-        transaction_type: 'redemption',
-        status: 'transaction_completed'
+        session: session
       )
 
-      # Associate products if provided
-      if params[:product_ids].present?
-        params[:product_ids].each do |product_id|
-          quantity = 1 # Default quantity since form doesn't support quantities
-          transaction.voucher_transaction_products.build(
-            product_id: product_id,
-            quantity: quantity
-          )
-        end
-      end
-
-      # Also associate products with the application
-      if params[:product_ids].present?
-        application = @voucher.application
-        params[:product_ids].each do |product_id|
-          application.products << Product.find(product_id) unless application.products.include?(Product.find(product_id))
-        rescue StandardError => e
-          Rails.logger.error("Failed to associate product: #{e.message}")
-        end
-      end
-
-      if transaction.save
-        # Reload the voucher to ensure we have the latest data
-        @voucher.reload
-
-        # Update voucher remaining value - use direct SQL update to avoid race conditions
-        new_remaining_value = @voucher.remaining_value - redemption_amount
-        new_status = new_remaining_value.zero? || new_remaining_value.abs < 0.01 ? 'redeemed' : 'active'
-
-        Voucher.where(id: @voucher.id).update_all(
-          remaining_value: new_remaining_value,
-          vendor_id: current_user.id,
-          status: new_status
-        )
-
-        # Reload to get updated values
-        @voucher.reload
-
-        flash[:notice] = 'Voucher successfully processed'
+      if result.success?
+        flash[:notice] = result.message
         redirect_to vendor_portal_dashboard_path
       else
-        flash[:alert] = "Error processing voucher: #{transaction.errors.full_messages.join(', ')}"
+        flash[:alert] = result.message
         redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
       end
     end
