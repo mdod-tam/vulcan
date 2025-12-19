@@ -29,6 +29,8 @@
 
 en:
   hello: "Hello world"
+  shared:
+    unauthorized: "Not authorized"
   alerts:
     must_be_vendor: "You must be a vendor to access this section"
     dob_verification_failed: "Date of birth verification failed. You have %{attempts_left} attempts remaining."
