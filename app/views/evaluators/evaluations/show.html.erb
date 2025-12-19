@@ -170,7 +170,7 @@
             Manage Evaluation
           </h3>
           
-          <%= form_with(url: update_evaluators_evaluation_path(@evaluation), method: :patch, local: true, class: "space-y-4") do |f| %>
+          <%= form_with(url: evaluators_evaluation_path(@evaluation), method: :patch, local: true, class: "space-y-4") do |f| %>
             <div>
               <%= f.label :status, "Status", class: "block text-sm font-medium text-gray-700" %>
               <%= f.select :status, 
