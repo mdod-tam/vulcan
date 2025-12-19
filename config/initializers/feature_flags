@@ -1,0 +1,14 @@
+Rails.application.config.after_initialize do
+  # Make sure the feature flags table exists before trying to access it
+  if ActiveRecord::Base.connection.table_exists?('feature_flags')
+    # Define a method to check feature flags
+    def feature_enabled?(feature_name, default: false)
+      FeatureFlag.enabled?(feature_name, default: default)
+    end
+  else
+    # Fallback method if the table doesn't exist yet
+    def feature_enabled?(*)
+      false
+    end
+  end
+end

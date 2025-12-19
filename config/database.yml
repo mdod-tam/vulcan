@@ -27,6 +27,7 @@ development:
     <<: *primary_development
     database: mat_vulcan_queue_development  # Separate database for Solid Queue
     pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+    migrations_paths: db/queue_migrate
   cable:
     <<: *primary_development
     database: mat_vulcan_cable_development
