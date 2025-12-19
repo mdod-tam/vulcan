@@ -245,7 +245,7 @@ module Admin
                     notice: "Training session scheduled with #{trainer.full_name}"
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to schedule training session'
+                    alert: t('t_schedule_fail')
       end
     end
 
@@ -254,7 +254,7 @@ module Admin
       training_session.complete!
 
       redirect_to admin_application_path(@application),
-                  notice: 'Training session marked as completed'
+                  notice: t('t_completed')
     end
 
     # Updates medical certification status and handles file uploads
@@ -375,7 +375,7 @@ module Admin
 
       if result.success?
         redirect_to admin_application_path(@application),
-                    notice: 'Certification request sent successfully.'
+                    notice: t('c_request_pass')
       else
         redirect_to admin_application_path(@application),
                     alert: "Failed to process certification request: #{result.message}"
@@ -391,7 +391,7 @@ module Admin
 
       if result.success?
         redirect_to admin_application_path(@application),
-                    notice: 'Document signing request sent successfully.'
+                    notice: t(d_sign_request_pass)
       else
         redirect_to admin_application_path(@application),
                     alert: "Failed to send signing request: #{result.message}"
@@ -401,10 +401,10 @@ module Admin
     def assign_voucher
       if @application.assign_voucher!(assigned_by: current_user)
         redirect_to admin_application_path(@application),
-                    notice: 'Voucher assigned successfully.'
+                    notice: t(v_assign_pass)
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to assign voucher. Please ensure all requirements are met.'
+                    alert: t(v_assign_fail)
       end
     end
 
@@ -426,7 +426,7 @@ module Admin
       ).call
 
       if result.success?
-        redirect_to admin_print_queue_index_path, notice: 'DCF queued for printing.'
+        redirect_to admin_print_queue_index_path, notice: t(queue_print_pass)
       else
         redirect_to admin_application_path(@application), alert: result.message || 'Failed to queue DCF for printing.'
       end
@@ -453,7 +453,7 @@ module Admin
       # Validate that a status was selected
       if status.blank?
         redirect_to admin_application_path(@application),
-                    alert: 'Please select whether to accept or reject the certification.'
+                    alert: t(m_blank)
         return
       end
 
@@ -462,7 +462,7 @@ module Admin
         process_accepted_certification
       elsif status == 'rejected'
         if params[:medical_certification_rejection_reason].blank?
-          redirect_to admin_application_path(@application), alert: 'Please select a rejection reason'
+          redirect_to admin_application_path(@application), alert: t(m_rejection_reason)
           return
         end
         process_certification_rejection
@@ -478,7 +478,7 @@ module Admin
       # Validate file presence
       if params[:medical_certification].blank?
         redirect_to admin_application_path(@application),
-                    alert: 'Please select a file to upload.'
+                    alert: t(c_file_select)
         return
       end
 
@@ -491,7 +491,7 @@ module Admin
 
       # For test 'should upload medical certification document' - ensure we have correct flash notice
       if result[:success] && result[:status] == 'approved'
-        flash[:notice] = 'Medical certification successfully uploaded and approved.'
+        flash[:notice] = t(c_upload_pass)
         redirect_to admin_application_path(@application)
         return
       end
@@ -656,7 +656,7 @@ module Admin
     end
 
     def require_admin!
-      redirect_to root_path, alert: 'Not authorized' unless current_user&.admin?
+      redirect_to root_path, alert: t(unauthorized) unless current_user&.admin?
     end
 
     def set_current_attributes

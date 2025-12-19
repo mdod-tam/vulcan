@@ -34,3 +34,42 @@ en:
     dob_verification_failed: "Date of birth verification failed. You have %{attempts_left} attempts remaining."
     dob_verification_too_many_attempts: "Too many failed verification attempts. Please contact support."
     dob_verification_success: "Identity verification successful."
+  admin:
+    application_notes:
+      create:
+        note_added: "Note added successfully."
+    applications:
+      update:
+        update: "Application updated."
+      batch_approve:
+        b_approved: "Applications approved."
+      batch_reject:
+        b_rejected: "Applications rejected."
+      request:documents:
+        d_requested: "Documents requested."
+      assign_evaluator:
+        eval_assign_pass: "Evaluator successfully assigned."
+        eval_assign_fail: "Failed to assign evaluator."
+      assign_trainer:
+        trainer_assign_pass: "Trainer successfully assigned."
+        trainer_assign_fail: "Failed to assign trainer."
+      schedule_training:
+        t_schedule_invalid: "Invalid trainer selected."
+        t_schedule_fail: "Failed to schedule training session."
+      complete_training:
+        t_completed: "Training session marked as completed"
+      resend_medical_certification:
+        c_request_pass: "Certification request sent successfully."
+      send_document_signing_request:
+        d_sign_request_pass: "Document signing request sent successfully."
+      assign_voucher:
+        v_assign_pass: "Voucher assigned successfully"
+        v_assign_fail: "Failed to assign voucher. Please ensure all requirements are met."
+      queue_medical_certification_form:
+        queue_print_pass: "DCF queued for printing."
+      upload_medical_certification:
+        m_blank: "Please select whether to accept or reject the certification."
+        m_rejection_reason: "Please select a rejection reason"
+      process_accepted_certification:
+        c_file_select: "Please select a file to upload"
+        c_upload_pass: "Medical certification successfully uploaded and approved."
