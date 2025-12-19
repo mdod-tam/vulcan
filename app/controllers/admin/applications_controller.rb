@@ -100,7 +100,7 @@ module Admin
 
     def update
       if @application.update(application_params)
-        redirect_to admin_application_path(@application), notice: 'Application updated.'
+        redirect_to admin_application_path(@application), notice: t('updated')
       else
         render :edit, status: :unprocessable_content
       end
@@ -117,7 +117,7 @@ module Admin
     def batch_approve
       result = Application.batch_update_status(params[:ids], :approved)
       if result
-        redirect_to admin_applications_path, notice: 'Applications approved.'
+        redirect_to admin_applications_path, notice: t('b_approved')
       else
         render json: { error: 'Unable to approve applications' },
                status: :unprocessable_content
@@ -126,12 +126,12 @@ module Admin
 
     def batch_reject
       Application.batch_update_status(params[:ids], :rejected)
-      redirect_to admin_applications_path, notice: 'Applications rejected.'
+      redirect_to admin_applications_path, notice: t('b_rejected')
     end
 
     def request_documents
       @application.request_documents!
-      redirect_to admin_application_path(@application), notice: 'Documents requested.'
+      redirect_to admin_application_path(@application), notice: t('d_requested')
     end
 
     def review_proof
@@ -208,10 +208,10 @@ module Admin
 
       if @application.assign_evaluator!(evaluator)
         redirect_to admin_application_path(@application),
-                    notice: 'Evaluator successfully assigned'
+                    notice: t('eval_assign_pass')
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to assign evaluator'
+                    alert: t('eval_assign_fail')
       end
     end
 
@@ -221,17 +221,17 @@ module Admin
 
       if @application.assign_trainer!(trainer)
         redirect_to admin_application_path(@application),
-                    notice: 'Trainer successfully assigned'
+                    notice: t('trainer_assign_pass')
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to assign trainer'
+                    alert: t('trainer_assign_fail')
       end
     end
 
     def schedule_training
       trainer = Users::Trainer.active.find_by(id: params[:trainer_id])
       unless trainer
-        redirect_to admin_application_path(@application), alert: 'Invalid trainer selected.'
+        redirect_to admin_application_path(@application), alert: t('t_schedule_invalid')
         return
       end
 
