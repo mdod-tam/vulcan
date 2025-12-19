@@ -310,29 +310,41 @@ Rails.application.routes.draw do
     end
   end
 
-  # Vendor portal routes
-  namespace :vendor_portal do
-    resource :dashboard, only: [:show], controller: :dashboard
-    resource :profile, only: %i[edit update], controller: :profiles
-    resources :redemptions, only: %i[new create] do
-      collection do
-        get :check_voucher
-        get :verify
-      end
-    end
-    resources :vouchers, only: %i[index show], param: :code do
-      member do
-        get :verify
-        post :verify_dob
-        get :redeem
-        post :process_redemption
-      end
-    end
-    resources :transactions, only: [:index] do
-      get :report, on: :collection
-    end
-    resources :invoices, only: %i[index show]
+  # Vendor portal routes enabled with feature flag
+  voucher_constraint = lambda do |_request|
+    FeatureFlag.enabled?(:vouchers_enabled)
   end
+  constraints(voucher_constraint) do
+    namespace :vendor_portal do
+      resource :dashboard, only: [:show], controller: :dashboard
+      resource :profile, only: %i[edit update], controller: :profiles
+      resources :redemptions, only: %i[new create] do
+        collection do
+          get :check_voucher
+          get :verify
+        end
+      end
+      resources :vouchers, only: %i[index show], param: :code do
+        member do
+          get :verify
+          post :verify_dob
+          get :redeem
+          post :process_redemption
+        end
+      end
+    end
+    namespace :admin do
+      resources :vouchers, only: %i[index show edit update]
+      resources :voucher_transactions, only: %i[index show]
+      resources :invoices, only: %i[index show new create edit update]
+      resources :vendors, controller: 'users/vendors', only: %i[index show edit update]
+    end
+  end
+
+  namespace :admin do
+    resources :feature_flags, only: %i[index update]
+  end
+
 
   # New constituent_portal namespace (replacing constituent)
   namespace :constituent_portal do
