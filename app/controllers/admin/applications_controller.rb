@@ -375,7 +375,7 @@ module Admin
 
       if result.success?
         redirect_to admin_application_path(@application),
-                    notice: t('c_request_pass')
+                    notice: t(c_request_pass)
       else
         redirect_to admin_application_path(@application),
                     alert: "Failed to process certification request: #{result.message}"

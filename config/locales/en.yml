@@ -28,7 +28,6 @@
 #       enabled: "ON"
 
 en:
-  hello: "Hello world"
   shared:
     unauthorized: "Not authorized"
   alerts:
