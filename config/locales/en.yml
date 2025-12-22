@@ -31,10 +31,14 @@ en:
   shared:
     unauthorized: "Not authorized"
   alerts:
+    app_not_found: "Application not found"
+    unauthorized_page: "You do not have permission to access this page"
     must_be_vendor: "You must be a vendor to access this section"
     dob_verification_failed: "Date of birth verification failed. You have %{attempts_left} attempts remaining."
     dob_verification_too_many_attempts: "Too many failed verification attempts. Please contact support."
     dob_verification_success: "Identity verification successful."
+    unfiltered_error: "Filter error – showing unfiltered results."
+    e_template_not_found: "Email template not found."
   admin:
     application_notes:
       create:
@@ -74,3 +78,39 @@ en:
       process_accepted_certification:
         c_file_select: "Please select a file to upload"
         c_upload_pass: "Medical certification successfully uploaded and approved."
+    email_templates:
+      update:
+        e_template_update_pass: "Email template was successfully updated."
+    guardian_relationships:
+      create:
+        dependent_not_found: "Email template not found"
+        relationship_create_pass: "Guardian relationship created successfully."
+        relationship_create_fail: "Failed to create guardian relationship."
+      destroy:
+        relationship_remove_pass: "Guardian relationship removed successfully."
+        relationship_remove_fail: "Failed to remove guardian relationship."
+  invoices:
+    approve:
+      invoice_approved_pass: "Invoice approved successfully"
+      invoice_approved_pending: "Invoice must be pending to approve"
+    handle_missing_gad_reference:
+      gad_blank: "GAD reference can't be blank"
+  print_queue:
+    show:
+      pdf_file_missing_storage: "PDF file is missing from storage"
+      pdf_not_available: "PDF not available for this letter"
+    mark_as_printed:
+      letter_marked_printed: "Letter marked as printed"
+      letter_marked_empty: "0 letters marked as printed"
+    redirect_empty_letters:
+      no_selected_letters: "No letters selected for download"
+    handle_zip_error:
+      download_error: "An error occured while preparing the download"
+  products:
+    create:
+      product_created_pass: "Product successfully created."
+    update:
+      product_updated_pass: "Product successfully updated."
+    archive:
+      product_archive_pass: "Product archived"
+      product_archive_fail: "Could not archive product"

@@ -635,7 +635,7 @@ module Admin
       # This avoids N+1 queries by preloading attachment metadata without loading variant records
       @application = load_application_with_attachments(params[:id])
     rescue ActiveRecord::RecordNotFound
-      redirect_to admin_applications_path, alert: 'Application not found'
+      redirect_to admin_applications_path, alert: t(app_not_found)
     end
 
     def application_params
@@ -673,7 +673,7 @@ module Admin
       end
     rescue StandardError => e
       Rails.logger.error "Filter error: #{e.message}"
-      flash.now[:alert] = 'Filter error – showing unfiltered results.'
+      flash.now[:alert] = t(unfiltered_error)
       scope
     end
 
