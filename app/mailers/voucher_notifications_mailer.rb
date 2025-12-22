@@ -229,6 +229,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     # Use Policy.get for configuration values
     expiration_date_formatted = (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y')
     minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0)
+    redeemed_value_formatted = number_to_currency(transaction.amount)
 
     # Optional message blocks (text only)
     remaining_value_message_text = ''
@@ -252,6 +253,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       expiration_date_formatted: expiration_date_formatted,
       # Optional variables
       remaining_value_message_text: remaining_value_message_text,
+      redeemed_value_formatted: redeemed_value_formatted,
       fully_redeemed_message_text: fully_redeemed_message_text,
       minimum_redemption_amount_formatted: minimum_redemption_amount_formatted # Often used within optional blocks
     }.compact

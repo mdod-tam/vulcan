@@ -23,6 +23,17 @@ module Admin
       keyword_init: true
     )
 
+    # Define the mapping from expected demodulized names to full namespaced names.
+    # These should match the actual class names under the Users module.
+    VALID_USER_TYPES = {
+      'Admin' => 'Users::Administrator',
+      'Administrator' => 'Users::Administrator',
+      'Evaluator' => 'Users::Evaluator',
+      'Constituent' => 'Users::Constituent',
+      'Vendor' => 'Users::Vendor',
+      'Trainer' => 'Users::Trainer'
+    }.freeze
+
     # Main index action with filtering, pagination, and dashboard metrics
     # Supports both full page loads and Turbo Frame updates
     def index
@@ -240,17 +251,6 @@ module Admin
       render 'admin/users/search'
     end
 
-    # Define the mapping from expected demodulized names to full namespaced names.
-    # These should match the actual class names under the Users module.
-    VALID_USER_TYPES = {
-      'Admin' => 'Users::Administrator',
-      'Administrator' => 'Users::Administrator',
-      'Evaluator' => 'Users::Evaluator',
-      'Constituent' => 'Users::Constituent',
-      'Vendor' => 'Users::Vendor',
-      'Trainer' => 'Users::Trainer'
-    }.freeze
-
     def update_role
       user = User.find(params[:id])
       Rails.logger.info "Admin::UsersController#update_role - Received raw params[:role]: #{params[:role].inspect} for user_id: #{user.id}"
@@ -258,12 +258,13 @@ module Admin
       namespaced_role = validate_and_normalize_role(params[:role], user.id)
       return if performed? # Early return if validation failed and response was rendered
 
-      unless can_update_user_role?(user, namespaced_role)
-        render_self_update_error
+      unless user.prevent_self_role_update?(current_user, namespaced_role)
+        Rails.logger.warn "Admin::UsersController#update_role - Denied self role change attempt by user_id: #{current_user.id}"
+        render json: { success: false, message: 'You cannot change your own role.' }, status: :forbidden
         return
       end
 
-      if role_unchanged?(user, namespaced_role)
+      if user.type == namespaced_role
         handle_unchanged_role(user, namespaced_role)
       else
         handle_role_change(user, namespaced_role)
@@ -442,18 +443,7 @@ module Admin
       {
         guardian_id: guardian.id,
         waiting_period_years: waiting_period_years,
-        dependents: @dependents.map { |d| dependent_summary_to_hash(d) }
-      }
-    end
-
-    # Convert DependentSummary to hash for JSON serialization
-    def dependent_summary_to_hash(d)
-      {
-        id: d.id, name: d.name, date_of_birth: d.date_of_birth,
-        city: d.city, state: d.state, last_app_status: d.last_app_status,
-        last_app_date: d.last_app_date, has_active_app: d.has_active_app,
-        eligible_date: d.eligible_date, eligible_now: d.eligible_now,
-        relationship_types: d.relationship_types
+        dependents: @dependents.map(&:to_h)
       }
     end
 
@@ -495,21 +485,7 @@ module Admin
     def enhance_user_with_relationship_data(user, relationship_data)
       user.instance_variable_set(:@dependents_count, relationship_data[:dependents_counts][user.id] || 0)
       user.instance_variable_set(:@has_guardian, relationship_data[:has_guardian].include?(user.id))
-
-      # Add helper methods to access the data
-      class << user
-        def dependents_count
-          @dependents_count || 0
-        end
-
-        def guardian?
-          (@dependents_count || 0).positive?
-        end
-
-        def dependent?
-          @has_guardian || false
-        end
-      end
+      add_relationship_helper_methods_to_user(user)
     end
 
     # Replace users in array with enhanced versions
@@ -540,22 +516,6 @@ module Admin
 
       Rails.logger.info "Admin::UsersController#update_role - Determined namespaced_role: #{namespaced_role.inspect} for user_id: #{user_id}"
       namespaced_role
-    end
-
-    def can_update_user_role?(user, namespaced_role)
-      user.prevent_self_role_update?(current_user, namespaced_role)
-    end
-
-    def render_self_update_error
-      Rails.logger.warn "Admin::UsersController#update_role - Denied self role change attempt by user_id: #{current_user.id}"
-      render json: {
-        success: false,
-        message: 'You cannot change your own role.'
-      }, status: :forbidden
-    end
-
-    def role_unchanged?(user, namespaced_role)
-      user.type == namespaced_role
     end
 
     def handle_unchanged_role(user, namespaced_role)
@@ -614,32 +574,16 @@ module Admin
 
     def handle_successful_user_conversion(converted_user)
       update_user_capabilities(converted_user, params[:capabilities]) if params[:capabilities].present?
-      log_successful_conversion(converted_user)
-      render_conversion_success(converted_user)
-    end
-
-    def handle_failed_user_conversion(converted_user, original_user)
-      log_failed_conversion(converted_user, original_user)
-      render_conversion_error(converted_user)
-    end
-
-    def log_successful_conversion(converted_user)
       Rails.logger.info "Admin::UsersController#update_role - Successfully updated user_id: #{converted_user.id} to type: #{converted_user.type}"
-    end
-
-    def log_failed_conversion(converted_user, original_user)
-      Rails.logger.error "Admin::UsersController#update_role - Failed to save converted_user_id: #{original_user.id} " \
-                         "as type #{converted_user.type}: #{converted_user.errors.full_messages.join(', ')}"
-    end
-
-    def render_conversion_success(converted_user)
       render json: {
         success: true,
         message: "#{converted_user.full_name}'s role updated to #{converted_user.type.demodulize.titleize}."
       }
     end
 
-    def render_conversion_error(converted_user)
+    def handle_failed_user_conversion(converted_user, original_user)
+      Rails.logger.error "Admin::UsersController#update_role - Failed to save converted_user_id: #{original_user.id} " \
+                         "as type #{converted_user.type}: #{converted_user.errors.full_messages.join(', ')}"
       render json: {
         success: false,
         message: converted_user.errors.full_messages.join(', ')
@@ -723,13 +667,16 @@ module Admin
 
     # Preload all data needed for the users index view
     def preload_user_index_data(user_ids)
+      guardian_rels = load_guardian_relationships(user_ids)
+      dependent_rels = load_dependent_relationships(user_ids)
+
       {
         guardian_counts: load_guardian_counts(user_ids),
         has_guardian_ids: load_has_guardian_ids(user_ids),
-        guardian_rels: load_guardian_relationships(user_ids),
-        guardian_users: load_guardian_users(user_ids),
-        dependent_rels: load_dependent_relationships(user_ids),
-        dependent_users: load_dependent_users(user_ids),
+        guardian_rels: guardian_rels,
+        guardian_users: load_related_users_from_relationships(guardian_rels, :guardian_id),
+        dependent_rels: dependent_rels,
+        dependent_users: load_related_users_from_relationships(dependent_rels, :dependent_id),
         capabilities_by_user: load_capabilities_by_user(user_ids)
       }
     end
@@ -749,27 +696,17 @@ module Admin
       GuardianRelationship.where(dependent_id: user_ids).group_by(&:dependent_id)
     end
 
-    # Load guardian users referenced in relationships
-    def load_guardian_users(user_ids)
-      guardian_rels = load_guardian_relationships(user_ids)
-      guardian_user_ids = guardian_rels.values.flatten.map(&:guardian_id).uniq
-      return {} unless guardian_user_ids.any?
-
-      User.where(id: guardian_user_ids).index_by(&:id)
-    end
-
     # Load dependent relationships grouped by guardian
     def load_dependent_relationships(user_ids)
       GuardianRelationship.where(guardian_id: user_ids).group_by(&:guardian_id)
     end
 
-    # Load dependent users referenced in relationships
-    def load_dependent_users(user_ids)
-      dependent_rels = load_dependent_relationships(user_ids)
-      dependent_user_ids = dependent_rels.values.flatten.map(&:dependent_id).uniq
-      return {} unless dependent_user_ids.any?
+    # Load users referenced in relationships (works for both guardians and dependents)
+    def load_related_users_from_relationships(relationships, user_id_field)
+      user_ids = relationships.values.flatten.map(&user_id_field).uniq
+      return {} unless user_ids.any?
 
-      User.where(id: dependent_user_ids).index_by(&:id)
+      User.where(id: user_ids).index_by(&:id)
     end
 
     # Load capabilities grouped by user
@@ -853,40 +790,17 @@ module Admin
       end
 
       user.define_singleton_method(:available_capabilities) do
-        Admin::UsersController.get_available_capabilities_for_user_type(type)
+        User.available_capabilities_for_type(type)
       end
 
       user.define_singleton_method(:inherent_capabilities) do
-        Admin::UsersController.get_inherent_capabilities_for_user_type(type)
+        User.inherent_capabilities_for_type(type)
       end
     end
 
     # Add role methods to user
     def add_role_methods(user)
       user.define_singleton_method(:role_type) { type&.demodulize || 'Unknown' }
-    end
-
-    class << self
-      # Get available capabilities for a user type
-      def get_available_capabilities_for_user_type(user_type)
-        case user_type
-        when 'Users::Evaluator' then %w[can_evaluate]
-        when 'Users::Trainer' then %w[can_train]
-        when 'Users::Constituent' then %w[can_train can_evaluate]
-        else
-          []
-        end
-      end
-
-      # Get inherent capabilities for a user type
-      def get_inherent_capabilities_for_user_type(user_type)
-        case user_type
-        when 'Users::Evaluator' then %w[can_evaluate]
-        when 'Users::Trainer' then %w[can_train]
-        else
-          []
-        end
-      end
     end
   end
 end

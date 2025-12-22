@@ -92,13 +92,19 @@ class Voucher < ApplicationRecord
   # This method handles the financial transaction (redemption) and updates the voucher's state.
   # It assumes that any necessary identity verification (e.g., DOB) has already
   # been performed by an external service (e.g., VoucherVerificationService) prior to this method being called.
-  def redeem!(amount, vendor, product_data = nil)
+  #
+  # @param amount [Float] The amount to redeem
+  # @param vendor [User] The vendor processing the redemption
+  # @param product_data [Hash] Optional hash of {product_id => quantity}
+  # @param notes [String] Optional notes about the redemption
+  # @return [VoucherTransaction, false] The created transaction or false if redemption fails
+  def redeem!(amount, vendor, product_data = nil, notes: nil)
     # Ensure the voucher meets basic redemption criteria (active, not expired, sufficient funds)
     return false unless can_redeem?(amount)
 
     transaction(requires_new: true) do
       # Create the transaction record
-      txn = create_redemption_transaction(amount, vendor, generate_reference_number)
+      txn = create_redemption_transaction(amount, vendor, generate_reference_number, notes)
 
       # Process any products that were purchased
       process_product_data(product_data, txn) if product_data.present?
@@ -154,14 +160,15 @@ class Voucher < ApplicationRecord
   private
 
   # Create the transaction record
-  def create_redemption_transaction(amount, vendor, reference_number)
+  def create_redemption_transaction(amount, vendor, reference_number, notes)
     transactions.create!(
       vendor: vendor,
       amount: amount,
       transaction_type: :redemption,
       status: :transaction_completed,
       processed_at: Time.current,
-      reference_number: reference_number
+      reference_number: reference_number,
+      notes: notes
     )
   end
 
@@ -192,8 +199,8 @@ class Voucher < ApplicationRecord
     self.last_used_at = Time.current
     self.vendor = vendor
 
-    # Update status if fully redeemed
-    self.status = :redeemed if remaining_value.zero?
+    # Update status if fully redeemed (use epsilon check for floating point precision)
+    self.status = :redeemed if remaining_value.zero? || remaining_value.abs < 0.01
 
     save!
   end

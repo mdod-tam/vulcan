@@ -28,6 +28,30 @@ module UserRolesAndCapabilities
         []
       end
     end
+
+    # Get available capabilities for a user type (for display/assignment)
+    # This returns the capabilities that can be assigned to this user type
+    def available_capabilities_for_type(user_type)
+      case user_type
+      when 'Users::Administrator', 'Users::Constituent' then %w[can_train can_evaluate]
+      when 'Users::Evaluator' then %w[can_evaluate]
+      when 'Users::Trainer' then %w[can_train]
+      else
+        []
+      end
+    end
+
+    # Get inherent capabilities for a user type
+    # This returns the capabilities that come automatically with the role
+    def inherent_capabilities_for_type(user_type)
+      case user_type
+      when 'Users::Administrator' then %w[can_train can_evaluate]
+      when 'Users::Evaluator' then %w[can_evaluate]
+      when 'Users::Trainer' then %w[can_train]
+      else
+        []
+      end
+    end
   end
 
   # Role methods

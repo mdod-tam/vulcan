@@ -37,11 +37,11 @@
       <h2 class="text-xl font-semibold mb-4">Redemption Details</h2>
       <div class="mb-4">
         <%= f.label :amount, "Redemption Amount", class: "block text-sm font-medium text-gray-700" %>
-        <div class="mt-1 flex rounded-md shadow-sm">
-          <span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-            $
-          </span>
-          <%= f.number_field :amount, class: "flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", min: 0.01, max: @voucher.remaining_value, step: 0.01, required: true, id: "redemption-amount" %>
+        <div class="mt-1 relative rounded-md shadow-sm">
+          <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <span class="text-gray-500 sm:text-sm">$</span>
+          </div>
+          <%= f.number_field :amount, class: "block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", min: 0.01, max: @voucher.remaining_value, step: 0.01, required: true, id: "redemption-amount", placeholder: "0.00" %>
         </div>
         <p class="mt-1 text-sm text-gray-500">Enter the amount to be redeemed (cannot exceed current balance).</p>
       </div>
@@ -55,33 +55,27 @@
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <% @products.each do |product| %>
-          <div class="border rounded-lg p-4">
-            <div class="flex items-center">
-              <%= check_box_tag "product_ids[]", product.id, false, { class: "form-checkbox product-checkbox h-4 w-4 text-indigo-600", id: "product_#{product.id}" } %>
-              <label for="product_<%= product.id %>" class="ml-3 block text-sm font-medium text-gray-700 flex-1">
-                <div class="flex justify-between items-center">
-                  <span class="font-semibold"><%= product.name %></span>
-                  <span class="inline-block bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">
-                    <%= number_to_currency(product.price) %>
-                  </span>
-                </div>
+          <div class="border rounded-lg p-4 hover:border-indigo-300 transition-colors">
+            <div class="flex items-start">
+              <%= check_box_tag "product_ids[]", product.id, false, { class: "form-checkbox product-checkbox h-5 w-5 text-indigo-600 mt-0.5 flex-shrink-0", id: "product_#{product.id}", data: { product_name: product.name } } %>
+              <label for="product_<%= product.id %>" class="ml-3 block text-sm cursor-pointer flex-1">
+                <span class="font-semibold text-gray-900"><%= product.name %></span>
                 <p class="mt-1 text-sm text-gray-500"><%= product.description %></p>
               </label>
             </div>
           </div>
         <% end %>
       </div>
-      <div id="no-products-warning" class="mt-4 text-sm text-red-600 hidden">
-        Please select at least one product for this voucher redemption.
+      <div id="no-products-warning" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700 hidden">
+        <strong>⚠️ Please select at least one product</strong> for this voucher redemption.
       </div>
 
-      <!-- Voucher Redemption Summary -->
-      <div class="mt-6 p-4 border rounded-lg bg-gray-50">
-        <h4 class="text-lg font-semibold">Voucher Redemption Summary</h4>
-        <div class="flex justify-between mt-2">
-          <span>Number of products selected:</span>
-          <span id="selected-products-count" class="font-medium">0</span>
-        </div>
+      <!-- Selected Products Summary -->
+      <div id="selected-products-summary" class="mt-6 p-4 border-2 border-indigo-200 rounded-lg bg-indigo-50 hidden">
+        <h4 class="text-lg font-semibold text-indigo-900 mb-3">Selected Products</h4>
+        <ul id="selected-products-list" class="space-y-2">
+          <!-- JavaScript will populate this -->
+        </ul>
       </div>
     </div>
 
@@ -96,39 +90,45 @@
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const productCheckboxes = document.querySelectorAll('.product-checkbox');
-    const selectedCount = document.getElementById('selected-products-count');
     const submitButton = document.getElementById('submit-redemption');
     const noProductsWarning = document.getElementById('no-products-warning');
-
-    console.log('JavaScript loaded:', {
-      productCheckboxes: productCheckboxes.length,
-      selectedCount: !!selectedCount,
-      submitButton: !!submitButton,
-      noProductsWarning: !!noProductsWarning
-    });
+    const selectedProductsSummary = document.getElementById('selected-products-summary');
+    const selectedProductsList = document.getElementById('selected-products-list');
 
     // Add event listeners to each checkbox
     productCheckboxes.forEach(checkbox => {
-      checkbox.addEventListener('change', updateSelectedCount);
+      checkbox.addEventListener('change', updateSelectedProducts);
     });
 
-    function updateSelectedCount() {
-      let count = 0;
+    function updateSelectedProducts() {
+      const selectedProducts = [];
+      
       productCheckboxes.forEach(checkbox => {
         if (checkbox.checked) {
-          count++;
+          const productName = checkbox.dataset.productName;
+          selectedProducts.push(productName);
         }
       });
-      console.log('Updating count:', count);
-      selectedCount.textContent = count;
-      if (count === 0) {
+
+      // Update the summary section
+      if (selectedProducts.length === 0) {
+        selectedProductsSummary.classList.add('hidden');
         noProductsWarning.classList.remove('hidden');
         submitButton.disabled = true;
-        console.log('Button disabled');
       } else {
+        selectedProductsSummary.classList.remove('hidden');
         noProductsWarning.classList.add('hidden');
         submitButton.disabled = false;
-        console.log('Button enabled');
+        
+        // Build the list of selected products
+        selectedProductsList.innerHTML = selectedProducts.map(name => 
+          `<li class="flex items-center text-sm">
+            <svg class="h-5 w-5 text-indigo-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+            <span class="text-gray-900 font-medium">${name}</span>
+          </li>`
+        ).join('');
       }
     }
 
@@ -143,11 +143,14 @@
       if (!hasSelected) {
         e.preventDefault();
         noProductsWarning.classList.remove('hidden');
-        window.scrollTo(0, noProductsWarning.offsetTop - 100);
+        window.scrollTo({
+          top: noProductsWarning.offsetTop - 100,
+          behavior: 'smooth'
+        });
       }
     });
 
     // Run initial update on page load
-    updateSelectedCount();
+    updateSelectedProducts();
   });
 </script>

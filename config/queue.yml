@@ -14,7 +14,7 @@ development:
   workers:
     - queues: "*"
       threads: 3  # Use more threads since we're not forking
-      processes: 0  # Disable forking in development to avoid PostgreSQL connection corruption
+      processes: 1  # solid_queue needs at least 1 process
       polling_interval: 1
 
 test:

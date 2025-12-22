@@ -50,13 +50,15 @@ module Admin
     end
 
     def cancel
-      if @voucher.can_cancel?
-        @voucher.update!(status: :cancelled)
+      if @voucher.cancel!
         AuditEventService.log(
           action: 'voucher_cancelled',
           actor: current_user,
           auditable: @voucher,
-          metadata: { reason: @voucher.notes } # Assuming notes might contain cancellation reason
+          metadata: {
+            cancelled_at: Time.current.iso8601,
+            notes: @voucher.notes
+          }
         )
         handle_success_response(
           html_redirect_path: [:admin, @voucher],

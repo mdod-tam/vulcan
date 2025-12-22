@@ -3,6 +3,7 @@ import { application } from "./application"
 // Admin Controllers
 import RoleSelectController from "./admin/role_select_controller"
 import AdminUserSearchController from "./admin/user_search_controller"
+import ProtectedVariablesController from "./admin/protected_variables_controller"
 
 // Auth Controllers
 import AddCredentialController from "./auth/add_credential_controller"
@@ -58,6 +59,7 @@ if (process.env?.NODE_ENV === "development") {
 // Admin Controllers
 application.register("role-select", RoleSelectController)
 application.register("admin-user-search", AdminUserSearchController)
+application.register("protected-variables", ProtectedVariablesController)
 
 // Auth Controllers
 application.register("add-credential", AddCredentialController)
