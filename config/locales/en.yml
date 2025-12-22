@@ -114,3 +114,8 @@ en:
     archive:
       product_archive_pass: "Product archived"
       product_archive_fail: "Could not archive product"
+    unarchive:
+      product_unarchive_pass: "Product unarchived."
+      product_unarchive_fail: "Could not unarchive product"
+    set_product:
+      product_not_found: "Product not found"
