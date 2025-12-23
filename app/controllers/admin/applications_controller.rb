@@ -187,7 +187,7 @@ module Admin
         turbo_updates: {
           'attachments-section' => 'attachments',      # Updates attachment display
           'audit-logs' => 'audit_logs',                # Updates audit log section
-          'modals' => 'modals'                         # Replaces modals with fresh versions
+          'modals' => 'modals'                         # Regenerates modals container (closes and resets all modals)
         }
       )
     end
@@ -360,7 +360,7 @@ module Admin
         turbo_updates: {
           'medical-certification-section' => 'medical_certification_section',
           'audit-logs' => 'audit_logs',
-          'modals' => 'modals'
+          'modals' => 'modals' # Regenerates modals container (closes and resets all modals)
         }
       )
     end

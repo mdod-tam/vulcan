@@ -16,7 +16,7 @@ module Admin
       @application.income_proof.attach(io: StringIO.new('test content'), filename: 'income.pdf', content_type: 'application/pdf')
     end
 
-    test 'approve income proof responds with turbo streams: update modals and attachments' do
+    test 'approve income proof responds with turbo streams: update modals container and replace attachments' do
       attach_income_proof!
 
       approved_review = build(
@@ -37,12 +37,12 @@ module Admin
       # Must be a turbo stream response
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
 
-      # Validate stream actions - controller now replaces modals container instead of removing individual modals
+      # Validate stream actions - modals container is replaced (closes all modals and regenerates them)
       assert_turbo_stream action: 'update', target: 'modals'
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
 
-    test 'reject income proof responds with turbo streams: update modals and attachments' do
+    test 'reject income proof responds with turbo streams: update modals container and replace attachments' do
       attach_income_proof!
 
       rejected_review = build(
@@ -64,12 +64,12 @@ module Admin
       assert_response :success
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
 
-      # The controller replaces modals container and updates attachments
+      # The controller replaces the modals container (closes all modals and regenerates them)
       assert_turbo_stream action: 'update', target: 'modals'
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
 
-    test 'approve residency proof responds with turbo streams: update modals and attachments' do
+    test 'approve residency proof responds with turbo streams: update modals container and replace attachments' do
       # Attach residency proof and keep income untouched
       @application.residency_proof.attach(io: StringIO.new('test content'), filename: 'residency.pdf', content_type: 'application/pdf')
 
@@ -90,7 +90,7 @@ module Admin
       assert_response :success
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
 
-      # Controller replaces modals container instead of removing individual modals
+      # Modals container is replaced (closes all modals and regenerates them)
       assert_turbo_stream action: 'update', target: 'modals'
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
