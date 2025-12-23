@@ -41,7 +41,10 @@ module Admin
     end
 
     def update
-      handle_missing_gad_reference and return if missing_gad_reference?
+      if missing_gad_reference?
+        handle_update_error("GAD reference can't be blank")
+        return
+      end
 
       if @invoice.update(invoice_params)
         log_event!('Updated invoice details', {
@@ -51,7 +54,7 @@ module Admin
                    })
         redirect_to [:admin, @invoice], notice: invoice_update_notice
       else
-        render_update_error
+        handle_update_error(@invoice.errors.full_messages.join(', '))
       end
     end
 
@@ -81,16 +84,14 @@ module Admin
 
     # Helpers for update action refactoring
     def missing_gad_reference?
-      invoice_params[:status] == 'invoice_paid' && params.dig(:invoice, :gad_invoice_reference).blank?
+      # params.expect() raises ArgumentError if structure doesn't match, which would fail the guard clause
+      # The form sends status as string 'invoice_paid', so check for that
+      status = params.dig(:invoice, :status)
+      status == 'invoice_paid' && params.dig(:invoice, :gad_invoice_reference).blank?
     end
 
-    def handle_missing_gad_reference
-      flash[:alert] = "GAD reference can't be blank"
-      set_transactions
-      render :show, status: :unprocessable_content
-    end
-
-    def render_update_error
+    def handle_update_error(alert_message = nil)
+      flash[:alert] = alert_message if alert_message
       set_transactions
       render :show, status: :unprocessable_content
     end
