@@ -26,7 +26,7 @@ module Admin
 
       return if @proof&.attached?
 
-      redirect_to admin_application_path(@application), alert: 'Proof file no longer available'
+      redirect_to admin_application_path(@application), alert: t(proof_not_available)
     end
 
     def new
@@ -50,7 +50,7 @@ module Admin
       @proof_review.admin = current_user
 
       if @proof_review.save
-        redirect_to admin_application_path(@application), notice: 'Proof review completed successfully'
+        redirect_to admin_application_path(@application), notice: t(proof_completed)
       else
         render :new, status: :unprocessable_content, alert: 'Proof review failed to save'
       end
@@ -64,13 +64,13 @@ module Admin
       # This is crucial for proof review since we need attachment metadata without N+1 queries
       @application = load_application_with_attachments(params[:application_id])
     rescue ActiveRecord::RecordNotFound
-      redirect_to admin_applications_path, alert: 'Application not found'
+      redirect_to admin_applications_path, alert: t(app_not_found)
     end
 
     def set_proof_review
       @proof_review = @application.proof_reviews.find(params[:id])
     rescue ActiveRecord::RecordNotFound
-      redirect_to admin_application_path(@application), alert: 'Review not found'
+      redirect_to admin_application_path(@application), alert: t(review_not_found)
     end
 
     def proof_review_params
@@ -92,14 +92,14 @@ module Admin
     def require_admin!
       return if current_user&.admin?
 
-      flash[:alert] = 'You are not authorized to perform this action'
+      flash[:alert] = t(unauthorized_action)
       redirect_to root_path
     end
 
     def ensure_reviewable_status
       return if @application.proofs_reviewable?
 
-      redirect_to admin_application_path(@application), alert: 'Application is not in a reviewable state'
+      redirect_to admin_application_path(@application), alert: t(app_not_reviewable)
     end
   end
 end

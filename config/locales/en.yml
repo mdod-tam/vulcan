@@ -31,7 +31,13 @@ en:
   shared:
     unauthorized: "Not authorized"
   alerts:
+    session_fail: "Unable to create session"
+    review_not_found: "Review not found"
+    w9_missing: "W9 form is missing"
+    file_select: "Please select a file to upload"
+    file_type_not_allowed: "File type not allowed"
     app_not_found: "Application not found"
+    unauthorized_action: "You are not authorized to perform this action"
     unauthorized_page: "You do not have permission to access this page"
     must_be_vendor: "You must be a vendor to access this section"
     dob_verification_failed: "Date of birth verification failed. You have %{attempts_left} attempts remaining."
@@ -89,33 +95,62 @@ en:
       destroy:
         relationship_remove_pass: "Guardian relationship removed successfully."
         relationship_remove_fail: "Failed to remove guardian relationship."
-  invoices:
-    approve:
-      invoice_approved_pass: "Invoice approved successfully"
-      invoice_approved_pending: "Invoice must be pending to approve"
-    handle_missing_gad_reference:
-      gad_blank: "GAD reference can't be blank"
-  print_queue:
-    show:
-      pdf_file_missing_storage: "PDF file is missing from storage"
-      pdf_not_available: "PDF not available for this letter"
-    mark_as_printed:
-      letter_marked_printed: "Letter marked as printed"
-      letter_marked_empty: "0 letters marked as printed"
-    redirect_empty_letters:
-      no_selected_letters: "No letters selected for download"
-    handle_zip_error:
-      download_error: "An error occured while preparing the download"
-  products:
-    create:
-      product_created_pass: "Product successfully created."
-    update:
-      product_updated_pass: "Product successfully updated."
-    archive:
-      product_archive_pass: "Product archived"
-      product_archive_fail: "Could not archive product"
-    unarchive:
-      product_unarchive_pass: "Product unarchived."
-      product_unarchive_fail: "Could not unarchive product"
-    set_product:
-      product_not_found: "Product not found"
+    invoices:
+      approve:
+        invoice_approved_pass: "Invoice approved successfully"
+        invoice_approved_pending: "Invoice must be pending to approve"
+      handle_missing_gad_reference:
+        gad_blank: "GAD reference can't be blank"
+    print_queue:
+      show:
+        pdf_file_missing_storage: "PDF file is missing from storage"
+        pdf_not_available: "PDF not available for this letter"
+      mark_as_printed:
+        letter_marked_printed: "Letter marked as printed"
+        letter_marked_empty: "0 letters marked as printed"
+      redirect_empty_letters:
+        no_selected_letters: "No letters selected for download"
+      handle_zip_error:
+        download_error: "An error occured while preparing the download"
+    products:
+      create:
+        product_created_pass: "Product successfully created."
+      update:
+        product_updated_pass: "Product successfully updated."
+      archive:
+        product_archive_pass: "Product archived"
+        product_archive_fail: "Could not archive product"
+      unarchive:
+        product_unarchive_pass: "Product unarchived."
+        product_unarchive_fail: "Could not unarchive product"
+      set_product:
+        product_not_found: "Product not found"
+    proof_reviews:
+      show:
+        proof_not_available: "Proof file no longer available"
+      create:
+        proof_completed: "Proof review completed successfully"
+      set_proof_review:
+        review_not_found: "Review not found"
+      ensure_reviewable_status:
+        app_not_reviewable: "Application is not in a reviewable state"
+    recovery_requests:
+      approve:
+        recovery_approved: "Security key recovery request approved successfully. The user can register a new security key."
+    users:
+      update:
+        user_update_pass: "User was successfully updated."
+    w9_reviews:
+      create:
+        w9_review_complete: "W9 review completed successfully"
+        w9_save_fail: "W9 review faled to save"
+      set_vendor:
+        vendor_not_found: "Vendor not found"
+  controllers:
+    application:
+      check_passsword_change_required:
+        password_security_change: "For security reasons, you must change your password before continuing."
+      sign_in:
+        signin_pass: "Signed in successfully"
+      complete_two_factor_authentication:
+        signin_pass_2fa: "Signed in successfully"
