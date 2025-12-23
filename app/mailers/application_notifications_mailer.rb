@@ -301,6 +301,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     base_variables = build_base_email_variables(header_title, 'MAT Program')
     proof_variables = {
       user_first_name: user.first_name,
+      constituent_full_name: user.full_name,
       organization_name: 'MAT Program',
       proof_type_formatted: proof_type_formatted,
       rejection_reason: proof_review.rejection_reason,
@@ -319,12 +320,12 @@ class ApplicationNotificationsMailer < ApplicationMailer
       {
         remaining_attempts_message_text: build_remaining_attempts_message(remaining_attempts, reapply_date),
         default_options_text: build_default_options_text(sign_in_url_value),
-        archived_message_text: nil
+        archived_message_text: ''
       }
     else
       {
-        remaining_attempts_message_text: nil,
-        default_options_text: nil,
+        remaining_attempts_message_text: '',
+        default_options_text: '',
         archived_message_text: build_archived_message(reapply_date)
       }
     end
