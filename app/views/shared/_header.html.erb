@@ -19,6 +19,8 @@
                        evaluators_dashboard_path
                      elsif user.vendor?
                        vendor_portal_dashboard_path
+                     elsif user.trainer?
+                       trainers_dashboard_path
                      else
                        admin_applications_path
                      end
