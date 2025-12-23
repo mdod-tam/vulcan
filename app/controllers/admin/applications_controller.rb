@@ -186,9 +186,9 @@ module Admin
         html_message: message,
         turbo_updates: {
           'attachments-section' => 'attachments',      # Updates attachment display
-          'audit-logs' => 'audit_logs'                 # Updates audit log section
-        },
-        turbo_modals_to_remove: standard_application_modals # Removes open modals after review
+          'audit-logs' => 'audit_logs',                # Updates audit log section
+          'modals' => 'modals'                         # Regenerates modals container (closes and resets all modals)
+        }
       )
     end
 
@@ -359,9 +359,9 @@ module Admin
         html_message: message,
         turbo_updates: {
           'medical-certification-section' => 'medical_certification_section',
-          'audit-logs' => 'audit_logs'
-        },
-        turbo_modals_to_remove: standard_application_modals
+          'audit-logs' => 'audit_logs',
+          'modals' => 'modals' # Regenerates modals container (closes and resets all modals)
+        }
       )
     end
 
