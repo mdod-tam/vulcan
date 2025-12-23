@@ -37,8 +37,11 @@ module Admin
       # Must be a turbo stream response
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
 
-      # Validate stream actions - controller now replaces modals container instead of removing individual modals
-      assert_turbo_stream action: 'update', target: 'modals'
+      # Validate stream actions - controller removes individual modals and updates attachments
+      assert_turbo_stream action: 'remove', target: 'proofRejectionModal'
+      assert_turbo_stream action: 'remove', target: 'incomeProofReviewModal'
+      assert_turbo_stream action: 'remove', target: 'residencyProofReviewModal'
+      assert_turbo_stream action: 'remove', target: 'medicalCertificationReviewModal'
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
 
@@ -64,8 +67,11 @@ module Admin
       assert_response :success
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
 
-      # The controller replaces modals container and updates attachments
-      assert_turbo_stream action: 'update', target: 'modals'
+      # The controller removes individual modals and updates attachments
+      assert_turbo_stream action: 'remove', target: 'proofRejectionModal'
+      assert_turbo_stream action: 'remove', target: 'incomeProofReviewModal'
+      assert_turbo_stream action: 'remove', target: 'residencyProofReviewModal'
+      assert_turbo_stream action: 'remove', target: 'medicalCertificationReviewModal'
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
 
@@ -90,8 +96,11 @@ module Admin
       assert_response :success
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
 
-      # Controller replaces modals container instead of removing individual modals
-      assert_turbo_stream action: 'update', target: 'modals'
+      # Controller removes individual modals and updates attachments
+      assert_turbo_stream action: 'remove', target: 'proofRejectionModal'
+      assert_turbo_stream action: 'remove', target: 'incomeProofReviewModal'
+      assert_turbo_stream action: 'remove', target: 'residencyProofReviewModal'
+      assert_turbo_stream action: 'remove', target: 'medicalCertificationReviewModal'
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
   end
