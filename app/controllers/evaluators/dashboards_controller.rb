@@ -22,12 +22,6 @@ module Evaluators
 
       # Load display data (always needed)
       load_display_data
-
-      # Handle different format requests appropriately
-      respond_to do |format|
-        format.html # renders show.html.erb as usual
-        format.turbo_stream # renders show.turbo_stream.erb if it exists
-      end
     end
 
     private

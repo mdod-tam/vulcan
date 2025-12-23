@@ -249,22 +249,22 @@ module Evaluators
     end
 
     def process_attendees_param
-      return if params[:evaluation][:attendees_field].blank?
+      return if params[:attendees_field].blank?
 
-      attendees = params[:evaluation][:attendees_field].split(',').map do |attendee_str|
+      attendees = params[:attendees_field].split(',').map do |attendee_str|
         name, relationship = attendee_str.strip.split('-').map(&:strip)
         { 'name' => name, 'relationship' => relationship }
       end
-      params[:evaluation][:attendees] = attendees
+      params[:attendees] = attendees
     end
 
     def process_products_tried_param
-      return if params[:evaluation][:products_tried_field].blank?
+      return if params[:products_tried_field].blank?
 
-      products_tried = params[:evaluation][:products_tried_field].map do |product_id|
+      products_tried = params[:products_tried_field].map do |product_id|
         { 'product_id' => product_id, 'reaction' => 'Recorded during evaluation' }
       end
-      params[:evaluation][:products_tried] = products_tried
+      params[:products_tried] = products_tried
     end
   end
 end
