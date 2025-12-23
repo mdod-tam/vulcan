@@ -169,14 +169,20 @@ class MedicalCertificationMailbox < ApplicationMailbox
   end
 
   def medical_provider
-    @medical_provider ||= MedicalProvider.find_by(email: mail.from.first)
+    return @medical_provider if defined?(@medical_provider)
+
+    @medical_provider = MedicalProvider.find_by(email: mail.from.first)
   end
 
   def application
     # Extract application ID from the email subject or body
     # This assumes you include an application ID in the original request email
     application_id = extract_application_id_from_email
-    @application ||= Application.find_by(id: application_id)
+    if defined?(@application)
+      @application
+    else
+      @application = Application.find_by(id: application_id)
+    end
   end
 
   def extract_application_id_from_email

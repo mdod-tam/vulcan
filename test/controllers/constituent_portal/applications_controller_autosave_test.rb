@@ -45,7 +45,7 @@ module ConstituentPortal
     test 'should autosave Application field for new draft' do
       # Delete the existing draft so a new one can be created
       @draft_application.destroy
-      
+
       # Test autosaving for a new application (no ID provided)
       assert_difference('Application.count') do
         patch autosave_field_constituent_portal_applications_path,

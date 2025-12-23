@@ -56,11 +56,11 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
   test 'document_signing_audit_url is encrypted' do
     url = 'https://api.docuseal.com/audit/12345'
     @application.update!(document_signing_audit_url: url)
-    
+
     # The encrypted value should be different from the plain text
     encrypted_value = @application.read_attribute_before_type_cast(:document_signing_audit_url)
     assert_not_equal url, encrypted_value
-    
+
     # But decryption should return the original value
     assert_equal url, @application.document_signing_audit_url
   end
@@ -68,11 +68,11 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
   test 'document_signing_document_url is encrypted' do
     url = 'https://api.docuseal.com/document/67890'
     @application.update!(document_signing_document_url: url)
-    
+
     # The encrypted value should be different from the plain text
     encrypted_value = @application.read_attribute_before_type_cast(:document_signing_document_url)
     assert_not_equal url, encrypted_value
-    
+
     # But decryption should return the original value
     assert_equal url, @application.document_signing_document_url
   end
@@ -80,7 +80,7 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
   test 'digitally_signed_needs_review scope includes signed applications' do
     signed_app = create(:application, :in_progress, document_signing_status: :signed)
     other_app = create(:application, :in_progress, document_signing_status: :sent)
-    
+
     results = Application.digitally_signed_needs_review
     assert_includes results, signed_app
     assert_not_includes results, other_app
@@ -88,20 +88,20 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
 
   test 'digitally_signed_needs_review scope excludes already processed applications' do
     # Should exclude approved applications
-    approved_app = create(:application, :in_progress, 
-                         document_signing_status: :signed, 
-                         medical_certification_status: :approved)
-    
-    # Should exclude rejected applications  
+    approved_app = create(:application, :in_progress,
+                          document_signing_status: :signed,
+                          medical_certification_status: :approved)
+
+    # Should exclude rejected applications
     rejected_app = create(:application, :in_progress,
-                         document_signing_status: :signed,
-                         medical_certification_status: :rejected)
-    
+                          document_signing_status: :signed,
+                          medical_certification_status: :rejected)
+
     # Should include received applications
     received_app = create(:application, :in_progress,
-                         document_signing_status: :signed,
-                         medical_certification_status: :received)
-    
+                          document_signing_status: :signed,
+                          medical_certification_status: :received)
+
     results = Application.digitally_signed_needs_review
     assert_not_includes results, approved_app
     assert_not_includes results, rejected_app
@@ -111,13 +111,13 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
   test 'digitally_signed_needs_review scope excludes rejected and archived applications' do
     # Should exclude rejected status applications
     rejected_app = create(:application, status: :rejected, document_signing_status: :signed)
-    
-    # Should exclude archived status applications  
+
+    # Should exclude archived status applications
     archived_app = create(:application, status: :archived, document_signing_status: :signed)
-    
+
     # Should include in_progress applications
     active_app = create(:application, :in_progress, document_signing_status: :signed)
-    
+
     results = Application.digitally_signed_needs_review
     assert_not_includes results, rejected_app
     assert_not_includes results, archived_app
@@ -127,7 +127,7 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
   test 'filter_by_type includes digitally_signed_needs_review' do
     signed_app = create(:application, :in_progress, document_signing_status: :signed)
     other_app = create(:application, :in_progress, document_signing_status: :sent)
-    
+
     results = Application.filter_by_type('digitally_signed_needs_review')
     assert_includes results, signed_app
     assert_not_includes results, other_app

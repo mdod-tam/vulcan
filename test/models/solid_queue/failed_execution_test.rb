@@ -17,9 +17,7 @@ module SolidQueue
       # Skip if SolidQueue tables are not in the primary database
       # SolidQueue tables may be in a separate queue database
       connection = ActiveRecord::Base.connection
-      unless connection.table_exists?('solid_queue_failed_executions')
-        skip 'solid_queue_failed_executions table not in primary database (may be in queue database)'
-      end
+      skip 'solid_queue_failed_executions table not in primary database (may be in queue database)' unless connection.table_exists?('solid_queue_failed_executions')
 
       table_info = connection.columns('solid_queue_failed_executions')
       failed_at_column = table_info.find { |c| c.name == 'failed_at' }

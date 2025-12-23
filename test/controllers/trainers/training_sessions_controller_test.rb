@@ -4,7 +4,7 @@ require 'test_helper'
 
 module Trainers
   class TrainingSessionsControllerTest < ActionDispatch::IntegrationTest
-  # include AuthenticationTestHelper # Already included via test_helper.rb
+    # include AuthenticationTestHelper # Already included via test_helper.rb
 
     setup do
       # Create a constituent for the application
@@ -33,7 +33,7 @@ module Trainers
       @session2_no_show = create(:training_session, :no_show, application: @app2, trainer: @trainer)
     end
 
-  # --- Authorization Tests ---
+    # --- Authorization Tests ---
     test 'trainer should only see their own training sessions' do
       sign_in_for_controller_test @trainer
       # other_trainer_session is created in setup
@@ -62,7 +62,7 @@ module Trainers
       assert_redirected_to sign_in_url
     end
 
-  # --- Show Action Tests ---
+    # --- Show Action Tests ---
     test 'should get show and assign instance variables for trainer' do
       sign_in_for_controller_test @trainer
       # Create the session *inside* the test
@@ -118,7 +118,7 @@ module Trainers
       assert_equal 2, assigns(:constituent_cancelled_sessions_count)
     end
 
-  # --- Status Update Action Tests ---
+    # --- Status Update Action Tests ---
 
     test 'update_status should update status and log generic event' do
       sign_in_for_controller_test @trainer
@@ -195,7 +195,7 @@ module Trainers
       assert_nil @no_show_session.no_show_notes
     end
 
-  # --- Complete Action Tests ---
+    # --- Complete Action Tests ---
     test 'complete should update status to completed, set completed_at, notes, product, and log specific event' do
       sign_in_for_controller_test @trainer
       notes = 'Training session completed successfully.'
@@ -255,7 +255,7 @@ module Trainers
       assert_includes @response.body, 'Failed to complete training session:' # Check for error message in body
     end
 
-  # --- Schedule Action Tests ---
+    # --- Schedule Action Tests ---
     test 'schedule should update status to scheduled, set scheduled_for, notes, and log specific event' do
       sign_in_for_controller_test @trainer
       scheduled_time = 2.days.from_now
@@ -306,7 +306,7 @@ module Trainers
       assert_includes @response.body, 'Failed to schedule training session:' # Check for error message in body
     end
 
-  # --- Reschedule Action Tests ---
+    # --- Reschedule Action Tests ---
     test 'reschedule should update scheduled_for, reschedule_reason, status to scheduled, and log specific event' do
       sign_in_for_controller_test @trainer
       new_scheduled_time = 3.days.from_now
@@ -367,7 +367,7 @@ module Trainers
       assert_includes @response.body, 'Failed to reschedule training session:' # Check for error message in body
     end
 
-  # --- Cancel Action Tests ---
+    # --- Cancel Action Tests ---
     test 'cancel should update status to cancelled, set cancelled_at, cancellation_reason, and log specific event' do
       sign_in_for_controller_test @trainer
       cancellation_reason = 'Constituent cancelled.'
@@ -407,9 +407,9 @@ module Trainers
       assert_includes @response.body, 'Failed to cancel training session:' # Check for error message in body
     end
 
-  # --- Index and Filter Action Tests ---
+    # --- Index and Filter Action Tests ---
 
-  # Basic reachability check
+    # Basic reachability check
     test 'index should return success when signed in (basic check)' do
       sign_in_for_controller_test @trainer # Uses ENV['TEST_USER_ID']
       get trainers_training_sessions_url # Basic index route
@@ -490,7 +490,7 @@ module Trainers
       assert_includes assigns(:training_sessions), other_trainer_scheduled
     end
 
-  # Add tests for requested, scheduled, completed, needs_followup actions if they are still used directly
-  # (The index/filter actions seem to be the primary way to view lists now, but double-check routes and usage)
+    # Add tests for requested, scheduled, completed, needs_followup actions if they are still used directly
+    # (The index/filter actions seem to be the primary way to view lists now, but double-check routes and usage)
   end
 end

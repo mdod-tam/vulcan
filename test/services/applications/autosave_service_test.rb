@@ -6,12 +6,12 @@ module Applications
   class AutosaveServiceTest < ActiveSupport::TestCase
     setup do
       # Create guardian with explicit disability settings to avoid factory defaults
-      @user = FactoryBot.create(:constituent, 
+      @user = FactoryBot.create(:constituent,
                                 hearing_disability: false,
                                 vision_disability: true)
       # Create dependent with explicit disability settings to avoid factory defaults
-      @dependent = FactoryBot.create(:constituent, 
-                                     first_name: 'Dependent', 
+      @dependent = FactoryBot.create(:constituent,
+                                     first_name: 'Dependent',
                                      last_name: 'Child',
                                      hearing_disability: false,
                                      vision_disability: true)
@@ -91,7 +91,7 @@ module Applications
       end
 
       # All should succeed and return the SAME application_id
-      application_ids = results.map { |r| r[:application_id] }
+      application_ids = results.pluck(:application_id)
       assert_equal 1, application_ids.uniq.size, 'Should only create one application'
       assert results.all? { |r| r[:success] }, 'All autosaves should succeed'
     end
@@ -195,7 +195,7 @@ module Applications
     test 'does not create new draft when active application exists' do
       # When user has a submitted/active application, they cannot create a new draft
       # This prevents duplicate applications and aligns with controller logic
-      submitted_app = FactoryBot.create(:application, :in_progress, user: @user)
+      FactoryBot.create(:application, :in_progress, user: @user)
 
       assert_no_difference -> { Application.count } do
         result = Applications::AutosaveService.new(
@@ -303,7 +303,7 @@ module Applications
       ).call
 
       assert result[:success], "Expected autosave to succeed but got errors: #{result[:errors]}"
-      
+
       # Verify the dependent's disability flag was updated, not the guardian's
       assert @dependent.reload.hearing_disability, 'Dependent should have hearing_disability set to true'
       assert_not @user.reload.hearing_disability, 'Guardian should not have hearing_disability set'

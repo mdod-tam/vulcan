@@ -12,7 +12,7 @@ module ApplicationDataStructures
     end
 
     def valid_phone?
-      phone.present? && phone.match?(/\A[\d\-\(\)\s\.]+\z/)
+      phone.present? && phone.match?(/\A[\d\-()\s.]+\z/)
     end
 
     def valid_email?

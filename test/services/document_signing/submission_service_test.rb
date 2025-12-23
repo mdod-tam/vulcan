@@ -6,10 +6,10 @@ module DocumentSigning
   class SubmissionServiceTest < ActiveSupport::TestCase
     setup do
       @admin = create(:admin)
-      @application = create(:application, :in_progress, 
-                           medical_provider_email: 'doctor@example.com',
-                           medical_provider_name: 'Dr. Jane Smith')
-      
+      @application = create(:application, :in_progress,
+                            medical_provider_email: 'doctor@example.com',
+                            medical_provider_name: 'Dr. Jane Smith')
+
       # Mock DocuSeal API response
       @mock_submission = {
         'id' => 'sub_123456',
@@ -45,7 +45,7 @@ module DocumentSigning
       assert_not_nil @application.document_signing_requested_at
       assert_operator @application.document_signing_requested_at, :<=, Time.current
       assert_equal 1, @application.document_signing_request_count
-      
+
       # Medical certification tracking should also be updated
       assert_equal 'requested', @application.medical_certification_status
       assert_not_nil @application.medical_certification_requested_at
@@ -171,7 +171,7 @@ module DocumentSigning
 
       result = service.call
       assert result.success?
-      
+
       @application.reload
       assert_equal 'alternative_service', @application.document_signing_service
     end
@@ -190,7 +190,7 @@ module DocumentSigning
 
       result = service.call
       assert result.success?
-      
+
       @application.reload
       assert_equal original_doc_count + 1, @application.document_signing_request_count
       assert_equal original_med_count + 1, @application.medical_certification_request_count

@@ -46,7 +46,7 @@ module Applications
       # Search in both user's own applications and applications they manage as guardian
       application = current_user.applications.find_by(id: params[:id]) ||
                     current_user.managed_applications.find_by(id: params[:id])
-      
+
       application || find_or_create_draft_application
     end
 

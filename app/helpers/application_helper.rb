@@ -69,9 +69,9 @@ module ApplicationHelper
   end
 
   def document_signing_status_badge(application)
-    return nil unless application.document_signing_status.present?
+    return nil if application.document_signing_status.blank?
     return nil if application.document_signing_status == 'not_sent'
-    
+
     status = application.document_signing_status
     label = case status.to_s
             when 'sent' then 'Sent for Signing'

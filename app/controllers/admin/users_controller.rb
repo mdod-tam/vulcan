@@ -344,7 +344,7 @@ module Admin
       @user = User.find(params[:id])
 
       if @user.update(admin_user_params)
-        redirect_to admin_user_path(@user), notice: 'User was successfully updated.'
+        redirect_to admin_user_path(@user), notice: t(user_update_pass)
       else
         render :edit, status: :unprocessable_content
       end

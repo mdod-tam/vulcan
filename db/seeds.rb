@@ -488,7 +488,7 @@ else
       verify_and_fix_missing_files
     end
   rescue StandardError => e
-    puts "❌ SEEDING FAILED: #{e.message}"
+    Rails.logger.debug { "❌ SEEDING FAILED: #{e.message}" }
     seed_error "Seeding failed: #{e.message}"
     Rails.logger.debug 'Backtrace:'
     e.backtrace.first(10).each { |line| Rails.logger.debug line }

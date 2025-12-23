@@ -37,7 +37,7 @@ class ApplicationController < ActionController::Base
     store_location if request.get? && !request.xhr?
 
     # Redirect to password change form with notice
-    redirect_to edit_password_path, notice: 'For security reasons, you must change your password before continuing.'
+    redirect_to edit_password_path, notice: t(password_security_change)
   end
 
   # Standard flash helper methods
@@ -81,9 +81,9 @@ class ApplicationController < ActionController::Base
   def sign_in(user)
     session_record = _create_and_set_session_cookie(user)
     if session_record
-      redirect_to _dashboard_for(user), notice: 'Signed in successfully'
+      redirect_to _dashboard_for(user), notice: t(signin_pass)
     else
-      redirect_to sign_in_path(email_hint: user.email), alert: 'Unable to create session.'
+      redirect_to sign_in_path(email_hint: user.email), alert: t(session_fail)
     end
   end
 
@@ -138,9 +138,9 @@ class ApplicationController < ActionController::Base
       # Clear the challenge only after successful sign-in
       TwoFactorAuth.clear_challenge(session)
       # Redirect to stored location or appropriate dashboard
-      redirect_to stored_location || _dashboard_for(user), notice: 'Signed in successfully'
+      redirect_to stored_location || _dashboard_for(user), notice: t(signin_pass_2fa)
     else
-      redirect_to sign_in_path, alert: 'Unable to create session.'
+      redirect_to sign_in_path, alert: t(session_fail)
     end
   end
 

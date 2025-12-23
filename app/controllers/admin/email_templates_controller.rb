@@ -87,7 +87,7 @@ module Admin
 
       if @email_template.update(email_template_params.merge(updated_by: current_user))
         log_template_update_event
-        redirect_to admin_email_template_path(@email_template), notice: 'Email template was successfully updated.'
+        redirect_to admin_email_template_path(@email_template), notice: t(e_template_update_pass)
       else
         # Re-prepare sample data for form re-render on validation failure
         @sample_data = view_context.sample_data_for_template(@email_template.name)
@@ -136,7 +136,7 @@ module Admin
     def set_template
       @email_template = EmailTemplate.find(params[:id])
     rescue ActiveRecord::RecordNotFound
-      redirect_to admin_email_templates_path, alert: 'Email template not found.'
+      redirect_to admin_email_templates_path, alert: t(e_template_not_found)
     end
 
     # Load the definition from the constant based on the template name

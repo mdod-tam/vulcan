@@ -27,7 +27,7 @@ module Admin
     def create
       @product = Product.new(product_params)
       if @product.save
-        redirect_to admin_products_path, notice: 'Product successfully created.'
+        redirect_to admin_products_path, notice: t(product_created_pass)
       else
         load_vendors
         render :new, status: :unprocessable_content
@@ -36,7 +36,7 @@ module Admin
 
     def update
       if @product.update(product_params)
-        redirect_to admin_products_path, notice: 'Product successfully updated.'
+        redirect_to admin_products_path, notice: t(product_updated_pass)
       else
         load_vendors
         render :edit, status: :unprocessable_content
@@ -45,17 +45,17 @@ module Admin
 
     def archive
       if @product&.archive!
-        redirect_to admin_products_path, notice: 'Product archived.'
+        redirect_to admin_products_path, notice: t(product_archive_pass)
       else
-        redirect_to admin_products_path, alert: 'Could not archive product.'
+        redirect_to admin_products_path, alert: t(product_archive_fail)
       end
     end
 
     def unarchive
       if @product&.unarchive!
-        redirect_to admin_products_path, notice: 'Product unarchived.'
+        redirect_to admin_products_path, notice: t(product_unarchive_pass)
       else
-        redirect_to admin_products_path, alert: 'Could not unarchive product.'
+        redirect_to admin_products_path, alert: t(product_unarchive_fail)
       end
     end
 
@@ -81,7 +81,7 @@ module Admin
       @product = Product.find_by(id: params[:id])
       return if @product
 
-      redirect_to admin_products_path, alert: 'Product not found.'
+      redirect_to admin_products_path, alert: t(product_not_found)
     end
 
     def load_vendors

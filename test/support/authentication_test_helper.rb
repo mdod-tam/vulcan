@@ -142,6 +142,4 @@ module AuthenticationTestHelper
 
     skip 'Authentication not working properly'
   end
-
-  private
 end
