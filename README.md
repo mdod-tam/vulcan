@@ -252,6 +252,43 @@ After seeding (`bin/rails db:seed`), the following test users are available:
 
 **Note**: Email templates must be seeded separately with `rake db:seed_manual_email_templates`.
 
+## Production Deployment
+
+For production environments (e.g., Heroku), use the rake tasks that don't require FactoryBot:
+
+```bash
+# Seed policies (required for application functionality)
+rails db:seed_policies
+
+# Seed email templates (required for notifications)
+rails db:seed_manual_email_templates
+```
+
+**On Heroku:**
+
+```bash
+heroku run rails db:seed_policies --app your-app-name
+heroku run rails db:seed_manual_email_templates --app your-app-name
+```
+
+**Important**: Do NOT run `rails db:seed` in production, as it requires FactoryBot (test dependency) and will clear existing data.
+
+To create an admin user in production, use the Rails console:
+
+```bash
+# Heroku
+heroku run rails console --app your-app-name
+
+# In console
+Users::Administrator.create!(
+  email: 'admin@yourdomain.com',
+  password: 'secure_password_here',
+  first_name: 'Admin',
+  last_name: 'User',
+  email_verified: true
+)
+```
+
 ## Contributing
 
 1. Fork the repository
