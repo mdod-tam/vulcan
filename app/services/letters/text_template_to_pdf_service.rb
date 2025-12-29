@@ -204,6 +204,8 @@ module Letters
         'Income Eligibility Review'
       when 'application_notifications_proof_approved'
         'Document Verification Approved'
+      when 'application_notifications_proof_received'
+        'Document Verification Received'
       when 'application_notifications_max_rejections_reached'
         'Important Application Status Update'
       when 'application_notifications_proof_submission_error'

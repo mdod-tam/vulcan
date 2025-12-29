@@ -48,32 +48,13 @@ module TurboStreamResponseHandling
     streams
   end
 
-  # Standard set of modals to remove for application-related operations
-  def standard_application_modals
-    %w[
-      proofRejectionModal
-      incomeProofReviewModal
-      residencyProofReviewModal
-      medicalCertificationReviewModal
-    ]
-  end
-
-  # Builds turbo streams for application proof review success
-  def build_proof_review_success_streams
-    updates = {
-      'attachments-section' => 'attachments',
-      'audit-logs' => 'audit_logs'
-    }
-
-    build_success_turbo_streams(updates, standard_application_modals)
-  end
-
   # Handles both HTML and Turbo Stream responses for successful operations
   # @param html_redirect_path [String] Path to redirect for HTML requests
   # @param html_message [String] Message for HTML redirect
   # @param turbo_message [String] Message for Turbo Stream response
   # @param turbo_updates [Hash] Updates for Turbo Stream response
-  # @param turbo_modals_to_remove [Array<String>] Modals to remove for Turbo Stream
+  # @param turbo_modals_to_remove [Array<String>] DEPRECATED: Modals to remove for Turbo Stream.
+  #   Use 'modals' => 'modals' in turbo_updates to replace entire modal container.
   # @param turbo_redirect_path [String] Path to redirect for Turbo Stream (optional)
   def handle_success_response(
     html_redirect_path:,
