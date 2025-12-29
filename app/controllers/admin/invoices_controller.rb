@@ -23,7 +23,7 @@ module Admin
                              .select('users.id, users.business_name, ' \
                                      'SUM(voucher_transactions.amount) as total_amount, ' \
                                      'COUNT(DISTINCT voucher_transactions.id) as transaction_count')
-                             .order('total_amount DESC')
+                             .order(total_amount: :desc)
 
       respond_to do |format|
         format.html
@@ -62,9 +62,9 @@ module Admin
       if @invoice.status_invoice_pending?
         @invoice.update!(status: :invoice_approved)
         log_event!('Approved invoice')
-        redirect_to [:admin, @invoice], notice: 'Invoice approved successfully'
+        redirect_to [:admin, @invoice], notice: t('.invoice_approved_pass')
       else
-        redirect_to [:admin, @invoice], alert: 'Invoice must be pending to approve'
+        redirect_to [:admin, @invoice], alert: t('.invoice_approved_pending')
       end
     end
 

@@ -65,7 +65,7 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
       residency_proof_status: :approved
     )
 
-    initial_count = ApplicationStatusChange.count
+    ApplicationStatusChange.count
 
     # Now approve medical certification - this should trigger auto-approval
     # because all requirements are now met and the callback checks saved_change_to_*

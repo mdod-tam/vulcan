@@ -137,11 +137,11 @@ module Letters
         next if paragraph.strip.empty?
 
         # Format lists if they exist in the paragraph
-        if paragraph.match(/^\s*[\*\-\•]\s+/)
+        if paragraph.match(/^\s*[*\-•]\s+/)
           paragraph.split("\n").each do |list_item|
-            if list_item.match(/^\s*[\*\-\•]\s+/)
+            if list_item.match(/^\s*[*\-•]\s+/)
               pdf.indent(10) do
-                pdf.text list_item.gsub(/^\s*[\*\-\•]\s+/, '• ')
+                pdf.text list_item.gsub(/^\s*[*\-•]\s+/, '• ')
               end
             else
               pdf.text list_item

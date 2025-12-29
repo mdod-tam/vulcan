@@ -28,9 +28,128 @@
 #       enabled: "ON"
 
 en:
-  hello: "Hello world"
+  shared:
+    unauthorized: "Not authorized"
   alerts:
+    invalid_voucher_code: "Invalid voucher code"
+    session_fail: "Unable to create session"
+    review_not_found: "Review not found"
+    w9_missing: "W9 form is missing"
+    file_select: "Please select a file to upload"
+    file_type_not_allowed: "File type not allowed"
+    app_not_found: "Application not found"
+    unauthorized_action: "You are not authorized to perform this action"
+    unauthorized_page: "You do not have permission to access this page"
     must_be_vendor: "You must be a vendor to access this section"
     dob_verification_failed: "Date of birth verification failed. You have %{attempts_left} attempts remaining."
     dob_verification_too_many_attempts: "Too many failed verification attempts. Please contact support."
     dob_verification_success: "Identity verification successful."
+    unfiltered_error: "Filter error – showing unfiltered results."
+    e_template_not_found: "Email template not found."
+  admin:
+    application_notes:
+      create:
+        note_added: "Note added successfully."
+    applications:
+      update:
+        updated: "Application updated."
+      batch_approve:
+        b_approved: "Applications approved."
+      batch_reject:
+        b_rejected: "Applications rejected."
+      request_documents:
+        d_requested: "Documents requested."
+      assign_evaluator:
+        eval_assign_pass: "Evaluator successfully assigned."
+        eval_assign_fail: "Failed to assign evaluator."
+      assign_trainer:
+        trainer_assign_pass: "Trainer successfully assigned."
+        trainer_assign_fail: "Failed to assign trainer."
+      schedule_training:
+        t_schedule_invalid: "Invalid trainer selected."
+        t_schedule_fail: "Failed to schedule training session."
+      complete_training:
+        t_completed: "Training session marked as completed"
+      resend_medical_certification:
+        c_request_pass: "Certification request sent successfully."
+      send_document_signing_request:
+        d_sign_request_pass: "Document signing request sent successfully."
+      assign_voucher:
+        v_assign_pass: "Voucher assigned successfully"
+        v_assign_fail: "Failed to assign voucher. Please ensure all requirements are met."
+      queue_medical_certification_form:
+        queue_print_pass: "DCF queued for printing."
+      upload_medical_certification:
+        m_blank: "Please select whether to accept or reject the certification."
+        m_rejection_reason: "Please select a rejection reason"
+      process_accepted_certification:
+        c_file_select: "Please select a file to upload"
+        c_upload_pass: "Medical certification successfully uploaded and approved."
+    email_templates:
+      update:
+        e_template_update_pass: "Email template was successfully updated."
+    guardian_relationships:
+      create:
+        dependent_not_found: "Email template not found"
+        relationship_create_pass: "Guardian relationship created successfully."
+        relationship_create_fail: "Failed to create guardian relationship."
+      destroy:
+        relationship_remove_pass: "Guardian relationship removed successfully."
+        relationship_remove_fail: "Failed to remove guardian relationship."
+    invoices:
+      approve:
+        invoice_approved_pass: "Invoice approved successfully"
+        invoice_approved_pending: "Invoice must be pending to approve"
+      handle_missing_gad_reference:
+        gad_blank: "GAD reference can't be blank"
+    print_queue:
+      show:
+        pdf_file_missing_storage: "PDF file is missing from storage"
+        pdf_not_available: "PDF not available for this letter"
+      mark_as_printed:
+        letter_marked_printed: "Letter marked as printed"
+        letter_marked_empty: "0 letters marked as printed"
+      redirect_empty_letters:
+        no_selected_letters: "No letters selected for download"
+      handle_zip_error:
+        download_error: "An error occured while preparing the download"
+    products:
+      create:
+        product_created_pass: "Product successfully created."
+      update:
+        product_updated_pass: "Product successfully updated."
+      archive:
+        product_archive_pass: "Product archived."
+        product_archive_fail: "Could not archive product"
+      unarchive:
+        product_unarchive_pass: "Product unarchived."
+        product_unarchive_fail: "Could not unarchive product"
+      set_product:
+        product_not_found: "Product not found"
+    proof_reviews:
+      show:
+        proof_not_available: "Proof file no longer available"
+      create:
+        proof_completed: "Proof review completed successfully"
+      ensure_reviewable_status:
+        app_not_reviewable: "Application is not in a reviewable state"
+    recovery_requests:
+      approve:
+        recovery_approved: "Security key recovery request approved successfully. The user can register a new security key."
+    users:
+      update:
+        user_update_pass: "User was successfully updated."
+    w9_reviews:
+      create:
+        w9_review_complete: "W9 review completed successfully"
+        w9_save_fail: "W9 review faled to save"
+      set_vendor:
+        vendor_not_found: "Vendor not found"
+  controllers:
+    application:
+      check_passsword_change_required:
+        password_security_change: "For security reasons, you must change your password before continuing."
+      sign_in:
+        signin_pass: "Signed in successfully"
+      complete_two_factor_authentication:
+        signin_pass_2fa: "Signed in successfully"

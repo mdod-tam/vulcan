@@ -11,7 +11,7 @@ env:
   DATABASE_USERNAME: postgres
   DATABASE_PASSWORD: postgres
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mat_vulcan_test
-  NODE_VERSION: '22.12.0'
+  NODE_VERSION: '24'
   CHROME_NO_SANDBOX: true
   POSTGRES_DB: mat_vulcan_test
   POSTGRES_USER: postgres
@@ -31,7 +31,8 @@ jobs:
           bundler-cache: true
           
       - name: Run Brakeman security scan
-        run: bin/brakeman --no-pager
+        #running bundle exec over bin/ until gemfile is updated to latest brakeman version
+        run: bundle exec brakeman --no-pager
 
   lint:
     runs-on: ubuntu-22.04

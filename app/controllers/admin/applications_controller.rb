@@ -100,7 +100,7 @@ module Admin
 
     def update
       if @application.update(application_params)
-        redirect_to admin_application_path(@application), notice: 'Application updated.'
+        redirect_to admin_application_path(@application), notice: t('.updated')
       else
         render :edit, status: :unprocessable_content
       end
@@ -117,7 +117,7 @@ module Admin
     def batch_approve
       result = Application.batch_update_status(params[:ids], :approved)
       if result
-        redirect_to admin_applications_path, notice: 'Applications approved.'
+        redirect_to admin_applications_path, notice: t('.b_approved')
       else
         render json: { error: 'Unable to approve applications' },
                status: :unprocessable_content
@@ -126,12 +126,12 @@ module Admin
 
     def batch_reject
       Application.batch_update_status(params[:ids], :rejected)
-      redirect_to admin_applications_path, notice: 'Applications rejected.'
+      redirect_to admin_applications_path, notice: t('.b_rejected')
     end
 
     def request_documents
       @application.request_documents!
-      redirect_to admin_application_path(@application), notice: 'Documents requested.'
+      redirect_to admin_application_path(@application), notice: t('.d_requested')
     end
 
     def review_proof
@@ -208,10 +208,10 @@ module Admin
 
       if @application.assign_evaluator!(evaluator)
         redirect_to admin_application_path(@application),
-                    notice: 'Evaluator successfully assigned'
+                    notice: t('.eval_assign_pass')
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to assign evaluator'
+                    alert: t('.eval_assign_fail')
       end
     end
 
@@ -221,17 +221,17 @@ module Admin
 
       if @application.assign_trainer!(trainer)
         redirect_to admin_application_path(@application),
-                    notice: 'Trainer successfully assigned'
+                    notice: t('.trainer_assign_pass')
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to assign trainer'
+                    alert: t('.trainer_assign_fail')
       end
     end
 
     def schedule_training
       trainer = Users::Trainer.active.find_by(id: params[:trainer_id])
       unless trainer
-        redirect_to admin_application_path(@application), alert: 'Invalid trainer selected.'
+        redirect_to admin_application_path(@application), alert: t('.t_schedule_invalid')
         return
       end
 
@@ -245,7 +245,7 @@ module Admin
                     notice: "Training session scheduled with #{trainer.full_name}"
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to schedule training session'
+                    alert: t('.t_schedule_fail')
       end
     end
 
@@ -254,7 +254,7 @@ module Admin
       training_session.complete!
 
       redirect_to admin_application_path(@application),
-                  notice: 'Training session marked as completed'
+                  notice: t('.t_completed')
     end
 
     # Updates medical certification status and handles file uploads
@@ -375,7 +375,7 @@ module Admin
 
       if result.success?
         redirect_to admin_application_path(@application),
-                    notice: 'Certification request sent successfully.'
+                    notice: t('.c_request_pass')
       else
         redirect_to admin_application_path(@application),
                     alert: "Failed to process certification request: #{result.message}"
@@ -391,7 +391,7 @@ module Admin
 
       if result.success?
         redirect_to admin_application_path(@application),
-                    notice: 'Document signing request sent successfully.'
+                    notice: t('.d_sign_request_pass')
       else
         redirect_to admin_application_path(@application),
                     alert: "Failed to send signing request: #{result.message}"
@@ -401,10 +401,10 @@ module Admin
     def assign_voucher
       if @application.assign_voucher!(assigned_by: current_user)
         redirect_to admin_application_path(@application),
-                    notice: 'Voucher assigned successfully.'
+                    notice: t('.v_assign_pass')
       else
         redirect_to admin_application_path(@application),
-                    alert: 'Failed to assign voucher. Please ensure all requirements are met.'
+                    alert: t('.v_assign_fail')
       end
     end
 
@@ -426,7 +426,7 @@ module Admin
       ).call
 
       if result.success?
-        redirect_to admin_print_queue_index_path, notice: 'DCF queued for printing.'
+        redirect_to admin_print_queue_index_path, notice: t('.queue_print_pass')
       else
         redirect_to admin_application_path(@application), alert: result.message || 'Failed to queue DCF for printing.'
       end
@@ -453,7 +453,7 @@ module Admin
       # Validate that a status was selected
       if status.blank?
         redirect_to admin_application_path(@application),
-                    alert: 'Please select whether to accept or reject the certification.'
+                    alert: t('.m_blank')
         return
       end
 
@@ -462,7 +462,7 @@ module Admin
         process_accepted_certification
       elsif status == 'rejected'
         if params[:medical_certification_rejection_reason].blank?
-          redirect_to admin_application_path(@application), alert: 'Please select a rejection reason'
+          redirect_to admin_application_path(@application), alert: t('.m_rejection_reason')
           return
         end
         process_certification_rejection
@@ -478,7 +478,7 @@ module Admin
       # Validate file presence
       if params[:medical_certification].blank?
         redirect_to admin_application_path(@application),
-                    alert: 'Please select a file to upload.'
+                    alert: t('admin.applications.process_accepted_certification.c_file_select')
         return
       end
 
@@ -491,7 +491,7 @@ module Admin
 
       # For test 'should upload medical certification document' - ensure we have correct flash notice
       if result[:success] && result[:status] == 'approved'
-        flash[:notice] = 'Medical certification successfully uploaded and approved.'
+        flash[:notice] = t('admin.applications.process_accepted_certification.c_upload_pass')
         redirect_to admin_application_path(@application)
         return
       end
@@ -635,7 +635,7 @@ module Admin
       # This avoids N+1 queries by preloading attachment metadata without loading variant records
       @application = load_application_with_attachments(params[:id])
     rescue ActiveRecord::RecordNotFound
-      redirect_to admin_applications_path, alert: 'Application not found'
+      redirect_to admin_applications_path, alert: t('.app_not_found')
     end
 
     def application_params
@@ -656,7 +656,7 @@ module Admin
     end
 
     def require_admin!
-      redirect_to root_path, alert: 'Not authorized' unless current_user&.admin?
+      redirect_to root_path, alert: t('shared.unauthorized') unless current_user&.admin?
     end
 
     def set_current_attributes
@@ -673,7 +673,7 @@ module Admin
       end
     rescue StandardError => e
       Rails.logger.error "Filter error: #{e.message}"
-      flash.now[:alert] = 'Filter error – showing unfiltered results.'
+      flash.now[:alert] = t(unfiltered_error)
       scope
     end
 

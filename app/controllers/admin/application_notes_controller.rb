@@ -11,7 +11,7 @@ module Admin
       @note.admin = current_user
 
       if @note.save
-        redirect_to admin_application_path(@application), notice: 'Note added successfully.'
+        redirect_to admin_application_path(@application), notice: t('.note_added')
       else
         error_message = "Failed to add note: #{@note.errors.full_messages.join(', ')}"
         redirect_to admin_application_path(@application), alert: error_message

@@ -166,7 +166,7 @@ module ConstituentPortal
       create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
 
       # Create an active application for the dependent (but not for the user)
-      dependent_app = create(:application, user: dependent, managing_guardian: @user, status: :in_progress)
+      create(:application, user: dependent, managing_guardian: @user, status: :in_progress)
 
       get constituent_portal_dashboard_path
       assert_response :success
