@@ -21,7 +21,7 @@ module Admin
       dependent_user = User.find_by(id: dependent_user_id)
 
       unless dependent_user
-        flash[:alert] = t(dependent_not_found)
+        flash[:alert] = t('.dependent_not_found')
         redirect_to admin_user_path(@guardian)
         return
       end
@@ -29,7 +29,7 @@ module Admin
       # Using UserServiceIntegration concern for consistent relationship creation
       # Flow: create_guardian_relationship_with_service -> handles validation and creation
       if create_guardian_relationship_with_service(@guardian, dependent_user, params[:guardian_relationship][:relationship_type])
-        redirect_to admin_user_path(@guardian), notice: t(relationship_create_pass)
+        redirect_to admin_user_path(@guardian), notice: t('.relationship_create_pass')
       else
         @dependent = dependent_user
         @guardian_relationship = GuardianRelationship.new(
@@ -38,7 +38,7 @@ module Admin
           relationship_type: params[:guardian_relationship][:relationship_type]
         )
         log_user_service_error('to create guardian relationship', 'Relationship creation failed')
-        flash.now[:alert] = t(relationship_create_fail)
+        flash.now[:alert] = t('.relationship_create_fail')
         render :new, status: :unprocessable_content
       end
     end
@@ -49,10 +49,10 @@ module Admin
 
       if @guardian_relationship.destroy
         redirect_to admin_user_path(params[:return_to] == 'dependent' ? dependent : guardian),
-                    notice: t(relationship_remove_pass)
+                    notice: t('.relationship_remove_pass')
       else
         redirect_to admin_user_path(params[:return_to] == 'dependent' ? dependent : guardian),
-                    alert: t(relationship_remove_fail)
+                    alert: t('.relationship_remove_fail')
       end
     end
 

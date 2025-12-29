@@ -84,12 +84,12 @@ module Admin
     def validate_file
       if params[:file].blank?
         return redirect_to(new_admin_application_scanned_proof_path(@application),
-                           alert: t(file_select))
+                           alert: t('alerts.file_select'))
       end
 
       unless valid_file_type?
         return redirect_to(new_admin_application_scanned_proof_path(@application),
-                           alert: t(file_type_not_allowed))
+                           alert: t('alerts.file_type_not_allowed'))
       end
 
       return if valid_file_size?

@@ -31,7 +31,7 @@ module Admin
         notify_user_of_approval
       end
 
-      redirect_to admin_recovery_requests_path, notice: t(recovery_approved)
+      redirect_to admin_recovery_requests_path, notice: t('.recovery_approved')
     end
 
     private
@@ -43,7 +43,7 @@ module Admin
     def ensure_admin
       return if current_user.admin?
 
-      redirect_to root_path, alert: t(unauthorized_page)
+      redirect_to root_path, alert: t('alerts.unauthorized_page')
     end
 
     def notify_user_of_approval

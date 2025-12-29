@@ -32,17 +32,17 @@ module Admin
 
       # Always check for attachment presence, even in test environment
       unless @w9_form&.attached?
-        redirect_to admin_vendors_path, alert: t(w9_missing)
+        redirect_to admin_vendors_path, alert: t('alerts.w9_missing')
         return
       end
 
       if @w9_review.save
         Rails.logger.debug 'W9Review saved successfully'
         # The W9Review model's after_commit callback will update the vendor's w9_status
-        redirect_to admin_vendor_path(@vendor), notice: t(w9_review_complete)
+        redirect_to admin_vendor_path(@vendor), notice: t('.w9_review_complete')
       else
         # If validation fails, render the form with error messages
-        flash.now[:alert] = t(w9_save_fail)
+        flash.now[:alert] = t('.w9_save_fail')
         render :new, status: :unprocessable_content
       end
     end
@@ -53,7 +53,7 @@ module Admin
       @w9_form = @vendor.w9_form
 
       # Check if w9_form is attached and redirect if it's not
-      redirect_to admin_vendors_path, alert: t(w9_missing) unless @w9_form&.attached?
+      redirect_to admin_vendors_path, alert: t('alerts.w9_missing') unless @w9_form&.attached?
     end
 
     def set_vendor
@@ -62,10 +62,10 @@ module Admin
     rescue ActiveRecord::RecordNotFound
       # Special handling for the review_not_found test only
       if Rails.env.test? && params[:id].present? && params[:id].to_i == 999_999
-        redirect_to admin_vendor_path(params[:vendor_id]), alert: t(review_not_found)
+        redirect_to admin_vendor_path(params[:vendor_id]), alert: t('alerts.review_not_found')
       else
         # Default behavior for any other vendor not found scenarios
-        redirect_to admin_vendors_path, alert: t(vendor_not_found)
+        redirect_to admin_vendors_path, alert: t('admin.w9_reviews.set_vendor.vendor_not_found')
       end
     end
 
@@ -73,7 +73,7 @@ module Admin
       @w9_review = @vendor.w9_reviews.find(params[:id])
     rescue ActiveRecord::RecordNotFound
       # We always want to redirect to the vendor page if review not found
-      redirect_to admin_vendor_path(@vendor), alert: t(review_not_found)
+      redirect_to admin_vendor_path(@vendor), alert: t('alerts.review_not_found')
     end
 
     def w9_review_params
@@ -83,7 +83,7 @@ module Admin
     def require_admin!
       return if current_user&.admin?
 
-      flash[:alert] = t(unauthorized_action)
+      flash[:alert] = t('alerts.unauthorized_action')
       redirect_to root_path
     end
   end

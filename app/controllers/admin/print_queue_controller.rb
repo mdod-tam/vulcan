@@ -27,10 +27,10 @@ module Admin
                         disposition: 'inline'
             rescue ActiveStorage::FileNotFoundError => e
               Rails.logger.error "[STORAGE_ERROR] PDF file missing for PrintQueueItem ##{@letter.id}: #{e.message}"
-              redirect_to admin_print_queue_index_path, alert: t(pdf_file_missing_storage)
+              redirect_to admin_print_queue_index_path, alert: t('.pdf_file_missing_storage')
             end
           else
-            redirect_to admin_print_queue_index_path, alert: t(pdf_not_available)
+            redirect_to admin_print_queue_index_path, alert: t('.pdf_not_available')
           end
         end
       end
@@ -39,7 +39,7 @@ module Admin
     def mark_as_printed
       letter = PrintQueueItem.find(params[:id])
       letter.update(status: :printed, printed_at: Time.current, admin: current_user)
-      redirect_to admin_print_queue_index_path, notice: t(letter_marked_printed)
+      redirect_to admin_print_queue_index_path, notice: t('.letter_marked_printed')
     end
 
     def mark_batch_as_printed
@@ -48,7 +48,7 @@ module Admin
 
       if @letters.empty?
         # Set the correct flash notice for an empty batch as expected by the test
-        redirect_to admin_print_queue_index_path, notice: t(letter_marked_empty)
+        redirect_to admin_print_queue_index_path, notice: t('admin.print_queue.mark_as_printed.letter_marked_empty')
         return
       end
 
@@ -78,11 +78,11 @@ module Admin
     def require_admin
       return if current_user&.admin?
 
-      redirect_to root_path, alert: t(unauthorized_page)
+      redirect_to root_path, alert: t('alerts.unauthorized_page')
     end
 
     def redirect_empty_letters
-      redirect_to admin_print_queue_index_path, alert: t(no_selected_letters)
+      redirect_to admin_print_queue_index_path, alert: t('admin.print_queue.redirect_empty_letters.no_selected_letters')
     end
 
     def send_single_letter(letter)

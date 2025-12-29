@@ -31,6 +31,7 @@ en:
   shared:
     unauthorized: "Not authorized"
   alerts:
+    invalid_voucher_code: "Invalid voucher code"
     session_fail: "Unable to create session"
     review_not_found: "Review not found"
     w9_missing: "W9 form is missing"
@@ -51,12 +52,12 @@ en:
         note_added: "Note added successfully."
     applications:
       update:
-        update: "Application updated."
+        updated: "Application updated."
       batch_approve:
         b_approved: "Applications approved."
       batch_reject:
         b_rejected: "Applications rejected."
-      request:documents:
+      request_documents:
         d_requested: "Documents requested."
       assign_evaluator:
         eval_assign_pass: "Evaluator successfully assigned."
@@ -118,7 +119,7 @@ en:
       update:
         product_updated_pass: "Product successfully updated."
       archive:
-        product_archive_pass: "Product archived"
+        product_archive_pass: "Product archived."
         product_archive_fail: "Could not archive product"
       unarchive:
         product_unarchive_pass: "Product unarchived."
@@ -130,8 +131,6 @@ en:
         proof_not_available: "Proof file no longer available"
       create:
         proof_completed: "Proof review completed successfully"
-      set_proof_review:
-        review_not_found: "Review not found"
       ensure_reviewable_status:
         app_not_reviewable: "Application is not in a reviewable state"
     recovery_requests:

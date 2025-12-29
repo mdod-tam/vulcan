@@ -59,9 +59,9 @@ module Admin
       if @invoice.status_invoice_pending?
         @invoice.update!(status: :invoice_approved)
         log_event!('Approved invoice')
-        redirect_to [:admin, @invoice], notice: t(invoice_approved_pass)
+        redirect_to [:admin, @invoice], notice: t('.invoice_approved_pass')
       else
-        redirect_to [:admin, @invoice], alert: t(invoice_approved_pending)
+        redirect_to [:admin, @invoice], alert: t('.invoice_approved_pending')
       end
     end
 
@@ -85,7 +85,7 @@ module Admin
     end
 
     def handle_missing_gad_reference
-      flash[:alert] = t(gad_blank)
+      flash[:alert] = t('.gad_blank')
       set_transactions
       render :show, status: :unprocessable_content
     end
