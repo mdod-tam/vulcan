@@ -31,7 +31,7 @@ module Applications
         )
 
         # Create initial voucher if applicable
-        if feature_enabled?(:vouchers_enabled) && application.can_create_voucher?
+        if FeatureFlag.enabled?(:vouchers_enabled) && application.can_create_voucher?
           application.create_initial_voucher 
         end
 

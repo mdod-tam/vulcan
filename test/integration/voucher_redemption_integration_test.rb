@@ -94,7 +94,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     }
 
     # Enable Voucher Redemption feature flag
-    FeatureFlag.find_by(name: 'vouchers_enabled').update(enabled: true)
+    FeatureFlag.create!(name: 'vouchers_enabled', enabled: true)
   end
 
   test 'full voucher redemption flow with database integrity verification' do
@@ -310,7 +310,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       product_quantities: { @product1.id.to_s => '1' }
     }
 
-    assert_redirected_to vendor_portal_vouchers_path
-    assert_match(/Voucher redemption is not enabled/, flash[:alert])
+    assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
+    assert_match(/Voucher functionality is currently disabled/, flash[:alert])
   end
 end
