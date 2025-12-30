@@ -92,6 +92,9 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     post verify_dob_vendor_portal_voucher_path(@voucher.code), params: {
       date_of_birth: @constituent.date_of_birth.strftime('%Y-%m-%d')
     }
+
+    # Enable Voucher Redemption feature flag
+    FeatureFlag.find_by(name: 'vouchers_enabled').update(enabled: true)
   end
 
   test 'full voucher redemption flow with database integrity verification' do
@@ -296,5 +299,18 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     follow_redirect!
     assert_match(/Identity verification is required before redemption/,
                  flash[:alert])
+  end
+
+  test 'voucher redemption returns error when vouchers_enabled feature flag is false' do
+    FeatureFlag.find_by(name: 'vouchers_enabled').update(enabled: false)
+
+    post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
+      amount: 150.0,
+      product_ids: [@product1.id],
+      product_quantities: { @product1.id.to_s => '1' }
+    }
+
+    assert_redirected_to vendor_portal_vouchers_path
+    assert_match(/Voucher redemption is not enabled/, flash[:alert])
   end
 end
