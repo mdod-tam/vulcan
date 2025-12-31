@@ -207,7 +207,7 @@
     <%= render "modals" %>
 
     <!-- Voucher Details Section -->
-    <% if @application.status_approved? && @application.medical_certification_status_approved? %>
+    <% if FeatureFlag.enabled?(:voucher_redemption) && @application.status_approved? && @application.medical_certification_status_approved? %>
       <%= render "voucher_details" %>
     <% end %>
 
