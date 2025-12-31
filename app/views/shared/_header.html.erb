@@ -4,11 +4,13 @@
   
   # Set up navigation links once
   navigation_links = [
-    ["Home", root_path],
-    ["About", "/about"],
-    ["Contact", "/contact"]
+    ["Home", root_path]
   ]
-  
+
+    #Saving this for later incase we want to add it back to navbar
+    #["About", "/about"],
+    #["Contact", "/contact"]
+
   # Determine dashboard path once if user is logged in
   if user
     dashboard_path = if user.admin?
