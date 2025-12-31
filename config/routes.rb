@@ -334,13 +334,6 @@ Rails.application.routes.draw do
   end
 
   namespace :admin do
-    resources :vouchers, only: %i[index show edit update]
-    resources :voucher_transactions, only: %i[index show]
-    resources :invoices, only: %i[index show new create edit update]
-    resources :vendors, controller: 'users/vendors', only: %i[index show edit update]
-  end
-
-  namespace :admin do
     resources :feature_flags, only: %i[index update]
   end
 

@@ -9,9 +9,11 @@ class FeatureFlag < ApplicationRecord
     rescue StandardError
       default
     end
+
     def enable!(feature_name)
       find_or_initialize_by(name: feature_name.to_s).update!(enabled: true)
     end
+
     def disable!(feature_name)
       find_or_initialize_by(name: feature_name.to_s).update!(enabled: false)
     end
