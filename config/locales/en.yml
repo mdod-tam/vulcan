@@ -30,6 +30,12 @@
 en:
   shared:
     unauthorized: "Not authorized"
+    enabled: "Enabled"
+    disabled: "Disabled"
+    view: "View"
+    edit: "Edit"
+    enable: "Enable"
+    disable: "Disable"
   alerts:
     invalid_voucher_code: "Invalid voucher code"
     session_fail: "Unable to create session"
@@ -86,8 +92,26 @@ en:
         c_file_select: "Please select a file to upload"
         c_upload_pass: "Medical certification successfully uploaded and approved."
     email_templates:
+      index:
+        page_title: "Email Templates"
+        disable_all: "Disable All"
+        enable_all: "Enable All"
+        disable_all_confirm: "Disable all email templates? They will not be sent until re-enabled."
+        enable_all_confirm: "Enable all email templates? They will be sent to users."
+        status_column: "Status"
+        view_aria: "View %{template_name} template"
+        edit_aria: "Edit %{template_name} template"
+        disable_aria: "Disable %{template_name} template"
+        enable_aria: "Enable %{template_name} template"
       update:
         e_template_update_pass: "Email template was successfully updated."
+        toggled_enabled: "Email template '%{template_name}' has been enabled."
+        toggled_disabled: "Email template '%{template_name}' has been disabled."
+        toggle_failed: "Failed to update template: %{error_messages}"
+      bulk_disable:
+        success: "All email templates have been disabled."
+      bulk_enable:
+        success: "All email templates have been enabled."
     guardian_relationships:
       create:
         dependent_not_found: "Email template not found"
