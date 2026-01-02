@@ -116,9 +116,14 @@
                            class="block text-sm font-medium text-gray-700 mb-1">
                       Primary Role
                     </label>
+                    <% role_options = if FeatureFlag.enabled?(:vouchers_enabled)
+                      %w[Users::Administrator Users::Evaluator Users::Constituent Users::Vendor Users::Trainer]
+                    else
+                      %w[Users::Administrator Users::Evaluator Users::Constituent Users::Trainer]
+                    end %>
                     <%= select_tag "role_#{user.id}",
                         options_for_select(
-                          %w[Users::Administrator Users::Evaluator Users::Constituent Users::Vendor Users::Trainer],
+                          role_options,
                           selected: user.type
                         ),
                         data: { 

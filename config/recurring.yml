@@ -9,7 +9,7 @@ production:
   
   check_voucher_expiration:
     class: CheckVoucherExpirationJob
-    schedule: "0 1 * * *"
+    schedule: "<%= feature_enabled?(:vouchers_enabled) ? '0 1 * * *' : nil %>"
     description: "Check for expiring vouchers and notify constituents"
     queue: "default"
     args: []
