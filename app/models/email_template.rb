@@ -29,6 +29,11 @@ class EmailTemplate < ApplicationRecord
   # This list is populated based on the analysis in doc/mailer_template_management.md
   AVAILABLE_TEMPLATES = {
     # ApplicationNotificationsMailer Templates
+    'application_notifications_application_submitted' => {
+      description: 'Sent when an application is submitted.',
+      required_vars: %w[user_first_name application_id submission_date_formatted header_text footer_text],
+      optional_vars: %w[title logo subtitle show_automated_message]
+    },
     'application_notifications_account_created' => {
       description: 'Sent when a new user account is created (e.g., by an admin).',
       # Text-only variables
