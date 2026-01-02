@@ -14,6 +14,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       rendered_body = body_format % vars
       [rendered_subject, rendered_body]
     end
+    template.stubs(:enabled?).returns(true)
     template
   end
 
@@ -141,13 +142,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'proof_approved' do
-    # Create new mocks for the test to ensure they're fresh
-    mock_approved_text = mock('EmailTemplate')
-    mock_approved_text.stubs(:render).returns(['Mock Proof Approved: Income', "Text Body: Income approved for #{@user.first_name}."])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text).returns(mock_approved_text)
-
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -175,13 +169,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Set user communication preference to 'letter'
     @user.update!(communication_preference: 'letter')
 
-    # Create new mocks for the test to ensure they're fresh
-    mock_approved_text = mock('EmailTemplate')
-    mock_approved_text.stubs(:render).returns(['Mock Proof Approved: Income', "Text Body: Income approved for #{@user.first_name}."])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text).returns(mock_approved_text)
-
     # Create a mock for the TextTemplateToPdfService instance
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
@@ -206,17 +193,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   test 'proof_rejected' do
     # Set up the remaining_attempts for the test
     @application.update_column(:total_rejections, 3)
-
-    # Create new mocks for the test to ensure they're fresh
-    mock_rejected_text = mock('EmailTemplate')
-    mock_rejected_text.stubs(:render).returns([
-                                                "Mock Proof Needs Revision: #{format_proof_type(@proof_review.proof_type)}",
-                                                "Text Body: #{format_proof_type(@proof_review.proof_type)} needs revision " \
-                                                "for #{@user.first_name}. Reason: #{@proof_review.rejection_reason}"
-                                              ])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_rejected', format: :text).returns(mock_rejected_text)
 
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
@@ -273,16 +249,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'max_rejections_reached' do
-    # Create new mocks for the test to ensure they're fresh
-    mock_max_reached_text = mock('EmailTemplate')
-    text_body = "Text Body: Application #{@application.id} archived for #{@user.first_name}. " \
-                "Reapply after #{@reapply_date.strftime('%B %d, %Y')}."
-    mock_max_reached_text.stubs(:render).returns(['Mock Application Archived - ID 7', text_body])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_max_rejections_reached',
-                                        format: :text).returns(mock_max_reached_text)
-
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -506,20 +472,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
   test 'income_threshold_exceeded generates letter when preference is letter' do
     setup_income_threshold_test_data
-
-    # Create new mocks for the test
-    mock_income_exceeded_text = mock('EmailTemplate')
-    mock_income_exceeded_text.stubs(:render).returns([
-                                                       'Mock Income Threshold Exceeded for ' \
-                                                       "#{@constituent_params[:first_name]}",
-                                                       "Text Body: #{@constituent_params[:first_name]}, your income exceeds the " \
-                                                       'threshold for household size ' \
-                                                       "#{@notification_params[:household_size]}."
-                                                     ])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded',
-                                        format: :text).returns(mock_income_exceeded_text)
 
     # Mock the letter service without expectations
     pdf_service_mock = mock('pdf_service')

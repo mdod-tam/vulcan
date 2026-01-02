@@ -50,6 +50,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     subject = 'Your Proof Was Rejected'
     body = 'http://test.example.com/dashboard'
     mock_template.stubs(:render).returns([subject, body])
+    mock_template.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).returns(mock_template)
 
     email = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review)
@@ -65,6 +66,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     subject = 'New Evaluation Assigned'
     body = 'You can view and update the evaluation here: http://test.example.com/evaluations/123'
     mock_template.stubs(:render).returns([subject, body])
+    mock_template.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).returns(mock_template)
 
     # Override status_box_text method to provide the missing value
