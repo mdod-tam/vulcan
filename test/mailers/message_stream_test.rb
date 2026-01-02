@@ -9,6 +9,7 @@ class MessageStreamTest < ActionMailer::TestCase
     @account_created_template = mock('EmailTemplate')
     @account_created_template.stubs(:render).returns(['Welcome to the System', 'Account creation email body'])
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text).returns(@account_created_template)
+    @account_created_template.stubs(:enabled?).returns(true)
 
     # Create mock template for user_mailer_password_reset
     @password_reset_template = mock('EmailTemplate')
