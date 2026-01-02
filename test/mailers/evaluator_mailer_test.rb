@@ -15,6 +15,8 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     template_instance.stubs(:subject).returns(subject_format)
     template_instance.stubs(:body).returns(body_format)
 
+    template_instance.stubs(:enabled?).returns(true)
+
     template_instance
   end
 
