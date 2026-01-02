@@ -81,7 +81,7 @@ class ApplicationController < ActionController::Base
   def sign_in(user)
     session_record = _create_and_set_session_cookie(user)
     if session_record
-      redirect_to _dashboard_for(user), notice: t('.signin_pass')
+      redirect_to _dashboard_for(user), notice: t('controllers.application.sign_in.signin_pass')
     else
       redirect_to sign_in_path(email_hint: user.email), alert: t('alerts.session_fail')
     end
