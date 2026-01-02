@@ -15,7 +15,7 @@
           <%= button_to bulk_disable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 text-sm font-medium", data: { confirm: "Disable all email templates? They will not be sent until re-enabled." } do %>
             Disable All
           <% end %>
-          <%= button_to bulk_enable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-600 text-sm font-medium" do %>
+          <%= button_to bulk_enable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-600 text-sm font-medium", data: { confirm: "Enable all email templates? They will be sent to users." } do %>
             Enable All
           <% end %>
         </div>
