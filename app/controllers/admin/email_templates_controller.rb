@@ -4,7 +4,7 @@ module Admin
   class EmailTemplatesController < Admin::BaseController
     include Pagy::Backend # Include Pagy for pagination
 
-    before_action :set_template, only: %i[show edit update new_test_email send_test]
+    before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled]
     before_action :load_template_definition, only: %i[show edit update new_test_email] # Load definition for relevant actions
 
     # GET /admin/email_templates
@@ -110,6 +110,44 @@ module Admin
       end
     rescue StandardError => e
       handle_test_email_error(e)
+    end
+
+    # PATCH /admin/email_templates/:id/toggle_disabled
+    def toggle_disabled
+      new_state = !@email_template.enabled
+      if @email_template.update(enabled: new_state)
+        action = new_state ? 'enabled' : 'disabled'
+        log_audit_event('email_template_toggled', enabled: new_state)
+        redirect_to admin_email_templates_path,
+                    notice: "Email template '#{@email_template.name}' has been #{action}."
+      else
+        redirect_to admin_email_templates_path,
+                    alert: "Failed to update template: #{@email_template.errors.full_messages.join(', ')}"
+      end
+    end
+
+    # PATCH /admin/email_templates/bulk_disable
+    def bulk_disable
+      count = EmailTemplate.update_all(enabled: false)
+      Event.create!(
+        user: current_user,
+        action: 'email_templates_bulk_disabled',
+        metadata: { count: count }
+      )
+      redirect_to admin_email_templates_path,
+                  notice: "All #{count} email templates have been disabled."
+    end
+
+    # PATCH /admin/email_templates/bulk_enable
+    def bulk_enable
+      count = EmailTemplate.update_all(enabled: true)
+      Event.create!(
+        user: current_user,
+        action: 'email_templates_bulk_enabled',
+        metadata: { count: count }
+      )
+      redirect_to admin_email_templates_path,
+                  notice: "All #{count} email templates have been enabled."
     end
 
     private

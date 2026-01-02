@@ -253,6 +253,11 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   # Common email sender
   def send_email(recipient_email, template, variables, mail_options = {})
+    if !template.enabled?
+      Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping email to #{recipient_email}")
+      return
+    end
+
     rendered_subject, rendered_text_body = template.render(**variables)
 
     default_options = {

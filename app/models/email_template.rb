@@ -9,6 +9,9 @@ class EmailTemplate < ApplicationRecord
 
   belongs_to :updated_by, class_name: 'User', optional: true
 
+  scope :enabled, -> { where(enabled: true) }
+  scope :disabled_templates, -> { where(enabled: false) }
+
   # Ensure name is unique within the scope of its format (e.g., 'welcome.html' and 'welcome.text' are distinct)
   validates :name, presence: true, uniqueness: { scope: :format }
   validates :subject, presence: true
