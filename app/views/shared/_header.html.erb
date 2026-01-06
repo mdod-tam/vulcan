@@ -144,10 +144,9 @@
     </div>
 
     <!-- Mobile Menu -->
-    <div class="md:hidden" 
+    <div class="md:hidden hidden" 
          id="mobile-menu" 
          data-mobile-menu-target="menu" 
-         hidden
          role="menu"
          aria-orientation="vertical"
          aria-labelledby="mobile-menu-button">
@@ -155,7 +154,7 @@
         <% navigation_links.each do |text, path| %>
           <%= link_to text,
               path,
-              class: "block w-full text-left px-4 py-3 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
+              class: "block w-full text-center px-4 py-3 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
               role: "menuitem" %>
         <% end %>
       </div>
@@ -163,13 +162,13 @@
       <div class="pt-4 pb-3 border-t border-gray-200">
         <% if user %>
           <div class="px-4 py-2">
-            <p class="text-base font-medium text-gray-800">
+            <p class="text-base text-center font-medium text-gray-800">
               Hello, <%= user.first_name %>
             </p>
             
             <% unless has_webauthn %>
               <%= link_to setup_two_factor_authentication_path, 
-                  class: "mt-2 flex items-center w-full px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500",
+                  class: "mt-2 flex items-center justify-center w-full px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500",
                   role: "menuitem",
                     aria: { label: "Set up two-factor authentication for your account" } do %>
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -181,7 +180,7 @@
             
             <%= link_to "Dashboard",
                 dashboard_path,
-                class: "mt-2 block w-full px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                class: "mt-2 block w-full text-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
                 role: "menuitem",
                 aria: { label: "Go to your dashboard" } %>
             <%= button_to "Sign Out",
@@ -195,12 +194,12 @@
           <div class="px-4 space-y-1">
             <%= link_to "Sign In",
                 sign_in_path,
-                class: "block w-full px-4 py-3 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
+                class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
                 role: "menuitem",
                 aria: { label: "Sign in to your account" } %>
             <%= link_to "Sign Up",
                 sign_up_path,
-                class: "block w-full px-4 py-3 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
+                class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
                 role: "menuitem",
                 aria: { label: "Sign up for a new account" } %>
           </div>
