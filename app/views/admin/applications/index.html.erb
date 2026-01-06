@@ -47,7 +47,7 @@
                 
                 <%= link_to admin_print_queue_index_path, class: "inline-flex items-center px-4 py-2 min-h-[44px] border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" do %>
                   <span>Print Queue</span>
-                  <% pending_count = @print_queue_pending_count || 0 %>
+                  <% pending_count = @metrics[:print_queue_pending_count] || 0 %>
                   <% if pending_count > 0 %>
                     <span class="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">
                       <%= pending_count %>
@@ -168,7 +168,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="bg-white rounded-lg shadow p-6">
           <h3 id="active-applications-heading" class="text-lg font-medium text-gray-900">In Progress Applications</h3>
-          <p class="text-3xl font-bold text-indigo-600" aria-labelledby="active-applications-heading" aria-live="polite"><%= @open_applications_count || 0 %></p>
+          <p class="text-3xl font-bold text-indigo-600" aria-labelledby="active-applications-heading" aria-live="polite"><%= @metrics[:open_applications_count] || 0 %></p>
           <p class="text-sm text-gray-500">All active applications: submitted but unapproved</p>
           <div class="mt-2">
             <%= link_to params[:filter] == 'active' ? admin_applications_path : admin_applications_path(filter: 'active'),
@@ -185,7 +185,7 @@
         
         <div class="bg-white rounded-lg shadow p-6">
           <h3 id="approved-heading" class="text-lg font-medium text-gray-900">Approved</h3>
-          <p class="text-3xl font-bold text-indigo-600" aria-labelledby="approved-heading" aria-live="polite"><%= @pending_services_count || 0 %></p>
+          <p class="text-3xl font-bold text-indigo-600" aria-labelledby="approved-heading" aria-live="polite"><%= @metrics[:pending_services_count] || 0 %></p>
           <p class="text-sm text-gray-500">Approved and awaiting services</p>
           <div class="mt-2">
             <%= link_to params[:filter] == 'approved' ? admin_applications_path : admin_applications_path(filter: 'approved'),
@@ -210,28 +210,28 @@
             class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{params[:filter] == 'proofs_needing_review' ? 'bg-gray-50' : ''}",
             aria: { label: "View applications with proofs needing review" },
             data: { turbo_frame: "applications_list" } do %>
-          <span>Proofs Needing Review (<%= @proofs_needing_review_count %>)</span>
+          <span>Proofs Needing Review (<%= @metrics[:proofs_needing_review_count] %>)</span>
         <% end %>
         
         <%= link_to admin_applications_path(filter: 'medical_certs_to_review'),
             class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{params[:filter] == 'medical_certs_to_review' ? 'bg-gray-50' : ''}",
             aria: { label: "View applications with medical certifications to review" },
             data: { turbo_frame: "applications_list" } do %>
-          <span>Medical Certs to Review (<%= @medical_certs_to_review_count %>)</span>
+          <span>Medical Certs to Review (<%= @metrics[:medical_certs_to_review_count] %>)</span>
         <% end %>
 
         <%= link_to admin_applications_path(filter: 'digitally_signed_needs_review'),
             class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{params[:filter] == 'digitally_signed_needs_review' ? 'bg-gray-50' : ''}",
             aria: { label: "View applications digitally signed but needing admin review" },
             data: { turbo_frame: "applications_list" } do %>
-          <span>Digitally Signed (Needs Review) (<%= @digitally_signed_needs_review_count %>)</span>
+          <span>Digitally Signed (Needs Review) (<%= @metrics[:digitally_signed_needs_review_count] %>)</span>
         <% end %>
         
         <%= link_to admin_applications_path(filter: 'training_requests'),
             class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{params[:filter] == 'training_requests' ? 'bg-gray-50' : ''}",
             aria: { label: "View applications with training requests" },
             data: { turbo_frame: "applications_list" } do %>
-          <span>Training Requests (<%= @training_requests_count %>)</span>
+          <span>Training Requests (<%= @metrics[:training_requests_count] %>)</span>
         <% end %>
       </div>
     </section>
@@ -358,112 +358,17 @@
       <% end %>
     </section>
 
-    <%# Charts Section - Moved below applications section %>
-    <section aria-labelledby="charts-heading" class="mb-6">
-      <h2 id="charts-heading" class="sr-only">Application Charts</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-white rounded-lg shadow p-6">
-          <h3 id="pipeline-heading" class="text-lg font-medium text-gray-900 mb-4">FY<%= @current_fiscal_year.to_s[-2..-1] %> Application Pipeline</h3>
-          <%= turbo_frame_tag "pipeline_chart_frame" do %>
-          <div>
-            <div data-controller="reports-chart" 
-                 data-reports-chart-current-data-value="<%= @pipeline_chart_data.to_json %>"
-                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-title-value="Application Pipeline"
-                 data-reports-chart-hidden-class="hidden"
-                 class="relative w-full h-[300px]">
-              <div class="sr-only" aria-labelledby="pipeline-heading">
-                Chart showing application pipeline: <%= @submitted_count %> submitted, <%= @in_review_count %> in review, and <%= @approved_count %> approved applications.
-              </div>
-            </div>
-          </div>
-          <% end %>
-          <div class="mt-4 grid grid-cols-4 gap-4 text-center">
-            <div>
-              <p class="text-sm font-medium text-gray-500">Draft</p>
-              <p class="text-xs text-gray-500">Started, Not Submitted</p>
-              <p class="text-lg font-bold"><%= @draft_count %></p>
-            </div>
-            <div>
-              <p class="text-sm font-medium text-gray-500">Submitted</p>
-              <p class="text-lg font-bold"><%= @submitted_count %></p>
-            </div>
-            <div>
-              <p class="text-sm font-medium text-gray-500">In Review</p>
-              <p class="text-lg font-bold"><%= @in_review_count %></p>
-            </div>
-            <div>
-              <p class="text-sm font-medium text-gray-500">Approved</p>
-              <p class="text-lg font-bold"><%= @approved_count %></p>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-          <h3 id="status-breakdown-heading" class="text-lg font-medium text-gray-900 mb-2">Status Breakdown</h3>
-          <p class="text-sm text-gray-500 mb-4">Current FY Application Breakdown</p>
-          <div>
-            <div data-controller="reports-chart" 
-                 data-reports-chart-current-data-value="<%= @status_chart_data.to_json %>"
-                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="polarArea"
-                 data-reports-chart-title-value="Status Breakdown"
-                 data-reports-chart-hidden-class="hidden"
-                 class="relative w-full h-[300px]">
-              <div class="sr-only" aria-labelledby="status-breakdown-heading">
-                Chart showing status breakdown: <%= @draft_count %> draft, <%= @in_progress_count %> in progress, <%= @approved_count %> approved, and <%= @rejected_count %> rejected applications.
-              </div>
-            </div>
-          </div>
-          <div class="mt-4 grid grid-cols-2 gap-4">
-            <div class="flex justify-between">
-              <span class="text-sm font-medium text-gray-500">Draft:</span>
-              <span class="text-sm font-bold">
-                <%= @draft_count || 0 %>
-                <% 
-                  # Safely calculate percentages, handling nil values
-                  draft_count = @draft_count.to_i
-                  in_progress_count = @in_progress_count.to_i
-                  approved_count = @approved_count.to_i
-                  rejected_count = @rejected_count.to_i
-                  total = draft_count + in_progress_count + approved_count + rejected_count
-                  if total > 0
-                %>
-                  (<%= calculate_percentage(draft_count, total) %>)
-                <% end %>
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-sm font-medium text-gray-500">In Progress:</span>
-              <span class="text-sm font-bold">
-                <%= @in_progress_count || 0 %>
-                <% if total > 0 %>
-                  (<%= calculate_percentage(in_progress_count, total) %>)
-                <% end %>
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-sm font-medium text-gray-500">Approved:</span>
-              <span class="text-sm font-bold">
-                <%= @approved_count || 0 %>
-                <% if total > 0 %>
-                  (<%= calculate_percentage(approved_count, total) %>)
-                <% end %>
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-sm font-medium text-gray-500">Rejected:</span>
-              <span class="text-sm font-bold">
-                <%= @rejected_count || 0 %>
-                <% if total > 0 %>
-                  (<%= calculate_percentage(rejected_count, total) %>)
-                <% end %>
-              </span>
-            </div>
-          </div>
+    <%# Charts Section - Lazy-loaded via Turbo Frame for better performance %>
+    <%= turbo_frame_tag "charts_section", src: charts_admin_applications_path, loading: "lazy" do %>
+      <div class="mb-6 bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-center">
+          <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="ml-2 text-gray-600">Loading charts...</span>
         </div>
       </div>
-    </section>
+    <% end %>
   </div>
 </main>

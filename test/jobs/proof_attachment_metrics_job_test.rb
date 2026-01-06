@@ -9,6 +9,8 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     Event.delete_all
 
     # Clear dependent records first to avoid foreign key violations
+    # ApplicationStatusChange must be deleted before Applications due to FK constraint
+    ApplicationStatusChange.delete_all
     ProofReview.delete_all
     Application.delete_all
     GuardianRelationship.delete_all

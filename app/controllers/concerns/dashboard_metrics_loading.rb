@@ -4,15 +4,53 @@ module DashboardMetricsLoading
   extend ActiveSupport::Concern
 
   # Main method to load all dashboard metrics with error handling
+  # Uses Rails caching to reduce database load on frequent page visits
+  # Returns a hash of metrics
   def load_dashboard_metrics
-    load_simple_counts
-    load_reporting_service_data
-    load_remaining_metrics
-    load_print_queue_count
+    # Cache all metrics together for 5 minutes to reduce DB queries
+    Rails.cache.fetch('admin_dashboard_metrics', expires_in: 5.minutes) do
+      metrics = {}
+
+      # Load all metrics into the hash
+      metrics[:open_applications_count] = Application.active.count
+      metrics[:pending_services_count] = Application.where(status: :approved).count
+
+      # Load reporting service data
+      service_result = Applications::ReportingService.new.generate_index_data
+      if service_result.is_a?(BaseService::Result) && service_result.success?
+        service_result.data.to_h.each do |key, value|
+          next if excluded_reporting_keys.include?(key.to_s)
+          next if key.to_s.blank? || value.nil?
+
+          metrics[key] = value
+        end
+      end
+      # Load proof review counts
+      metrics[:proofs_needing_review_count] = Application.where(income_proof_status: :not_reviewed)
+                                                         .or(Application.where(residency_proof_status: :not_reviewed))
+                                                         .distinct.count
+
+      # Load certification review counts
+      metrics[:medical_certs_to_review_count] = Application.where.not(status: %i[rejected archived])
+                                                           .where(medical_certification_status: :received)
+                                                           .count
+
+      metrics[:digitally_signed_needs_review_count] = Application.where(document_signing_status: :signed)
+                                                                 .where.not(medical_certification_status: :approved)
+                                                                 .count
+
+      # Load training requests count
+      metrics[:training_requests_count] = calculate_training_requests_count
+
+      # Load print queue count
+      metrics[:print_queue_pending_count] = PrintQueueItem.pending.count
+
+      metrics
+    end
   rescue StandardError => e
     Rails.logger.error "Dashboard metric error: #{e.message}"
-    # Set default values to prevent view errors
-    set_default_metric_values
+    # Return default values hash on error
+    default_metric_values_hash
   end
 
   # Loads basic application counts that are commonly needed
@@ -225,15 +263,6 @@ module DashboardMetricsLoading
                 })
   end
 
-  # === User and YTD Data ===
-
-  # Loads basic user and year-to-date data
-  def load_user_and_ytd_data
-    safe_assign(:current_fiscal_year, current_fiscal_year)
-    safe_assign(:total_users_count, User.count)
-    safe_assign(:ytd_constituents_count, Application.where(created_at: fiscal_year_start..).count)
-  end
-
   # === Comprehensive Chart Data Loading ===
 
   # Loads all chart data for reports
@@ -288,17 +317,25 @@ module DashboardMetricsLoading
     %w[open_applications_count pending_services_count]
   end
 
-  # Sets default values for metrics to prevent view errors
-  def set_default_metric_values
-    safe_assign(:open_applications_count, 0)
-    safe_assign(:pending_services_count, 0)
-    safe_assign(:proofs_needing_review_count, 0)
-    safe_assign(:medical_certs_to_review_count, 0)
-    safe_assign(:digitally_signed_needs_review_count, 0)
-    safe_assign(:training_requests_count, 0)
-    safe_assign(:print_queue_pending_count, 0)
-    safe_assign(:current_fiscal_year, current_fiscal_year)
-    safe_assign(:total_users_count, 0)
-    safe_assign(:ytd_constituents_count, 0)
+  # Returns default metric values as a hash for load_dashboard_metrics
+  def default_metric_values_hash
+    {
+      open_applications_count: 0,
+      pending_services_count: 0,
+      proofs_needing_review_count: 0,
+      medical_certs_to_review_count: 0,
+      digitally_signed_needs_review_count: 0,
+      training_requests_count: 0,
+      print_queue_pending_count: 0,
+      current_fiscal_year: current_fiscal_year,
+      draft_count: 0,
+      submitted_count: 0,
+      in_review_count: 0,
+      approved_count: 0,
+      rejected_count: 0,
+      in_progress_count: 0,
+      pipeline_chart_data: {},
+      status_chart_data: {}
+    }
   end
 end

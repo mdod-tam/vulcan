@@ -37,9 +37,8 @@ module Admin
 
     def index
       # DashboardMetricsLoading concern: Loads comprehensive dashboard metrics
-      # Flow: load_dashboard_metrics -> load_simple_counts + load_reporting_service_data + load_remaining_metrics
-      # This populates instance variables like @open_applications_count, @proofs_needing_review_count, etc.
-      load_dashboard_metrics
+      # Returns hash of metrics
+      @metrics = load_dashboard_metrics
 
       # Determine what statuses to exclude from base scope
       # When admin explicitly filters by a normally-excluded status, we need to include it
@@ -62,8 +61,9 @@ module Admin
       @applications = decorate_applications_with_storage(page_of_apps, attachments_index)
 
       # Load recent notifications with proper eager loading to avoid N+1 queries
+      # Preload user association through notifiable for NotificationComposer.generate
       @recent_notifications = Notification
-                              .includes(:notifiable, :actor)
+                              .includes(:actor, notifiable: :user)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
@@ -434,15 +434,51 @@ module Admin
 
     def refresh_pipeline_chart
       # Load updated chart data
-      load_dashboard_metrics
+      metrics = load_dashboard_metrics
 
       respond_to do |format|
         format.turbo_stream do
           render turbo_stream: turbo_stream.update('pipeline_chart_frame',
                                                    partial: 'pipeline_chart',
-                                                   locals: { data: @pipeline_chart_data })
+                                                   locals: { data: metrics[:pipeline_chart_data] })
         end
       end
+    end
+
+    # New action for lazy-loading charts via Turbo Frames
+    def charts
+      # Only load chart data, not full dashboard metrics
+      service_result = Applications::ReportingService.new.generate_index_data
+      @metrics = if service_result.is_a?(BaseService::Result) && service_result.success?
+                   # Assign the data as a hash to match what the partial expects
+                   {
+                     pipeline_chart_data: service_result.data[:pipeline_chart_data],
+                     status_chart_data: service_result.data[:status_chart_data],
+                     draft_count: service_result.data[:draft_count],
+                     submitted_count: service_result.data[:submitted_count],
+                     in_review_count: service_result.data[:in_review_count],
+                     approved_count: service_result.data[:approved_count],
+                     in_progress_count: service_result.data[:in_progress_count],
+                     rejected_count: service_result.data[:rejected_count],
+                     current_fiscal_year: service_result.data[:current_fiscal_year]
+                   }
+                 else
+                   # Set default values if service fails
+                   # Use current_fiscal_year method to properly calculate fiscal year (July 1 - June 30)
+                   {
+                     pipeline_chart_data: {},
+                     status_chart_data: {},
+                     draft_count: 0,
+                     submitted_count: 0,
+                     in_review_count: 0,
+                     approved_count: 0,
+                     in_progress_count: 0,
+                     rejected_count: 0,
+                     current_fiscal_year: current_fiscal_year
+                   }
+                 end
+
+      render partial: 'charts_section', layout: false
     end
 
     # Handles uploading and processing medical certification documents
