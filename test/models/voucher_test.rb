@@ -17,6 +17,7 @@ class VoucherTest < ActiveSupport::TestCase
     constituent = create(:constituent, email: "unique_setup_#{Time.now.to_i}_#{rand(1000)}@example.com")
     @application = create(:application, user: constituent)
     @voucher = create(:voucher, application: @application)
+    FeatureFlag.find_or_create_by(name: 'vouchers_enabled', enabled: true)
   end
 
   test 'valid voucher' do
