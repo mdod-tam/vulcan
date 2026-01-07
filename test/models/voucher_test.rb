@@ -18,7 +18,7 @@ class VoucherTest < ActiveSupport::TestCase
     @application = create(:application, user: constituent)
     @voucher = create(:voucher, application: @application)
     FeatureFlag.find_or_create_by(name: 'vouchers_enabled', enabled: true)
-  end
+   end
 
   test 'valid voucher' do
     assert @voucher.valid?

@@ -10,7 +10,7 @@ module VoucherManagement
   # @return [Voucher, false] The created voucher or false on failure
   def assign_voucher!(assigned_by: nil)
     return false unless can_create_voucher?
-    return false unless FeatureFlag.enabled?(:voucher_enabled)
+    return false unless FeatureFlag.enabled?(:vouchers_enabled)
 
     with_lock do
       voucher = vouchers.create!

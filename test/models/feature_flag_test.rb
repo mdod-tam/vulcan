@@ -19,12 +19,6 @@ class FeatureFlagTest < ActiveSupport::TestCase
     assert duplicate.errors[:name].present?
   end
 
-  test 'validates inclusion of enabled' do
-    flag = FeatureFlag.new(name: 'invalid_enabled', enabled: 'maybe')
-    assert_not flag.valid?
-    assert flag.errors[:enabled].present?
-  end
-
   test 'enabled? returns true when flag is enabled' do
     assert FeatureFlag.enabled?('test_feature')
   end

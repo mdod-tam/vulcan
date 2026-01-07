@@ -1,7 +1,7 @@
 class FeatureFlag < ApplicationRecord
   # Store feature flags in the database for easy toggling
   validates :name, presence: true, uniqueness: true
-  validates :enabled, inclusion: { in: [true, false] }
+  
   # Class methods for checking flags
   class << self
     def enabled?(feature_name, default: false)

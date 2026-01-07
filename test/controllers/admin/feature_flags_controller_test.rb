@@ -6,7 +6,7 @@ module Admin
   class FeatureFlagsControllerTest < ActionController::TestCase
     setup do
       @admin = create(:admin)
-      sign_in @admin
+      sign_in_as @admin
       @feature_flag = create(:feature_flag, name: 'test_feature', enabled: true)
     end
 
@@ -19,16 +19,16 @@ module Admin
     end
 
     test 'index requires authentication' do
-      sign_out @admin
+      sign_out
       get :index
-      assert_redirected_to new_user_session_path
+      assert_redirected_to sign_in_path
     end
 
     test 'index requires admin role' do
       user = create(:user)
-      sign_in user
+      sign_in_as user
       get :index
-      assert_response :forbidden
+      assert_redirected_to root_url
     end
 
     test 'update toggles feature flag enabled status' do
@@ -53,8 +53,8 @@ module Admin
       event = Event.last
       metadata = event.metadata
       assert_equal 'test_feature', metadata['flag_name']
-      assert_equal false, metadata['old_value']
-      assert_equal true, metadata['new_value']
+      assert_equal true, metadata['old_value']
+      assert_equal false, metadata['new_value']
       assert_equal @admin.id, metadata['admin_id']
       assert_equal @admin.full_name, metadata['admin_name']
     end
@@ -74,16 +74,16 @@ module Admin
     end
 
     test 'update requires authentication' do
-      sign_out @admin
+      sign_out
       patch :update, params: { id: @feature_flag.id, feature_flag: { enabled: false } }
-      assert_redirected_to new_user_session_path
+      assert_redirected_to sign_in_path
     end
 
     test 'update requires admin role' do
       user = create(:user)
-      sign_in user
+      sign_in_as user
       patch :update, params: { id: @feature_flag.id, feature_flag: { enabled: false } }
-      assert_response :forbidden
+      assert_redirected_to root_url
     end
 
     test 'update with invalid feature flag id raises error' do
