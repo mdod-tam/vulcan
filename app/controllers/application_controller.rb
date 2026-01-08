@@ -138,7 +138,7 @@ class ApplicationController < ActionController::Base
       # Clear the challenge only after successful sign-in
       TwoFactorAuth.clear_challenge(session)
       # Redirect to stored location or appropriate dashboard
-      redirect_to stored_location || _dashboard_for(user), notice: t('.signin_pass_2fa')
+      redirect_to stored_location || _dashboard_for(user), notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
     else
       redirect_to sign_in_path, alert: t('alerts.session_fail')
     end
