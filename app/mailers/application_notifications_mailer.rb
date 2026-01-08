@@ -14,17 +14,22 @@ class ApplicationNotificationsMailer < ApplicationMailer
     @application = application
     @user = application.user
 
+    template_name = 'application_notifications_application_submitted'
+    text_template = find_email_template(template_name)
+
+    variables = build_application_submitted_variables(application)
+
     # Set up mail options with CC for alternate contact if provided
     mail_options = {
-      to: @user.effective_email,
-      subject: 'Your Application Has Been Submitted',
       message_stream: 'notifications'
     }
-
-    # Add CC for alternate contact if email is provided
     mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
 
-    mail(mail_options)
+    send_email(@user.effective_email, text_template, variables, mail_options)
+  rescue StandardError => e
+    Rails.logger.error("Failed to send application submitted email for application #{application&.id}: #{e.message}")
+    Rails.logger.error(e.backtrace.join("\n"))
+    raise e
   end
 
   # A helper method that handles common logging, instance variable setup,
@@ -167,19 +172,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     text_template = find_email_template(template_name)
 
     variables = build_registration_variables(user, active_vendors_text_list)
-    rendered_subject, rendered_text_body = text_template.render(**variables)
 
-    message = mail(
-      to: user.effective_email,
-      subject: rendered_subject,
-      message_stream: 'notifications'
-    ) do |format|
-      format.text { render plain: rendered_text_body }
-    end
-
-    message.subject = rendered_subject if Rails.env.test?
-    Rails.logger.debug { "[Registration Mailer] Rendered subject: #{rendered_subject.inspect}" }
-    message
+    send_email(user.effective_email, text_template, variables)
   rescue StandardError => e
     Rails.logger.error("Failed to send registration confirmation email for user #{user&.id}: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n"))
@@ -191,18 +185,13 @@ class ApplicationNotificationsMailer < ApplicationMailer
     text_template = find_email_template(template_name)
 
     variables = build_proof_received_variables(application, proof_type)
-    rendered_subject, rendered_text_body = text_template.render(**variables)
 
     # Customize the subject to be more appropriate for "received" vs "approved"
-    rendered_subject = rendered_subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received')
-
-    mail(
-      to: application.user.effective_email,
-      subject: rendered_subject,
-      message_stream: 'notifications'
-    ) do |format|
-      format.text { render plain: rendered_text_body }
+    subject_override = proc do |subject|
+      subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received')
     end
+
+    send_email(application.user.effective_email, text_template, variables, { subject_override: subject_override })
   rescue StandardError => e
     Rails.logger.error("Failed to send proof received email for application #{application&.id}: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n"))
@@ -251,20 +240,6 @@ class ApplicationNotificationsMailer < ApplicationMailer
     }
   end
 
-  # Common email sender
-  def send_email(recipient_email, template, variables, mail_options = {})
-    rendered_subject, rendered_text_body = template.render(**variables)
-
-    default_options = {
-      to: recipient_email,
-      subject: rendered_subject,
-      message_stream: 'notifications'
-    }
-
-    mail(default_options.merge(mail_options)) do |format|
-      format.text { render plain: rendered_text_body }
-    end
-  end
 
   def safe_asset_path(asset_name)
     ActionController::Base.helpers.asset_path(asset_name, host: default_url_options[:host])
@@ -617,6 +592,20 @@ class ApplicationNotificationsMailer < ApplicationMailer
     }
 
     base_variables.merge(registration_variables).compact
+  end
+
+  # Application submitted specific methods
+  def build_application_submitted_variables(application)
+    header_title = 'Your Application Has Been Submitted'
+
+    base_variables = build_base_email_variables(header_title)
+    submitted_variables = {
+      user_first_name: application.user.first_name,
+      application_id: application.id,
+      submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y')
+    }
+
+    base_variables.merge(submitted_variables).compact
   end
 
   # Proof received specific methods

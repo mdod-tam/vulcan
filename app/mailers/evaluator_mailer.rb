@@ -17,7 +17,7 @@ class EvaluatorMailer < ApplicationMailer
 
     text_template = load_email_template(template_name)
     variables = build_new_evaluation_variables(evaluation)
-    send_evaluation_email(text_template, variables, evaluation.evaluator, template_name)
+    send_email(evaluation.evaluator.email, text_template, variables)
   rescue StandardError => e
     log_email_error(e, evaluation&.evaluator, template_name, variables)
     raise
@@ -33,7 +33,7 @@ class EvaluatorMailer < ApplicationMailer
     variables = build_submission_confirmation_variables(evaluation)
 
     queue_letter_if_needed(evaluation, template_name, variables)
-    send_constituent_email(text_template, variables, evaluation.constituent, template_name)
+    send_email(evaluation.constituent.email, text_template, variables)
   rescue StandardError => e
     log_submission_error(e, evaluation)
     raise
@@ -169,33 +169,6 @@ class EvaluatorMailer < ApplicationMailer
     constituent.disabilities.map { |d| "- #{d}" }.join("\n")
   end
 
-  # Send email to evaluator
-  def send_evaluation_email(text_template, variables, evaluator, template_name)
-    send_email(text_template, variables, evaluator.email, template_name)
-  end
-
-  # Send email to constituent
-  def send_constituent_email(text_template, variables, constituent, template_name)
-    send_email(text_template, variables, constituent.email, template_name)
-  end
-
-  # Generic email sending method
-  def send_email(text_template, variables, recipient_email, template_name)
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-    rendered_subject = format(rendered_subject, **variables)
-    rendered_text_body = format(rendered_text_body, **variables)
-
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send #{template_name} email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email,
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
-  end
 
   # Queue letter if constituent prefers print communication
   def queue_letter_if_needed(evaluation, template_name, variables)

@@ -7,9 +7,19 @@
 
     <%# Header Section %>
     <div class="mb-6">
-      <h1 class="text-3xl font-bold mb-4" id="page-title">
-        Email Templates
-      </h1>
+      <div class="flex items-center justify-between mb-4">
+        <h1 class="text-3xl font-bold" id="page-title">
+          <%= t('admin.email_templates.index.page_title') %>
+        </h1>
+        <div class="flex gap-2">
+          <%= button_to bulk_disable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 text-sm font-medium", data: { confirm: t('admin.email_templates.index.disable_all_confirm') } do %>
+            <%= t('admin.email_templates.index.disable_all') %>
+          <% end %>
+          <%= button_to bulk_enable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-600 text-sm font-medium", data: { confirm: t('admin.email_templates.index.enable_all_confirm') } do %>
+            <%= t('admin.email_templates.index.enable_all') %>
+          <% end %>
+        </div>
+      </div>
     </div>
 
     <%# Templates Table Section %>
@@ -23,22 +33,25 @@
               <caption class="sr-only">List of email templates</caption>
               <thead class="bg-gray-50">
                 <tr>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2 lg:w-[55%]">
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2 lg:w-[45%]">
                     Template Purpose
                   </th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4 lg:w-[25%]">
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4 lg:w-[20%]">
                     Email Subject
                   </th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 lg:w-40">
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32 lg:w-32">
                     Template ID
                   </th>
                   <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
                     Ver.
                   </th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                    <%= t('admin.email_templates.index.status_column') %>
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
                     Updated
                   </th>
-                  <th scope="col" class="relative px-6 py-3 w-24">
+                  <th scope="col" class="relative px-6 py-3 w-32">
                     <span class="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -69,12 +82,28 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       <%= template.version %>
                     </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                      <% if template.enabled %>
+                        <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                          <%= t('shared.enabled') %>
+                        </span>
+                      <% else %>
+                        <span class="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+                          <%= t('shared.disabled') %>
+                        </span>
+                      <% end %>
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       <%= time_ago_in_words(template.updated_at) %> ago
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <%= link_to 'View', admin_email_template_path(template), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600", aria: { label: "View #{template.name} template" } %>
-                      <%= link_to 'Edit', edit_admin_email_template_path(template), class: "ml-4 text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600", aria: { label: "Edit #{template.name} template" } %>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                      <%= link_to t('shared.view'), admin_email_template_path(template), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600", aria: { label: t('admin.email_templates.index.view_aria', template_name: template.name) } %>
+                      <%= link_to t('shared.edit'), edit_admin_email_template_path(template), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600", aria: { label: t('admin.email_templates.index.edit_aria', template_name: template.name) } %>
+                      <% if template.enabled %>
+                        <%= button_to t('shared.disable'), toggle_disabled_admin_email_template_path(template), method: :patch, class: "text-red-600 hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 inline", aria: { label: t('admin.email_templates.index.disable_aria', template_name: template.name) } %>
+                      <% else %>
+                        <%= button_to t('shared.enable'), toggle_disabled_admin_email_template_path(template), method: :patch, class: "text-green-600 hover:text-green-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-600 inline", aria: { label: t('admin.email_templates.index.enable_aria', template_name: template.name) } %>
+                      <% end %>
                     </td>
                   </tr>
                 <% end %>
@@ -107,11 +136,29 @@
                       <%= template.name %>
                     </p>
 
-                    <div class="flex justify-between items-center text-xs text-gray-600">
+                    <div class="flex justify-between items-center text-xs text-gray-600 mb-2">
                       <span>v<%= template.version %> · Updated <%= time_ago_in_words(template.updated_at) %> ago</span>
+                      <% if template.enabled %>
+                        <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                          <%= t('shared.enabled') %>
+                        </span>
+                      <% else %>
+                        <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
+                          <%= t('shared.disabled') %>
+                        </span>
+                      <% end %>
+                    </div>
+                    <div class="flex justify-between items-center gap-2">
+                      <div class="space-x-4">
+                        <%= link_to t('shared.view'), admin_email_template_path(template), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 text-sm", aria: { label: t('admin.email_templates.index.view_aria', template_name: template.name) } %>
+                        <%= link_to t('shared.edit'), edit_admin_email_template_path(template), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 text-sm", aria: { label: t('admin.email_templates.index.edit_aria', template_name: template.name) } %>
+                      </div>
                       <div>
-                        <%= link_to 'View', admin_email_template_path(template), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600", aria: { label: "View #{template.name} template" } %>
-                        <%= link_to 'Edit', edit_admin_email_template_path(template), class: "ml-4 text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600", aria: { label: "Edit #{template.name} template" } %>
+                        <% if template.enabled %>
+                          <%= button_to t('shared.disable'), toggle_disabled_admin_email_template_path(template), method: :patch, class: "text-red-600 hover:text-red-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 text-sm inline", aria: { label: t('admin.email_templates.index.disable_aria', template_name: template.name) } %>
+                        <% else %>
+                          <%= button_to t('shared.enable'), toggle_disabled_admin_email_template_path(template), method: :patch, class: "text-green-600 hover:text-green-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-600 text-sm inline", aria: { label: t('admin.email_templates.index.enable_aria', template_name: template.name) } %>
+                        <% end %>
                       </div>
                     </div>
                   </div>

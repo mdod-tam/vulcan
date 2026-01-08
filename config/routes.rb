@@ -174,6 +174,11 @@ Rails.application.routes.draw do
       member do
         get :new_test_email
         post :send_test
+        patch :toggle_disabled
+      end
+      collection do
+        patch :bulk_disable
+        patch :bulk_enable
       end
     end
 

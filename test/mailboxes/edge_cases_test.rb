@@ -40,10 +40,12 @@ class EdgeCasesTest < ActionMailbox::TestCase
     # Create a specific mock for the proof_submission_error template
     proof_submission_error_template = mock('EmailTemplate')
     proof_submission_error_template.stubs(:render).returns(['Error Processing Your Proof Submission', 'Test Email Body'])
+    proof_submission_error_template.stubs(:enabled?).returns(true)
 
     # Create a generic mock for other templates
     generic_template = mock('EmailTemplate')
     generic_template.stubs(:render).returns(['Test Email Subject', 'Test Email Body'])
+    generic_template.stubs(:enabled?).returns(true)
 
     # Ensure the template lookup uses the correct template based on name
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_submission_error',

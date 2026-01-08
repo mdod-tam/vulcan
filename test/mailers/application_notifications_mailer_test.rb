@@ -1,23 +1,11 @@
 # frozen_string_literal: true
 
 require 'test_helper'
+require_relative 'email_template_mock_helper'
 
 class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   include ActiveJob::TestHelper
-
-  # Helper to create mock templates that performs interpolation
-  def mock_template(subject_format, body_format)
-    template = mock('email_template')
-    # Stub render to accept keyword args and perform interpolation
-    template.stubs(:render).with(any_parameters).returns do |**vars|
-      rendered_subject = subject_format % vars
-      rendered_body = body_format % vars
-      [rendered_subject, rendered_body]
-    end
-    template
-  end
-
-  # Include the helper directly in the test class context
+  include EmailTemplateMockHelper
   include Mailers::ApplicationNotificationsHelper
 
   setup do
@@ -51,11 +39,11 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     @mock_reminder_text = mock_template('Mock Reminder: %<stale_reviews_count>s Apps Need Review',
                                         'Text Body: Reminder for %<admin_first_name>s. ' \
                                         '%<stale_reviews_count>s apps need review. %<stale_reviews_text_list>s')
-    @mock_account_created = mock_template('Mock Account Created for %<user_first_name>s',
-                                          '<p>HTML Body: Welcome %<user_first_name>s! Your password is ' \
+    @mock_account_created = mock_template('Mock Account Created for %<constituent_first_name>s',
+                                          '<p>HTML Body: Welcome %<constituent_first_name>s! Your password is ' \
                                           '%<temp_password>s. Sign in: %<sign_in_url>s</p>')
-    @mock_account_created_text = mock_template('Mock Account Created for %<user_first_name>s',
-                                               'Text Body: Welcome %<user_first_name>s! Your password is ' \
+    @mock_account_created_text = mock_template('Mock Account Created for %<constituent_first_name>s',
+                                               'Text Body: Welcome %<constituent_first_name>s! Your password is ' \
                                                '%<temp_password>s. Sign in: %<sign_in_url>s')
     @mock_income_exceeded = mock_template('Mock Income Threshold Exceeded for %<constituent_first_name>s',
                                           '<p>HTML Body: %<constituent_first_name>s, your income ' \
@@ -94,8 +82,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   def stub_url_helpers
-    ApplicationNotificationsMailer.any_instance.stubs(:sign_in_url).returns('http://example.com/sign_in')
-    ApplicationNotificationsMailer.any_instance.stubs(:login_url).returns('http://example.com/sign_in')
+    ApplicationNotificationsMailer.any_instance.stubs(:sign_in_url).returns('http://example.com/users/sign_in')
+    ApplicationNotificationsMailer.any_instance.stubs(:login_url).returns('http://example.com/users/sign_in')
     ApplicationNotificationsMailer.any_instance.stubs(:new_user_session_url).returns('http://example.com/users/sign_in')
     ApplicationNotificationsMailer.any_instance.stubs(:constituent_portal_dashboard_url).returns('http://example.com/dashboard')
     ApplicationNotificationsMailer.any_instance.stubs(:new_constituent_portal_application_url).returns('http://example.com/applications/new')
@@ -141,13 +129,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'proof_approved' do
-    # Create new mocks for the test to ensure they're fresh
-    mock_approved_text = mock('EmailTemplate')
-    mock_approved_text.stubs(:render).returns(['Mock Proof Approved: Income', "Text Body: Income approved for #{@user.first_name}."])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text).returns(mock_approved_text)
-
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -175,13 +156,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Set user communication preference to 'letter'
     @user.update!(communication_preference: 'letter')
 
-    # Create new mocks for the test to ensure they're fresh
-    mock_approved_text = mock('EmailTemplate')
-    mock_approved_text.stubs(:render).returns(['Mock Proof Approved: Income', "Text Body: Income approved for #{@user.first_name}."])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text).returns(mock_approved_text)
-
     # Create a mock for the TextTemplateToPdfService instance
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
@@ -207,17 +181,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Set up the remaining_attempts for the test
     @application.update_column(:total_rejections, 3)
 
-    # Create new mocks for the test to ensure they're fresh
-    mock_rejected_text = mock('EmailTemplate')
-    mock_rejected_text.stubs(:render).returns([
-                                                "Mock Proof Needs Revision: #{format_proof_type(@proof_review.proof_type)}",
-                                                "Text Body: #{format_proof_type(@proof_review.proof_type)} needs revision " \
-                                                "for #{@user.first_name}. Reason: #{@proof_review.rejection_reason}"
-                                              ])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_rejected', format: :text).returns(mock_rejected_text)
-
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -233,7 +196,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [@user.email], email.to
 
     # We're working with the mock data from setup
-    expected_subject = "Mock Proof Needs Revision: #{format_proof_type(@proof_review.proof_type)}"
+    expected_subject = "Mock Proof Needs Revision: #{format_proof_type(@proof_review.proof_type).capitalize}"
     assert_equal expected_subject, email.subject
 
     # We're using a text-only template, don't expect multipart emails anymore
@@ -273,16 +236,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'max_rejections_reached' do
-    # Create new mocks for the test to ensure they're fresh
-    mock_max_reached_text = mock('EmailTemplate')
-    text_body = "Text Body: Application #{@application.id} archived for #{@user.first_name}. " \
-                "Reapply after #{@reapply_date.strftime('%B %d, %Y')}."
-    mock_max_reached_text.stubs(:render).returns(['Mock Application Archived - ID 7', text_body])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_max_rejections_reached',
-                                        format: :text).returns(mock_max_reached_text)
-
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -342,15 +295,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # This is needed for the @stale_reviews to be populated
     @application.stubs(:needs_review_since).returns(4.days.ago)
 
-    # Create new mocks for the test to ensure they're fresh
-    mock_reminder_text = mock('EmailTemplate')
-    mock_reminder_text.stubs(:render).returns(["Mock Reminder: #{applications.count} Apps Need Review",
-                                               "Text Body: Reminder for #{@admin.first_name}. #{applications.count} apps need review. ID: #{@application.id}"])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_needs_review_reminder',
-                                        format: :text).returns(mock_reminder_text)
-
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -390,15 +334,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       hearing_disability: true
     )
     temp_password = 'temporary123'
-
-    # Create new mocks for the test to ensure they're fresh
-    mock_account_created_text = mock('EmailTemplate')
-    mock_account_created_text.stubs(:render).returns(["Mock Account Created for #{constituent.first_name}",
-                                                      "Text Body: Welcome #{constituent.first_name}! Your password is #{temp_password}. Sign in: http://example.com/users/sign_in"])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created',
-                                        format: :text).returns(mock_account_created_text)
 
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
@@ -443,15 +378,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       zip_code: '21201'
     )
     temp_password = 'temporary123'
-
-    # Create new mocks for the test to ensure they're fresh
-    mock_account_created_text = mock('EmailTemplate')
-    mock_account_created_text.stubs(:render).returns(["Mock Account Created for #{constituent.first_name}",
-                                                      "Text Body: Welcome #{constituent.first_name}! Your password is #{temp_password}. Sign in: http://example.com/users/sign_in"])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created',
-                                        format: :text).returns(mock_account_created_text)
 
     # Mock just for verification, don't set expectations
     pdf_service_mock = mock('pdf_service')
@@ -507,20 +433,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   test 'income_threshold_exceeded generates letter when preference is letter' do
     setup_income_threshold_test_data
 
-    # Create new mocks for the test
-    mock_income_exceeded_text = mock('EmailTemplate')
-    mock_income_exceeded_text.stubs(:render).returns([
-                                                       'Mock Income Threshold Exceeded for ' \
-                                                       "#{@constituent_params[:first_name]}",
-                                                       "Text Body: #{@constituent_params[:first_name]}, your income exceeds the " \
-                                                       'threshold for household size ' \
-                                                       "#{@notification_params[:household_size]}."
-                                                     ])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded',
-                                        format: :text).returns(mock_income_exceeded_text)
-
     # Mock the letter service without expectations
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.stubs(:queue_for_printing).returns(true)
@@ -560,11 +472,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     setup_income_threshold_test_data
 
     # Create new mocks for the test to ensure they're fresh
-    mock_income_exceeded_text = mock('EmailTemplate')
-    mock_income_exceeded_text.stubs(:render).returns(["Mock Income Threshold Exceeded for #{@constituent_params[:first_name]}",
+    mock_income_exceeded_text = mock_template("Mock Income Threshold Exceeded for #{@constituent_params[:first_name]}",
                                                       "Text Body: #{@constituent_params[:first_name]}, your income exceeds the " \
                                                       "threshold for household size #{@notification_params[:household_size]}. " \
-                                                      "#{@notification_params[:additional_notes]}"])
+                                                      "#{@notification_params[:additional_notes]}")
 
     # Re-stub the EmailTemplate.find_by! to return our new mock
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded',
@@ -610,6 +521,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     # Create new mocks for the test
     mock_error_text = mock('EmailTemplate')
+    mock_error_text.stubs(:name).returns('application_notifications_proof_submission_error')
+    mock_error_text.stubs(:enabled?).returns(true)
     mock_error_text.stubs(:render).returns(["Submission Error: #{@user.email}",
                                             "Text Body: Error processing submission: #{error_message}"])
 
@@ -663,11 +576,11 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     Vendor.none.stubs(:order).returns(active_vendors)
 
     # Override the email template mock specifically for this test
-    custom_mock = mock('EmailTemplate')
-    custom_mock.stubs(:render).returns(['Mock Welcome Jane!',
-                                        'Text Body: Welcome, Jane! Dashboard: http://example.com/dashboard. ' \
-                                        'New App: http://example.com/applications/new. No authorized vendors found at this time.'])
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text).returns(custom_mock)
+    custom_mock = mock_template(
+      'Mock Welcome Jane!',
+      'Text Body: Welcome, Jane! Dashboard: http://example.com/dashboard. ' \
+      'New App: http://example.com/applications/new. No authorized vendors found at this time.'
+    )
 
     # Generate the email
     email = ApplicationNotificationsMailer.registration_confirmation(user)
@@ -714,16 +627,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     active_vendors = []
     Vendor.stubs(:active).returns(Vendor.none)
     Vendor.none.stubs(:order).returns(active_vendors)
-
-    # Create custom mocks for this test to ensure they're fresh
-    custom_mock = mock('EmailTemplate')
-    custom_mock.stubs(:render).returns(['Mock Welcome Jane!',
-                                        'Text Body: Welcome, Jane! Dashboard: http://example.com/dashboard. New App: http://example.com/applications/new. ' \
-                                        'No authorized vendors found at this time.'])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation',
-                                        format: :text).returns(custom_mock)
 
     # Mock the letter service without expectations
     pdf_service_mock = mock('pdf_service')

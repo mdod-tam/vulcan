@@ -174,6 +174,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_19_163427) do
     t.integer "version", default: 1
     t.string "previous_subject"
     t.text "previous_body"
+    t.boolean "enabled", default: true, null: false
+    t.index ["enabled"], name: "index_email_templates_on_enabled"
     t.index ["name"], name: "index_email_templates_on_name", unique: true
     t.index ["updated_by_id"], name: "index_email_templates_on_updated_by_id"
   end

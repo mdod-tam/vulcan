@@ -9,6 +9,7 @@ FactoryBot.define do
     description { 'A default email template.' }
     format { :html } # Default format
     version { 1 }
+    enabled { true }
     updated_by factory: %i[admin]
 
     trait :html do
