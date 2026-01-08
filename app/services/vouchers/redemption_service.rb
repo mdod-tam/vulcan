@@ -29,6 +29,9 @@ module Vouchers
     end
 
     def call # rubocop:disable Metrics/AbcSize
+      # Check if vouchers are enabled
+      return failure('Voucher functionality is currently disabled') unless FeatureFlag.enabled?(:vouchers_enabled)
+
       # Validate external concerns
       return failure('Your account is not approved for processing vouchers yet') unless vendor_authorized?
       return failure('This voucher is not active or has already been processed') unless voucher_active?

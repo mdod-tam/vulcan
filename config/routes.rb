@@ -311,7 +311,6 @@ Rails.application.routes.draw do
     end
   end
 
-  # Vendor portal routes
   namespace :vendor_portal do
     resource :dashboard, only: [:show], controller: :dashboard
     resource :profile, only: %i[edit update], controller: :profiles
@@ -334,6 +333,11 @@ Rails.application.routes.draw do
     end
     resources :invoices, only: %i[index show]
   end
+
+  namespace :admin do
+    resources :feature_flags, only: %i[index update]
+  end
+
 
   # New constituent_portal namespace (replacing constituent)
   namespace :constituent_portal do
