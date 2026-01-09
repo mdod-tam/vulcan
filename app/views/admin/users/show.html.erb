@@ -95,7 +95,8 @@
                     <div class="flex-1">
                       <p class="text-md font-semibold text-gray-900">
                         <%= link_to dependent.full_name, admin_user_path(dependent), 
-                            class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+                            class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
+                            data: { turbo_frame: "_top" } %>
                       </p>
                       <p class="text-sm text-gray-700">Relationship: <span class="font-medium text-gray-900"><%= gr.relationship_type %></span></p>
                       <p class="text-sm text-gray-700">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
@@ -125,7 +126,8 @@
                         <span class="text-xs text-gray-700"><%= active_app.application_date.strftime('%b %d, %Y') %></span>
                         <%= link_to admin_application_path(active_app), 
                             class: "inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", 
-                            "aria-label": "View application for #{dependent.full_name}" do %>
+                            "aria-label": "View application for #{dependent.full_name}",
+                            data: { turbo_frame: "_top" } do %>
                           View
                         <% end %>
                       </div>
@@ -144,7 +146,8 @@
                         <span class="text-xs text-gray-700"><%= last_app.application_date.strftime('%b %d, %Y') %></span>
                         <%= link_to admin_application_path(last_app), 
                             class: "inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", 
-                            "aria-label": "View application for #{dependent.full_name}" do %>
+                            "aria-label": "View application for #{dependent.full_name}",
+                            data: { turbo_frame: "_top" } do %>
                           View
                         <% end %>
                       </div>
@@ -202,7 +205,8 @@
                   <div class="flex-1">
                     <p class="text-md font-semibold text-gray-900">
                       <%= link_to guardian.full_name, admin_user_path(guardian), 
-                          class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+                          class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
+                          data: { turbo_frame: "_top" } %>
                     </p>
                     <p class="text-sm text-gray-700">Relationship: <span class="font-medium text-gray-900"><%= gr.relationship_type %></span></p>
                     <p class="text-sm text-gray-700">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
