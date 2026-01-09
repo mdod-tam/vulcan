@@ -10,6 +10,7 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
 
     # Clear dependent records first to avoid foreign key violations
     ProofReview.delete_all
+    ApplicationStatusChange.delete_all
     Application.delete_all
     GuardianRelationship.delete_all
     WebauthnCredential.delete_all
