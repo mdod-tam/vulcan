@@ -38,7 +38,7 @@
           <dt class="text-sm font-medium text-gray-500">Applicant</dt>
           <dd class="mt-1 text-sm text-gray-900">
             <% if @application.user.present? %>
-              <%= link_to @application.user.full_name, admin_user_path(@application.user), class: "text-indigo-600 hover:text-indigo-500" %>
+              <%= link_to @application.user.full_name, admin_user_path(@application.user), class: "text-indigo-600 hover:text-indigo-500", data: { turbo_frame: "_top" } %>
               <span class="text-gray-500">(ID: <%= @application.user.id %>)</span>
             <% else %>
               Unknown Applicant
@@ -49,7 +49,7 @@
           <div>
             <dt class="text-sm font-medium text-gray-500">Managed By</dt>
             <dd class="mt-1 text-sm text-gray-900">
-              <%= link_to @application.managing_guardian.full_name, admin_user_path(@application.managing_guardian), class: "text-indigo-600 hover:text-indigo-500" %>
+              <%= link_to @application.managing_guardian.full_name, admin_user_path(@application.managing_guardian), class: "text-indigo-600 hover:text-indigo-500", data: { turbo_frame: "_top" } %>
               <span class="text-gray-500">(ID: <%= @application.managing_guardian.id %>)</span>
               <% guardian_relationship = GuardianRelationship.find_by(guardian_id: @application.managing_guardian.id, dependent_id: @application.user.id) %>
               <% if guardian_relationship %>
