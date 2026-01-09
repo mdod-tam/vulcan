@@ -5,7 +5,7 @@ module ApplicationStatusManagement
 
   included do
     after_save :handle_status_change, if: :saved_change_to_status?
-    after_save :auto_approve_if_eligible, if: :requirements_met_for_approval?
+    after_save :auto_approve_if_eligible, if: :should_auto_approve?
 
     enum :application_type, {
       new: 0,
@@ -101,17 +101,13 @@ module ApplicationStatusManagement
   end
 
   # --- Auto Approve Application Process ---
-  # Checks if the application itself is eligible for auto-approval.
-  # Eligibility requires income proof, residency proof, AND medical certification to be approved.
-  # This method is triggered after save if any of the relevant proof statuses change.
-  def requirements_met_for_approval?
-    # Only run this when relevant fields have changed
-    return false unless saved_change_to_income_proof_status? ||
-                        saved_change_to_residency_proof_status? ||
-                        saved_change_to_medical_certification_status?
-
-    # Only auto-approve applications that aren't already approved
-    return false if status_approved?
+  # Determines if the application should be auto-approved.
+  # Auto-approval occurs when all three requirements (income, residency, medical certification)
+  # are approved, regardless of the order in which they were approved.
+  # This check runs on every save to catch cases where requirements were met out of order.
+  def should_auto_approve?
+    # Don't auto-approve if already in a terminal state
+    return false if status_approved? || status_rejected? || status_archived?
 
     # Check if all requirements are met (income, residency, and medical certification approved)
     all_requirements_met?

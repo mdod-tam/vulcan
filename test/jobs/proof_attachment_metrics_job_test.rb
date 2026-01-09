@@ -12,6 +12,7 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     # ApplicationStatusChange must be deleted before Applications due to FK constraint
     ApplicationStatusChange.delete_all
     ProofReview.delete_all
+    ApplicationStatusChange.delete_all
     Application.delete_all
     GuardianRelationship.delete_all
     WebauthnCredential.delete_all
