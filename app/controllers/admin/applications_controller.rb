@@ -100,7 +100,12 @@ module Admin
 
     def update
       if @application.update(application_params)
-        redirect_to admin_application_path(@application), notice: t('.updated')
+        # If this is a modal request, respond with success so the modal can close
+        if params[:modal] == 'true'
+          head :ok
+        else
+          redirect_to admin_application_path(@application), notice: t('.updated')
+        end
       else
         render :edit, status: :unprocessable_content
       end

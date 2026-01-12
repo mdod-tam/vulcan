@@ -5,7 +5,7 @@
       <%= link_to "Back to User", admin_user_path(@user), class: "text-indigo-600 hover:text-indigo-500" %>
     </div>
 
-    <%= form_with(model: [:admin, @user], local: true, class: "space-y-6") do |f| %>
+    <%= form_with(model: @user, url: admin_user_path(@user), method: :patch, local: true, class: "space-y-6") do |f| %>
       <% if @user.errors.any? %>
         <div class="bg-red-50 p-4 rounded mb-6" role="alert" aria-atomic="true">
           <h2 class="text-red-700 font-medium">
