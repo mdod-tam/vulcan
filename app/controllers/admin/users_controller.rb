@@ -344,6 +344,15 @@ module Admin
       @user = User.find(params[:id])
 
       if @user.update(admin_user_params)
+      AuditEventService.log(
+        action: 'user_updated',
+        actor: current_user,
+        auditable: @user,
+        metadata: {
+          admin_id: current_user.id,
+          admin_name: current_user.full_name
+        }
+      )
         redirect_to admin_user_path(@user), notice: t('.user_update_pass')
       else
         render :edit, status: :unprocessable_content

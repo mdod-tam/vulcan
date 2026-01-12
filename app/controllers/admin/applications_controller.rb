@@ -100,6 +100,15 @@ module Admin
 
     def update
       if @application.update(application_params)
+        AuditEventService.log(
+          action: 'application_updated',
+          actor: current_user,
+          auditable: @application,
+          metadata: {
+            admin_id: current_user.id,
+            admin_name: current_user.full_name
+          }
+        )
         # If this is a modal request, respond with success so the modal can close
         if params[:modal] == 'true'
           head :ok
