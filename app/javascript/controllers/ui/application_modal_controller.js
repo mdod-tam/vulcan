@@ -2,7 +2,6 @@ import { Controller } from "@hotwired/stimulus"
 
 class ApplicationModalController extends Controller {
   connect() {
-    console.log("ApplicationModalController connected")
     // Listen for Turbo form submissions within modals
     this.element.addEventListener("turbo:submit-end", this.handleFormSubmit.bind(this))
   }
@@ -24,13 +23,10 @@ class ApplicationModalController extends Controller {
   }
 
   open(event) {
-    console.log("ApplicationModalController#open called")
     const button = event.currentTarget
     const applicationId = button.dataset.applicationId
     const modalId = button.dataset.modalId
-    
-    console.log("Application ID:", applicationId, "Modal ID:", modalId)
-    
+        
     // Find the dialog element
     const dialog = document.getElementById(modalId)
     if (!dialog) {
@@ -38,13 +34,10 @@ class ApplicationModalController extends Controller {
       return
     }
     
-    console.log("Dialog found:", dialog)
-    
     // Update the "View Full Application" link
     const viewFullLink = dialog.querySelector('#modal-view-full-link')
     if (viewFullLink) {
       viewFullLink.href = `/admin/applications/${applicationId}`
-      console.log("Updated link to:", viewFullLink.href)
     }
     
     // Update the edit button with the application ID
@@ -57,7 +50,6 @@ class ApplicationModalController extends Controller {
     const frameId = "application-modal-content"
     const frame = dialog.querySelector(`[id="${frameId}"]`)
     if (frame) {
-      console.log("Frame found, loading content...")
       // Use Turbo to load the application show page into the frame
       Turbo.visit(`/admin/applications/${applicationId}?modal=true`, { 
         frame: frameId
@@ -68,7 +60,6 @@ class ApplicationModalController extends Controller {
     
     // Show the dialog
     if (dialog.tagName === "DIALOG") {
-      console.log("Showing dialog...")
       dialog.showModal()
     }
   }
