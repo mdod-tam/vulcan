@@ -1,6 +1,7 @@
 <main class="container mx-auto px-4 py-8" role="main">
  <header class="mb-6">
    <h1 class="text-3xl font-bold text-gray-900">Edit Application</h1>
+   <p class="text-l text-gray-900" aria-hidden="true"><span style="color: red;">*</span> Indicates a required field</p>
  </header>
 
  <%= form_with(model: [:constituent_portal, @application], 
@@ -58,7 +59,7 @@
 
        <!-- Residency Verification Section -->
        <div class="space-y-4 p-4 bg-gray-50 rounded">
-         <h2 class="text-lg font-medium text-gray-900">Residency Verification</h2>
+         <h2 class="text-lg font-medium text-gray-900 required-label">Residency Verification</h2>
          
          <div class="flex items-start">
            <%= f.check_box :maryland_resident,
@@ -84,7 +85,7 @@
                 required: true,
                 data: { "income-validation-target": "householdSize" } %>
           </div>
-          <p class="mt-2 text-sm text-gray-500" id="household_size_help">
+          <p class="mt-2 text-sm text-gray-500 required-label" id="household_size_help">
             Total number of people living in your household
           </p>
         </div>
@@ -103,7 +104,7 @@
                 data: { "income-validation-target": "annualIncome", currency_formatter_target: "input" } %>
           </div>
           <div class="mt-2">
-            <p class="text-sm text-gray-500" id="annual_income_help">
+            <p class="text-sm text-gray-500 required-label" id="annual_income_help">
               Total yearly household income before taxes
             </p>
           </div>
@@ -134,7 +135,7 @@
 
        <!-- Disability Section -->
        <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
-         <h2 id="disability-section-title" class="text-lg font-medium text-gray-900">Disability Information</h2>
+         <h2 id="disability-section-title" class="text-lg font-medium text-gray-900 required-label">Disability Information</h2>
          
          <div class="flex items-start">
            <%= f.check_box :self_certify_disability,
@@ -210,7 +211,7 @@
          <div class="space-y-4">
            <div>
              <%= f.label :residency_proof, "Proof of Residency",
-                 class: "block text-sm font-medium text-gray-700" %>
+                 class: "block text-sm font-medium text-gray-700 required-label" %>
              <p id="residency-hint" class="text-xs text-gray-500 mb-2">
                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong>patient photo ID</strong>
@@ -223,7 +224,7 @@
 
            <div>
              <%= f.label :income_proof, "Income Verification",
-                 class: "block text-sm font-medium text-gray-700" %>
+                 class: "block text-sm font-medium text-gray-700 required-label" %>
              <p id="income-hint" class="text-xs text-gray-500 mb-2">
                Upload SSI/SSDI documentation, recent pay stubs, or tax forms
              </p>

@@ -13,6 +13,7 @@
           New Application for <%= current_user.full_name %>
         <% end %>
       </h1>
+      <p class="text-l text-gray-900" aria-hidden="true"><span style="color: red;">*</span> Indicates a required field</p>
 
       <% if flash[:alert] %>
         <div class="bg-red-100 border border-red-400 text-red-700 p-4 rounded mb-4" role="alert" aria-live="polite">
@@ -116,7 +117,7 @@
               <%= form.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
               <%= form.text_field :physical_address_1, 
                   value: @address[:physical_address_1],
-                  class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                  class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
                   required: true,
                   data: { no_autosave: true } %>
             </div>
@@ -134,7 +135,7 @@
                 <%= form.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
                 <%= form.text_field :city, 
                     value: @address[:city],
-                    class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                    class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
                     required: true,
                     data: { no_autosave: true } %>
               </div>
@@ -158,7 +159,7 @@
                       ["Wisconsin", "WI"], ["Wyoming", "WY"], ["District of Columbia", "DC"]
                     ], (@address && @address.respond_to?(:[]) ? @address[:state] : nil) || params.dig(:application, :state) || current_user&.state || "MD"),
                     { include_blank: "Select State" },
-                    { class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                    { class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
                       required: true,
                       data: { no_autosave: true } } %>
               </div>
@@ -183,7 +184,7 @@
 
           <!-- Disability Information Section -->
           <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-white border border-gray-200 rounded mb-4">
-            <h3 id="disability-section-title" class="text-base font-medium text-gray-900">Disability Information</h3>
+            <h3 id="disability-section-title" class="text-base font-medium text-gray-900 required-label">Disability Information</h3>
             <div class="flex items-start">
               <%= form.check_box :self_certify_disability,
                   { 
@@ -274,13 +275,13 @@
                           "income-validation-target": "householdSize"
                         } %>
                   </div>
-                  <p class="mt-1 text-xs text-gray-700" id="household_size_help">
+                  <p class="mt-1 text-xs text-gray-700 required-label" id="household_size_help">
                     Total number of people living in your household
                   </p>
                 </div>
 
                 <div>
-                  <%= form.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
+                  <%= form.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700 required-label" %>
                   <div class="mt-1 relative rounded-md shadow-sm">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span class="text-gray-700 sm:text-sm font-medium" aria-hidden="true">$</span>
@@ -297,7 +298,7 @@
                           currency_formatter_target: "input"
                         } %>
                   </div>
-                  <p class="mt-1 text-xs text-gray-700" id="annual_income_help">
+                  <p class="mt-1 text-xs text-gray-700 required-label" id="annual_income_help">
                     Total yearly household income before taxes
                   </p>
                 </div>
@@ -346,7 +347,7 @@
             </div>
 
             <div>
-              <label for="application_residency_proof" class="block text-sm font-medium text-gray-700">Upload Residency Proof Document</label>
+              <label for="application_residency_proof" class="block text-sm font-medium text-gray-700 required-label">Upload Residency Proof Document</label>
               <p id="residency-hint" class="text-xs text-gray-700 mb-2">
                 Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
                 <strong>identification card</strong>, <strong>utility bill</strong>, or <strong>patient photo ID</strong>. 

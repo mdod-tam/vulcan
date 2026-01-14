@@ -9,6 +9,7 @@
           <div>
             <h1 class="text-2xl font-bold text-slate-900">Upload Paper Application</h1>
             <p class="mt-1 text-sm text-slate-600">Enter information from a handwritten application form</p>
+            <p class="text-l text-gray-900" aria-hidden="true"><span style="color: red;">*</span> Indicates a required field</p>
           </div>
           <%= link_to admin_applications_path, class: "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors", data: { turbo_frame: "_top" }, aria: { label: "Return to applications dashboard" } do %>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -189,7 +190,7 @@
                     <h4 class="text-sm font-medium text-gray-700 mb-3">Personal Information</h4>
                     <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                       <div class="md:col-span-2">
-                        <%= g.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700 required-label" %>
                         <%= g.text_field :first_name, 
                             required: true,
                             autocomplete: "given-name",
@@ -202,14 +203,14 @@
                             class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
                       </div>
                       <div class="md:col-span-2">
-                        <%= g.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700 required-label" %>
                         <%= g.text_field :last_name, 
                             required: true,
                             autocomplete: "family-name",
                             class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
                       </div>
                       <div class="md:col-span-2">
-                        <%= g.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700 required-label" %>
                         <%= g.date_field :date_of_birth, 
                             required: true,
                             autocomplete: "bday",
@@ -225,7 +226,7 @@
                     <h4 class="text-sm font-medium text-gray-700 mb-3">Contact Information</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
-                        <%= g.label :email, "Email Address", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.label :email, "Email Address", class: "block text-sm font-medium text-gray-700 required-label" %>
                         <%= g.email_field :email, 
                             required: true,
                             autocomplete: "email",
@@ -236,7 +237,7 @@
                             } %>
                       </div>
                       <div>
-                        <%= g.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700 required-label" %>
                         <%= g.telephone_field :phone, 
                             required: true,
                             autocomplete: "tel",
@@ -499,7 +500,7 @@
           <div class="p-6 space-y-6">
             <%# Disability Information %>
             <fieldset class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-              <legend class="text-base font-medium text-gray-900 px-2">Disability Information (for the Applicant)</legend>
+              <legend class="text-base font-medium text-gray-900 px-2 required-label">Disability Information (for the Applicant)</legend>
               <p class="text-sm text-gray-600 mb-4">Required for program eligibility</p>
               
               <%= fields_for :applicant_attributes do |app_f| %>
@@ -553,14 +554,14 @@
               <%= fields_for :application do |a| %>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="md:col-span-2">
-                    <%= a.label :medical_provider_name, "Provider Name", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.label :medical_provider_name, "Provider Name", class: "block text-sm font-medium text-gray-700 required-label" %>
                     <%= a.text_field :medical_provider_name, 
                         required: true, 
                         class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.label :medical_provider_phone, "Phone", class: "block text-sm font-medium text-gray-700 required-label" %>
                     <%= a.telephone_field :medical_provider_phone, 
                         required: true, 
                         placeholder: "XXX-XXX-XXXX",
@@ -568,7 +569,7 @@
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_email, "Email", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.label :medical_provider_email, "Email", class: "block text-sm font-medium text-gray-700 required-label" %>
                     <%= a.email_field :medical_provider_email, 
                         required: true, 
                         class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
@@ -653,7 +654,7 @@
                      data-income-validation-target="incomeFieldsContainer">
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <%= a.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
+                      <%= a.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700 required-label" %>
                       <%= a.number_field :household_size, 
                           min: 1, 
                           required: true, 
@@ -665,7 +666,7 @@
                           } %>
                     </div>
                     <div>
-                      <%= a.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
+                      <%= a.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700 required-label" %>
                       <div class="mt-1 relative rounded-md shadow-sm">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                           <span class="text-gray-500 sm:text-sm">$</span>
@@ -718,7 +719,7 @@
               
               <%# Upload Field %>
               <div id="income_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                <label for="income_proof" class="block text-sm font-medium text-gray-700 mb-1">Upload Income Proof Document</label>
+                <label for="income_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Income Proof Document</label>
                 <input type="file" 
                        name="income_proof" 
                        id="income_proof" 
@@ -787,7 +788,7 @@
                         required: true, 
                         "aria-required": "true" %>
                     <label for="application_maryland_resident" class="ml-3">
-                      <span class="block text-sm font-medium text-gray-700">The applicant has marked that they are a resident of Maryland</span>
+                      <span class="block text-sm font-medium text-gray-700 required-label">The applicant has marked that they are a resident of Maryland</span>
                       <span class="block text-xs text-gray-500 mt-1">This will be verified through the residency proof process</span>
                     </label>
                   </div>
@@ -824,7 +825,7 @@
               
               <%# Upload Field %>
               <div id="residency_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                <label for="residency_proof" class="block text-sm font-medium text-gray-700 mb-1">Upload Residency Proof Document</label>
+                <label for="residency_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Residency Proof Document</label>
                 <input type="file" 
                        name="residency_proof" 
                        id="residency_proof" 
