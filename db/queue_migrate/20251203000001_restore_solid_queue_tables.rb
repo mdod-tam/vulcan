@@ -6,7 +6,7 @@
 # The tables were NOT orphaned - they were being used and their absence c
 # causes Heroku to throw errors
 class RestoreSolidQueueTables < ActiveRecord::Migration[8.0]
-  def change
+  def change # rubocop:disable Metrics/MethodLength
     # Core jobs table
     create_table :solid_queue_jobs do |t|
       t.string :queue_name, null: false

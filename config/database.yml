@@ -45,6 +45,7 @@ test:
     <<: *primary_test
     database: mat_vulcan_queue_test
     pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+    migrations_paths: db/queue_migrate
   cable:
     <<: *primary_test
     database: mat_vulcan_cable_test
@@ -59,6 +60,7 @@ production:
     <<: *primary_production
     url: <%= ENV['QUEUE_DATABASE_URL'] || ENV['DATABASE_URL'] %>
     pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+    migrations_paths: db/queue_migrate
   cache:
     <<: *primary_production
     url: <%= ENV['CACHE_DATABASE_URL'] || ENV['DATABASE_URL'] %>
