@@ -22,15 +22,6 @@ class MedicalCertificationAttachmentService
   # @param metadata [Hash] Additional metadata to store with the operation
   #
   # @return [Hash] Result hash with :success, :error, and :duration_ms keys
-  # Updates only the status of a medical certification without touching the attachment
-  #
-  # @param application [Application] The application whose certification status to update
-  # @param status [Symbol] The status to set (:accepted, :rejected, :received)
-  # @param admin [User] The admin user performing this action
-  # @param submission_method [Symbol] The method of submission (:fax, :email, :portal, etc.)
-  # @param metadata [Hash] Additional metadata to store with the operation
-  #
-  # @return [Hash] Result hash with :success, :error, and :duration_ms keys
   def self.update_certification_status(application:, status:, admin:, submission_method: :admin_review, metadata: {})
     start_time = Time.current
     result = { success: false, error: nil, duration_ms: 0 }
@@ -60,7 +51,7 @@ class MedicalCertificationAttachmentService
   end
 
   # Attaches a medical certification document to an application
-  def self.attach_certification(application:, blob_or_file:, status: :approved, # rubocop:disable Metrics/ParameterLists
+  def self.attach_certification(application:, blob_or_file:, status: :approved,
                                 admin: nil, submission_method: :admin_upload, metadata: {})
     attachment_params = {
       application: application,
@@ -77,7 +68,7 @@ class MedicalCertificationAttachmentService
   end
 
   # Reject a medical certification without requiring a file attachment
-  def self.reject_certification(application:, admin:, reason:, notes: nil, # rubocop:disable Metrics/ParameterLists
+  def self.reject_certification(application:, admin:, reason:, notes: nil,
                                 submission_method: :admin_review, metadata: {})
     rejection_params = {
       application: application,
@@ -487,6 +478,10 @@ class MedicalCertificationAttachmentService
 
     fresh_application = Application.unscoped.find(application.id)
     fresh_application.medical_certification.attach(attachment_param)
+
+    # NOTE: attach() returns the attachment object (truthy), not a boolean.
+    # Check attached? to verify success.
+    Rails.logger.error "Failed to attach certification: #{fresh_application.errors.full_messages.join(', ')}" unless fresh_application.medical_certification.attached?
 
     reloaded_app = Application.unscoped.find(application.id)
     raise 'Failed to verify attachment: medical_certification not attached after direct attachment' unless attachment_verified?(reloaded_app)

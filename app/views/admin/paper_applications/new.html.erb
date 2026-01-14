@@ -1,499 +1,964 @@
-<div class="min-h-screen bg-gray-100 py-12">
-      <div class="form-container max-w-4xl mx-auto">
-        <div class="bg-white p-8 rounded shadow-md">
-          <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-semibold">Upload Paper Application</h1>
-            <div>
-              <%= link_to "Back to Dashboard", admin_applications_path,
-                  class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                  data: { turbo_frame: "_top" },
-                  aria: { label: "Return to applications dashboard" } %>
-            </div>
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <%# ================================================================ %>
+    <%# Page Header %>
+    <%# ================================================================ %>
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 mb-6">
+      <div class="px-6 py-4 border-b border-slate-200">
+        <div class="flex justify-between items-center">
+          <div>
+            <h1 class="text-2xl font-bold text-slate-900">Upload Paper Application</h1>
+            <p class="mt-1 text-sm text-slate-600">Enter information from a handwritten application form</p>
           </div>
-
-
-          <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
-            html: { "aria-label": "Paper application upload form" },
-            data: { controller: "paper-application applicant-type income-validation", "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']", "income-validation-fpl-thresholds-value": fpl_thresholds_json, "income-validation-modifier-value": fpl_modifier_value }) do |form| %>
-            <!-- Applicant Type Selection -->
-            <fieldset class="mb-6 p-4 border border-gray-200 rounded" data-applicant-type-target="radioSection" data-action="change->applicant-type#updateApplicantTypeDisplay">
-              <legend class="text-lg font-medium">Who is this application for?</legend>
-              <div class="space-y-2">
-                <div class="flex items-center">
-                  <input type="radio" id="applicant_is_adult" name="applicant_type" value="guardian" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" <%= 'checked' unless @show_create_guardian_form %> data-applicant-type-target="radio">
-                  <label for="applicant_is_adult" class="ml-3 text-sm text-gray-700">An Adult (applying for themselves)</label>
-                </div>
-                <div class="flex items-center">
-                  <input type="radio" id="applicant_is_minor" name="applicant_type" value="dependent" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" <%= 'checked' if @show_create_guardian_form %> data-applicant-type-target="radio" data-guardian-picker-target="applicantTypeRadioDependent">
-                  <label for="applicant_is_minor" class="ml-3 text-sm text-gray-700">A Dependent (must select existing guardian in system or enter guardian's information)</label>
-                </div>
-              </div>
-            </fieldset>
-      <%= render 'self_application_fields' %>
-
-            <!-- Guardian Picker Wrapper -->
-            <fieldset id="guardian-info-section" class="mb-6 p-4 border border-gray-200 rounded hidden" data-controller="guardian-picker" data-applicant-type-target="guardianSection">
-              <legend class="text-lg font-medium">Guardian Information</legend>
-
-              <!-- Search Pane -->
-              <div data-guardian-picker-target="searchPane">
-                <div data-controller="admin-user-search"
-                     data-admin-user-search-search-url-value="/admin/users/search"
-                     data-admin-user-search-create-user-url-value="/admin/users"
-                     data-admin-user-search-role-value="guardian"
-                     data-admin-user-search-guardian-picker-outlet="[data-controller='guardian-picker']">
-                  <h3 class="text-base font-medium text-gray-900 mb-2">Find Existing Guardian</h3>
-                  <div class="flex items-center gap-4">
-                    <div class="flex-grow">
-                      <label for="guardian_search_q" class="sr-only">Search by Name or Email</label>
-                      <input id="guardian_search_q" placeholder="Search by Name or Email"
-                             class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                             data-action="input->admin-user-search#performSearch"
-                             data-admin-user-search-target="searchInput"
-                             type="text"
-                             name="q">
-                    </div>
-                    <button type="button" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" data-action="click->admin-user-search#clearSearchAndShowForm">Clear</button>
-                  </div>
-
-                  <%= turbo_frame_tag "guardian_search_results", class: "mt-2 space-y-2", target: "_top", "data-admin-user-search-target": "searchResults" do %>
-                    <p class="text-sm text-gray-500 p-3 hidden" data-admin-user-search-target="emptyMessage">Type a name or email to search for guardians.</p>
-                  <% end %>
-
-                  <div class="mt-4">
-                    <%= link_to "Or Create New Guardian", new_admin_paper_application_path(show_create_guardian_form: true), class: "text-sm font-medium text-indigo-600 hover:text-indigo-500" %>
-                  </div>
-
-                  <!-- New Guardian Form -->
-                  <% if @show_create_guardian_form %>
-                  <div class="mt-4 p-4 border border-gray-200 rounded bg-gray-50">
-                    <h3 class="text-base font-medium text-gray-900 mb-2">Create New Guardian</h3>
-                    <%= fields_for :guardian_attributes, @paper_application[:guardian_attributes] do |g| %>
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <%= g.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.text_field :first_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                        </div>
-                        <div>
-                          <%= g.label :middle_initial, "Middle Initial", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.text_field :middle_initial, maxlength: 1, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                        </div>
-                        <div>
-                          <%= g.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.text_field :last_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div>
-                          <%= g.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.date_field :date_of_birth, 
-                              required: true,
-                              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
-                              "aria-required": "true",
-                              "aria-describedby": "guardian_dob_hint",
-                              max: Date.current.to_s %>
-                          <p id="guardian_dob_hint" class="text-xs text-gray-500 mt-1">Select date of birth from the calendar</p>
-                        </div>
-                        <div>
-                          <%= g.label :email, "Email", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.email_field :email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "guardianEmail" } %>
-                        </div>
-                        <div>
-                          <%= g.label :phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.telephone_field :phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "guardianPhone" } %>
-                        </div>
-                        <div>
-                          <span id="guardian_phone_type_label" class="block text-sm font-medium text-gray-700 mb-2">Phone Type</span>
-                          <div role="radiogroup" aria-labelledby="guardian_phone_type_label" class="space-y-2">
-                            <div class="flex items-center">
-                              <%= g.radio_button :phone_type, "voice", id: "guardian_phone_type_voice", checked: true,
-                                     class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
-                              <%= g.label :phone_type_voice, "Voice", for: "guardian_phone_type_voice", class: "ml-3 text-sm text-gray-700" %>
-                            </div>
-                            <div class="flex items-center">
-                              <%= g.radio_button :phone_type, "videophone", id: "guardian_phone_type_videophone",
-                                     class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
-                              <%= g.label :phone_type_videophone, "Videophone", for: "guardian_phone_type_videophone", class: "ml-3 text-sm text-gray-700" %>
-                            </div>
-                            <div class="flex items-center">
-                              <%= g.radio_button :phone_type, "text", id: "guardian_phone_type_text",
-                                     class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
-                              <%= g.label :phone_type_text, "Text/SMS", for: "guardian_phone_type_text", class: "ml-3 text-sm text-gray-700" %>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="mt-4">
-                        <%= g.label :physical_address_1, "Address Line 1", class: "block text-sm font-medium text-gray-700" %>
-                        <%= g.text_field :physical_address_1, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "guardianAddress1" } %>
-                      </div>
-                      <div class="mt-4">
-                        <%= g.label :physical_address_2, "Address Line 2", class: "block text-sm font-medium text-gray-700" %>
-                        <%= g.text_field :physical_address_2, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "guardianAddress2" } %>
-                        </div>
-                      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                        <div>
-                          <%= g.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.text_field :city, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "guardianCity" } %>
-                        </div>
-                        <div>
-                          <%= g.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.text_field :state, value: "MD", class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "guardianState" } %>
-                        </div>
-                        <div>
-                          <%= g.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.text_field :zip_code, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { dependent_fields_target: "guardianZip" } %>
-                        </div>
-                      </div>
-
-                      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div>
-                          <%= g.label :locale, "Language Preference", class: "block text-sm font-medium text-gray-700" %>
-                          <%= g.select :locale, options_for_select([["English","en"],["Spanish","es"],["French","fr"],["Other","other"]], g.object[:locale] || 'en'), { prompt: "Select Language" }, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                        </div>
-                        <div>
-                          <span id="guardian_comm_pref_label" class="block text-sm font-medium text-gray-700">Communication Preference</span>
-                          <div role="radiogroup" aria-labelledby="guardian_comm_pref_label" class="mt-2 space-y-2 sm:space-y-0 sm:flex sm:space-x-4">
-                            <div class="flex items-center">
-                              <%= g.radio_button :communication_preference, "email", id: "guardian_communication_preference_email", class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" %>
-                              <%= g.label :communication_preference_email, "Email", class: "ml-2 text-sm text-gray-700" %>
-                            </div>
-                            <div class="flex items-center">
-                              <%= g.radio_button :communication_preference, "letter", id: "guardian_communication_preference_letter", class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" %>
-                              <%= g.label :communication_preference_letter, "Letter", class: "ml-2 text-sm text-gray-700" %>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    <% end %>
-                    <div class="mt-4 flex justify-between">
-                      <%= link_to "Cancel Create", new_admin_paper_application_path, class: "text-sm font-medium text-indigo-600 hover:text-indigo-500" %>
-                      <button type="button" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700" 
-                        data-action="click->admin-user-search#createGuardian">
-                        Save Guardian
-                      </button>
-                    </div>
-                  </div>
-                  <% end %>
-                </div>
-              </div>
-
-              <!-- Selected Guardian Pane -->
-              <div data-guardian-picker-target="selectedPane" class="hidden">
-                <div class="mt-4 p-4 border-2 border-green-200 bg-green-50 rounded-md shadow-sm">
-                  <div class="flex justify-between items-start">
-                    <div class="flex-grow">
-                      <h3 class="text-sm font-medium text-gray-800 mb-1">Selected Guardian:</h3>
-                      <div data-guardian-picker-target="selectedGuardianDisplay" class="text-sm guardian-details-container"></div>
-                      <div data-guardian-picker-target="displaySelection" class="text-xs text-gray-700 mt-2"></div>
-                      <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block" do %>
-                        <%# dependents list will load here when guardian is selected %>
-                      <% end %>
-                    </div>
-                    <button type="button"
-                            class="text-xs text-gray-500 hover:text-gray-700 ml-2"
-                            data-action="guardian-picker#clearSelection">
-                      Change Selection
-                    </button>
-                  </div>
-                  <input type="hidden" name="guardian_id" data-guardian-picker-target="guardianIdField">
-                  <input type="hidden" name="dependent_id" data-guardian-picker-target="dependentIdField">
-                </div>
-              </div>
-            </fieldset>
-
-            <!-- Wrapper for sections shown only for Dependent Application with Guardian Selected -->
-            <div class="hidden" data-applicant-type-target="sectionsForDependentWithGuardian">
-              <%= turbo_frame_tag "dependent_info_form", target: "_top" do %>
-                <%= render partial: 'admin/paper_applications/dependent_form', 
-                           locals: { dependent: nil, mode: :new } %>
-              <% end %>
-            </div> <!-- End of sectionsForDependentWithGuardian wrapper -->
-
-            <!-- Wrapper for common sections shown for Adult OR Dependent with Guardian -->
-            <div data-applicant-type-target="commonSections" class="hidden">
-              <!-- Disability Certification Group with related disability and medical provider info -->
-            <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-              <h2 class="text-lg font-semibold text-gray-800 mb-4">Disability Certification</h2>
-
-              <!-- Disability Information Section -->
-              <fieldset class="mb-4 p-4 bg-white border border-gray-200 rounded">
-                <legend class="text-base font-medium">Disability Information (for the Applicant)</legend>
-                <%# Note: These fields apply to the applicant, whether they are the guardian or a dependent %>
-                <%= fields_for :applicant_attributes do |app_f| %>
-                  <div class="flex items-start">
-                    <%= app_f.check_box :self_certify_disability, class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", required: true, "aria-required": "true" %>
-                    <%= app_f.label :self_certify_disability, "The applicant certifies that they have a disability that affects their ability to access telecommunications services", class: "ml-2 block text-sm text-gray-700" %>
-                  </div>
-                  <fieldset class="mt-4">
-                    <legend class="text-sm font-medium text-gray-700">Select Disabilities</legend>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                      <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
-                      <% disabilities.each do |disability| %>
-                        <div class="flex items-center">
-                          <%= app_f.check_box "#{disability}_disability", class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
-                          <%= app_f.label "#{disability}_disability", disability.to_s.titleize, class: "ml-2 text-sm text-gray-700" %>
-                        </div>
-                      <% end %>
-                    </div>
-                  </fieldset>
-                <% end %>
-              </fieldset>
-
-              <!-- Medical Provider Information Section -->
-              <fieldset class="p-4 bg-white border border-gray-200 rounded">
-                <legend class="text-base font-medium">Medical Provider Information</legend>
-                
-                <!-- Prefill Notice (hidden by default, shown via JS when data is reused) -->
-                <div id="medical-provider-prefill-notice" 
-                     class="hidden rounded-md bg-blue-50 p-3 mb-4"
-                     role="status"
-                     aria-live="polite">
-                  <div class="flex">
-                    <div class="flex-shrink-0">
-                      <svg class="h-5 w-5 text-blue-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                      </svg>
-                    </div>
-                    <div class="ml-3">
-                      <p class="text-sm text-blue-700">
-                        <span class="font-medium">Pre-filled from previous application:</span>
-                        <span id="medical-provider-prefill-source"></span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <%= fields_for :application do |a| %>
-                  <div>
-                    <%= a.label :medical_provider_name, "Name", class: "block text-sm font-medium text-gray-700" %>
-                    <%= a.text_field :medical_provider_name, required: true, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                  </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <%= a.label :medical_provider_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
-                      <%= a.telephone_field :medical_provider_phone, required: true, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                    </div>
-                    <div>
-                      <%= a.label :medical_provider_email, "Email", class: "block text-sm font-medium text-gray-700" %>
-                      <%= a.email_field :medical_provider_email, required: true, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                    </div>
-                  </div>
-                  <div class="mt-4">
-                    <%= a.label :medical_provider_fax, "Fax (Optional)", class: "block text-sm font-medium text-gray-700" %>
-                    <%= a.text_field :medical_provider_fax, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                  </div>
-                <% end %>
-              </fieldset>
-            </div>
-
-            <!-- Alternate Contact Section (optional) -->
-            <fieldset class="mb-6 p-4 border border-gray-200 rounded">
-              <legend class="text-lg font-medium">Alternate Contact (optional)</legend>
-              <%= fields_for :application do |a| %>
-                <div>
-                  <%= a.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
-                  <%= a.text_field :alternate_contact_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <%= a.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
-                    <%= a.telephone_field :alternate_contact_phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                  </div>
-                  <div>
-                    <%= a.label :alternate_contact_email, "Email", class: "block text-sm font-medium text-gray-700" %>
-                    <%= a.email_field :alternate_contact_email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-                  </div>
-                </div>
-              <% end %>
-            </fieldset>
-
-            <!-- Proof Upload Section -->
-            <fieldset class="mb-6 p-4 border border-gray-200 rounded">
-              <legend class="text-lg font-medium">Proof Documents</legend>
-              <!-- Income Proof Section -->
-              <div class="mb-6" data-controller="document-proof-handler" data-document-proof-handler-type-value="income">
-                <h3 class="text-md font-medium mb-2">Income Proof</h3>
-                <%# Income information - grouped with income proof for logical flow %>
-                <%= fields_for :application do |a| %>
-                  <div class="mb-4 p-3 bg-gray-50 border-2 border-gray-200 rounded transition-colors duration-200" 
-                       data-income-validation-target="incomeFieldsContainer">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <%= a.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
-                        <%= a.number_field :household_size, min: 1, required: true, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { "income-validation-target": "householdSize", "action": "input->income-validation#validateAction change->income-validation#validateAction" } %>
-                      </div>
-                      <div>
-                        <%= a.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
-                        <div class="mt-1 relative rounded-md shadow-sm">
-                          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <span class="text-gray-500 sm:text-sm">$</span>
-                          </div>
-                          <%= a.number_field :annual_income, step: "0.01", required: true, class: "pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", data: { "income-validation-target": "annualIncome", "action": "input->income-validation#validateAction change->income-validation#validateAction" } %>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                <% end %>
-                <!-- Income Threshold Warning (hidden by default, shown when income exceeds threshold) -->
-                <div id="admin-income-threshold-warning" hidden class="hidden mb-4" role="alert" aria-live="assertive" data-income-validation-target="warningContainer"></div>
-                <fieldset class="mb-4">
-                  <legend class="sr-only">Income Proof Action</legend>
-                  <div role="radiogroup" aria-label="Income proof action" class="flex items-center space-x-4">
-                    <div>
-                      <input type="radio" id="accept_income_proof" name="income_proof_action" value="accept" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" checked data-action="change->document-proof-handler#toggleProofAction" data-document-proof-handler-target="acceptRadio">
-                      <label for="accept_income_proof" class="ml-2 text-sm text-gray-700">Accept Income Proof and Upload</label>
-                    </div>
-                    <div>
-                      <input type="radio" id="reject_income_proof" name="income_proof_action" value="reject" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" data-action="change->document-proof-handler#toggleProofAction" data-document-proof-handler-target="rejectRadio">
-                      <label for="reject_income_proof" class="ml-2 text-sm text-gray-700">Reject Income Proof</label>
-                    </div>
-                  </div>
-                </fieldset>
-                <!-- File upload field (shown when Accept is selected) -->
-                <div id="income_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                  <label for="income_proof" class="sr-only">Upload Income Proof Document</label>
-                  <input type="file" name="income_proof" id="income_proof" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" accept=".pdf,.jpg,.jpeg,.png" aria-describedby="income_proof_help" data-document-proof-handler-target="fileInput" />
-                  <p id="income_proof_help" class="mt-1 text-xs text-gray-500">Please select a PDF or image file containing income verification</p>
-                </div>
-                <!-- Rejection reason (shown when Reject is selected) -->
-                <div id="income_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
-                  <label class="block text-sm font-medium text-gray-700 mb-1" for="income_proof_rejection_reason">Rejection Reason</label>
-                  <select id="income_proof_rejection_reason" name="income_proof_rejection_reason" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" data-document-proof-handler-target="rejectionReasonSelect">
-                    <option value="">Select a reason</option>
-                    <option value="address_mismatch">Address Mismatch</option>
-                    <option value="expired">Expired Documentation</option>
-                    <option value="missing_name">Missing Name</option>
-                    <option value="wrong_document">Wrong Document Type</option>
-                    <option value="missing_amount">Missing Income Amount</option>
-                    <option value="exceeds_threshold">Income Exceeds Threshold</option>
-                    <option value="outdated_ss_award">Outdated Social Security Award Letter</option>
-                    <option value="other">Other</option>
-                  </select>
-                  <!-- Reason Preview -->
-                  <div id="income_proof_reason_preview" class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
-                  <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1" for="income_proof_rejection_notes"> Notes to Constituent </label>
-                    <textarea id="income_proof_rejection_notes" name="income_proof_rejection_notes" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" data-document-proof-handler-target="rejectionNotes"></textarea>
-                    <p class="mt-1 text-xs text-gray-500"> Review and modify this text as needed to provide clear instructions to the constituent. This message will be included in the notification sent to the applicant. </p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Residency Proof Section -->
-              <div class="mb-6" data-controller="document-proof-handler" data-document-proof-handler-type-value="residency">
-                <h3 class="text-md font-medium mb-2">Residency Proof</h3>
-                <%# Maryland residency attestation - grouped with residency proof for logical flow %>
-                <%= fields_for :application do |a| %>
-                  <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
-                    <div class="flex items-start">
-                      <%= a.check_box :maryland_resident, class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", required: true, "aria-required": "true" %>
-                      <%= a.label :maryland_resident, "The applicant has marked that they are a resident of Maryland", class: "ml-2 block text-sm text-gray-700" %>
-                    </div>
-                    <p class="ml-6 text-xs text-gray-500 mt-1">Note: This will be verified through the residency proof upload/review process</p>
-                  </div>
-                <% end %>
-                <fieldset class="mb-4">
-                  <legend class="sr-only">Residency Proof Action</legend>
-                  <div role="radiogroup" aria-label="Residency proof action" class="flex items-center space-x-4">
-                    <div>
-                      <input type="radio" id="accept_residency_proof" name="residency_proof_action" value="accept" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" checked data-action="change->document-proof-handler#toggleProofAction" data-document-proof-handler-target="acceptRadio">
-                      <label for="accept_residency_proof" class="ml-2 text-sm text-gray-700">Accept Residency Proof and Upload</label>
-                    </div>
-                    <div>
-                      <input type="radio" id="reject_residency_proof" name="residency_proof_action" value="reject" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" data-action="change->document-proof-handler#toggleProofAction" data-document-proof-handler-target="rejectRadio">
-                      <label for="reject_residency_proof" class="ml-2 text-sm text-gray-700">Reject Residency Proof</label>
-                    </div>
-                  </div>
-                </fieldset>
-                <!-- File upload field (shown when Accept is selected) -->
-                <div id="residency_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                  <label for="residency_proof" class="sr-only">Upload Residency Proof Document</label>
-                  <input type="file" name="residency_proof" id="residency_proof" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" accept=".pdf,.jpg,.jpeg,.png" aria-describedby="residency_proof_help" data-document-proof-handler-target="fileInput" />
-                  <p id="residency_proof_help" class="mt-1 text-xs text-gray-500">Please select a PDF or image file verifying Maryland residency</p>
-                </div>
-                <!-- Rejection reason (shown when Reject is selected) -->
-                <div id="residency_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
-                  <label class="block text-sm font-medium text-gray-700 mb-1" for="residency_proof_rejection_reason">Rejection Reason</label>
-                  <select id="residency_proof_rejection_reason" name="residency_proof_rejection_reason" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" data-document-proof-handler-target="rejectionReasonSelect">
-                    <option value="">Select a reason</option>
-                    <option value="address_mismatch">Address Mismatch</option>
-                    <option value="expired">Expired Documentation</option>
-                    <option value="missing_name">Missing Name</option>
-                    <option value="wrong_document">Wrong Document Type</option>
-                    <option value="other">Other</option>
-                  </select>
-                  <!-- Reason Preview -->
-                  <div id="residency_proof_reason_preview" class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
-                  <div class="mt-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1" for="residency_proof_rejection_notes"> Notes to Constituent </label>
-                    <textarea id="residency_proof_rejection_notes" name="residency_proof_rejection_notes" rows="3" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" data-document-proof-handler-target="rejectionNotes"></textarea>
-                    <p class="mt-1 text-xs text-gray-500"> Review and modify this text as needed to provide clear instructions to the constituent. This message will be included in the notification sent to the applicant. </p>
-                  </div>
-                </div>
-              </div>
-            </fieldset>
-            </div> <!-- End of commonSections wrapper -->
-
-            <!-- Form Actions -->
-            <div class="flex justify-end space-x-3">
-              <%= link_to "Cancel", admin_applications_path, class: "px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-              <%= button_tag "Reject Application (Income)", type: "button", id: "rejection-button", class: "hidden px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700", data: { action: "click->paper-application#openRejectionModal", "paper-application-target": "rejectionButton" } %>
-              <%= form.submit "Submit Paper Application", id: "submit-button", class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700", data: { paper_application_target: "submitButton", "income-validation-target": "submitButton" } %>
-            </div>
+          <%= link_to admin_applications_path, class: "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors", data: { turbo_frame: "_top" }, aria: { label: "Return to applications dashboard" } do %>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Dashboard
           <% end %>
         </div>
       </div>
     </div>
 
-    <!-- Rejection Modal - Uses native <dialog> for accessibility and proper focus management -->
-    <dialog id="rejection-modal"
-            class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0"
-            data-controller="modal"
-            data-action="click->modal#clickOutside"
-            aria-labelledby="rejection-modal-heading">
-      <div class="p-6">
-        <h3 id="rejection-modal-heading" class="text-lg font-medium text-gray-900 mb-4">Send Rejection Notification</h3>
-        <%= form_with(url: send_rejection_notification_admin_paper_applications_path, method: :post, local: false, data: { turbo: true }) do |form| %>
-          <!-- Hidden fields to carry over constituent information - populated via JS when modal opens -->
-          <%= form.hidden_field :first_name, id: "rejection_modal_first_name", data: { "paper-application-target": "rejectionFirstName" } %>
-          <%= form.hidden_field :last_name, id: "rejection_modal_last_name", data: { "paper-application-target": "rejectionLastName" } %>
-          <%= form.hidden_field :email, id: "rejection_modal_email", data: { "paper-application-target": "rejectionEmail" } %>
-          <%= form.hidden_field :phone, id: "rejection_modal_phone", data: { "paper-application-target": "rejectionPhone" } %>
-          <%= form.hidden_field :household_size, id: "rejection_modal_household_size", data: { "paper-application-target": "rejectionHouseholdSize" } %>
-          <%= form.hidden_field :annual_income, id: "rejection_modal_annual_income", data: { "paper-application-target": "rejectionAnnualIncome" } %>
-          <div class="mb-4">
-            <p class="text-sm text-gray-700">
-              A notification will be sent to the applicant informing them that their application was rejected because their income exceeds the maximum threshold for their household size.
-            </p>
+    <%# ================================================================ %>
+    <%# Main Form %>
+    <%# ================================================================ %>
+    <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
+      html: { "aria-label": "Paper application upload form", class: "space-y-6" },
+      data: { 
+        turbo: false,
+        controller: "paper-application applicant-type income-validation", 
+        "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']", 
+        "income-validation-fpl-thresholds-value": fpl_thresholds_json, 
+        "income-validation-modifier-value": fpl_modifier_value 
+      }) do |form| %>
+
+      <%# ============================================================ %>
+      <%# STEP 1: Applicant Type Selection %>
+      <%# ============================================================ %>
+      <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" aria-labelledby="step1-heading">
+        <div class="px-6 py-4 bg-indigo-50 border-b border-indigo-100">
+          <h2 id="step1-heading" class="text-lg font-semibold text-indigo-900 flex items-center gap-2">
+            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-600 text-white text-sm font-bold">1</span>
+            Who is this application for?
+          </h2>
+        </div>
+        <div class="p-6">
+          <fieldset data-applicant-type-target="radioSection" data-action="change->applicant-type#updateApplicantTypeDisplay">
+            <legend class="text-base font-medium text-gray-900 mb-4">Who is this application for?</legend>
+            <div class="space-y-4">
+              <label class="flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                <input type="radio" 
+                       id="applicant_is_adult" 
+                       name="applicant_type" 
+                       value="guardian" 
+                       class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" 
+                       <%= 'checked' unless @show_create_guardian_form %> 
+                       data-applicant-type-target="radio">
+                <span class="ml-3">
+                  <span class="block text-sm font-medium text-gray-900">An Adult (applying for themselves)</span>
+                  <span class="block text-sm text-gray-500 mt-1">The applicant is 18 or older and managing their own application</span>
+                </span>
+              </label>
+              
+              <label class="flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+                <input type="radio" 
+                       id="applicant_is_minor" 
+                       name="applicant_type" 
+                       value="dependent" 
+                       class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" 
+                       <%= 'checked' if @show_create_guardian_form %> 
+                       data-applicant-type-target="radio" 
+                       data-guardian-picker-target="applicantTypeRadioDependent">
+                <span class="ml-3">
+                  <span class="block text-sm font-medium text-gray-900">A Dependent (minor or adult requiring guardian)</span>
+                  <span class="block text-sm text-gray-500 mt-1">Select or create a guardian who will manage this application</span>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <%# ============================================================ %>
+      <%# STEP 2: Applicant Information (shown for adults) %>
+      <%# ============================================================ %>
+      <fieldset class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" 
+               id="self-info-section"
+               data-applicant-type-target="adultSection"
+               aria-labelledby="step2-adult-heading">
+        <div class="px-6 py-4 bg-blue-50 border-b border-blue-100">
+          <legend id="step2-adult-heading" class="text-lg font-semibold text-blue-900 flex items-center gap-2 w-full">
+            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white text-sm font-bold">2</span>
+            Applicant's Information
+          </legend>
+          <p class="mt-1 text-sm text-blue-700">Enter the applicant's personal details</p>
+        </div>
+        <div class="p-6">
+          <%= render 'self_application_fields' %>
+        </div>
+      </fieldset>
+
+      <%# ============================================================ %>
+      <%# STEP 2: Guardian Selection/Creation (shown for dependents) %>
+      <%# NOTE: When dependent is selected, this replaces the adult section above %>
+      <%# ============================================================ %>
+      <fieldset id="guardian-info-section" 
+               class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hidden" 
+               data-controller="guardian-picker" 
+               data-applicant-type-target="guardianSection"
+               aria-labelledby="step2-guardian-heading">
+        <legend id="step2-guardian-heading" class="px-6 py-4 bg-amber-50 border-b border-amber-100 w-full block">
+          <span class="text-lg font-semibold text-amber-900 flex items-center gap-2">
+            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-amber-600 text-white text-sm font-bold">2</span>
+            Guardian Information
+          </span>
+          <span class="mt-1 text-sm text-amber-700 block">Select an existing guardian or create a new one</span>
+        </legend>
+        
+        <div class="p-6">
+          <%# Search Pane %>
+          <div data-guardian-picker-target="searchPane">
+            <div data-controller="admin-user-search"
+                 data-admin-user-search-search-url-value="/admin/users/search"
+                 data-admin-user-search-create-user-url-value="/admin/users"
+                 data-admin-user-search-role-value="guardian"
+                 data-admin-user-search-guardian-picker-outlet="[data-controller='guardian-picker']">
+              
+              <h3 class="text-base font-medium text-gray-900 mb-3">Find Existing Guardian</h3>
+              <div class="flex items-center gap-4 mb-4">
+                <div class="flex-grow">
+                  <label for="guardian_search_q" class="sr-only">Search by Name or Email</label>
+                  <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                      </svg>
+                    </div>
+                    <input id="guardian_search_q" 
+                           placeholder="Search by Name or Email"
+                           class="block w-full pl-10 pr-3 py-2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           data-action="input->admin-user-search#performSearch"
+                           data-admin-user-search-target="searchInput"
+                           type="text"
+                           name="q"
+                           autocomplete="off">
+                  </div>
+                </div>
+                <button type="button" 
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" 
+                        data-action="click->admin-user-search#clearSearchAndShowForm">
+                  Clear
+                </button>
+              </div>
+
+              <%= turbo_frame_tag "guardian_search_results", 
+                  class: "mt-2 space-y-2", 
+                  target: "_top", 
+                  "data-admin-user-search-target": "searchResults" do %>
+                <p class="text-sm text-gray-500 p-3 hidden" data-admin-user-search-target="emptyMessage">
+                  Type a name or email to search for guardians.
+                </p>
+              <% end %>
+
+              <div class="mt-4 pt-4 border-t border-gray-200">
+                <%= link_to new_admin_paper_application_path(show_create_guardian_form: true), 
+                    class: "inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500" do %>
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                  </svg>
+                  Create New Guardian
+                <% end %>
+              </div>
+
+              <%# ============================================================ %>
+              <%# New Guardian Creation Form %>
+              <%# ============================================================ %>
+              <% if @show_create_guardian_form %>
+              <div class="mt-6 p-5 border-2 border-indigo-200 rounded-lg bg-indigo-50/50" data-controller="contact-feedback">
+                <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                  </svg>
+                  Create New Guardian
+                </h3>
+                
+                <%= fields_for :guardian_attributes, @paper_application[:guardian_attributes] do |g| %>
+                  <%# Personal Information %>
+                  <div class="mb-5">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Personal Information</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                      <div class="md:col-span-2">
+                        <%= g.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.text_field :first_name, 
+                            required: true,
+                            autocomplete: "given-name",
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
+                      </div>
+                      <div class="md:col-span-1">
+                        <%= g.label :middle_initial, "M.I.", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.text_field :middle_initial, 
+                            maxlength: 1, 
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
+                      </div>
+                      <div class="md:col-span-2">
+                        <%= g.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.text_field :last_name, 
+                            required: true,
+                            autocomplete: "family-name",
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
+                      </div>
+                      <div class="md:col-span-2">
+                        <%= g.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.date_field :date_of_birth, 
+                            required: true,
+                            autocomplete: "bday",
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white",
+                            "aria-required": "true",
+                            max: Date.current.to_s %>
+                      </div>
+                    </div>
+                  </div>
+
+                  <%# Contact Information %>
+                  <div class="mb-5">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Contact Information</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <%= g.label :email, "Email Address", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.email_field :email, 
+                            required: true,
+                            autocomplete: "email",
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                            data: { 
+                              dependent_fields_target: "guardianEmail",
+                              "contact-feedback-target": "email"
+                            } %>
+                      </div>
+                      <div>
+                        <%= g.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.telephone_field :phone, 
+                            required: true,
+                            autocomplete: "tel",
+                            placeholder: "XXX-XXX-XXXX",
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                            data: { 
+                              dependent_fields_target: "guardianPhone",
+                              "contact-feedback-target": "phone"
+                            } %>
+                      </div>
+                    </div>
+
+                    <%# Preferred Contact Method %>
+                    <fieldset class="mb-4 p-3 bg-white rounded border border-gray-200">
+                      <legend class="text-sm font-medium text-gray-700 mb-2">How would you like us to contact you if we have any questions?</legend>
+                      <div role="radiogroup" aria-label="Contact preference" class="flex flex-wrap gap-4">
+                        <div class="flex items-center">
+                          <%= g.radio_button :phone_type, "voice", 
+                              id: "guardian_phone_type_voice", 
+                              class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                              data: { action: "change->contact-feedback#updateFeedback" } %>
+                          <%= g.label :phone_type_voice, "Call me", for: "guardian_phone_type_voice", class: "ml-2 text-sm text-gray-700" %>
+                        </div>
+                        <div class="flex items-center">
+                          <%= g.radio_button :phone_type, "text", 
+                              id: "guardian_phone_type_text",
+                              class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                              data: { action: "change->contact-feedback#updateFeedback" } %>
+                          <%= g.label :phone_type_text, "Text me", for: "guardian_phone_type_text", class: "ml-2 text-sm text-gray-700" %>
+                        </div>
+                        <div class="flex items-center">
+                          <%= g.radio_button :phone_type, "videophone", 
+                              id: "guardian_phone_type_videophone",
+                              class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                              data: { action: "change->contact-feedback#updateFeedback" } %>
+                          <%= g.label :phone_type_videophone, "Call me using ASL (videophone)", for: "guardian_phone_type_videophone", class: "ml-2 text-sm text-gray-700" %>
+                        </div>
+                        <div class="flex items-center">
+                          <%= g.radio_button :phone_type, "email", 
+                              id: "guardian_phone_type_email",
+                              class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                              data: { action: "change->contact-feedback#updateFeedback" } %>
+                          <%= g.label :phone_type_email, "Email me", for: "guardian_phone_type_email", class: "ml-2 text-sm text-gray-700" %>
+                        </div>
+                        <div class="flex items-center">
+                          <%= g.radio_button :phone_type, "letter", 
+                              id: "guardian_phone_type_letter",
+                              class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                              data: { action: "change->contact-feedback#updateFeedback" } %>
+                          <%= g.label :phone_type_letter, "Send me a letter in the mail", for: "guardian_phone_type_letter", class: "ml-2 text-sm text-gray-700" %>
+                        </div>
+                      </div>
+                      <div data-contact-feedback-target="feedback" class="hidden" aria-live="polite"></div>
+                    </fieldset>
+
+                    <%# Address %>
+                    <div class="space-y-3">
+                      <div>
+                        <%= g.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.text_field :physical_address_1, 
+                            autocomplete: "address-line1",
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                            data: { dependent_fields_target: "guardianAddress1", contact_feedback_target: "address1" } %>
+                      </div>
+                      <div>
+                        <%= g.label :physical_address_2, "Apt, suite, unit (optional)", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.text_field :physical_address_2, 
+                            autocomplete: "address-line2",
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                            data: { dependent_fields_target: "guardianAddress2", contact_feedback_target: "address2" } %>
+                      </div>
+                      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="col-span-2">
+                          <%= g.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
+                          <%= g.text_field :city, 
+                              autocomplete: "address-level2",
+                              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                              data: { dependent_fields_target: "guardianCity", contact_feedback_target: "city" } %>
+                        </div>
+                        <div>
+                          <%= g.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
+                          <%= g.text_field :state, 
+                              value: "MD", 
+                              autocomplete: "address-level1",
+                              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                              data: { dependent_fields_target: "guardianState", contact_feedback_target: "state" } %>
+                        </div>
+                        <div>
+                          <%= g.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700" %>
+                          <%= g.text_field :zip_code, 
+                              autocomplete: "postal-code",
+                              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                              data: { dependent_fields_target: "guardianZip", contact_feedback_target: "zipCode" } %>
+                        </div>
+                      </div>
+                      <%# Residency proof notice - placed after all address fields for clarity %>
+                      <div role="note" aria-label="Address matching requirement" class="mt-3 flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                        <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                        </svg>
+                        <p class="text-sm text-blue-800">
+                          <strong>Important:</strong> This address must match the address on your residency proof document.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <%# Communication Preferences %>
+                  <div class="mb-5 p-4 bg-white rounded border border-gray-200">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Communication Preferences</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <%= g.label :locale, "Preferred Language", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.select :locale, 
+                            options_for_select([["English","en"],["Spanish","es"],["French","fr"],["American Sign Language (ASL)","asl"],["Other","other"]], g.object[:locale] || 'en'), 
+                            { prompt: "Select Language" }, 
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                      </div>
+                      <div>
+                        <%= g.label :preferred_means_of_communication, "How do you prefer to communicate?", class: "block text-sm font-medium text-gray-700" %>
+                        <%= g.select :preferred_means_of_communication, 
+                            options_for_select([
+                              ["Voice (spoken language)", "voice"],
+                              ["Read lips", "lip_reading"],
+                              ["American Sign Language (ASL)", "asl"],
+                              ["Signed English", "signed_english"],
+                              ["Written notes", "written"],
+                              ["Typed communication", "typed"],
+                              ["Braille", "braille"],
+                              ["Augmentative & Alternative Communication (AAC)", "aac"]
+                            ], g.object[:preferred_means_of_communication]), 
+                            { prompt: "Select preference" }, 
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                      </div>
+                    </div>
+
+                    <fieldset class="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                      <legend class="text-base font-semibold text-blue-900 mb-1 px-2">
+                        Where should we send official program documents?
+                      </legend>
+                      <p class="text-sm text-blue-700 mb-3 px-2">
+                        Important notices, approval letters, and voucher information will be delivered here
+                      </p>
+                      <div role="radiogroup" aria-label="Document delivery preference" class="flex flex-wrap gap-6">
+                        <div class="flex items-start">
+                          <%= g.radio_button :communication_preference, "email", 
+                              id: "guardian_communication_preference_email", 
+                              checked: true,
+                              class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                              data: { action: "change->contact-feedback#updateDeliveryFeedback" } %>
+                          <label for="guardian_communication_preference_email" class="ml-2">
+                            <span class="block text-sm font-medium text-gray-700">Email</span>
+                            <span class="block text-xs text-gray-500">Faster delivery</span>
+                          </label>
+                        </div>
+                        <div class="flex items-start">
+                          <%= g.radio_button :communication_preference, "letter", 
+                              id: "guardian_communication_preference_letter",
+                              class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                              data: { action: "change->contact-feedback#updateDeliveryFeedback" } %>
+                          <label for="guardian_communication_preference_letter" class="ml-2">
+                            <span class="block text-sm font-medium text-gray-700">Printed letter by mail</span>
+                            <span class="block text-xs text-gray-500">Physical copy</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div data-contact-feedback-target="deliveryFeedback" class="hidden" aria-live="polite" aria-atomic="true"></div>
+                    </fieldset>
+                  </div>
+                <% end %>
+
+                <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                  <%= link_to "Cancel", new_admin_paper_application_path, class: "text-sm font-medium text-gray-600 hover:text-gray-500" %>
+                  <button type="button" 
+                          class="inline-flex items-center gap-2 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" 
+                          data-action="click->admin-user-search#createGuardian">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Save Guardian
+                  </button>
+                </div>
+              </div>
+              <% end %>
+            </div>
           </div>
-          <div class="mb-4">
-            <span id="modal_notification_method_label" class="block text-sm font-medium text-gray-700 mb-1">Notification Method</span>
-            <div class="mt-1">
-              <div role="radiogroup" aria-labelledby="modal_notification_method_label" class="flex items-center space-x-4">
+
+          <%# Selected Guardian Pane %>
+          <div data-guardian-picker-target="selectedPane" class="hidden">
+            <div class="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
+              <div class="flex justify-between items-start">
+                <div class="flex-grow">
+                  <h3 class="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    Guardian Selected
+                  </h3>
+                  <div data-guardian-picker-target="selectedGuardianDisplay" class="text-sm guardian-details-container"></div>
+                  <div data-guardian-picker-target="displaySelection" class="text-xs text-gray-700 mt-2"></div>
+                  <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block" do %>
+                    <%# dependents list will load here when guardian is selected %>
+                  <% end %>
+                </div>
+                <button type="button"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        data-action="guardian-picker#clearSelection">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  Change Selection
+                </button>
+              </div>
+              <input type="hidden" name="guardian_id" data-guardian-picker-target="guardianIdField">
+              <input type="hidden" name="dependent_id" data-guardian-picker-target="dependentIdField">
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <%# ============================================================ %>
+      <%# STEP 3: Dependent Information (shown after guardian selected) %>
+      <%# NOTE: Only shown when applicant is a dependent with a guardian %>
+      <%# ============================================================ %>
+      <div class="hidden" data-applicant-type-target="sectionsForDependentWithGuardian">
+        <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" aria-labelledby="step3-dependent-heading">
+          <div class="px-6 py-4 bg-teal-50 border-b border-teal-100">
+            <h2 id="step3-dependent-heading" class="text-lg font-semibold text-teal-900 flex items-center gap-2">
+              <span class="flex items-center justify-center w-7 h-7 rounded-full bg-teal-600 text-white text-sm font-bold">3</span>
+              Dependent Information
+            </h2>
+            <p class="mt-1 text-sm text-teal-700">Enter the dependent's personal details</p>
+          </div>
+          <div class="p-6">
+            <%= turbo_frame_tag "dependent_info_form", target: "_top" do %>
+              <%= render partial: 'admin/paper_applications/dependent_form', 
+                         locals: { dependent: nil, mode: :new } %>
+            <% end %>
+          </div>
+        </section>
+      </div>
+
+      <%# ============================================================ %>
+      <%# Common Sections (shown for adult OR dependent with guardian) %>
+      <%# ============================================================ %>
+      <div data-applicant-type-target="commonSections" class="hidden space-y-6">
+        
+        <%# ============================================================ %>
+        <%# Disability & Medical Certification %>
+        <%# ============================================================ %>
+        <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" aria-labelledby="disability-heading">
+          <div class="px-6 py-4 bg-purple-50 border-b border-purple-100">
+            <h2 id="disability-heading" class="text-lg font-semibold text-purple-900 flex items-center gap-2">
+              <span class="flex items-center justify-center w-7 h-7 rounded-full bg-purple-600 text-white text-sm font-bold" data-applicant-type-target="stepNumber">3</span>
+              Disability Certification
+            </h2>
+            <p class="mt-1 text-sm text-purple-700">Disability information and medical provider details</p>
+          </div>
+          
+          <div class="p-6 space-y-6">
+            <%# Disability Information %>
+            <fieldset class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <legend class="text-base font-medium text-gray-900 px-2">Disability Information (for the Applicant)</legend>
+              <p class="text-sm text-gray-600 mb-4">Required for program eligibility</p>
+              
+              <%= fields_for :applicant_attributes do |app_f| %>
+                <div class="flex items-start mb-4">
+                  <%= app_f.check_box :self_certify_disability, 
+                      class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
+                      required: true, 
+                      "aria-required": "true",
+                      "aria-describedby": "self_certify_hint" %>
+                  <label for="applicant_attributes_self_certify_disability" class="ml-3">
+                    <span class="block text-sm font-medium text-gray-700">The applicant certifies that they have a disability that affects their ability to access telecommunications services</span>
+                    <span id="self_certify_hint" class="block text-xs text-gray-500 mt-1">Required for program eligibility</span>
+                  </label>
+                </div>
+                
+                <fieldset class="mt-4">
+                  <legend class="text-sm font-medium text-gray-700 mb-3">Select all disabilities that apply:</legend>
+                  <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <% %i[hearing vision speech mobility cognition].each do |disability| %>
+                      <label class="flex items-center p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <%= app_f.check_box "#{disability}_disability", class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+                        <span class="ml-2 text-sm text-gray-700"><%= disability.to_s.titleize %></span>
+                      </label>
+                    <% end %>
+                  </div>
+                </fieldset>
+              <% end %>
+            </fieldset>
+
+            <%# Medical Provider Information %>
+            <fieldset class="p-4 bg-white border border-gray-200 rounded-lg">
+              <legend class="text-base font-medium text-gray-900 px-2">Medical Provider Information</legend>
+              <p class="text-sm text-gray-600 mb-4">We'll contact this provider to verify the disability certification</p>
+              
+              <%# Prefill Notice %>
+              <div id="medical-provider-prefill-notice" 
+                   class="hidden rounded-md bg-blue-50 p-3 mb-4"
+                   role="status"
+                   aria-live="polite">
+                <div class="flex items-start gap-2">
+                  <svg class="h-5 w-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                  </svg>
+                  <p class="text-sm text-blue-700">
+                    <span class="font-medium">Pre-filled from previous application:</span>
+                    <span id="medical-provider-prefill-source"></span>
+                  </p>
+                </div>
+              </div>
+
+              <%= fields_for :application do |a| %>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="md:col-span-2">
+                    <%= a.label :medical_provider_name, "Provider Name", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.text_field :medical_provider_name, 
+                        required: true, 
+                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                        "aria-required": "true" %>
+                  </div>
+                  <div>
+                    <%= a.label :medical_provider_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.telephone_field :medical_provider_phone, 
+                        required: true, 
+                        placeholder: "XXX-XXX-XXXX",
+                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                        "aria-required": "true" %>
+                  </div>
+                  <div>
+                    <%= a.label :medical_provider_email, "Email", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.email_field :medical_provider_email, 
+                        required: true, 
+                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                        "aria-required": "true" %>
+                  </div>
+                  <div class="md:col-span-2">
+                    <%= a.label :medical_provider_fax, "Fax (Optional)", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.text_field :medical_provider_fax, 
+                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                  </div>
+                </div>
+              <% end %>
+            </fieldset>
+          </div>
+        </section>
+
+        <%# ============================================================ %>
+        <%# Alternate Contact (Optional) %>
+        <%# ============================================================ %>
+        <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" aria-labelledby="alternate-contact-heading">
+          <div class="px-6 py-4 bg-slate-50 border-b border-slate-200">
+            <h2 id="alternate-contact-heading" class="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              <span class="flex items-center justify-center w-7 h-7 rounded-full bg-slate-600 text-white text-sm font-bold" data-applicant-type-target="stepNumber">4</span>
+              Alternate Contact
+              <span class="ml-2 text-sm font-normal text-slate-500">(Optional)</span>
+            </h2>
+            <p class="mt-1 text-sm text-slate-600">A trusted person who can help with the application or receive communications on the applicant's behalf</p>
+          </div>
+          
+          <div class="p-6">
+            <%= fields_for :application do |a| %>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <%= form.radio_button :communication_preference, "email", checked: true, class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" %>
-                  <%= form.label :communication_preference_email, "Email", class: "ml-2 text-sm text-gray-700" %>
+                  <%= a.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.text_field :alternate_contact_name, 
+                      autocomplete: "name",
+                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
                 </div>
                 <div>
-                  <%= form.radio_button :communication_preference, "letter", class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" %>
-                  <%= form.label :communication_preference_letter, "Printed Letter", class: "ml-2 text-sm text-gray-700" %>
+                  <%= a.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.telephone_field :alternate_contact_phone, 
+                      autocomplete: "tel",
+                      placeholder: "XXX-XXX-XXXX",
+                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                </div>
+                <div>
+                  <%= a.label :alternate_contact_email, "Email", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.email_field :alternate_contact_email, 
+                      autocomplete: "email",
+                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </section>
+
+        <%# ============================================================ %>
+        <%# Income & Residency Proof %>
+        <%# ============================================================ %>
+        <fieldset class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" aria-labelledby="proof-heading">
+          <div class="px-6 py-4 bg-emerald-50 border-b border-emerald-100">
+            <legend id="proof-heading" class="text-lg font-semibold text-emerald-900 flex items-center gap-2 w-full">
+              <span class="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-600 text-white text-sm font-bold" data-applicant-type-target="stepNumber">5</span>
+              Proof Documents
+            </legend>
+            <p class="mt-1 text-sm text-emerald-700">Upload or reject income and residency documentation</p>
+          </div>
+          
+          <div class="p-6 space-y-8">
+            <%# Income Proof Section %>
+            <div data-controller="document-proof-handler" data-document-proof-handler-type-value="income">
+              <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Income Verification
+              </h3>
+              
+              <%# Income Information Fields %>
+              <%= fields_for :application do |a| %>
+                <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200" 
+                     data-income-validation-target="incomeFieldsContainer">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <%= a.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
+                      <%= a.number_field :household_size, 
+                          min: 1, 
+                          required: true, 
+                          class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                          "aria-required": "true",
+                          data: { 
+                            "income-validation-target": "householdSize", 
+                            "action": "input->income-validation#validateAction change->income-validation#validateAction" 
+                          } %>
+                    </div>
+                    <div>
+                      <%= a.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
+                      <div class="mt-1 relative rounded-md shadow-sm">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span class="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <%= a.number_field :annual_income, 
+                            step: "0.01", 
+                            required: true, 
+                            class: "pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                            "aria-required": "true",
+                            data: { 
+                              "income-validation-target": "annualIncome", 
+                              "action": "input->income-validation#validateAction change->income-validation#validateAction" 
+                            } %>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+              
+              <%# Income Threshold Warning %>
+              <div id="admin-income-threshold-warning" hidden class="hidden mb-4" role="alert" aria-live="assertive" data-income-validation-target="warningContainer"></div>
+              
+              <%# Proof Action Selection %>
+              <fieldset class="mb-4">
+                <legend class="text-sm font-medium text-gray-700 mb-2">Income Proof Action</legend>
+                <div role="radiogroup" aria-label="Income proof action" class="flex flex-wrap gap-4">
+                  <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+                    <input type="radio" 
+                           id="accept_income_proof" 
+                           name="income_proof_action" 
+                           value="accept" 
+                           class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300" 
+                           checked 
+                           data-action="change->document-proof-handler#toggleProofAction" 
+                           data-document-proof-handler-target="acceptRadio">
+                    <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+                  </label>
+                  <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                    <input type="radio" 
+                           id="reject_income_proof" 
+                           name="income_proof_action" 
+                           value="reject" 
+                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
+                           data-action="change->document-proof-handler#toggleProofAction" 
+                           data-document-proof-handler-target="rejectRadio">
+                    <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                  </label>
+                </div>
+              </fieldset>
+              
+              <%# Upload Field %>
+              <div id="income_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
+                <label for="income_proof" class="block text-sm font-medium text-gray-700 mb-1">Upload Income Proof Document</label>
+                <input type="file" 
+                       name="income_proof" 
+                       id="income_proof" 
+                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                       accept=".pdf,.jpg,.jpeg,.png" 
+                       aria-describedby="income_proof_help" 
+                       data-document-proof-handler-target="fileInput">
+                <p id="income_proof_help" class="mt-1 text-xs text-gray-500">
+                  Upload documents verifying income eligibility: recent tax return (1040), Social Security award letter, 
+                  SSI/SSDI benefits statement, pension statement, pay stubs, or other income verification. 
+                  Accepted formats: PDF, JPG, PNG.
+                </p>
+              </div>
+              
+              <%# Rejection Fields %>
+              <div id="income_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
+                <div class="space-y-4">
+                  <div>
+                    <label for="income_proof_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                    <select id="income_proof_rejection_reason" 
+                            name="income_proof_rejection_reason" 
+                            class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                            data-document-proof-handler-target="rejectionReasonSelect">
+                      <option value="">Select a reason</option>
+                      <option value="address_mismatch">Address Mismatch</option>
+                      <option value="expired">Expired Documentation</option>
+                      <option value="missing_name">Missing Name</option>
+                      <option value="wrong_document">Wrong Document Type</option>
+                      <option value="missing_amount">Missing Income Amount</option>
+                      <option value="exceeds_threshold">Income Exceeds Threshold</option>
+                      <option value="outdated_ss_award">Outdated Social Security Award Letter</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div id="income_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
+                  <div>
+                    <label for="income_proof_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes to Constituent</label>
+                    <textarea id="income_proof_rejection_notes" 
+                              name="income_proof_rejection_notes" 
+                              rows="3" 
+                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                              data-document-proof-handler-target="rejectionNotes"></textarea>
+                    <p class="mt-1 text-xs text-gray-500">This message will be included in the notification sent to the applicant</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <hr class="border-gray-200">
+
+            <%# Residency Proof Section %>
+            <div data-controller="document-proof-handler" data-document-proof-handler-type-value="residency">
+              <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                Residency Verification
+              </h3>
+              
+              <%# Maryland Residency Attestation %>
+              <%= fields_for :application do |a| %>
+                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div class="flex items-start">
+                    <%= a.check_box :maryland_resident, 
+                        class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
+                        required: true, 
+                        "aria-required": "true" %>
+                    <label for="application_maryland_resident" class="ml-3">
+                      <span class="block text-sm font-medium text-gray-700">The applicant has marked that they are a resident of Maryland</span>
+                      <span class="block text-xs text-gray-500 mt-1">This will be verified through the residency proof process</span>
+                    </label>
+                  </div>
+                </div>
+              <% end %>
+              
+              <%# Proof Action Selection %>
+              <fieldset class="mb-4">
+                <legend class="text-sm font-medium text-gray-700 mb-2">Residency Proof Action</legend>
+                <div role="radiogroup" aria-label="Residency proof action" class="flex flex-wrap gap-4">
+                  <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+                    <input type="radio" 
+                           id="accept_residency_proof" 
+                           name="residency_proof_action" 
+                           value="accept" 
+                           class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300" 
+                           checked 
+                           data-action="change->document-proof-handler#toggleProofAction" 
+                           data-document-proof-handler-target="acceptRadio">
+                    <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+                  </label>
+                  <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                    <input type="radio" 
+                           id="reject_residency_proof" 
+                           name="residency_proof_action" 
+                           value="reject" 
+                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
+                           data-action="change->document-proof-handler#toggleProofAction" 
+                           data-document-proof-handler-target="rejectRadio">
+                    <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                  </label>
+                </div>
+              </fieldset>
+              
+              <%# Upload Field %>
+              <div id="residency_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
+                <label for="residency_proof" class="block text-sm font-medium text-gray-700 mb-1">Upload Residency Proof Document</label>
+                <input type="file" 
+                       name="residency_proof" 
+                       id="residency_proof" 
+                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                       accept=".pdf,.jpg,.jpeg,.png" 
+                       aria-describedby="residency_proof_help" 
+                       data-document-proof-handler-target="fileInput">
+                <p id="residency_proof_help" class="mt-1 text-xs text-gray-500">
+                  Upload documents verifying Maryland residency: utility bill, mortgage statement, lease agreement, 
+                  bank statement, or government-issued ID showing the same physical address provided in this application. 
+                  Accepted formats: PDF, JPG, PNG.
+                </p>
+              </div>
+              
+              <%# Rejection Fields %>
+              <div id="residency_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
+                <div class="space-y-4">
+                  <div>
+                    <label for="residency_proof_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                    <select id="residency_proof_rejection_reason" 
+                            name="residency_proof_rejection_reason" 
+                            class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                            data-document-proof-handler-target="rejectionReasonSelect">
+                      <option value="">Select a reason</option>
+                      <option value="address_mismatch">Address Mismatch</option>
+                      <option value="expired">Expired Documentation</option>
+                      <option value="missing_name">Missing Name</option>
+                      <option value="wrong_document">Wrong Document Type</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div id="residency_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
+                  <div>
+                    <label for="residency_proof_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes to Constituent</label>
+                    <textarea id="residency_proof_rejection_notes" 
+                              name="residency_proof_rejection_notes" 
+                              rows="3" 
+                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                              data-document-proof-handler-target="rejectionNotes"></textarea>
+                    <p class="mt-1 text-xs text-gray-500">This message will be included in the notification sent to the applicant</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-          <div class="mb-4">
-            <%= form.label :additional_notes, "Additional Notes", class: "block text-sm font-medium text-gray-700 mb-1" %>
-            <%= form.text_area :additional_notes, rows: 3, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" %>
-          </div>
-          <div class="flex justify-end space-x-3">
-            <button type="button"
-                    class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                    data-action="click->modal#close">
-              Cancel
-            </button>
-            <%= form.submit "Send Notification", class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700" %>
-          </div>
-        <% end %>
+        </fieldset>
       </div>
-    </dialog>
+
+      <%# ============================================================ %>
+      <%# Form Actions %>
+      <%# ============================================================ %>
+      <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+        <div class="flex flex-col sm:flex-row justify-end gap-3">
+          <%= link_to "Cancel", admin_applications_path, 
+              class: "inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          
+          <%= button_tag type: "button", 
+              id: "rejection-button", 
+              class: "hidden inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500", 
+              data: { action: "click->paper-application#openRejectionModal", "paper-application-target": "rejectionButton" } do %>
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            Reject (Income Over Threshold)
+          <% end %>
+          
+          <%= form.submit "Submit Paper Application", 
+              id: "submit-button", 
+              class: "inline-flex justify-center items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed", 
+              data: { paper_application_target: "submitButton", "income-validation-target": "submitButton" } %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<%# ============================================================ %>
+<%# Rejection Modal %>
+<%# ============================================================ %>
+<dialog id="rejection-modal"
+        class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0"
+        data-controller="modal"
+        data-action="click->modal#clickOutside"
+        aria-labelledby="rejection-modal-heading">
+  <div class="p-6">
+    <h3 id="rejection-modal-heading" class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      Send Rejection Notification
+    </h3>
+    
+    <%= form_with(url: send_rejection_notification_admin_paper_applications_path, method: :post, local: false, data: { turbo: true }) do |form| %>
+      <%# Hidden fields for constituent information %>
+      <%= form.hidden_field :first_name, id: "rejection_modal_first_name", data: { "paper-application-target": "rejectionFirstName" } %>
+      <%= form.hidden_field :last_name, id: "rejection_modal_last_name", data: { "paper-application-target": "rejectionLastName" } %>
+      <%= form.hidden_field :email, id: "rejection_modal_email", data: { "paper-application-target": "rejectionEmail" } %>
+      <%= form.hidden_field :phone, id: "rejection_modal_phone", data: { "paper-application-target": "rejectionPhone" } %>
+      <%= form.hidden_field :household_size, id: "rejection_modal_household_size", data: { "paper-application-target": "rejectionHouseholdSize" } %>
+      <%= form.hidden_field :annual_income, id: "rejection_modal_annual_income", data: { "paper-application-target": "rejectionAnnualIncome" } %>
+      
+      <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+        <p class="text-sm text-red-800">
+          A notification will be sent informing the applicant that their income exceeds the maximum threshold for their household size.
+        </p>
+      </div>
+      
+      <fieldset class="mb-4">
+        <legend class="block text-sm font-medium text-gray-700 mb-2">Notification Method</legend>
+        <div role="radiogroup" aria-label="Notification method" class="flex flex-wrap gap-4">
+          <label class="flex items-center">
+            <%= form.radio_button :communication_preference, "email", checked: true, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+            <span class="ml-2 text-sm text-gray-700">Email</span>
+          </label>
+          <label class="flex items-center">
+            <%= form.radio_button :communication_preference, "letter", class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+            <span class="ml-2 text-sm text-gray-700">Printed Letter</span>
+          </label>
+        </div>
+      </fieldset>
+      
+      <div class="mb-6">
+        <%= form.label :additional_notes, "Additional Notes (Optional)", class: "block text-sm font-medium text-gray-700 mb-1" %>
+        <%= form.text_area :additional_notes, rows: 3, class: "block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+      </div>
+      
+      <div class="flex justify-end gap-3">
+        <button type="button"
+                class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                data-action="click->modal#close">
+          Cancel
+        </button>
+        <%= form.submit "Send Notification", class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
+      </div>
+    <% end %>
+  </div>
+</dialog>

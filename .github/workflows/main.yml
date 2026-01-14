@@ -26,7 +26,6 @@ jobs:
           --health-retries 5
     env:
       RAILS_ENV: test
-      RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
         
     steps:
       - name: Checkout code
@@ -69,7 +68,7 @@ jobs:
           EOF
 
       - name: Set up database
-        run: bin/rails db:prepare
+        run: bin/rails db:setup
 
       - name: Seed email templates
         run: bundle exec rake db:seed_manual_email_templates

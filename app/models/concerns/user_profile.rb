@@ -39,8 +39,16 @@ module UserProfile
 
     # Enums
     enum :status, { inactive: 0, active: 1, suspended: 2 }, default: :active
-    enum :communication_preference, { email: 0, letter: 1 }, default: :email
-    enum :phone_type, { voice: 'voice', videophone: 'videophone', text: 'text' }, default: :voice
+    # communication_preference: where to send official documents (email vs physical mail)
+    enum :communication_preference, { email: 0, letter: 1 }, default: :email, prefix: :deliver_via
+    # phone_type serves as "preferred contact method" - how the user prefers to be reached for questions
+    enum :phone_type, {
+      voice: 'voice',           # Voice call to phone number
+      videophone: 'videophone', # ASL videophone call
+      text: 'text',             # Text/SMS message
+      contact_email: 'email',   # Contact via email (stored as 'email' in DB)
+      contact_letter: 'letter'  # Contact via physical mail (stored as 'letter' in DB)
+    }, default: :voice
   end
 
   def full_name

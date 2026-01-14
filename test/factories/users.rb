@@ -139,6 +139,17 @@ FactoryBot.define do
         cognition_disability { true }
       end
 
+      # Trait for testing disability validation - no disabilities set
+      trait :without_disabilities do
+        after(:build) do |constituent|
+          constituent.hearing_disability = false
+          constituent.vision_disability = false
+          constituent.speech_disability = false
+          constituent.mobility_disability = false
+          constituent.cognition_disability = false
+        end
+      end
+
       # This trait creates a single dependent for the guardian.
       trait :as_guardian do
         transient do

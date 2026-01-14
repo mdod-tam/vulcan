@@ -19,6 +19,7 @@ import ReportsChartController from "./charts/reports_chart_controller"
 // Form Controllers
 import ApplicationFormController from "./forms/application_form_controller"
 import AutosaveController from "./forms/autosave_controller"
+import ContactFeedbackController from "./forms/contact_feedback_controller"
 import CurrencyFormatterController from "./forms/currency_formatter_controller"
 import DateRangeController from "./forms/date_range_controller"
 import DependentFieldsController from "./forms/dependent_fields_controller"
@@ -74,6 +75,7 @@ application.register("reports-chart", ReportsChartController)
 // Form Controllers
 application.register("application-form", ApplicationFormController)
 application.register("autosave", AutosaveController)
+application.register("contact-feedback", ContactFeedbackController)
 application.register("currency-formatter", CurrencyFormatterController)
 application.register("date-range", DateRangeController)
 application.register("dependent-fields", DependentFieldsController)

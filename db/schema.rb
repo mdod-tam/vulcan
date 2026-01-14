@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_12_19_163427) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_13_164032) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -646,6 +646,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_19_163427) do
     t.string "dependent_email", comment: "Optional email for dependents; if blank, uses guardian email"
     t.string "dependent_phone", comment: "Optional phone for dependents; if blank, uses guardian phone"
     t.integer "vendor_authorization_status"
+    t.string "referral_source"
     t.index ["business_name"], name: "index_users_on_business_name"
     t.index ["business_tax_id"], name: "index_users_on_business_tax_id"
     t.index ["dependent_email"], name: "index_users_on_dependent_email"

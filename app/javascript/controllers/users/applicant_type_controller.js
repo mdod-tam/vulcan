@@ -3,7 +3,7 @@ import { setVisible } from "../../utils/visibility";
 import { createVeryShortDebounce } from "../../utils/debounce";
 
 export default class extends Controller {
-  static targets = ["radio", "adultSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField"];
+  static targets = ["radio", "adultSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField", "stepNumber"];
   static outlets = ["guardian-picker"]; // Keep guardian-picker outlet
 
   connect() {
@@ -106,6 +106,8 @@ export default class extends Controller {
       // Show guardian section (guardian picker) if dependent radio is selected
       if (this.hasGuardianSectionTarget) {
         setVisible(this.guardianSectionTarget, dependentRadioSelected);
+        // Disable form fields in hidden guardian section to prevent form submission conflicts
+        this._toggleFormFieldsDisabled(this.guardianSectionTarget, !dependentRadioSelected);
         if (process.env.NODE_ENV !== 'production') {
           console.log(`ApplicantTypeController: Guardian Section ${this.guardianSectionTarget.classList.contains("hidden") ? "hidden" : "visible"}`);
         }
@@ -163,6 +165,10 @@ export default class extends Controller {
         setVisible(this.commonSectionsTarget, showCommon);
       }
 
+      // Update step numbers in common sections based on applicant type
+      // Adult flow: 3, 4, 5 | Dependent flow: 4, 5, 6 (because step 3 is Dependent Information)
+      this._updateStepNumbers(showDependentSections);
+
       // Only dispatch event if the meaningful state has changed
       const currentIsDependentSelected = this.isDependentRadioChecked(); // Re-check after potential selectRadio call
       const stateChanged = !this._lastState ||
@@ -217,5 +223,26 @@ export default class extends Controller {
         field.removeAttribute('disabled');
       }
     });
+  }
+
+  /**
+   * Update step numbers in common sections based on applicant type
+   * @param {boolean} isDependentFlow - Whether the dependent flow is active
+   * @private
+   */
+  _updateStepNumbers(isDependentFlow) {
+    if (!this.hasStepNumberTargets || this.stepNumberTargets.length === 0) {
+      return;
+    }
+
+    try {
+      // Adult flow: 3, 4, 5 | Dependent flow: 4, 5, 6
+      const baseStep = isDependentFlow ? 4 : 3;
+      this.stepNumberTargets.forEach((stepEl, index) => {
+        stepEl.textContent = baseStep + index;
+      });
+    } catch (error) {
+      console.error("ApplicantTypeController: Error updating step numbers:", error);
+    }
   }
 }
