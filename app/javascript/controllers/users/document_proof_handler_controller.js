@@ -60,15 +60,13 @@ class DocumentProofHandlerController extends Controller {
     setVisible(this.uploadSectionTarget, isAccepted);
     setVisible(this.rejectionSectionTarget, !isAccepted);
     
-    // Toggle file input enabled state and required attribute
+    // Toggle file input enabled state
+    // Note: We don't set 'required' attribute to allow server-side validation to handle missing files
     if (this.hasFileInputTarget) {
       const target = this.fileInputTarget;
       target.disabled = !isAccepted;
 
-      if (isAccepted) {
-        target.setAttribute('required', 'required');
-      } else {
-        target.removeAttribute('required');
+      if (!isAccepted) {
         // Clear file when switching to reject
         if (target.value) {
           target.value = '';

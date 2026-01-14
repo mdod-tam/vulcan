@@ -75,7 +75,7 @@ module Applications
 
     private
 
-    def failure(message) # rubocop:disable Naming/PredicateMethod
+    def failure(message)
       @errors << message
       false
     end
@@ -221,7 +221,7 @@ module Applications
       @temp_passwords[user.id] = password
     end
 
-    def validate_no_active_application(user_type) # rubocop:disable Naming/PredicateMethod
+    def validate_no_active_application(user_type)
       return true unless @constituent.applications.where.not(status: :archived).exists?
 
       error_message = case user_type
@@ -286,7 +286,7 @@ module Applications
       Current.paper_context = nil
     end
 
-    def validate_income_threshold(application_attrs) # rubocop:disable Naming/PredicateMethod
+    def validate_income_threshold(application_attrs)
       # Skip validation if explicitly requested (e.g., for rejection cases)
       return true if @skip_income_validation
 
@@ -305,7 +305,7 @@ module Applications
       false
     end
 
-    def build_and_save_application(application_attrs) # rubocop:disable Naming/PredicateMethod
+    def build_and_save_application(application_attrs)
       @application = Application.new(application_attrs)
       @application.user = @constituent
       @application.managing_guardian = @guardian_user_for_app
@@ -345,7 +345,23 @@ module Applications
     end
 
     def process_accept_proof(type)
-      file_present = params["#{type}_proof"].present? || params["#{type}_proof_signed_id"].present?
+      file_param = params["#{type}_proof"]
+      signed_id_param = params["#{type}_proof_signed_id"]
+
+      # Check if we have a valid file or signed_id
+      # file_param can be:
+      # - An uploaded file (ActionDispatch::Http::UploadedFile)
+      # - A file-like object (responds to :read)
+      # - A signed blob ID string (String)
+      # signed_id_param should be a non-empty string if present
+      file_valid = file_param.present? && (
+        file_param.respond_to?(:read) ||
+        file_param.is_a?(ActionDispatch::Http::UploadedFile) ||
+        (file_param.is_a?(String) && !file_param.empty?)
+      )
+      signed_id_valid = signed_id_param.present? && signed_id_param.is_a?(String) && !signed_id_param.empty?
+
+      file_present = file_valid || signed_id_valid
 
       # Approval requires an attachment in all contexts. Only rejections may proceed without files.
       return add_error("Please upload a file for #{type} proof before approving") unless file_present
@@ -353,7 +369,7 @@ module Applications
       attach_and_approve_proof(type)
     end
 
-    def attach_and_approve_proof(type) # rubocop:disable Naming/PredicateMethod
+    def attach_and_approve_proof(type)
       blob_or_file = params["#{type}_proof"].presence || params["#{type}_proof_signed_id"].presence
 
       result = ProofAttachmentService.attach_proof(
@@ -374,7 +390,7 @@ module Applications
       true
     end
 
-    def process_reject_proof(type) # rubocop:disable Naming/PredicateMethod
+    def process_reject_proof(type)
       result = ProofAttachmentService.reject_proof_without_attachment(
         application: @application,
         proof_type: type,
@@ -484,7 +500,7 @@ module Applications
       attrs.present? && attrs.values.any?(&:present?)
     end
 
-    def add_error(message) # rubocop:disable Naming/PredicateMethod
+    def add_error(message)
       @errors << message
       false
     end

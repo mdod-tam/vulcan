@@ -10,7 +10,8 @@ module Admin
     USER_BASE_FIELDS = %i[
       first_name middle_initial last_name email phone phone_type
       physical_address_1 physical_address_2 city state zip_code
-      communication_preference locale
+      communication_preference locale date_of_birth
+      preferred_means_of_communication referral_source
     ].freeze
 
     USER_DISABILITY_FIELDS = %i[
@@ -21,7 +22,8 @@ module Admin
     DEPENDENT_BASE_FIELDS = %i[
       first_name last_name date_of_birth
       physical_address_1 physical_address_2 city state zip_code
-      dependent_email dependent_phone
+      dependent_email dependent_phone phone_type locale
+      preferred_means_of_communication referral_source
     ].freeze
 
     APPLICATION_FIELDS = %i[
@@ -67,6 +69,7 @@ module Admin
           turbo_redirect_path: admin_application_path(service.application)
         )
       else
+        Rails.logger.info "[PaperApplicationsController] Handling service failure, request format: #{request.format}"
         handle_service_failure(service)
       end
     end
