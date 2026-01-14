@@ -25,7 +25,7 @@
     </ul>
   </div>
 
-  <%= form.label :name, "Name", class: "block text-sm font-medium text-gray-700" %>
+  <%= form.label :name, "Name", class: "block text-sm font-medium text-gray-700 required-label" %>
   <%= form.text_field :name, 
       class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
       required: true,
@@ -35,7 +35,7 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
     <div>
-      <%= form.label :phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
+      <%= form.label :phone, "Phone", class: "block text-sm font-medium text-gray-700 required-label" %>
       <%= form.telephone_field :phone, 
           class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
           required: true,
@@ -45,7 +45,7 @@
       <p id="phone-description" class="mt-1 text-xs text-gray-700">Enter 10-digit phone number</p>
     </div>
     <div>
-      <%= form.label :email, "Email", class: "block text-sm font-medium text-gray-700" %>
+      <%= form.label :email, "Email", class: "block text-sm font-medium text-gray-700 required-label" %>
       <%= form.email_field :email, 
           class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
           required: true,
@@ -105,7 +105,7 @@
           id: "application_medical_release_authorized" %>
       <%= label_tag "application[medical_release_authorized]",
           "I authorize the release and sharing of my medical information as described above",
-          class: "ml-2 block text-sm font-medium text-blue-800",
+          class: "ml-2 block text-sm font-medium text-blue-800 required-label",
           for: "application_medical_release_authorized" %>
     </div>
     <p id="medical-release-description" class="text-xs text-blue-600 ml-6 mt-1">
