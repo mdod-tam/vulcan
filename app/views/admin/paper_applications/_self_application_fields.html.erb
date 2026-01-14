@@ -24,7 +24,7 @@
       <%# Row 1: Name fields %>
       <div class="grid grid-cols-6 gap-4 mb-4">
         <div class="col-span-6 sm:col-span-2">
-          <%= c.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
+          <%= c.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700 required-label" %>
           <%= c.text_field :first_name, 
               required: true,
               autocomplete: "given-name",
@@ -39,7 +39,7 @@
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
         </div>
         <div class="col-span-4 sm:col-span-3">
-          <%= c.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
+          <%= c.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700 required-label" %>
           <%= c.text_field :last_name, 
               required: true,
               autocomplete: "family-name",
@@ -50,7 +50,7 @@
       
       <%# Row 2: Date of Birth %>
       <div class="mb-4">
-        <%= c.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
+        <%= c.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700  required-label" %>
         <%= c.date_field :date_of_birth, 
             required: true,
             autocomplete: "bday",
@@ -76,7 +76,7 @@
       <%# Email and Phone row %>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700" %>
+          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700 required-label" %>
           <%= c.email_field :email, 
               required: true,
               autocomplete: "email",
@@ -85,7 +85,7 @@
               data: { "contact-feedback-target": "email" } %>
         </div>
         <div>
-          <%= c.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700" %>
+          <%= c.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700 required-label" %>
           <%= c.telephone_field :phone, 
               required: true,
               autocomplete: "tel",
@@ -143,7 +143,7 @@
       <%# Address fields %>
       <div class="space-y-4">
         <div>
-          <%= c.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
+          <%= c.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700 required-label" %>
           <%= c.text_field :physical_address_1, 
               required: true,
               autocomplete: "address-line1",
@@ -160,7 +160,7 @@
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="col-span-2 md:col-span-2">
-            <%= c.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
+            <%= c.label :city, "City", class: "block text-sm font-medium text-gray-700 required-label" %>
             <%= c.text_field :city, 
                 required: true,
                 autocomplete: "address-level2",
@@ -169,7 +169,7 @@
                 data: { contact_feedback_target: "city" } %>
           </div>
           <div>
-            <%= c.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
+            <%= c.label :state, "State", class: "block text-sm font-medium text-gray-700 required-label" %>
             <%= c.text_field :state, 
                 value: "MD", 
                 required: true,
@@ -179,7 +179,7 @@
                 "aria-required": "true" %>
           </div>
           <div>
-            <%= c.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700" %>
+            <%= c.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700 required-label" %>
             <%= c.text_field :zip_code, 
                 required: true,
                 autocomplete: "postal-code",
