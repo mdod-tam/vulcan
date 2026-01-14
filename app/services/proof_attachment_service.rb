@@ -393,6 +393,9 @@ class ProofAttachmentService
     end
 
     def send_notification(context, event_metadata)
+      # Skip notifications if this is a paper application as paper applications handle their own notifications in PaperApplicationService
+      return if Current.paper_context
+
       NotificationService.create_and_deliver!(
         type: "#{context.proof_type}_proof_attached",
         recipient: context.application.user,
@@ -445,6 +448,10 @@ class ProofAttachmentService
         actor: admin,
         metadata: audit_metadata
       )
+
+      # Skip notifications if this is a paper application context as PaperApplicationService handles notifications
+      return if Current.paper_context
+
       NotificationService.create_and_deliver!(
         type: "#{proof_type}_proof_rejected",
         recipient: application.user,
