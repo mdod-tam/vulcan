@@ -105,6 +105,13 @@ class ProofReview < ApplicationRecord
   end
 
   def send_status_notification
+    # Skip notifications if this is a paper application context
+    # Paper applications handle their own notifications in PaperApplicationService
+    return if Current.paper_context
+
+    # Skip if associations aren't loaded properly
+    return unless application&.user.present? && admin.present?
+
     if status_rejected?
       send_notification('proof_rejected', :proof_rejected,
                         { proof_type: proof_type, rejection_reason: rejection_reason })
@@ -124,7 +131,8 @@ class ProofReview < ApplicationRecord
       metadata: metadata
     )
 
-    # Send the notification
+    # Send the notification with Application as notifiable to maintain consistency
+    # with existing queries that filter by notifiable_type: 'Application'
     NotificationService.create_and_deliver!(
       type: action_name,
       recipient: application.user,

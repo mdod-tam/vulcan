@@ -233,7 +233,7 @@
                 value: dependent&.physical_address_1,
                 autocomplete: "address-line1",
                 class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
-                data: { dependent_fields_target: "dependentAddress1" } %>
+                data: { dependent_fields_target: "dependentAddress1", contact_feedback_target: "address1" } %>
           </div>
           <div>
             <%= d.label :physical_address_2, "Apt, suite, unit (optional)", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_physical_address_2" %>
@@ -242,7 +242,7 @@
                 value: dependent&.physical_address_2,
                 autocomplete: "address-line2",
                 class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
-                data: { dependent_fields_target: "dependentAddress2" } %>
+                data: { dependent_fields_target: "dependentAddress2", contact_feedback_target: "address2" } %>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="col-span-2">
@@ -252,7 +252,7 @@
                   value: dependent&.city,
                   autocomplete: "address-level2",
                   class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
-                  data: { dependent_fields_target: "dependentCity" } %>
+                  data: { dependent_fields_target: "dependentCity", contact_feedback_target: "city" } %>
             </div>
             <div>
               <%= d.label :state, "State", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_state" %>
@@ -261,7 +261,7 @@
                   value: (dependent&.state || "MD"),
                   autocomplete: "address-level1",
                   class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
-                  data: { dependent_fields_target: "dependentState" } %>
+                  data: { dependent_fields_target: "dependentState", contact_feedback_target: "state" } %>
             </div>
             <div>
               <%= d.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_zip_code" %>
@@ -271,7 +271,7 @@
                   autocomplete: "postal-code",
                   pattern: "[0-9]{5}(-[0-9]{4})?",
                   class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
-                  data: { dependent_fields_target: "dependentZip" } %>
+                  data: { dependent_fields_target: "dependentZip", contact_feedback_target: "zipCode" } %>
             </div>
           </div>
         </div>

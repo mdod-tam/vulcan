@@ -31,17 +31,18 @@ export function setVisible(element, visible, options = {}) {
 
   const { required, hiddenClass = 'hidden', ariaHidden } = options;
 
-  // Toggle visibility - let CSS handle it to maintain screen reader accessibility
+  // Toggle visibility
   if (visible) {
     element.classList.remove(hiddenClass);
-    // Remove inline display that might override CSS classes
-    if (element.style.display) {
+    // Remove inline display:none that might override CSS classes
+    if (element.style.display === 'none') {
       element.style.display = '';
     }
   } else {
     element.classList.add(hiddenClass);
-    // Don't set inline display:none - let CSS handle it
-    // This ensures screen readers can still access content if needed
+    // Set inline style as fallback in case CSS fails to load
+    // This prevents sensitive sections from being visible if .hidden class doesn't apply
+    element.style.display = 'none';
   }
 
   // Handle required attribute if specified
