@@ -48,6 +48,7 @@ namespace :db do
       elsif policy.value != value
         old_value = policy.value
         policy.value = value
+        policy.updated_by = User.system_user
         policy.save!
         updated_count += 1
         puts "  ✓ Updated policy: #{key} (#{old_value} → #{value})"
