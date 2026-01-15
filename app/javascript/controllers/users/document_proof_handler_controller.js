@@ -11,6 +11,7 @@ class DocumentProofHandlerController extends Controller {
   static targets = [
     "acceptRadio",
     "rejectRadio",
+    "noneRadio",
     "uploadSection",
     "rejectionSection",
     "fileInput",
@@ -55,10 +56,12 @@ class DocumentProofHandlerController extends Controller {
     }
 
     const isAccepted = this.acceptRadioTarget.checked;
-    
+    const noneProvided = this.noneRadioTarget.checked;
+    const isRejected = this.rejectRadioTarget.checked;
+  
     // Toggle visibility of sections using utility
     setVisible(this.uploadSectionTarget, isAccepted);
-    setVisible(this.rejectionSectionTarget, !isAccepted);
+    setVisible(this.rejectionSectionTarget, isRejected);
     
     // Toggle file input enabled state
     // Note: We don't set 'required' attribute to allow server-side validation to handle missing files
@@ -77,7 +80,7 @@ class DocumentProofHandlerController extends Controller {
     // Toggle required attributes on fields
     if (this.hasRejectionReasonSelectTarget) {
       const target = this.rejectionReasonSelectTarget;
-      if (isAccepted) {
+      if (isAccepted || noneProvided ) {
         target.removeAttribute('required');
       } else {
         target.setAttribute('required', 'required');

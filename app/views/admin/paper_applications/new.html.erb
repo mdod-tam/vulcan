@@ -649,6 +649,15 @@
               </h3>
               
               <%# Income Information Fields %>
+              <%= check_box_tag :no_income_information, 
+                  nil, 
+                  false, 
+                  class: "mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", 
+                  data: { 
+                    "income-validation-target": "noIncomeProvided", 
+                    "action": "change->income-validation#toggleIncome" 
+                  } %>
+              <%= label_tag :no_income_information, "No income information provided" %>
               <%= fields_for :application do |a| %>
                 <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200" 
                      data-income-validation-target="incomeFieldsContainer">
@@ -713,6 +722,16 @@
                            data-action="change->document-proof-handler#toggleProofAction" 
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                  </label>
+                  <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
+                    <input type="radio" 
+                           id="no_income_proof_provided" 
+                           name="income_proof_action" 
+                           value="none"
+                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
+                           data-action="change->document-proof-handler#toggleProofAction"
+                           data-document-proof-handler-target="noneRadio">
+                    <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
                   </label>
                 </div>
               </fieldset>
@@ -819,6 +838,16 @@
                            data-action="change->document-proof-handler#toggleProofAction" 
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                  </label>
+                  <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
+                    <input type="radio" 
+                           id="no_residency_proof_provided" 
+                           name="residency_proof_action" 
+                           value="none"
+                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
+                           data-action="change->document-proof-handler#toggleProofAction"
+                           data-document-proof-handler-target="noneRadio">
+                    <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
                   </label>
                 </div>
               </fieldset>
