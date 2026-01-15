@@ -290,6 +290,13 @@ class IncomeValidationController extends Controller {
   toggleIncome() {
     const incomeMissing = this.noIncomeProvidedTarget.checked
     setVisible(this.incomeFieldsContainerTarget, !incomeMissing)
+    if (incomeMissing) {
+      this.householdSizeTarget.removeAttribute('required')
+      this.annualIncomeTarget.removeAttribute('required')
+    } else {
+      this.householdSizeTarget.setAttribute('required', 'required')
+      this.annualIncomeTarget.setAttribute('required', 'required')
+    }
   }
 
 }

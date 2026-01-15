@@ -129,8 +129,6 @@ class Application < ApplicationRecord
   validates :medical_provider_name, presence: true, unless: :status_draft?
   validates :medical_provider_phone, presence: true, unless: :status_draft?
   validates :medical_provider_email, presence: true, unless: :status_draft?
-  validates :household_size, presence: true, unless: :status_draft?
-  validates :annual_income, presence: true, unless: :status_draft?
   validates :self_certify_disability, inclusion: { in: [true, false] }, unless: :status_draft?
   validates :alternate_contact_phone,
             format: { with: /\A\+?[\d\-()\s]+\z/, allow_blank: true }
