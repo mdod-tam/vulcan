@@ -129,46 +129,59 @@
 
                     <% if active_app %>
                       <div class="flex items-center flex-wrap gap-2">
-                        <span class="text-xs text-gray-700">Active Application:</span>
+                        <span class="text-sm font-medium text-gray-700">Application:</span>
                         <%= application_status_badge(active_app) %>
-                        <span class="text-xs text-gray-700"><%= active_app.application_date.strftime('%b %d, %Y') %></span>
-                        <%= link_to admin_application_path(active_app), 
-                            class: "inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", 
-                            "aria-label": "View application for #{dependent.full_name}",
-                            data: { turbo_frame: "_top" } do %>
+                        <span class="text-sm text-gray-700"><%= active_app.application_date.strftime('%b %d, %Y') %></span>
+                        <button 
+                          type="button"
+                          class="inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          data-action="click->application-modal#open"
+                          data-modal-id="application-modal"
+                          data-application-id="<%= active_app.id %>"
+                          aria-label="View application for <%= dependent.full_name %>">
                           View
-                        <% end %>
+                        </button>
                       </div>
-                      <div class="flex items-center flex-wrap gap-2 mt-1">
-                        <span class="text-xs text-gray-700">Income:</span>
+                      <div class="flex items-center flex-wrap gap-2 mt-2">
+                        <span class="text-sm text-gray-700">Income:</span>
                         <%= proof_status_badge('income', active_app.income_proof_status) %>
-                        <span class="text-xs text-gray-700">Residency:</span>
+                        <span class="text-sm text-gray-700">Residency:</span>
                         <%= proof_status_badge('residency', active_app.residency_proof_status) %>
-                        <span class="text-xs text-gray-700">Medical:</span>
+                        <span class="text-sm text-gray-700">Medical:</span>
                         <%= medical_certification_status_badge(active_app) %>
                       </div>
                     <% elsif last_app %>
                       <div class="flex items-center flex-wrap gap-2">
-                        <span class="text-xs text-gray-700">Last Application:</span>
+                        <span class="text-sm font-medium text-gray-700">Application:</span>
                         <%= application_status_badge(last_app) %>
-                        <span class="text-xs text-gray-700"><%= last_app.application_date.strftime('%b %d, %Y') %></span>
-                        <%= link_to admin_application_path(last_app), 
-                            class: "inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", 
-                            "aria-label": "View application for #{dependent.full_name}",
-                            data: { turbo_frame: "_top" } do %>
+                        <span class="text-sm text-gray-700"><%= last_app.application_date.strftime('%b %d, %Y') %></span>
+                        <button 
+                          type="button"
+                          class="inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          data-action="click->application-modal#open"
+                          data-modal-id="application-modal"
+                          data-application-id="<%= last_app.id %>"
+                          aria-label="View application for <%= dependent.full_name %>">
                           View
-                        <% end %>
+                        </button>
                       </div>
-                      <div class="flex items-center flex-wrap gap-2 mt-1">
-                        <span class="text-xs text-gray-700">Income:</span>
+                      <div class="flex items-center flex-wrap gap-2 mt-2">
+                        <span class="text-sm text-gray-700">Income:</span>
                         <%= proof_status_badge('income', last_app.income_proof_status) %>
-                        <span class="text-xs text-gray-700">Residency:</span>
+                        <span class="text-sm text-gray-700">Residency:</span>
                         <%= proof_status_badge('residency', last_app.residency_proof_status) %>
-                        <span class="text-xs text-gray-700">Medical:</span>
+                        <span class="text-sm text-gray-700">Medical:</span>
                         <%= medical_certification_status_badge(last_app) %>
                       </div>
                     <% else %>
                       <div class="text-xs text-gray-700">No prior applications</div>
+                    <% end %>
+
+                    <% app_to_show = active_app || last_app %>
+                    <% if app_to_show %>
+                      <div class="mt-2 text-xs text-gray-600">
+                        Last updated: <%= app_to_show.updated_at.strftime('%b %d, %Y at %l:%M %p') %>
+                      </div>
                     <% end %>
 
                     <div class="mt-2">
@@ -254,25 +267,63 @@
 
     <!-- Applications Section with Modal Controller -->
     <div data-controller="application-modal">
-      <section aria-labelledby="applications-heading">
-        <h2 id="applications-heading" class="text-lg font-semibold text-gray-900 mb-4">Applications</h2>
+      <section aria-labelledby="applications-heading" class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 id="applications-heading" class="text-xl font-semibold text-gray-900 mb-4"><%= @user.first_name %>'s Applications</h2>
         <div class="space-y-4">
           <% if @user.applications.any? %>
-            <% @user.applications.each do |application| %>
-              <div class="p-4 bg-white rounded border border-gray-200">
-                <p class="text-md font-semibold text-gray-900">
-                  <button 
-                    type="button"
-                    class="text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded underline"
-                    data-action="click->application-modal#open"
-                    data-modal-id="application-modal"
-                    data-application-id="<%= application.id %>"
-                    aria-label="View application from <%= application.application_date.strftime('%B %d, %Y') %>">
-                    <%= application.application_date.strftime('%B %d, %Y') %>
-                  </button>
-                </p>
-              </div>
-            <% end %>
+            <ul role="list" class="space-y-4">
+              <% @user.applications.order(application_date: :desc).each do |application| %>
+                <li class="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50">
+                  <div class="flex items-center flex-wrap gap-2">
+                    <span class="text-sm font-medium text-gray-700">Application:</span>
+                    <%= application_status_badge(application) %>
+                    <span class="text-sm text-gray-700"><%= application.application_date.strftime('%b %d, %Y') %></span>
+                    <button 
+                      type="button"
+                      class="inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      data-action="click->application-modal#open"
+                      data-modal-id="application-modal"
+                      data-application-id="<%= application.id %>"
+                      aria-label="View application from <%= application.application_date.strftime('%B %d, %Y') %>">
+                      View
+                    </button>
+                  </div>
+                  <div class="flex items-center flex-wrap gap-2 mt-2">
+                    <span class="text-sm text-gray-700">Income:</span>
+                    <%= proof_status_badge('income', application.income_proof_status) %>
+                    <span class="text-sm text-gray-700">Residency:</span>
+                    <%= proof_status_badge('residency', application.residency_proof_status) %>
+                    <span class="text-sm text-gray-700">Medical:</span>
+                    <%= medical_certification_status_badge(application) %>
+                  </div>
+                  <div class="mt-2 text-xs text-gray-600">
+                    Last updated: <%= application.updated_at.strftime('%b %d, %Y at %l:%M %p') %>
+                  </div>
+                  <% if application.status == 'approved' %>
+                    <% waiting_period_years = Policy.get('waiting_period_years') || 3 %>
+                    <% approved_change = ApplicationStatusChange.where(application_id: application.id, to_status: 'approved').order(changed_at: :desc).first %>
+                    <% eligible_date = application.application_date + waiting_period_years.years %>
+                    <% eligible_now = eligible_date <= Time.current %>
+                    <div class="mt-2">
+                      <div class="text-xs text-gray-700">
+                        Application approved on <%= (approved_change&.changed_at || application.updated_at).strftime('%b %d, %Y') %>
+                      </div>
+                      <% voucher = application.vouchers.order(issued_at: :desc).first %>
+                      <% if voucher.present? && voucher.issued_at.present? %>
+                        <div class="text-xs text-gray-700">
+                          Voucher issued on <%= voucher.issued_at.strftime('%b %d, %Y') %>
+                        </div>
+                      <% end %>
+                      <% if eligible_now %>
+                        <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium">Eligible now</span>
+                      <% else %>
+                        <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs font-medium">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
           <% else %>
             <p class="text-gray-700 text-sm">This user has no applications.</p>
           <% end %>
@@ -314,7 +365,8 @@
       <button 
         type="button"
         class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        data-action="click->application-modal#close">
+        data-action="click->application-modal#close"
+        aria-label="Close application details modal">
         Close
       </button>
       <button 
@@ -370,7 +422,8 @@
             <button 
               type="button"
               class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              data-action="click->application-modal#close">
+              data-action="click->application-modal#close"
+              aria-label="Cancel editing and close modal">
               Cancel
             </button>
           </div>

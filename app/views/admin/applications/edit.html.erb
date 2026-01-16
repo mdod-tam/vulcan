@@ -1,8 +1,9 @@
-<%= turbo_frame_tag(turbo_frame_request_id) do %>
+<%= turbo_frame_tag(turbo_frame_request_id || "application_edit_#{@application.id}") do %>
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-2xl font-semibold mb-6">Edit Application for <%= @application.user.first_name %></h1>
 
   <%= form_with(model: [:admin, @application], local: true, class: "space-y-6", data: { turbo_frame: turbo_frame_request_id || "_top" }) do |form| %>
+    <%= hidden_field_tag :modal, params[:modal] if params[:modal].present? %>
     <% if @application.errors.any? %>
       <div id="error_explanation" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
         <strong class="font-bold"><%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:</strong>
@@ -94,5 +95,3 @@
   <% end %>
 </div>
 <% end %>
-
-

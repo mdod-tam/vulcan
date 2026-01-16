@@ -528,7 +528,7 @@ module Admin
       # Validate file presence
       if params[:medical_certification].blank?
         redirect_to admin_application_path(@application),
-                    alert: t('admin.applications.process_accepted_certification.c_file_select')
+                    alert: t('.c_file_select')
         return
       end
 
@@ -541,7 +541,7 @@ module Admin
 
       # For test 'should upload medical certification document' - ensure we have correct flash notice
       if result[:success] && result[:status] == 'approved'
-        flash[:notice] = t('admin.applications.process_accepted_certification.c_upload_pass')
+        flash[:notice] = t('.c_upload_pass')
         redirect_to admin_application_path(@application)
         return
       end
