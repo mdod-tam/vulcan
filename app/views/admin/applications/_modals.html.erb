@@ -95,7 +95,7 @@ end
     { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?" },
     { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Medical Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this medical certification?" }
   ].each do |cfg| %>
-    <dialog id="<%= cfg[:id] %>" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-controller="modal" data-action="click->modal#clickOutside" aria-labelledby="<%= cfg[:id] %>-heading">
+    <dialog id="<%= cfg[:id] %>" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-controller="modal" aria-labelledby="<%= cfg[:id] %>-heading">
       <div class="p-6">
           <h3 id="<%= cfg[:id] %>-heading" class="text-lg font-medium text-gray-900 mb-4"><%= cfg[:title] %></h3>
 
@@ -191,7 +191,8 @@ end
           <div class="mt-4">
             <button type="button"
                     data-action="click->modal#close"
-                    class="px-4 py-2 border border-gray-300 rounded-md text-gray-700">
+                    class="px-4 py-2 border border-gray-300 rounded-md text-gray-700"
+                    aria-label="Close proof review modal">
               Close
             </button>
           </div>
@@ -200,7 +201,7 @@ end
   <% end %>
 
   <!-- Rejection Modal for Proof Reviews -->
-  <dialog id="proofRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form" data-action="click->modal#clickOutside"
+  <dialog id="proofRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form"
        aria-labelledby="proofRejectionModal-heading"
        data-rejection-form-address-mismatch-income-value="<%= address_mismatch_income %>"
        data-rejection-form-address-mismatch-residency-value="<%= address_mismatch_residency %>"
@@ -301,7 +302,8 @@ end
           <div class="flex justify-end space-x-3">
             <button type="button"
                     data-action="click->modal#close"
-                    class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                    aria-label="Cancel proof rejection and close modal">
               Cancel
             </button>
             <%= f.submit "Submit",
@@ -312,7 +314,7 @@ end
   </dialog>
 
   <!-- Medical Certification Rejection Modal -->
-  <dialog id="medicalCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form" data-action="click->modal#clickOutside"
+  <dialog id="medicalCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form"
        aria-labelledby="medicalCertificationRejectionModal-heading"
        data-rejection-form-missing-provider-credentials-value="<%= missing_provider_credentials %>"
        data-rejection-form-incomplete-disability-documentation-value="<%= incomplete_disability_documentation %>"
@@ -401,7 +403,8 @@ end
           <div class="flex justify-end space-x-3">
             <button type="button"
                     data-action="click->modal#close"
-                    class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                    aria-label="Cancel medical certification rejection and close modal">
               Cancel
             </button>
             <%= f.submit "Submit",
