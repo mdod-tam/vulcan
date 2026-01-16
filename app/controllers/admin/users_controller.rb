@@ -3,7 +3,7 @@
 module Admin
   # Controller for managing users in the admin interface
   # Inherits from BaseController for Pagy pagination support
-  class UsersController < BaseController
+  class UsersController < BaseController # rubocop:disable Metrics/ClassLength
     include ParamCasting
     include UserServiceIntegration
 
@@ -344,15 +344,15 @@ module Admin
       @user = User.find(params[:id])
 
       if @user.update(admin_user_params)
-      AuditEventService.log(
-        action: 'user_updated',
-        actor: current_user,
-        auditable: @user,
-        metadata: {
-          admin_id: current_user.id,
-          admin_name: current_user.full_name
-        }
-      )
+        AuditEventService.log(
+          action: 'user_updated',
+          actor: current_user,
+          auditable: @user,
+          metadata: {
+            admin_id: current_user.id,
+            admin_name: current_user.full_name
+          }
+        )
         redirect_to admin_user_path(@user), notice: t('.user_update_pass')
       else
         render :edit, status: :unprocessable_content

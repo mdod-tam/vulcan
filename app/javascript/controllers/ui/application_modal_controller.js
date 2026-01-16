@@ -2,12 +2,15 @@ import { Controller } from "@hotwired/stimulus"
 
 class ApplicationModalController extends Controller {
   connect() {
+    // Store bound function as instance property for proper cleanup
+    this.boundHandleFormSubmit = this.handleFormSubmit.bind(this)
     // Listen for Turbo form submissions within modals
-    this.element.addEventListener("turbo:submit-end", this.handleFormSubmit.bind(this))
+    this.element.addEventListener("turbo:submit-end", this.boundHandleFormSubmit)
   }
 
   disconnect() {
-    this.element.removeEventListener("turbo:submit-end", this.handleFormSubmit.bind(this))
+    // Remove listener using the same bound function reference
+    this.element.removeEventListener("turbo:submit-end", this.boundHandleFormSubmit)
   }
 
   handleFormSubmit(event) {
@@ -75,6 +78,12 @@ class ApplicationModalController extends Controller {
   openUserEdit(event) {
     const userId = event.currentTarget.dataset.userId || document.querySelector('[data-user-id]')?.dataset.userId
     const dialog = document.getElementById('user-edit-modal')
+    
+    if (!dialog) {
+      console.error("User edit modal not found")
+      return
+    }
+    
     const frame = dialog.querySelector('[id="user-edit-modal-content"]')
     
     if (frame && userId) {
@@ -88,6 +97,12 @@ class ApplicationModalController extends Controller {
   openApplicationEdit(event) {
     const applicationId = event.currentTarget.dataset.applicationId
     const dialog = document.getElementById('application-edit-modal')
+    
+    if (!dialog) {
+      console.error("Application edit modal not found")
+      return
+    }
+    
     const frame = dialog.querySelector('[id="application-edit-modal-content"]')
     
     if (frame && applicationId) {
