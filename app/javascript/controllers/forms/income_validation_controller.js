@@ -11,7 +11,7 @@ import { calculateThreshold as calculateThresholdUtil } from "../../services/inc
  */
 class IncomeValidationController extends Controller {
   static targets = [
-    "householdSize", "annualIncome", "warningContainer", "submitButton", "incomeFieldsContainer"
+    "householdSize", "annualIncome", "warningContainer", "submitButton", "incomeFieldsContainer", "noIncomeProvided"
   ]
 
   static outlets = ["flash"] // Declare flash outlet
@@ -285,6 +285,18 @@ class IncomeValidationController extends Controller {
   // Action methods for manual triggering
   validateAction() {
     this.validateIncomeThreshold()
+  }
+
+  toggleIncome() {
+    const incomeMissing = this.noIncomeProvidedTarget.checked
+    setVisible(this.incomeFieldsContainerTarget, !incomeMissing)
+    if (incomeMissing) {
+      this.householdSizeTarget.removeAttribute('required')
+      this.annualIncomeTarget.removeAttribute('required')
+    } else {
+      this.householdSizeTarget.setAttribute('required', 'required')
+      this.annualIncomeTarget.setAttribute('required', 'required')
+    }
   }
 
 }
