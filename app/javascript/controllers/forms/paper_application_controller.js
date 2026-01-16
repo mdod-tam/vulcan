@@ -66,6 +66,50 @@ export default class extends Controller {
   }
 
   /**
+   * Toggle medical provider fields visibility and required attribute
+   * When "No medical provider information provided" is checked, hide fields and remove required
+   */
+  toggleMedicalProvider(event) {
+    const checkbox = event.target;
+    const isChecked = checkbox.checked;
+    
+    // Find the medical provider fieldset
+    const fieldset = checkbox.closest('fieldset');
+    const medicalProviderFields = fieldset.querySelectorAll('[name*="medical_provider"]');
+    const description = fieldset.querySelector('p.text-sm');
+    const prefillNotice = fieldset.querySelector('#medical-provider-prefill-notice');
+    const fieldsContainer = fieldset.querySelector('.grid');
+    
+    if (isChecked) {
+      // Hide only the form fields and description, keep the header visible
+      if (description) description.classList.add('hidden');
+      if (prefillNotice) prefillNotice.classList.add('hidden');
+      if (fieldsContainer) fieldsContainer.classList.add('hidden');
+      
+      // Remove required attribute from all medical provider fields
+      medicalProviderFields.forEach(field => {
+        field.removeAttribute('required');
+        field.removeAttribute('aria-required');
+      });
+    } else {
+      // Show the form fields and description
+      if (description) description.classList.remove('hidden');
+      if (fieldsContainer) fieldsContainer.classList.remove('hidden');
+      
+      // Add required attribute back to all medical provider fields
+      medicalProviderFields.forEach(field => {
+        if (field.name.includes('medical_provider')) {
+          // Only set required for the main fields, not the optional fax field
+          if (!field.name.includes('fax')) {
+            field.setAttribute('required', 'required');
+            field.setAttribute('aria-required', 'true');
+          }
+        }
+      });
+    }
+  }
+
+  /**
    * Temporary method to prevent errors - this functionality should be handled by income-validation controller
    * TODO: Replace with proper income-validation controller setup
    */
