@@ -126,9 +126,9 @@ class Application < ApplicationRecord
   validates :terms_accepted, acceptance: { accept: true }, if: :submitted?
   validates :information_verified, acceptance: { accept: true }, if: :submitted?
   validates :medical_release_authorized, acceptance: { accept: true }, if: :submitted?
-  validates :medical_provider_name, presence: true, unless: :status_draft?
-  validates :medical_provider_phone, presence: true, unless: :status_draft?
-  validates :medical_provider_email, presence: true, unless: :status_draft?
+  validates :medical_provider_name, presence: true, unless: :skip_medical_provider_validation?
+  validates :medical_provider_phone, presence: true, unless: :skip_medical_provider_validation?
+  validates :medical_provider_email, presence: true, unless: :skip_medical_provider_validation?
   validates :self_certify_disability, inclusion: { in: [true, false] }, unless: :status_draft?
   validates :alternate_contact_phone,
             format: { with: /\A\+?[\d\-()\s]+\z/, allow_blank: true }
@@ -262,6 +262,12 @@ class Application < ApplicationRecord
   cattr_accessor :skip_wait_period_validation, default: false
 
   # Instance Methods
+  # Determines if medical provider validation should be skipped
+  # Skip validation if: status is draft, needs_information
+  def skip_medical_provider_validation?
+    status_draft? || status_needs_information?
+  end
+
   # Status methods- Delegate approval logic to the Applications::Approver service object
   def approve!(user: Current.user)
     Applications::Approver.new(self, by: user).call

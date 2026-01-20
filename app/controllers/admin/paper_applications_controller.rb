@@ -333,6 +333,7 @@ module Admin
         :income_proof_rejection_reason, :income_proof_rejection_notes,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
         :residency_proof_rejection_reason, :residency_proof_rejection_notes,
+        :no_medical_provider_information,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),
@@ -341,7 +342,7 @@ module Admin
     end
 
     def base_params_from(permitted)
-      base = permitted.slice(:relationship_type, :guardian_id, :dependent_id)
+      base = permitted.slice(:relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information)
       base[:applicant_type] = compute_applicant_type(permitted)
       base
     end

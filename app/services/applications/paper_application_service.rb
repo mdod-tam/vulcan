@@ -311,13 +311,20 @@ module Applications
       @application.managing_guardian = @guardian_user_for_app
       @application.submission_method = :paper
       @application.application_date = Time.current
-      @application.status = :in_progress
+      
+      # Check if the "no medical provider information" checkbox was checked
+      if params[:no_medical_provider_information]
+        @application.status = :needs_information
+      else
+        @application.status = :in_progress
+      end
 
       return true if @application.save
 
       add_error("Failed to create application: #{@application.errors.full_messages.join(', ')}")
       false
     end
+
 
     def process_proof_uploads
       Current.paper_context = true
@@ -330,6 +337,7 @@ module Applications
     ensure
       Current.paper_context = nil
     end
+
 
     def process_proof(type)
       action = params["#{type}_proof_action"] || params[:"#{type}_proof_action"]
