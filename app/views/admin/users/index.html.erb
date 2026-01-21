@@ -76,7 +76,7 @@
       
       <%# Filters Section %>
       <div class="p-4 border-b border-gray-200">
-        <%= form_tag admin_users_path, method: :get, class: "flex flex-wrap items-end gap-4", data: { turbo_frame: "users_list", controller: "autosubmit" } do %>
+        <%= form_tag admin_users_path, method: :get, class: "flex flex-wrap items-end gap-4", data: { turbo_frame: "users_list", turbo_action: "advance", controller: "autosubmit" } do %>
           <%# Search %>
           <div class="flex-1 min-w-[200px]">
             <%= label_tag :q, "Search", class: "block text-sm font-medium text-gray-700 mb-1" %>
