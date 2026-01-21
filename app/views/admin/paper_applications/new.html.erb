@@ -594,6 +594,96 @@
                   </div>
                 </div>
               <% end %>
+              
+              <%# Medical Provider Documentation Upload %>
+              <div data-controller="document-proof-handler" class="mt-6 pt-6 border-t border-gray-200">
+                <h4 class="text-sm font-semibold text-gray-900 mb-4">Medical Provider Documentation</h4>
+                
+                <%# Proof Action Selection %>
+                <fieldset class="mb-4">
+                  <legend class="text-sm font-medium text-gray-700 mb-2">Medical Provider Documentation Action</legend>
+                  <div role="radiogroup" aria-label="Medical provider documentation action" class="flex flex-wrap gap-4">
+                    <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+                      <input type="radio" 
+                             id="accept_medical_provider_documentation" 
+                             name="medical_provider_documentation_action" 
+                             value="accept" 
+                             class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300" 
+                             checked 
+                             data-action="change->document-proof-handler#toggleProofAction" 
+                             data-document-proof-handler-target="acceptRadio">
+                      <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+                    </label>
+                    <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                      <input type="radio" 
+                             id="reject_medical_provider_documentation" 
+                             name="medical_provider_documentation_action" 
+                             value="reject" 
+                             class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
+                             data-action="change->document-proof-handler#toggleProofAction" 
+                             data-document-proof-handler-target="rejectRadio">
+                      <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                    </label>
+                    <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
+                      <input type="radio" 
+                             id="no_medical_provider_documentation_provided" 
+                             name="medical_provider_documentation_action" 
+                             value="none"
+                             class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
+                             data-action="change->document-proof-handler#toggleProofAction"
+                             data-document-proof-handler-target="noneRadio">
+                      <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
+                    </label>
+                  </div>
+                </fieldset>
+                
+                <%# Upload Field %>
+                <div id="medical_provider_documentation_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
+                  <label for="medical_provider_documentation" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Medical Provider Documentation</label>
+                  <input type="file" 
+                         name="medical_provider_documentation" 
+                         id="medical_provider_documentation" 
+                         class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                         accept=".pdf,.jpg,.jpeg,.png" 
+                         aria-describedby="medical_provider_documentation_help" 
+                         data-document-proof-handler-target="fileInput">
+                  <p id="medical_provider_documentation_help" class="mt-1 text-xs text-gray-500">
+                    Upload documentation from the medical provider verifying the disability certification. 
+                    Accepted formats: PDF, JPG, PNG.
+                  </p>
+                </div>
+                
+                <%# Rejection Fields %>
+                <div id="medical_provider_documentation_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
+                  <div class="space-y-4">
+                    <div>
+                      <label for="medical_provider_documentation_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                      <select id="medical_provider_documentation_rejection_reason" 
+                              name="medical_provider_documentation_rejection_reason" 
+                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                              data-document-proof-handler-target="rejectionReasonSelect">
+                        <option value="">Select a reason</option>
+                        <option value="incomplete">Incomplete Documentation</option>
+                        <option value="expired">Expired Documentation</option>
+                        <option value="illegible">Illegible or Unclear</option>
+                        <option value="missing_signature">Missing Provider Signature</option>
+                        <option value="wrong_document">Wrong Document Type</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div id="medical_provider_documentation_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
+                    <div>
+                      <label for="medical_provider_documentation_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes to Constituent</label>
+                      <textarea id="medical_provider_documentation_rejection_notes" 
+                                name="medical_provider_documentation_rejection_notes" 
+                                rows="3" 
+                                class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                                data-document-proof-handler-target="rejectionNotes"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">This message will be included in the notification sent to the applicant</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </fieldset>
           </div>
         </section>

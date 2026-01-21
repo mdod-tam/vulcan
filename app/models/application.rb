@@ -118,6 +118,7 @@ class Application < ApplicationRecord
   has_one_attached :income_proof
   has_one_attached :residency_proof
   has_one_attached :medical_certification
+  has_one_attached :medical_provider_documentation
 
   # Validations
   validates :application_date, presence: true

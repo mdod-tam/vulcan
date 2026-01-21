@@ -202,9 +202,18 @@ class ProofAttachmentService
     end
 
     def perform_attachment(application, proof_type, attachment_param)
-      application.send("#{proof_type}_proof").attach(attachment_param)
+      attachment_method = get_attachment_method_name(proof_type)
+      application.send(attachment_method).attach(attachment_param)
     rescue ActiveSupport::MessageVerifier::InvalidSignature, ActiveRecord::RecordNotFound => e
       handle_attachment_signature_error(application, proof_type, attachment_param, e)
+    end
+
+    def get_attachment_method_name(proof_type)
+      # Handle special case for medical_provider_documentation
+      # which is named medical_provider_documentation, not medical_provider_documentation_proof
+      return 'medical_provider_documentation' if proof_type.to_s == 'medical_provider_documentation'
+      
+      "#{proof_type}_proof"
     end
 
     def handle_attachment_signature_error(application, proof_type, attachment_param, error)
@@ -212,7 +221,8 @@ class ProofAttachmentService
 
       validate_recoverable_attachment_param(attachment_param, error)
       blob = recreate_blob_from_uploaded_file(attachment_param)
-      application.send("#{proof_type}_proof").attach(blob)
+      attachment_method = get_attachment_method_name(proof_type)
+      application.send(attachment_method).attach(blob)
     end
 
     def validate_recoverable_attachment_param(attachment_param, error)
@@ -252,7 +262,8 @@ class ProofAttachmentService
     def verify_attachment_persisted(application, proof_type)
       application.reload
 
-      return if application.send("#{proof_type}_proof").attached?
+      attachment_method = get_attachment_method_name(proof_type)
+      return if application.send(attachment_method).attached?
 
       Rails.logger.error "Attachment failed to persist for #{proof_type} proof on application #{application.id}"
       raise 'Attachment failed to persist after save and reload'
@@ -357,7 +368,8 @@ class ProofAttachmentService
     end
 
     def build_event_metadata(context)
-      attached_blob = context.application.send("#{context.proof_type}_proof").blob
+      attachment_method = get_attachment_method_name(context.proof_type)
+      attached_blob = context.application.send(attachment_method).blob
       blob_id = attached_blob&.id
 
       context.metadata.merge(
