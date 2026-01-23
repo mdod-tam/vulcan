@@ -59,3 +59,4 @@ app/.DS_Store
 test/.DS_Store
 test/controllers/.DS_Store
 package-lock.json
+.yarn/install-state.gz
