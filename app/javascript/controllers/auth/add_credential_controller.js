@@ -6,7 +6,7 @@ class AddCredentialController extends Controller {
   // Define the expected value for the callback URL
   static values = { callbackUrl: String }
   // Define the target for the nickname input
-  static targets = ["nicknameInput", "submitButton"]
+  static targets = ["nicknameInput", "submitButton", "statusMessage"]
 
 
   connect() {
@@ -45,7 +45,7 @@ class AddCredentialController extends Controller {
     // Get the nickname
     const nickname = this.hasNicknameInputTarget ? this.nicknameInputTarget.value : null;
     if (!nickname) {
-      console.error("Please enter a nickname for your security key.")
+      this.showNicknameError("Please enter a name so you can recognize this device later.")
       if (this.hasSubmitButtonTarget) {
         this.submitButtonTarget.disabled = false;
       }
@@ -114,6 +114,28 @@ class AddCredentialController extends Controller {
       if (this.hasSubmitButtonTarget) {
         this.submitButtonTarget.disabled = false;
       }
+    }
+  }
+
+  clearNicknameError() {
+    if (!this.hasNicknameInputTarget) return;
+
+    this.nicknameInputTarget.classList.remove("border-red-500", "focus:border-red-500", "focus:ring-red-500");
+    if (this.hasStatusMessageTarget) {
+      this.statusMessageTarget.textContent = "";
+      this.statusMessageTarget.classList.add("hidden");
+    }
+  }
+
+  showNicknameError(message) {
+    if (this.hasNicknameInputTarget) {
+      this.nicknameInputTarget.focus();
+      this.nicknameInputTarget.classList.add("border-red-500", "focus:border-red-500", "focus:ring-red-500");
+    }
+
+    if (this.hasStatusMessageTarget) {
+      this.statusMessageTarget.textContent = message;
+      this.statusMessageTarget.classList.remove("hidden");
     }
   }
 }

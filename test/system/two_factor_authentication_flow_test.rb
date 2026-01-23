@@ -59,12 +59,12 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     click_link 'Register Security Key'
 
     # This likely takes us directly to the security key setup page, not a general 2FA setup page
-    assert_text 'Add a Security Key'
+    assert_text 'Set up Device or Security Key'
     take_screenshot('2fa-2-setup-options')
 
     # We're on the WebAuthn credential page
     assert_current_path new_credential_two_factor_authentication_path(type: 'webauthn')
-    assert_text 'Add a Security Key'
+    assert_text 'Set up Device or Security Key'
     take_screenshot('2fa-3-webauthn-setup')
 
     # Visit TOTP setup directly
@@ -410,7 +410,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
     # Visit WebAuthn credential creation page
     visit new_credential_two_factor_authentication_path(type: 'webauthn')
-    assert_text 'Add a Security Key'
+    assert_text 'Set up Device or Security Key'
 
     # We need to simulate the creation process - inject a JavaScript helper for this test
     # to confirm challenge data was generated
