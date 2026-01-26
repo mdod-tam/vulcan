@@ -2,7 +2,7 @@
 
 A comprehensive guide to the notification and communication system in MAT Vulcan, covering email delivery, message composition, template management, and integration patterns across the application.
 
-> **⚠️ Important Distinction**: This document covers the **Notification System** for email communications. For audit trails and event logging, see [`docs/features/audits.md`](./audits.md). The audit system handles system events and data change tracking, while the notification system handles user communications.
+> **⚠️ Important Distinction**: This document covers the **Notification System** for email communications. For audit trails and event logging, see [`docs/features/audit_event_tracking.md`](./audit_event_tracking.md). The audit system handles system events and data change tracking, while the notification system handles user communications.
 
 ---
 
@@ -41,7 +41,7 @@ User Action → Service → NotificationService.create_and_deliver!()
 - **Unified API**: Single service interface for all notification types
 - **Template System**: Database-stored email templates with variable substitution
 - **Delivery Tracking**: Comprehensive tracking of delivery status and errors
-- **Multi-Channel Ready**: Extensible architecture for email, SMS, push notifications
+- **Single-Channel Today**: Only `:email` delivery is implemented; extension points exist
 - **Error Recovery**: Robust error handling with retry mechanisms
 - **Rails Flash Integration**: Preference for accessible Rails flash messages over toast notifications
 
@@ -148,6 +148,8 @@ NotificationService.create_and_deliver!(
 
 **Returns**: `Notification` record or `nil` if failed
 
+If `audit: true`, `NotificationService` uses `AuditEventService.log()` to write an `Event` record with action `notification_<action>_created`, `_sent`, or `_failed` depending on delivery outcome, ensuring consistent event structure and automatic deduplication.
+
 #### Builder Pattern (Alternative)
 
 ```ruby
@@ -188,6 +190,9 @@ MAILER_MAP = {
   'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created]
 }.freeze
 ```
+
+Notifications with actions starting with `medical_certification_` are routed dynamically to
+`MedicalProviderMailer` based on the action suffix.
 
 ### 2.3 · Error Handling & Recovery
 
@@ -232,6 +237,8 @@ end
 
 ```ruby
 class Notification < ApplicationRecord
+  attr_accessor :delivery_successful
+
   enum :delivery_status, { delivered: 'delivered', opened: 'opened', error: 'error' }, suffix: true
   
   belongs_to :recipient, class_name: 'User'
@@ -260,9 +267,19 @@ class Notification < ApplicationRecord
   
   def email_error_message
     return nil unless delivery_status == 'error'
+    return 'Unknown error' unless metadata.is_a?(Hash)
+
     metadata.fetch('delivery_error', {}).fetch('message', 'Unknown error')
   end
   
+  def update_metadata!(key, value)
+    with_lock do
+      new_metadata = metadata || {}
+      new_metadata[key.to_s] = value
+      update!(metadata: new_metadata)
+    end
+  end
+
   # Generate human-readable message via NotificationComposer
   def message
     NotificationComposer.generate(action, notifiable, actor, metadata)
@@ -270,32 +287,38 @@ class Notification < ApplicationRecord
 end
 ```
 
+**Note**: Both the model and database schema allow optional `actor`/`notifiable` associations. `NotificationService` provides a `default_actor` fallback when needed and enforces specific contracts via `enforce_delivery_contracts!` for notification types that require these associations.
+
 ### 3.2 · Database Schema
 
 ```sql
 CREATE TABLE notifications (
   id BIGINT PRIMARY KEY,
   recipient_id BIGINT NOT NULL,           -- User receiving notification
-  actor_id BIGINT,                        -- User who triggered notification
+  actor_id BIGINT,                        -- User who triggered notification (optional)
   action VARCHAR NOT NULL,                -- Notification type (e.g., 'proof_approved')
-  notifiable_type VARCHAR,                -- Polymorphic type (e.g., 'Application')
-  notifiable_id BIGINT,                   -- Polymorphic ID
-  metadata JSONB DEFAULT '{}',            -- Additional notification context
-  delivery_status VARCHAR DEFAULT 'delivered', -- 'delivered', 'opened', 'error'
+  notifiable_type VARCHAR,                -- Polymorphic type (e.g., 'Application') (optional)
+  notifiable_id BIGINT,                   -- Polymorphic ID (optional)
+  metadata JSONB,                         -- Additional notification context
+  delivery_status VARCHAR,                -- 'delivered', 'opened', 'error'
   message_id VARCHAR,                     -- Email message ID for tracking
   read_at TIMESTAMP,                      -- When notification was read
-  audited BOOLEAN DEFAULT false,          -- Whether audit event was created
+  delivered_at TIMESTAMP,                 -- When delivery was confirmed
+  opened_at TIMESTAMP,                    -- When recipient opened the email
+  audited BOOLEAN DEFAULT false NOT NULL, -- Whether audit event was created
   created_at TIMESTAMP NOT NULL,
   updated_at TIMESTAMP NOT NULL
 );
 
 -- Performance indexes
 CREATE INDEX notifications_recipient_id_idx ON notifications (recipient_id);
+CREATE INDEX notifications_actor_id_idx ON notifications (actor_id);
 CREATE INDEX notifications_notifiable_idx ON notifications (notifiable_type, notifiable_id);
-CREATE INDEX notifications_action_idx ON notifications (action);
-CREATE INDEX notifications_unread_idx ON notifications (recipient_id, read_at) WHERE read_at IS NULL;
-CREATE INDEX notifications_metadata_gin_idx ON notifications USING GIN (metadata);
+CREATE INDEX notifications_message_id_idx ON notifications (message_id);
+CREATE INDEX notifications_audited_idx ON notifications (audited);
 ```
+
+**Schema Design**: The `actor_id` and `notifiable_id` columns are optional to support system notifications that don't require a specific actor or notifiable object. This aligns with the model's `optional: true` declarations and provides flexibility for different notification types.
 
 ### 3.3 · Metadata Structure Examples
 
@@ -402,14 +425,27 @@ Email templates are stored in the database via the `EmailTemplate` model, allowi
 
 ```ruby
 class EmailTemplate < ApplicationRecord
+  enum :format, { html: 0, text: 1 }
+
   validates :name, presence: true, uniqueness: { scope: :format }
-  validates :format, inclusion: { in: %w[text html] }
-  validates :subject_template, presence: true
-  validates :body_template, presence: true
+  validates :subject, presence: true
+  validates :body, presence: true
+  validates :format, presence: true
+  validates :description, presence: true
+  validates :version, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   
   def render(**variables)
-    rendered_subject = ERB.new(subject_template).result_with_hash(variables)
-    rendered_body = ERB.new(body_template).result_with_hash(variables)
+    rendered_body = body.dup
+    rendered_subject = subject.dup
+
+    variables.each do |key, value|
+      rendered_body = rendered_body.gsub("%{#{key}}", value.to_s)
+      rendered_body = rendered_body.gsub("%<#{key}>s", value.to_s)
+
+      rendered_subject = rendered_subject.gsub("%{#{key}}", value.to_s)
+      rendered_subject = rendered_subject.gsub("%<#{key}>s", value.to_s)
+    end
+
     [rendered_subject, rendered_body]
   end
 end
@@ -417,34 +453,21 @@ end
 
 ### 5.2 · Template Variable System
 
-Templates use ERB syntax with variable substitution:
+Templates use `%{variable}` / `%<variable>s` interpolation:
 
-```erb
+```text
 <!-- Subject Template -->
-Your <%= proof_type.titleize %> Proof Status - Application #<%= application_id %>
+Your %{proof_type_formatted} Proof Status - Application #%{application_id}
 
 <!-- Body Template -->
-Dear <%= user_full_name %>,
+Dear %{user_full_name},
 
-Your <%= proof_type.titleize.downcase %> proof for Application #<%= application_id %> has been 
-<% if status == 'approved' %>
-  ✅ APPROVED
-  
-  Next steps:
-  - Your application will be processed automatically
-  - You will receive updates on your application status
-<% else %>
-  ❌ REJECTED
-  
-  Reason: <%= rejection_reason %>
-  
-  <% if resubmission_allowed %>
-  You can resubmit your proof by logging into your account:
-  <%= login_url %>
-  
-  Remaining attempts: <%= remaining_attempts %>
-  <% end %>
-<% end %>
+Your %{proof_type_formatted} proof for Application #%{application_id} has been %{status_text}.
+
+Reason: %{rejection_reason}
+
+You can resubmit your proof by logging into your account:
+%{login_url}
 
 Best regards,
 The MAT Vulcan Team
@@ -465,12 +488,10 @@ class ApplicationNotificationsMailer < ApplicationMailer
   private
   
   def find_email_template(template_name)
-    Rails.cache.fetch("email_template_#{template_name}", expires_in: 1.hour) do
-      EmailTemplate.find_by!(name: template_name, format: :text)
-    end
+    EmailTemplate.find_by!(name: template_name, format: :text)
   rescue ActiveRecord::RecordNotFound => e
     Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
-    raise "Email template not found for #{template_name}"
+    raise "Email templates not found for #{template_name}"
   end
 end
 ```
@@ -596,28 +617,27 @@ end
 ### 7.1 · Service Integration
 
 ```ruby
-class ProofReviewService < BaseService
-  def call
-    ActiveRecord::Base.transaction do
-      create_proof_review
-      update_application_status
-      
-      # Send notification
-      NotificationService.create_and_deliver!(
-        type: "#{@proof_type}_proof_#{@status}",
-        recipient: @application.user,
-        actor: @admin,
-        notifiable: @application,
-        metadata: {
-          proof_type: @proof_type,
-          status: @status,
-          rejection_reason: @rejection_reason,
-          admin_notes: @notes,
-          resubmission_allowed: can_resubmit?,
-          remaining_attempts: remaining_attempts
-        }
-      )
-    end
+class ProofReview < ApplicationRecord
+  after_commit :handle_post_review_actions, on: :create
+
+  private
+
+  def send_notification(action_name, _mail_method, metadata)
+    AuditEventService.log(
+      action: action_name,
+      actor: admin,
+      auditable: application,
+      metadata: metadata
+    )
+
+    NotificationService.create_and_deliver!(
+      type: action_name,
+      recipient: application.user,
+      actor: admin,
+      notifiable: application,
+      metadata: metadata,
+      channel: :email
+    )
   end
 end
 ```
@@ -630,7 +650,7 @@ class Admin::ApplicationsController < Admin::BaseController
     result = ProofReviewService.new(@application, current_user, params).call
     
     if result.success?
-      # Notification sent by service
+      # Notification sent by ProofReview callbacks
       redirect_to admin_application_path(@application), notice: 'Review completed'
     else
       render :show, alert: result.message
@@ -643,22 +663,25 @@ end
 
 ```ruby
 class Application < ApplicationRecord
-  after_update :notify_status_change, if: :saved_change_to_status?
-  
+  after_update :log_status_change, if: :saved_change_to_status?
+
   private
-  
-  def notify_status_change
-    return unless status_approved?
-    
-    NotificationService.create_and_deliver!(
-      type: 'application_approved',
-      recipient: user,
-      actor: nil, # System action
-      notifiable: self,
+
+  def log_status_change
+    status_changes.create!(
+      from_status: status_before_last_save,
+      to_status: status,
+      user: Current.user || user
+    )
+
+    AuditEventService.log(
+      action: 'application_status_changed',
+      actor: Current.user || user,
+      auditable: self,
       metadata: {
+        application_id: id,
         old_status: status_before_last_save,
-        new_status: status,
-        auto_approval: true
+        new_status: status
       }
     )
   end
@@ -667,35 +690,8 @@ end
 
 ### 7.4 · Background Job Integration
 
-```ruby
-class ApplicationApprovalJob < ApplicationJob
-  def perform(application)
-    # Send approval notification
-    NotificationService.create_and_deliver!(
-      type: 'application_approved',
-      recipient: application.user,
-      notifiable: application,
-      metadata: {
-        approval_date: Time.current.iso8601,
-        next_steps: determine_next_steps(application)
-      }
-    )
-    
-    # Send notification to medical provider if needed
-    if application.medical_certification_required?
-      NotificationService.create_and_deliver!(
-        type: 'medical_certification_requested',
-        recipient: application.medical_provider,
-        notifiable: application,
-        metadata: {
-          request_type: 'automatic',
-          deadline: 30.days.from_now.iso8601
-        }
-      )
-    end
-  end
-end
-```
+Notifications are delivered via `ActionMailer#deliver_later` inside `NotificationService`.
+Email status tracking for medical certification requests is handled by `UpdateEmailStatusJob`.
 
 ---
 
@@ -703,7 +699,8 @@ end
 
 ### 8.1 · Email Tracking Integration
 
-The system integrates with email service providers (like Postmark) to track delivery status:
+The system uses `PostmarkEmailTracker` + `UpdateEmailStatusJob` to track delivery status for
+`medical_certification_requested` notifications:
 
 ```ruby
 class UpdateEmailStatusJob < ApplicationJob
@@ -711,34 +708,20 @@ class UpdateEmailStatusJob < ApplicationJob
     notification = Notification.find(notification_id)
     return unless notification.email_tracking?
     
-    # Query email service provider for status
-    status_info = EmailServiceProvider.get_message_status(notification.message_id)
+    status = PostmarkEmailTracker.fetch_status(notification.message_id)
     
     notification.update!(
-      delivery_status: map_provider_status(status_info.status),
-      metadata: notification.metadata.merge(
-        'delivery_info' => status_info.to_h,
-        'last_status_check' => Time.current.iso8601
-      )
+      delivery_status: status[:status],
+      delivered_at: status[:delivered_at],
+      opened_at: status[:opened_at]
     )
-  end
-  
-  private
-  
-  def map_provider_status(provider_status)
-    case provider_status
-    when 'Sent', 'Delivered'
-      'delivered'
-    when 'Opened'
-      'opened'
-    when 'Bounced', 'SpamComplaint'
-      'error'
-    else
-      'delivered' # Default
-    end
   end
 end
 ```
+
+`UpdateEmailStatusJob` currently applies only to `medical_certification_requested` notifications.
+
+**Medical Certification Tracking**: Medical certification audit events (tracked via `AuditEventService.log()`) include `submission_method` metadata to identify the delivery channel: `email`, `mail` (postal), or `document_signing` (electronic). See [`docs/features/audit_event_tracking.md`](./audit_event_tracking.md) for complete details.
 
 ### 8.2 · Error Handling & Retry Logic
 
@@ -783,33 +766,8 @@ end
 
 ### 8.3 · Batch Operations & Performance
 
-```ruby
-class BulkNotificationJob < ApplicationJob
-  def perform(notification_params_array)
-    notifications = []
-    
-    notification_params_array.each do |params|
-      notification = NotificationService.create_and_deliver!(params)
-      notifications << notification if notification
-    end
-    
-    Rails.logger.info "BulkNotificationJob: Sent #{notifications.count} notifications"
-    notifications
-  end
-end
-
-# Usage
-notification_params = applications.map do |app|
-  {
-    type: 'deadline_reminder',
-    recipient: app.user,
-    notifiable: app,
-    metadata: { deadline: app.deadline.iso8601 }
-  }
-end
-
-BulkNotificationJob.perform_later(notification_params)
-```
+Batch notification jobs are not currently implemented. If we add a bulk job, it should
+call `NotificationService.create_and_deliver!` for each payload and preserve audit metadata.
 
 ---
 
@@ -818,37 +776,33 @@ BulkNotificationJob.perform_later(notification_params)
 ### 9.1 · Service Testing
 
 ```ruby
-describe NotificationService do
-  describe '.create_and_deliver!' do
-    it 'creates notification and sends email' do
-      expect {
-        NotificationService.create_and_deliver!(
-          type: 'proof_approved',
-          recipient: user,
-          actor: admin,
-          notifiable: application,
-          metadata: { proof_type: 'income' }
-        )
-      }.to change(Notification, :count).by(1)
-      
-      notification = Notification.last
-      expect(notification.action).to eq('proof_approved')
-      expect(notification.recipient).to eq(user)
-      expect(notification.metadata['proof_type']).to eq('income')
-    end
-    
-    it 'handles delivery errors gracefully' do
-      allow(ApplicationNotificationsMailer).to receive(:proof_approved).and_raise(StandardError)
-      
-      notification = NotificationService.create_and_deliver!(
-        type: 'proof_approved',
-        recipient: user,
-        notifiable: application
-      )
-      
-      expect(notification.delivery_status).to eq('error')
-      expect(notification.metadata['delivery_error']).to be_present
-    end
+test 'creates notification and sends email' do
+  assert_difference('Notification.count', 1) do
+    NotificationService.create_and_deliver!(
+      type: 'proof_approved',
+      recipient: user,
+      actor: admin,
+      notifiable: application,
+      metadata: { proof_type: 'income' }
+    )
+  end
+
+  notification = Notification.last
+  assert_equal 'proof_approved', notification.action
+  assert_equal user, notification.recipient
+  assert_equal 'income', notification.metadata['proof_type']
+end
+
+test 'handles delivery errors gracefully' do
+  ApplicationNotificationsMailer.stub(:proof_approved, ->(*) { raise StandardError }) do
+    notification = NotificationService.create_and_deliver!(
+      type: 'proof_approved',
+      recipient: user,
+      notifiable: application
+    )
+
+    assert_equal 'error', notification.delivery_status
+    assert notification.metadata['delivery_error'].present?
   end
 end
 ```
@@ -856,45 +810,39 @@ end
 ### 9.2 · Email Template Testing
 
 ```ruby
-describe 'Email Templates' do
-  let(:template) { create(:email_template, :proof_rejection) }
-  
-  it 'renders template with variables' do
-    variables = {
-      user_full_name: 'John Doe',
-      application_id: 123,
-      proof_type: 'income',
-      rejection_reason: 'unclear document'
-    }
-    
-    subject, body = template.render(**variables)
-    
-    expect(subject).to include('Income Proof Status')
-    expect(body).to include('John Doe')
-    expect(body).to include('unclear document')
-  end
+test 'renders template with variables' do
+  template = create(:email_template, :proof_rejection)
+  variables = {
+    user_full_name: 'John Doe',
+    application_id: 123,
+    proof_type_formatted: 'Income',
+    rejection_reason: 'unclear document'
+  }
+
+  subject, body = template.render(**variables)
+
+  assert_includes subject, 'Income'
+  assert_includes body, 'John Doe'
+  assert_includes body, 'unclear document'
 end
 ```
 
 ### 9.3 · Integration Testing
 
 ```ruby
-describe 'Notification Integration' do
-  it 'sends notification when proof is approved' do
-    expect {
-      ProofReviewService.new(application, admin, {
-        proof_type: 'income',
-        status: 'approved'
-      }).call
-    }.to change(Notification, :count).by(1)
-    
-    notification = Notification.last
-    expect(notification.action).to eq('income_proof_approved')
-    expect(notification.recipient).to eq(application.user)
-    
-    # Verify email was queued
-    expect(ActionMailer::MailDeliveryJob).to have_been_enqueued
+test 'sends notification when proof is approved' do
+  assert_difference('Notification.count', 1) do
+    ProofReviewService.new(application, admin, {
+      proof_type: 'income',
+      status: 'approved'
+    }).call
   end
+
+  notification = Notification.last
+  assert_equal 'proof_approved', notification.action
+  assert_equal application.user, notification.recipient
+
+  assert_enqueued_jobs 1, only: ActionMailer::MailDeliveryJob
 end
 ```
 
@@ -905,69 +853,30 @@ end
 ### 10.1 · Database Optimization
 
 ```sql
--- Essential indexes for notification queries
-CREATE INDEX CONCURRENTLY notifications_recipient_unread_idx 
-ON notifications (recipient_id, created_at DESC) WHERE read_at IS NULL;
+-- Existing indexes (from schema.rb)
+CREATE INDEX index_notifications_on_recipient_id ON notifications (recipient_id);
+CREATE INDEX index_notifications_on_actor_id ON notifications (actor_id);
+CREATE INDEX index_notifications_on_notifiable ON notifications (notifiable_type, notifiable_id);
+CREATE INDEX index_notifications_on_message_id ON notifications (message_id);
+CREATE INDEX index_notifications_on_created_by_service ON notifications (created_by_service);
+CREATE INDEX index_notifications_on_audited ON notifications (audited);
 
-CREATE INDEX CONCURRENTLY notifications_delivery_status_idx 
-ON notifications (delivery_status, created_at) WHERE delivery_status = 'error';
-
-CREATE INDEX CONCURRENTLY notifications_action_created_idx 
-ON notifications (action, created_at DESC);
+-- Optional indexes (not currently present)
+-- CREATE INDEX notifications_delivery_status_idx ON notifications (delivery_status, created_at);
+-- CREATE INDEX notifications_unread_idx ON notifications (recipient_id, read_at) WHERE read_at IS NULL;
 ```
 
 ### 10.2 · Email Template Caching
 
-```ruby
-class EmailTemplateCache
-  CACHE_DURATION = 1.hour
-  
-  def self.fetch_template(template_name, format = :text)
-    cache_key = "email_template_#{template_name}_#{format}"
-    
-    Rails.cache.fetch(cache_key, expires_in: CACHE_DURATION) do
-      EmailTemplate.find_by!(name: template_name, format: format)
-    end
-  end
-  
-  def self.invalidate_template(template_name)
-    %w[text html].each do |format|
-      Rails.cache.delete("email_template_#{template_name}_#{format}")
-    end
-  end
-end
-```
+Templates are fetched directly from the database in mailers (e.g., `ApplicationNotificationsMailer#find_email_template`).
+If caching is added, it should be keyed by template name + format and invalidated on update.
 
 ### 10.3 · Monitoring & Alerting
 
-```ruby
-class NotificationMonitor
-  def self.check_delivery_rates
-    failed_notifications = Notification.where(delivery_status: 'error')
-                                     .where(created_at: 1.hour.ago..Time.current)
-                                     .count
-                                     
-    total_notifications = Notification.where(created_at: 1.hour.ago..Time.current).count
-    
-    if total_notifications > 0
-      failure_rate = (failed_notifications.to_f / total_notifications * 100).round(2)
-      
-      if failure_rate > 10.0 # Alert if > 10% failure rate
-        alert_administrators("High notification failure rate: #{failure_rate}%")
-      end
-    end
-  end
-  
-  def self.check_template_errors
-    template_errors = Rails.cache.read('email_template_errors') || []
-    
-    if template_errors.any?
-      alert_administrators("Email template errors detected: #{template_errors.join(', ')}")
-      Rails.cache.delete('email_template_errors')
-    end
-  end
-end
-```
+There is no dedicated `NotificationMonitor` class. Delivery failures are logged by `NotificationService`
+and stored in `notification.metadata['delivery_error']`. Postmark tracking updates `delivery_status`,
+`delivered_at`, and `opened_at` via `UpdateEmailStatusJob`. Bounce/complaint webhooks are handled by
+`Webhooks::EmailEventsController` + `EmailEventHandler`.
 
 ---
 
@@ -976,17 +885,10 @@ end
 ### 11.1 · Environment Configuration
 
 ```ruby
-# config/environments/production.rb
+# config/application.rb
 config.action_mailer.delivery_method = :postmark
 config.action_mailer.postmark_settings = {
   api_token: Rails.application.credentials.postmark_api_token
-}
-
-# Enable email tracking
-config.notification_service = {
-  enable_tracking: true,
-  track_opens: true,
-  track_clicks: false
 }
 ```
 
@@ -996,16 +898,19 @@ To add new notification types:
 
 1. **Add to MAILER_MAP**:
 ```ruby
-MAILER_MAP['new_notification_type'] => [YourMailer, :your_method]
+MAILER_MAP['new_notification_type'] = [YourMailer, :your_method]
 ```
 
 2. **Create Email Template**:
 ```ruby
 EmailTemplate.create!(
   name: 'your_mailer_new_notification_type',
-  format: 'text',
-  subject_template: 'Your Custom Subject',
-  body_template: 'Your custom email body with <%= variables %>'
+  format: :text,
+  subject: 'Your Custom Subject',
+  body: 'Your custom email body with %{variables}',
+  description: 'Short description of the template',
+  version: 1,
+  enabled: true
 )
 ```
 
@@ -1018,10 +923,12 @@ end
 
 ### 11.3 · Multi-Channel Extensions
 
-The system is designed to support multiple channels:
+Multi-channel delivery is planned but not implemented. `NotificationService::VALID_CHANNELS`
+currently allows only `:email`.
+
+Example pseudo-code (not currently in codebase):
 
 ```ruby
-# Future SMS channel implementation
 class SmsChannel
   def self.deliver(notification)
     SmsService.send_message(
@@ -1113,9 +1020,9 @@ notifications = user.notifications
 
 ### 13.2 · Performance Best Practices
 
-- **Cache email templates** to avoid database queries
+- **Consider caching email templates** if query volume grows
 - **Use background jobs** for email delivery to avoid blocking requests
-- **Batch notifications** when sending to multiple recipients
+- **Batch notifications** only after introducing a bulk job
 - **Monitor delivery rates** and set up alerts for failures
 - **Archive old notifications** to maintain query performance
 
@@ -1129,4 +1036,4 @@ notifications = user.notifications
 
 ---
 
-**Tools**: Admin notification interface (`/admin/notifications`) · Email template editor (`/admin/email_templates`) · Delivery monitoring (`/admin/notifications/status`) · Template testing (`rails notifications:test_template`)
+**Tools**: Notifications index (`/notifications`) · Email template editor (`/admin/email_templates`) · Postmark dashboard for delivery monitoring

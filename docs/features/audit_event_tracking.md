@@ -46,11 +46,10 @@ User Action → Controller → Service → AuditEventService.log() → Event Rec
 
 ### 1.4 · Key Principles
 
-- **Single Source of Truth**: `AuditEventService` is the canonical way to create audit events
-- **Deduplication**: Multiple layers prevent duplicate events while preserving legitimate variations
-- **Context Awareness**: Events capture user context, IP addresses, and system state
-- **Polymorphic Design**: Single Event model handles all auditable entities
-- **Performance Optimized**: Efficient querying and aggregation for large audit trails
+- **Single Source of Truth**: `AuditEventService` is the canonical way to create audit events.
+- **Deduplication**: Defensive layers prevent duplicate events while preserving legitimate variations. A 5-second deduplication window is applied to all events.
+- **Context Awareness**: Events capture user context, IP addresses, and system state automatically through `Current`.
+- **Polymorphic Design**: Single Event model handles all auditable entities via polymorphic associations.
 
 ---
 
@@ -200,14 +199,15 @@ CREATE TABLE events (
 );
 
 -- Existing indexes
+CREATE INDEX events_action_auditable_idx ON events (action, auditable_type, auditable_id);
 CREATE INDEX events_auditable_idx ON events (auditable_type, auditable_id);
 CREATE INDEX events_user_id_idx ON events (user_id);
 CREATE INDEX events_metadata_gin_idx ON events USING GIN (metadata);
 
 -- (Optional indexes, not currently present)
--- CREATE INDEX CONCURRENTLY events_action_idx ON events (action);
 -- CREATE INDEX CONCURRENTLY events_created_at_idx ON events (created_at);
--- CREATE INDEX CONCURRENTLY events_auditable_action_idx ON events (auditable_type, auditable_id, action);
+-- CREATE INDEX CONCURRENTLY events_action_idx ON events (action);
+-- CREATE INDEX CONCURRENTLY events_auditable_created_at_idx ON events (auditable_type, auditable_id, created_at);
 ```
 
 ### 4.3 · Metadata Structure Examples
@@ -338,21 +338,34 @@ end
 
 | Action | Triggered By | Metadata Keys |
 |--------|-------------|---------------|
-| `income_proof_attached` | ProofAttachmentService | `proof_type`, `submission_method`, `blob_id`, `filename` |
-| `residency_proof_attached` | ProofAttachmentService | `proof_type`, `submission_method`, `blob_id`, `filename` |
-| `proof_submitted` | Tracking submission (paper/web/email) | `proof_type`, `submission_method`, `email_from`, `blob_id` |
-| `proof_approved` | Admin review (ProofReview) | `proof_type`, `admin_id`, `review_notes` |
-| `proof_rejected` | Admin review (ProofReview) | `proof_type`, `rejection_reason`, `admin_id` |
-| `income_proof_rejected` | Explicit reject path without attachment | `proof_type`, `rejection_reason`, `admin_id` |
+| `income_proof_attached` | ProofAttachmentService (web/paper) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
+| `residency_proof_attached` | ProofAttachmentService (web/paper) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
+| `income_proof_submitted` | ProofAttachmentService (email) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
+| `residency_proof_submitted` | ProofAttachmentService (email) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
+| `income_proof_attachment_failed` | ProofAttachmentService | `proof_type`, `submission_method`, `error_class`, `error_message`, `success` |
+| `residency_proof_attachment_failed` | ProofAttachmentService | `proof_type`, `submission_method`, `error_class`, `error_message`, `success` |
+| `proof_submission_received` | ProofSubmissionMailbox | `application_id`, `inbound_email_id`, `email_subject`, `email_from`, `attachments_count` |
+| `proof_submission_processed` | ProofSubmissionMailbox | `application_id`, `inbound_email_id` |
+| `proof_submission_<error_type>` | ProofSubmissionMailbox bounce | `application_id`, `error`, `error_type`, `inbound_email_id`, `sender_email` |
+| `proof_approved` | Admin review (ProofReview) | `proof_type` |
+| `proof_rejected` | Admin review (ProofReview) | `proof_type`, `rejection_reason` |
+| `income_proof_rejected` | Explicit reject path without attachment | `proof_type`, `rejection_reason`, `submission_method` |
 
 ### 6.3 · Medical Certification Events
 
 | Action | Triggered By | Metadata Keys |
 |--------|-------------|---------------|
-| `medical_certification_requested` | System auto-request | `medical_provider_email`, `request_type` |
+| `medical_certification_requested` | Email, Mail, or DocuSeal request | `medical_provider_email`, `submission_method`, `provider_name`, `change_type` |
 | `medical_certification_received` | Email processing | `submission_method`, `email_from` |
 | `medical_certification_approved` | Admin review | `admin_id`, `review_notes` |
 | `medical_certification_rejected` | Admin review | `rejection_reason`, `admin_id` |
+
+**Submission Method Tracking**: All medical certification requests include `submission_method` metadata to track the delivery channel:
+- `email` - Automated emails sent via `MedicalCertificationService`
+- `mail` - Paper letters queued for postal delivery via `MedicalCertificationPdfService`
+- `document_signing` - Electronic signatures via `DocumentSigning::SubmissionService` (DocuSeal)
+
+Audit logs display this as: "Medical certification requested from [Provider] (via Email/Mail/Document Signing)" providing clear visibility into the request delivery method.
 
 ### 6.4 · User & Authentication Events
 
@@ -373,11 +386,19 @@ Note: These are examples of potential events. They are not currently emitted by 
 | `bulk_action_performed` | Admin bulk operations | `action_type`, `affected_count` |
 | `policy_updated` | System configuration | `policy_name`, `old_value`, `new_value` |
 
+### 6.6 · Notification Events
+
+| Action | Triggered By | Metadata Keys |
+|--------|-------------|---------------|
+| `notification_<action>_created` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_attempted` |
+| `notification_<action>_sent` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_successful` |
+| `notification_<action>_failed` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_successful` |
+
 ---
 
 ## 7 · AuditLogBuilder - Event Aggregation
 
-### 6.1 · Purpose & Usage
+### 7.1 · Purpose & Usage
 
 The `AuditLogBuilder` aggregates events from multiple sources to provide comprehensive audit trails for admin interfaces:
 
@@ -393,7 +414,7 @@ audit_builder = Applications::AuditLogBuilder.new(application)
 # - Notification records
 ```
 
-### 6.2 · Event Source Integration
+### 7.2 · Event Source Integration
 
 ```ruby
 def combined_events
@@ -421,7 +442,7 @@ def build_creation_event
 end
 ```
 
-### 6.3 · Performance Optimization
+### 7.3 · Performance Optimization
 
 ```ruby
 # Efficient eager loading
@@ -587,7 +608,7 @@ end
 
 ```ruby
 # ProofAttachmentService uses skip_audit_events parameter to control event creation
-ProofAttachmentService.call(
+ProofAttachmentService.attach_proof(
   application: application,
   proof_type: :income,
   blob_or_file: file,
@@ -740,40 +761,36 @@ end
 ### 11.1 · Event Creation Testing
 
 ```ruby
-describe 'Event Creation' do
-  it 'creates audit event for proof approval' do
-    expect {
-      AuditEventService.log(
-        action: 'income_proof_approved',
-        actor: admin_user,
-        auditable: application,
-        metadata: { proof_type: 'income' }
-      )
-    }.to change(Event, :count).by(1)
-    
-    event = Event.last
-    expect(event.action).to eq('income_proof_approved')
-    expect(event.metadata['proof_type']).to eq('income')
+test 'creates audit event for proof approval' do
+  assert_difference('Event.count', 1) do
+    AuditEventService.log(
+      action: 'proof_approved',
+      actor: admin_user,
+      auditable: application,
+      metadata: { proof_type: 'income' }
+    )
   end
-  
-  it 'prevents duplicate events within deduplication window' do
-    # Create first event
+
+  event = Event.last
+  assert_equal 'proof_approved', event.action
+  assert_equal 'income', event.metadata['proof_type']
+end
+
+test 'prevents duplicate events within deduplication window' do
+  AuditEventService.log(
+    action: 'income_proof_attached',
+    actor: user,
+    auditable: application,
+    metadata: { proof_type: 'income', blob_id: 123 }
+  )
+
+  assert_no_difference('Event.count') do
     AuditEventService.log(
       action: 'income_proof_attached',
       actor: user,
       auditable: application,
       metadata: { proof_type: 'income', blob_id: 123 }
     )
-    
-    # Attempt duplicate
-    expect {
-      AuditEventService.log(
-        action: 'income_proof_attached',
-        actor: user,
-        auditable: application,
-        metadata: { proof_type: 'income', blob_id: 123 }
-      )
-    }.not_to change(Event, :count)
   end
 end
 ```
@@ -781,65 +798,44 @@ end
 ### 11.2 · Context Testing
 
 ```ruby
-describe 'Context Management' do
-  it 'captures current user context' do
-    Current.user = admin_user
-    Current.ip_address = '192.168.1.1'
-    Current.user_agent = 'Test Browser'
-    
-    event = AuditEventService.log(
-      action: 'test_action',
-      actor: admin_user,
-      auditable: application
-    )
-    
-    expect(event.ip_address).to eq('192.168.1.1')
-    expect(event.user_agent).to eq('Test Browser')
-  end
-  
-  it 'respects proof_attachment_service_context flag' do
-    Current.proof_attachment_service_context = true
-    
-    expect {
-      # Code that would normally create events but should be skipped
-      # when the service is handling audit events itself
-      application.some_proof_related_callback
-    }.not_to change(Event, :count)
-  end
+test 'captures current user context' do
+  Current.user = admin_user
+  Current.ip_address = '192.168.1.1'
+  Current.user_agent = 'Test Browser'
+
+  event = AuditEventService.log(
+    action: 'test_action',
+    actor: admin_user,
+    auditable: application
+  )
+
+  assert_equal '192.168.1.1', event.ip_address
+  assert_equal 'Test Browser', event.user_agent
 end
 ```
 
 ### 11.3 · Integration Testing
 
 ```ruby
-describe 'Full Audit Trail' do
-  it 'creates complete audit trail for application lifecycle' do
-    # Application creation
-    application = create(:application)
-    
-    # Proof submissions
-    ProofAttachmentService.attach_proof(
-      application: application,
-      proof_type: :income,
-      blob_or_file: fixture_file_upload('proof.pdf'),
-      submission_method: :web,
-      admin: user
-    )
-    
-    # Admin review
-    ProofReviewService.new(application, admin, {
-      proof_type: 'income',
-      status: 'approved'
-    }).call
-    
-    # Verify complete trail
-    events = Event.where(auditable: application).order(:created_at)
-    expect(events.map(&:action)).to include(
-      'application_created',
-      'income_proof_attached',
-      'income_proof_approved'
-    )
-  end
+test 'creates audit trail for proof approval' do
+  application = create(:application)
+
+  ProofAttachmentService.attach_proof(
+    application: application,
+    proof_type: :income,
+    blob_or_file: fixture_file_upload('proof.pdf'),
+    submission_method: :web,
+    admin: user
+  )
+
+  ProofReviewService.new(application, admin, {
+    proof_type: 'income',
+    status: 'approved'
+  }).call
+
+  actions = Event.where(auditable: application).pluck(:action)
+  assert_includes actions, 'income_proof_attached'
+  assert_includes actions, 'proof_approved'
 end
 ```
 
@@ -986,4 +982,4 @@ events = Event.where(auditable: application)
 
 ---
 
-**Tools**: Currently, audit events are viewed through the admin application detail pages via the `Applications::AuditLogBuilder` service. Dedicated admin audit interfaces, search/export endpoints, and integrity check tasks are planned but not currently implemented.
+**Tools**: Audit events are viewed through the admin application detail pages via the `Applications::AuditLogBuilder` service. Dedicated admin audit interfaces, search/export endpoints, and integrity check tasks are planned but not currently implemented.
