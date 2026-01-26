@@ -476,8 +476,8 @@ class NotificationService
                      "notification_#{notification.action}_created"
                    end
 
-    Event.create!(
-      user: notification.actor || notification.recipient,
+    AuditEventService.log(
+      actor: notification.actor || notification.recipient,
       action: event_action,
       auditable: notification,
       metadata: {

@@ -67,12 +67,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Update error logging to include template name and variables
-    Event.create!(
-      user: trainer, # Use local variable
+    AuditEventService.log(
+      actor: trainer, # Use local variable
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: trainer,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name, # Use local variable
@@ -143,12 +144,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: trainer, # Use local variable if available, otherwise nil
+    AuditEventService.log(
+      actor: trainer, # Use local variable if available, otherwise nil
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: trainer,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name, # Use local variable
@@ -218,12 +220,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: trainer, # Use local variable if available, otherwise nil
+    AuditEventService.log(
+      actor: trainer, # Use local variable if available, otherwise nil
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: trainer,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name, # Use local variable
@@ -292,12 +295,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: trainer, # Use local variable if available, otherwise nil
+    AuditEventService.log(
+      actor: trainer, # Use local variable if available, otherwise nil
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: trainer,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name, # Use local variable
@@ -367,12 +371,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: trainer, # Use local variable if available, otherwise nil
+    AuditEventService.log(
+      actor: trainer, # Use local variable if available, otherwise nil
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: trainer,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name, # Use local variable

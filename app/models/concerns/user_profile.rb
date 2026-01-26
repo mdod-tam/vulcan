@@ -165,9 +165,10 @@ module UserProfile
                'profile_updated_by_guardian'
              end
 
-    Event.create!(
-      user: actor,
+    AuditEventService.log(
+      actor: actor,
       action: action,
+      auditable: self,
       metadata: {
         user_id: id,
         changes: changed_attributes,

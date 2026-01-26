@@ -293,10 +293,10 @@ class MedicalCertificationAttachmentService
       notes: params[:notes]
     )
 
-    Event.create!(
-      user: admin,
+    AuditEventService.log(
+      actor: admin,
       action: 'medical_certification_status_changed',
-      auditable: app, # Add auditable field to match test expectations and approval flow
+      auditable: app,
       metadata: {
         application_id: app.id,
         old_status: app.medical_certification_status_was || 'requested',

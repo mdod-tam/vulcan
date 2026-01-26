@@ -21,9 +21,10 @@ module Applications
         application.update!(status: :approved)
 
         # Create event for approval
-        Event.create!(
-          user: actor,
+        AuditEventService.log(
+          actor: actor,
           action: 'application_approved',
+          auditable: application,
           metadata: {
             application_id: application.id,
             timestamp: Time.current.iso8601

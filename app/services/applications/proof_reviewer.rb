@@ -109,9 +109,10 @@ module Applications
         @application.update_column(:status, Application.statuses[:approved])
 
         # Create an event for this automated approval
-        Event.create!(
-          user: @admin,
+        AuditEventService.log(
+          actor: @admin,
           action: 'application_auto_approved',
+          auditable: @application,
           metadata: {
             application_id: @application.id,
             timestamp: Time.current.iso8601,

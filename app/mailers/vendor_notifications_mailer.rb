@@ -171,12 +171,13 @@ class VendorNotificationsMailer < ApplicationMailer
   end
 
   def log_mail_error(error, user, template_name, variables)
-    Event.create!(
-      user: user,
+    AuditEventService.log(
+      actor: user,
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: user,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: error.message,
         error_class: error.class.name,
         template_name: template_name,

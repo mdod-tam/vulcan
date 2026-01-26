@@ -191,12 +191,13 @@ class EvaluatorMailer < ApplicationMailer
 
   # Log email delivery errors
   def log_email_error(error, evaluator, template_name, variables = {})
-    Event.create!(
-      user: evaluator,
+    AuditEventService.log(
+      actor: evaluator,
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: evaluator,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: error.message,
         error_class: error.class.name,
         template_name: template_name,

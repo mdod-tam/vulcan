@@ -132,9 +132,10 @@ module VendorPortal
     end
 
     def record_verification_event(successful)
-      Event.create!(
-        user: current_user,
+      AuditEventService.log(
+        actor: current_user,
         action: 'voucher_verification_attempt',
+        auditable: @voucher,
         metadata: {
           voucher_id: @voucher.id,
           voucher_code: @voucher.code,
