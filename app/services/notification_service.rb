@@ -559,7 +559,6 @@ class NotificationService
 
   def merge_service_metadata(meta, opts)
     meta.merge(
-      'created_by_service' => true,
       'channel' => (opts['channel'] || opts[:channel]).to_s
     )
   end

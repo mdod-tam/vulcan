@@ -76,7 +76,8 @@ module Applications
           old_status: previous_status || 'not_requested',
           new_status: 'requested',
           change_type: 'medical_certification',
-          provider_name: application.medical_provider_name
+          provider_name: application.medical_provider_name,
+          submission_method: 'email'
         }
       )
     end

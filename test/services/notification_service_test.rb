@@ -27,7 +27,6 @@ class NotificationServiceTest < ActiveSupport::TestCase
       assert_equal @constituent, notification.recipient
       assert_equal @application, notification.notifiable
       assert_equal 'email', notification.metadata['channel']
-      assert notification.metadata['created_by_service']
     end
   end
 
