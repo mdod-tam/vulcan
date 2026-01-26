@@ -333,6 +333,8 @@ module Admin
         :income_proof_rejection_reason, :income_proof_rejection_notes,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
         :residency_proof_rejection_reason, :residency_proof_rejection_notes,
+        :medical_provider_documentation_action, :medical_provider_documentation, :medical_provider_documentation_signed_id,
+        :medical_provider_documentation_rejection_reason, :medical_provider_documentation_rejection_notes,
         :no_medical_provider_information,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
@@ -403,6 +405,21 @@ module Admin
         service_params[reason_key] = permitted[reason_key]
         service_params[notes_key]  = permitted[notes_key]
       end
+
+      # Handle medical provider documentation
+      action_key = "medical_provider_documentation_action"
+      file_key   = "medical_provider_documentation"
+      signed_key = "medical_provider_documentation_signed_id"
+      reason_key = "medical_provider_documentation_rejection_reason"
+      notes_key  = "medical_provider_documentation_rejection_notes"
+
+      service_params[action_key] = permitted[action_key]
+      file_val = permitted[file_key]
+      signed_val = permitted[signed_key]
+      service_params[file_key] = file_val if file_val.present?
+      service_params[signed_key] = signed_val if signed_val.present?
+      service_params[reason_key] = permitted[reason_key]
+      service_params[notes_key]  = permitted[notes_key]
     end
 
     # Translate checkbox UI to email strategy parameter

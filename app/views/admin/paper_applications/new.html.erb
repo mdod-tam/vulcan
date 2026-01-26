@@ -607,7 +607,7 @@
                       <input type="radio" 
                              id="accept_medical_provider_documentation" 
                              name="medical_provider_documentation_action" 
-                             value="accept" 
+                             value="approved" 
                              class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300" 
                              checked 
                              data-action="change->document-proof-handler#toggleProofAction" 
@@ -618,7 +618,7 @@
                       <input type="radio" 
                              id="reject_medical_provider_documentation" 
                              name="medical_provider_documentation_action" 
-                             value="reject" 
+                             value="rejected" 
                              class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
                              data-action="change->document-proof-handler#toggleProofAction" 
                              data-document-proof-handler-target="rejectRadio">
@@ -628,7 +628,7 @@
                       <input type="radio" 
                              id="no_medical_provider_documentation_provided" 
                              name="medical_provider_documentation_action" 
-                             value="none"
+                             value="not_requested"
                              class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="noneRadio">

@@ -344,13 +344,15 @@ module Applications
       action_key = type == :medical_provider_documentation ? "#{type}_action" : "#{type}_proof_action"
       action = params[action_key] || params[action_key.to_sym]
 
-      return true unless %w[accept reject].include?(action)
+      return true unless %w[accept reject approved rejected not_requested].include?(action)
 
       case action
-      when 'accept'
+      when 'accept', 'approved'
         process_accept_proof(type)
-      when 'reject'
+      when 'reject', 'rejected'
         process_reject_proof(type)
+      when 'not_requested'
+        true # Skip processing if no action needed
       end
     end
 
@@ -390,21 +392,40 @@ module Applications
       
       blob_or_file = params[file_key].presence || params[signed_id_key].presence
 
-      result = ProofAttachmentService.attach_proof(
-        application: @application,
-        proof_type: type,
-        blob_or_file: blob_or_file,
-        status: :approved,
-        admin: @admin,
-        submission_method: :paper,
-        metadata: {}
-      )
+      Rails.logger.info "[PaperApp] Processing #{type} proof with action 'approved', file_present=#{blob_or_file.present?}"
+
+      # Route medical certifications to the correct service
+      if type == :medical_provider_documentation
+        Rails.logger.info "[PaperApp] Routing to MedicalCertificationAttachmentService for #{type}"
+        result = MedicalCertificationAttachmentService.attach_certification(
+          application: @application,
+          blob_or_file: blob_or_file,
+          status: :approved,
+          admin: @admin,
+          submission_method: :paper,
+          metadata: {}
+        )
+        Rails.logger.info "[PaperApp] Medical cert result: #{result.inspect}"
+      else
+        Rails.logger.info "[PaperApp] Routing to ProofAttachmentService for #{type}"
+        result = ProofAttachmentService.attach_proof(
+          application: @application,
+          proof_type: type,
+          blob_or_file: blob_or_file,
+          status: :approved,
+          admin: @admin,
+          submission_method: :paper,
+          metadata: {}
+        )
+        Rails.logger.info "[PaperApp] Proof result: #{result.inspect}"
+      end
 
       unless result[:success]
         add_error("Error processing #{type} proof: #{result[:error]&.message}")
         return false
       end
 
+      Rails.logger.info "[PaperApp] Successfully processed #{type}, app medical_cert_status=#{@application.reload.medical_certification_status}"
       true
     end
 
@@ -413,15 +434,27 @@ module Applications
       reason_key = type == :medical_provider_documentation ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
       notes_key = type == :medical_provider_documentation ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
       
-      result = ProofAttachmentService.reject_proof_without_attachment(
-        application: @application,
-        proof_type: type,
-        admin: @admin,
-        reason: params[reason_key],
-        notes: params[notes_key],
-        submission_method: :paper,
-        metadata: {}
-      )
+      # Route medical certifications to the correct service
+      if type == :medical_provider_documentation
+        result = MedicalCertificationAttachmentService.reject_certification(
+          application: @application,
+          admin: @admin,
+          reason: params[reason_key],
+          notes: params[notes_key],
+          submission_method: :paper,
+          metadata: {}
+        )
+      else
+        result = ProofAttachmentService.reject_proof_without_attachment(
+          application: @application,
+          proof_type: type,
+          admin: @admin,
+          reason: params[reason_key],
+          notes: params[notes_key],
+          submission_method: :paper,
+          metadata: {}
+        )
+      end
 
       unless result[:success]
         add_error("Error rejecting #{type} proof: #{result[:error]&.message}")
