@@ -28,9 +28,10 @@ class MedicalCertificationMailbox < ApplicationMailbox
   private
 
   def create_audit_record
-    Event.create!(
-      user: application.constituent,
+    AuditEventService.log(
+      actor: application.constituent,
       action: 'medical_certification_received',
+      auditable: application,
       metadata: {
         application_id: application.id,
         medical_provider_id: medical_provider.id,
@@ -73,9 +74,10 @@ class MedicalCertificationMailbox < ApplicationMailbox
 
   def notify_admin
     # Notify admin of new certification submission
-    Event.create!(
-      user: application.constituent,
+    AuditEventService.log(
+      actor: application.constituent,
       action: 'medical_certification_received',
+      auditable: application,
       metadata: {
         application_id: application.id,
         medical_provider_id: medical_provider.id,
@@ -144,9 +146,10 @@ class MedicalCertificationMailbox < ApplicationMailbox
   def bounce_with_notification(error_type, message)
     # Use System User if constituent isn't available (e.g., bounced before application lookup)
     event_user = application&.constituent || User.system_user
-    Event.create!(
-      user: event_user,
+    AuditEventService.log(
+      actor: event_user,
       action: "medical_certification_#{error_type}",
+      auditable: application,
       metadata: {
         application_id: application&.id,
         medical_provider_id: medical_provider&.id,

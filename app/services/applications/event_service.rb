@@ -32,9 +32,10 @@ module Applications
         dependent_id: dependent.id
       )&.relationship_type
 
-      Event.create!(
-        user: user, # The user performing the action (likely the guardian)
+      AuditEventService.log(
+        actor: user, # The user performing the action (likely the guardian)
         action: 'application_for_dependent_updated',
+        auditable: application,
         metadata: {
           application_id: application.id,
           dependent_id: dependent.id,
@@ -58,9 +59,10 @@ module Applications
         dependent_id: dependent.id
       )&.relationship_type
 
-      Event.create!(
-        user: user, # The user performing the action (likely the guardian)
+      AuditEventService.log(
+        actor: user, # The user performing the action (likely the guardian)
         action: 'application_for_dependent_submitted',
+        auditable: application,
         metadata: {
           application_id: application.id,
           dependent_id: dependent.id,

@@ -35,8 +35,10 @@ class EmailEventHandler
     )
 
     # Create an audit event
-    Event.create!(
+    AuditEventService.log(
+      actor: User.system_user,
       action: 'email_bounced',
+      auditable: provider_email,
       metadata: {
         provider_email_id: provider_email.id,
         bounce_type: bounce_data[:type]

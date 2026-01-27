@@ -129,9 +129,10 @@ module Admin
     # PATCH /admin/email_templates/bulk_disable
     def bulk_disable
       count = EmailTemplate.update_all(enabled: false)
-      Event.create!(
-        user: current_user,
+      AuditEventService.log(
+        actor: current_user,
         action: 'email_templates_bulk_disabled',
+        auditable: current_user,
         metadata: { count: count }
       )
       redirect_to admin_email_templates_path,
@@ -141,9 +142,10 @@ module Admin
     # PATCH /admin/email_templates/bulk_enable
     def bulk_enable
       count = EmailTemplate.update_all(enabled: true)
-      Event.create!(
-        user: current_user,
+      AuditEventService.log(
+        actor: current_user,
         action: 'email_templates_bulk_enabled',
+        auditable: current_user,
         metadata: { count: count }
       )
       redirect_to admin_email_templates_path,
@@ -208,9 +210,10 @@ module Admin
         timestamp: Time.current.iso8601
       }
 
-      Event.create!(
-        user: current_user,
+      AuditEventService.log(
+        actor: current_user,
         action: action,
+        auditable: @email_template,
         metadata: base_metadata.merge(additional_metadata)
       )
     end

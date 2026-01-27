@@ -476,8 +476,8 @@ class NotificationService
                      "notification_#{notification.action}_created"
                    end
 
-    Event.create!(
-      user: notification.actor || notification.recipient,
+    AuditEventService.log(
+      actor: notification.actor || notification.recipient,
       action: event_action,
       auditable: notification,
       metadata: {
@@ -559,7 +559,6 @@ class NotificationService
 
   def merge_service_metadata(meta, opts)
     meta.merge(
-      'created_by_service' => true,
       'channel' => (opts['channel'] || opts[:channel]).to_s
     )
   end

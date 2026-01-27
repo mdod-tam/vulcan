@@ -51,12 +51,13 @@ class VoucherNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: user,
+    AuditEventService.log(
+      actor: user,
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: user,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name,
@@ -109,12 +110,13 @@ class VoucherNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: user,
+    AuditEventService.log(
+      actor: user,
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: user,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name,
@@ -193,12 +195,13 @@ class VoucherNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: user,
+    AuditEventService.log(
+      actor: user,
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: user,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name,
@@ -274,12 +277,13 @@ class VoucherNotificationsMailer < ApplicationMailer
     )
   rescue StandardError => e
     # Log error with more details
-    Event.create!(
-      user: user,
+    AuditEventService.log(
+      actor: user,
       action: 'email_delivery_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address,
+      auditable: user,
       metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address,
         error_message: e.message,
         error_class: e.class.name,
         template_name: template_name,

@@ -141,14 +141,15 @@ module ApplicationStatusManagement
 
   # Creates an audit event for the auto-approval
   def create_auto_approval_audit_event(previous_status)
-    return unless defined?(Event) && Event.respond_to?(:create)
+    return unless defined?(AuditEventService)
 
     begin
       # Use Current.user if available, otherwise fall back to a system user for automated processes
       acting_user = Current.user || User.find_by(email: 'system@example.com') || User.first
-      Event.create!(
-        user: acting_user,
+      AuditEventService.log(
+        actor: acting_user,
         action: 'application_auto_approved',
+        auditable: self,
         metadata: {
           application_id: id,
           old_status: previous_status,

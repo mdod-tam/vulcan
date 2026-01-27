@@ -53,9 +53,10 @@ module TrainingSessions
     end
 
     def create_event!(old_scheduled_for)
-      Event.create!(
-        user: @current_user,
+      AuditEventService.log(
+        actor: @current_user,
         action: 'training_rescheduled',
+        auditable: @training_session,
         metadata: {
           application_id: @training_session.application_id,
           training_session_id: @training_session.id,

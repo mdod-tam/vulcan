@@ -35,6 +35,21 @@ module Applications
       )
 
       item.save!
+
+      # Create audit event for tracking
+      AuditEventService.log(
+        action: 'medical_certification_requested',
+        actor: actor || User.system_user,
+        auditable: application,
+        metadata: {
+          change_type: 'medical_certification',
+          provider_name: application.medical_provider_name,
+          submission_method: 'mail',
+          letter_queued: true,
+          print_queue_item_id: item.id
+        }
+      )
+
       success('DCF queued for printing', item)
     rescue StandardError => e
       log_error(e, application_id: application&.id)

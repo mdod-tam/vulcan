@@ -243,20 +243,26 @@ class EmailTemplate < ApplicationRecord
     validate_required_variables!(variables)
     rendered_subject, rendered_body = render(variables)
 
-    Event.create!(
-      user: current_user,
+    AuditEventService.log(
+      actor: current_user,
       action: 'email_template_rendered',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address
+      auditable: self,
+      metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address
+      }
     )
 
     [rendered_subject, rendered_body]
   rescue StandardError
-    Event.create!(
-      user: current_user,
+    AuditEventService.log(
+      actor: current_user,
       action: 'email_template_error',
-      user_agent: Current.user_agent,
-      ip_address: Current.ip_address
+      auditable: self,
+      metadata: {
+        user_agent: Current.user_agent,
+        ip_address: Current.ip_address
+      }
     )
     raise
   end

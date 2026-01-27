@@ -22,9 +22,10 @@ module EvaluationManagement
       )
 
       # Create event for audit logging
-      Event.create!(
-        user: Current.user,
+      AuditEventService.log(
+        actor: Current.user,
         action: 'evaluator_assigned',
+        auditable: self,
         metadata: {
           application_id: id,
           evaluator_id: evaluator.id,

@@ -81,9 +81,10 @@ module TrainingSessions
     def create_event
       case @new_status
       when 'no_show'
-        Event.create!(
-          user: @current_user,
+        AuditEventService.log(
+          actor: @current_user,
           action: 'training_no_show',
+          auditable: @training_session,
           metadata: {
             application_id: @training_session.application_id,
             training_session_id: @training_session.id,
@@ -93,9 +94,10 @@ module TrainingSessions
         )
       else
         # Fallback to generic status change event for other status updates
-        Event.create!(
-          user: @current_user,
+        AuditEventService.log(
+          actor: @current_user,
           action: 'training_status_changed',
+          auditable: @training_session,
           metadata: {
             application_id: @training_session.application_id,
             training_session_id: @training_session.id,

@@ -203,8 +203,10 @@
                                      end
                       "Application automatically approved after all proofs validated (triggered by: #{trigger_text})"
                     when "medical_certification_requested"
-                      trigger = log.metadata['trigger']&.titleize || 'System'
-                      "Medical certification requested (triggered by: #{trigger})"
+                      method = log.metadata['submission_method']&.titleize || 'Unknown'
+                      provider = log.metadata['provider_name']
+                      provider_text = provider.present? ? " from #{provider}" : ""
+                      "Medical certification requested#{provider_text} (via #{method})"
                     when "voucher_assigned"
                       "Voucher #{log.metadata['voucher_code']} assigned with value #{number_to_currency(log.metadata['initial_value'])}"
                     when "voucher_redeemed"

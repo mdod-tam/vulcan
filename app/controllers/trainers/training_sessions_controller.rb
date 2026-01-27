@@ -232,9 +232,10 @@ module Trainers
     end
 
     def create_status_change_event(old_status)
-      Event.create!(
-        user: current_user,
+      AuditEventService.log(
+        actor: current_user,
         action: 'training_status_changed',
+        auditable: @training_session,
         metadata: {
           application_id: @training_session.application_id,
           training_session_id: @training_session.id,
