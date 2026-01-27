@@ -96,7 +96,7 @@
         <% end %>
       <% end %>
         <!-- Email Button (Alternative) -->
-      <% if FeatureFlag.enabled?(:email_button_enabled) %>
+      
         <% email_button_text = request_count.zero? ? "Send Email" : "Resend Email" %>
         <%= button_to resend_medical_certification_admin_application_path(@application),
             method: :post,
@@ -108,7 +108,7 @@
             'aria-label': "Send email request to #{@application.medical_provider_name}" do %>
           <%= email_button_text %>
         <% end %>
-      <% end %>
+      
 
         <!-- Print Button (Alternative) -->
         <%= button_to queue_medical_certification_form_admin_application_path(@application),
