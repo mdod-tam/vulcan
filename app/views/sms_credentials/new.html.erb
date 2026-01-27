@@ -5,8 +5,8 @@
   <main id="main-content" role="main" tabindex="-1">
     <section aria-labelledby="setup-heading" class="bg-white rounded-lg shadow-md p-8">
       <header id="setup-heading" class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-800">Set up Text Message Authentication</h1>
-        <p class="mt-3 text-gray-600">Receive verification codes via SMS to protect your account.</p>
+        <h1 class="text-3xl font-bold text-gray-800">Set up Text Message Verification</h1>
+        <p class="mt-3 text-gray-600">Get a code by text when you sign in. Choose this if texting is easiest.</p>
       </header>
 
       <!-- Step Indicator -->
@@ -38,13 +38,13 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <section aria-labelledby="how-it-works-heading" class="bg-blue-50 p-6 rounded-lg mb-6">
-            <h2 id="how-it-works-heading" class="text-xl font-semibold text-gray-800 mb-4">How It Works</h2>
+            <h2 id="how-it-works-heading" class="text-xl font-semibold text-gray-800 mb-4">What to expect</h2>
             <ul class="space-y-3 text-gray-700" role="list">
               <li class="flex items-start">
                 <svg aria-hidden="true" class="h-5 w-5 text-blue-500 mr-2 mt-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                 </svg>
-                <span>When you sign in with your password, we'll send a verification code to your phone.</span>
+                <span>When you sign in with your password, we'll send a code by text.</span>
               </li>
               <li class="flex items-start">
                 <svg aria-hidden="true" class="h-5 w-5 text-blue-500 mr-2 mt-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -63,7 +63,9 @@
 
           <section aria-labelledby="phone-form-heading" class="bg-white p-6 rounded-lg border border-gray-200">
             <h2 id="phone-form-heading" class="sr-only">Enter Phone Number</h2>
-            <%= form_with url: create_credential_two_factor_authentication_path(type: 'sms'), method: :post do |form| %>
+            <%= form_with url: create_credential_two_factor_authentication_path(type: 'sms'),
+                          method: :post,
+                          data: { turbo: false } do |form| %>
               <div class="mb-4">
                 <label for="phone_number" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                 <%= form.telephone_field :phone_number, id: "phone_number", class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-400 rounded-md py-3", placeholder: "(555) 555-5555", required: true, autocomplete: "tel", aria: { describedby: "phone_number_help" } %>
@@ -83,7 +85,7 @@
 
         <aside>
           <section aria-labelledby="security-considerations-heading" class="bg-gray-50 p-6 rounded-lg mb-6">
-            <h3 id="security-considerations-heading" class="text-lg font-medium text-gray-800 mb-4">Security Considerations</h3>
+            <h3 id="security-considerations-heading" class="text-lg font-medium text-gray-800 mb-4">About text message verification</h3>
 
             <div class="mb-4">
               <div class="flex items-start mb-2">
@@ -93,8 +95,8 @@
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <h4 class="text-sm font-medium text-gray-800">Convenience</h4>
-                  <p class="text-sm text-gray-600">No need to install an app or carry a physical key.</p>
+                  <h4 class="text-sm font-medium text-gray-800">Easy to use</h4>
+                  <p class="text-sm text-gray-600">No app or extra device needed. Just your phone.</p>
                 </div>
               </div>
 
@@ -105,8 +107,8 @@
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <h4 class="text-sm font-medium text-gray-800">Mobile Network Dependency</h4>
-                  <p class="text-sm text-gray-600">Requires cellular service to receive codes.</p>
+                  <h4 class="text-sm font-medium text-gray-800">Needs phone service</h4>
+                  <p class="text-sm text-gray-600">You will need cellular service to receive the code.</p>
                 </div>
               </div>
 
@@ -117,8 +119,8 @@
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <h4 class="text-sm font-medium text-gray-800">Security Strength</h4>
-                  <p class="text-sm text-gray-600">Provides basic protection but is less secure than security keys or authenticator apps.</p>
+                  <h4 class="text-sm font-medium text-gray-800">Protection level</h4>
+                  <p class="text-sm text-gray-600">Text messages are convenient, but security keys or authenticator apps are stronger.</p>
                 </div>
               </div>
             </div>
@@ -134,7 +136,7 @@
               <div class="ml-3">
                 <h3 id="recommendation-heading" class="text-sm font-medium text-yellow-800">Recommendation</h3>
                 <div class="mt-2 text-sm text-yellow-700">
-                  <p>We recommend using a security key or authenticator app when possible for stronger security. Text messages are a good backup option.</p>
+                  <p>If you can, use a security key or authenticator app for stronger protection. Text messages are a good backup option.</p>
                 </div>
               </div>
             </div>

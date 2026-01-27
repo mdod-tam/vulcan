@@ -350,7 +350,8 @@ class TwoFactorCredentialsController < ApplicationController
       handle_success_response(
         html_redirect_path: verify_sms_credential_two_factor_authentication_path(id: @credential.id),
         html_message: 'Verification code sent.',
-        turbo_message: 'Verification code sent.'
+        turbo_message: 'Verification code sent.',
+        turbo_redirect_path: verify_sms_credential_two_factor_authentication_path(id: @credential.id)
       )
     else
       Rails.logger.error('[SMS_DEBUG] SMS sending failed, staying on form')

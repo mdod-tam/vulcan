@@ -2,8 +2,10 @@
 <div class="max-w-4xl mx-auto px-4 py-8">
   <section aria-labelledby="add-key-heading" class="bg-white rounded-lg shadow-md p-8">
     <header id="add-key-heading" class="text-center mb-8">
-      <h1 class="text-3xl font-bold text-gray-800">Add a Security Key</h1>
-      <p class="mt-3 text-gray-600">Use your device's built-in biometrics or a physical security key for stronger account protection.</p>
+      <h1 class="text-3xl font-bold text-gray-800">Set up Device or Security Key</h1>
+      <p class="mt-3 text-gray-600">
+        Use your device (fingerprint or face) or a physical security key for the strongest protection.
+      </p>
     </header>
 
     <!-- Step Indicator -->
@@ -35,91 +37,48 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <aside aria-labelledby="understanding-heading">
         <section id="understanding-heading" class="bg-gray-50 p-6 rounded-lg">
-          <h2 class="text-xl font-semibold text-gray-800 mb-4">Understanding Security Key Registration</h2>
-
-          <h3 class="text-lg font-medium text-gray-800 mb-4">Registration Steps (1-2)</h3>
-          <ol class="space-y-4 text-gray-700 mb-6" role="list">
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Quick steps</h2>
+          <ol class="space-y-4 text-gray-700" role="list">
             <li class="flex">
               <span class="flex-shrink-0 h-6 w-6 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-medium text-sm mr-3">1</span>
               <div>
-                <p class="font-medium">Enter a nickname</p>
-                <p class="text-sm text-gray-600 mt-1">Choose a name that will help you recognize this key later.</p>
+                <p class="font-medium">Give your device or key a name</p>
+                <p class="text-sm text-gray-600 mt-1">This helps you recognize it later.</p>
               </div>
             </li>
             <li class="flex">
               <span class="flex-shrink-0 h-6 w-6 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-medium text-sm mr-3">2</span>
               <div>
                 <p class="font-medium">Click "Continue to Key Activation"</p>
-                <p class="text-sm text-gray-600 mt-1">This saves the nickname and prepares for the browser prompt.</p>
+                <p class="text-sm text-gray-600 mt-1">Your browser will open a prompt.</p>
+              </div>
+            </li>
+            <li class="flex">
+              <span class="flex-shrink-0 h-6 w-6 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-medium text-sm mr-3">3</span>
+              <div>
+                <p class="font-medium">Follow the prompt</p>
+                <p class="text-sm text-gray-600 mt-1">Use fingerprint, face, PIN, or tap your security key.</p>
               </div>
             </li>
           </ol>
 
-          <h3 class="text-lg font-medium text-gray-800 mb-2 mt-6 pt-4 border-t border-gray-200">Authentication Options</h3>
-          <div class="mb-4 pb-4 border-b border-gray-200">
-            <h4 class="text-md font-semibold text-gray-700 mb-2">Platform Authentication</h4>
-            <ul class="space-y-2 text-gray-700 text-sm" role="list">
-              <li class="flex items-start">
-                <svg aria-hidden="true" class="h-5 w-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                </svg>
-                <span>Uses your device's built-in biometrics (fingerprint, Face ID) or PIN</span>
-              </li>
-              <li class="flex items-start">
-                <svg aria-hidden="true" class="h-5 w-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                </svg>
-                <span>No additional hardware required</span>
-              </li>
-            </ul>
-          </div>
-          <div class="mb-6">
-            <h4 class="text-md font-semibold text-gray-700 mb-2">Security Keys</h4>
-            <ul class="space-y-2 text-gray-700 text-sm" role="list">
-              <li class="flex items-start">
-                <svg aria-hidden="true" class="h-5 w-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                </svg>
-                <span>Uses a physical USB, NFC, or Bluetooth key</span>
-              </li>
-              <li class="flex items-start">
-                <svg aria-hidden="true" class="h-5 w-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                </svg>
-                <span>Can be used across multiple devices</span>
-              </li>
-            </ul>
-          </div>
-
-          <h3 class="text-lg font-medium text-gray-800 mb-4 mt-6 pt-4 border-t border-gray-200">Step 3: Activate Your Key</h3>
-          <div class="flex">
-            <span class="flex-shrink-0 h-6 w-6 rounded-full	bg-indigo-100 text-indigo-800 flex items-center justify-center font-medium text-sm mr-3">3</span>
-            <div>
-              <p class="font-medium">Follow browser/OS prompts</p>
-              <p class="text-sm text-gray-600 mt-1">Your device or browser will now ask you to activate your security method (e.g., touch sensor, insert key, enter PIN).</p>
-              <ul class="list-disc ml-5 mt-1 text-sm text-gray-600" role="list">
-                <li>Use your device's fingerprint, face recognition, or PIN</li>
-                <li>Insert a security key and press its button when prompted</li>
-              </ul>
+          <details class="mt-6 text-sm text-gray-700">
+            <summary class="cursor-pointer font-medium text-gray-800">Learn more about devices and security keys</summary>
+            <div class="mt-3 space-y-3">
+              <p>
+                If your device has fingerprint or face sign-in, you can use that. You do not need extra hardware.
+              </p>
+              <p>
+                If you use a physical security key (USB, NFC, or Bluetooth), keep it nearby and tap it when asked.
+              </p>
             </div>
-          </div>
-
-          <div class="mt-6 flex justify-center space-x-4">
-            <figure class="text-center">
-              <%= image_tag 'touchid.jpg', alt: "Illustration of fingerprint authentication", class: "h-24 mx-auto" %>
-              <figcaption class="text-sm text-gray-600 mt-1">Biometrics</figcaption>
-            </figure>
-            <figure class="text-center">
-              <%= image_tag 'private-key.png', alt: "Illustration of a physical security key", class: "h-24 mx-auto" %>
-              <figcaption class="text-sm text-gray-600 mt-1">Security Key Access</figcaption>
-            </figure>
-          </div>
+          </details>
         </section>
       </aside>
 
       <main aria-labelledby="form-heading">
         <section id="form-heading" class="bg-white p-6 rounded-lg border border-gray-200">
-          <h2 class="text-xl font-semibold text-gray-800 mb-4">Step 1: Name Your Security Key</h2>
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Step 1: Name Your Device or Key</h2>
           <%= form_with scope: :webauthn_credential,
                       url: webauthn_creation_options_two_factor_authentication_path,
                       class: "space-y-6",
@@ -128,7 +87,7 @@
                               "add-credential-callback-url-value": create_credential_two_factor_authentication_path(type: 'webauthn'),
                               turbo: false } do |form| %>
             <div>
-              <label for="webauthn_credential_nickname" class="block text-sm font-medium text-gray-700 mb-1">Nickname for this security key</label>
+              <label for="webauthn_credential_nickname" class="block text-sm font-medium text-gray-700 mb-1">Name for this device or key</label>
               <div class="mt-1">
                 <%= form.text_field :nickname,
                       id: "webauthn_credential_nickname",
@@ -136,12 +95,14 @@
                       placeholder: "e.g., My Laptop Fingerprint, Office YubiKey",
                       required: true,
                       aria: { describedby: "nickname-help" },
-                      data: { "add-credential-target": "nicknameInput" } %>
+                      data: { action: "input->add-credential#clearNicknameError", "add-credential-target": "nicknameInput" } %>
               </div>
-              <p id="nickname-help" class="mt-2 text-sm text-gray-500">Give this key a memorable name. You'll use this name to identify the key later. After clicking 'Continue', your browser will prompt you to activate the actual security key or biometric.</p>
+              <p id="nickname-help" class="mt-2 text-sm text-gray-500">
+                Pick a name you will recognize later. After you click Continue, your browser will ask you to verify.
+              </p>
             </div>
             <div aria-live="polite">
-              <div class="hidden" data-add-credential-target="statusMessage"></div>
+              <div class="hidden text-sm text-red-700 mt-2" role="alert" data-add-credential-target="statusMessage"></div>
             </div>
             <div class="flex items-center justify-between">
               <%= link_to setup_two_factor_authentication_path,
@@ -162,7 +123,7 @@
       <section id="troubleshooting-heading" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <h2 class="text-sm font-medium text-yellow-800">Troubleshooting</h2>
         <div class="mt-2 text-sm text-yellow-700">
-          <p>If you encounter issues, make sure your browser supports WebAuthn and that you're using a compatible security key.</p>
+          <p>If you encounter issues, make sure your browser supports WebAuthn and your device or key is compatible.</p>
         </div>
       </section>
     </aside>

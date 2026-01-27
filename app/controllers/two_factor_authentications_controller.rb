@@ -13,9 +13,10 @@ class TwoFactorAuthenticationsController < ApplicationController
   include TwoFactorVerification
   include TurboStreamResponseHandling
 
-  before_action :ensure_two_factor_initiated_unless_skipped, except: %i[setup]
+  before_action :ensure_two_factor_initiated_unless_skipped, except: %i[setup resend_sms_verification]
   before_action :authenticate_user!, only: %i[setup]
-  skip_before_action :authenticate_user!, only: %i[verify verify_method process_verification verification_options setup]
+  skip_before_action :authenticate_user!,
+                     only: %i[verify verify_method process_verification verification_options setup resend_sms_verification]
 
   # GET /two_factor_authentication/setup
   def setup
@@ -189,6 +190,21 @@ class TwoFactorAuthenticationsController < ApplicationController
       else
         handle_failed_verification(format, message)
       end
+    end
+  end
+
+  # POST /two_factor_authentication/verify/sms/resend
+  def resend_sms_verification
+    @user = current_user || find_user_for_two_factor
+    return redirect_to sign_in_path unless @user
+
+    credential = resolve_sms_credential_for_resend(@user)
+    return handle_error_response(error_message: 'SMS verification not available') unless credential
+
+    if send_sms_verification_code_for_user(credential, @user)
+      render_resend_success(credential)
+    else
+      render_resend_failure(credential)
     end
   end
 
@@ -389,5 +405,55 @@ class TwoFactorAuthenticationsController < ApplicationController
     return if session[:skip_2fa]
 
     ensure_two_factor_initiated
+  end
+
+  def resolve_sms_credential_for_resend(user)
+    challenge_data = retrieve_challenge
+    credential_id = challenge_data[:metadata]&.dig(:credential_id)
+    return user.sms_credentials.find_by(id: credential_id) if credential_id.present?
+
+    user.sms_credentials.first
+  end
+
+  def resend_sms_redirect_path(credential)
+    return verify_sms_credential_two_factor_authentication_path(id: credential.id) if current_user
+
+    verify_method_two_factor_authentication_path(type: 'sms')
+  end
+
+  def render_resend_success(credential)
+    message = 'A new verification code has been sent.'
+    respond_to do |format|
+      format.html { redirect_to resend_sms_redirect_path(credential), notice: message }
+      format.turbo_stream do
+        render turbo_stream: turbo_stream.replace(
+          'sms_resend',
+          partial: 'shared/sms_resend',
+          locals: {
+            resend_path: resend_sms_verification_two_factor_authentication_path,
+            message: message,
+            message_type: :success
+          }
+        )
+      end
+    end
+  end
+
+  def render_resend_failure(credential)
+    message = 'Could not send verification code.'
+    respond_to do |format|
+      format.html { redirect_to resend_sms_redirect_path(credential), alert: message }
+      format.turbo_stream do
+        render turbo_stream: turbo_stream.replace(
+          'sms_resend',
+          partial: 'shared/sms_resend',
+          locals: {
+            resend_path: resend_sms_verification_two_factor_authentication_path,
+            message: message,
+            message_type: :error
+          }
+        )
+      end
+    end
   end
 end

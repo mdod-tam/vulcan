@@ -53,6 +53,7 @@ Rails.application.routes.draw do
     get 'verify/:type', to: 'two_factor_authentications#verify_method', as: :verify_method
     post 'verify/:type', to: 'two_factor_authentications#process_verification', as: :process_verification
     get 'verification_options/:type', to: 'two_factor_authentications#verification_options', as: :verification_options
+    post 'verify/sms/resend', to: 'two_factor_authentications#resend_sms_verification', as: :resend_sms_verification
 
     # Credential management routes (delegated to TwoFactorCredentialsController)
     get 'credentials/:type/new', to: 'two_factor_credentials#new_credential', as: :new_credential
@@ -342,7 +343,6 @@ Rails.application.routes.draw do
   namespace :admin do
     resources :feature_flags, only: %i[index update]
   end
-
 
   # New constituent_portal namespace (replacing constituent)
   namespace :constituent_portal do
