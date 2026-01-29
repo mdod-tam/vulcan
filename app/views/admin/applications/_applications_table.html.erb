@@ -1,8 +1,8 @@
 <div class="bg-white shadow overflow-x-auto sm:rounded-lg">
   <table class="min-w-full divide-y divide-gray-200 applications-table" role="table" style="table-layout: fixed;">
-    <thead class="bg-gray-50">
-      <tr> 
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 7%;">
+    <thead class="bg-gray-50" role="rowgroup">
+      <tr role="row"> 
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" role="columnheader" style="width: 7%;">
           <%= link_to admin_applications_path(sort: 'application_date', direction: toggle_direction('application_date')),
                       class: "flex items-center",
                       aria: { label: "Sort applications by Date" },
@@ -13,7 +13,7 @@
             </svg>
           <% end %>
         </th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 11%;">
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" style="width: 11%;">
           <%= link_to admin_applications_path(sort: 'user.last_name', direction: toggle_direction('user.last_name')),
                       class: "flex items-center",
                       aria: { label: "Sort applications by Applicant" },
@@ -24,10 +24,10 @@
             </svg>
           <% end %>
         </th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 12%;">Managing Guardian</th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell" style="width: 9%;">Phone</th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 15%;">Email</th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 8%;">
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" style="width: 12%;">Managing Guardian</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell" role="columnheader" style="width: 9%;">Phone</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" style="width: 15%;">Email</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" role="columnheader" style="width: 8%;">
           <%= link_to admin_applications_path(sort: 'status', direction: toggle_direction('status')),
                       class: "flex items-center",
                       aria: { label: "Sort applications by Status" },
@@ -38,18 +38,18 @@
             </svg>
           <% end %>
         </th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width: 15%;">Attachments</th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 11%;">Medical Response</th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" style="width: 8%;">Action</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" style="width: 15%;">Attachments</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" role="columnheader" style="width: 11%;">Medical Response</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" role="columnheader" style="width: 8%;">Action</th>
       </tr>
     </thead>
-    <tbody class="bg-white divide-y divide-gray-200">
+    <tbody class="bg-white divide-y divide-gray-200" role="rowgroup">
       <% applications.each do |application| %>
-        <tr id="application_<%= application.id %>" class="application-row h-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 <%= 'bg-blue-50' if application.for_dependent? %>" tabindex="0"> <!-- Added application-row class here -->
-          <td class="px-2 py-2 text-sm text-gray-900 whitespace-nowrap overflow-hidden">
+        <tr id="application_<%= application.id %>" class="application-row h-20 focus:outline-none focus:ring-2 focus:ring-indigo-500 <%= 'bg-blue-50' if application.for_dependent? %>" role="row"> <!-- Added application-row class here -->
+          <td class="px-2 py-2 text-sm text-gray-900 whitespace-nowrap overflow-hidden" role="cell">
             <%= application.application_date.strftime("%m/%d/%Y") %>
           </td>
-          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <div class="truncate" title="<%= application.user&.full_name || 'Unknown Applicant' %>">
               <% if application.user.present? %>
                 <%= application.user.full_name %>
@@ -58,7 +58,7 @@
               <% end %>
             </div>
           </td>
-          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <% if application.managing_guardian.present? %>
               <div class="truncate" title="<%= application.managing_guardian.full_name %>">
                 <span class="font-semibold"><%= application.managing_guardian.full_name %></span>
@@ -74,7 +74,7 @@
               N/A
             <% end %>
           </td>
-          <td class="px-2 py-2 text-sm text-gray-900 hidden sm:table-cell whitespace-nowrap overflow-hidden">
+          <td class="px-2 py-2 text-sm text-gray-900 hidden sm:table-cell whitespace-nowrap overflow-hidden" role="cell">
             <div class="truncate">
               <% if application.user.present? %>
                 <%= application.user.phone || "No phone" %>
@@ -83,7 +83,7 @@
               <% end %>
             </div>
           </td>
-          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <div class="truncate" title="<%= application.user&.effective_email || 'No email' %>">
               <% if application.user.present? %>
                 <%= application.user.effective_email || "No email" %>
@@ -92,10 +92,10 @@
               <% end %>
             </div>
           </td>
-          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <%= application_status_badge(application) %>
           </td>
-          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <% 
               # Use our decorator's safe methods to check attachment status
               income_attached = application.respond_to?(:income_proof_attached?) ? 
@@ -122,10 +122,10 @@
               <span class="text-sm text-gray-500">No Proofs</span>
             <% end %>
           </td>
-          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
+          <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <%= medical_certification_status_badge(application) %>
           </td>
-          <td class="px-2 py-2 text-sm font-medium overflow-hidden">
+          <td class="px-2 py-2 text-sm font-medium overflow-hidden" role="cell">
             <%= link_to "View",
                 admin_application_path(id: application.id),
                 class: "text-indigo-600 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 whitespace-nowrap",
