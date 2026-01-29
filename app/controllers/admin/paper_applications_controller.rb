@@ -333,6 +333,8 @@ module Admin
         :income_proof_rejection_reason, :income_proof_rejection_notes,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
         :residency_proof_rejection_reason, :residency_proof_rejection_notes,
+        :medical_certification_action, :medical_certification, :medical_certification_signed_id,
+        :medical_certification_rejection_reason, :medical_certification_rejection_notes,
         :no_medical_provider_information,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
@@ -403,6 +405,15 @@ module Admin
         service_params[reason_key] = permitted[reason_key]
         service_params[notes_key]  = permitted[notes_key]
       end
+
+      # Handle medical certification (uses different naming convention)
+      service_params[:medical_certification_action] = permitted[:medical_certification_action]
+      file_val = permitted[:medical_certification]
+      signed_val = permitted[:medical_certification_signed_id]
+      service_params[:medical_certification] = file_val if file_val.present?
+      service_params[:medical_certification_signed_id] = signed_val if signed_val.present?
+      service_params[:medical_certification_rejection_reason] = permitted[:medical_certification_rejection_reason]
+      service_params[:medical_certification_rejection_notes] = permitted[:medical_certification_rejection_notes]
     end
 
     # Translate checkbox UI to email strategy parameter
