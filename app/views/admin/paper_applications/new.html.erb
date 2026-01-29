@@ -704,7 +704,6 @@
               <%# Proof Action Selection %>
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Income Proof Action</legend>
-                <p class="text-sm text-gray-600 mb-3">If no income proof was provided with the paper application, select <strong>Reject</strong> and choose "None Provided" from the rejection reasons.</p>
                 <div role="radiogroup" aria-label="Income proof action" class="flex flex-wrap gap-4">
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio" 
@@ -726,6 +725,16 @@
                            data-action="change->document-proof-handler#toggleProofAction" 
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                  </label>
+                  <label class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 has-[:checked]:ring-2 has-[:checked]:ring-gray-500">
+                    <input type="radio" 
+                           id="no_income_proof_provided" 
+                           name="income_proof_action" 
+                           value="none" 
+                           class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300" 
+                           data-action="change->document-proof-handler#handleNoneProvided" 
+                           data-document-proof-handler-target="noneRadio">
+                    <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
                   </label>
                 </div>
               </fieldset>
@@ -812,7 +821,6 @@
               <%# Proof Action Selection %>
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Residency Proof Action</legend>
-                <p class="text-sm text-gray-600 mb-3">If no residency proof was provided with the paper application, select <strong>Reject</strong> and choose "None Provided" from the rejection reasons.</p>
                 <div role="radiogroup" aria-label="Residency proof action" class="flex flex-wrap gap-4">
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio" 
@@ -834,6 +842,16 @@
                            data-action="change->document-proof-handler#toggleProofAction" 
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                  </label>
+                  <label class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 has-[:checked]:ring-2 has-[:checked]:ring-gray-500">
+                    <input type="radio" 
+                           id="no_residency_proof_provided" 
+                           name="residency_proof_action" 
+                           value="none" 
+                           class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300" 
+                           data-action="change->document-proof-handler#handleNoneProvided" 
+                           data-document-proof-handler-target="noneRadio">
+                    <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
                   </label>
                 </div>
               </fieldset>
