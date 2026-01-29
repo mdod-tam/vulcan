@@ -74,6 +74,7 @@
     <% if show_medical_certification_request_buttons?(@application) && !@application.document_signing_status_signed? %>
       <div class="flex flex-wrap gap-2">
         <!-- DocuSeal Button (Default) -->
+      <% if FeatureFlag.enabled?(:docusign_enabled) %>
         <% if provider_info_complete %>
           <%= button_to send_document_signing_request_admin_application_path(@application),
               method: :post,
@@ -93,8 +94,9 @@
             <%= docuseal_text %>
           </button>
         <% end %>
-
+      <% end %>
         <!-- Email Button (Alternative) -->
+      
         <% email_button_text = request_count.zero? ? "Send Email" : "Resend Email" %>
         <%= button_to resend_medical_certification_admin_application_path(@application),
             method: :post,
@@ -106,6 +108,7 @@
             'aria-label': "Send email request to #{@application.medical_provider_name}" do %>
           <%= email_button_text %>
         <% end %>
+      
 
         <!-- Print Button (Alternative) -->
         <%= button_to queue_medical_certification_form_admin_application_path(@application),
