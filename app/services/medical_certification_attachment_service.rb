@@ -123,12 +123,22 @@ class MedicalCertificationAttachmentService
       # Capture the old status before updating
       old_status = application.medical_certification_status || 'requested'
 
-      # Update certification status
-      application.update!(
+      Rails.logger.info "[MedicalCertService] Updating status from #{old_status} to #{status} for app #{application.id}"
+
+      # Update certification status using update_columns to bypass validations
+      # This is necessary because validations may require proofs to be attached,
+      # but in paper application context we're still processing proofs
+      update_result = application.update_columns(
         medical_certification_status: status.to_s,
         medical_certification_verified_at: Time.current,
-        medical_certification_verified_by_id: admin&.id
+        medical_certification_verified_by_id: admin&.id,
+        updated_at: Time.current
       )
+      
+      Rails.logger.info "[MedicalCertService] update_columns returned: #{update_result}"
+      
+      # Reload to get the updated values for audit logging
+      application.reload
 
       Rails.logger.info "Updated disability certification status to #{status} for application #{application.id}"
 
@@ -264,12 +274,15 @@ class MedicalCertificationAttachmentService
     old_status = params[:application].medical_certification_status || 'requested'
     params[:old_status] = old_status
 
-    params[:application].update!(
+    # Use update_columns to bypass validations
+    params[:application].update_columns(
       medical_certification_status: 'rejected',
       medical_certification_verified_at: Time.current,
       medical_certification_verified_by_id: params[:admin].id,
-      medical_certification_rejection_reason: params[:reason]
+      medical_certification_rejection_reason: params[:reason],
+      updated_at: Time.current
     )
+    params[:application].reload
   end
 
   def self.create_rejection_audit_trail(params)

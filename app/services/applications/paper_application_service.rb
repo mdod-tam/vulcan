@@ -380,7 +380,7 @@ module Applications
     def process_proof_uploads
       Current.paper_context = true
 
-      %i[income residency].each do |proof_type|
+      %i[income residency medical_certification].each do |proof_type|
         return false unless process_proof(proof_type)
       end
 
@@ -390,21 +390,29 @@ module Applications
     end
 
     def process_proof(type)
-      action = params["#{type}_proof_action"] || params[:"#{type}_proof_action"]
+      # Handle medical_certification naming convention
+      action_key = type == :medical_certification ? "#{type}_action" : "#{type}_proof_action"
+      action = params[action_key] || params[action_key.to_sym]
 
-      return true unless %w[accept reject].include?(action)
+      return true unless %w[accept reject approved rejected not_requested].include?(action)
 
       case action
-      when 'accept'
+      when 'accept', 'approved'
         process_accept_proof(type)
-      when 'reject'
+      when 'reject', 'rejected'
         process_reject_proof(type)
+      when 'not_requested'
+        true
       end
     end
 
     def process_accept_proof(type)
-      file_param = params["#{type}_proof"]
-      signed_id_param = params["#{type}_proof_signed_id"]
+      # Handle medical_certification naming convention
+      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
+      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
+      
+      file_param = params[file_key]
+      signed_id_param = params[signed_id_key]
 
       # Check if we have a valid file or signed_id
       # file_param can be:
@@ -428,17 +436,33 @@ module Applications
     end
 
     def attach_and_approve_proof(type)
-      blob_or_file = params["#{type}_proof"].presence || params["#{type}_proof_signed_id"].presence
+      # Handle medical_certification naming convention
+      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
+      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
+      
+      blob_or_file = params[file_key].presence || params[signed_id_key].presence
 
-      result = ProofAttachmentService.attach_proof(
-        application: @application,
-        proof_type: type,
-        blob_or_file: blob_or_file,
-        status: :approved,
-        admin: @admin,
-        submission_method: :paper,
-        metadata: {}
-      )
+      # Route medical certifications to the correct service
+      if type == :medical_certification
+        result = MedicalCertificationAttachmentService.attach_certification(
+          application: @application,
+          blob_or_file: blob_or_file,
+          status: :approved,
+          admin: @admin,
+          submission_method: :paper,
+          metadata: {}
+        )
+      else
+        result = ProofAttachmentService.attach_proof(
+          application: @application,
+          proof_type: type,
+          blob_or_file: blob_or_file,
+          status: :approved,
+          admin: @admin,
+          submission_method: :paper,
+          metadata: {}
+        )
+      end
 
       unless result[:success]
         add_error("Error processing #{type} proof: #{result[:error]&.message}")
@@ -449,15 +473,31 @@ module Applications
     end
 
     def process_reject_proof(type)
-      result = ProofAttachmentService.reject_proof_without_attachment(
-        application: @application,
-        proof_type: type,
-        admin: @admin,
-        reason: params["#{type}_proof_rejection_reason"],
-        notes: params["#{type}_proof_rejection_notes"],
-        submission_method: :paper,
-        metadata: {}
-      )
+      # Handle medical_certification naming convention
+      reason_key = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
+      notes_key = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
+      
+      # Route medical certifications to the correct service
+      if type == :medical_certification
+        result = MedicalCertificationAttachmentService.reject_certification(
+          application: @application,
+          admin: @admin,
+          reason: params[reason_key],
+          notes: params[notes_key],
+          submission_method: :paper,
+          metadata: {}
+        )
+      else
+        result = ProofAttachmentService.reject_proof_without_attachment(
+          application: @application,
+          proof_type: type,
+          admin: @admin,
+          reason: params[reason_key],
+          notes: params[notes_key],
+          submission_method: :paper,
+          metadata: {}
+        )
+      end
 
       unless result[:success]
         add_error("Error rejecting #{type} proof: #{result[:error]&.message}")
