@@ -80,9 +80,9 @@ class DocumentProofHandlerController extends Controller {
     const isAccepted = this.acceptRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
   
-    // Toggle visibility of sections using utility
-    setVisible(this.uploadSectionTarget, isAccepted);
-    setVisible(this.rejectionSectionTarget, isRejected);
+    // Toggle visibility of sections using utility with aria-hidden for accessibility
+    setVisible(this.uploadSectionTarget, isAccepted, { ariaHidden: !isAccepted });
+    setVisible(this.rejectionSectionTarget, isRejected, { ariaHidden: !isRejected });
     
     // Toggle file input enabled state
     // Note: We don't set 'required' attribute to allow server-side validation to handle missing files
@@ -130,9 +130,9 @@ class DocumentProofHandlerController extends Controller {
       if (selectedReason) {
         // In a real app, we'd use I18n or data attributes to get formatted reason text
         previewTarget.textContent = this.formatRejectionReason(selectedReason);
-        setVisible(previewTarget, true);
+        setVisible(previewTarget, true, { ariaHidden: false });
       } else {
-        setVisible(previewTarget, false);
+        setVisible(previewTarget, false, { ariaHidden: true });
       }
     }
   }
@@ -153,6 +153,9 @@ class DocumentProofHandlerController extends Controller {
       'missing_amount': 'The income amount is not clearly visible on the document.',
       'exceeds_threshold': 'The income shown exceeds the program\'s threshold.',
       'outdated_ss_award': 'The Social Security award letter is from a previous year.',
+      'incomplete': 'The medical provider documentation is incomplete or missing required information.',
+      'illegible': 'The documentation is illegible or unclear. Please provide a clearer copy.',
+      'missing_signature': 'The medical provider signature is missing or illegible.',
       'other': 'There is an issue with this document. Please see notes for details.'
     };
     
@@ -204,6 +207,9 @@ class DocumentProofHandlerController extends Controller {
       'missing_amount': 'Please provide a document that clearly shows the income amount.',
       'exceeds_threshold': 'Unfortunately, your income exceeds the program eligibility threshold.',
       'outdated_ss_award': 'Please provide your most recent Social Security award letter.',
+      'incomplete': 'Please provide complete medical provider documentation with all required information.',
+      'illegible': 'Please provide a clearer copy of the medical provider documentation.',
+      'missing_signature': 'Please provide documentation that includes the medical provider\'s signature.',
       'other': 'Please contact us for more information about the required documentation.'
     };
     
