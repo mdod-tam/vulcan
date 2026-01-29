@@ -657,21 +657,10 @@
                 <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                Income Verification
+                Verification of Income and/or Benefits
               </h3>
               
               <%# Income Information Fields %>
-              <div class="flex items-center gap-3 mb-6 pb-4">
-                <%= check_box_tag :no_income_information, 
-                    nil, 
-                    false, 
-                    class: "mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", 
-                    data: { 
-                      "income-validation-target": "noIncomeProvided", 
-                      "action": "change->income-validation#toggleIncome" 
-                    } %>
-                <%= label_tag :no_income_information, "No income information provided" %>
-              </div>
               <%= fields_for :application do |a| %>
                 <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200" 
                      data-income-validation-target="incomeFieldsContainer">
@@ -715,6 +704,7 @@
               <%# Proof Action Selection %>
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Income Proof Action</legend>
+                <p class="text-sm text-gray-600 mb-3">If no income proof was provided with the paper application, select <strong>Reject</strong> and choose "None Provided" from the rejection reasons.</p>
                 <div role="radiogroup" aria-label="Income proof action" class="flex flex-wrap gap-4">
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio" 
@@ -736,16 +726,6 @@
                            data-action="change->document-proof-handler#toggleProofAction" 
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
-                  </label>
-                  <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
-                    <input type="radio" 
-                           id="no_income_proof_provided" 
-                           name="income_proof_action" 
-                           value="none"
-                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
-                           data-action="change->document-proof-handler#toggleProofAction"
-                           data-document-proof-handler-target="noneRadio">
-                    <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
                   </label>
                 </div>
               </fieldset>
@@ -777,6 +757,7 @@
                             class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
+                      <option value="none_provided">None Provided</option>
                       <option value="address_mismatch">Address Mismatch</option>
                       <option value="expired">Expired Documentation</option>
                       <option value="missing_name">Missing Name</option>
@@ -831,6 +812,7 @@
               <%# Proof Action Selection %>
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Residency Proof Action</legend>
+                <p class="text-sm text-gray-600 mb-3">If no residency proof was provided with the paper application, select <strong>Reject</strong> and choose "None Provided" from the rejection reasons.</p>
                 <div role="radiogroup" aria-label="Residency proof action" class="flex flex-wrap gap-4">
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio" 
@@ -852,16 +834,6 @@
                            data-action="change->document-proof-handler#toggleProofAction" 
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
-                  </label>
-                  <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
-                    <input type="radio" 
-                           id="no_residency_proof_provided" 
-                           name="residency_proof_action" 
-                           value="none"
-                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
-                           data-action="change->document-proof-handler#toggleProofAction"
-                           data-document-proof-handler-target="noneRadio">
-                    <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
                   </label>
                 </div>
               </fieldset>
@@ -893,6 +865,7 @@
                             class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
+                      <option value="none_provided">None Provided</option>
                       <option value="address_mismatch">Address Mismatch</option>
                       <option value="expired">Expired Documentation</option>
                       <option value="missing_name">Missing Name</option>

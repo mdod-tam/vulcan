@@ -11,7 +11,6 @@ class DocumentProofHandlerController extends Controller {
   static targets = [
     "acceptRadio",
     "rejectRadio",
-    "noneRadio",
     "uploadSection",
     "rejectionSection",
     "fileInput",
@@ -21,7 +20,7 @@ class DocumentProofHandlerController extends Controller {
   ]
 
   static values = {
-    proofType: String // "income_proof" or "residency_proof"
+    type: String // "income" or "residency"
   }
 
   connect() {
@@ -56,7 +55,6 @@ class DocumentProofHandlerController extends Controller {
     }
 
     const isAccepted = this.acceptRadioTarget.checked;
-    const noneProvided = this.noneRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
   
     // Toggle visibility of sections using utility
@@ -80,7 +78,7 @@ class DocumentProofHandlerController extends Controller {
     // Toggle required attributes on fields
     if (this.hasRejectionReasonSelectTarget) {
       const target = this.rejectionReasonSelectTarget;
-      if (isAccepted || noneProvided ) {
+      if (isAccepted) {
         target.removeAttribute('required');
       } else {
         target.setAttribute('required', 'required');
@@ -124,6 +122,7 @@ class DocumentProofHandlerController extends Controller {
   formatRejectionReason(reasonCode) {
     // This would typically come from Rails I18n
     const reasonMessages = {
+      'none_provided': this.getNoneProvidedMessage(),
       'address_mismatch': 'The address on the document does not match the application address.',
       'expired': 'The document has expired or is not within the required date range.',
       'missing_name': 'The document does not clearly show the applicant\'s name.',
@@ -135,6 +134,18 @@ class DocumentProofHandlerController extends Controller {
     };
     
     return reasonMessages[reasonCode] || 'This document was rejected. Please provide a valid document.';
+  }
+
+  /**
+   * Get the appropriate "none provided" message based on proof type
+   * @returns {string} The none provided message
+   */
+  getNoneProvidedMessage() {
+    if (this.typeValue === 'income') {
+      return 'No income proof was provided with the application.';
+    } else {
+      return 'No residency proof was provided with the application.';
+    }
   }
 
   /**
@@ -162,6 +173,7 @@ class DocumentProofHandlerController extends Controller {
    */
   getInstructionalText(reasonCode) {
     const instructions = {
+      'none_provided': this.getNoneProvidedInstructions(),
       'address_mismatch': 'Please provide a document that shows your current address.',
       'expired': 'Please provide a current document that is not expired.',
       'missing_name': 'Please provide a document that clearly shows your name.',
@@ -173,6 +185,24 @@ class DocumentProofHandlerController extends Controller {
     };
     
     return instructions[reasonCode] || 'Please provide the required documentation.';
+  }
+
+  /**
+   * Get the appropriate instructions for "none provided" based on proof type
+   * @returns {string} The instructional text
+   */
+  getNoneProvidedInstructions() {
+    if (this.typeValue === 'income') {
+      return `Please provide ONE of the following to complete your application:
+
+• If you receive Social Security (SSA), SSI, or SSDI: Send your most recent Social Security Award Letter.
+
+• If you receive Veterans (VA) benefits, TDAP, TANF, or pharmacy/medical/housing assistance: Send your most recent benefit paperwork.
+
+• If you live on a limited or fixed income: Send your 2 most recent pay stubs, unemployment stubs, or last year's tax return.`;
+    } else {
+      return 'Please provide proof of Maryland residency to complete your application. Acceptable documents include: utility bill, mortgage statement, lease agreement, bank statement, or government ID. IMPORTANT: The address shown on your proof document must match the address you provided in your application.';
+    }
   }
 }
 
