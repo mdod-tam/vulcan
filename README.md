@@ -9,7 +9,7 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 1. **Applications (Portal + Paper)**
    - Self-service portal flow with autosave and inline validation
    - Admin-only paper path guarded by `Current.paper_context`; approvals require attachments, rejections may proceed without a file
-   - Status tracking: draft → in_progress → approved/rejected/needs_information
+   - Status tracking: draft → in_progress → awaiting_proof/reminder_sent/awaiting_dcf → approved/rejected/archived
    - Guardian/dependent application support with managing guardian tracking
 
 2. **Guardian & Dependent Management**
@@ -22,7 +22,7 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
    - Income and residency proof uploads with status tracking
    - Unified `ProofAttachmentService` for web, paper, and email submissions
    - Resubmission and rate-limit policies; robust error handling
-   - Centralized approval/rejection via `ProofReviewService` with audit logging
+   - Centralized approval/rejection via `ProofReviewService` + `ProofReview` callbacks with audit logging
 
 4. **Medical Certification**
    - Request and track provider responses
@@ -161,7 +161,7 @@ Vulcan is a Ruby on Rails application that facilitates Maryland Accessible Telec
 - [Pain Point Tracking](docs/features/application_pain_point_tracking.md) - Draft drop-off analysis
 
 ### Infrastructure
-- [Email System Guide](docs/infrastructure/EMAIL_SYSTEM.md) - Inbound and outbound email, templates
+- [Email System Guide](docs/infrastructure/email_system.md) - Inbound and outbound email, templates
 - [Active Storage S3 Setup](docs/infrastructure/active_storage_s3_setup.md) - File storage configuration
 
 ### Security

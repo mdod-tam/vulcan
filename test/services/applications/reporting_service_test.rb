@@ -372,10 +372,10 @@ module Applications
                               status: :in_progress)
 
       # 1 Needs information application (which maps to in_review_count in the service)
-      needs_info_app = create(:application,
+      needs_info_app =       create(:application,
                               user: create(:constituent, email: "unique_index_needsinfo_#{Time.now.to_i}@example.com"),
                               created_at: current_fy_start + 3.months + 15.days, # Use 3 months + 15 days instead of 3.5 months
-                              status: :needs_information)
+                              status: :awaiting_proof)
 
       # 3 Approved applications (2 current FY, 1 previous FY)
       approved_app1 = create(:application,
@@ -431,8 +431,8 @@ module Applications
         in_progress_count_after = new_status_counts.fetch(in_progress_key, 0) + new_status_counts.fetch(in_progress_key_int, 0)
         _added_in_progress = in_progress_count_after - in_progress_count_before
 
-        needs_info_key = Application.statuses[:needs_information].to_s
-        needs_info_key_int = Application.statuses[:needs_information]
+        needs_info_key = Application.statuses[:awaiting_proof].to_s
+        needs_info_key_int = Application.statuses[:awaiting_proof]
         needs_info_count_before = initial_status_counts.fetch(needs_info_key, 0) + initial_status_counts.fetch(needs_info_key_int, 0)
         needs_info_count_after = new_status_counts.fetch(needs_info_key, 0) + new_status_counts.fetch(needs_info_key_int, 0)
         _added_needs_info = needs_info_count_after - needs_info_count_before

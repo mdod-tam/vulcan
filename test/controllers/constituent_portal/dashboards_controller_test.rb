@@ -27,8 +27,8 @@ module ConstituentPortal
     end
 
     test 'dashboard shows different content based on application status' do
-      # Test for a status that might require user action, e.g., needs_information
-      create(:application, user: @user, status: :needs_information)
+      # Test for a status that might require user action, e.g., awaiting_proof
+      create(:application, user: @user, status: :awaiting_proof)
 
       get constituent_portal_dashboard_path
       assert_response :success

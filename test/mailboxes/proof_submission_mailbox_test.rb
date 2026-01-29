@@ -238,7 +238,7 @@ class ProofSubmissionMailboxTest < ActionMailbox::TestCase
     puts "CONSTITUENT FOUND: #{constituent.present?} (#{email_params[:from]})"
     if constituent
       # Check for active applications - helps identify bounce reasons
-      app = constituent.applications.where(status: %i[in_progress needs_information reminder_sent awaiting_documents]).first
+      app = constituent.applications.where(status: %i[in_progress awaiting_proof reminder_sent awaiting_dcf]).first
       puts "ACTIVE APPLICATION: #{app.present?} (ID: #{app&.id})"
     end
 

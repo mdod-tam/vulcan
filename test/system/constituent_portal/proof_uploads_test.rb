@@ -14,7 +14,7 @@ class ProofUploadsTest < ApplicationSystemTestCase
       :application,
       :in_progress_with_rejected_proofs,
       user: @user,
-      status: :needs_information
+      status: :awaiting_proof
     )
 
     # Verify prerequisites

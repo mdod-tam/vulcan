@@ -93,19 +93,19 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     application.update!(status: :in_progress)
     assert_equal initial_count + 1, ApplicationStatusChange.count
 
-    # Change 2: in_progress -> needs_information
-    application.update!(status: :needs_information)
+    # Change 2: in_progress -> awaiting_proof
+    application.update!(status: :awaiting_proof)
     assert_equal initial_count + 2, ApplicationStatusChange.count
 
-    # Change 3: needs_information -> in_progress
+    # Change 3: awaiting_proof -> in_progress
     application.update!(status: :in_progress)
     assert_equal initial_count + 3, ApplicationStatusChange.count
 
     # Verify all changes are distinct
     changes = ApplicationStatusChange.where(application: application).order(created_at: :asc)
     assert_equal 3, changes.count
-    assert_equal %w[draft in_progress needs_information], changes.map(&:from_status)
-    assert_equal %w[in_progress needs_information in_progress], changes.map(&:to_status)
+    assert_equal %w[draft in_progress awaiting_proof], changes.map(&:from_status)
+    assert_equal %w[in_progress awaiting_proof in_progress], changes.map(&:to_status)
   end
 
   test 'status change without Current.user falls back to application user' do

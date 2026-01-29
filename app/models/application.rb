@@ -54,9 +54,9 @@ class Application < ApplicationRecord
     in_progress: 1,         # Submitted by constituent, being processed
     approved: 2,            # Application approved
     rejected: 3,            # Application rejected
-    needs_information: 4,   # Additional info needed from constituent
+    awaiting_proof: 4,      # Waiting for income/residency proofs
     reminder_sent: 5,       # Reminder sent to constituent
-    awaiting_documents: 6,  # Waiting for specific documents
+    awaiting_dcf: 6,        # Waiting for disability certification form (DCF)
     archived: 7             # Historical record
   }, prefix: true, validate: true
 
@@ -263,9 +263,9 @@ class Application < ApplicationRecord
 
   # Instance Methods
   # Determines if medical provider validation should be skipped
-  # Skip validation if: status is draft, needs_information
+  # Skip validation if: status is draft, awaiting_proof
   def skip_medical_provider_validation?
-    status_draft? || status_needs_information?
+    status_draft? || status_awaiting_proof?
   end
 
   # Status methods- Delegate approval logic to the Applications::Approver service object

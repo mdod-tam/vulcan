@@ -195,19 +195,22 @@ class ProofReview < ApplicationRecord
     # Reload the application to ensure we have the latest status
     application.reload
 
-    # Check if all proofs are approved and certification not already requested
-    if application.all_proofs_approved? && application.medical_certification_status_not_requested?
-      Rails.logger.info "All proofs approved for Application ID: #{application.id}, sending medical provider email"
+    # Check if required proofs are approved (policy-aware) and certification not already requested
+    if application.required_proofs_for_dcf_approved? && application.medical_certification_status_not_requested?
+      Rails.logger.info "Required proofs approved for Application ID: #{application.id}, transitioning to awaiting_dcf and requesting medical certification"
 
-      # Update certification status and send email
+      # Update certification status, application status, and send email
       application.with_lock do
-        application.update!(medical_certification_status: :requested)
+        application.update!(
+          medical_certification_status: :requested,
+          status: :awaiting_dcf
+        )
         # Use deliver_later to enqueue a job
         MedicalProviderMailer.request_certification(application).deliver_later
       end
     end
   rescue StandardError => e
-    Rails.logger.error "Failed to process all proofs approved: #{e.message}\n#{e.backtrace.join("\n")}"
+    Rails.logger.error "Failed to process required proofs approved: #{e.message}\n#{e.backtrace.join("\n")}"
   end
 
   def admin_must_be_admin_type

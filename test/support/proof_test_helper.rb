@@ -38,7 +38,7 @@ module ProofTestHelper
     app.update_columns(
       income_proof_status: Application.income_proof_statuses[:rejected],
       residency_proof_status: Application.residency_proof_statuses[:rejected],
-      status: Application.statuses[:needs_information],
+      status: Application.statuses[:awaiting_proof],
       needs_review_since: nil
     )
 
