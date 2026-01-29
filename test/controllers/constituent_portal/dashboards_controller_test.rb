@@ -33,7 +33,7 @@ module ConstituentPortal
       get constituent_portal_dashboard_path
       assert_response :success
       # Assert for the status badge text and the view details link
-      assert_select 'div.flex.items-center span.rounded-full', text: 'Needs information'
+      assert_select 'div.flex.items-center span.rounded-full', text: 'Awaiting proof'
       assert_select 'a', text: 'View Application Details'
     end
 
