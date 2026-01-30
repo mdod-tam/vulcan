@@ -14,9 +14,12 @@ class SessionsController < ApplicationController
   def create
     user = User.find_by(email: params[:email])
 
-    handle_invalid_credentials and return unless user&.authenticate(params[:password])
+    if !user&.authenticate(params[:password])
+      @errors = { email: ["Invalid email or password"] }
+      return render_form_errors
+    end
 
-    return sign_in(user) unless user.second_factor_enabled?
+    return sign_in(user) if !user.second_factor_enabled?
 
     setup_two_factor_session(user)
     redirect_to_two_factor_verification(user)
@@ -44,11 +47,15 @@ class SessionsController < ApplicationController
 
   private
 
-  def handle_invalid_credentials
-    # Add user feedback for failed login attempts if User model supports it
-    # user = User.find_by(email: params[:email])
-    # user&.track_failed_attempt!(request.remote_ip) if user # Assuming track_failed_attempt! exists
-    redirect_to sign_in_path(email_hint: params[:email]), alert: 'Invalid email or password'
+  def render_form_errors
+    respond_to do |format|
+      format.turbo_stream do
+        render turbo_stream: turbo_stream.replace('sign_in_form', partial: 'sessions/form')
+      end
+      format.html do
+        redirect_to sign_in_path(email_hint: params[:email]), alert: 'Invalid email or password'
+      end
+    end
   end
 
   def setup_two_factor_session(user)
