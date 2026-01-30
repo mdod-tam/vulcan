@@ -159,12 +159,6 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     user_for_2fa.sms_credentials.find_by(id: credential_id)
   end
 
-  def sms_code_expired?(credential)
-    # Check local timestamp as a secondary safeguard
-    # Note: code_digest is no longer used with Verify API
-    credential.code_expires_at.present? && credential.code_expires_at < Time.current
-  end
-
   def verify_sms_code(code, credential)
     # Use Twilio Verify API to check the code
     result = TwilioVerifyService.check_verification(credential.phone_number, code)
