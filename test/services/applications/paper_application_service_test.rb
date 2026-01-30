@@ -155,7 +155,8 @@ module Applications
 
       # Rather than directly inspecting the model, check that the service completed
       # and the application was created with appropriate parameters
-      assert_equal 'in_progress', application.status, 'Status should be in_progress'
+      # Status should be awaiting_proof when any proof is rejected
+      assert_equal 'awaiting_proof', application.status, 'Status should be awaiting_proof when proof is rejected'
 
       # Since we've mocked the service, we just need to verify that the application was created
       # and our mocked rejection service was called
@@ -250,7 +251,8 @@ module Applications
       assert_not_nil application, 'Application should be created'
 
       # Verify the application was created
-      assert_equal 'in_progress', application.status, 'Status should be in_progress'
+      # Status should be awaiting_proof when any proof is rejected
+      assert_equal 'awaiting_proof', application.status, 'Status should be awaiting_proof when proof is rejected'
     end
   end
 end
