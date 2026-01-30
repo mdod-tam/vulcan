@@ -1,0 +1,13 @@
+<div id="sms_resend" class="flex flex-col items-start">
+  <%= link_to "Didn't receive the code? Resend",
+      resend_path,
+      class: "text-indigo-600 hover:text-indigo-900 text-sm font-medium",
+      data: { turbo_method: :post } %>
+  <p class="mt-2 text-xs text-gray-500">Please wait a moment before resending.</p>
+
+  <% if message.present? %>
+    <div class="mt-3 text-sm <%= message_type == :error ? 'text-red-700' : 'text-green-700' %>">
+      <%= message %>
+    </div>
+  <% end %>
+</div>

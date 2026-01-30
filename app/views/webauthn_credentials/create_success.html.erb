@@ -1,4 +1,4 @@
-<%= render partial: 'shared/setup_success', locals: { 
-  auth_method_name: params[:authenticator_type] == 'platform' ? 'Biometric Authentication' : 'Security Key', 
-  setup_another: true 
+<%= render partial: 'shared/setup_success', locals: {
+  auth_method_name: params[:authenticator_type] == 'platform' ? 'Device (fingerprint or face)' : 'Security Key',
+  setup_another: true
 } %>
