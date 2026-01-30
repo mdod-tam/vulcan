@@ -168,7 +168,7 @@
       <%# Preferred Contact Method for Dependent %>
       <fieldset class="mb-4">
         <legend class="text-sm font-medium text-gray-700 mb-2">How would you like us to contact the dependent if we have any questions?</legend>
-        <div role="radiogroup" aria-label="Contact preference" class="flex flex-wrap gap-4">
+        <div class="flex flex-wrap gap-4">
           <div class="flex items-center">
             <%= d.radio_button :phone_type, "voice", 
                 id: "dependent_constituent_phone_type_voice", 
@@ -336,7 +336,7 @@
         <p class="text-sm text-blue-700 mb-3 px-2">
           Important notices, approval letters, and voucher information will be delivered here
         </p>
-        <div role="radiogroup" aria-label="Document delivery preference" class="flex flex-wrap gap-6">
+        <div class="flex flex-wrap gap-6">
           <div class="flex items-start">
             <%= d.radio_button :communication_preference, "email", 
                 id: "dependent_constituent_communication_preference_email", 

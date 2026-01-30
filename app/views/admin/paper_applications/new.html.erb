@@ -9,7 +9,7 @@
           <div>
             <h1 class="text-2xl font-bold text-slate-900">Upload Paper Application</h1>
             <p class="mt-1 text-sm text-slate-600">Enter information from a handwritten application form</p>
-            <p class="text-l text-gray-900" aria-hidden="true"><span style="color: red;">*</span> Indicates a required field</p>
+            <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
           </div>
           <%= link_to admin_applications_path, class: "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors", data: { turbo_frame: "_top" }, aria: { label: "Return to applications dashboard" } do %>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -253,7 +253,7 @@
                     <%# Preferred Contact Method %>
                     <fieldset class="mb-4 p-3 bg-white rounded border border-gray-200">
                       <legend class="text-sm font-medium text-gray-700 mb-2">How would you like us to contact you if we have any questions?</legend>
-                      <div role="radiogroup" aria-label="Contact preference" class="flex flex-wrap gap-4">
+                      <div class="flex flex-wrap gap-4">
                         <div class="flex items-center">
                           <%= g.radio_button :phone_type, "voice", 
                               id: "guardian_phone_type_voice", 
@@ -381,7 +381,7 @@
                       <p class="text-sm text-blue-700 mb-3 px-2">
                         Important notices, approval letters, and voucher information will be delivered here
                       </p>
-                      <div role="radiogroup" aria-label="Document delivery preference" class="flex flex-wrap gap-6">
+                      <div class="flex flex-wrap gap-6">
                         <div class="flex items-start">
                           <%= g.radio_button :communication_preference, "email", 
                               id: "guardian_communication_preference_email", 
@@ -663,7 +663,7 @@
               <%# Proof Action Selection %>
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Income Proof Action</legend>
-                <div role="radiogroup" aria-label="Income proof action" class="flex flex-wrap gap-4">
+                <div class="flex flex-wrap gap-4">
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio" 
                            id="accept_income_proof" 
@@ -783,7 +783,7 @@
                       <option value="other">Other</option>
                     </select>
                   </div>
-                  <div id="income_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
+                  <div id="income_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                   <div>
                     <label for="income_proof_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes to Constituent</label>
                     <textarea id="income_proof_rejection_notes" 
@@ -827,7 +827,7 @@
               <%# Proof Action Selection %>
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Residency Proof Action</legend>
-                <div role="radiogroup" aria-label="Residency proof action" class="flex flex-wrap gap-4">
+                <div class="flex flex-wrap gap-4">
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio" 
                            id="accept_residency_proof" 
@@ -895,7 +895,7 @@
                       <option value="other">Other</option>
                     </select>
                   </div>
-                  <div id="residency_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
+                  <div id="residency_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                   <div>
                     <label for="residency_proof_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes to Constituent</label>
                     <textarea id="residency_proof_rejection_notes" 
@@ -973,7 +973,7 @@
       
       <fieldset class="mb-4">
         <legend class="block text-sm font-medium text-gray-700 mb-2">Notification Method</legend>
-        <div role="radiogroup" aria-label="Notification method" class="flex flex-wrap gap-4">
+        <div class="flex flex-wrap gap-4">
           <label class="flex items-center">
             <%= form.radio_button :communication_preference, "email", checked: true, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
             <span class="ml-2 text-sm text-gray-700">Email</span>
