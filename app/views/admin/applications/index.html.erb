@@ -176,8 +176,8 @@
           <div class="mt-2">
             <%= link_to params[:filter] == 'active' ? admin_applications_path : admin_applications_path(filter: 'active'),
                 class: "inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                aria: { label: params[:filter] == 'active' ? "View all applications" : "View only active applications" },
-                data: { turbo_frame: "applications_list" } do %>
+                data: { turbo_frame: "applications_list" },
+                onclick: "const target = document.getElementById('application-table'); if (target) { target.scrollIntoView({behavior: 'smooth'}); target.focus(); }" do %>
               <span><%= params[:filter] == 'active' ? 'View All Applications' : 'View Only Active Applications' %></span>
               <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -193,8 +193,8 @@
           <div class="mt-2">
             <%= link_to params[:filter] == 'approved' ? admin_applications_path : admin_applications_path(filter: 'approved'),
                 class: "inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                aria: { label: params[:filter] == 'approved' ? "View all applications" : "View only approved applications" },
-                data: { turbo_frame: "applications_list" } do %>
+                data: { turbo_frame: "applications_list" },
+                onclick: "const target = document.getElementById('application-table'); if (target) { target.scrollIntoView({behavior: 'smooth'}); target.focus(); }" do %>
               <span><%= params[:filter] == 'approved' ? 'View All Applications' : 'View Only Approved' %></span>
               <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
