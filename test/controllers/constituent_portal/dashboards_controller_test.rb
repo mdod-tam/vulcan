@@ -27,13 +27,13 @@ module ConstituentPortal
     end
 
     test 'dashboard shows different content based on application status' do
-      # Test for a status that might require user action, e.g., needs_information
-      create(:application, user: @user, status: :needs_information)
+      # Test for a status that might require user action, e.g., awaiting_proof
+      create(:application, user: @user, status: :awaiting_proof)
 
       get constituent_portal_dashboard_path
       assert_response :success
       # Assert for the status badge text and the view details link
-      assert_select 'div.flex.items-center span.rounded-full', text: 'Needs information'
+      assert_select 'div.flex.items-center span.rounded-full', text: 'Awaiting proof'
       assert_select 'a', text: 'View Application Details'
     end
 
