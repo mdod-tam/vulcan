@@ -58,6 +58,12 @@ module ProofManageable
     income_proof_status_approved? && residency_proof_status_approved?
   end
 
+  # Checks if all currently required proofs for DCF request have been approved
+  # @return [Boolean] true if required proofs are approved
+  def required_proofs_for_dcf_approved?
+    all_proofs_approved?
+  end
+
   # Checks if the income proof has been rejected
   # @return [Boolean] true if income proof status is rejected
   def rejected_income_proof?
@@ -86,7 +92,6 @@ module ProofManageable
 
   # Rejects a proof without requiring an attachment (used for paper applications)
   # This is a model-level method that just updates the status - the service handles orchestration
-  # rubocop:disable Naming/PredicateMethod
   def reject_proof_without_attachment!(proof_type, admin: nil, reason: 'other', notes: nil)
     # Just update the proof status - avoid circular calls to ProofAttachmentService
     status_attr = "#{proof_type}_proof_status"
@@ -179,7 +184,9 @@ module ProofManageable
 
   def skip_validation_contexts?
     (Rails.env.test? && ENV['REQUIRE_PROOF_VALIDATIONS'] != 'true') ||
-      Current.skip_proof_validation || Current.paper_context?
+      Current.skip_proof_validation ||
+      Current.paper_context? ||
+      submission_method_paper? # Skip for paper applications (matches ProofConsistencyValidation line 39)
   end
 
   def transitioning_from_draft?

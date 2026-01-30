@@ -3,7 +3,14 @@
      updated via Turbo Stream for a smooth UX without full page reload.
 %>
 <div class="flex justify-between items-start">
-  <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Medical Certification</h2>
+  <div class="flex items-center gap-3">
+    <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Medical Certification</h2>
+    <% if @application.medical_certification_status == 'not_requested' %>
+      <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-gray-100 text-gray-700">
+        Not Requested
+      </span>
+    <% end %>
+  </div>
   <div class="flex items-center space-x-2">
     <%= medical_certification_status_badge(@application) %>
     <%= document_signing_status_badge(@application) %>
@@ -11,7 +18,7 @@
 </div>
 
 <div class="mt-6 space-y-4">
-  <!-- Fax Upload Form and History -->
+  <!-- Medical Certification Upload Form (Visible unless approved) -->
   <%= render "medical_certification_upload" %>
 
   <!-- Provider Information -->

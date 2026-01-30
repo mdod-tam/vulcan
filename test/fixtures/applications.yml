@@ -80,7 +80,7 @@ complete:
 one:
   user: constituent_john
   application_date: <%= Time.current %>
-  status: needs_information
+  status: awaiting_proof
   income_proof_status: rejected
   residency_proof_status: rejected
   maryland_resident: true
@@ -180,7 +180,7 @@ submitted_proofs_pending_application:
 awaiting_medical_response_application:
   user: constituent_jane
   application_date: <%= Time.zone.parse("2025-02-15 15:30:00").strftime("%F %T") %>
-  status: awaiting_documents
+  status: awaiting_dcf
   maryland_resident: true
   annual_income: "90000"
   household_size: 2
@@ -188,7 +188,9 @@ awaiting_medical_response_application:
   medical_provider_name: "City Health Partners"
   medical_provider_phone: "555-111-2222"
   medical_provider_email: "appointments@cityhealth.com"
-  medical_certification_status: not_requested
+  income_proof_status: approved
+  residency_proof_status: approved
+  medical_certification_status: requested
   submission_method: paper
 
 new_user_application:
@@ -271,25 +273,25 @@ submitted_status_application:
   medical_certification_status: approved
   submission_method: web
 
-awaiting_documents_application:
+awaiting_dcf_application:
   user: confirmed_user2
-  status: awaiting_documents
+  status: awaiting_dcf
   application_date: <%= Time.current - 10.days %>
   household_size: 3
   annual_income: 45000
-  income_proof_status: not_reviewed
-  residency_proof_status: not_reviewed
+  income_proof_status: approved
+  residency_proof_status: approved
   maryland_resident: true
   self_certify_disability: true
   medical_provider_name: "Awaiting Provider"
   medical_provider_phone: "555-999-0000"
   medical_provider_email: "awaiting.provider@example.com"
-  medical_certification_status: not_requested
+  medical_certification_status: requested
   submission_method: paper
 
 needs_information_application:
   user: unconfirmed_user
-  status: needs_information
+  status: awaiting_proof
   application_date: <%= Time.current - 1.month %>
   household_size: 2
   annual_income: 28000

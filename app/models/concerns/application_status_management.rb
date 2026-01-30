@@ -20,7 +20,7 @@ module ApplicationStatusManagement
     }, prefix: true
 
     # Status-related scopes - These rely on the enum defined in the model
-    scope :active, -> { where(status: %i[in_progress needs_information reminder_sent awaiting_documents]) }
+    scope :active, -> { where(status: %i[in_progress awaiting_proof reminder_sent awaiting_dcf]) }
     scope :draft, -> { where(status: :draft) }
     scope :submitted, -> { where.not(status: :draft) }
     scope :filter_by_status, ->(status) { where(status: status) if status.present? }
@@ -38,7 +38,7 @@ module ApplicationStatusManagement
           residency_proof_status: residency_proof_statuses[:rejected]
         )
       when 'awaiting_medical_response'
-        where(status: statuses[:awaiting_documents])
+        where(status: statuses[:awaiting_dcf])
       when 'digitally_signed_needs_review'
         where(
           document_signing_status: document_signing_statuses[:signed]
@@ -75,21 +75,19 @@ module ApplicationStatusManagement
 
   private
 
-  # Handles transitions to specific statuses that trigger automated actions.
-  # Currently triggers the auto-request for medical certification when transitioning to 'awaiting_documents'.
+  # Triggers the auto-request for medical certification when transitioning to 'awaiting_dcf'.
   def handle_status_change
-    return unless status_previously_changed?(to: 'awaiting_documents')
+    return unless status_previously_changed?(to: 'awaiting_dcf')
 
-    handle_awaiting_documents_transition
+    handle_awaiting_dcf_transition
   end
 
   # --- Auto Request Medical Certification Process ---
-  # Triggered when the application status transitions to 'awaiting_documents'.
-  # Checks if income and residency proofs are approved.
+  # Checks if required proofs are approved when the application status transitions to 'awaiting_dcf'
   # If so, updates the medical certification status to 'requested' and sends an email to the medical provider.
-  def handle_awaiting_documents_transition
-    # Ensure income and residency proofs are approved
-    return unless all_proofs_approved?
+  def handle_awaiting_dcf_transition
+    # Ensure required proofs are approved (policy-aware method allows future flexibility)
+    return unless required_proofs_for_dcf_approved?
     # Avoid re-requesting if already requested
     return if medical_certification_status_requested?
 
