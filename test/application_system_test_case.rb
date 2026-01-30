@@ -242,21 +242,21 @@ module SeedLookupHelpers
         raise(ArgumentError, 'No applications found in seeds (expected in_progress)')
     when :submitted_application
       # Try multiple possible statuses that indicate a submitted application
-      scope.where(status: %w[in_progress awaiting_documents]).first ||
+      scope.where(status: %w[in_progress awaiting_dcf]).first ||
         scope.first ||
-        raise(ArgumentError, 'No applications found in seeds (expected in_progress or awaiting_documents)')
+        raise(ArgumentError, 'No applications found in seeds (expected in_progress or awaiting_dcf)')
     when :approved_application
       scope.find_by(status: 'approved') ||
         scope.first ||
         raise(ArgumentError, 'No applications found in seeds (expected approved)')
     when :pending_application
-      scope.where(status: %w[needs_information awaiting_documents]).first ||
+      scope.where(status: %w[awaiting_proof awaiting_dcf]).first ||
         scope.first ||
-        raise(ArgumentError, 'No applications found in seeds (expected needs_information or awaiting_documents)')
+        raise(ArgumentError, 'No applications found in seeds (expected awaiting_proof or awaiting_dcf)')
     when :pending_with_proofs
       # Find a pending application that has both income and residency proofs attached
       scope.joins(:income_proof_attachment, :residency_proof_attachment)
-           .where(status: %w[needs_information awaiting_documents]).first ||
+           .where(status: %w[awaiting_proof awaiting_dcf]).first ||
         scope.first ||
         raise(ArgumentError, 'No applications found in seeds (expected pending with proofs)')
     when :waiting_period

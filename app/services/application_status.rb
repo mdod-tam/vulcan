@@ -6,14 +6,14 @@ class ApplicationStatus
   end
 
   def send_back!(actor: nil)
-    @application.update(status: :needs_information)
+    @application.update(status: :awaiting_proof)
 
     # Log the audit event
     AuditEventService.log(
       action: 'application_sent_back',
       actor: actor,
       auditable: @application,
-      metadata: { reason: 'Additional information required.' }
+      metadata: { reason: 'Additional proof documentation required.' }
     )
 
     # Send the notification
@@ -22,7 +22,7 @@ class ApplicationStatus
       recipient: @application.user,
       actor: actor,
       notifiable: @application,
-      metadata: { reason: 'Additional information required.' },
+      metadata: { reason: 'Additional proof documentation required.' },
       channel: :email
     )
   end

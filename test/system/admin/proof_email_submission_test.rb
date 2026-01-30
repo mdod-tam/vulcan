@@ -19,7 +19,7 @@ module Admin
 
       # Set the application to a status that allows for proof submission.
       # The ProofSubmissionMailbox bounces emails for applications that are not in an active state (e.g. 'draft').
-      @application.update!(status: :needs_information)
+      @application.update!(status: :awaiting_proof)
 
       # Set up ApplicationMailbox routing for testing
       ApplicationMailbox.instance_eval do
@@ -67,7 +67,7 @@ module Admin
       unique_email = "constituent_#{Time.now.to_i}_#{SecureRandom.hex(4)}@example.com"
       constituent = create(:constituent, email: unique_email)
       app = create(:application, :old_enough_for_new_application, user: constituent)
-      app.update!(status: :needs_information)
+      app.update!(status: :awaiting_proof)
       file_path = Rails.root.join('tmp/income_proof.pdf')
       File.write(file_path, 'This is a test PDF file that is larger than one kilobyte to ensure it passes all attachment validations in the mailbox. ' * 20)
 
@@ -102,7 +102,7 @@ module Admin
       unique_email = "constituent_truncation_#{Time.now.to_i}_#{rand(10_000)}@example.com"
       constituent = create(:constituent, email: unique_email)
       app = create(:application, :old_enough_for_new_application, user: constituent)
-      app.update!(status: :needs_information)
+      app.update!(status: :awaiting_proof)
 
       income_file_path = Rails.root.join('tmp/income_proof.pdf')
       residency_file_path = Rails.root.join('tmp/residency_proof.pdf')

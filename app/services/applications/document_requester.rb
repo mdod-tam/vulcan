@@ -18,7 +18,7 @@ module Applications
     # @return [Boolean] True if successful, false otherwise
     def call
       ApplicationRecord.transaction do
-        application.update!(status: :awaiting_documents)
+        application.update!(status: :awaiting_dcf)
 
         # Log the audit event
         AuditEventService.log(
