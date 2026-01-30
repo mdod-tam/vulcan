@@ -304,7 +304,7 @@ module Applications
       ).order(created_at: :desc)
                                   .limit(5)
 
-      data[:recent_notifications] = notifications.map { |n| NotificationDecorator.new(n) }
+      data[:recent_notifications] = notifications
     end
 
     def fetch_application_status_counts

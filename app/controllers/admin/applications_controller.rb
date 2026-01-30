@@ -67,7 +67,6 @@ module Admin
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
-                              .map { |n| NotificationDecorator.new(n) }
     end
 
     def show
