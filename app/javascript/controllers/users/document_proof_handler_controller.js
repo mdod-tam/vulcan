@@ -60,8 +60,8 @@ class DocumentProofHandlerController extends Controller {
     const isRejected = this.rejectRadioTarget.checked;
   
     // Toggle visibility of sections using utility
-    setVisible(this.uploadSectionTarget, isAccepted);
-    setVisible(this.rejectionSectionTarget, isRejected);
+    setVisible(this.uploadSectionTarget, isAccepted, { ariaHidden: !isAccepted });
+    setVisible(this.rejectionSectionTarget, isRejected, { ariaHidden: !isRejected });
     
     // Toggle file input enabled state
     // Note: We don't set 'required' attribute to allow server-side validation to handle missing files
@@ -109,9 +109,9 @@ class DocumentProofHandlerController extends Controller {
       if (selectedReason) {
         // In a real app, we'd use I18n or data attributes to get formatted reason text
         previewTarget.textContent = this.formatRejectionReason(selectedReason);
-        setVisible(previewTarget, true);
+        setVisible(previewTarget, true, { ariaHidden: false });
       } else {
-        setVisible(previewTarget, false);
+        setVisible(previewTarget, false, { ariaHidden: true });
       }
     }
   }
