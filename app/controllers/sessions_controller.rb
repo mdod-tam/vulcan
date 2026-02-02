@@ -15,7 +15,7 @@ class SessionsController < ApplicationController
     user = User.find_by(email: params[:email])
 
     if !user&.authenticate(params[:password])
-      @errors = { email: ["Invalid email or password"] }
+      @errors = { email: "Invalid email or password" }
       return render_form_errors
     end
 
