@@ -247,7 +247,7 @@
       </div>
       
       <div class="p-4 border-b">
-        <%= form_tag admin_applications_path, method: :get, class: "flex flex-wrap items-center gap-4", data: { turbo_frame: "applications_list" } do %>
+        <%= form_tag admin_applications_path, method: :get, class: "flex flex-wrap items-center gap-4", data: { turbo_frame: "applications_list", turbo_action: "advance", controller: "autosubmit" } do %>
           <div class="flex items-center gap-2">
             <%= label_tag :status, "Status:", class: "text-sm font-medium text-gray-700" %>
             <%= select_tag :status, options_for_select([
@@ -273,7 +273,7 @@
           <div class="flex items-center gap-2">
             <%= label_tag :q, "Search:", class: "sr-only" %>
             <div class="relative rounded-md shadow-sm">
-              <%= text_field_tag :q, params[:q], placeholder: "Search applications...", class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md" %>
+              <%= text_field_tag :q, params[:q], placeholder: "Search applications...", data: { action: "input->autosubmit#search" }, class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md" %>
               <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                 <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
@@ -285,19 +285,7 @@
           <div class="flex items-center gap-2">
             <%= label_tag :managing_guardian_q, "Managing Guardian:", class: "text-sm font-medium text-gray-700" %>
             <div class="relative rounded-md shadow-sm">
-              <%= text_field_tag :managing_guardian_q, params[:managing_guardian_q], placeholder: "Search guardian...", class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md" %>
-              <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <%= label_tag :dependent_q, "Dependent:", class: "text-sm font-medium text-gray-700" %>
-            <div class="relative rounded-md shadow-sm">
-              <%= text_field_tag :dependent_q, params[:dependent_q], placeholder: "Search dependent...", class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md" %>
+              <%= text_field_tag :managing_guardian_q, params[:managing_guardian_q], placeholder: "Search guardian...", data: { action: "input->autosubmit#search" }, class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md" %>
               <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                 <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
@@ -310,7 +298,7 @@
             <%= check_box_tag :for_minors, "true", params[:for_minors].present?, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", onchange: "this.form.requestSubmit()" %>
             <%= label_tag :for_minors, "Show only dependent applications", class: "text-sm font-medium text-gray-700" %>
           </div>
-
+          <%= submit_tag "Search", class: "sr-only" %>
           <%= link_to "Clear Filters", admin_applications_path, class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", data: { turbo_frame: "applications_list" } %>
         <% end %>
       </div>
