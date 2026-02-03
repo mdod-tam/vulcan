@@ -726,16 +726,14 @@
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
                   </label>
-                  <label class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 has-[:checked]:ring-2 has-[:checked]:ring-gray-500">
-                    <input type="radio" 
-                           id="no_income_proof_provided" 
-                           name="income_proof_action" 
-                           value="none" 
-                           class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300" 
-                           data-action="change->document-proof-handler#handleNoneProvided" 
-                           data-document-proof-handler-target="noneRadio">
+                  <button type="button"
+                          id="no_income_proof_provided"
+                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                          data-action="click->document-proof-handler#handleNoneProvided"
+                          data-document-proof-handler-target="noneButton">
+                    <span class="text-lg">📂</span>
                     <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
-                  </label>
+                  </button>
                 </div>
               </fieldset>
               
@@ -843,16 +841,14 @@
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
                   </label>
-                  <label class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 has-[:checked]:ring-2 has-[:checked]:ring-gray-500">
-                    <input type="radio" 
-                           id="no_residency_proof_provided" 
-                           name="residency_proof_action" 
-                           value="none" 
-                           class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300" 
-                           data-action="change->document-proof-handler#handleNoneProvided" 
-                           data-document-proof-handler-target="noneRadio">
+                  <button type="button"
+                          id="no_residency_proof_provided"
+                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                          data-action="click->document-proof-handler#handleNoneProvided"
+                          data-document-proof-handler-target="noneButton">
+                    <span class="text-lg">📂</span>
                     <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
-                  </label>
+                  </button>
                 </div>
               </fieldset>
               

@@ -11,7 +11,7 @@ class DocumentProofHandlerController extends Controller {
   static targets = [
     "acceptRadio",
     "rejectRadio",
-    "noneRadio",
+    "noneButton",
     "uploadSection",
     "rejectionSection",
     "fileInput",
@@ -47,9 +47,9 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * Handle "None Provided" radio button selection
+   * Handle "None Provided" button click
    * UX shortcut that automatically selects reject + none_provided reason
-   * @param {Event} event The change event from the none radio button
+   * @param {Event} event The click event from the none button
    */
   handleNoneProvided(event) {
     if (!this.hasRejectRadioTarget || !this.hasRejectionReasonSelectTarget) {
