@@ -11,7 +11,7 @@ class DocumentProofHandlerController extends Controller {
   static targets = [
     "acceptRadio",
     "rejectRadio",
-    "noneRadio",
+    "noneButton",
     "uploadSection",
     "rejectionSection",
     "fileInput",
@@ -47,6 +47,28 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
+   * Handle "None Provided" button click
+   * UX shortcut that automatically selects reject + none_provided reason
+   * @param {Event} event The click event from the none button
+   */
+  handleNoneProvided(event) {
+    if (!this.hasRejectRadioTarget || !this.hasRejectionReasonSelectTarget) {
+      return;
+    }
+
+    // Programmatically select the reject radio button
+    this.rejectRadioTarget.checked = true;
+
+    // Auto-select "none_provided" from rejection reason dropdown
+    this.rejectionReasonSelectTarget.value = 'none_provided';
+
+    // Update visibility and populate notes
+    this.updateVisibility();
+    this.previewRejectionReason();
+    this.populateRejectionNotes();
+  }
+
+  /**
    * Update the visibility of upload or rejection sections
    * based on the selected radio
    */
@@ -56,7 +78,6 @@ class DocumentProofHandlerController extends Controller {
     }
 
     const isAccepted = this.acceptRadioTarget.checked;
-    const noneProvided = this.noneRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
   
     // Toggle visibility of sections using utility
@@ -81,7 +102,7 @@ class DocumentProofHandlerController extends Controller {
     // Toggle required attributes on fields
     if (this.hasRejectionReasonSelectTarget) {
       const target = this.rejectionReasonSelectTarget;
-      if (isAccepted || noneProvided ) {
+      if (isAccepted) {
         target.removeAttribute('required');
       } else {
         target.setAttribute('required', 'required');
@@ -125,6 +146,7 @@ class DocumentProofHandlerController extends Controller {
   formatRejectionReason(reasonCode) {
     // This would typically come from Rails I18n
     const reasonMessages = {
+      'none_provided': 'No proof document was provided with the paper application.',
       'address_mismatch': 'The address on the document does not match the application address.',
       'expired': 'The document has expired or is not within the required date range.',
       'missing_name': 'The document does not clearly show the applicant\'s name.',
@@ -163,6 +185,7 @@ class DocumentProofHandlerController extends Controller {
    */
   getInstructionalText(reasonCode) {
     const instructions = {
+      'none_provided': 'Please provide the required proof documentation to complete your application.',
       'address_mismatch': 'Please provide a document that shows your current address.',
       'expired': 'Please provide a current document that is not expired.',
       'missing_name': 'Please provide a document that clearly shows your name.',
