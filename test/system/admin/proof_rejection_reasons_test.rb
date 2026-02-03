@@ -13,7 +13,7 @@ module Admin
       @admin = create(:admin)
       @user = create(:constituent, hearing_disability: true)
       @application = create(:application, :old_enough_for_new_application, user: @user)
-      @application.update!(status: 'needs_information')
+      @application.update!(status: 'awaiting_proof')
 
       # Attach proofs using the lightweight helper and verify they're attached
       attach_lightweight_proof(@application, :income_proof)

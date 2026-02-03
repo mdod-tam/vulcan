@@ -137,9 +137,9 @@ Approvals require an attachment; only rejections may proceed without a file. The
 ```
 draft ─▶ in_progress ─▶ approved ─▶ (voucher auto-assigned via VoucherManagement concern)
       └▶ rejected
-      └▶ needs_information
+      └▶ awaiting_proof
       └▶ reminder_sent
-      └▶ awaiting_documents
+      └▶ awaiting_dcf
       └▶ archived
 ```
 

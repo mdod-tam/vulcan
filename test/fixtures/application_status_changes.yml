@@ -16,7 +16,7 @@ in_progress_to_approved:
 
 needs_info_to_in_progress:
   application: in_review
-  from_status: needs_information
+  from_status: awaiting_proof
   to_status: in_progress
   user: admin_david
   changed_at: <%= 2.days.ago %>

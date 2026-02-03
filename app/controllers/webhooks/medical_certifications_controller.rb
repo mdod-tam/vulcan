@@ -5,7 +5,7 @@ module Webhooks
     def create
       application = Application.find_by!(
         medical_provider_email: provider_email,
-        status: :awaiting_documents
+        status: :awaiting_dcf
       )
 
       certification = create_certification(application)

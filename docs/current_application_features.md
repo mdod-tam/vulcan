@@ -10,8 +10,8 @@ An at-a-glance yet detailed map of MAT Vulcan's major feature sets as of Decembe
 |--------|-------------|------------|
 | `draft` | Constituent working on application | Submit for review |
 | `in_progress` | Submitted, being processed | Proof review, medical cert |
-| `needs_information` | Additional info needed | Constituent provides info |
-| `awaiting_documents` | Waiting for specific docs | Document upload |
+| `awaiting_proof` | Waiting for income/residency proofs | Constituent uploads proofs |
+| `awaiting_dcf` | Waiting for disability certification form | Medical provider submits DCF |
 | `approved` | Application approved | Voucher assignment |
 | `rejected` | Application denied | Constituent may reapply |
 | `archived` | Historical record | — |

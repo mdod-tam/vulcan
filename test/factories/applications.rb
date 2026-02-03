@@ -89,7 +89,7 @@ FactoryBot.define do
     end
 
     trait :with_rejected_proofs do
-      status { :needs_information }
+      status { :awaiting_proof }
       income_proof_status { :rejected }
       residency_proof_status { :rejected }
       needs_review_since { Time.current }
@@ -113,7 +113,7 @@ FactoryBot.define do
     end
 
     trait :paper_rejected_proofs do
-      status { :needs_information }
+      status { :awaiting_proof }
 
       # This trait represents the paper application scenario where
       # admin rejected proofs without uploading them (paper workflow)

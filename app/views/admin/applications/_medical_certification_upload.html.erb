@@ -1,14 +1,12 @@
 <%
-  # Only show the form when:
-  # 1. The certification has been requested but not yet received, AND
-  # 2. There's no attachment OR the status is not "approved"
-  show_upload_form = @application.medical_certification_status == "requested" && 
-                    (!@application.medical_certification.attached? ||
-                     @application.medical_certification_status != "approved")
+  # Show the upload form unless the certification is already approved
+  # Sometimes certifications arrive unexpectedly (mail, fax, email) without being formally requested
+  show_upload_form = @application.medical_certification_status != "approved"
 %>
 
 <% if show_upload_form %>
   <div class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md" 
+       id="medical-certification-upload-form"
        data-testid="medical-certification-upload-form">
     <h3 class="text-sm font-medium text-blue-700 mb-2">Upload Medical Certification</h3>
     <p class="text-sm text-blue-600 mb-2">
