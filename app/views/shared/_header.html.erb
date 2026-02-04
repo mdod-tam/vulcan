@@ -14,7 +14,7 @@
   # Determine dashboard path once if user is logged in
   if user
     dashboard_path = if user.admin?
-                       admin_applications_path
+                       admin_dashboard_path
                      elsif user.constituent?
                        constituent_portal_dashboard_path
                      elsif user.evaluator?
@@ -24,7 +24,7 @@
                      elsif user.trainer?
                        trainers_dashboard_path
                      else
-                       admin_applications_path
+                       admin_dashboard_path
                      end
     
     # Check if user has 2FA set up

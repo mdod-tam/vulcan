@@ -99,8 +99,8 @@ Rails.application.routes.draw do
   end
 
   namespace :admin do
-    get 'dashboard', to: 'dashboard#index', as: :dashboard # Add dashboard route
-    root to: 'applications#index'
+    get 'dashboard', to: 'dashboards#index', as: :dashboard
+    root to: 'dashboards#index'
 
     resources :guardian_relationships, only: %i[destroy]
 
