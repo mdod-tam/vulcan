@@ -392,16 +392,13 @@ module Applications
     def process_proof(type)
       action = params["#{type}_proof_action"] || params[:"#{type}_proof_action"]
 
-      return true unless %w[accept reject none].include?(action)
+      return true unless %w[accept reject].include?(action)
 
       case action
       when 'accept'
         process_accept_proof(type)
       when 'reject'
         process_reject_proof(type)
-      when 'none'
-        # UX shortcut that maps to reject with 'none_provided' reason
-        process_none_provided_proof(type)
       end
     end
 
@@ -464,30 +461,6 @@ module Applications
 
       unless result[:success]
         add_error("Error rejecting #{type} proof: #{result[:error]&.message}")
-        return false
-      end
-
-      true
-    end
-
-    def process_none_provided_proof(type)
-      # When "None Provided" is selected, automatically use the rejection workflow
-      # with 'none_provided' as the reason. Use params if explicitly provided (from JavaScript),
-      # otherwise default to 'none_provided'
-      reason = params["#{type}_proof_rejection_reason"].presence || 'none_provided'
-
-      result = ProofAttachmentService.reject_proof_without_attachment(
-        application: @application,
-        proof_type: type,
-        admin: @admin,
-        reason: reason,
-        notes: params["#{type}_proof_rejection_notes"],
-        submission_method: :paper,
-        metadata: {}
-      )
-
-      unless result[:success]
-        add_error("Error processing none provided for #{type} proof: #{result[:error]&.message}")
         return false
       end
 
