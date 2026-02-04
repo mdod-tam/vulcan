@@ -661,6 +661,17 @@
               </h3>
               
               <%# Income Information Fields %>
+              <div class="flex items-center gap-3 mb-6 pb-4">
+                <%= check_box_tag :no_income_information, 
+                    nil, 
+                    false, 
+                    class: "mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", 
+                    data: { 
+                      "income-validation-target": "noIncomeProvided", 
+                      "action": "change->income-validation#toggleIncome" 
+                    } %>
+                <%= label_tag :no_income_information, "Benefits information was provided that satisfies the income requirement; no household size or income information needed", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
+              </div>
               <%= fields_for :application do |a| %>
                 <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200" 
                      data-income-validation-target="incomeFieldsContainer">
