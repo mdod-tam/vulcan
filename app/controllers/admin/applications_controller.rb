@@ -36,11 +36,7 @@ module Admin
     before_action :load_audit_logs_with_service, only: %i[show approve reject]
 
     def index
-      # DashboardMetricsLoading concern: Loads comprehensive dashboard metrics
-      # Returns hash of metrics
-      @metrics = load_dashboard_metrics
-
-      # Determine what statuses to exclude from base scope
+        # Determine what statuses to exclude from base scope
       # When admin explicitly filters by a normally-excluded status, we need to include it
       excluded_statuses = %i[draft rejected archived]
       filtered_status = params[:status]&.to_sym || params[:filter]&.to_sym

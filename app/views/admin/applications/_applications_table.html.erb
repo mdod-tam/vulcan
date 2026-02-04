@@ -52,7 +52,7 @@
           <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden">
             <div class="truncate" title="<%= application.user&.full_name || 'Unknown Applicant' %>">
               <% if application.user.present? %>
-                <%= application.user.full_name %>
+                <%= link_to application.user.full_name, admin_user_path(application.user), class: "font-semibold text-indigo-600 hover:text-indigo-500", aria: { label: "View user details" }, data: { turbo_frame: "_top" } %>
               <% else %>
                 Unknown Applicant
               <% end %>

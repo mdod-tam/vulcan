@@ -162,10 +162,10 @@ module Admin
       log_income_threshold_rejection(constituent_params, notification_params)
 
       handle_success_response(
-        html_redirect_path: admin_applications_path,
+        html_redirect_path: admin_dashboard_path,
         html_message: 'Application rejected due to income threshold. Rejection notification has been sent.',
         turbo_message: 'Application rejected due to income threshold. Rejection notification has been sent.',
-        turbo_redirect_path: admin_applications_path
+        turbo_redirect_path: admin_dashboard_path
       )
     end
 
@@ -180,10 +180,10 @@ module Admin
         # For letter notifications, queue for printing
         # This would integrate with a print queue system
         handle_success_response(
-          html_redirect_path: admin_applications_path,
+          html_redirect_path: admin_dashboard_path,
           html_message: 'Rejection letter has been queued for printing',
           turbo_message: 'Rejection letter has been queued for printing',
-          turbo_redirect_path: admin_applications_path
+          turbo_redirect_path: admin_dashboard_path
         )
       else
         # For email notifications, send immediately
@@ -193,10 +193,10 @@ module Admin
         ).deliver_later
 
         handle_success_response(
-          html_redirect_path: admin_applications_path,
+          html_redirect_path: admin_dashboard_path,
           html_message: 'Rejection notification has been sent',
           turbo_message: 'Rejection notification has been sent',
-          turbo_redirect_path: admin_applications_path
+          turbo_redirect_path: admin_dashboard_path
         )
       end
     end
