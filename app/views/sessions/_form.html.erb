@@ -80,10 +80,6 @@
     </div>
     <div class="flex items-center justify-between mt-2">
       <p id="password-hint" class="text-xs text-gray-500">Enter your password</p>
-      <%= link_to "Forgot password?",
-          edit_password_path,
-          class: "text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
-          "aria-label": "Reset your password" %>
     </div>
     <% if @errors&.include?(:password) %>
       <p id="password-error" class="mt-1 text-sm text-red-600">
@@ -99,6 +95,10 @@
       "aria-label": "Sign in to your account" %>
 
   <div class="text-center" role="contentinfo">
+    <%= link_to "Forgot password?",
+      edit_password_path,
+      class: "text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
+      "aria-label": "Reset your password" %>
     <p class="text-sm text-gray-600">
       Don't have an account?
       <%= link_to "Sign Up",
