@@ -12,10 +12,10 @@
           <%= t('admin.email_templates.index.page_title') %>
         </h1>
         <div class="flex gap-2">
-          <%= button_to bulk_disable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 text-sm font-medium", data: { confirm: t('admin.email_templates.index.disable_all_confirm') } do %>
+          <%= button_to bulk_disable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600 text-sm font-medium", data: { turbo_confirm: t('admin.email_templates.index.disable_all_confirm') } do %>
             <%= t('admin.email_templates.index.disable_all') %>
           <% end %>
-          <%= button_to bulk_enable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-600 text-sm font-medium", data: { confirm: t('admin.email_templates.index.enable_all_confirm') } do %>
+          <%= button_to bulk_enable_admin_email_templates_path, method: :patch, class: "px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-600 text-sm font-medium", data: { turbo_confirm: t('admin.email_templates.index.enable_all_confirm') } do %>
             <%= t('admin.email_templates.index.enable_all') %>
           <% end %>
         </div>
