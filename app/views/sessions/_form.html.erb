@@ -1,27 +1,25 @@
-<%# Error Summary Block - from main page for better accessibility %>
-<% if @errors&.any? %>
-  <div id="signin-error-summary" role="alert" aria-labelledby="signin-error-heading" tabindex="-1" class="bg-red-50 border border-red-400 text-red-700 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
-    <h2 id="signin-error-heading" class="sr-only">Please address the following errors:</h2>
-    <ul class="list-disc list-inside">
-      <% @errors.each do |field, messages| %>
-        <% messages.each do |msg| %>
-          <li><a href="#<%= field %>-input" class="underline"><%= msg %></a></li>
+<div id="sign_in_form">
+  <%# Error Summary Block - from main page for better accessibility %>
+  <% if @errors&.any? %>
+    <div id="signin-error-summary" role="alert" aria-labelledby="signin-error-heading" tabindex="-1" class="bg-red-50 border border-red-400 text-red-700 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
+      <h2 id="signin-error-heading" class="sr-only">Please address the following errors:</h2>
+      <ul class="list-disc list-inside">
+        <% @errors.each do |field, msg| %>
+            <li><a href="#<%= field %>-input" class="underline"><%= msg %></a></li>
         <% end %>
-      <% end %>
-    </ul>
-  </div>
-  <script>
-    // Optional: Focus the error summary when it appears
-    document.getElementById('signin-error-summary')?.focus();
-  </script>
-<% end %>
+      </ul>
+    </div>
+    <script>
+      // Optional: Focus the error summary when it appears
+      document.getElementById('signin-error-summary')?.focus();
+    </script>
+  <% end %>
 
-<%= form_with url: sign_in_path,
-              local: true,
-              class: "space-y-6",
-              aria: { labelledby: "signin-heading" },
-              data: { controller: "visibility" },
-              id: "sign_in_form" do |form| %>
+  <%= form_with url: sign_in_path,
+                local: true,
+                class: "space-y-6",
+                aria: { labelledby: "signin-heading" },
+                data: { controller: "visibility" } do |form| %>
 
   <div class="space-y-1" role="group" aria-labelledby="email-input-label">
     <%= form.label :email, "Email Address",
@@ -41,7 +39,7 @@
     <p id="email-hint" class="text-xs text-gray-500">Enter the email address associated with your account</p>
     <% if @errors&.include?(:email) %>
       <p id="email-error" class="mt-1 text-sm text-red-600">
-        <%= @errors[:email].join(", ") %>
+        <%= @errors[:email] %>
       </p>
     <% end %>
   </div>
@@ -109,4 +107,5 @@
           "aria-label": "Sign up for a new account" %>
     </p>
   </div>
-<% end %>
+  <% end %>
+</div>
