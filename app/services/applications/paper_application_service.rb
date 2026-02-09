@@ -36,7 +36,7 @@ module Applications
       # If application was successfully created, send notifications outside the transaction
       if application_created && @application.persisted?
         begin
-          handle_successful_application
+          handle_successful_application(:create)
         rescue StandardError => e
           # Log notification errors but don't fail the entire operation
           log_error(e, 'Failed to send notifications after successful application creation')
@@ -60,9 +60,13 @@ module Applications
         @application = application
         @constituent = application.user
 
+        # Update application attributes if provided
+        return failure('Application update failed') unless update_application_attributes
+
+        # Process proof uploads (accept/reject)
         return failure('Proof upload failed') unless process_proof_uploads
 
-        handle_successful_application if @application.persisted?
+        handle_successful_application(:update) if @application.persisted?
         return true
       end
     rescue StandardError => e
@@ -80,9 +84,14 @@ module Applications
       false
     end
 
-    def handle_successful_application
+    def handle_successful_application(operation = :create)
       send_notifications
-      log_application_creation
+      case operation
+      when :create
+        log_application_creation
+      when :update
+        log_application_update
+      end
     end
 
     def log_application_creation
@@ -93,6 +102,22 @@ module Applications
         metadata: {
           submission_method: 'paper',
           initial_status: (@application.status || 'in_progress').to_s
+        }
+      )
+    end
+
+    def log_application_update
+      AuditEventService.log(
+        action: 'application_updated',
+        actor: @admin,
+        auditable: @application,
+        metadata: {
+          submission_method: 'paper',
+          updated_attributes: @application.saved_changes.keys,
+          proof_actions: {
+            income: params[:income_proof_action],
+            residency: params[:residency_proof_action]
+          }.compact
         }
       )
     end
@@ -311,13 +336,9 @@ module Applications
       @application.managing_guardian = @guardian_user_for_app
       @application.submission_method = :paper
       @application.application_date = Time.current
-      
-      # Check if the "no medical provider information" checkbox was checked
-      if params[:no_medical_provider_information]
-        @application.status = :needs_information
-      else
-        @application.status = :in_progress
-      end
+
+      # Set appropriate status based on what's missing
+      @application.status = determine_initial_status
 
       return true if @application.save
 
@@ -325,6 +346,36 @@ module Applications
       false
     end
 
+    def determine_initial_status
+      # awaiting_proof if:
+      # 1. No medical provider info provided
+      # 2. No proofs provided (income_proof_action: 'none' or residency_proof_action: 'none')
+      # 3. Proofs were rejected (income_proof_action: 'reject' or residency_proof_action: 'reject')
+
+      return :awaiting_proof if params[:no_medical_provider_information]
+
+      income_action = params[:income_proof_action]
+      residency_action = params[:residency_proof_action]
+
+      # If no proofs provided or any proofs rejected, awaiting proof
+      return :awaiting_proof if income_action.in?(%w[none reject]) || residency_action.in?(%w[none reject])
+
+      # Otherwise, in progress (has all initial documentation)
+      :in_progress
+    end
+
+    # Update application attributes within paper context
+    # only if params[:application] is present
+    def update_application_attributes
+      application_attrs = params[:application]
+      return true if application_attrs.blank?
+
+      # Update attributes - model callback automatically sets paper context
+      return true if @application.update(application_attrs)
+
+      add_error("Failed to update application: #{@application.errors.full_messages.join(', ')}")
+      false
+    end
 
     def process_proof_uploads
       Current.paper_context = true
@@ -337,7 +388,6 @@ module Applications
     ensure
       Current.paper_context = nil
     end
-
 
     def process_proof(type)
       action = params["#{type}_proof_action"] || params[:"#{type}_proof_action"]

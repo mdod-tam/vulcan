@@ -657,7 +657,7 @@
                 <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                Income Verification
+                Verification of Income and/or Benefits
               </h3>
               
               <%# Income Information Fields %>
@@ -670,7 +670,7 @@
                       "income-validation-target": "noIncomeProvided", 
                       "action": "change->income-validation#toggleIncome" 
                     } %>
-                <%= label_tag :no_income_information, "No income information provided" %>
+                <%= label_tag :no_income_information, "Benefits information was provided that satisfies the income requirement; no household size or income information needed", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
               </div>
               <%= fields_for :application do |a| %>
                 <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200" 
@@ -737,16 +737,14 @@
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
                   </label>
-                  <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
-                    <input type="radio" 
-                           id="no_income_proof_provided" 
-                           name="income_proof_action" 
-                           value="none"
-                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
-                           data-action="change->document-proof-handler#toggleProofAction"
-                           data-document-proof-handler-target="noneRadio">
-                    <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
-                  </label>
+                  <button type="button"
+                          id="no_income_proof_provided"
+                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                          data-action="click->document-proof-handler#handleNoneProvided"
+                          data-document-proof-handler-target="noneButton">
+                    <span class="text-lg">📂</span>
+                    <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+                  </button>
                 </div>
               </fieldset>
               
@@ -777,6 +775,7 @@
                             class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
+                      <option value="none_provided">None Provided</option>
                       <option value="address_mismatch">Address Mismatch</option>
                       <option value="expired">Expired Documentation</option>
                       <option value="missing_name">Missing Name</option>
@@ -853,16 +852,14 @@
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
                   </label>
-                  <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
-                    <input type="radio" 
-                           id="no_residency_proof_provided" 
-                           name="residency_proof_action" 
-                           value="none"
-                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
-                           data-action="change->document-proof-handler#toggleProofAction"
-                           data-document-proof-handler-target="noneRadio">
-                    <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
-                  </label>
+                  <button type="button"
+                          id="no_residency_proof_provided"
+                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                          data-action="click->document-proof-handler#handleNoneProvided"
+                          data-document-proof-handler-target="noneButton">
+                    <span class="text-lg">📂</span>
+                    <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+                  </button>
                 </div>
               </fieldset>
               
@@ -893,6 +890,7 @@
                             class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
+                      <option value="none_provided">None Provided</option>
                       <option value="address_mismatch">Address Mismatch</option>
                       <option value="expired">Expired Documentation</option>
                       <option value="missing_name">Missing Name</option>
