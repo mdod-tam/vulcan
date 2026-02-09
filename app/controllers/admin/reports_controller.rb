@@ -13,6 +13,8 @@ module Admin
       load_vendor_data
       load_mfr_data
       load_chart_data
+      load_disability_type_data
+      load_referral_source_data
     end
 
     def show; end
