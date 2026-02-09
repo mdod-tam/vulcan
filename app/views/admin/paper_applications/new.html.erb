@@ -660,58 +660,6 @@
                 Verification of Income and/or Benefits
               </h3>
               
-              <%# Income Information Fields %>
-              <div class="flex items-center gap-3 mb-6 pb-4">
-                <%= check_box_tag :no_income_information, 
-                    nil, 
-                    false, 
-                    class: "mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", 
-                    data: { 
-                      "income-validation-target": "noIncomeProvided", 
-                      "action": "change->income-validation#toggleIncome" 
-                    } %>
-                <%= label_tag :no_income_information, "Benefits information was provided that satisfies the income requirement; no household size or income information needed", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
-              </div>
-              <%= fields_for :application do |a| %>
-                <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200" 
-                     data-income-validation-target="incomeFieldsContainer">
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <%= a.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700 required-label" %>
-                      <%= a.number_field :household_size, 
-                          min: 1, 
-                          required: true, 
-                          class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
-                          "aria-required": "true",
-                          data: { 
-                            "income-validation-target": "householdSize", 
-                            "action": "input->income-validation#validateAction change->income-validation#validateAction" 
-                          } %>
-                    </div>
-                    <div>
-                      <%= a.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700 required-label" %>
-                      <div class="mt-1 relative rounded-md shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <span class="text-gray-500 sm:text-sm">$</span>
-                        </div>
-                        <%= a.number_field :annual_income, 
-                            step: "0.01", 
-                            required: true, 
-                            class: "pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
-                            "aria-required": "true",
-                            data: { 
-                              "income-validation-target": "annualIncome", 
-                              "action": "input->income-validation#validateAction change->income-validation#validateAction" 
-                            } %>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
-              
-              <%# Income Threshold Warning %>
-              <div id="admin-income-threshold-warning" hidden class="hidden mb-4" role="alert" aria-live="assertive" data-income-validation-target="warningContainer"></div>
-              
               <%# Proof Action Selection %>
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Income Proof Action</legend>
@@ -763,6 +711,55 @@
                   SSI/SSDI benefits statement, pension statement, pay stubs, or other income verification. 
                   Accepted formats: PDF, JPG, PNG.
                 </p>
+
+                <%# Income Information Fields %>
+                <div class="flex items-center gap-3 mb-4 pb-4 mt-4">
+                  <%= check_box_tag :no_income_information, 
+                      nil, 
+                      false, 
+                      class: "mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", 
+                      data: { 
+                        "income-validation-target": "noIncomeProvided", 
+                        "action": "change->income-validation#toggleIncome" 
+                      } %>
+                  <%= label_tag :no_income_information, "Benefits information was provided that satisfies the income requirement", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
+                </div>
+                <%= fields_for :application do |a| %>
+                  <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200" 
+                      data-income-validation-target="incomeFieldsContainer">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <%= a.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
+                        <%= a.number_field :household_size, 
+                            min: 1, 
+                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                            data: { 
+                              "income-validation-target": "householdSize", 
+                              "action": "input->income-validation#validateAction change->income-validation#validateAction" 
+                            } %>
+                      </div>
+                      <div>
+                        <%= a.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span class="text-gray-500 sm:text-sm">$</span>
+                          </div>
+                          <%= a.number_field :annual_income, 
+                              step: "0.01", 
+                              class: "pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", 
+                              data: { 
+                                "income-validation-target": "annualIncome", 
+                                "action": "input->income-validation#validateAction change->income-validation#validateAction" 
+                              } %>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+                
+                <%# Income Threshold Warning %>
+                <div id="admin-income-threshold-warning" hidden class="hidden mb-4" role="alert" aria-live="assertive" data-income-validation-target="warningContainer"></div>
+
               </div>
               
               <%# Rejection Fields %>
