@@ -55,8 +55,6 @@ module Admin
       # First dashboard request: verify proofs and medical certs counts
       # Dashboard redirects to admin/applications#index, so follow the redirect
       get admin_dashboard_path
-      assert_redirected_to admin_applications_path
-      follow_redirect!
       assert_response :success
       verify_dashboard_counts
 
@@ -64,8 +62,6 @@ module Admin
 
       # Second dashboard request: verify training requests count
       get admin_dashboard_path
-      assert_redirected_to admin_applications_path
-      follow_redirect!
       assert_response :success
       verify_training_request_counts
     end
