@@ -183,7 +183,7 @@ module Admin
           html_redirect_path: admin_applications_path,
           html_message: 'Rejection letter has been queued for printing',
           turbo_message: 'Rejection letter has been queued for printing',
-          turbo_redirect_path: admin_application_path
+          turbo_redirect_path: admin_applications_path
         )
       else
         # For email notifications, send immediately
