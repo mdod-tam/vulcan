@@ -3,10 +3,11 @@
  * Ignores test expectations - tests will be rewritten once charts work
  */
 export class ChartConfigService {
-  // Enforce non-responsive behavior to prevent resize loops
+  // Enable responsive charts with explicit container heights
+  // Chart.js will handle resizing automatically when container changes
   getBaseConfig() {
     return {
-      responsive: false,
+      responsive: true,
       maintainAspectRatio: false
     }
   }
