@@ -297,7 +297,7 @@ module Admin
       )
 
       if result.success?
-        handle_successful_certification_update('Medical certification rejected and provider notified.')
+        handle_successful_certification_update('Disability certification rejected and provider notified.')
       else
         handle_error_response(
           error_message: "Failed to reject certification: #{result.message}",
@@ -353,9 +353,9 @@ module Admin
       @application.reload # Ensure we have the latest status after callbacks
 
       message = if @application.status_approved?
-                  'Medical certification status updated and application auto-approved.'
+                  'Disability certification status updated and application auto-approved.'
                 else
-                  'Medical certification status updated.'
+                  'Disability certification status updated.'
                 end
 
       handle_successful_certification_update(message)
@@ -417,7 +417,7 @@ module Admin
       end
     end
 
-    # Enqueue a Medical Certification Form (DCF) PDF to the print queue.
+    # Enqueue a Disability Certification Form (DCF) PDF to the print queue.
     # Uses a pregenerated PDF if available under app/assets/pdfs/medical_certification_form.pdf,
     # otherwise generates a simple PDF with application and provider details.
     def queue_medical_certification_form
@@ -490,8 +490,8 @@ module Admin
       render partial: 'charts_section', layout: false
     end
 
-    # Handles uploading and processing medical certification documents
-    # This action can either accept and attach a certification document or reject it with a reason, notifying the medical provider
+    # Handles uploading and processing disability certification documents
+    # This action can either accept and attach a certification document or reject it with a reason, notifying the healthcare provider
     def upload_medical_certification
       status = params[:medical_certification_status]
 
@@ -514,8 +514,8 @@ module Admin
       end
     end
 
-    # Process an approved medical certification
-    # This method handles the upload and approval of medical certifications in a single step
+    # Process an approved disability certification
+    # This method handles the upload and approval of disability certifications in a single step
     def process_accepted_certification
       # Log debug information only in development or test environments
       log_certification_params unless Rails.env.production?
@@ -534,7 +534,7 @@ module Admin
       # Make sure the result includes the correct status for the flash message
       result[:status] = 'approved' if result[:success] && result[:status].blank?
 
-      # For test 'should upload medical certification document' - ensure we have correct flash notice
+      # For test 'should upload disability certification document' - ensure we have correct flash notice
       if result[:success] && result[:status] == 'approved'
         flash[:notice] = t('admin.applications.process_accepted_certification.c_upload_pass')
         redirect_to admin_application_path(@application)
@@ -573,11 +573,11 @@ module Admin
       if result[:success]
         status_text = result[:status] || 'processed'
         redirect_to admin_application_path(@application),
-                    notice: "Medical certification successfully uploaded and #{status_text}."
+                    notice: "Disability certification successfully uploaded and #{status_text}."
       else
-        Rails.logger.error "Medical certification operation failed: #{result[:error]&.message}"
+        Rails.logger.error "Disability certification operation failed: #{result[:error]&.message}"
         redirect_to admin_application_path(@application),
-                    alert: "Failed to process medical certification: #{result[:error]&.message}"
+                    alert: "Failed to process disability certification: #{result[:error]&.message}"
       end
     end
 
@@ -647,8 +647,8 @@ module Admin
     def log_certification_params
       return unless Rails.env.local?
 
-      Rails.logger.info "MEDICAL CERTIFICATION PARAMS: #{params.to_unsafe_h.inspect}"
-      Rails.logger.info "MEDICAL CERTIFICATION FILE PARAM: #{params[:medical_certification].inspect}"
+      Rails.logger.info "DISABILITY CERTIFICATION PARAMS: #{params.to_unsafe_h.inspect}"
+      Rails.logger.info "DISABILITY CERTIFICATION FILE PARAM: #{params[:medical_certification].inspect}"
 
       return if params[:medical_certification].blank?
 

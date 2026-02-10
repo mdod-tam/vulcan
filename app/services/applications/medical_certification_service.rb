@@ -33,10 +33,10 @@ module Applications
         # Send email with notification for tracking
         send_email(notification)
 
-        success(message: 'Medical certification requested successfully.')
+        success(message: 'Disability certification requested successfully.')
       rescue StandardError => e
         log_error(e, "Application ID: #{application.id}")
-        failure(message: "Failed to request medical certification: #{e.message}")
+        failure(message: "Failed to request disability certification: #{e.message}")
       end
     end
 

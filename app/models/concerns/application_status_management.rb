@@ -75,16 +75,16 @@ module ApplicationStatusManagement
 
   private
 
-  # Triggers the auto-request for medical certification when transitioning to 'awaiting_dcf'.
+  # Triggers the auto-request for disability certification when transitioning to 'awaiting_dcf'.
   def handle_status_change
     return unless status_previously_changed?(to: 'awaiting_dcf')
 
     handle_awaiting_dcf_transition
   end
 
-  # --- Auto Request Medical Certification Process ---
+  # --- Auto Request Disability Certification Process ---
   # Checks if required proofs are approved when the application status transitions to 'awaiting_dcf'
-  # If so, updates the medical certification status to 'requested' and sends an email to the medical provider.
+  # If so, updates the disability certification status to 'requested' and sends an email to the healthcare provider.
   def handle_awaiting_dcf_transition
     # Ensure required proofs are approved (policy-aware method allows future flexibility)
     return unless required_proofs_for_dcf_approved?
@@ -107,7 +107,7 @@ module ApplicationStatusManagement
     # Don't auto-approve if already in a terminal state
     return false if status_approved? || status_rejected? || status_archived?
 
-    # Check if all requirements are met (income, residency, and medical certification approved)
+    # Check if all requirements are met (income, residency, and disability certification approved)
     all_requirements_met?
   end
 

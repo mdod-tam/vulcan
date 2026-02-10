@@ -32,7 +32,7 @@ module Applications
       note_result = create_rejection_note(notes)
       return note_result if note_result.failure?
 
-      success('Medical certification rejected successfully')
+      success('Disability certification rejected successfully')
     end
 
     private
@@ -63,7 +63,7 @@ module Applications
         notes: notes
       )
 
-      return failure(service_result[:error]&.message || 'Medical certification service failed') unless service_result[:success]
+      return failure(service_result[:error]&.message || 'Disability certification service failed') unless service_result[:success]
 
       success
     end
@@ -74,12 +74,12 @@ module Applications
       begin
         application.application_notes.create!(
           admin: admin,
-          content: "Medical certification rejected: #{notes}"
+          content: "Disability certification rejected: #{notes}"
         )
         success
       rescue StandardError => e
         Rails.logger.error("Failed to create application note: #{e.message}")
-        failure("Medical certification rejected successfully, but note creation failed: #{e.message}")
+        failure("Disability certification rejected successfully, but note creation failed: #{e.message}")
       end
     end
   end

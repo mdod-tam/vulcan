@@ -178,7 +178,7 @@
           </div>
         </section>
 
-        <!-- Disability Certification Group - Contains Disability Info and Medical Provider -->
+        <!-- Disability Certification Group - Contains Disability Info and Healthcare Provider -->
         <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <h2 class="text-lg font-semibold text-gray-800 mb-4">Disability Certification</h2>
 
@@ -220,7 +220,7 @@
             </fieldset>
           </section>
 
-          <!-- Medical Provider Information (Nested Attributes) -->
+          <!-- Healthcare Provider Information (Nested Attributes) -->
           <%= form.fields_for :medical_provider_attributes do |mp| %>
             <%= render "medical_provider_form", form: mp %>
           <% end %>

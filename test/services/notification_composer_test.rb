@@ -48,7 +48,7 @@ class NotificationComposerTest < ActiveSupport::TestCase
       @admin,
       { 'reason' => 'Missing signature' }
     )
-    assert_equal "Medical certification rejected for application ##{@application.id} - Missing signature.", message
+    assert_equal "Disability certification rejected for application ##{@application.id} - Missing signature.", message
   end
 
   test 'generate default message for unknown action' do

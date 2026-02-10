@@ -30,7 +30,7 @@ class MedicalCertificationAttachmentService
       # Verify the existing certification is attached before proceeding
       raise 'Cannot update certification status: No certification is attached' unless application.medical_certification.attached?
 
-      Rails.logger.info "Updating medical certification status to #{status} for application #{application.id}"
+      Rails.logger.info "Updating disability certification status to #{status} for application #{application.id}"
 
       # Update status and create audit records in a single transaction
       update_certification_status_only(application, status, admin, submission_method, metadata)
@@ -130,7 +130,7 @@ class MedicalCertificationAttachmentService
         medical_certification_verified_by_id: admin&.id
       )
 
-      Rails.logger.info "Updated medical certification status to #{status} for application #{application.id}"
+      Rails.logger.info "Updated disability certification status to #{status} for application #{application.id}"
 
       # Create ApplicationStatusChange record
       ApplicationStatusChange.create!(
@@ -184,7 +184,7 @@ class MedicalCertificationAttachmentService
   end
 
   def self.record_failure(application, error, admin, submission_method, _metadata)
-    Rails.logger.error "Medical certification attachment error: #{error.message}"
+    Rails.logger.error "Disability certification attachment error: #{error.message}"
     Rails.logger.error error.backtrace.join("\n")
 
     begin
@@ -205,7 +205,7 @@ class MedicalCertificationAttachmentService
     end
   rescue StandardError => e
     # Try logging if even the failure tracking fails
-    Rails.logger.error "Failed to record medical certification failure: #{e.message}"
+    Rails.logger.error "Failed to record disability certification failure: #{e.message}"
   end
 
   def self.record_metrics(result, status)
@@ -213,7 +213,7 @@ class MedicalCertificationAttachmentService
     context = build_metrics_context(result, status)
     log_metrics(context)
   rescue StandardError => e
-    Rails.logger.error "Failed to record medical certification metrics: #{e.message}"
+    Rails.logger.error "Failed to record disability certification metrics: #{e.message}"
   end
 
   # Common timing wrapper for operations
@@ -324,8 +324,8 @@ class MedicalCertificationAttachmentService
 
   # Input processing helper methods
   def self.log_input_details(blob_or_file)
-    Rails.logger.info "MEDICAL CERTIFICATION ATTACHMENT INPUT: Type=#{blob_or_file.class.name}"
-    Rails.logger.info "MEDICAL CERTIFICATION BLOB OR FILE VALUE: #{blob_or_file.to_s[0..100]}" if blob_or_file.respond_to?(:to_s)
+    Rails.logger.info "DISABILITY CERTIFICATION ATTACHMENT INPUT: Type=#{blob_or_file.class.name}"
+    Rails.logger.info "DISABILITY CERTIFICATION BLOB OR FILE VALUE: #{blob_or_file.to_s[0..100]}" if blob_or_file.respond_to?(:to_s)
     safe_inspect(blob_or_file)
   end
 
@@ -333,7 +333,7 @@ class MedicalCertificationAttachmentService
     return unless blob_or_file.respond_to?(:inspect)
 
     inspection = blob_or_file.inspect[0..200]
-    Rails.logger.info "MEDICAL CERTIFICATION ATTACHMENT INSPECTION: #{inspection}"
+    Rails.logger.info "DISABILITY CERTIFICATION ATTACHMENT INSPECTION: #{inspection}"
   rescue StandardError => e
     Rails.logger.info "Could not inspect input: #{e.message}"
   end

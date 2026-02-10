@@ -55,8 +55,8 @@ module Webhooks
 
     def notify_admins(certification)
       AdminNotifier.new(
-        subject: 'New Medical Certification Received',
-        message: "Medical certification received for Application ##{certification.id}",
+        subject: 'New Disability Certification Received',
+        message: "Disability certification received for Application ##{certification.id}",
         level: :info
       ).notify_all
     end
