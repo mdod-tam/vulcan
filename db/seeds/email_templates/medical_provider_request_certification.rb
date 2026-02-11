@@ -2,12 +2,12 @@
 
 # Seed File for "medical_provider_request_certification"
 EmailTemplate.create_or_find_by!(name: 'medical_provider_request_certification', format: :text) do |template|
-  template.subject = 'MEDICAL CERTIFICATION FORM REQUEST'
-  template.description = 'Sent to a medical provider requesting they complete and submit a disability certification form for their patient.'
+  template.subject = 'DISABILITY CERTIFICATION FORM REQUEST'
+  template.description = 'Sent to a certifying professional requesting they complete and submit a disability certification form for their patient.'
   template.body = <<~TEXT
-    MEDICAL CERTIFICATION FORM REQUEST
+    DISABILITY CERTIFICATION FORM REQUEST
 
-    Dear Healthcare Provider,
+    Hello,
 
     We are writing to request your completion of a disability certification form for your patient, %<constituent_full_name>s, who is applying for the Maryland Accessible Telecommunications Program to receive accessible telecommunications equipment to support independent telephone usage.
 

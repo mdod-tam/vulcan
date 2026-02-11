@@ -26,13 +26,13 @@
 <% exceeds_threshold_income = h('Based on the income documentation you provided, your household income exceeds the maximum threshold to qualify for the MAT program. The program is designed to assist those with financial need, and unfortunately, your income level is above our current eligibility limits.') %>
 <% outdated_ss_award_income = h('Your Social Security benefit award letter is out-of-date. Please submit your most recent award letter, which should be dated within the last 12 months. You can obtain a new benefit verification letter by visiting the Social Security Administration website or contacting your local SSA office.') %>
 
-<%# Medical Rejection message locals %>
-<% missing_provider_credentials = h('The disability certification is missing required provider credentials or license number. Please ensure the resubmitted form includes the healthcare provider\'s full credentials and license information.') %>
+<%# Disability Rejection message locals %>
+<% missing_provider_credentials = h('The disability certification is missing required provider credentials or license number. Please ensure the resubmitted form includes the certifying professional\'s full credentials and license information.') %>
 <% incomplete_disability_documentation = h('The documentation of the disability is incomplete. The certification must include a complete description of the disability and how it affects major life activities.') %>
-<% outdated_certification = h('The medical certification is outdated. Please provide a certification that has been completed within the last 12 months.') %>
-<% missing_signature = h('The medical certification is missing the required signature from the healthcare provider. Please ensure the resubmitted form is properly signed and dated.') %>
-<% missing_functional_limitations = h('The certification lacks sufficient detail about functional limitations. Please ensure the resubmitted form includes specific information about how the disability affects daily activities.') %>
-<% incorrect_form_used = h('The wrong certification form was used. Please ensure the healthcare provider completes the official Medical Certification Form for MAT program eligibility.') %>
+<% outdated_certification = h('The disability certification is outdated. Please provide a certification that has been completed within the last 12 months.') %>
+<% missing_signature = h('The disability certification is missing the required signature from the certifying professional. Please ensure the resubmitted form is properly signed and dated.') %>
+<% missing_functional_limitations = h('The disability certification lacks sufficient detail about functional limitations. Please ensure the resubmitted form includes specific information about how the disability affects daily activities.') %>
+<% incorrect_form_used = h('The wrong certification form was used. Please ensure the certifying professional completes the official Disability Certification Form for MAT program eligibility.') %>
 
 <%# Helper to render PDF/Image attachment preview %>
 <%
@@ -93,7 +93,7 @@ end
   <% [
     { id: 'incomeProofReviewModal',  key: :income,   title: 'Review Income Proof',   approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'income', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'income', confirm_message: "Approve income proof?" },
     { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?" },
-    { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Medical Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this medical certification?" }
+    { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this disability certification?" }
   ].each do |cfg| %>
     <dialog id="<%= cfg[:id] %>" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-controller="modal" aria-labelledby="<%= cfg[:id] %>-heading">
       <div class="p-6">
@@ -313,7 +313,7 @@ end
     </div>
   </dialog>
 
-  <!-- Medical Certification Rejection Modal -->
+  <!-- Disability Certification Rejection Modal -->
   <dialog id="medicalCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form"
        aria-labelledby="medicalCertificationRejectionModal-heading"
        data-rejection-form-missing-provider-credentials-value="<%= missing_provider_credentials %>"
@@ -323,7 +323,7 @@ end
        data-rejection-form-missing-functional-limitations-value="<%= missing_functional_limitations %>"
        data-rejection-form-incorrect-form-used-value="<%= incorrect_form_used %>">
     <div class="p-6">
-        <h3 id="medicalCertificationRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Medical Certification Rejection Reason</h3>
+        <h3 id="medicalCertificationRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Disability Certification Rejection Reason</h3>
         <div class="mb-4">
           <p class="text-sm font-medium text-gray-700 mb-1">Predefined Rejection Reasons:</p>
           <div class="flex flex-wrap gap-2 mb-2 medical-only-reasons" data-rejection-form-target="medicalOnlyReasons">
@@ -390,21 +390,21 @@ end
           </div>
 
           <div class="mt-4">
-            <%= f.label :notes, "Additional Notes to Healthcare Provider", class: "block text-sm font-medium text-gray-700" %>
+            <%= f.label :notes, "Additional Notes to Certifying Professional", class: "block text-sm font-medium text-gray-700" %>
             <%= f.text_area :notes,
                 rows: 4,
                 class: "mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                placeholder: "Additional instructions or information for the healthcare provider...",
+                placeholder: "Additional instructions or information for the certifying professional...",
                 data: { rejection_form_target: "notesField" } %>
             <p class="mt-1 text-xs text-gray-500">
-              These notes will be included in the rejection email sent to the healthcare provider.
+              These notes will be included in the rejection email sent to the certifying professional.
             </p>
           </div>
           <div class="flex justify-end space-x-3">
             <button type="button"
                     data-action="click->modal#close"
                     class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                    aria-label="Cancel medical certification rejection and close modal">
+                    aria-label="Cancel disability certification rejection and close modal">
               Cancel
             </button>
             <%= f.submit "Submit",

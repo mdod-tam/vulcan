@@ -84,7 +84,7 @@ module ApplicationStatusManagement
 
   # --- Auto Request Disability Certification Process ---
   # Checks if required proofs are approved when the application status transitions to 'awaiting_dcf'
-  # If so, updates the disability certification status to 'requested' and sends an email to the healthcare provider.
+  # If so, updates the disability certification status to 'requested' and sends an email to the certifying professional.
   def handle_awaiting_dcf_transition
     # Ensure required proofs are approved (policy-aware method allows future flexibility)
     return unless required_proofs_for_dcf_approved?

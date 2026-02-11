@@ -491,7 +491,7 @@ module Admin
     end
 
     # Handles uploading and processing disability certification documents
-    # This action can either accept and attach a certification document or reject it with a reason, notifying the healthcare provider
+    # This action can either accept and attach a certification document or reject it with a reason, notifying the certifying professional
     def upload_medical_certification
       status = params[:medical_certification_status]
 

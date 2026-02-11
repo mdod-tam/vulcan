@@ -486,7 +486,7 @@
       <div data-applicant-type-target="commonSections" class="hidden space-y-6">
         
         <%# ============================================================ %>
-        <%# Disability & Medical Certification %>
+        <%# Disability Certification %>
         <%# ============================================================ %>
         <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" aria-labelledby="disability-heading">
           <div class="px-6 py-4 bg-purple-50 border-b border-purple-100">
@@ -494,7 +494,7 @@
               <span class="flex items-center justify-center w-7 h-7 rounded-full bg-purple-600 text-white text-sm font-bold" data-applicant-type-target="stepNumber">3</span>
               Disability Certification
             </h2>
-            <p class="mt-1 text-sm text-purple-700">Disability information and healthcare provider details</p>
+            <p class="mt-1 text-sm text-purple-700">Disability information and certifying professional details</p>
           </div>
           
           <div class="p-6 space-y-6">
@@ -530,7 +530,7 @@
               <% end %>
             </fieldset>
 
-            <%# Healthcare Provider Information %>
+            <%# Certifying Professional Information %>
             <fieldset class="p-4 bg-white border border-gray-200 rounded-lg">
               <div class="flex items-center gap-3 mb-6 pb-4">
                 <%= check_box_tag :no_medical_provider_information, 
@@ -541,10 +541,10 @@
                         data: { 
                           "action": "change->paper-application#toggleMedicalProvider" 
                         } %>
-                <%= label_tag :no_medical_provider_information, "No healthcare provider information provided", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
+                <%= label_tag :no_medical_provider_information, "No certifying professional information provided", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
             </div>
 
-              <legend class="text-base font-medium text-gray-900 px-2">Healthcare Provider Information</legend>
+              <legend class="text-base font-medium text-gray-900 px-2">Certifying Professional Information</legend>
               <p class="text-sm text-gray-600 mb-4">We'll contact this provider to verify the disability certification</p>
               
               <%# Prefill Notice %>
