@@ -31,8 +31,11 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_rejected', forma
 
     %<footer_text>s
   TEXT
-  template.variables = %w[header_text vendor_business_name status_box_text rejection_reason vendor_portal_url
-                          footer_text]
+  template.variables = {
+    'required' => %w[header_text vendor_business_name status_box_text rejection_reason vendor_portal_url
+                          footer_text],
+    'optional' => []
+  }                      
   template.version = 1
 end
 Rails.logger.debug 'Seeded vendor_notifications_w9_rejected (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

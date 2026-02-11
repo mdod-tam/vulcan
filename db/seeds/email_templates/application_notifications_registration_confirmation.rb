@@ -48,8 +48,10 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_c
 
     %<footer_text>s
   TEXT
-  template.variables = %w[header_text user_full_name dashboard_url new_application_url active_vendors_text_list
-                          footer_text]
+  template.variables = {
+    'required' => %w[header_text user_full_name dashboard_url new_application_url active_vendors_text_list footer_text],
+    'optional' => []
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded application_notifications_registration_confirmation (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

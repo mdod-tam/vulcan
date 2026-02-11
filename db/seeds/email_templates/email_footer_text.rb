@@ -6,14 +6,17 @@ EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text) do |t
   template.description = 'Standard text footer used in all email templates'
   template.body = <<~TEXT
     --
-    <%= organization_name %>
-    Email: <%= contact_email %>
-    Website: <%= website_url %>
+    %<organization_name>
+    Email: %<contact_email>
+    Website: %<website_url>
 
-    <% if defined?(show_automated_message) && show_automated_message %>
+    %<show_automated_message>
     This is an automated message. Please do not reply directly to this email.
-    <% end %>
   TEXT
+  template.variables = {
+    'required' => %w[organization_name contact_email website_url],
+    'optional' => %w[show_automated_message]
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded email_footer_text (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

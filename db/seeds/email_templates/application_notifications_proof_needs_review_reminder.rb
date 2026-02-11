@@ -26,8 +26,11 @@ EmailTemplate.create_or_find_by!(name: 'admin_notifications_stale_reviews_summar
 
     %<footer_text>s
   TEXT
-  template.variables = %w[header_text admin_full_name stale_reviews_count stale_reviews_text_list
-                          admin_dashboard_url footer_text]
+  template.variables = {
+    'required' => %w[header_text admin_full_name stale_reviews_count stale_reviews_text_list
+                          admin_dashboard_url footer_text],
+    'optional' => []
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded admin_notifications_stale_reviews_summary (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?
