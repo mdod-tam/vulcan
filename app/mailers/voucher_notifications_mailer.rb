@@ -227,6 +227,16 @@ class VoucherNotificationsMailer < ApplicationMailer
       raise "Email template (text format) not found for #{template_name}"
     end
 
+    header_content, _ = EmailTemplate.render('email_header_text',
+      title: 'Voucher Redeemed',
+      subtitle: ''
+    )
+    footer_content, _ = EmailTemplate.render('email_footer_text', 
+      organization_name: Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program',
+      contact_email: Policy.get('support_email') || 'support@example.com',
+      website_url: root_url(host: default_url_options[:host]),
+      automated_message_text: 'This is an automated message. Please do not reply directly to this email.'
+    )
     # Prepare variables
     remaining_balance_formatted = number_to_currency(voucher.remaining_value) # After transaction
     # Use Policy.get for configuration values
@@ -258,7 +268,9 @@ class VoucherNotificationsMailer < ApplicationMailer
       remaining_value_message_text: remaining_value_message_text,
       redeemed_value_formatted: redeemed_value_formatted,
       fully_redeemed_message_text: fully_redeemed_message_text,
-      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted # Often used within optional blocks
+      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted,# Often used within optional blocks
+      header_text: header_content,
+      footer_text: footer_content 
     }.compact
 
     # Render subject and body from the text template

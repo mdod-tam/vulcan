@@ -90,7 +90,7 @@ class EmailTemplate < ApplicationRecord
     variables['optional'] || []
   end
 
-  def allowed_varibales
+  def allowed_variabales
     required_variables + optional_variables
   end
 
@@ -110,7 +110,7 @@ class EmailTemplate < ApplicationRecord
 
   def validate_required_variables!(vars)
     provided_keys = vars.keys.map(&:to_s)
-    missing_vars = required_vars - provided_keys
+    missing_vars = required_variables - provided_keys
 
     return unless missing_vars.any?
 
