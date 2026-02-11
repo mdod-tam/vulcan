@@ -24,7 +24,10 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_submissio
 
     This is an automated message. Please do not reply directly to this email.
   TEXT
-  template.variables = %w[medical_provider_email error_message]
+  template.variables = {
+    'required' => %w[medical_provider_email error_message],
+    'optional' => []
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded medical_provider_certification_submission_error (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

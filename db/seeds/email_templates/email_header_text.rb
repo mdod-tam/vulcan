@@ -5,12 +5,14 @@ EmailTemplate.create_or_find_by!(name: 'email_header_text', format: :text) do |t
   template.subject = 'Email Header Text'
   template.description = 'Standard text header used in all email templates'
   template.body = <<~TEXT
-    <%= title %>
+    %<title>
 
-    <% if defined?(subtitle) && subtitle.present? %>
-    <%= subtitle %>
-    <% end %>
+    %<subtitle>
   TEXT
+  template.variables = {
+    'required' => %w[title],
+    'optional' => %w[subtitle]
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded email_header_text (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

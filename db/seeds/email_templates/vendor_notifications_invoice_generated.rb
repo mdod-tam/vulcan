@@ -33,8 +33,11 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_generated',
 
     Thank you for participating in our program!
   TEXT
-  template.variables = %w[vendor_business_name invoice_number period_start_formatted period_end_formatted
-                          total_amount_formatted transactions_text_list]
+  template.variables = {
+    'required' => %w[vendor_business_name invoice_number period_start_formatted period_end_formatted
+                          total_amount_formatted transactions_text_list],
+    'optional' => []
+  }                     
   template.version = 1
 end
 Rails.logger.debug 'Seeded vendor_notifications_invoice_generated (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

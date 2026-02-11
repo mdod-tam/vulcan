@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_26_024847) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -165,7 +165,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_26_024847) do
     t.string "name", null: false
     t.string "subject"
     t.text "body"
-    t.text "variables", default: [], array: true
+    t.jsonb "variables", default: {}
     t.bigint "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -279,23 +279,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_26_024847) do
 
   create_table "notifications", force: :cascade do |t|
     t.bigint "recipient_id", null: false
-    t.bigint "actor_id", null: false
+    t.bigint "actor_id"
     t.string "action"
     t.datetime "read_at"
     t.jsonb "metadata"
     t.string "notifiable_type", null: false
-    t.bigint "notifiable_id", null: false
+    t.bigint "notifiable_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "message_id"
     t.string "delivery_status"
     t.datetime "delivered_at"
     t.datetime "opened_at"
-    t.boolean "created_by_service", default: false, null: false
     t.boolean "audited", default: false, null: false
     t.index ["actor_id"], name: "index_notifications_on_actor_id"
     t.index ["audited"], name: "index_notifications_on_audited"
-    t.index ["created_by_service"], name: "index_notifications_on_created_by_service"
     t.index ["message_id"], name: "index_notifications_on_message_id"
     t.index ["notifiable_type", "notifiable_id"], name: "index_notifications_on_notifiable"
     t.index ["recipient_id"], name: "index_notifications_on_recipient_id"
