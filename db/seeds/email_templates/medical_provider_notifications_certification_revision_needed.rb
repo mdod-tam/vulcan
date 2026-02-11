@@ -27,8 +27,6 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certifica
     1. Email: Reply to this email with the updated certification form attached
     2. Fax: Send the updated form to 410-767-4276
 
-    Note: The patient has %<remaining_attempts>s remaining submission attempts before they must reapply.
-
     Thank you for your assistance in helping your patient access needed telecommunications services.
 
     Sincerely,
@@ -39,7 +37,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certifica
     For questions, please contact us at medical-cert@mdmat.org or call 410-767-6960.
     Maryland Accessible Telecommunications (MAT) - Improving lives through accessible communication.
   TEXT
-  template.variables = %w[constituent_full_name application_id rejection_reason remaining_attempts]
+  template.variables = %w[constituent_full_name application_id rejection_reason]
   template.version = 1
 end
 Rails.logger.debug 'Seeded medical_provider_notifications_certification_revision_needed (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

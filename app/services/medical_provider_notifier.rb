@@ -197,7 +197,6 @@ class MedicalProviderNotifier
       add_pdf_header(pdf)
       add_patient_info(pdf)
       add_rejection_details(pdf, rejection_reason)
-      add_remaining_attempts(pdf)
       add_submission_instructions(pdf)
       add_pdf_footer(pdf)
     end
@@ -233,13 +232,6 @@ class MedicalProviderNotifier
     pdf.text 'Reason for Revision:', size: 14, style: :bold
     pdf.move_down 5
     pdf.text rejection_reason, size: 12
-    pdf.move_down 20
-  end
-
-  # Add remaining attempts information to PDF
-  def add_remaining_attempts(pdf)
-    remaining_attempts = 8 - application.total_rejections
-    pdf.text "Remaining Attempts: #{remaining_attempts}", size: 12
     pdf.move_down 20
   end
 

@@ -88,7 +88,7 @@ class EmailTemplate < ApplicationRecord
     # MedicalProviderMailer Templates
     'medical_provider_certification_rejected' => {
       description: 'Sent to a medical provider when a submitted certification is rejected.', # Added description
-      required_vars: %w[constituent_full_name application_id rejection_reason remaining_attempts],
+      required_vars: %w[constituent_full_name application_id rejection_reason],
       optional_vars: []
     },
     'medical_provider_request_certification' => {
