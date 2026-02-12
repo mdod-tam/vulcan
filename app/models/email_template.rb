@@ -19,6 +19,7 @@ class EmailTemplate < ApplicationRecord
   validates :format, presence: true
   validates :description, presence: true
   validates :version, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
+  validate :validate_body_uses_only_allowed_variables
   validate :validate_variables_in_body
 
   # Store previous version before saving changes
@@ -90,7 +91,7 @@ class EmailTemplate < ApplicationRecord
     variables['optional'] || []
   end
 
-  def allowed_variabales
+  def allowed_variables
     required_variables + optional_variables
   end
 
@@ -115,6 +116,21 @@ class EmailTemplate < ApplicationRecord
     return unless missing_vars.any?
 
     raise ArgumentError, "Missing required variables for template '#{name}': #{missing_vars.join(', ')}"
+  end
+
+  def validate_body_uses_only_allowed_variables
+    # Get all variables currently written in the body string (e.g. ['name', 'bad_var'])
+    current_vars_in_body = extract_variables
+    
+    # Get the allowed list from the database (e.g. ['name', 'footer_text'])
+    allowed = allowed_variables 
+    
+    # Find the difference
+    unauthorized_vars = current_vars_in_body - allowed
+    
+    if unauthorized_vars.any?
+      errors.add(:body, "contains unauthorized variables: #{unauthorized_vars.join(', ')}. Only use: #{allowed.join(', ')}")
+    end
   end
 
   def store_previous_content
