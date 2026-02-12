@@ -11,7 +11,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     post sign_in_path, params: { email: @admin.email, password: 'password123' }
 
     # Admin sign-in should redirect to admin dashboard
-    assert_redirected_to admin_applications_path
+    assert_redirected_to admin_dashboard_path
   end
 
   def test_should_get_new
