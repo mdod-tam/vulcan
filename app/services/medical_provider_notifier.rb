@@ -195,7 +195,7 @@ class MedicalProviderNotifier
 
     Prawn::Document.generate(temp_file_path) do |pdf|
       add_pdf_header(pdf)
-      add_patient_info(pdf)
+      add_applicant_info(pdf)
       add_rejection_details(pdf, rejection_reason)
       add_remaining_attempts(pdf)
       add_submission_instructions(pdf)
@@ -217,13 +217,13 @@ class MedicalProviderNotifier
   def add_pdf_header(pdf)
     pdf.text 'Maryland Accessible Telecommunications', size: 18, style: :bold
     pdf.move_down 10
-    pdf.text 'Disability Certification Form for Patient needs Updates', size: 16, style: :bold
+    pdf.text 'Disability Certification Form for Applicant needs Updates', size: 16, style: :bold
     pdf.move_down 20
   end
 
-  # Add patient information section to PDF
-  def add_patient_info(pdf)
-    pdf.text "Patient: #{application.user.full_name}", size: 12
+  # Add applicant information section to PDF
+  def add_applicant_info(pdf)
+    pdf.text "Name: #{application.user.full_name}", size: 12
     pdf.text "Application ID: #{application.id}", size: 12
     pdf.move_down 20
   end
@@ -254,7 +254,7 @@ class MedicalProviderNotifier
 
   # Add footer section to PDF
   def add_pdf_footer(pdf)
-    pdf.text 'Thank you for your assistance in helping your patient access needed telecommunications services.', size: 12
+    pdf.text 'Thank you for your assistance in helping this applicant access needed telecommunications services.', size: 12
     pdf.text 'For questions, please contact: medical-cert@mdmat.org', size: 12
   end
 

@@ -11,9 +11,9 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
 
     Hello,
 
-    We have received the disability certification form for the following patient:
+    We have received the disability certification form for the following individual:
 
-    Patient Name: %<constituent_full_name>s
+    Name: %<constituent_full_name>s
     Application ID: %<application_id>s
 
     Unfortunately, the certification form has been rejected due to the following reason:
@@ -27,9 +27,9 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
     1. Email: Reply to this email with the updated certification form attached
     2. Fax: Send the updated form to 410-767-4276
 
-    Note: The patient has %<remaining_attempts>s remaining submission attempts before they must reapply.
+    Note: The application has %<remaining_attempts>s remaining submission attempts before they must reapply.
 
-    Thank you for your assistance in helping your patient access needed telecommunications services.
+    Thank you for your assistance in helping this applicant access needed telecommunications services.
 
     Sincerely,
     Maryland Accessible Telecommunications Program
