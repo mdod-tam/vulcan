@@ -4,7 +4,7 @@
 %>
 <div class="flex justify-between items-start">
   <div class="flex items-center gap-3">
-    <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Medical Certification</h2>
+    <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Disability Certification</h2>
     <% if @application.medical_certification_status == 'not_requested' %>
       <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-gray-100 text-gray-700">
         Not Requested
@@ -18,7 +18,7 @@
 </div>
 
 <div class="mt-6 space-y-4">
-  <!-- Medical Certification Upload Form (Visible unless approved) -->
+  <!-- Disability Certification Upload Form (Visible unless approved) -->
   <%= render "medical_certification_upload" %>
 
   <!-- Provider Information -->
@@ -88,7 +88,7 @@
               class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
               data: {
                 disable_with: "Sending...",
-                turbo_confirm: "Send digital signing request to #{@application.medical_provider_name} (#{@application.medical_provider_email}) for #{@application.constituent_full_name}'s medical certification?"
+                turbo_confirm: "Send digital signing request to #{@application.medical_provider_name} (#{@application.medical_provider_email}) for #{@application.constituent_full_name}'s disability certification?"
               },
               'aria-label': "Send DocuSeal digital signing request to #{@application.medical_provider_name}" do %>
             <%= docuseal_text %>
@@ -139,9 +139,8 @@
             data-action="click->modal#open"
             data-modal-id="medicalCertificationReviewModal"
             class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none">
-        Review Certification
+        Review Disability Certification
       </button>
     <% end %>
   </div>
 </div>
-

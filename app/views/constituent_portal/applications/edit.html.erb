@@ -175,7 +175,7 @@
          </fieldset>
        </section>
 
-       <!-- Medical Provider Information -->
+       <!-- Certifying Professional Information -->
        <%= f.fields_for :medical_provider_attributes do |mp| %>
          <%= render "medical_provider_form", form: mp %>
        <% end %>
@@ -214,7 +214,7 @@
                  class: "block text-sm font-medium text-gray-700 required-label" %>
              <p id="residency-hint" class="text-xs text-gray-500 mb-2">
                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
-               <strong>identification card</strong>, <strong>utility bill</strong>, or <strong>patient photo ID</strong>
+               <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>
              </p>
              <%= f.file_field :residency_proof,
                  class: "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100",
