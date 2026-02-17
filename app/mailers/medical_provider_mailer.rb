@@ -32,7 +32,7 @@ class MedicalProviderMailer < ApplicationMailer
     # Map to certification_rejected method
     self.class.with(
       application: notifiable,
-      rejection_reason: notification.metadata['rejection_reason'] || 'Not specified',
+      rejection_reason: notification.metadata['reason'] || 'Not specified',
       admin: notification.actor
     ).certification_rejected
   end
