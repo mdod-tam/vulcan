@@ -82,15 +82,29 @@ class VoucherNotificationsMailer < ApplicationMailer
     end
 
     # Prepare variables
+    header_title = "Important: Your voucher is expiring soon."
+    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_website_url = root_url(host: default_url_options[:host])
+    footer_show_automated_message = true
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
+    header_logo_url = begin
+      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
+    rescue StandardError
+      nil
+    end
     # Use Policy.get for configuration values
     expiration_date = voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months
     days_remaining = (expiration_date - Time.current).to_i / 1.day
+    
 
     variables = {
       user_first_name: user.first_name,
       voucher_code: voucher.code,
       days_remaining: days_remaining,
-      expiration_date_formatted: expiration_date.strftime('%B %d, %Y')
+      expiration_date_formatted: expiration_date.strftime('%B %d, %Y'),
+      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message)
       # Add other required variables from AVAILABLE_TEMPLATES if needed
     }.compact
 
@@ -173,9 +187,6 @@ class VoucherNotificationsMailer < ApplicationMailer
                                organization_name: organization_name, show_automated_message: footer_show_automated_message),
       # Optional variables
       transaction_history_text: transaction_history_text,
-      title: header_title, # Optional
-      logo: header_logo_url, # Optional
-      subtitle: nil, # Optional
       show_automated_message: footer_show_automated_message # Optional
     }.compact
 
@@ -228,11 +239,22 @@ class VoucherNotificationsMailer < ApplicationMailer
     end
 
     # Prepare variables
+    header_title = "Your voucher has been redeemed!"
     remaining_balance_formatted = number_to_currency(voucher.remaining_value) # After transaction
+    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_website_url = root_url(host: default_url_options[:host])
+    footer_show_automated_message = true
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
+    header_logo_url = begin
+      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
+    rescue StandardError
+      nil
+    end
     # Use Policy.get for configuration values
     expiration_date_formatted = (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y')
     minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0)
     redeemed_value_formatted = number_to_currency(transaction.amount)
+    header_content = "Your voucher has been redeemed!"
 
     # Optional message blocks (text only)
     remaining_value_message_text = ''
@@ -258,7 +280,10 @@ class VoucherNotificationsMailer < ApplicationMailer
       remaining_value_message_text: remaining_value_message_text,
       redeemed_value_formatted: redeemed_value_formatted,
       fully_redeemed_message_text: fully_redeemed_message_text,
-      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted # Often used within optional blocks
+      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted,# Often used within optional blocks
+      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message)
     }.compact
 
     # Render subject and body from the text template

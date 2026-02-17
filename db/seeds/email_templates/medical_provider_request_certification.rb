@@ -38,8 +38,11 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_request_certification',
     This email was sent regarding Application #%<application_id>s on behalf of %<constituent_full_name>s.
     CONFIDENTIALITY NOTICE: This email may contain confidential health information protected by state and federal privacy laws.
   TEXT
-  template.variables = %w[constituent_full_name request_count_message timestamp_formatted constituent_dob_formatted
-                          constituent_address_formatted application_id download_form_url]
+  template.variables = {
+    'required' => %w[constituent_full_name request_count_message timestamp_formatted constituent_dob_formatted
+                          constituent_address_formatted application_id download_form_url],
+    'optional' => []
+  }                          
   template.version = 1
 end
 Rails.logger.debug 'Seeded medical_provider_request_certification (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

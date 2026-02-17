@@ -23,8 +23,11 @@ EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_evaluation_submission_c
 
     %<footer_text>s
   TEXT
-  template.variables = %w[header_text evaluator_full_name constituent_first_name application_id
-                          submission_date_formatted status_box_text footer_text]
+  template.variables = {
+    'required' => %w[header_text evaluator_full_name constituent_first_name application_id
+                          submission_date_formatted status_box_text footer_text],
+    'optional' => []
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded evaluator_mailer_evaluation_submission_confirmation (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

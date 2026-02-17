@@ -34,8 +34,11 @@ EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_assigned',
 
     This is an automated message. Please do not reply directly to this email.
   TEXT
-  template.variables = %w[user_first_name voucher_code initial_value_formatted expiration_date_formatted
-                          validity_period_months minimum_redemption_amount_formatted]
+  template.variables = {
+    'required' => %w[user_first_name voucher_code initial_value_formatted expiration_date_formatted
+                          validity_period_months minimum_redemption_amount_formatted],
+    'optional' => []
+  }                      
   template.version = 1
 end
 Rails.logger.debug 'Seeded voucher_notifications_voucher_assigned (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?
