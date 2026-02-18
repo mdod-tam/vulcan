@@ -274,6 +274,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   def build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date)
     user = application.user
+    locale = user.locale.presence || 'en'
     proof_type_formatted = format_proof_type(proof_review.proof_type)
     header_title = "Document Review Update: #{proof_type_formatted.capitalize} Needs Revision"
 
@@ -283,13 +284,24 @@ class ApplicationNotificationsMailer < ApplicationMailer
       constituent_full_name: user.full_name,
       organization_name: 'MAT Program',
       proof_type_formatted: proof_type_formatted,
-      rejection_reason: proof_review.rejection_reason,
+      rejection_reason: resolve_rejection_reason(proof_review, locale),
       additional_instructions: proof_review.notes,
       sign_in_url: sign_in_url(host: default_url_options[:host])
     }
     conditional_variables = build_proof_rejected_conditional_variables(remaining_attempts, reapply_date)
 
     base_variables.merge(proof_variables).merge(conditional_variables).compact
+  end
+
+  def resolve_rejection_reason(proof_review, locale)
+    return proof_review.rejection_reason if proof_review.rejection_reason_code.blank?
+
+    reason = RejectionReason.resolve(
+      code: proof_review.rejection_reason_code,
+      proof_type: proof_review.proof_type,
+      locale: locale
+    )
+    reason&.body || proof_review.rejection_reason
   end
 
   def build_proof_rejected_conditional_variables(remaining_attempts, reapply_date)

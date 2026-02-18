@@ -406,24 +406,30 @@ class ProofAttachmentService
     end
 
     def perform_rejection(application:, proof_type:, admin:, submission_method:, rejection_details:)
-      reason = rejection_details.fetch(:reason, 'other')
-      notes = rejection_details.fetch(:notes, nil)
+      raw_reason = rejection_details.fetch(:reason, 'other')
+      notes      = rejection_details.fetch(:notes, nil)
+
+      # When the caller supplies a known RejectionReason code (e.g. from a
+      # select dropdown), persist the code and look up the human-readable body.
+      # Fall back to the raw value for free-text / "other" reasons.
+      rr = RejectionReason.resolve(code: raw_reason, proof_type: proof_type.to_s)
+      reason_code = rr ? raw_reason : nil
+      reason_text = rr&.body || raw_reason
 
       with_paper_context(submission_method, proof_type) do
-        # Update the proof status
         application.reject_proof_without_attachment!(
           proof_type,
           admin: admin,
-          reason: reason,
+          reason: reason_text,
           notes: notes || 'Rejected during paper application submission'
         )
 
-        # Create the proof review record
         application.proof_reviews.create!(
           admin: admin,
           proof_type: proof_type,
           status: 'rejected',
-          rejection_reason: reason,
+          rejection_reason: reason_text,
+          rejection_reason_code: reason_code,
           notes: notes,
           reviewed_at: Time.current,
           submission_method: submission_method

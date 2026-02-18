@@ -222,25 +222,29 @@ end
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="addressMismatch">
+                    data-reason-type="addressMismatch"
+                    data-reason-code="address_mismatch">
               Address Mismatch
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="expired">
+                    data-reason-type="expired"
+                    data-reason-code="expired">
               Expired Documentation
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingName">
+                    data-reason-type="missingName"
+                    data-reason-code="missing_name">
               Missing Name
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="wrongDocument">
+                    data-reason-type="wrongDocument"
+                    data-reason-code="wrong_document">
               Wrong Document Type
             </button>
           </div>
@@ -248,19 +252,22 @@ end
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingAmount">
+                    data-reason-type="missingAmount"
+                    data-reason-code="missing_amount">
               Missing Amount
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="exceedsThreshold">
+                    data-reason-type="exceedsThreshold"
+                    data-reason-code="exceeds_threshold">
               Income Exceeds Threshold
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="outdatedSsAward">
+                    data-reason-type="outdatedSsAward"
+                    data-reason-code="outdated_ss_award">
               Outdated SS Award Letter
             </button>
           </div>
@@ -277,6 +284,9 @@ end
           <%= f.hidden_field :proof_type,
               id: "rejection-proof-type",
               data: { rejection_form_target: "proofType" } %>
+          <%= f.hidden_field :rejection_reason_code,
+              id: "rejection-reason-code",
+              data: { rejection_form_target: "reasonCode" } %>
           <div>
             <%= f.label :rejection_reason, "Reason for Rejection", class: "block text-sm font-medium text-gray-700" %>
             <%= f.text_area :rejection_reason,
@@ -330,37 +340,43 @@ end
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingProviderCredentials">
+                    data-reason-type="missingProviderCredentials"
+                    data-reason-code="missing_provider_credentials">
               Missing Provider Credentials
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="incompleteDisabilityDocumentation">
+                    data-reason-type="incompleteDisabilityDocumentation"
+                    data-reason-code="incomplete_disability_documentation">
               Incomplete Disability Documentation
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="outdatedCertification">
+                    data-reason-type="outdatedCertification"
+                    data-reason-code="outdated_certification">
               Outdated Certification
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingSignature">
+                    data-reason-type="missingSignature"
+                    data-reason-code="missing_signature">
               Missing Signature
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingFunctionalLimitations">
+                    data-reason-type="missingFunctionalLimitations"
+                    data-reason-code="missing_functional_limitations">
               Missing Functional Limitations
             </button>
             <button type="button"
                     class="px-3 py-1 bg-gray-200 rounded"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="incorrectFormUsed">
+                    data-reason-type="incorrectFormUsed"
+                    data-reason-code="incorrect_form_used">
               Incorrect Form Used
             </button>
           </div>
