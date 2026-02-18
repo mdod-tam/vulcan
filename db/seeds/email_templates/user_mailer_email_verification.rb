@@ -3,7 +3,7 @@
 # Seed File for "user_mailer_email_verifications.rb"
 # (Suggest saving as db/seeds/email_templates/user_mailer_email_verifications.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'user_mailer_email_verifications', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'user_mailer_email_verifications', format: :text, locale: 'en') do |template|
   template.subject = 'Please confirm your email address'
   template.description = 'Sent to a user to verify their email address by clicking a confirmation link.'
   template.body = <<~TEXT

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Seed File for "email_footer_text"
-EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text, locale: 'en') do |template|
   template.subject = 'Email Footer Text'
   template.description = 'Standard text footer used in all email templates'
   template.body = <<~TEXT

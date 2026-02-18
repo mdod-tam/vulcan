@@ -3,7 +3,7 @@
 # Seed File for "application_notifications_proof_rejected"
 # (Suggest saving as db/seeds/email_templates/application_notifications_proof_rejected.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_rejected', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_rejected', format: :text, locale: 'en') do |template|
   template.subject = 'Document Review Update'
   template.description = 'Sent when a specific piece of documentation submitted by the applicant has been rejected.'
   template.body = <<~TEXT

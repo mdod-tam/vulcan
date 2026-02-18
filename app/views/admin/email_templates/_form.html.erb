@@ -1,4 +1,26 @@
 <%= form_with(model: [:admin, email_template], class: "space-y-4") do |form| %>
+  <% if email_template.needs_sync? %>
+    <div class="rounded-md bg-amber-50 border border-amber-300 p-4" role="alert">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm text-amber-800">
+            <strong>Out of sync.</strong>
+            Another locale variant of this template was updated. Update the body or subject below to resolve this, or
+            <%= button_to "mark it as synced", mark_synced_admin_email_template_path(email_template), method: :patch,
+                  class: "font-medium underline hover:text-amber-600",
+                  data: { turbo_confirm: "Mark this template as synced without making changes?" } %>
+            if the existing translation is still correct.
+          </p>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
   <% if email_template.errors.any? %>
     <div id="error_explanation" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
       <strong class="font-bold">Holy smokes!</strong>

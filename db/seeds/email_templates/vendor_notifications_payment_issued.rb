@@ -3,7 +3,7 @@
 # Seed File for "vendor_notifications_invoice_payment_issued"
 # (Suggest saving as db/seeds/email_templates/vendor_notifications_invoice_payment_issued.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_payment_issued', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_payment_issued', format: :text, locale: 'en') do |template|
   template.subject = 'Payment Issued'
   template.description = 'Sent to a vendor when their invoice payment has been issued by the General Accounting Department (GAD).'
   template.body = <<~TEXT

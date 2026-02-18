@@ -15,7 +15,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     @user = application.user
 
     template_name = 'application_notifications_application_submitted'
-    text_template = find_email_template(template_name)
+    text_template = find_email_template(template_name, locale: @user.locale.presence || 'en')
 
     variables = build_application_submitted_variables(application)
 
@@ -42,7 +42,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     handle_proof_approved_letter(application, proof_review)
 
     template_name = 'application_notifications_proof_approved'
-    text_template = find_email_template(template_name)
+    text_template = find_email_template(template_name, locale: application.user.locale.presence || 'en')
 
     variables = build_proof_approved_variables(application, proof_review)
 
@@ -61,7 +61,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     handle_proof_rejected_letter(application, proof_review, remaining_attempts, reapply_date)
 
     template_name = 'application_notifications_proof_rejected'
-    text_template = find_email_template(template_name)
+    text_template = find_email_template(template_name, locale: application.user.locale.presence || 'en')
 
     variables = build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date)
 
@@ -80,7 +80,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     handle_max_rejections_letter(application, reapply_date)
 
     template_name = 'application_notifications_max_rejections_reached'
-    text_template = find_email_template(template_name)
+    text_template = find_email_template(template_name, locale: application.user.locale.presence || 'en')
 
     variables = build_max_rejections_variables(application, reapply_date)
 
@@ -118,7 +118,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     handle_account_created_letter(constituent, temp_password)
 
     template_name = 'application_notifications_account_created'
-    text_template = find_email_template(template_name)
+    locale = constituent.respond_to?(:locale) ? constituent.locale.presence || 'en' : 'en'
+    text_template = find_email_template(template_name, locale: locale)
 
     variables = build_account_created_variables(constituent, temp_password)
     recipient_email = extract_recipient_email(constituent)
@@ -134,7 +135,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     service_result = get_income_threshold_data(constituent_params, notification_params)
 
     template_name = 'application_notifications_income_threshold_exceeded'
-    text_template = find_email_template(template_name)
+    locale = service_result[:constituent][:locale].presence || 'en'
+    text_template = find_email_template(template_name, locale: locale)
 
     variables = build_income_threshold_variables(service_result)
 
@@ -151,7 +153,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     handle_proof_error_letter(constituent, application, message)
 
     template_name = 'application_notifications_proof_submission_error'
-    text_template = find_email_template(template_name)
+    locale = constituent.respond_to?(:locale) ? constituent.locale.presence || 'en' : 'en'
+    text_template = find_email_template(template_name, locale: locale)
 
     variables = build_proof_error_variables(recipient_info[:full_name], message)
 
@@ -169,7 +172,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     handle_registration_letter(user, active_vendors_text_list)
 
     template_name = 'application_notifications_registration_confirmation'
-    text_template = find_email_template(template_name)
+    text_template = find_email_template(template_name, locale: user.locale.presence || 'en')
 
     variables = build_registration_variables(user, active_vendors_text_list)
 
@@ -182,7 +185,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   def proof_received(application, proof_type)
     template_name = 'application_notifications_proof_received'
-    text_template = find_email_template(template_name)
+    text_template = find_email_template(template_name, locale: application.user.locale.presence || 'en')
 
     variables = build_proof_received_variables(application, proof_type)
 
@@ -211,12 +214,14 @@ class ApplicationNotificationsMailer < ApplicationMailer
     ).queue_for_printing
   end
 
-  # Common email template finder
-  def find_email_template(template_name)
-    EmailTemplate.find_by!(name: template_name, format: :text)
-  rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
-    raise "Email templates not found for #{template_name}"
+  # Common email template finder — fall back to English
+  def find_email_template(template_name, locale: 'en')
+    EmailTemplate.find_by!(name: template_name, format: :text, locale: locale)
+  rescue ActiveRecord::RecordNotFound
+    raise if locale == 'en'
+
+    Rails.logger.debug { "No #{locale} template for #{template_name}, falling back to English" }
+    find_email_template(template_name, locale: 'en')
   end
 
   # Common base variables builder
@@ -239,7 +244,6 @@ class ApplicationNotificationsMailer < ApplicationMailer
       header_subtitle: nil
     }
   end
-
 
   def safe_asset_path(asset_name)
     ActionController::Base.helpers.asset_path(asset_name, host: default_url_options[:host])

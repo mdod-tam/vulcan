@@ -4,7 +4,7 @@ module Admin
   class EmailTemplatesController < Admin::BaseController
     include Pagy::Backend # Include Pagy for pagination
 
-    before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled]
+    before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled mark_synced]
 
     # GET /admin/email_templates
     def index
@@ -125,9 +125,17 @@ module Admin
       end
     end
 
+    # PATCH /admin/email_templates/:id/mark_synced
+    def mark_synced
+      @email_template.update_column(:needs_sync, false) # rubocop:disable Rails/SkipsModelValidations
+      log_audit_event('email_template_marked_synced')
+      redirect_to admin_email_template_path(@email_template),
+                  notice: 'Template marked as synced.'
+    end
+
     # PATCH /admin/email_templates/bulk_disable
     def bulk_disable
-      count = EmailTemplate.update_all(enabled: false)
+      count = EmailTemplate.update_all(enabled: false) # rubocop:disable Rails/SkipsModelValidations
       AuditEventService.log(
         actor: current_user,
         action: 'email_templates_bulk_disabled',
@@ -140,7 +148,7 @@ module Admin
 
     # PATCH /admin/email_templates/bulk_enable
     def bulk_enable
-      count = EmailTemplate.update_all(enabled: true)
+      count = EmailTemplate.update_all(enabled: true) # rubocop:disable Rails/SkipsModelValidations
       AuditEventService.log(
         actor: current_user,
         action: 'email_templates_bulk_enabled',

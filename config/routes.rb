@@ -176,6 +176,7 @@ Rails.application.routes.draw do
         get :new_test_email
         post :send_test
         patch :toggle_disabled
+        patch :mark_synced
       end
       collection do
         patch :bulk_disable

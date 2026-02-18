@@ -3,7 +3,7 @@
 # Seed File for "vendor_notifications_w9_approved"
 # (Suggest saving as db/seeds/email_templates/vendor_notifications_w9_approved.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_approved', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_approved', format: :text, locale: 'en') do |template|
   template.subject = 'W9 Form Approved'
   template.description = 'Sent to a vendor when their submitted W9 form has been reviewed and approved, activating their account.'
   template.body = <<~TEXT

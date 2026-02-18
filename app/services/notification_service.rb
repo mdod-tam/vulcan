@@ -146,18 +146,21 @@ class NotificationService
   end
 
   MAILER_MAP = {
-    'proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'proof_approved' => [ApplicationNotificationsMailer, :proof_approved],
-    'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'account_created' => [ApplicationNotificationsMailer, :account_created],
-    'income_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-    'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-    'w9_approved' => [VendorNotificationsMailer, :w9_approved],
-    'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
-    'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
-    'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
-    'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created]
+    'proof_rejected'                    => [ApplicationNotificationsMailer,           :proof_rejected],
+    'proof_approved'                    => [ApplicationNotificationsMailer,           :proof_approved],
+    'income_proof_rejected'             => [ApplicationNotificationsMailer,           :proof_rejected],
+    'residency_proof_rejected'          => [ApplicationNotificationsMailer,           :proof_rejected],
+    'account_created'                   => [ApplicationNotificationsMailer,           :account_created],
+    'income_proof_attached'             => [ApplicationNotificationsMailer,           :proof_received],
+    'residency_proof_attached'          => [ApplicationNotificationsMailer,           :proof_received],
+    'w9_approved'                       => [VendorNotificationsMailer,                :w9_approved],
+    'w9_rejected'                       => [VendorNotificationsMailer,                :w9_rejected],
+    'training_requested'                => [TrainingSessionNotificationsMailer,       :trainer_assigned],
+    'trainer_assigned'                  => [TrainingSessionNotificationsMailer,       :trainer_assigned],
+    'security_key_recovery_approved'    => [ApplicationNotificationsMailer,           :account_created],
+    'medical_certification_rejected'    => [MedicalProviderMailer,                    :rejected],
+    'medical_certification_approved'    => [MedicalProviderMailer,                    :approved]
+    # medical_certification_requested: sent directly via MedicalProviderMailer.request_certification
   }.freeze
 
   # ---- Creation + validation -------------------------------------------------
@@ -385,7 +388,7 @@ class NotificationService
       Rails.logger.warn 'NotificationService: Adding fallback temp_password for test environment'
       # Update the notification's metadata directly
       updated_metadata = (notification.metadata || {}).merge('temp_password' => 'test_password_123')
-      notification.update_column(:metadata, updated_metadata)
+      notification.update_column(:metadata, updated_metadata) # rubocop:disable Rails/SkipsModelValidations
       return true
     end
     false
@@ -430,8 +433,6 @@ class NotificationService
   def resolve_mailer(notification)
     if (entry = MAILER_MAP[notification.action])
       [entry.first, entry.last]
-    elsif notification.action.start_with?('medical_certification_')
-      [MedicalProviderMailer, notification.action.delete_prefix('medical_certification_').to_sym]
     else
       Rails.logger.warn "NotificationService: No mailer configured for action: #{notification.action} for Notification ##{notification.id}."
       [nil, nil]

@@ -2,7 +2,7 @@
 
 # Seed File for "voucher_notifications_voucher_redeemed"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_redeemed', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_redeemed', format: :text, locale: 'en') do |template|
   template.subject = 'Voucher Successfully Redeemed at Your Business'
   template.description = 'Sent to the vendor when a constituent redeems a voucher at their business.'
   template.body = <<~TEXT

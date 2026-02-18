@@ -2,7 +2,7 @@
 
 # Seed File for "application_notifications_proof_received"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_received', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_received', format: :text, locale: 'en') do |template|
   template.subject = 'Document Received'
   template.description = 'Sent when a piece of documentation submitted by the applicant has been received and is awaiting review.'
   template.body = <<~TEXT

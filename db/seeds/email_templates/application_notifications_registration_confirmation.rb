@@ -2,7 +2,7 @@
 
 # Seed File for "application_notifications_registration_confirmation"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_confirmation', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en') do |template|
   template.subject = 'Welcome to the Maryland Accessible Telecommunications Program'
   template.description = 'Sent to a user immediately after they register an account, outlining the program and next steps.'
   template.body = <<~TEXT

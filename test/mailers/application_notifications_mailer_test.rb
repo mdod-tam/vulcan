@@ -65,13 +65,13 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   def setup_email_template_stubs
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text).returns(@mock_approved_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_rejected', format: :text).returns(@mock_rejected_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_max_rejections_reached', format: :text).returns(@mock_max_reached_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_needs_review_reminder', format: :text).returns(@mock_reminder_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text).returns(@mock_account_created_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded', format: :text).returns(@mock_income_exceeded_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text).returns(@mock_registration_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text, locale: 'en').returns(@mock_approved_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_rejected', format: :text, locale: 'en').returns(@mock_rejected_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_max_rejections_reached', format: :text, locale: 'en').returns(@mock_max_reached_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_needs_review_reminder', format: :text, locale: 'en').returns(@mock_reminder_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text, locale: 'en').returns(@mock_account_created_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(@mock_income_exceeded_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(@mock_registration_text)
   end
 
   def create_test_data
@@ -473,13 +473,13 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     # Create new mocks for the test to ensure they're fresh
     mock_income_exceeded_text = mock_template("Mock Income Threshold Exceeded for #{@constituent_params[:first_name]}",
-                                                      "Text Body: #{@constituent_params[:first_name]}, your income exceeds the " \
-                                                      "threshold for household size #{@notification_params[:household_size]}. " \
-                                                      "#{@notification_params[:additional_notes]}")
+                                              "Text Body: #{@constituent_params[:first_name]}, your income exceeds the " \
+                                              "threshold for household size #{@notification_params[:household_size]}. " \
+                                              "#{@notification_params[:additional_notes]}")
 
     # Re-stub the EmailTemplate.find_by! to return our new mock
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded',
-                                        format: :text).returns(mock_income_exceeded_text)
+                                        format: :text, locale: 'en').returns(mock_income_exceeded_text)
 
     # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
@@ -528,7 +528,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     # Re-stub the EmailTemplate.find_by! to return our new mock
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_submission_error',
-                                        format: :text).returns(mock_error_text)
+                                        format: :text, locale: 'en').returns(mock_error_text)
 
     # Create a mock for the TextTemplateToPdfService instance
     pdf_service_mock = mock('pdf_service')
@@ -576,7 +576,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     Vendor.none.stubs(:order).returns(active_vendors)
 
     # Override the email template mock specifically for this test
-    custom_mock = mock_template(
+    mock_template(
       'Mock Welcome Jane!',
       'Text Body: Welcome, Jane! Dashboard: http://example.com/dashboard. ' \
       'New App: http://example.com/applications/new. No authorized vendors found at this time.'

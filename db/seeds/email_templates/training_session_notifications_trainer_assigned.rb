@@ -2,7 +2,7 @@
 
 # Seed File for "training_session_notifications_trainer_assigned"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_assigned', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en') do |template|
   template.subject = 'Trainer Assigned'
   template.description = 'Sent to the user when a trainer has been assigned to them.'
   template.body = <<~TEXT
