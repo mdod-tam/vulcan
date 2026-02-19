@@ -409,12 +409,11 @@ class ProofAttachmentService
       raw_reason = rejection_details.fetch(:reason, 'other')
       notes      = rejection_details.fetch(:notes, nil)
 
-      # When the caller supplies a known RejectionReason code (e.g. from a
-      # select dropdown), persist the code and look up the human-readable body.
-      # Fall back to the raw value for free-text / "other" reasons.
-      rr = RejectionReason.resolve(code: raw_reason, proof_type: proof_type.to_s)
-      reason_code = rr ? raw_reason : nil
-      reason_text = rr&.body || raw_reason
+      resolved = RejectionReason.resolve_for_persistence(
+        code: raw_reason, proof_type: proof_type.to_s, fallback: raw_reason
+      )
+      reason_text = resolved[:text]
+      reason_code = resolved[:code]
 
       with_paper_context(submission_method, proof_type) do
         application.reject_proof_without_attachment!(

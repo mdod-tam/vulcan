@@ -394,6 +394,9 @@ end
               id: "medical-rejection-proof-type",
               value: "medical",
               data: { rejection_form_target: "proofType" } %>
+          <%= f.hidden_field :rejection_reason_code,
+              id: "medical-rejection-reason-code",
+              data: { rejection_form_target: "reasonCode" } %>
           <div>
             <%= f.label :rejection_reason, "Reason for Rejection", class: "block text-sm font-medium text-gray-700" %>
             <%= f.text_area :rejection_reason,

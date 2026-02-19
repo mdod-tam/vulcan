@@ -38,6 +38,25 @@ class RejectionReason < ApplicationRecord
       find_by(code: code, proof_type: proof_type, locale: 'en')
   end
 
+  # Returns { text:, code: } for persisting to ProofReview
+  def self.resolve_for_persistence(code:, proof_type:, fallback:, locale: 'en')
+    return { text: fallback.to_s.presence, code: nil } if code.blank?
+
+    rr = resolve(code: code, proof_type: proof_type, locale: locale)
+    {
+      text: rr&.body || fallback,
+      code: rr ? code : nil
+    }
+  end
+
+  # Returns the human-readable body for the given code and proof type,
+  # or the fallback when code is blank or no record exists.
+  def self.resolve_text(code:, proof_type:, fallback:, locale: 'en')
+    resolve_for_persistence(
+      code: code, proof_type: proof_type, fallback: fallback, locale: locale
+    )[:text]
+  end
+
   private
 
   def store_previous_body

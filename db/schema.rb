@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_18_000002) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_19_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -135,6 +135,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_18_000002) do
     t.integer "document_signing_request_count", default: 0, null: false
     t.text "document_signing_audit_url"
     t.text "document_signing_document_url"
+    t.string "medical_certification_rejection_reason_code"
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
@@ -142,6 +143,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_18_000002) do
     t.index ["income_verified_by_id"], name: "index_applications_on_income_verified_by_id"
     t.index ["last_proof_submitted_at"], name: "index_applications_on_last_proof_submitted_at"
     t.index ["managing_guardian_id"], name: "index_applications_on_managing_guardian_id"
+    t.index ["medical_certification_rejection_reason_code"], name: "idx_on_medical_certification_rejection_reason_code_df759e6de4"
     t.index ["medical_certification_status"], name: "index_applications_on_medical_certification_status"
     t.index ["medical_certification_verified_by_id"], name: "index_applications_on_medical_certification_verified_by_id"
     t.index ["medical_provider_email", "status"], name: "index_applications_on_medical_provider_email_and_status"

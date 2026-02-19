@@ -33,14 +33,22 @@ module Applications
     def create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
       Rails.logger.info 'Finding or initializing proof review record'
 
-      find_attributes = build_find_attributes(rejection_reason, rejection_reason_code)
-      @proof_review = @application.proof_reviews.find_or_initialize_by(find_attributes)
+      rejection_reason_text = RejectionReason.resolve_text(
+        code: rejection_reason_code,
+        proof_type: @proof_type_key,
+        fallback: rejection_reason
+      )
+      find_attributes      = build_find_attributes(rejection_reason, rejection_reason_code)
+      @proof_review        = @application.proof_reviews.find_or_initialize_by(find_attributes)
 
-      @proof_review.assign_attributes(
+      assign = {
         admin: @admin,
         notes: notes,
         rejection_reason_code: rejection_reason_code
-      )
+      }
+      assign[:rejection_reason] = rejection_reason_text if @status_key == 'rejected'
+
+      @proof_review.assign_attributes(assign)
       set_reviewed_at_if_needed
       @proof_review.save!
 
@@ -94,7 +102,7 @@ module Applications
       # This design pattern is important for handling attachment purges when rejecting proofs.
       column_name = "#{@proof_type_key}_proof_status"
       status_enum_value = Application.send(column_name.pluralize.to_s).fetch(@status_key.to_sym)
-      @application.update_column(column_name, status_enum_value)
+      @application.update_column(column_name, status_enum_value) # rubocop:disable Rails/SkipsModelValidations
     end
 
     # Explicitly call purge logic on the application if the status was just set to rejected
@@ -116,7 +124,7 @@ module Applications
          @application.medical_certification_status_approved?
 
         # Auto-approve using update_column to avoid triggering other validations
-        @application.update_column(:status, Application.statuses[:approved])
+        @application.update_column(:status, Application.statuses[:approved]) # rubocop:disable Rails/SkipsModelValidations
 
         # Create an event for this automated approval
         AuditEventService.log(

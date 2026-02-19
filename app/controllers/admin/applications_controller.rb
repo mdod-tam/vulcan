@@ -288,12 +288,22 @@ module Admin
       end
     end
 
-    # Processes a certification rejection using the reviewer service
+    # Processes a certification rejection using the reviewer service.
+    # Accepts both modal params (rejection_reason, notes, rejection_reason_code) and
+    # upload form params (medical_certification_rejection_reason, medical_certification_rejection_notes).
     def process_certification_rejection
+      rejection_reason = params[:medical_certification_rejection_reason].presence ||
+                         params[:rejection_reason]
+      notes = params[:medical_certification_rejection_notes].presence ||
+              params[:notes]
+      rejection_reason_code = params[:medical_certification_rejection_reason_code].presence ||
+                             params[:rejection_reason_code]
+
       reviewer = Applications::MedicalCertificationReviewer.new(@application, current_user)
       result = reviewer.reject(
-        rejection_reason: params[:medical_certification_rejection_reason],
-        notes: params[:medical_certification_rejection_notes]
+        rejection_reason: rejection_reason,
+        notes: notes,
+        rejection_reason_code: rejection_reason_code
       )
 
       if result.success?
