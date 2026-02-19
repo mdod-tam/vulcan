@@ -2,7 +2,7 @@
 
 # Seed File for "training_session_notifications_training_cancelled"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_cancelled', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_cancelled', format: :text, locale: 'en') do |template|
   template.subject = 'Training Session Cancelled'
   template.description = 'Sent to the user when their scheduled training session has been cancelled.'
   template.body = <<~TEXT

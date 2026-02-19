@@ -2,7 +2,7 @@
 
 # Seed File for "application_notifications_account_created"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_account_created', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_account_created', format: :text, locale: 'en') do |template|
   template.subject = 'Your Maryland Accessible Telecommunications Account'
   template.description = 'Sent when an application is received and a constituent account is created, providing initial login details.'
   template.body = <<~TEXT

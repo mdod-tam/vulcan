@@ -69,12 +69,13 @@ class MedicalCertificationAttachmentService
 
   # Reject a medical certification without requiring a file attachment
   def self.reject_certification(application:, admin:, reason:, notes: nil,
-                                submission_method: :admin_review, metadata: {})
+                                reason_code: nil, submission_method: :admin_review, metadata: {})
     rejection_params = {
       application: application,
       admin: admin,
       reason: reason,
       notes: notes,
+      reason_code: reason_code,
       submission_method: submission_method,
       metadata: metadata
     }
@@ -264,12 +265,15 @@ class MedicalCertificationAttachmentService
     old_status = params[:application].medical_certification_status || 'requested'
     params[:old_status] = old_status
 
-    params[:application].update!(
+    update_attrs = {
       medical_certification_status: 'rejected',
       medical_certification_verified_at: Time.current,
       medical_certification_verified_by_id: params[:admin].id,
       medical_certification_rejection_reason: params[:reason]
-    )
+    }
+    update_attrs[:medical_certification_rejection_reason_code] = params[:reason_code] if params[:reason_code].present?
+
+    params[:application].update!(update_attrs)
   end
 
   def self.create_rejection_audit_trail(params)

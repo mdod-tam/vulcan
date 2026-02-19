@@ -3,7 +3,8 @@ import { setVisible } from "../../utils/visibility"
 
 export default class extends Controller {
   static targets = [
-    "proofType",         // Hidden input for proof type 
+    "proofType",         // Hidden input for proof type
+    "reasonCode",        // Hidden input for rejection_reason_code (snake_case DB key)
     "reasonField",       // Text area for rejection reason
     "incomeOnlyReasons", // Income-specific rejection reasons container
     "medicalOnlyReasons", // Medical-specific rejection reasons container
@@ -38,6 +39,11 @@ export default class extends Controller {
     if (this.hasReasonFieldTarget) {
       this.reasonFieldTarget.value = ""
       this.reasonFieldTarget.classList.remove('border-red-500')
+      // Clear the code whenever the admin manually edits the textarea (free text = no code)
+      this.reasonFieldTarget.addEventListener('input', () => this._clearReasonCode())
+    }
+    if (this.hasReasonCodeTarget) {
+      this.reasonCodeTarget.value = ""
     }
     
     // Initialize visibility based on initial proof type only if it has a value
@@ -162,10 +168,14 @@ export default class extends Controller {
     }
 
     const reasonText = this._lookupReason(reasonType, proofType)
-    
+    const reasonCode = event.currentTarget.dataset.reasonCode || null
+
     if (reasonText) {
       this.reasonFieldTarget.value = reasonText
       this.reasonFieldTarget.classList.remove('border-red-500')
+      if (this.hasReasonCodeTarget) {
+        this.reasonCodeTarget.value = reasonCode || ""
+      }
     } else {
       if (process.env.NODE_ENV !== 'production') {
         console.warn(`No predefined reason found for type: ${reasonType}, proof type: ${proofType}`)
@@ -226,7 +236,7 @@ export default class extends Controller {
     }
 
     reasonField.classList.remove('border-red-500')
-    
+
     // Notify any parent modal controllers that a form is being submitted
     // This helps ensure proper scroll restoration after the form submission
     document.dispatchEvent(new CustomEvent('turbo-form-submit', {
@@ -238,6 +248,14 @@ export default class extends Controller {
     
     if (process.env.NODE_ENV !== 'production') {
       console.log("Form submission validated, proceeding with submit");
+    }
+  }
+
+  // Clears the reason code when the admin edits the textarea directly.
+  // A manual edit means the text is no longer tied to a predefined code.
+  _clearReasonCode() {
+    if (this.hasReasonCodeTarget) {
+      this.reasonCodeTarget.value = ""
     }
   }
 }

@@ -3,7 +3,7 @@
 # Seed File for "training_session_notifications_training_no_show"
 # (Suggest saving as db/seeds/email_templates/training_session_notifications_training_no_show.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_no_show', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_no_show', format: :text, locale: 'en') do |template|
   template.subject = 'Training Session No Show'
   template.description = 'Sent to the user when they have not shown up for their scheduled training session.'
   template.body = <<~TEXT

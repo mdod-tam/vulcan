@@ -3,7 +3,7 @@
 # Seed File for "vendor_notifications_w9_rejected"
 # (Suggest saving as db/seeds/email_templates/vendor_notifications_w9_rejected.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_rejected', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'en') do |template|
   template.subject = 'W9 Form Requires Correction'
   template.description = 'Sent to a vendor when their submitted W9 form has been rejected and requires corrections.'
   template.body = <<~TEXT

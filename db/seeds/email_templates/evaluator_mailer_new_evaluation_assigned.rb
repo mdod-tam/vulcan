@@ -2,7 +2,7 @@
 
 # Seed File for "evaluator_mailer_new_evaluation_assigned"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_new_evaluation_assigned', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_new_evaluation_assigned', format: :text, locale: 'en') do |template|
   template.subject = 'New Evaluation Assigned'
   template.description = 'Sent to an evaluator when a new constituent evaluation has been assigned to them.'
   template.body = <<~TEXT

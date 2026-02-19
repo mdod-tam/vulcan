@@ -2,7 +2,7 @@
 
 # Seed File for "admin_application_notifications_proof_needs_review_remimder.rb"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'admin_notifications_stale_reviews_summary', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'admin_notifications_stale_reviews_summary', format: :text, locale: 'en') do |template|
   template.subject = 'Applications Awaiting Review'
   template.description = 'Sent to administrators summarizing applications that have been awaiting review for too long (e.g., > 3 days).'
   template.body = <<~TEXT

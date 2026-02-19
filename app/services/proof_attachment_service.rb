@@ -406,24 +406,29 @@ class ProofAttachmentService
     end
 
     def perform_rejection(application:, proof_type:, admin:, submission_method:, rejection_details:)
-      reason = rejection_details.fetch(:reason, 'other')
-      notes = rejection_details.fetch(:notes, nil)
+      raw_reason = rejection_details.fetch(:reason, 'other')
+      notes      = rejection_details.fetch(:notes, nil)
+
+      resolved = RejectionReason.resolve_for_persistence(
+        code: raw_reason, proof_type: proof_type.to_s, fallback: raw_reason
+      )
+      reason_text = resolved[:text]
+      reason_code = resolved[:code]
 
       with_paper_context(submission_method, proof_type) do
-        # Update the proof status
         application.reject_proof_without_attachment!(
           proof_type,
           admin: admin,
-          reason: reason,
+          reason: reason_text,
           notes: notes || 'Rejected during paper application submission'
         )
 
-        # Create the proof review record
         application.proof_reviews.create!(
           admin: admin,
           proof_type: proof_type,
           status: 'rejected',
-          rejection_reason: reason,
+          rejection_reason: reason_text,
+          rejection_reason_code: reason_code,
           notes: notes,
           reviewed_at: Time.current,
           submission_method: submission_method

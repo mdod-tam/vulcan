@@ -478,6 +478,10 @@ else
       seed_puts '📧 Seeding email templates...'
       seed_email_templates
 
+      seed_puts '🚫 Seeding rejection reasons...'
+      load Rails.root.join('db/seeds/rejection_reasons.rb')
+      seed_rejection_reasons
+
       seed_puts '📁 Ensuring storage directory exists...'
       ensure_storage_directory
 
@@ -501,6 +505,7 @@ else
     seed_puts "   Products: #{Product.count}"
     seed_puts "   Policies: #{Policy.count}"
     seed_puts "   Email Templates: #{EmailTemplate.count}"
+    seed_puts "   Rejection Reasons: #{RejectionReason.count}"
     seed_puts "   Invoices: #{Invoice.count}"
     seed_puts "✅ SEEDING COMPLETED SUCCESSFULLY at #{Time.current}!"
     Rails.logger.debug 'Seeding completed successfully!' unless Rails.env.production?

@@ -3,7 +3,7 @@
 # Seed File for "application_notifications_archived_max_revisions"
 # (Suggest saving as db/seeds/email_templates/application_notifications_archived_max_revisions.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_archived_max_revisions', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_archived_max_revisions', format: :text, locale: 'en') do |template|
   template.subject = 'Important Application Status Update'
   template.description = 'Sent when an application is archived because the maximum number of document revision attempts has been reached.'
   template.body = <<~TEXT

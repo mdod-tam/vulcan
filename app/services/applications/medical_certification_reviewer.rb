@@ -16,8 +16,9 @@ module Applications
     # Updates application status and notifies provider
     # @param rejection_reason [String] The reason for rejection
     # @param notes [String, nil] Optional additional notes for internal use
+    # @param rejection_reason_code [String, nil] Stable code for locale-aware resolution (e.g. missing_signature)
     # @return [BaseService::Result] Result object with success status and any error messages
-    def reject(rejection_reason:, notes: nil)
+    def reject(rejection_reason:, notes: nil, rejection_reason_code: nil)
       Rails.logger.info "Rejecting medical certification for Application ##{application.id}"
 
       # Validate all inputs and prerequisites
@@ -25,7 +26,7 @@ module Applications
       return validation_result if validation_result.failure?
 
       # Process the rejection through the dedicated service
-      service_result = process_rejection(rejection_reason, notes)
+      service_result = process_rejection(rejection_reason, notes, rejection_reason_code)
       return service_result if service_result.failure?
 
       # Create additional note if provided
@@ -55,12 +56,13 @@ module Applications
       application.medical_provider_email.blank? && application.medical_provider_fax.blank?
     end
 
-    def process_rejection(rejection_reason, notes)
+    def process_rejection(rejection_reason, notes, rejection_reason_code)
       service_result = MedicalCertificationAttachmentService.reject_certification(
         application: application,
         admin: admin,
         reason: rejection_reason,
-        notes: notes
+        notes: notes,
+        reason_code: rejection_reason_code
       )
 
       return failure(service_result[:error]&.message || 'Disability certification service failed') unless service_result[:success]

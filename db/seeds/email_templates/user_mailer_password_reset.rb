@@ -3,7 +3,7 @@
 # Seed File for "user_mailer_password_reset"
 # (Suggest saving as db/seeds/email_templates/user_mailer_password_reset.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'user_mailer_password_reset', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'user_mailer_password_reset', format: :text, locale: 'en') do |template|
   template.subject = 'Password Reset Instructions'
   template.description = 'Sent when a user requests to reset their password. Contains a link to set a new password.'
   template.body = <<~TEXT

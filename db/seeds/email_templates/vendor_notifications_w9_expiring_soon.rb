@@ -3,7 +3,7 @@
 # Seed File for "vendor_notifications_w9_expiring_soon"
 # (Suggest saving as db/seeds/email_templates/vendor_notifications_w9_expiring_soon.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', format: :text, locale: 'en') do |template|
   template.subject = 'Action Required: Your W9 Form is Expiring Soon'
   template.description = 'Sent to a vendor as a warning that their W9 form on file is nearing its expiration date.'
   template.body = <<~TEXT

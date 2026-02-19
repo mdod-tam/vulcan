@@ -3,7 +3,7 @@
 # Seed File for "training_session_notifications_training_completed"
 # (Suggest saving as db/seeds/email_templates/training_session_notifications_training_completed.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_completed', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_completed', format: :text, locale: 'en') do |template|
   template.subject = 'Training Session Completed'
   template.description = 'Sent to the user after their training session has been successfully completed and marked as such by the trainer.'
   template.body = <<~TEXT

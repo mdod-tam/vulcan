@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Seed File for "medical_provider_certification_submission_error"
-EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_submission_error', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_submission_error', format: :text, locale: 'en') do |template|
   template.subject = 'Medical Certification Submission Error'
   template.description = 'Sent to a medical provider when an error occurs during the automated processing of their submitted certification form.'
   template.body = <<~TEXT
