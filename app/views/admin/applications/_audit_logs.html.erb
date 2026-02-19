@@ -51,7 +51,7 @@
                       "Admin Review"
                     when log.is_a?(ApplicationStatusChange)
                       "Status Change"
-                    when log.is_a?(Notification) || log.class.name == "NotificationDecorator"
+                    when log.is_a?(Notification)
                       case log.action
                       when "proof_approved", "proof_rejected"
                         "Notification Sent"
@@ -86,7 +86,7 @@
                       log.admin.full_name
                     when log.is_a?(ApplicationStatusChange)
                       log.user&.full_name || "System"
-                    when log.is_a?(Notification) || log.class.name == "NotificationDecorator"
+                    when log.is_a?(Notification)
                       log.actor&.full_name || "System"
                     when log.is_a?(Event)
                       log.user&.full_name || "System"
@@ -151,7 +151,7 @@
                       end
                       "#{status_text}#{log.notes.present? ? " - #{log.notes}" : ""}"
                     end
-                  when log.is_a?(Notification) || log.class.name == "NotificationDecorator"
+                  when log.is_a?(Notification)
                     case log.action
                     when "medical_certification_requested"
                       "Disability certification requested from #{@application.medical_provider_name}"

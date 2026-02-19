@@ -106,7 +106,7 @@
         <ul class="divide-y divide-gray-200">
           <% @recent_notifications.each do |notification| %>
             <!-- Use render instead of inline partial to avoid implicit loading of notifiable association -->
-            <%= render "notifications/notification", notification: NotificationDecorator.new(notification) %>
+            <%= render "notifications/notification", notification: notification %>
           <% end %>
         </ul>
       <% else %>
