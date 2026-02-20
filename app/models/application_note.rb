@@ -64,16 +64,18 @@ class ApplicationNote < ApplicationRecord
     with_lock do
       update!(completed_at: Time.current)
 
-      AuditEventService.log(
-        action: 'note_completed',
-        actor: Current.user,
-        auditable: application,
-        metadata: {
-          note_id: id,
-          completed_by_id: Current.user.id,
-          completed_by_name: Current.user.full_name
-        }
-      )
+      if Current.user.present?
+        AuditEventService.log(
+          action: 'note_completed',
+          actor: Current.user,
+          auditable: application,
+          metadata: {
+            note_id: id,
+            completed_by_id: Current.user.id,
+            completed_by_name: Current.user.full_name
+          }
+        )
+      end
     end
     true
   rescue StandardError => e
@@ -85,14 +87,16 @@ class ApplicationNote < ApplicationRecord
     with_lock do
       update!(completed_at: nil)
 
-      AuditEventService.log(
-        action: 'note_reopened',
-        actor: Current.user,
-        auditable: application,
-        metadata: {
-          note_id: id
-        }
-      )
+      if Current.user.present?
+        AuditEventService.log(
+          action: 'note_reopened',
+          actor: Current.user,
+          auditable: application,
+          metadata: {
+            note_id: id
+          }
+        )
+      end
     end
     true
   rescue StandardError => e

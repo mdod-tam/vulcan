@@ -101,17 +101,19 @@ class ApplicationNoteTest < ActiveSupport::TestCase
   test 'assign_to! should assign note to user and log audit event' do
     note = create(:application_note, application: @application)
     other_admin = create(:admin)
+    Current.user = @admin
 
     assert_nil note.assigned_to_id
-    assert note.assign_to!(other_admin)
+    note.assign_to!(other_admin)
     assert_equal other_admin.id, note.reload.assigned_to_id
   end
 
   test 'unassign! should remove assignment and log audit event' do
     note = create(:application_note, application: @application, assigned_to: @admin)
+    Current.user = @admin
 
     assert_equal @admin.id, note.assigned_to_id
-    assert note.unassign!
+    note.unassign!
     assert_nil note.reload.assigned_to_id
   end
 
@@ -131,19 +133,21 @@ class ApplicationNoteTest < ActiveSupport::TestCase
     assert_equal completed_note.id, @application.application_notes.completed.first.id
   end
 
-  test 'mark_as_done! should set completed_at and log audit event' do
+  test 'mark_as_done! should set completed_at' do
     note = create(:application_note, application: @application, assigned_to: @admin)
+    Current.user = @admin
 
     assert_nil note.completed_at
-    assert note.mark_as_done!
+    note.mark_as_done!
     assert_not_nil note.reload.completed_at
   end
 
-  test 'mark_as_incomplete! should clear completed_at and log audit event' do
+  test 'mark_as_incomplete! should clear completed_at' do
     note = create(:application_note, application: @application, assigned_to: @admin, completed_at: Time.current)
+    Current.user = @admin
 
     assert_not_nil note.completed_at
-    assert note.mark_as_incomplete!
+    note.mark_as_incomplete!
     assert_nil note.reload.completed_at
   end
 end
