@@ -82,5 +82,22 @@ module Admin
       note = ApplicationNote.last
       assert_equal @admin.id, note.admin_id, 'Note should be created with the authenticated admin user'
     end
+
+    test 'should create note with assignment' do
+      other_admin = create(:admin)
+      assert_difference('ApplicationNote.count') do
+        post admin_application_notes_path(@application), params: {
+          application_note: {
+            content: 'This is an assigned note',
+            internal_only: true,
+            assigned_to_id: other_admin.id
+          }
+        }
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      note = ApplicationNote.last
+      assert_equal other_admin.id, note.assigned_to_id
+    end
   end
 end

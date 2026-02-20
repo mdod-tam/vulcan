@@ -16,6 +16,14 @@ module Admin
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
+
+      # Load incomplete notes assigned to current user
+      @assigned_notes = ApplicationNote
+                        .where(assigned_to: current_user)
+                        .incomplete
+                        .includes(:application, :admin)
+                        .recent_first
+                        .limit(10)
     end
   end
 end

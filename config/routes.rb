@@ -164,7 +164,7 @@ Rails.application.routes.draw do
         post :queue_medical_certification_form
       end
 
-      resources :notes, only: [:create], controller: 'application_notes'
+      resources :notes, only: %i[create update], controller: 'application_notes'
       resources :scanned_proofs, only: %i[new create] # Added missing routes
     end
 

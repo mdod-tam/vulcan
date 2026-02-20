@@ -63,8 +63,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.boolean "internal_only", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "assigned_to_id"
+    t.datetime "completed_at"
     t.index ["admin_id"], name: "index_application_notes_on_admin_id"
     t.index ["application_id"], name: "index_application_notes_on_application_id"
+    t.index ["assigned_to_id"], name: "index_application_notes_on_assigned_to_id"
+    t.index ["completed_at"], name: "index_application_notes_on_completed_at"
   end
 
   create_table "application_status_changes", force: :cascade do |t|
@@ -279,21 +283,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
 
   create_table "notifications", force: :cascade do |t|
     t.bigint "recipient_id", null: false
-    t.bigint "actor_id"
+    t.bigint "actor_id", null: false
     t.string "action"
     t.datetime "read_at"
     t.jsonb "metadata"
     t.string "notifiable_type", null: false
-    t.bigint "notifiable_id"
+    t.bigint "notifiable_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "message_id"
     t.string "delivery_status"
     t.datetime "delivered_at"
     t.datetime "opened_at"
+    t.boolean "created_by_service", default: false, null: false
     t.boolean "audited", default: false, null: false
     t.index ["actor_id"], name: "index_notifications_on_actor_id"
     t.index ["audited"], name: "index_notifications_on_audited"
+    t.index ["created_by_service"], name: "index_notifications_on_created_by_service"
     t.index ["message_id"], name: "index_notifications_on_message_id"
     t.index ["notifiable_type", "notifiable_id"], name: "index_notifications_on_notifiable"
     t.index ["recipient_id"], name: "index_notifications_on_recipient_id"
@@ -752,6 +758,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "application_notes", "applications"
   add_foreign_key "application_notes", "users", column: "admin_id"
+  add_foreign_key "application_notes", "users", column: "assigned_to_id"
   add_foreign_key "application_status_changes", "applications"
   add_foreign_key "application_status_changes", "users"
   add_foreign_key "applications", "users"
