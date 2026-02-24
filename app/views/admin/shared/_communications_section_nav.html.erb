@@ -1,0 +1,20 @@
+<%# Section nav: switch between Email Templates and Rejection Reasons. Styled to match admin secondary/primary link pattern (dashboard Common Tasks, Reports, Users "Back to Dashboard"). %>
+<% current_section = local_assigns.fetch(:current, :email_templates) %>
+<% secondary_link = "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+<% primary_link   = "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+<nav aria-label="Emails and rejection reasons" class="mb-6">
+  <ul class="flex flex-wrap gap-2">
+    <li>
+      <%= link_to admin_email_templates_path,
+          class: current_section == :email_templates ? primary_link : secondary_link do %>
+        Email Templates
+      <% end %>
+    </li>
+    <li>
+      <%= link_to admin_rejection_reasons_path,
+          class: current_section == :rejection_reasons ? primary_link : secondary_link do %>
+        Rejection Reasons
+      <% end %>
+    </li>
+  </ul>
+</nav>

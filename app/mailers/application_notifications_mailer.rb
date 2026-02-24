@@ -93,7 +93,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     Rails.logger.info "Preparing max_rejections_reached email for Application ID: #{application.id}"
     Rails.logger.info "Delivery method: #{ActionMailer::Base.delivery_method}"
 
-    with_mailer_error_handling("max_rejections_reached application=#{application&.id}") do
+    with_mailer_error_handling("max_rejections_reached application=#{application&.id}",
+                               raise_in_test_only: true) do
       reapply_date  = 3.years.from_now.to_date
       text_template = find_email_template('application_notifications_max_rejections_reached',
                                           locale: application.user.locale.presence || 'en')
@@ -111,7 +112,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def proof_needs_review_reminder(admin, applications)
-    with_mailer_error_handling("proof_needs_review_reminder admin=#{admin&.id}") do
+    with_mailer_error_handling("proof_needs_review_reminder admin=#{admin&.id}",
+                               raise_in_test_only: true) do
       stale_reviews = filter_stale_reviews(applications)
 
       return handle_no_stale_reviews if stale_reviews.empty? && !Rails.env.test?
@@ -203,11 +205,13 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   private
 
-  def with_mailer_error_handling(context)
+  def with_mailer_error_handling(context, raise_in_test_only: false)
     yield
   rescue StandardError => e
     Rails.logger.error("Mailer error (#{context}): #{e.message}\n#{e.backtrace.join("\n")}")
-    raise
+    raise if !raise_in_test_only || Rails.env.test?
+
+    nil
   end
 
   def handle_letter_preference(user, template_key, variables)

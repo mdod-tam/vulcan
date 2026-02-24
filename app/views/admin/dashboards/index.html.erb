@@ -113,7 +113,7 @@
           </div>
         </div>
 
-        <!-- Line 3: Edit Policies, Manage Products, Manage Emails -->
+        <!-- Line 3: Edit Policies, Manage Products, Emails & Rejection Reasons -->
         <div>
           <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Configuration</h3>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -148,14 +148,14 @@
 
             <%= link_to admin_email_templates_path,
                 class: "group relative overflow-hidden rounded-lg border border-gray-300 bg-white px-6 py-4 text-gray-900 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
-                aria: { label: "Manage email templates" } do %>
+                aria: { label: "Manage email templates and rejection reasons" } do %>
               <div class="flex items-center gap-3">
                 <svg class="h-6 w-6 flex-shrink-0 text-indigo-600 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
                 <div class="text-left">
-                  <div class="font-semibold text-sm">Manage Emails</div>
-                  <div class="text-xs text-gray-600">Email templates</div>
+                  <div class="font-semibold text-sm">Emails & Rejection Reasons</div>
+                  <div class="text-xs text-gray-600">Email templates and proof rejection text</div>
                 </div>
               </div>
             <% end %>

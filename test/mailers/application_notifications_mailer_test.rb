@@ -649,4 +649,30 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Verify active vendors list rendering
     assert_includes email.body.to_s, 'No authorized vendors found at this time'
   end
+
+  test 'with_mailer_error_handling suppresses re-raise outside test when configured' do
+    mailer = ApplicationNotificationsMailer.new
+    production_env = ActiveSupport::StringInquirer.new('production')
+
+    Rails.stubs(:env).returns(production_env)
+
+    result = mailer.send(:with_mailer_error_handling, 'test-context', raise_in_test_only: true) do
+      raise StandardError, 'simulated failure'
+    end
+
+    assert_nil result
+  end
+
+  test 'with_mailer_error_handling still re-raises in test when configured' do
+    mailer = ApplicationNotificationsMailer.new
+    test_env = ActiveSupport::StringInquirer.new('test')
+
+    Rails.stubs(:env).returns(test_env)
+
+    assert_raises(StandardError) do
+      mailer.send(:with_mailer_error_handling, 'test-context', raise_in_test_only: true) do
+        raise StandardError, 'simulated failure'
+      end
+    end
+  end
 end

@@ -1,0 +1,71 @@
+<main class="container mx-auto px-4 py-8" role="main" aria-labelledby="rejection-reasons-title">
+  <div class="max-w-7xl mx-auto">
+    <%= render 'admin/shared/communications_section_nav', current: :rejection_reasons %>
+
+    <div class="mb-6">
+      <h1 id="rejection-reasons-title" class="text-3xl font-bold text-gray-900">Rejection Reasons</h1>
+      <p class="mt-2 text-sm text-gray-600">
+        Review and edit DB-backed rejection reason text by proof type and locale.
+      </p>
+    </div>
+
+    <section class="bg-white rounded-lg shadow overflow-hidden" aria-labelledby="reason-groups-heading">
+      <h2 id="reason-groups-heading" class="sr-only">Rejection reason groups</h2>
+
+      <% if @reason_groups.present? %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proof Type</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">English (EN)</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Spanish (ES)</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <% @reason_groups.each do |group| %>
+                <tr>
+                  <td class="px-6 py-4 text-sm text-gray-700"><%= rejection_reason_proof_type_label(group[:proof_type]) %></td>
+                  <td class="px-6 py-4 text-sm font-mono text-gray-700"><%= group[:code] %></td>
+                  <td class="px-6 py-4 text-sm text-gray-700">
+                    <% if group[:en].present? %>
+                      <span class="<%= rejection_reason_sync_badge_classes(group[:en]) %>">
+                        <%= rejection_reason_sync_status(group[:en]) %>
+                      </span>
+                      <p class="mt-2 line-clamp-3"><%= group[:en].body %></p>
+                      <p class="mt-1 text-xs text-gray-500">v<%= group[:en].version %> • <%= time_ago_in_words(group[:en].updated_at) %> ago</p>
+                      <div class="mt-2">
+                        <%= link_to 'Edit EN', edit_admin_rejection_reason_path(group[:en]), class: "text-indigo-600 hover:text-indigo-800 font-medium" %>
+                      </div>
+                    <% else %>
+                      <span class="text-sm text-gray-500">No EN variant</span>
+                    <% end %>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-700">
+                    <% if group[:es].present? %>
+                      <span class="<%= rejection_reason_sync_badge_classes(group[:es]) %>">
+                        <%= rejection_reason_sync_status(group[:es]) %>
+                      </span>
+                      <p class="mt-2 line-clamp-3"><%= group[:es].body %></p>
+                      <p class="mt-1 text-xs text-gray-500">v<%= group[:es].version %> • <%= time_ago_in_words(group[:es].updated_at) %> ago</p>
+                      <div class="mt-2">
+                        <%= link_to 'Edit ES', edit_admin_rejection_reason_path(group[:es]), class: "text-indigo-600 hover:text-indigo-800 font-medium" %>
+                      </div>
+                    <% else %>
+                      <span class="text-sm text-gray-500">No ES variant</span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <div class="p-6 text-center text-sm text-gray-600">
+          No rejection reasons found. Run seeds to populate baseline records.
+        </div>
+      <% end %>
+    </section>
+  </div>
+</main>

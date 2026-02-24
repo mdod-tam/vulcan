@@ -38,15 +38,21 @@ module Applications
         proof_type: @proof_type_key,
         fallback: rejection_reason
       )
-      find_attributes      = build_find_attributes(rejection_reason, rejection_reason_code)
+      find_attributes      = build_find_attributes
       @proof_review        = @application.proof_reviews.find_or_initialize_by(find_attributes)
 
       assign = {
         admin: @admin,
-        notes: notes,
-        rejection_reason_code: rejection_reason_code
+        notes: notes
       }
-      assign[:rejection_reason] = rejection_reason_text if @status_key == 'rejected'
+      if @status_key == 'rejected'
+        assign[:rejection_reason_code] = rejection_reason_code
+        assign[:rejection_reason] = rejection_reason_text
+      else
+        # Preserve data integrity for non-rejected reviews.
+        assign[:rejection_reason_code] = nil
+        assign[:rejection_reason] = nil
+      end
 
       @proof_review.assign_attributes(assign)
       set_reviewed_at_if_needed
@@ -56,16 +62,8 @@ module Applications
       proof_type: #{@proof_review.proof_type}, new_record: #{@proof_review.previously_new_record?}"
     end
 
-    def build_find_attributes(rejection_reason, rejection_reason_code)
-      find_attributes = { proof_type: @proof_type_key, status: @status_key }
-      if @status_key == 'rejected'
-        if rejection_reason_code.present?
-          find_attributes[:rejection_reason_code] = rejection_reason_code
-        else
-          find_attributes[:rejection_reason] = rejection_reason
-        end
-      end
-      find_attributes
+    def build_find_attributes
+      { proof_type: @proof_type_key, status: @status_key }
     end
 
     def set_reviewed_at_if_needed
