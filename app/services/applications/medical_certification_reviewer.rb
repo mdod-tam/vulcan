@@ -67,7 +67,27 @@ module Applications
 
       return failure(service_result[:error]&.message || 'Disability certification service failed') unless service_result[:success]
 
+      # Notify medical provider (fax if available, email fallback)
+      notify_medical_provider(rejection_reason)
+
       success
+    end
+
+    def notify_medical_provider(rejection_reason)
+      MedicalProviderNotifier.new(application).send_certification_rejection_notice(
+        rejection_reason: rejection_reason,
+        admin: admin
+      )
+    rescue StandardError => e
+      # Log but don't fail the reviewer - the rejection already succeeded (DB updated, notification created)
+      Rails.logger.error("Provider notification failed for application #{application.id}: #{e.message}")
+      Rails.logger.error(e.backtrace.join("\n"))
+
+      # Optional: Report to error tracking service if available
+      # Sentry.capture_exception(e) if defined?(Sentry)
+
+      # Provider notification failure doesn't prevent rejection from succeeding
+      # Admin can manually contact provider if needed
     end
 
     def create_rejection_note(notes)
