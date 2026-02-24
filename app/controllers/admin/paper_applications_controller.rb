@@ -62,6 +62,7 @@ module Admin
 
       if service_result
         success_message = generate_success_message(service.application)
+        send_medical_certification_notification_if_needed(service.application)
         handle_success_response(
           html_redirect_path: admin_application_path(service.application),
           html_message: success_message,
@@ -474,6 +475,20 @@ module Admin
 
     def build_notification_params
       params.permit(:household_size, :annual_income, :communication_preference, :additional_notes).to_h
+    end
+
+    def send_medical_certification_notification_if_needed(application)
+      has_provider_info = application.medical_provider_name.present? || 
+                          application.medical_provider_email.present? || 
+                          application.medical_provider_phone.present?
+      has_certification = application.medical_certification.attached?
+
+      # Send notification if missing both provider info and certification
+      return if has_provider_info || has_certification
+
+      ApplicationNotificationsMailer.medical_certification_not_provided(application).deliver_later
+    rescue StandardError => e
+      Rails.logger.error("Failed to send medical certification notification for application #{application&.id}: #{e.message}")
     end
 
     # NOTE: cast_boolean_params and cast_boolean_for are provided by the ParamCasting concern

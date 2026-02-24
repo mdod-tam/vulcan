@@ -198,6 +198,19 @@ class ApplicationNotificationsMailer < ApplicationMailer
     raise e
   end
 
+  def medical_certification_not_provided(application)
+    template_name = 'application_notifications_medical_certification_not_provided'
+    text_template = find_email_template(template_name)
+
+    variables = build_medical_certification_not_provided_variables(application)
+
+    send_email(application.user.effective_email, text_template, variables)
+  rescue StandardError => e
+    Rails.logger.error("Failed to send medical certification not provided email for application #{application&.id}: #{e.message}")
+    Rails.logger.error(e.backtrace.join("\n"))
+    raise e
+  end
+
   private
 
   # Common letter generation helper
@@ -624,4 +637,20 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
     base_variables.merge(received_variables).compact
   end
+
+  # Medical certification not provided specific methods
+  def build_medical_certification_not_provided_variables(application)
+    user = application.user
+    header_title = 'Medical Certification Required for Your Application'
+
+
+    base_variables = build_base_email_variables(header_title)
+    cert_variables = {
+      user_first_name: user.first_name,
+      application_id: application.id
+    }
+
+    base_variables.merge(cert_variables).compact
+  end
+
 end
