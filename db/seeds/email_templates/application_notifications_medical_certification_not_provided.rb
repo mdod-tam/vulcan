@@ -11,20 +11,20 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certif
 
     Thank you for submitting your application to the Maryland Accessible Telecommunications Program. We have received your submission and are beginning our review process.
 
-    However, we noticed that your application is missing medical certification information. To complete your application, we need documentation from a medical professional confirming your disability.
+    However, we noticed that your application is missing disability certification information. To complete your application, we need documentation from a qualified professional confirming your disability.
 
     NEXT STEPS:
 
     1. Email our team at mat.program1@maryland.gov.
     2. Provide either:
-       - Medical provider contact information (name, email, phone, fax), OR
+       - A qualifying provider contact information (name, email, phone, fax), OR
        - Upload a completed medical certification form
 
     3. Our team will then contact your medical provider to request the necessary certification.
 
     WHAT IS NEEDED:
 
-    We require a disability certification form completed by a licensed medical professional (physician, psychiatrist, psychologist, or other qualified provider) who can confirm that you have a disability that makes it difficult for you to use a standard telephone.
+    We require a disability certification form completed by a qualified professional (physician, psychiatrist, psychologist, social worker, or other qualified provider) who can confirm that you have a disability that makes it difficult for you to use a standard telephone.
 
     If you have questions about what documentation is needed or need assistance, please contact our support team.
 
