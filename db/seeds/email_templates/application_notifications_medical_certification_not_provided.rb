@@ -11,7 +11,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certif
 
     Thank you for submitting your application to the Maryland Accessible Telecommunications Program. We have received your submission and are beginning our review process.
 
-    %<certification_status_message>s
+    However, we noticed that your application is missing disability certification information. To complete your application, we need documentation from a qualified professional confirming your disability.
 
     NEXT STEPS:
 
@@ -35,7 +35,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certif
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text user_first_name certification_status_message application_id footer_text],
+    'required' => %w[header_text user_first_name application_id footer_text],
     'optional' => %w[rejection_reason_message]
   }
   template.version = 1

@@ -597,12 +597,12 @@
               
               <%# Medical Provider Documentation Upload %>
               <div data-controller="document-proof-handler" class="mt-6 pt-6 border-t border-gray-200">
-                <h4 class="text-sm font-semibold text-gray-900 mb-4">Medical Provider Documentation</h4>
+                <h4 class="text-sm font-semibold text-gray-900 mb-4">Disability Certification</h4>
                 
                 <%# Proof Action Selection %>
                 <fieldset class="mb-4">
-                  <legend class="text-sm font-medium text-gray-700 mb-2">Medical Provider Documentation Action</legend>
-                  <div role="radiogroup" aria-label="Medical provider documentation action" class="flex flex-wrap gap-4">
+                  <legend class="text-sm font-medium text-gray-700 mb-2">Disability Certification Action</legend>
+                  <div role="radiogroup" aria-label="Disability certification action" class="flex flex-wrap gap-4">
                     <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                       <input type="radio" 
                              id="accept_medical_certification" 
@@ -624,16 +624,14 @@
                              data-document-proof-handler-target="rejectRadio">
                       <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
                     </label>
-                    <label class="flex items-center p-3 bg-grey-50 border border-grey-200 rounded-lg cursor-pointer hover:bg-grey-100 has-[:checked]:ring-2 has-[:checked]:ring-grey-500">
-                      <input type="radio" 
-                             id="no_medical_certification_provided" 
-                             name="medical_certification_action" 
-                             value="not_requested"
-                             class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
-                             data-action="change->document-proof-handler#toggleProofAction"
-                             data-document-proof-handler-target="noneRadio">
-                      <span class="ml-2 text-sm font-medium text-red-800">None Provided</span>
-                    </label>
+                    <button type="button"
+                            id="no_medical_certification_provided"
+                            class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                            data-action="click->document-proof-handler#handleNoneProvided"
+                            data-document-proof-handler-target="noneButton">
+                      <span class="text-lg">📄</span>
+                      <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+                    </button>
                   </div>
                 </fieldset>
                 
@@ -664,6 +662,7 @@
                               data-document-proof-handler-target="rejectionReasonSelect">
                         <option value="">Select a reason</option>
                         <option value="incomplete">Incomplete Documentation</option>
+                        <option value="none_provided">None Provided</option>
                         <option value="expired">Expired Documentation</option>
                         <option value="illegible">Illegible or Unclear</option>
                         <option value="missing_signature">Missing Provider Signature</option>
