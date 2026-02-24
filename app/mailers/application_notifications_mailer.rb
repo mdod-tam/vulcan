@@ -641,16 +641,28 @@ class ApplicationNotificationsMailer < ApplicationMailer
   # Medical certification not provided specific methods
   def build_medical_certification_not_provided_variables(application)
     user = application.user
-    header_title = 'Medical Certification Required for Your Application'
+    header_title = 'Disability Certification Required for Your Application'
 
+    certification_status_message = build_certification_status_message(application)
+    rejection_reason_message = application.medical_certification_rejection_notes.presence || ''
 
     base_variables = build_base_email_variables(header_title)
     cert_variables = {
       user_first_name: user.first_name,
+      certification_status_message: certification_status_message,
+      rejection_reason_message: rejection_reason_message,
       application_id: application.id
     }
 
     base_variables.merge(cert_variables).compact
+  end
+
+  def build_certification_status_message(application)
+    if application.medical_certification_status_rejected?
+      "We have reviewed the disability certification you submitted and unfortunately, it does not meet our requirements at this time. We need you to provide an updated or revised certification."
+    else
+      "However, we noticed that your application is missing disability certification information. To complete your application, we need documentation from a qualified professional confirming your disability."
+    end
   end
 
 end

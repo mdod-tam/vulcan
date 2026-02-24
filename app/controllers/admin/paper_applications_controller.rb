@@ -482,8 +482,15 @@ module Admin
                           application.medical_provider_email.present? || 
                           application.medical_provider_phone.present?
       has_certification = application.medical_certification.attached?
+      is_rejected = application.medical_certification_status_rejected?
 
-      # Send notification if missing both provider info and certification
+      # If provider info exists AND certification is rejected for reason other than not present, notify the provider
+      if has_provider_info && is_rejected && application.medical_certification_rejection_reason != 'none_provided'
+        MedicalProviderMailer.certification_revision_needed(application).deliver_later
+        return
+      end
+
+      # If nothing is attached (no provider info AND no certification), notify the constituent
       return if has_provider_info || has_certification
 
       ApplicationNotificationsMailer.medical_certification_not_provided(application).deliver_later
