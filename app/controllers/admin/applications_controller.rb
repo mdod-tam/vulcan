@@ -614,7 +614,6 @@ module Admin
                  review_requested documents_requested proof_approved proof_rejected
                ])
         .order(created_at: :desc)
-        .map { |n| NotificationDecorator.new(n) }
     end
 
     def load_application_events

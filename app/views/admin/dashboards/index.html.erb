@@ -232,6 +232,38 @@
       </div>
     </section>
 
+    <%# Assigned Notes Section %>
+    <% if @assigned_notes.present? %>
+      <section aria-labelledby="assigned-notes-heading" class="bg-white rounded-lg shadow p-4 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 id="assigned-notes-heading" class="text-lg font-medium text-gray-900">Assigned Notes</h2>
+        </div>
+        
+        <ul class="space-y-3">
+          <% @assigned_notes.each do |note| %>
+            <li class="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+              <div class="flex justify-between items-start gap-2">
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-gray-900 font-medium truncate">
+                    <%= link_to note.application.user&.full_name, admin_application_path(note.application), class: "text-indigo-600 hover:text-indigo-500" %>
+                  </p>
+                  <p class="text-sm text-gray-700 mt-1 line-clamp-2"><%= note.content %></p>
+                  <div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                    <span>by <%= note.admin.full_name %></span>
+                    <span>•</span>
+                    <span><%= time_ago_in_words(note.created_at) %> ago</span>
+                  </div>
+                </div>
+                <div class="flex-shrink-0">
+                  <%= link_to "View", admin_application_path(note.application), class: "text-indigo-600 hover:text-indigo-500 text-sm font-medium" %>
+                </div>
+              </div>
+            </li>
+          <% end %>
+        </ul>
+      </section>
+    <% end %>
+
     <%# Notifications Section %>
     <section aria-labelledby="notifications-heading" class="bg-white rounded-lg shadow p-4 mb-6">
       <div class="flex items-center justify-between mb-4">

@@ -146,21 +146,22 @@ class NotificationService
   end
 
   MAILER_MAP = {
-    'proof_rejected' => [ApplicationNotificationsMailer,           :proof_rejected],
-    'proof_approved' => [ApplicationNotificationsMailer,           :proof_approved],
-    'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'account_created' => [ApplicationNotificationsMailer, :account_created],
-    'income_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-    'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-    'w9_approved' => [VendorNotificationsMailer,                :w9_approved],
-    'w9_rejected' => [VendorNotificationsMailer,                :w9_rejected],
-    'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
-    'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
-    'security_key_recovery_approved' => [ApplicationNotificationsMailer,           :account_created],
-    'medical_certification_rejected' => [MedicalProviderMailer,                    :rejected],
-    'medical_certification_approved' => [MedicalProviderMailer,                    :approved]
-    # medical_certification_requested: sent directly via MedicalProviderMailer.request_certification
+    'proof_rejected'                    => [ApplicationNotificationsMailer,           :proof_rejected],
+    'proof_approved'                    => [ApplicationNotificationsMailer,           :proof_approved],
+    'income_proof_rejected'             => [ApplicationNotificationsMailer,           :proof_rejected],
+    'residency_proof_rejected'          => [ApplicationNotificationsMailer,           :proof_rejected],
+    'account_created'                   => [ApplicationNotificationsMailer,           :account_created],
+    'income_proof_attached'             => [ApplicationNotificationsMailer,           :proof_received],
+    'residency_proof_attached'          => [ApplicationNotificationsMailer,           :proof_received],
+    'w9_approved'                       => [VendorNotificationsMailer,                :w9_approved],
+    'w9_rejected'                       => [VendorNotificationsMailer,                :w9_rejected],
+    'training_requested'                => [TrainingSessionNotificationsMailer,       :trainer_assigned],
+    'trainer_assigned'                  => [TrainingSessionNotificationsMailer,       :trainer_assigned],
+    'security_key_recovery_approved'    => [ApplicationNotificationsMailer,           :account_created],
+    'medical_certification_rejected'    => [MedicalProviderMailer,                    :rejected],
+    'medical_certification_approved'    => [MedicalProviderMailer,                    :approved]
+    # medical_certification_received: no email — constituent sees status in dashboard
+    # medical_certification_requested: sent directly via MedicalProviderMailer.request_certification, not through NotificationService
   }.freeze
 
   # ---- Creation + validation -------------------------------------------------
