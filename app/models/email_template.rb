@@ -45,7 +45,13 @@ class EmailTemplate < ApplicationRecord
 
       rendered_subject = rendered_subject.gsub("%{#{key}}", value.to_s)
       rendered_subject = rendered_subject.gsub("%<#{key}>s", value.to_s)
+
+      rendered_body = rendered_body.gsub("%<#{key}>", value.to_s)
+      rendered_subject = rendered_subject.gsub("%<#{key}>", value.to_s)
     end
+
+    rendered_body = rendered_body.gsub(/%[<{]\w+[>}]s?/, '')
+    rendered_subject = rendered_subject.gsub(/%[<{]\w+[>}]s?/, '')
 
     [rendered_subject, rendered_body]
   end
