@@ -56,10 +56,10 @@ module Admin
       # Flow: decorate_applications_with_storage -> wraps each app with ApplicationStorageDecorator
       @applications = decorate_applications_with_storage(page_of_apps, attachments_index)
 
-      # Load recent notifications with proper eager loading to avoid N+1 queries
-      # Preload user association through notifiable for NotificationComposer.generate
+      # Load recent notifications to avoid N+1 queries
+      # Preload notifiable for Notification#message, actor for view display
       @recent_notifications = Notification
-                              .includes(:actor, notifiable: :user)
+                              .includes(:actor, :notifiable)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)

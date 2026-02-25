@@ -6,6 +6,7 @@ module Admin
 
     before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled mark_synced create_counterpart]
     before_action :load_locale_templates, only: %i[edit update]
+    before_action :eager_load_template_associations, only: %i[edit update]
 
     # GET /admin/email_templates
     def index
@@ -231,9 +232,17 @@ module Admin
     end
 
     def set_template
-      @email_template = EmailTemplate.includes(:updated_by).find(params[:id])
+      @email_template = EmailTemplate.find(params[:id])
     rescue ActiveRecord::RecordNotFound
       redirect_to admin_email_templates_path, alert: t('alerts.e_template_not_found')
+    end
+
+    def eager_load_template_associations
+      # Preload updated_by for edit/update actions which use the template helpers
+      ActiveRecord::Associations::Preloader.new(
+        records: [@email_template],
+        associations: [:updated_by]
+      ).call
     end
 
     def email_template_params
@@ -299,7 +308,7 @@ module Admin
 
     def counterpart_template
       target_locale = @email_template.locale == 'en' ? 'es' : 'en'
-      EmailTemplate.includes(:updated_by).find_by(
+      EmailTemplate.find_by(
         name: @email_template.name,
         format: @email_template.format,
         locale: target_locale
@@ -307,11 +316,16 @@ module Admin
     end
 
     def load_locale_templates
-      templates_by_locale = EmailTemplate.includes(:updated_by)
-                                         .where(name: @email_template.name, format: @email_template.format, locale: %w[en es])
+      templates_by_locale = EmailTemplate.where(name: @email_template.name, format: @email_template.format, locale: %w[en es])
                                          .index_by(&:locale)
       @en_template = templates_by_locale['en']
       @es_template = templates_by_locale['es']
+
+      # Preload updated_by for both templates when needed in edit view
+      ActiveRecord::Associations::Preloader.new(
+        records: [@en_template, @es_template].compact,
+        associations: [:updated_by]
+      ).call
     end
 
     def template_for_locale(locale)
