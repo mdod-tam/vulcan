@@ -643,7 +643,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     user = application.user
     header_title = 'Disability Certification Required for Your Application'
 
-    rejection_reason_message = application.medical_certification_rejection_notes.presence || ''
+    rejection_reason_message = application.medical_certification_rejection_reason.presence || ''
 
     base_variables = build_base_email_variables(header_title)
     cert_variables = {
