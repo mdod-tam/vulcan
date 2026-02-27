@@ -33,9 +33,9 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', 
   TEXT
   template.variables = {
     'required' => %w[header_text vendor_business_name status_box_warning_text days_until_expiry
-                          expiration_date_formatted vendor_portal_url status_box_info_text footer_text],
+                     expiration_date_formatted vendor_portal_url status_box_info_text footer_text],
     'optional' => []
-  }                      
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded vendor_notifications_w9_expiring_soon (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

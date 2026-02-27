@@ -6,7 +6,7 @@
 # address_mismatch body uses a %{address} placeholder so it can be
 # interpolated with the applicant's actual address at send time.
 # All other bodies are static.
-def seed_rejection_reasons
+def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
   reasons = [
     # ── Income ────────────────────────────────────────────────────────────
     {
@@ -14,7 +14,7 @@ def seed_rejection_reasons
       proof_type: 'income',
       body: 'The address provided on your income documentation does not match ' \
             'the application address. Please submit documentation that contains ' \
-            'the address exactly matching the one shared in your application: %{address}'
+            'the address exactly matching the one shared in your application: %<address>s'
     },
     {
       code: 'expired',
@@ -69,7 +69,7 @@ def seed_rejection_reasons
       proof_type: 'residency',
       body: 'The address provided on your residency documentation does not match ' \
             'the application address. Please submit documentation that contains ' \
-            'the address exactly matching the one shared in your application: %{address}'
+            'the address exactly matching the one shared in your application: %<address>s'
     },
     {
       code: 'expired',
@@ -97,8 +97,8 @@ def seed_rejection_reasons
     {
       code: 'missing_provider_credentials',
       proof_type: 'medical_certification',
-      body: "The disability certification is missing required provider credentials or " \
-            "license number. Please ensure the resubmitted form includes the certifying " \
+      body: 'The disability certification is missing required provider credentials or ' \
+            'license number. Please ensure the resubmitted form includes the certifying ' \
             "professional's full credentials and license information."
     },
     {

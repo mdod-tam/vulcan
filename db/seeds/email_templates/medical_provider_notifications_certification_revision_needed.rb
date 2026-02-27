@@ -9,7 +9,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certifica
 
     DISABILITY CERTIFICATION FORM NEEDS UPDATES
 
-    Dear Medical Provider,
+    Hello,
 
     We have received the disability certification form for the following applicant:
 

@@ -25,7 +25,7 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_generated',
 
     NEXT STEPS
     ---------
-    Our accounting team will review this invoice and process payment within 30 days. You will receive another notification when the invoice has been approved and sent to accounting for payment.
+    Our accounting team will review this invoice and process payment within 30 days.
 
     A PDF copy of this invoice is attached for your records.
 
@@ -35,9 +35,9 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_generated',
   TEXT
   template.variables = {
     'required' => %w[vendor_business_name invoice_number period_start_formatted period_end_formatted
-                          total_amount_formatted transactions_text_list],
+                     total_amount_formatted transactions_text_list],
     'optional' => []
-  }                     
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded vendor_notifications_invoice_generated (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

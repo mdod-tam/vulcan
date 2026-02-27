@@ -10,13 +10,9 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_approved
 
     Dear %<user_first_name>s,
 
-    Thank you for submitting your application to %<organization_name>s. We appreciate your interest in our services and look forward to assisting you.
-
-    ==================================================
-    ✓ DOCUMENTATION APPROVED
-    ==================================================
-
     We have reviewed and approved your %<proof_type_formatted>s documentation.
+
+    No further action is required at this time.
 
     %<all_proofs_approved_message_text>s
 

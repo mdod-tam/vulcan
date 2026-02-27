@@ -9,8 +9,6 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_income_thresho
   template.body = <<~TEXT
     %<header_text>s
 
-    Important Information About Your MAT Application
-
     Dear %<constituent_first_name>s,
 
     We have reviewed your application for the Maryland Accessible Telecommunications program.

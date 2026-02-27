@@ -13,7 +13,7 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_a
     %<status_box_text>s
 
     TRAINER ASSIGNED
-    A trainer has been assigned to you for your training session.
+    A trainer has been assigned to train you on using telecommunications products.#{' '}
 
     Trainer Details:
     - Name: %<trainer_full_name>s
@@ -37,10 +37,10 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_a
   TEXT
   template.variables = {
     'required' => %w[header_text constituent_full_name status_box_text trainer_full_name trainer_email
-                          trainer_phone_formatted training_session_schedule_text constituent_address_formatted
-                          constituent_phone_formatted constituent_email constituent_disabilities_text_list footer_text],
+                     trainer_phone_formatted training_session_schedule_text constituent_address_formatted
+                     constituent_phone_formatted constituent_email constituent_disabilities_text_list footer_text],
     'optional' => []
-  }                     
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded training_session_notifications_trainer_assigned (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

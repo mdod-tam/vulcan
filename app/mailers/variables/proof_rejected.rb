@@ -91,7 +91,15 @@ module Variables
       end
 
       def default_options_text
-        "Please sign in to your account at #{@sign_in_url} to upload the corrected documents or reply to this email with the documents attached."
+        <<~TEXT.strip
+          HOW TO RESUBMIT YOUR DOCUMENTATION:
+          1. Reply to this email: Simply reply to this email and attach your updated documentation.
+          2. Upload Online: Sign in to your account dashboard at #{@sign_in_url} and upload your new documents securely.
+          3. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
+             Maryland Accessible Telecommunications
+             123 Main Street
+             Baltimore, MD 21201
+        TEXT
       end
 
       def archived_message

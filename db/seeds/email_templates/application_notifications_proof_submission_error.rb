@@ -9,8 +9,6 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_submissi
   template.body = <<~TEXT
     %<header_text>s
 
-    ERROR PROCESSING YOUR PROOF SUBMISSION
-
     Dear %<constituent_full_name>s,
 
     We encountered an issue while processing your recent proof submission via email.

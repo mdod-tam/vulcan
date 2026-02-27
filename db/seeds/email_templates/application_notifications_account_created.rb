@@ -10,14 +10,9 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_account_create
 
     Dear %<constituent_first_name>s,
 
-    Thank you for applying with Maryland Accessible Telecommunications. We are dedicated to providing accessible telecommunications solutions that help every Maryland resident stay connected. We have received your application, and an administrator has created an account for you in our system.
+    We have received your application and an administrator has created an account for you in our system.
 
-    Your new account lets you easily:
-    - Check the status of your application
-    - Upload additional proofs if needed
-    - View your voucher code and other important updates
-
-    You can access your application online using the following credentials:
+    You can view the status of your application online using the following credentials:
 
     Email: %<constituent_email>s
     Temporary Password: %<temp_password>s
@@ -26,7 +21,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_account_create
 
     Sign in here: %<sign_in_url>s
 
-    If you prefer not to access your account online or encounter any issues, do not worry — we will continue to send you important updates and documents by mail.
+    If you prefer not to access your account online, we will continue to send you important updates and documents by mail.
 
     If you have any questions or need assistance, please contact our support team.
 

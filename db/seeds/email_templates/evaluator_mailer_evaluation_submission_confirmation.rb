@@ -25,7 +25,7 @@ EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_evaluation_submission_c
   TEXT
   template.variables = {
     'required' => %w[header_text evaluator_full_name constituent_first_name application_id
-                          submission_date_formatted status_box_text footer_text],
+                     submission_date_formatted status_box_text footer_text],
     'optional' => []
   }
   template.version = 1

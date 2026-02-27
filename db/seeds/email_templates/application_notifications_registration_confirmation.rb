@@ -4,17 +4,17 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en') do |template|
   template.subject = 'Welcome to the Maryland Accessible Telecommunications Program'
-  template.description = 'Sent to a user immediately after they register an account, outlining the program and next steps.'
+  template.description = 'Sent to a user immediately after they register an account, outlining program and next steps.'
   template.body = <<~TEXT
     %<header_text>s
 
     Dear %<user_full_name>s,
 
-    Thank you for registering with the Maryland Accessible Telecommunications Program. We're here to help Maryland residents with hearing loss, vision loss, mobility impairments, speech impairments, and cognitive impairments access telecommunications devices that meet their needs.
+    Thank you for registering with Maryland Accessible Telecommunications. We help Maryland residents with difficulty using a standard telephone purchase telecommunications products that meet their needs.
 
     == PROGRAM OVERVIEW ==
 
-    Our program provides vouchers to eligible Maryland residents to purchase accessible telecommunications products. You may be eligible if your household income is less than 400% of the federal poverty level for your family size.
+    Our program provides vouchers to eligible Maryland residents that can be used to purchase accessible telecommunications products.
 
     == NEXT STEPS ==
 
@@ -22,27 +22,26 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_c
 
     1. Visit your dashboard to access your profile: %<dashboard_url>s
     2. Start a new application: %<new_application_url>s
-    3. Complete all required information, including proofs of residency and income, and information for your medical provider
+    3. Provide all required information, including proof of residency and contact information for a professional who can certify your disability status
     4. Submit your application for review
 
-    Once your application is approved, you'll receive a voucher that can be used to purchase eligible devices, along with information about available devices, vendors to purchase through, and resources for training.
+    Once your application is approved, you'll receive a voucher with a fixed value that can be used to purchase eligible products, along with information about which products are eligible and which vendors are authorized to accept the vouchers.
 
-    == AVAILABLE PRODUCTS ==
+    A variety of products for a range of disabilities are eligible for purchase with a voucher, including:
 
-    We offer a variety of accessible telecommunications products for a range of disabilities, including:
+    * Smartphones (iPhone, iPad, Pixel) with accessibility features and applications to support multiple types of disabilities
     * Amplified phones for individuals with hearing loss
     * Specialized landline phones for individuals with vision loss or hearing loss
-    * Smartphones (iPhone, iPad, Pixel) with accessibility features and applications to support multiple types of disabilities
-    * Braille and speech devices for individuals wih speech differences
+    * Braille and speech products for individuals wih speech differences
     * Communication aids for cognitive, memory or speech differences
-    * Visual, audible, and tactile emergency alert systems
+    * Visual, audible, and tactile alerting systems and accessories
 
     == AUTHORIZED RETAILERS ==
 
     You can redeem your voucher at any of these authorized vendors:
     %<active_vendors_text_list>s
 
-    Once your application is approved, you'll receive a voucher to purchase eligible devices through these vendors.
+    Once your application is approved, you'll receive a voucher to purchase eligible products through these vendors.
 
     If you have any questions about our program or need assistance with your application, please don't hesitate to contact us at more.info@maryland.gov or 410-697-9700.
 

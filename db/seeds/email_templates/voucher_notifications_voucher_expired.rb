@@ -35,9 +35,9 @@ EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_expired', 
   TEXT
   template.variables = {
     'required' => %w[header_text user_first_name voucher_code initial_value_formatted unused_value_formatted
-                          expiration_date_formatted footer_text],
-    'optional' => %w[transaction_history_text]  
-  }                    
+                     expiration_date_formatted footer_text],
+    'optional' => %w[transaction_history_text]
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded voucher_notifications_voucher_expired (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

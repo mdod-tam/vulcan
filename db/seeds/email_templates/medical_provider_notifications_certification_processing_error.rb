@@ -7,7 +7,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certifica
   template.body = <<~TEXT
     Medical Certification Submission Error
 
-    Dear Medical Provider,
+    Hello,
 
     We encountered an error processing your recent medical certification submission for %<constituent_full_name>s (Application ID: %<application_id>s).
 
