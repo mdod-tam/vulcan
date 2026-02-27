@@ -35,6 +35,7 @@ module Notifications
         last_name: extract_value(@constituent_params, :last_name),
         email: extract_value(@constituent_params, :email),
         communication_preference: extract_value(@constituent_params, :communication_preference),
+        locale: extract_value(@constituent_params, :locale),
         is_object: !@constituent_params.is_a?(Hash)
       }
     end

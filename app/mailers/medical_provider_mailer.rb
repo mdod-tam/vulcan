@@ -30,9 +30,10 @@ class MedicalProviderMailer < ApplicationMailer
 
   def rejected(notifiable, notification)
     # Map to certification_rejected method
+    # Note: MedicalCertificationAttachmentService stores rejection data as 'reason' (not 'rejection_reason')
     self.class.with(
       application: notifiable,
-      rejection_reason: notification.metadata['reason'] || 'Not specified',
+      rejection_reason: notification.metadata['reason'] || notifiable.medical_certification_rejection_reason || 'Not specified',
       admin: notification.actor
     ).certification_rejected
   end
@@ -52,13 +53,16 @@ class MedicalProviderMailer < ApplicationMailer
     raise e
   end
 
-  # Notify a medical provider that a certification has been rejected
+  # Notify a medical provider that a certification has been rejected.
+  # Uses RejectionReason.resolve when application.medical_certification_rejection_reason_code
+  # is set, so body text is DB-stored and locale-aware
   # @param application [Application] The application with the rejected certification
-  # @param rejection_reason [String] The reason for rejection
+  # @param rejection_reason [String] Fallback reason text when no code is stored
   # @param admin [User] The admin who rejected the certification
   def certification_rejected
-    template = load_email_template('medical_provider_certification_rejected')
-    variables = build_rejection_variables
+    locale = provider_email_locale
+    template = load_email_template('medical_provider_certification_rejected', locale: locale)
+    variables = build_rejection_variables(locale)
     log_debug_variables('certification_rejected', variables)
 
     subject, body = template.render(**variables)
@@ -103,11 +107,14 @@ class MedicalProviderMailer < ApplicationMailer
 
   private
 
-  def load_email_template(template_name)
-    EmailTemplate.find_by!(name: template_name, format: :text)
-  rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
-    raise "Email template (text format) not found for #{template_name}"
+  # Loads template by name and locale, falling back to English when locale variant is missing.
+  def load_email_template(template_name, locale: 'en')
+    EmailTemplate.find_by!(name: template_name, format: :text, locale: locale)
+  rescue ActiveRecord::RecordNotFound
+    raise if locale == 'en'
+
+    Rails.logger.debug { "No #{locale} template for #{template_name}, falling back to English" }
+    load_email_template(template_name, locale: 'en')
   end
 
   def build_submission_error_variables(medical_provider, application, message)
@@ -129,11 +136,11 @@ class MedicalProviderMailer < ApplicationMailer
     }.compact
   end
 
-  def build_rejection_variables
+  def build_rejection_variables(locale = 'en')
     application = params[:application]
-    rejection_reason = params[:rejection_reason]
     constituent = application.user
     remaining_attempts = 8 - application.total_rejections
+    rejection_reason = resolve_medical_cert_rejection_reason(application, locale)
 
     {
       constituent_full_name: constituent.full_name,
@@ -141,6 +148,24 @@ class MedicalProviderMailer < ApplicationMailer
       rejection_reason: rejection_reason,
       remaining_attempts: remaining_attempts
     }.compact
+  end
+
+  # Resolves rejection body from RejectionReason when code is stored; otherwise uses passed-in text.
+  def resolve_medical_cert_rejection_reason(application, locale)
+    code = application.medical_certification_rejection_reason_code.presence
+    return params[:rejection_reason] || 'Not specified' if code.blank?
+
+    reason = RejectionReason.resolve(
+      code: code,
+      proof_type: 'medical_certification',
+      locale: locale
+    )
+    reason&.body.presence || params[:rejection_reason] || 'Not specified'
+  end
+
+  # Locale for provider-facing emails. No provider preference yet; default to English.
+  def provider_email_locale
+    'en'
   end
 
   def build_request_certification_variables

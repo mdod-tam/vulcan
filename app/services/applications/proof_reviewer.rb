@@ -7,7 +7,7 @@ module Applications
       @admin = admin
     end
 
-    def review(proof_type:, status:, rejection_reason: nil, notes: nil)
+    def review(proof_type:, status:, rejection_reason: nil, rejection_reason_code: nil, notes: nil)
       Rails.logger.info "Starting review with proof_type: #{proof_type.inspect}, status: #{status.inspect}"
 
       @proof_type_key = proof_type.to_s
@@ -16,7 +16,7 @@ module Applications
       Rails.logger.info "Converted values - proof_type: #{@proof_type_key.inspect}, status: #{@status_key.inspect}"
 
       ApplicationRecord.transaction do
-        create_or_update_proof_review(rejection_reason, notes)
+        create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
         update_application_status
         purge_if_rejected
       end
@@ -30,13 +30,31 @@ module Applications
 
     private
 
-    def create_or_update_proof_review(rejection_reason, notes)
+    def create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
       Rails.logger.info 'Finding or initializing proof review record'
 
-      find_attributes = build_find_attributes(rejection_reason)
-      @proof_review = @application.proof_reviews.find_or_initialize_by(find_attributes)
+      rejection_reason_text = RejectionReason.resolve_text(
+        code: rejection_reason_code,
+        proof_type: @proof_type_key,
+        fallback: rejection_reason
+      )
+      find_attributes      = build_find_attributes
+      @proof_review        = @application.proof_reviews.find_or_initialize_by(find_attributes)
 
-      @proof_review.assign_attributes(admin: @admin, notes: notes)
+      assign = {
+        admin: @admin,
+        notes: notes
+      }
+      if @status_key == 'rejected'
+        assign[:rejection_reason_code] = rejection_reason_code
+        assign[:rejection_reason] = rejection_reason_text
+      else
+        # Preserve data integrity for non-rejected reviews.
+        assign[:rejection_reason_code] = nil
+        assign[:rejection_reason] = nil
+      end
+
+      @proof_review.assign_attributes(assign)
       set_reviewed_at_if_needed
       @proof_review.save!
 
@@ -44,10 +62,8 @@ module Applications
       proof_type: #{@proof_review.proof_type}, new_record: #{@proof_review.previously_new_record?}"
     end
 
-    def build_find_attributes(rejection_reason)
-      find_attributes = { proof_type: @proof_type_key, status: @status_key }
-      find_attributes[:rejection_reason] = rejection_reason if @status_key == 'rejected'
-      find_attributes
+    def build_find_attributes
+      { proof_type: @proof_type_key, status: @status_key }
     end
 
     def set_reviewed_at_if_needed
@@ -84,7 +100,7 @@ module Applications
       # This design pattern is important for handling attachment purges when rejecting proofs.
       column_name = "#{@proof_type_key}_proof_status"
       status_enum_value = Application.send(column_name.pluralize.to_s).fetch(@status_key.to_sym)
-      @application.update_column(column_name, status_enum_value)
+      @application.update_column(column_name, status_enum_value) # rubocop:disable Rails/SkipsModelValidations
     end
 
     # Explicitly call purge logic on the application if the status was just set to rejected
@@ -106,7 +122,7 @@ module Applications
          @application.medical_certification_status_approved?
 
         # Auto-approve using update_column to avoid triggering other validations
-        @application.update_column(:status, Application.statuses[:approved])
+        @application.update_column(:status, Application.statuses[:approved]) # rubocop:disable Rails/SkipsModelValidations
 
         # Create an event for this automated approval
         AuditEventService.log(

@@ -12,19 +12,25 @@ class EmailTemplate < ApplicationRecord
   scope :enabled, -> { where(enabled: true) }
   scope :disabled_templates, -> { where(enabled: false) }
 
-  # Ensure name is unique within the scope of its format (e.g., 'welcome.html' and 'welcome.text' are distinct)
-  validates :name, presence: true, uniqueness: { scope: :format }
+  validates :name, presence: true, uniqueness: { scope: %i[format locale] }
   validates :subject, presence: true
   validates :body, presence: true
   validates :format, presence: true
+  validates :locale, presence: true
   validates :description, presence: true
   validates :version, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validate :validate_body_uses_only_allowed_variables
   validate :validate_variables_in_body
+  validate :counterpart_locales_are_synced, on: :update
 
-  # Store previous version before saving changes
   before_update :store_previous_content
   before_update :increment_version
+  # Flag other locales when this template's content changes
+  after_update :flag_counterpart_locales_for_sync,
+               if: -> { (saved_change_to_body? || saved_change_to_subject?) && !needs_sync? }
+  # Clear flag after content update resolveing the out-of-sync state
+  after_update :clear_sync_flag,
+               if: -> { (saved_change_to_body? || saved_change_to_subject?) && needs_sync? }
 
   def self.render(template_name, **vars)
     template = find_by!(name: template_name)
@@ -127,16 +133,16 @@ class EmailTemplate < ApplicationRecord
   def validate_body_uses_only_allowed_variables
     # Get all variables currently written in the body string (e.g. ['name', 'bad_var'])
     current_vars_in_body = extract_variables
-    
+
     # Get the allowed list from the database (e.g. ['name', 'footer_text'])
-    allowed = allowed_variables 
-    
+    allowed = allowed_variables
+
     # Find the difference
     unauthorized_vars = current_vars_in_body - allowed
-    
-    if unauthorized_vars.any?
-      errors.add(:body, "contains unauthorized variables: #{unauthorized_vars.join(', ')}. Only use: #{allowed.join(', ')}")
-    end
+
+    return unless unauthorized_vars.any?
+
+    errors.add(:body, "contains unauthorized variables: #{unauthorized_vars.join(', ')}. Only use: #{allowed.join(', ')}")
   end
 
   def store_previous_content
@@ -150,5 +156,23 @@ class EmailTemplate < ApplicationRecord
   def increment_version
     # Increment version only if subject or body changed
     self.version += 1 if subject_changed? || body_changed?
+  end
+
+  def flag_counterpart_locales_for_sync
+    EmailTemplate.where(name: name, format: format).where.not(locale: locale)
+                 .update_all(needs_sync: true) # rubocop:disable Rails/SkipsModelValidations
+  end
+
+  def clear_sync_flag
+    update_column(:needs_sync, false) # rubocop:disable Rails/SkipsModelValidations
+  end
+
+  def counterpart_locales_are_synced
+    # Block saves that don't change content
+    return unless needs_sync?
+    return if body_changed? || subject_changed?
+
+    errors.add(:base, 'This template is out of sync with another locale variant. ' \
+                      'Update the body or subject to resolve it, or use "Mark Synced" to dismiss.')
   end
 end

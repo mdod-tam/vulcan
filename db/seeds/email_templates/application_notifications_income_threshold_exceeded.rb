@@ -3,13 +3,11 @@
 # Seed File for "application_notifications_income_threshold_exceeded"
 # (Suggest saving as db/seeds/email_templates/application_notifications_income_threshold_exceeded.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_income_threshold_exceeded', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en') do |template|
   template.subject = 'Important Information About Your MAT Application'
   template.description = 'Sent when an application is rejected because income exceeds the eligibility threshold.'
   template.body = <<~TEXT
     %<header_text>s
-
-    Important Information About Your MAT Application
 
     Dear %<constituent_first_name>s,
 

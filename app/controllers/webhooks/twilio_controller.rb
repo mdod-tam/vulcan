@@ -35,19 +35,18 @@ module Webhooks
     def verify_twilio_signature
       # Production implementations should verify the request is coming from Twilio
       # by checking the X-Twilio-Signature header against your auth token
-      # This is skipped in development/test for simplicity
       return true unless Rails.env.production?
 
-      # For production, uncomment and use the Twilio request validator
-      # validator = Twilio::Security::RequestValidator.new(Rails.application.config.twilio[:auth_token])
-      # signature = request.headers['X-Twilio-Signature']
-      # url = request.original_url
-      #
-      # unless validator.validate(url, params, signature)
-      #   Rails.logger.warn "Invalid Twilio signature for request to #{url}"
-      #   render json: { error: 'Invalid signature' }, status: :forbidden
-      #   return false
-      # end
+      # Verify Twilio signature to prevent unauthorized webhook calls
+      validator = Twilio::Security::RequestValidator.new(Rails.application.config.twilio[:auth_token])
+      signature = request.headers['X-Twilio-Signature']
+      url = request.original_url
+
+      unless validator.validate(url, params.to_unsafe_h, signature)
+        Rails.logger.warn "Invalid Twilio signature for request to #{url}"
+        render json: { error: 'Invalid signature' }, status: :forbidden
+        return false
+      end
 
       true
     end
@@ -78,13 +77,58 @@ module Webhooks
         delivery_status: internal_status == 'delivered' ? 'delivered' : 'failed'
       )
 
-      # If the fax failed, you might want to trigger an email fallback
-      # This depends on your application's requirements
-      return unless %w[failed no-answer busy canceled].include?(status)
+      # Handle terminal fax statuses (delivered or failed)
+      return unless %w[delivered failed no-answer busy canceled].include?(status)
 
-      Rails.logger.info "Fax delivery failed with status: #{status}, considering email fallback"
-      # You could trigger an email here if needed
-      # MedicalProviderMailer.certification_rejected(...).deliver_later
+      Rails.logger.info "Fax reached terminal status: #{status} for notification #{notification.id}"
+
+      # Trigger email fallback on fax failure
+      trigger_email_fallback(notification, status) if %w[failed no-answer busy canceled].include?(status)
+      # Purge blob after terminal status (Twilio has already fetched it)
+      purge_fax_blob(notification)
+    end
+
+    # Trigger email fallback when fax delivery fails
+    def trigger_email_fallback(notification, fax_status)
+      Rails.logger.info "Fax delivery failed with status: #{fax_status}, triggering email fallback"
+      application = notification.notifiable
+      return unless application.is_a?(Application)
+      return if application.medical_provider_email.blank?
+
+      # Extract rejection reason from notification metadata
+      rejection_reason = notification.metadata['reason'] ||
+                         application.medical_certification_rejection_reason ||
+                         'Not specified'
+      admin = notification.actor
+
+      # Send email as fallback
+      MedicalProviderMailer.with(
+        application: application,
+        rejection_reason: rejection_reason,
+        admin: admin
+      ).certification_rejected.deliver_later
+
+      Rails.logger.info "Email fallback queued for application #{application.id} after fax failure"
+    rescue StandardError => e
+      Rails.logger.error "Failed to trigger email fallback: #{e.message}"
+      # Don't fail the webhook - email fallback is best effort
+    end
+
+    # Purge the fax blob after terminal status
+    def purge_fax_blob(notification)
+      blob_id = notification.metadata['blob_id']
+      return if blob_id.blank?
+
+      blob = ActiveStorage::Blob.find_by(id: blob_id)
+      if blob
+        Rails.logger.info "Purging fax blob #{blob_id} after terminal status for notification #{notification.id}"
+        blob.purge_later
+      else
+        Rails.logger.warn "Blob #{blob_id} not found for purging (may have already been deleted)"
+      end
+    rescue StandardError => e
+      Rails.logger.error "Failed to purge fax blob #{blob_id}: #{e.message}"
+      # Don't fail webhook - blob cleanup is best effort
     end
   end
 end

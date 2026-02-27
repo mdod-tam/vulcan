@@ -2,7 +2,7 @@
 
 # Seed File for "application_notifications_proof_approved"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_approved', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_approved', format: :text, locale: 'en') do |template|
   template.subject = 'Document Review Update'
   template.description = 'Sent when a specific piece of documentation submitted by the applicant has been approved.'
   template.body = <<~TEXT
@@ -10,13 +10,9 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_approved
 
     Dear %<user_first_name>s,
 
-    Thank you for submitting your application to %<organization_name>s. We appreciate your interest in our services and look forward to assisting you.
-
-    ==================================================
-    ✓ DOCUMENTATION APPROVED
-    ==================================================
-
     We have reviewed and approved your %<proof_type_formatted>s documentation.
+
+    No further action is required at this time.
 
     %<all_proofs_approved_message_text>s
 

@@ -64,15 +64,44 @@ class MedicalProviderNotifier
   end
 
   # Handle the result of delivery attempts
-  def handle_delivery_result(delivery_result, rejection_reason, admin)
+  def handle_delivery_result(delivery_result, _rejection_reason, _admin)
     return false unless delivery_result[:success]
 
-    metadata = build_notification_metadata(delivery_result, rejection_reason)
-    create_notification_record(admin, rejection_reason, metadata)
+    # Notification record is already created by MedicalCertificationAttachmentService
+    # Update it with delivery-specific metadata
+    update_notification_metadata(delivery_result)
     true
   rescue StandardError => e
     Rails.logger.error "Failed to handle delivery result for Application ID: #{application.id} - #{e.message}"
     false
+  end
+
+  # Update existing notification with delivery metadata
+  def update_notification_metadata(delivery_result)
+    # Find the notification created by the attachment service
+    notification = Notification.where(
+      notifiable: application,
+      notification_type: 'medical_certification_rejected'
+    ).order(created_at: :desc).first
+
+    return unless notification
+
+    # Update metadata with delivery information
+    updated_metadata = notification.metadata.merge(
+      'delivery_method' => delivery_result[:method],
+      'notification_methods' => notification_methods
+    )
+
+    case delivery_result[:method]
+    when 'fax'
+      updated_metadata['fax_sid'] = delivery_result[:fax_sid] if delivery_result[:fax_sid]
+      updated_metadata['blob_id'] = delivery_result[:blob_id] if delivery_result[:blob_id]
+    when 'email'
+      updated_metadata['message_id'] = delivery_result[:message_id] if delivery_result[:message_id]
+    end
+
+    notification.update!(metadata: updated_metadata)
+    Rails.logger.info "Updated notification #{notification.id} with delivery metadata"
   end
 
   # Build metadata for notification record
@@ -92,6 +121,8 @@ class MedicalProviderNotifier
     case delivery_result[:method]
     when 'fax'
       metadata[:fax_sid] = delivery_result[:fax_sid] if delivery_result[:fax_sid]
+      # Store blob ID for webhook cleanup (blob should persist until Twilio confirms delivery)
+      metadata[:blob_id] = delivery_result[:blob_id] if delivery_result[:blob_id]
     when 'email'
       metadata[:message_id] = delivery_result[:message_id] if delivery_result[:message_id]
     end
@@ -111,16 +142,59 @@ class MedicalProviderNotifier
     pdf_path = generate_fax_pdf(rejection_reason)
     return failure_result_with_fax_sid unless pdf_path
 
-    send_fax_document(pdf_path)
+    # Upload PDF to ActiveStorage for public URL access
+    blob = upload_pdf_to_storage(pdf_path)
+    return failure_result_with_fax_sid unless blob
+
+    # Generate public URL for Twilio
+    media_url = generate_blob_url(blob)
+    return failure_result_with_fax_sid unless media_url
+
+    # Send fax with public URL
+    result = send_fax_document_via_url(media_url)
+    # Store blob ID in result for webhook cleanup (don't purge here)
+    result[:blob_id] = blob.id if result[:success]
+    result
   ensure
     cleanup_temp_file(pdf_path)
   end
 
-  # Send the fax document
-  def send_fax_document(pdf_path)
-    fax_result = @fax_service.send_pdf_fax(
+  # Upload PDF to ActiveStorage for public access
+  def upload_pdf_to_storage(pdf_path)
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io: File.open(pdf_path),
+      filename: "cert_rejection_#{application.id}_#{Time.now.to_i}.pdf",
+      content_type: 'application/pdf'
+    )
+    Rails.logger.info "Uploaded fax PDF to ActiveStorage, blob ID: #{blob.id}"
+    blob
+  rescue StandardError => e
+    Rails.logger.error "Failed to upload PDF to storage for Application ID: #{application.id} - #{e.message}"
+    nil
+  end
+
+  # Generate public blob URL for Twilio
+  def generate_blob_url(blob)
+    # Host must be configured in config/environments/*.rb:
+    # config.action_mailer.default_url_options = { host: 'your-domain.com' }
+    host = Rails.application.config.action_mailer.default_url_options[:host]
+
+    if host.blank?
+      Rails.logger.error 'Host not configured for blob URLs - cannot generate fax media URL'
+      return nil
+    end
+
+    Rails.application.routes.url_helpers.rails_blob_url(blob, host: host)
+  rescue StandardError => e
+    Rails.logger.error "Failed to generate blob URL for Application ID: #{application.id} - #{e.message}"
+    nil
+  end
+
+  # Send the fax document via public URL
+  def send_fax_document_via_url(media_url)
+    fax_result = @fax_service.send_fax(
       to: application.medical_provider_fax,
-      pdf_path: pdf_path,
+      media_url: media_url,
       options: fax_options
     )
 
@@ -160,31 +234,6 @@ class MedicalProviderNotifier
   # Return failure result with fax_sid field
   def failure_result_with_fax_sid
     { success: false, fax_sid: nil }
-  end
-
-  # Notify the medical provider using email
-  # @param rejection_reason [String] The reason for rejection
-  # @param admin [User] The admin who rejected the certification
-  # @return [Hash] Hash containing success status
-  def notify_by_email(rejection_reason, admin)
-    # Send the email - ensure message_id is captured for tracking
-    mail = MedicalProviderMailer.certification_rejected(
-      application,
-      rejection_reason,
-      admin
-    )
-
-    # Store message ID before delivering
-    message_id = mail.message_id
-
-    # Deliver later via background job
-    mail.deliver_later
-
-    Rails.logger.info "Email successfully queued for medical provider for Application ID: #{application.id} with message ID: #{message_id}"
-    { success: true, method: 'email', message_id: message_id }
-  rescue StandardError => e
-    Rails.logger.error "Email sending error for Application ID: #{application.id} - #{e.message}"
-    { success: false, message_id: nil }
   end
 
   # Generate a PDF document for faxing
@@ -256,27 +305,6 @@ class MedicalProviderNotifier
   def add_pdf_footer(pdf)
     pdf.text 'Thank you for your assistance in helping this applicant access needed telecommunications services.', size: 12
     pdf.text 'For questions, please contact: medical-cert@mdmat.org', size: 12
-  end
-
-  # Create a notification record for tracking
-  # @param admin [User] The admin who performed the action
-  # @param rejection_reason [String] The reason for rejection
-  # @param metadata [Hash] Additional metadata to include in the notification
-  def create_notification_record(admin, rejection_reason, metadata = {})
-    default_metadata = {
-      medical_provider_name: application.medical_provider_name,
-      rejection_reason: rejection_reason,
-      notification_methods: notification_methods
-    }
-
-    NotificationService.create_and_deliver!(
-      type: 'medical_certification_rejected',
-      recipient: application.user,
-      actor: admin,
-      notifiable: application,
-      metadata: default_metadata.merge(metadata),
-      channel: :email
-    )
   end
 
   # Get the contact methods that were available for the medical provider

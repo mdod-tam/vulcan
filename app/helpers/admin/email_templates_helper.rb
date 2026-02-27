@@ -2,6 +2,38 @@
 
 module Admin
   module EmailTemplatesHelper
+    def template_locale_label(locale)
+      case locale.to_s
+      when 'en' then 'English (EN)'
+      when 'es' then 'Spanish (ES)'
+      else locale.to_s.upcase
+      end
+    end
+
+    def counterpart_locale(locale)
+      locale.to_s == 'en' ? 'es' : 'en'
+    end
+
+    def template_last_updated_text(template)
+      return 'Last updated: unavailable' unless template&.updated_at
+
+      editor_name = template.updated_by&.full_name.presence || 'System'
+      formatted_time = template.updated_at.strftime('%B %d, %Y at %I:%M %p')
+      "Last updated (#{template.locale.to_s.upcase}): #{formatted_time} by #{editor_name}"
+    end
+
+    def template_sync_status(template)
+      template&.needs_sync? ? 'Needs sync' : 'In sync'
+    end
+
+    def template_sync_badge_classes(template)
+      if template&.needs_sync?
+        'inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800'
+      else
+        'inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800'
+      end
+    end
+
     # Provides sample data for rendering email template previews or tests.
     # Auto-extracts variables from the template body and generates generic sample values.
     def sample_data_for_template(template_name)

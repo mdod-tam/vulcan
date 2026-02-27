@@ -4,7 +4,9 @@ module Admin
   class EmailTemplatesController < Admin::BaseController
     include Pagy::Backend # Include Pagy for pagination
 
-    before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled]
+    before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled mark_synced create_counterpart]
+    before_action :load_locale_templates, only: %i[edit update]
+    before_action :eager_load_template_associations, only: %i[edit update]
 
     # GET /admin/email_templates
     def index
@@ -75,22 +77,39 @@ module Admin
 
       # Expensive computation done in controller for form preview
       @sample_data = view_context.sample_data_for_template(@email_template.name)
+      @counterpart_template = counterpart_template
     end
 
     # PATCH/PUT /admin/email_templates/:id
     def update
       # @email_template is set by before_action
       # @template_definition is set by before_action
+      target_template = template_for_locale(params[:locale].presence || @email_template.locale)
+      target_locale = target_template&.locale&.upcase || params[:locale].to_s.upcase
 
-      @original_values = capture_original_values
+      unless target_template
+        redirect_to edit_admin_email_template_path(@email_template),
+                    alert: "Could not find #{target_locale} template for this template pair."
+        return
+      end
 
-      if @email_template.update(email_template_params.merge(updated_by: current_user))
+      @original_values = capture_original_values(target_template)
+
+      if target_template.update(email_template_params.merge(updated_by: current_user))
+        @email_template = target_template
         log_template_update_event
-        redirect_to admin_email_template_path(@email_template), notice: t('.e_template_update_pass')
+        redirect_to edit_admin_email_template_path(target_template), notice: "#{target_locale} template updated."
       else
+        if target_template.locale == 'en'
+          @en_template = target_template
+        else
+          @es_template = target_template
+        end
+
         # Re-prepare sample data for form re-render on validation failure
         @sample_data = view_context.sample_data_for_template(@email_template.name)
-        flash.now[:alert] = "Failed to update template: #{@email_template.errors.full_messages.join(', ')}"
+        @counterpart_template = counterpart_template
+        flash.now[:alert] = "Failed to update #{target_locale} template: #{target_template.errors.full_messages.join(', ')}"
         render :edit, status: :unprocessable_content
       end
     end
@@ -125,9 +144,49 @@ module Admin
       end
     end
 
+    # PATCH /admin/email_templates/:id/mark_synced
+    def mark_synced
+      @email_template.update_column(:needs_sync, false) # rubocop:disable Rails/SkipsModelValidations
+      log_audit_event('email_template_marked_synced')
+      redirect_to admin_email_template_path(@email_template),
+                  notice: 'Template marked as synced.'
+    end
+
+    # POST /admin/email_templates/:id/create_counterpart
+    def create_counterpart
+      target_locale = counterpart_locale_for(@email_template.locale)
+      existing_template = counterpart_template
+
+      if existing_template
+        redirect_to edit_admin_email_template_path(@email_template),
+                    notice: "#{target_locale.upcase} template already exists."
+        return
+      end
+
+      created_template = EmailTemplate.new(
+        name: @email_template.name,
+        format: @email_template.format,
+        locale: target_locale,
+        subject: @email_template.subject,
+        body: @email_template.body,
+        description: @email_template.description,
+        variables: @email_template.variables,
+        enabled: @email_template.enabled,
+        updated_by: current_user
+      )
+
+      if created_template.save
+        redirect_to edit_admin_email_template_path(@email_template),
+                    notice: "Created #{target_locale.upcase} template from #{@email_template.locale.upcase}."
+      else
+        redirect_to edit_admin_email_template_path(@email_template),
+                    alert: "Failed to create #{target_locale.upcase} template: #{created_template.errors.full_messages.join(', ')}"
+      end
+    end
+
     # PATCH /admin/email_templates/bulk_disable
     def bulk_disable
-      count = EmailTemplate.update_all(enabled: false)
+      count = EmailTemplate.update_all(enabled: false) # rubocop:disable Rails/SkipsModelValidations
       AuditEventService.log(
         actor: current_user,
         action: 'email_templates_bulk_disabled',
@@ -140,7 +199,7 @@ module Admin
 
     # PATCH /admin/email_templates/bulk_enable
     def bulk_enable
-      count = EmailTemplate.update_all(enabled: true)
+      count = EmailTemplate.update_all(enabled: true) # rubocop:disable Rails/SkipsModelValidations
       AuditEventService.log(
         actor: current_user,
         action: 'email_templates_bulk_enabled',
@@ -153,10 +212,10 @@ module Admin
 
     private
 
-    def capture_original_values
+    def capture_original_values(template)
       {
-        subject: @email_template.subject,
-        body: @email_template.body
+        subject: template.subject,
+        body: template.body
       }
     end
 
@@ -176,6 +235,14 @@ module Admin
       @email_template = EmailTemplate.find(params[:id])
     rescue ActiveRecord::RecordNotFound
       redirect_to admin_email_templates_path, alert: t('alerts.e_template_not_found')
+    end
+
+    def eager_load_template_associations
+      # Preload updated_by for edit/update actions which use the template helpers
+      ActiveRecord::Associations::Preloader.new(
+        records: [@email_template],
+        associations: [:updated_by]
+      ).call
     end
 
     def email_template_params
@@ -237,6 +304,36 @@ module Admin
 
       flash.now[:alert] = "Failed to send test email: #{error.message}. Check sample data and template syntax."
       render :new_test_email, status: :unprocessable_content
+    end
+
+    def counterpart_template
+      target_locale = @email_template.locale == 'en' ? 'es' : 'en'
+      EmailTemplate.find_by(
+        name: @email_template.name,
+        format: @email_template.format,
+        locale: target_locale
+      )
+    end
+
+    def load_locale_templates
+      templates_by_locale = EmailTemplate.where(name: @email_template.name, format: @email_template.format, locale: %w[en es])
+                                         .index_by(&:locale)
+      @en_template = templates_by_locale['en']
+      @es_template = templates_by_locale['es']
+
+      # Preload updated_by for both templates when needed in edit view
+      ActiveRecord::Associations::Preloader.new(
+        records: [@en_template, @es_template].compact,
+        associations: [:updated_by]
+      ).call
+    end
+
+    def template_for_locale(locale)
+      locale.to_s == 'es' ? @es_template : @en_template
+    end
+
+    def counterpart_locale_for(locale)
+      locale.to_s == 'en' ? 'es' : 'en'
     end
   end
 end

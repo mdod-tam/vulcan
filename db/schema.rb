@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_19_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -139,6 +139,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.integer "document_signing_request_count", default: 0, null: false
     t.text "document_signing_audit_url"
     t.text "document_signing_document_url"
+    t.string "medical_certification_rejection_reason_code"
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
@@ -146,6 +147,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.index ["income_verified_by_id"], name: "index_applications_on_income_verified_by_id"
     t.index ["last_proof_submitted_at"], name: "index_applications_on_last_proof_submitted_at"
     t.index ["managing_guardian_id"], name: "index_applications_on_managing_guardian_id"
+    t.index ["medical_certification_rejection_reason_code"], name: "idx_on_medical_certification_rejection_reason_code_df759e6de4"
     t.index ["medical_certification_status"], name: "index_applications_on_medical_certification_status"
     t.index ["medical_certification_verified_by_id"], name: "index_applications_on_medical_certification_verified_by_id"
     t.index ["medical_provider_email", "status"], name: "index_applications_on_medical_provider_email_and_status"
@@ -179,8 +181,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.string "previous_subject"
     t.text "previous_body"
     t.boolean "enabled", default: true, null: false
+    t.string "locale", default: "en", null: false
+    t.boolean "needs_sync", default: false, null: false
     t.index ["enabled"], name: "index_email_templates_on_enabled"
-    t.index ["name"], name: "index_email_templates_on_name", unique: true
+    t.index ["name", "format", "locale"], name: "index_email_templates_on_name_format_locale", unique: true
     t.index ["updated_by_id"], name: "index_email_templates_on_updated_by_id"
   end
 
@@ -373,11 +377,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "notes"
+    t.string "rejection_reason_code"
     t.index ["admin_id", "created_at"], name: "index_proof_reviews_on_admin_id_and_created_at"
     t.index ["admin_id"], name: "index_proof_reviews_on_admin_id"
     t.index ["application_id", "proof_type", "created_at"], name: "idx_on_application_id_proof_type_created_at_4b8ffa7c5f"
     t.index ["application_id", "proof_type", "status"], name: "idx_on_application_id_proof_type_status_78cb268d0d"
     t.index ["application_id"], name: "index_proof_reviews_on_application_id"
+    t.index ["rejection_reason_code"], name: "index_proof_reviews_on_rejection_reason_code"
     t.index ["reviewed_at"], name: "index_proof_reviews_on_reviewed_at"
     t.index ["status"], name: "index_proof_reviews_on_status"
   end
@@ -393,6 +399,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.datetime "resolved_at"
     t.integer "resolved_by_id"
     t.index ["user_id"], name: "index_recovery_requests_on_user_id"
+  end
+
+  create_table "rejection_reasons", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "proof_type", null: false
+    t.string "locale", default: "en", null: false
+    t.text "body", null: false
+    t.boolean "needs_sync", default: false, null: false
+    t.integer "version", default: 1, null: false
+    t.text "previous_body"
+    t.bigint "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code", "proof_type", "locale"], name: "index_rejection_reasons_on_code_proof_type_locale", unique: true
+    t.index ["updated_by_id"], name: "index_rejection_reasons_on_updated_by_id"
   end
 
   create_table "role_capabilities", force: :cascade do |t|

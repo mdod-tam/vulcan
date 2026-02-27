@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Seed File for "medical_provider_notifications_certification_revision_needed"
-EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certification_revision_needed', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certification_revision_needed', format: :text, locale: 'en') do |template|
   template.subject = 'Disability Certification Needs Updates'
   template.description = 'Sent to a medical provider when the submitted disability certification form requires revision.'
   template.body = <<~TEXT
@@ -9,7 +9,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certifica
 
     DISABILITY CERTIFICATION FORM NEEDS UPDATES
 
-    Dear Medical Provider,
+    Hello,
 
     We have received the disability certification form for the following applicant:
 

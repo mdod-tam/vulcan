@@ -13,26 +13,15 @@
 <% zip       = @application.user&.zip_code.to_s %>
 <% full_address = "#{address_1} #{address_2} #{city}, #{state} #{zip}".squish %>
 
-<%# Rejection message locals %>
-<% address_mismatch_income = h("The address provided on your income documentation does not match the application address. Please submit documentation that contains the address exactly matching the one shared in your application: #{full_address}") %>
-<% address_mismatch_residency = h("The address provided on your residency documentation does not match the application address. Please submit documentation that contains the address exactly matching the one shared in your application: #{full_address}") %>
-<% expired_income = h('The income documentation you provided is more than 1 year old or is expired. Please submit documentation that is less than 1 year old and which is not expired.') %>
-<% expired_residency = h('The residency documentation you provided is more than 1 year old or is expired. Please submit documentation that is less than 1 year old and which is not expired.') %>
-<% missing_name_income = h('The income documentation you provided does not show your name. Please submit documentation that clearly displays your full name as it appears on your application.') %>
-<% missing_name_residency = h('The residency documentation you provided does not show your name. Please submit documentation that clearly displays your full name as it appears on your application.') %>
-<% wrong_document_income = h('The document you submitted is not an acceptable type of income proof. Please submit one of the following: recent pay stubs, tax returns, Social Security benefit statements, or other official documentation that verifies your income.') %>
-<% wrong_document_residency = h('The document you submitted is not an acceptable type of residency proof. Please submit one of the following: utility bill, lease agreement, mortgage statement, or other official documentation that verifies your Maryland residence.') %>
-<% missing_amount_income = h('The income documentation you provided does not clearly show your income amount. Please submit documentation that clearly displays your income figures, such as pay stubs with earnings clearly visible or benefit statements showing payment amounts.') %>
-<% exceeds_threshold_income = h('Based on the income documentation you provided, your household income exceeds the maximum threshold to qualify for the MAT program. The program is designed to assist those with financial need, and unfortunately, your income level is above our current eligibility limits.') %>
-<% outdated_ss_award_income = h('Your Social Security benefit award letter is out-of-date. Please submit your most recent award letter, which should be dated within the last 12 months. You can obtain a new benefit verification letter by visiting the Social Security Administration website or contacting your local SSA office.') %>
-
-<%# Disability Rejection message locals %>
-<% missing_provider_credentials = h('The disability certification is missing required provider credentials or license number. Please ensure the resubmitted form includes the certifying professional\'s full credentials and license information.') %>
-<% incomplete_disability_documentation = h('The documentation of the disability is incomplete. The certification must include a complete description of the disability and how it affects major life activities.') %>
-<% outdated_certification = h('The disability certification is outdated. Please provide a certification that has been completed within the last 12 months.') %>
-<% missing_signature = h('The disability certification is missing the required signature from the certifying professional. Please ensure the resubmitted form is properly signed and dated.') %>
-<% missing_functional_limitations = h('The disability certification lacks sufficient detail about functional limitations. Please ensure the resubmitted form includes specific information about how the disability affects daily activities.') %>
-<% incorrect_form_used = h('The wrong certification form was used. Please ensure the certifying professional completes the official Disability Certification Form for MAT program eligibility.') %>
+<% rejection_reason_text = lambda do |proof_type, code|
+     rejection_reason_body(
+       proof_type: proof_type,
+       code: code,
+       locale: 'en',
+       interpolations: { address: full_address }
+     )
+   end %>
+<% reason_button_classes = "px-3 py-1 rounded border border-gray-300 bg-gray-100 text-gray-800 hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1" %>
 
 <%# Helper to render PDF/Image attachment preview %>
 <%
@@ -203,64 +192,93 @@ end
   <!-- Rejection Modal for Proof Reviews -->
   <dialog id="proofRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form"
        aria-labelledby="proofRejectionModal-heading"
-       data-rejection-form-address-mismatch-income-value="<%= address_mismatch_income %>"
-       data-rejection-form-address-mismatch-residency-value="<%= address_mismatch_residency %>"
-       data-rejection-form-expired-income-value="<%= expired_income %>"
-       data-rejection-form-expired-residency-value="<%= expired_residency %>"
-       data-rejection-form-missing-name-income-value="<%= missing_name_income %>"
-       data-rejection-form-missing-name-residency-value="<%= missing_name_residency %>"
-       data-rejection-form-wrong-document-income-value="<%= wrong_document_income %>"
-       data-rejection-form-wrong-document-residency-value="<%= wrong_document_residency %>"
-       data-rejection-form-missing-amount-income-value="<%= missing_amount_income %>"
-       data-rejection-form-exceeds-threshold-income-value="<%= exceeds_threshold_income %>"
-       data-rejection-form-outdated-ss-award-income-value="<%= outdated_ss_award_income %>">
+       data-rejection-form-address-mismatch-income-value="<%= rejection_reason_text.call('income', 'address_mismatch') %>"
+       data-rejection-form-address-mismatch-residency-value="<%= rejection_reason_text.call('residency', 'address_mismatch') %>"
+       data-rejection-form-expired-income-value="<%= rejection_reason_text.call('income', 'expired') %>"
+       data-rejection-form-expired-residency-value="<%= rejection_reason_text.call('residency', 'expired') %>"
+       data-rejection-form-missing-name-income-value="<%= rejection_reason_text.call('income', 'missing_name') %>"
+       data-rejection-form-missing-name-residency-value="<%= rejection_reason_text.call('residency', 'missing_name') %>"
+       data-rejection-form-wrong-document-income-value="<%= rejection_reason_text.call('income', 'wrong_document') %>"
+       data-rejection-form-wrong-document-residency-value="<%= rejection_reason_text.call('residency', 'wrong_document') %>"
+       data-rejection-form-missing-amount-income-value="<%= rejection_reason_text.call('income', 'missing_amount') %>"
+       data-rejection-form-exceeds-threshold-income-value="<%= rejection_reason_text.call('income', 'exceeds_threshold') %>"
+       data-rejection-form-outdated-ss-award-income-value="<%= rejection_reason_text.call('income', 'outdated_ss_award') %>">
     <div class="p-6">
         <h3 id="proofRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Rejection Reason</h3>
+        <p class="sr-only" data-rejection-form-target="liveRegion" aria-live="polite" aria-atomic="true"></p>
         <div class="mb-4">
           <p class="text-sm font-medium text-gray-700 mb-1">Predefined Rejection Reasons:</p>
           <div class="flex flex-wrap gap-2 mb-2 general-reasons" data-rejection-form-target="generalReasons">
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="addressMismatch">
+                    data-reason-type="addressMismatch"
+                    data-reason-code="address_mismatch"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Address Mismatch rejection reason"
+                    aria-pressed="false">
               Address Mismatch
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="expired">
+                    data-reason-type="expired"
+                    data-reason-code="expired"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Expired Documentation rejection reason"
+                    aria-pressed="false">
               Expired Documentation
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingName">
+                    data-reason-type="missingName"
+                    data-reason-code="missing_name"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Missing Name rejection reason"
+                    aria-pressed="false">
               Missing Name
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="wrongDocument">
+                    data-reason-type="wrongDocument"
+                    data-reason-code="wrong_document"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Wrong Document Type rejection reason"
+                    aria-pressed="false">
               Wrong Document Type
             </button>
           </div>
-          <div class="flex flex-wrap gap-2 income-only-reasons" data-rejection-form-target="incomeOnlyReasons" style="display: none;">
+          <div class="hidden flex flex-wrap gap-2 income-only-reasons" data-rejection-form-target="incomeOnlyReasons" aria-hidden="true">
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingAmount">
+                    data-reason-type="missingAmount"
+                    data-reason-code="missing_amount"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Missing Amount rejection reason"
+                    aria-pressed="false">
               Missing Amount
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="exceedsThreshold">
+                    data-reason-type="exceedsThreshold"
+                    data-reason-code="exceeds_threshold"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Income Exceeds Threshold rejection reason"
+                    aria-pressed="false">
               Income Exceeds Threshold
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="outdatedSsAward">
+                    data-reason-type="outdatedSsAward"
+                    data-reason-code="outdated_ss_award"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Outdated SS Award Letter rejection reason"
+                    aria-pressed="false">
               Outdated SS Award Letter
             </button>
           </div>
@@ -277,6 +295,9 @@ end
           <%= f.hidden_field :proof_type,
               id: "rejection-proof-type",
               data: { rejection_form_target: "proofType" } %>
+          <%= f.hidden_field :rejection_reason_code,
+              id: "rejection-reason-code",
+              data: { rejection_form_target: "reasonCode" } %>
           <div>
             <%= f.label :rejection_reason, "Reason for Rejection", class: "block text-sm font-medium text-gray-700" %>
             <%= f.text_area :rejection_reason,
@@ -286,6 +307,9 @@ end
                 required: true,
                 placeholder: "Please provide a detailed explanation...",
                 data: { rejection_form_target: "reasonField" } %>
+            <p class="mt-1 text-xs text-gray-500" data-rejection-form-target="codeStatus">
+              No predefined rejection reason selected.
+            </p>
           </div>
 
           <div class="mt-4">
@@ -316,51 +340,76 @@ end
   <!-- Disability Certification Rejection Modal -->
   <dialog id="medicalCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form"
        aria-labelledby="medicalCertificationRejectionModal-heading"
-       data-rejection-form-missing-provider-credentials-value="<%= missing_provider_credentials %>"
-       data-rejection-form-incomplete-disability-documentation-value="<%= incomplete_disability_documentation %>"
-       data-rejection-form-outdated-certification-value="<%= outdated_certification %>"
-       data-rejection-form-missing-signature-value="<%= missing_signature %>"
-       data-rejection-form-missing-functional-limitations-value="<%= missing_functional_limitations %>"
-       data-rejection-form-incorrect-form-used-value="<%= incorrect_form_used %>">
+       data-rejection-form-missing-provider-credentials-value="<%= rejection_reason_text.call('medical_certification', 'missing_provider_credentials') %>"
+       data-rejection-form-incomplete-disability-documentation-value="<%= rejection_reason_text.call('medical_certification', 'incomplete_disability_documentation') %>"
+       data-rejection-form-outdated-certification-value="<%= rejection_reason_text.call('medical_certification', 'outdated_certification') %>"
+       data-rejection-form-missing-signature-value="<%= rejection_reason_text.call('medical_certification', 'missing_signature') %>"
+       data-rejection-form-missing-functional-limitations-value="<%= rejection_reason_text.call('medical_certification', 'missing_functional_limitations') %>"
+       data-rejection-form-incorrect-form-used-value="<%= rejection_reason_text.call('medical_certification', 'incorrect_form_used') %>">
     <div class="p-6">
         <h3 id="medicalCertificationRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Disability Certification Rejection Reason</h3>
+        <p class="sr-only" data-rejection-form-target="liveRegion" aria-live="polite" aria-atomic="true"></p>
         <div class="mb-4">
           <p class="text-sm font-medium text-gray-700 mb-1">Predefined Rejection Reasons:</p>
           <div class="flex flex-wrap gap-2 mb-2 medical-only-reasons" data-rejection-form-target="medicalOnlyReasons">
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingProviderCredentials">
+                    data-reason-type="missingProviderCredentials"
+                    data-reason-code="missing_provider_credentials"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Missing Provider Credentials rejection reason"
+                    aria-pressed="false">
               Missing Provider Credentials
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="incompleteDisabilityDocumentation">
+                    data-reason-type="incompleteDisabilityDocumentation"
+                    data-reason-code="incomplete_disability_documentation"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Incomplete Disability Documentation rejection reason"
+                    aria-pressed="false">
               Incomplete Disability Documentation
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="outdatedCertification">
+                    data-reason-type="outdatedCertification"
+                    data-reason-code="outdated_certification"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Outdated Certification rejection reason"
+                    aria-pressed="false">
               Outdated Certification
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingSignature">
+                    data-reason-type="missingSignature"
+                    data-reason-code="missing_signature"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Missing Signature rejection reason"
+                    aria-pressed="false">
               Missing Signature
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="missingFunctionalLimitations">
+                    data-reason-type="missingFunctionalLimitations"
+                    data-reason-code="missing_functional_limitations"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Missing Functional Limitations rejection reason"
+                    aria-pressed="false">
               Missing Functional Limitations
             </button>
             <button type="button"
-                    class="px-3 py-1 bg-gray-200 rounded"
+                    class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectPredefinedReason"
-                    data-reason-type="incorrectFormUsed">
+                    data-reason-type="incorrectFormUsed"
+                    data-reason-code="incorrect_form_used"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Incorrect Form Used rejection reason"
+                    aria-pressed="false">
               Incorrect Form Used
             </button>
           </div>
@@ -378,6 +427,9 @@ end
               id: "medical-rejection-proof-type",
               value: "medical",
               data: { rejection_form_target: "proofType" } %>
+          <%= f.hidden_field :rejection_reason_code,
+              id: "medical-rejection-reason-code",
+              data: { rejection_form_target: "reasonCode" } %>
           <div>
             <%= f.label :rejection_reason, "Reason for Rejection", class: "block text-sm font-medium text-gray-700" %>
             <%= f.text_area :rejection_reason,
@@ -387,6 +439,9 @@ end
                 required: true,
                 placeholder: "Please provide a detailed explanation...",
                 data: { rejection_form_target: "reasonField" } %>
+            <p class="mt-1 text-xs text-gray-500" data-rejection-form-target="codeStatus">
+              No predefined rejection reason selected.
+            </p>
           </div>
 
           <div class="mt-4">

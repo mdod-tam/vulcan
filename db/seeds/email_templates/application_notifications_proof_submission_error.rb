@@ -3,13 +3,11 @@
 # Seed File for "application_notifications_proof_submission_error"
 # (Suggest saving as db/seeds/email_templates/application_notifications_proof_submission_error.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_submission_error', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_submission_error', format: :text, locale: 'en') do |template|
   template.subject = 'Error Processing Your Proof Submission'
   template.description = 'Sent to the user when an error occurs during the automated processing of a proof submitted via email.'
   template.body = <<~TEXT
     %<header_text>s
-
-    ERROR PROCESSING YOUR PROOF SUBMISSION
 
     Dear %<constituent_full_name>s,
 

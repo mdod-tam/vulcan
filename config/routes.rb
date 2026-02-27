@@ -176,10 +176,18 @@ Rails.application.routes.draw do
         get :new_test_email
         post :send_test
         patch :toggle_disabled
+        patch :mark_synced
+        post :create_counterpart
       end
       collection do
         patch :bulk_disable
         patch :bulk_enable
+      end
+    end
+
+    resources :rejection_reasons, only: %i[index edit update] do
+      member do
+        patch :mark_synced
       end
     end
 

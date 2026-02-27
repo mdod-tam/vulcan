@@ -327,6 +327,9 @@ module Admin
         # Click rejection reason button using scroll-safe helper (no within_modal since we're already scoped)
         click_modal_button("button[data-reason-type='missingName']")
 
+        selected_button = find("button[data-reason-type='missingName']")
+        assert_equal 'true', selected_button['aria-pressed']
+
         # Wait for textarea to be populated - use intelligent waiting
         assert_selector("textarea[name='rejection_reason']")
 
@@ -334,6 +337,11 @@ module Admin
         reason_field = find("textarea[name='rejection_reason']")
         assert reason_field.value.present?, 'Rejection reason field should be populated'
         assert_includes reason_field.value, 'does not show your name'
+        assert_equal reason_field[:id], page.evaluate_script('document.activeElement.id')
+
+        assert_selector("[data-rejection-form-target='liveRegion']",
+                        text: /Selected rejection reason: Missing Name/i,
+                        visible: :all)
 
         # Close the modal using scroll-safe helper
         click_modal_button('Cancel')

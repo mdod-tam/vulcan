@@ -111,7 +111,8 @@ TestCaseConfig.configure_generator_test_case(Rails::Generators::TestCase)
 module DefaultHeadersRequestPatch
   %i[get post put patch delete].each do |method|
     define_method(method) do |path, **args|
-      result = super(path, **merge_default_headers(args))
+      normalized_path = normalize_request_path(path, args)
+      result = super(normalized_path, **merge_default_headers(args))
 
       # After request completes, restore Current.user for verify_authentication_state
       restore_current_user_after_request
@@ -125,8 +126,35 @@ module DefaultHeadersRequestPatch
   def merge_default_headers(args)
     return args unless respond_to?(:default_headers, true)
 
-    args[:headers] = default_headers.merge(args[:headers] || {})
+    incoming_headers = (args[:headers] || {}).transform_keys(&:to_s)
+    args[:headers] = default_headers.merge(incoming_headers)
     args
+  end
+
+  def normalize_request_path(path, args)
+    return path unless path.is_a?(Symbol)
+
+    controller_path = inferred_controller_path
+    route_id = args.dig(:params, :id)
+    return path if controller_path.blank?
+
+    Rails.application.routes.url_helpers.url_for(
+      only_path: true,
+      controller: controller_path,
+      action: path,
+      id: route_id
+    )
+  rescue StandardError
+    path
+  end
+
+  def inferred_controller_path
+    test_class_name = self.class.name.to_s
+    return if test_class_name.blank?
+
+    test_class_name.sub(/Test\z/, '').underscore
+                   .sub(%r{\A/}, '')
+                   .sub('_controller', '')
   end
 
   def restore_current_user_after_request

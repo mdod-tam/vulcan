@@ -56,10 +56,10 @@ module Admin
       # Flow: decorate_applications_with_storage -> wraps each app with ApplicationStorageDecorator
       @applications = decorate_applications_with_storage(page_of_apps, attachments_index)
 
-      # Load recent notifications with proper eager loading to avoid N+1 queries
-      # Preload user association through notifiable for NotificationComposer.generate
+      # Load recent notifications to avoid N+1 queries
+      # Preload notifiable for Notification#message, actor for view display
       @recent_notifications = Notification
-                              .includes(:actor, notifiable: :user)
+                              .includes(:actor, :notifiable)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
@@ -288,12 +288,22 @@ module Admin
       end
     end
 
-    # Processes a certification rejection using the reviewer service
+    # Processes a certification rejection using the reviewer service.
+    # Accepts both modal params (rejection_reason, notes, rejection_reason_code) and
+    # upload form params (medical_certification_rejection_reason, medical_certification_rejection_notes).
     def process_certification_rejection
+      rejection_reason = params[:medical_certification_rejection_reason].presence ||
+                         params[:rejection_reason]
+      notes = params[:medical_certification_rejection_notes].presence ||
+              params[:notes]
+      rejection_reason_code = params[:medical_certification_rejection_reason_code].presence ||
+                             params[:rejection_reason_code]
+
       reviewer = Applications::MedicalCertificationReviewer.new(@application, current_user)
       result = reviewer.reject(
-        rejection_reason: params[:medical_certification_rejection_reason],
-        notes: params[:medical_certification_rejection_notes]
+        rejection_reason: rejection_reason,
+        notes: notes,
+        rejection_reason_code: rejection_reason_code
       )
 
       if result.success?
