@@ -502,6 +502,7 @@ module ConstituentPortal
       )
     end
 
+
     def set_application
       @application = find_application_by_standard_query
       @application = find_application_by_flexible_query if @application.nil?

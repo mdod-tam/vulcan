@@ -81,6 +81,7 @@ class DocumentProofHandlerController extends Controller {
     const isRejected = this.rejectRadioTarget.checked;
   
     // Toggle visibility of sections using utility
+    // Note: display:none automatically removes elements from accessibility tree
     setVisible(this.uploadSectionTarget, isAccepted);
     setVisible(this.rejectionSectionTarget, isRejected);
     
