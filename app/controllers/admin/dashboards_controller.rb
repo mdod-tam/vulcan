@@ -10,14 +10,20 @@ module Admin
       # Load comprehensive dashboard metrics
       @metrics = load_dashboard_metrics
 
-      # Load recent notifications with proper eager loading to avoid N+1 queries
-      # Preload user association through notifiable for NotificationComposer.generate
+      # Load recent notifications with actor eager-loaded to avoid N+1 on actor queries
       @recent_notifications = Notification
-                              .includes(:actor, notifiable: :user)
+                              .includes(:actor, :notifiable)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
-                              .map { |n| NotificationDecorator.new(n) }
+
+      # Load incomplete notes assigned to current user
+      @assigned_notes = ApplicationNote
+                        .where(assigned_to: current_user)
+                        .incomplete
+                        .includes(:application, :admin)
+                        .recent_first
+                        .limit(10)
     end
   end
 end

@@ -36,7 +36,7 @@ module Applications
       # If application was successfully created, send notifications outside the transaction
       if application_created && @application.persisted?
         begin
-          handle_successful_application
+          handle_successful_application(:create)
         rescue StandardError => e
           # Log notification errors but don't fail the entire operation
           log_error(e, 'Failed to send notifications after successful application creation')
@@ -60,9 +60,13 @@ module Applications
         @application = application
         @constituent = application.user
 
+        # Update application attributes if provided
+        return failure('Application update failed') unless update_application_attributes
+
+        # Process proof uploads (accept/reject)
         return failure('Proof upload failed') unless process_proof_uploads
 
-        handle_successful_application if @application.persisted?
+        handle_successful_application(:update) if @application.persisted?
         return true
       end
     rescue StandardError => e
@@ -80,9 +84,14 @@ module Applications
       false
     end
 
-    def handle_successful_application
+    def handle_successful_application(operation = :create)
       send_notifications
-      log_application_creation
+      case operation
+      when :create
+        log_application_creation
+      when :update
+        log_application_update
+      end
     end
 
     def log_application_creation
@@ -93,6 +102,22 @@ module Applications
         metadata: {
           submission_method: 'paper',
           initial_status: (@application.status || 'in_progress').to_s
+        }
+      )
+    end
+
+    def log_application_update
+      AuditEventService.log(
+        action: 'application_updated',
+        actor: @admin,
+        auditable: @application,
+        metadata: {
+          submission_method: 'paper',
+          updated_attributes: @application.saved_changes.keys,
+          proof_actions: {
+            income: params[:income_proof_action],
+            residency: params[:residency_proof_action]
+          }.compact
         }
       )
     end
@@ -311,13 +336,9 @@ module Applications
       @application.managing_guardian = @guardian_user_for_app
       @application.submission_method = :paper
       @application.application_date = Time.current
-      
-      # Check if the "no medical provider information" checkbox was checked
-      if params[:no_medical_provider_information]
-        @application.status = :needs_information
-      else
-        @application.status = :in_progress
-      end
+
+      # Set appropriate status based on what's missing
+      @application.status = determine_initial_status
 
       return true if @application.save
 
@@ -325,11 +346,41 @@ module Applications
       false
     end
 
+    def determine_initial_status
+      # awaiting_proof if:
+      # 1. No medical provider info provided
+      # 2. No proofs provided (income_proof_action: 'none' or residency_proof_action: 'none')
+      # 3. Proofs were rejected (income_proof_action: 'reject' or residency_proof_action: 'reject')
+
+      return :awaiting_proof if params[:no_medical_provider_information]
+
+      income_action = params[:income_proof_action]
+      residency_action = params[:residency_proof_action]
+
+      # If no proofs provided or any proofs rejected, awaiting proof
+      return :awaiting_proof if income_action.in?(%w[none reject]) || residency_action.in?(%w[none reject])
+
+      # Otherwise, in progress (has all initial documentation)
+      :in_progress
+    end
+
+    # Update application attributes within paper context
+    # only if params[:application] is present
+    def update_application_attributes
+      application_attrs = params[:application]
+      return true if application_attrs.blank?
+
+      # Update attributes - model callback automatically sets paper context
+      return true if @application.update(application_attrs)
+
+      add_error("Failed to update application: #{@application.errors.full_messages.join(', ')}")
+      false
+    end
 
     def process_proof_uploads
       Current.paper_context = true
 
-      %i[income residency].each do |proof_type|
+      %i[income residency medical_certification].each do |proof_type|
         return false unless process_proof(proof_type)
       end
 
@@ -338,23 +389,30 @@ module Applications
       Current.paper_context = nil
     end
 
-
     def process_proof(type)
-      action = params["#{type}_proof_action"] || params[:"#{type}_proof_action"]
+      # Handle medical_certification naming convention
+      action_key = type == :medical_certification ? "#{type}_action" : "#{type}_proof_action"
+      action = params[action_key] || params[action_key.to_sym]
 
-      return true unless %w[accept reject].include?(action)
+      return true unless %w[accept reject approved rejected not_requested].include?(action)
 
       case action
-      when 'accept'
+      when 'accept', 'approved'
         process_accept_proof(type)
-      when 'reject'
+      when 'reject', 'rejected'
         process_reject_proof(type)
+      when 'not_requested'
+        true
       end
     end
 
     def process_accept_proof(type)
-      file_param = params["#{type}_proof"]
-      signed_id_param = params["#{type}_proof_signed_id"]
+      # Handle medical_certification naming convention
+      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
+      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
+      
+      file_param = params[file_key]
+      signed_id_param = params[signed_id_key]
 
       # Check if we have a valid file or signed_id
       # file_param can be:
@@ -378,17 +436,33 @@ module Applications
     end
 
     def attach_and_approve_proof(type)
-      blob_or_file = params["#{type}_proof"].presence || params["#{type}_proof_signed_id"].presence
+      # Handle medical_certification naming convention
+      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
+      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
+      
+      blob_or_file = params[file_key].presence || params[signed_id_key].presence
 
-      result = ProofAttachmentService.attach_proof(
-        application: @application,
-        proof_type: type,
-        blob_or_file: blob_or_file,
-        status: :approved,
-        admin: @admin,
-        submission_method: :paper,
-        metadata: {}
-      )
+      # Route medical certifications to the correct service
+      if type == :medical_certification
+        result = MedicalCertificationAttachmentService.attach_certification(
+          application: @application,
+          blob_or_file: blob_or_file,
+          status: :approved,
+          admin: @admin,
+          submission_method: :paper,
+          metadata: {}
+        )
+      else
+        result = ProofAttachmentService.attach_proof(
+          application: @application,
+          proof_type: type,
+          blob_or_file: blob_or_file,
+          status: :approved,
+          admin: @admin,
+          submission_method: :paper,
+          metadata: {}
+        )
+      end
 
       unless result[:success]
         add_error("Error processing #{type} proof: #{result[:error]&.message}")
@@ -399,15 +473,31 @@ module Applications
     end
 
     def process_reject_proof(type)
-      result = ProofAttachmentService.reject_proof_without_attachment(
-        application: @application,
-        proof_type: type,
-        admin: @admin,
-        reason: params["#{type}_proof_rejection_reason"],
-        notes: params["#{type}_proof_rejection_notes"],
-        submission_method: :paper,
-        metadata: {}
-      )
+      # Handle medical_certification naming convention
+      reason_key = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
+      notes_key = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
+      
+      # Route medical certifications to the correct service
+      if type == :medical_certification
+        result = MedicalCertificationAttachmentService.reject_certification(
+          application: @application,
+          admin: @admin,
+          reason: params[reason_key],
+          notes: params[notes_key],
+          submission_method: :paper,
+          metadata: {}
+        )
+      else
+        result = ProofAttachmentService.reject_proof_without_attachment(
+          application: @application,
+          proof_type: type,
+          admin: @admin,
+          reason: params[reason_key],
+          notes: params[notes_key],
+          submission_method: :paper,
+          metadata: {}
+        )
+      end
 
       unless result[:success]
         add_error("Error rejecting #{type} proof: #{result[:error]&.message}")

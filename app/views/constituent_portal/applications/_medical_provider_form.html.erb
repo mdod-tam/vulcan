@@ -1,14 +1,14 @@
 <section aria-labelledby="medical-info-heading" class="space-y-4 p-4 bg-white border border-gray-200 rounded">
-  <h3 id="medical-info-heading" class="text-base font-medium text-gray-900">Medical Professional Information and Authorization to Contact</h3>
+  <h3 id="medical-info-heading" class="text-base font-medium text-gray-900">Certifying Professional Information and Authorization to Contact</h3>
   
   <p class="text-sm text-gray-700 mb-4">
-    Please provide contact information for your Doctor or a qualified Medical Professional. 
+    Please provide contact information for your Doctor or a qualified Certifying Professional. 
     The system will automatically send your Disability Certification form to them to complete.
   </p>
 
   <div class="text-sm text-gray-700 mb-4">
-    <p class="font-medium mb-2">Qualified Medical Professionals include:</p>
-    <ul class="list-disc list-inside space-y-1 ml-2" aria-label="List of qualified medical professionals">
+    <p class="font-medium mb-2">Qualified Certifying Professionals include:</p>
+    <ul class="list-disc list-inside space-y-1 ml-2" aria-label="List of qualified certifying professionals">
       <li>Doctor / Physician</li>
       <li>Audiologist</li>
       <li>Rehabilitation Counselor</li>
@@ -31,7 +31,7 @@
       required: true,
       "aria-required": "true",
       "aria-describedby": "name-description" %>
-  <p id="name-description" class="mt-1 text-xs text-gray-700">Enter the full name of your medical professional</p>
+  <p id="name-description" class="mt-1 text-xs text-gray-700">Enter the full name of your certifying professional</p>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
     <div>
@@ -65,7 +65,7 @@
 
   <!-- Enhanced Authorization Section -->
   <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
-    <h4 class="text-base font-medium text-blue-800 mb-3">Medical Information Release Authorization</h4>
+    <h4 class="text-base font-medium text-blue-800 mb-3">Professional Information Release Authorization</h4>
     
     <!-- MAT Contact Information -->
     <div class="bg-white p-3 rounded border mb-4">
@@ -79,19 +79,19 @@
     </div>
     
     <div class="text-sm text-blue-700 space-y-3">
-      <p class="font-medium">By providing your medical professional's contact information and checking the authorization below, you consent to:</p>
+      <p class="font-medium">By providing your certifying professional's contact information and checking the authorization below, you consent to:</p>
       
       <ul class="list-disc list-inside space-y-1 ml-4">
-        <li>The release of your information to your medical provider, including the capability to view your application in its entirety</li>
-        <li>The MAT program contacting your medical provider to verify medical information related to your application</li>
-        <li>Your medical provider sharing relevant medical documentation with the MAT program for application processing</li>
-        <li>The MAT program sharing relevant medical information with authorized program staff for application review</li>
+        <li>The release of your information to your certifying professional, including the capability to view your application in its entirety</li>
+        <li>The MAT program contacting your certifying professional to verify disability-related information for your application</li>
+        <li>Your certifying professional sharing relevant disability documentation with the MAT program for application processing</li>
+        <li>The MAT program sharing relevant disability information with authorized program staff for application review</li>
       </ul>
       
       <p class="text-xs">
         <strong>Important:</strong> You are responsible for ensuring that the contact information provided is correct. 
         For security and privacy, you cannot make changes after you submit this application. 
-        If you need to update your medical professional's contact information after submission, you must contact MAT staff.
+        If you need to update your certifying professional's contact information after submission, you must contact MAT staff.
       </p>
     </div>
     
@@ -104,7 +104,7 @@
           "aria-describedby": "medical-release-description",
           id: "application_medical_release_authorized" %>
       <%= label_tag "application[medical_release_authorized]",
-          "I authorize the release and sharing of my medical information as described above",
+          "I authorize the release and sharing of my disability-related information as described above",
           class: "ml-2 block text-sm font-medium text-blue-800 required-label",
           for: "application_medical_release_authorized" %>
     </div>

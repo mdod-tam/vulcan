@@ -20,22 +20,10 @@ module Admin
       text_name  = "test_template_text_#{unique_id}"
 
       # Register our test template configs BEFORE creating records so validations succeed
-      original_templates = EmailTemplate::AVAILABLE_TEMPLATES
-      new_templates = original_templates.merge(
-        html_name => {
-          description: 'An HTML template used for system testing.',
-          required_vars: ['name'],
-          optional_vars: ['footer_text']
-        },
-        text_name => {
-          description: 'A Text template used for system testing.',
-          required_vars: ['name'],
-          optional_vars: ['footer_text']
-        }
-      )
-
-      EmailTemplate.send(:remove_const, :AVAILABLE_TEMPLATES) if EmailTemplate.const_defined?(:AVAILABLE_TEMPLATES)
-      EmailTemplate.const_set(:AVAILABLE_TEMPLATES, new_templates)
+      template_vars = {
+        'required' => ['name'],
+        'optional' => ['footer_text']
+      }
 
       # Create template records *after* constant is ready
       @template_html = create(:email_template, :html, name: html_name, subject: 'HTML Subject',
@@ -67,7 +55,7 @@ module Admin
       # Test that the mail delivery works without going through the UI to validate the core functionality
 
       sample_data = { 'name' => 'System Test User Text' }
-      rendered_subject, rendered_body = @template_text.render(**sample_data)
+      rendered_subject, rendered_body = @template_text.render(**sample_data.symbolize_keys)
 
       assert_emails 1 do
         AdminTestMailer.with(
@@ -115,8 +103,7 @@ module Admin
 
     test 'validate_variables_in_body allows optional variables' do
       # Test that optional variables are allowed
-      template_config = EmailTemplate::AVAILABLE_TEMPLATES[@template_text.name.to_s]
-      optional_vars = template_config[:optional_vars] || []
+      optional_vars = @template_text.optional_variables
       
       if optional_vars.any?
         @template_text.body = "Hello %<name>s, optional: %<#{optional_vars.first}>s"
@@ -126,8 +113,7 @@ module Admin
 
     test 'validate_variables_in_body allows required variables' do
       # Test that required variables are allowed
-      template_config = EmailTemplate::AVAILABLE_TEMPLATES[@template_text.name.to_s]
-      required_vars = template_config[:required_vars] || []
+      required_vars = @template_text.required_variables
       
       if required_vars.any?
         @template_text.body = "Hello %<#{required_vars.first}>s"

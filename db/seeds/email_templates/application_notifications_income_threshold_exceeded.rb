@@ -31,8 +31,10 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_income_thresho
 
     %<footer_text>s
   TEXT
-  template.variables = %w[header_text constituent_first_name annual_income_formatted household_size threshold_formatted
-                          additional_notes footer_text]
+  template.variables = {
+    'required' => %w[header_text constituent_first_name annual_income_formatted household_size threshold_formatted footer_text],
+    'optional' => %w[additional_notes]
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded application_notifications_income_threshold_exceeded (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

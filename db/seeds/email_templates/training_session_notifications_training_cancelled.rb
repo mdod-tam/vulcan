@@ -16,7 +16,10 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_
 
     %<footer_text>s
   TEXT
-  template.variables = %w[header_text constituent_full_name scheduled_date_time_formatted support_email footer_text]
+  template.variables = {
+    'required' => %w[header_text constituent_full_name scheduled_date_time_formatted support_email footer_text],
+    'optional' => []
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded training_session_notifications_training_cancelled (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

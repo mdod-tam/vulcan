@@ -65,21 +65,21 @@ class NotificationComposer
   end
 
   def message_for_medical_certification_requested
-    "Medical certification requested for application ##{@notifiable&.id}"
+    "Disability certification requested for application ##{@notifiable&.id}"
   end
 
   def message_for_medical_certification_received
-    "Medical certification received for application ##{@notifiable&.id}"
+    "Disability certification received for application ##{@notifiable&.id}"
   end
 
   def message_for_medical_certification_approved
-    "Medical certification approved for application ##{@notifiable&.id}"
+    "Disability certification approved for application ##{@notifiable&.id}"
   end
 
   def message_for_medical_certification_rejected
     reason = @metadata['reason']
     reason_text = reason.present? ? " - #{reason}" : ''
-    "Medical certification rejected for application ##{@notifiable&.id}#{reason_text}."
+    "Disability certification rejected for application ##{@notifiable&.id}#{reason_text}."
   end
 
   def message_for_documents_requested

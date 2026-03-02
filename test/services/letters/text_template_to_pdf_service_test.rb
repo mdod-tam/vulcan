@@ -20,6 +20,10 @@ module Letters
                                "Please login at %<sign_in_url>s soon.\n\n" \
                                "%<header_text>s\n" \
                                "%<footer_text>s\n",
+                        variables: {
+                          'required' => %w[constituent_first_name constituent_email temp_password sign_in_url header_text footer_text],
+                           'optional' => []
+                        },
                          format: :text)
 
       @variables = {
