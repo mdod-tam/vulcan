@@ -4,6 +4,7 @@
 # Includes authentication, CSRF protection, and password change enforcement
 class ApplicationController < ActionController::Base
   include Authentication
+  include Pagy::Frontend
 
   protect_from_forgery with: :exception
 

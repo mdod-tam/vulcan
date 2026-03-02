@@ -54,6 +54,12 @@ module ApplicationDataLoading
                .order(created_at: :desc)
                .load
 
+    # Load application notes with admin and assigned_to to avoid N+1
+    ApplicationNote.where(application_id: application.id)
+                   .includes(:admin, :assigned_to)
+                   .recent_first
+                   .load
+
     # Access user if needed (for caching, if necessary)
     User.find_by(id: application.user_id) if application.user_id.present?
 
