@@ -15,16 +15,16 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_submissi
 
     ERROR: %<message>s
 
-    Please review the error message above and try again. If you continue to experience issues, you can also upload your proof directly through our online portal.
+    Please review the error message above and try again.
 
-    If you need assistance, please contact our support team.
+    If you need assistance, please contact our team at %<support_email>s or call (410) 767-6960.
 
     Thank you for your understanding.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text constituent_full_name message footer_text],
+    'required' => %w[header_text constituent_full_name message footer_text support_email],
     'optional' => []
   }
   template.version = 1

@@ -67,7 +67,12 @@ module Letters
     private
 
     def find_template
-      EmailTemplate.find_by(name: template_name, format: format)
+      template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale)
+      return template if template.present?
+
+      return template if resolved_locale == I18n.default_locale.to_s
+
+      EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
     end
 
     def render_template_with_variables
@@ -168,8 +173,9 @@ module Letters
       pdf.font_size 8
       pdf.stroke_horizontal_rule
       pdf.move_down 10
+      support_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
       pdf.text 'Maryland Accessible Telecommunications | 123 Main Street, Baltimore, MD 21201', align: :center
-      pdf.text 'Phone: 555-123-4567 | Email: more.info@maryland.gov | Website: mdmat.org', align: :center
+      pdf.text "Phone: 555-123-4567 | Email: #{support_email} | Website: mdmat.org", align: :center
     end
 
     def add_page_numbers(pdf)
@@ -231,9 +237,16 @@ module Letters
 
     # Check if the template requires shared partial variables (header_text and footer_text)
     def template_requires_shared_partials?
-      template = EmailTemplate.find_by(name: template_name)
+      template = EmailTemplate.find_by(name: template_name, locale: resolved_locale) ||
+                 EmailTemplate.find_by(name: template_name, locale: I18n.default_locale.to_s)
       return false unless template
+
       template.required_variables.include?('header_text') && template.required_variables.include?('footer_text')
+    end
+
+    def resolved_locale
+      locale = recipient.locale if recipient.respond_to?(:locale)
+      locale.to_s.presence || I18n.default_locale.to_s
     end
   end
 end

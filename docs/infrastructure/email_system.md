@@ -60,8 +60,8 @@ Admin UI lets staff **edit, preview, and send test mails** — no code deploys f
 Routing (`ApplicationMailbox`):
 
 ```text
-medical-cert@mdmat.org → MedicalCertificationMailbox
-proof@example.com → ProofSubmissionMailbox  
+disability_cert@mdmat.org → MedicalCertificationMailbox
+proof@mdmat.org → ProofSubmissionMailbox  
 inbound address (env var) → ProofSubmissionMailbox
 else → DefaultMailbox
 ```

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Represents a voucher that can be redeemed by constituents for assistive technology products
+# Represents a voucher that can be redeemed by constituents for accessible telecommunications products
 class Voucher < ApplicationRecord
   belongs_to :application
   belongs_to :vendor, optional: true, class_name: 'User'

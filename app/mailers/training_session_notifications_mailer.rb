@@ -13,10 +13,12 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Expects training_session passed via .with(training_session: ...)
   def trainer_assigned
     training_session = params[:training_session] # Use params
+    trainer = training_session.trainer
+    locale = resolve_template_locale(recipient: trainer)
     template_name = 'training_session_notifications_trainer_assigned'
     begin
       # Only find the text template as per project strategy
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email templates not found for #{template_name}"
@@ -24,12 +26,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     # Prepare variables
     constituent = training_session.constituent
-    trainer = training_session.trainer
     application = training_session.application
 
     # Common elements for shared partials
     header_title = "New Training Assignment - Application ##{application.id}"
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
@@ -44,11 +45,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       constituent_full_name: constituent.full_name,
       application_id: application.id,
       # Shared partial variables (rendered content - text only for non-multipart emails)
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message),
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
       header_logo_url: header_logo_url, # Optional, passed for potential use in template body
-      header_subtitle: nil # Optional
+      header_subtitle: nil, # Optional
+      support_email: footer_contact_email
     }.compact
 
     # Render subject and body from the text template
@@ -88,23 +91,24 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Expects training_session passed via .with(training_session: ...)
   def training_scheduled
     training_session = params[:training_session] # Use params
+    constituent = training_session.constituent
+    locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_scheduled'
     begin
       # Only find the text template as per project strategy
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email templates not found for #{template_name}"
     end
 
     # Prepare variables
-    constituent = training_session.constituent
     trainer = training_session.trainer
     application = training_session.application
 
     # Common elements for shared partials
     header_title = "Training Scheduled - Application ##{application.id}"
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
@@ -121,11 +125,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       scheduled_time: training_session.scheduled_for.strftime('%I:%M %p'),
       application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message),
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
       header_logo_url: header_logo_url, # Optional
-      header_subtitle: nil # Optional
+      header_subtitle: nil, # Optional
+      support_email: footer_contact_email
     }.compact
 
     # Render subject and body from the text template
@@ -165,23 +171,24 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Expects training_session passed via .with(training_session: ...)
   def training_completed
     training_session = params[:training_session] # Use params
+    constituent = training_session.constituent
+    locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_completed'
     begin
       # Only find the text template as per project strategy
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email templates not found for #{template_name}"
     end
 
     # Prepare variables
-    constituent = training_session.constituent
     trainer = training_session.trainer
     application = training_session.application
 
     # Common elements for shared partials
     header_title = "Training Completed - Application ##{application.id}"
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
@@ -197,11 +204,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       completion_date: training_session.completed_at.strftime('%B %d, %Y'),
       application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message),
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
       header_logo_url: header_logo_url, # Optional
-      header_subtitle: nil # Optional
+      header_subtitle: nil, # Optional
+      support_email: footer_contact_email
     }.compact
 
     # Render subject and body from the text template
@@ -239,23 +248,24 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
   # Notify constituent that training is cancelled
   def training_cancelled(training_session)
+    constituent = training_session.constituent
+    locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_cancelled'
     begin
       # Only find the text template as per project strategy
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email templates not found for #{template_name}"
     end
 
     # Prepare variables
-    constituent = training_session.constituent
     trainer = training_session.trainer
     application = training_session.application
 
     # Common elements for shared partials
     header_title = "Training Cancelled - Application ##{application.id}"
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
@@ -272,11 +282,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       scheduled_time: training_session.scheduled_for.strftime('%I:%M %p'),
       application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message),
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
       header_logo_url: header_logo_url, # Optional
-      header_subtitle: nil # Optional
+      header_subtitle: nil, # Optional
+      support_email: footer_contact_email
     }.compact
 
     # Render subject and body from the text template
@@ -315,23 +327,24 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Notify constituent about a no-show for training
   def no_show_notification(training_session)
     # Use full template name as defined in the constant
+    constituent = training_session.constituent
+    locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_no_show'
     begin
       # Only find the text template as per project strategy
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email templates not found for #{template_name}"
     end
 
     # Prepare variables
-    constituent = training_session.constituent
     trainer = training_session.trainer
     application = training_session.application
 
     # Common elements for shared partials
     header_title = "Training Session Missed - Application ##{application.id}"
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
@@ -348,11 +361,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       missed_time: training_session.scheduled_for.strftime('%I:%M %p'),
       application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message),
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
       header_logo_url: header_logo_url, # Optional
-      header_subtitle: nil # Optional
+      header_subtitle: nil, # Optional
+      support_email: footer_contact_email
     }.compact
 
     # Render subject and body from the text template

@@ -14,9 +14,10 @@ class EvaluatorMailer < ApplicationMailer
   def new_evaluation_assigned
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_new_evaluation_assigned'
+    locale = resolve_template_locale(recipient: evaluation&.evaluator)
 
-    text_template = load_email_template(template_name)
-    variables = build_new_evaluation_variables(evaluation)
+    text_template = load_email_template(template_name, locale: locale)
+    variables = build_new_evaluation_variables(evaluation, locale: locale)
     send_email(evaluation.evaluator.email, text_template, variables)
   rescue StandardError => e
     log_email_error(e, evaluation&.evaluator, template_name, variables)
@@ -28,9 +29,10 @@ class EvaluatorMailer < ApplicationMailer
   def evaluation_submission_confirmation
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_evaluation_submission_confirmation'
+    locale = resolve_template_locale(recipient: evaluation&.constituent)
 
-    text_template = load_email_template(template_name)
-    variables = build_submission_confirmation_variables(evaluation)
+    text_template = load_email_template(template_name, locale: locale)
+    variables = build_submission_confirmation_variables(evaluation, locale: locale)
 
     queue_letter_if_needed(evaluation, template_name, variables)
     send_email(evaluation.constituent.email, text_template, variables)
@@ -62,22 +64,22 @@ class EvaluatorMailer < ApplicationMailer
   private
 
   # Load email template with error handling
-  def load_email_template(template_name)
-    EmailTemplate.find_by!(name: template_name, format: :text)
+  def load_email_template(template_name, locale: nil)
+    find_text_template(template_name, locale: locale)
   rescue ActiveRecord::RecordNotFound => e
     Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
     raise "Email templates not found for #{template_name}"
   end
 
   # Build variables hash for new evaluation assignment email
-  def build_new_evaluation_variables(evaluation)
+  def build_new_evaluation_variables(evaluation, locale: nil)
     evaluator = evaluation.evaluator
     constituent = evaluation.constituent
     application = evaluation.application
 
     evaluation_url = safe_evaluation_url(evaluation)
     header_title = "New Evaluation Assigned - Application ##{application.id}"
-    header_data = build_header_footer_data(header_title)
+    header_data = build_header_footer_data(header_title, locale: locale)
 
     {
       evaluator_full_name: evaluator.full_name,
@@ -93,14 +95,14 @@ class EvaluatorMailer < ApplicationMailer
   end
 
   # Build variables hash for evaluation submission confirmation email
-  def build_submission_confirmation_variables(evaluation)
+  def build_submission_confirmation_variables(evaluation, locale: nil)
     constituent = evaluation.constituent
     application = evaluation.application
     evaluator = evaluation.evaluator
     submission_date_formatted = evaluation.try(:submitted_at)&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not Provided'
 
     header_title = "Your Evaluation has been Submitted - Application ##{application.id}"
-    header_data = build_header_footer_data(header_title)
+    header_data = build_header_footer_data(header_title, locale: locale)
 
     {
       constituent_first_name: constituent.first_name,
@@ -119,23 +121,25 @@ class EvaluatorMailer < ApplicationMailer
   end
 
   # Build header and footer data for email template
-  def build_header_footer_data(title)
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+  def build_header_footer_data(title, locale: nil)
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     footer_organization_name = Policy.get('organization_name') || 'MAT Program'
     header_logo_url = safe_logo_url
 
     {
-      header_text: header_text(title: title, logo_url: header_logo_url),
+      header_text: header_text(title: title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(
         contact_email: footer_contact_email,
         website_url: footer_website_url,
         show_automated_message: footer_show_automated_message,
-        organization_name: footer_organization_name
+        organization_name: footer_organization_name,
+        locale: locale
       ),
       header_logo_url: header_logo_url,
-      header_subtitle: nil
+      header_subtitle: nil,
+      support_email: footer_contact_email
     }
   end
 
@@ -168,7 +172,6 @@ class EvaluatorMailer < ApplicationMailer
 
     constituent.disabilities.map { |d| "- #{d}" }.join("\n")
   end
-
 
   # Queue letter if constituent prefers print communication
   def queue_letter_if_needed(evaluation, template_name, variables)

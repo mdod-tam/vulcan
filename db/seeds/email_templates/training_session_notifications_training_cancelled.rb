@@ -12,7 +12,7 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_
 
     Your training session that was scheduled for %<scheduled_date_time_formatted>s has been cancelled. We apologize for any inconvenience.
 
-    If you have questions or would like to reschedule, please contact our support team at %<support_email>s.
+    If you have questions or would like to reschedule, please contact our team at %<support_email>s or call (410) 767-6960.
 
     %<footer_text>s
   TEXT

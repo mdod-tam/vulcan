@@ -496,7 +496,7 @@ else
     seed_error "Seeding failed: #{e.message}"
     Rails.logger.debug 'Backtrace:'
     e.backtrace.first(10).each { |line| Rails.logger.debug line }
-    exit 1
+    raise e
   else
     # Show summary of what was created
     seed_puts '📊 SEEDING SUMMARY:'

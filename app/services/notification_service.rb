@@ -146,22 +146,23 @@ class NotificationService
   end
 
   MAILER_MAP = {
-    'proof_rejected'                    => [ApplicationNotificationsMailer,           :proof_rejected],
-    'proof_approved'                    => [ApplicationNotificationsMailer,           :proof_approved],
-    'income_proof_rejected'             => [ApplicationNotificationsMailer,           :proof_rejected],
-    'residency_proof_rejected'          => [ApplicationNotificationsMailer,           :proof_rejected],
-    'account_created'                   => [ApplicationNotificationsMailer,           :account_created],
-    'income_proof_attached'             => [ApplicationNotificationsMailer,           :proof_received],
-    'residency_proof_attached'          => [ApplicationNotificationsMailer,           :proof_received],
-    'w9_approved'                       => [VendorNotificationsMailer,                :w9_approved],
-    'w9_rejected'                       => [VendorNotificationsMailer,                :w9_rejected],
-    'training_requested'                => [TrainingSessionNotificationsMailer,       :trainer_assigned],
-    'trainer_assigned'                  => [TrainingSessionNotificationsMailer,       :trainer_assigned],
-    'security_key_recovery_approved'    => [ApplicationNotificationsMailer,           :account_created],
-    'medical_certification_rejected'    => [MedicalProviderMailer,                    :rejected],
-    'medical_certification_approved'    => [MedicalProviderMailer,                    :approved]
+    'proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
+    'proof_approved' => [ApplicationNotificationsMailer, :proof_approved],
+    'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
+    'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
+    'account_created' => [ApplicationNotificationsMailer, :account_created],
+    'income_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
+    'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
+    'w9_approved' => [VendorNotificationsMailer, :w9_approved],
+    'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
+    'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
+    'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
+    'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created],
+    'medical_certification_rejected' => [MedicalProviderMailer, :rejected],
+    'medical_certification_approved' => [MedicalProviderMailer, :approved],
+    'medical_certification_requested' => [MedicalProviderMailer, :requested]
     # medical_certification_received: no email — constituent sees status in dashboard
-    # medical_certification_requested: sent directly via MedicalProviderMailer.request_certification, not through NotificationService
+    # medical_certification_requested: request email delivered through MedicalProviderMailer.requested proxy
   }.freeze
 
   # ---- Creation + validation -------------------------------------------------
@@ -526,7 +527,7 @@ class NotificationService
   end
 
   def default_actor
-    User.admins&.first || User.find_by(email: 'mat.program1@maryland.gov')
+    User.admins&.first || User.find_by(email: Policy.get('support_email') || 'mat.program1@maryland.gov')
   end
 
   def finalized_metadata(opts)
@@ -662,7 +663,7 @@ class NotificationService
   private_class_method :normalize_options
 
   def self.default_actor
-    User.admins&.first || User.find_by(email: 'mat.program1@maryland.gov')
+    User.admins&.first || User.find_by(email: Policy.get('support_email') || 'mat.program1@maryland.gov')
   end
   private_class_method :default_actor
 

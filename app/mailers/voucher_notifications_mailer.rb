@@ -14,11 +14,12 @@ class VoucherNotificationsMailer < ApplicationMailer
   def voucher_assigned
     voucher = params[:voucher]
     user = voucher.application.user
+    locale = resolve_template_locale(recipient: user)
     template_name = 'voucher_notifications_voucher_assigned'
 
     begin
       # Only find the text template as per project strategy
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
@@ -26,7 +27,7 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     # Common elements for shared partials
     header_title = 'Your MAT Voucher is Ready!'
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -45,9 +46,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       expiration_date_formatted: (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y'),
       validity_period_months: Policy.get('voucher_validity_period_months') || 6,
       minimum_redemption_amount_formatted: number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0),
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message)
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
+      support_email: footer_contact_email
     }.compact
 
     # Render subject and body from the text template
@@ -86,11 +89,12 @@ class VoucherNotificationsMailer < ApplicationMailer
   def voucher_expiring_soon
     voucher = params[:voucher]
     user = voucher.application.user
+    locale = resolve_template_locale(recipient: user)
     template_name = 'voucher_notifications_voucher_expiring_soon'
 
     begin
       # Find the text template
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
@@ -98,7 +102,7 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     # Prepare variables
     header_title = 'Important: Your voucher is expiring soon.'
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -116,9 +120,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       voucher_code: voucher.code,
       days_remaining: days_remaining,
       expiration_date_formatted: expiration_date.strftime('%B %d, %Y'),
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message)
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
+      support_email: footer_contact_email
       # Add other required variables from AVAILABLE_TEMPLATES if needed
     }.compact
 
@@ -158,11 +164,12 @@ class VoucherNotificationsMailer < ApplicationMailer
   def voucher_expired
     voucher = params[:voucher]
     user = voucher.application.user
+    locale = resolve_template_locale(recipient: user)
     template_name = 'voucher_notifications_voucher_expired'
 
     begin
       # Find the text template
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
@@ -170,7 +177,7 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     # Common elements for shared partials
     header_title = 'Important: Your Voucher Has Expired'
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -196,9 +203,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       # Use Policy.get for configuration values
       expiration_date_formatted: (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y'),
       # Required header and footer text
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message),
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
+      support_email: footer_contact_email,
       # Optional variables
       transaction_history_text: transaction_history_text,
       show_automated_message: footer_show_automated_message # Optional
@@ -242,11 +251,12 @@ class VoucherNotificationsMailer < ApplicationMailer
     voucher = transaction.voucher
     user = voucher.application.user
     vendor = transaction.vendor
+    locale = resolve_template_locale(recipient: user)
     template_name = 'voucher_notifications_voucher_redeemed'
 
     begin
       # Find the text template
-      text_template = EmailTemplate.find_by!(name: template_name, format: :text)
+      text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
@@ -255,7 +265,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     # Prepare variables
     header_title = 'Your voucher has been redeemed!'
     remaining_balance_formatted = number_to_currency(voucher.remaining_value) # After transaction
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -267,7 +277,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     # Use Policy.get for configuration values
     expiration_date_formatted = (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y')
     minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0)
-    redeemed_value_formatted = number
+    redeemed_value_formatted = number_to_currency(transaction.amount)
 
     # Optional message blocks (text only)
     remaining_value_message_text = ''
@@ -294,9 +304,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       redeemed_value_formatted: redeemed_value_formatted,
       fully_redeemed_message_text: fully_redeemed_message_text,
       minimum_redemption_amount_formatted: minimum_redemption_amount_formatted, # Often used within optional blocks
-      header_text: header_text(title: header_title, logo_url: header_logo_url),
+      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message)
+                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
+                               locale: locale),
+      support_email: footer_contact_email
     }.compact
 
     # Render subject and body from the text template

@@ -85,11 +85,11 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Stub EmailTemplate.find_by! for text format only
     EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_trainer_assigned',
-                                        format: :text).returns(@trainer_assigned_template)
+                                        format: :text, locale: 'en').returns(@trainer_assigned_template)
     EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_training_scheduled',
-                                        format: :text).returns(@training_scheduled_template)
+                                        format: :text, locale: 'en').returns(@training_scheduled_template)
     EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_training_completed',
-                                        format: :text).returns(@training_completed_template)
+                                        format: :text, locale: 'en').returns(@training_completed_template)
   end
 
   test 'trainer_assigned' do
@@ -101,7 +101,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     # Override stub for this test
     EmailTemplate.unstub(:find_by!)
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_trainer_assigned', format: :text)
+                 .with(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en')
                  .returns(trainer_assigned_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -134,7 +134,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Re-stub for this test only
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_training_scheduled', format: :text)
+                 .with(name: 'training_session_notifications_training_scheduled', format: :text, locale: 'en')
                  .returns(training_scheduled_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -167,7 +167,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Re-stub for this test only
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_training_completed', format: :text)
+                 .with(name: 'training_session_notifications_training_completed', format: :text, locale: 'en')
                  .returns(training_completed_template)
 
     # Update the status to completed

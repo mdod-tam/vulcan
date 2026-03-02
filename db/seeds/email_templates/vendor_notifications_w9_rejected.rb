@@ -25,15 +25,14 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_rejected', forma
 
     Once you've submitted a corrected W9 form, our team will review it promptly.
 
-    If you have any questions or need assistance, please don't hesitate to contact our support team.
+    If you have any questions or need assistance, please don't hesitate to contact our team at %<support_email>s or call (410) 767-6960.
 
     Thank you for your cooperation.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text vendor_business_name status_box_text rejection_reason vendor_portal_url
-                     footer_text],
+    'required' => %w[header_text vendor_business_name status_box_text rejection_reason vendor_portal_url footer_text support_email],
     'optional' => []
   }
   template.version = 1

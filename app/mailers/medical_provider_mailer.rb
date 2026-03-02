@@ -30,7 +30,7 @@ class MedicalProviderMailer < ApplicationMailer
 
   def rejected(notifiable, notification)
     # Map to certification_rejected method
-    # Note: MedicalCertificationAttachmentService stores rejection data as 'reason' (not 'rejection_reason')
+    # Note: MedicalCertificationAttachmentService stores rejection data as 'reason'
     self.class.with(
       application: notifiable,
       rejection_reason: notification.metadata['reason'] || notifiable.medical_certification_rejection_reason || 'Not specified',
@@ -40,7 +40,8 @@ class MedicalProviderMailer < ApplicationMailer
 
   # New method for approved certifications
   def certification_approved
-    template = load_email_template('medical_provider_certification_approved')
+    locale = provider_email_locale
+    template = find_text_template('medical_provider_certification_approved', locale: locale)
     variables = build_approval_variables
     log_debug_variables('certification_approved', variables)
 
@@ -61,7 +62,7 @@ class MedicalProviderMailer < ApplicationMailer
   # @param admin [User] The admin who rejected the certification
   def certification_rejected
     locale = provider_email_locale
-    template = load_email_template('medical_provider_certification_rejected', locale: locale)
+    template = find_text_template('medical_provider_certification_rejected', locale: locale)
     variables = build_rejection_variables(locale)
     log_debug_variables('certification_rejected', variables)
 
@@ -79,7 +80,8 @@ class MedicalProviderMailer < ApplicationMailer
   # @param timestamp [String] ISO8601 timestamp of when the request was made
   # @param notification_id [Integer] ID of the notification record for tracking
   def request_certification
-    template = load_email_template('medical_provider_request_certification')
+    locale = provider_email_locale
+    template = find_text_template('medical_provider_request_certification', locale: locale)
     variables = build_request_certification_variables
     log_debug_variables('request_certification', variables)
 
@@ -107,22 +109,13 @@ class MedicalProviderMailer < ApplicationMailer
 
   private
 
-  # Loads template by name and locale, falling back to English when locale variant is missing.
-  def load_email_template(template_name, locale: 'en')
-    EmailTemplate.find_by!(name: template_name, format: :text, locale: locale)
-  rescue ActiveRecord::RecordNotFound
-    raise if locale == 'en'
-
-    Rails.logger.debug { "No #{locale} template for #{template_name}, falling back to English" }
-    load_email_template(template_name, locale: 'en')
-  end
-
   def build_submission_error_variables(medical_provider, application, message)
     {
       medical_provider_email: medical_provider.email,
       error_message: message,
       constituent_full_name: application&.user&.full_name,
-      application_id: application&.id
+      application_id: application&.id,
+      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
 
@@ -132,7 +125,8 @@ class MedicalProviderMailer < ApplicationMailer
 
     {
       constituent_full_name: constituent.full_name,
-      application_id: application.id
+      application_id: application.id,
+      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
 
@@ -146,7 +140,8 @@ class MedicalProviderMailer < ApplicationMailer
       constituent_full_name: constituent.full_name,
       application_id: application.id,
       rejection_reason: rejection_reason,
-      remaining_attempts: remaining_attempts
+      remaining_attempts: remaining_attempts,
+      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
 
@@ -163,9 +158,9 @@ class MedicalProviderMailer < ApplicationMailer
     reason&.body.presence || params[:rejection_reason] || 'Not specified'
   end
 
-  # Locale for provider-facing emails. No provider preference yet; default to English.
+  # Locale for provider-facing emails based on the associated application user.
   def provider_email_locale
-    'en'
+    resolve_template_locale(recipient: params[:application]&.user)
   end
 
   def build_request_certification_variables
@@ -180,7 +175,8 @@ class MedicalProviderMailer < ApplicationMailer
       constituent_dob_formatted: format_constituent_dob(constituent),
       constituent_address_formatted: format_constituent_address(constituent),
       application_id: application.id,
-      download_form_url: build_download_form_url(application)
+      download_form_url: build_download_form_url(application),
+      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
 
@@ -220,8 +216,8 @@ class MedicalProviderMailer < ApplicationMailer
 
     mail(
       to: application.medical_provider_email,
-      from: 'info@mdmat.org',
-      reply_to: 'medical-certification@maryland.gov',
+      from: 'no_reply@mdmat.org',
+      reply_to: 'disability_cert@mdmat.org',
       subject: subject,
       message_stream: 'outbound'
     ) do |format|
@@ -234,8 +230,8 @@ class MedicalProviderMailer < ApplicationMailer
 
     mail(
       to: application.medical_provider_email,
-      from: 'info@mdmat.org',
-      reply_to: 'medical-certification@maryland.gov',
+      from: 'no_reply@mdmat.org',
+      reply_to: 'disability_cert@mdmat.org',
       subject: subject,
       message_stream: 'outbound'
     ) do |format|
@@ -258,8 +254,8 @@ class MedicalProviderMailer < ApplicationMailer
   def build_request_mail_options(application, subject)
     {
       to: application.medical_provider_email,
-      from: 'info@mdmat.org',
-      reply_to: 'medical-certification@maryland.gov',
+      from: 'no_reply@mdmat.org',
+      reply_to: 'disability_cert@mdmat.org',
       subject: subject,
       message_stream: 'outbound'
     }
@@ -284,8 +280,8 @@ class MedicalProviderMailer < ApplicationMailer
   def send_submission_error_email(medical_provider, subject, body)
     mail(
       to: medical_provider.email,
-      from: 'info@mdmat.org',
-      reply_to: 'medical-certification@maryland.gov',
+      from: 'no_reply@mdmat.org',
+      reply_to: 'disability_cert@mdmat.org',
       subject: subject,
       message_stream: 'outbound'
     ) do |format|
@@ -307,7 +303,8 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   def process_submission_error_email(medical_provider, application, message)
-    template = load_email_template('medical_provider_certification_submission_error')
+    locale = resolve_template_locale(recipient: application&.user)
+    template = find_text_template('medical_provider_certification_submission_error', locale: locale)
     variables = build_submission_error_variables(medical_provider, application, message)
     log_debug_variables('certification_submission_error', variables)
 

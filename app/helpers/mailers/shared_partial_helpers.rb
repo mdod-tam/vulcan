@@ -49,19 +49,31 @@ module Mailers
     # Renders an email template stored in DB, using ActionView to avoid ERB injection,
     # with caching.
     def render_email_template(template_name, format, locals = {})
-      key = [:template, template_name, format, locals.hash]
+      locals = locals.dup
+      locale = locals.delete(:locale) || locals.delete('locale')
+      resolved_locale = if respond_to?(:resolve_template_locale, true)
+                          resolve_template_locale(locale: locale)
+                        else
+                          locale.to_s.presence || I18n.default_locale.to_s
+                        end
+
+      key = [:template, template_name, format, resolved_locale, locals.hash]
       fetch_from_cache(key) do
-        template = EmailTemplate.find_by(name: template_name, format: format)
+        template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale)
+        if template.nil? && resolved_locale != I18n.default_locale.to_s
+          template = EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
+        end
+
         unless template
           # Enhanced error logging with more context
           total_templates = EmailTemplate.count
           Rails.logger.error "Missing email template: #{template_name} for format #{format}. " \
-                             "Total templates in DB: #{total_templates}. Rails env: #{Rails.env}"
+                             "Locale: #{resolved_locale}. Total templates in DB: #{total_templates}. Rails env: #{Rails.env}"
 
           # In test environment, try to create a fallback template
           return "Error: Missing email template '#{template_name}' for format #{format}" unless Rails.env.test?
 
-          template = create_fallback_template(template_name, format)
+          template = create_fallback_template(template_name, format, resolved_locale)
           return "Error: Missing email template '#{template_name}' for format #{format}" unless template
         end
 
@@ -80,14 +92,23 @@ module Mailers
     end
 
     # Creates a fallback template for test environment
-    def create_fallback_template(template_name, format)
+    def create_fallback_template(template_name, format, locale)
       return nil unless Rails.env.test?
 
       body = case template_name
              when 'email_header_text'
                "<%= title %>\n\n<% if defined?(subtitle) && subtitle.present? %>\n<%= subtitle %>\n<% end %>"
              when 'email_footer_text'
-               "--\n<%= organization_name %>\nEmail: <%= contact_email %>\nWebsite: <%= website_url %>\n\n<% if defined?(show_automated_message) && show_automated_message %>\nThis is an automated message. Please do not reply directly to this email.\n<% end %>"
+               <<~ERB.strip
+                 --
+                 <%= organization_name %>
+                 Email: <%= contact_email %>
+                 Website: <%= website_url %>
+
+                 <% if defined?(show_automated_message) && show_automated_message %>
+                 This is an automated message. Please do not reply directly to this email.
+                 <% end %>
+               ERB
              else
                return nil
              end
@@ -96,6 +117,7 @@ module Mailers
       EmailTemplate.create!(
         name: template_name,
         format: format,
+        locale: locale,
         subject: "#{template_name.humanize} Template",
         description: 'Auto-created fallback template for testing',
         body: body,

@@ -13,7 +13,8 @@ class MedicalProviderNotifier
   end
 
   # Notify the medical provider about a rejected certification
-  # Uses fax if available, otherwise email
+  # Attempts fax delivery when a provider fax number is present.
+  # Email delivery for this rejection event is handled via NotificationService.
   # @param rejection_reason [String] The reason for rejection
   # @param admin [User] The admin who rejected the certification
   # @return [Boolean] Whether the notification was sent successfully
@@ -42,11 +43,9 @@ class MedicalProviderNotifier
   end
 
   # Attempt to deliver notification via available channels
-  def attempt_notification_delivery(rejection_reason, admin)
-    delivery_result = try_fax_delivery(rejection_reason)
-    return delivery_result if delivery_result[:success]
-
-    try_email_delivery(rejection_reason, admin)
+  def attempt_notification_delivery(rejection_reason, _admin)
+    # This method attempts fax delivery and returns fax delivery status.
+    try_fax_delivery(rejection_reason)
   end
 
   # Try to deliver via fax if fax number is available
@@ -56,19 +55,11 @@ class MedicalProviderNotifier
     notify_by_fax(rejection_reason)
   end
 
-  # Try to deliver via email if email is available
-  def try_email_delivery(rejection_reason, admin)
-    return failure_result if application.medical_provider_email.blank?
-
-    notify_by_email(rejection_reason, admin)
-  end
-
   # Handle the result of delivery attempts
   def handle_delivery_result(delivery_result, _rejection_reason, _admin)
     return false unless delivery_result[:success]
 
-    # Notification record is already created by MedicalCertificationAttachmentService
-    # Update it with delivery-specific metadata
+    # Update the notification record created during rejection processing with fax metadata.
     update_notification_metadata(delivery_result)
     true
   rescue StandardError => e
@@ -81,13 +72,13 @@ class MedicalProviderNotifier
     # Find the notification created by the attachment service
     notification = Notification.where(
       notifiable: application,
-      notification_type: 'medical_certification_rejected'
+      action: 'medical_certification_rejected'
     ).order(created_at: :desc).first
 
     return unless notification
 
     # Update metadata with delivery information
-    updated_metadata = notification.metadata.merge(
+    updated_metadata = (notification.metadata || {}).merge(
       'delivery_method' => delivery_result[:method],
       'notification_methods' => notification_methods
     )
@@ -102,32 +93,6 @@ class MedicalProviderNotifier
 
     notification.update!(metadata: updated_metadata)
     Rails.logger.info "Updated notification #{notification.id} with delivery metadata"
-  end
-
-  # Build metadata for notification record
-  def build_notification_metadata(delivery_result, rejection_reason)
-    metadata = {
-      medical_provider_name: application.medical_provider_name,
-      rejection_reason: rejection_reason,
-      notification_methods: notification_methods,
-      delivery_method: delivery_result[:method]
-    }
-
-    add_delivery_specific_metadata(metadata, delivery_result)
-  end
-
-  # Add delivery-method-specific metadata
-  def add_delivery_specific_metadata(metadata, delivery_result)
-    case delivery_result[:method]
-    when 'fax'
-      metadata[:fax_sid] = delivery_result[:fax_sid] if delivery_result[:fax_sid]
-      # Store blob ID for webhook cleanup (blob should persist until Twilio confirms delivery)
-      metadata[:blob_id] = delivery_result[:blob_id] if delivery_result[:blob_id]
-    when 'email'
-      metadata[:message_id] = delivery_result[:message_id] if delivery_result[:message_id]
-    end
-
-    metadata
   end
 
   # Return a standard failure result
@@ -220,7 +185,7 @@ class MedicalProviderNotifier
   def fax_options
     {
       quality: 'fine',
-      status_callback: Rails.application.routes.url_helpers.twilio_fax_status_url(
+      status_callback: Rails.application.routes.url_helpers.webhooks_twilio_fax_status_url(
         host: Rails.application.config.action_mailer.default_url_options[:host]
       )
     }
@@ -304,7 +269,7 @@ class MedicalProviderNotifier
   # Add footer section to PDF
   def add_pdf_footer(pdf)
     pdf.text 'Thank you for your assistance in helping this applicant access needed telecommunications services.', size: 12
-    pdf.text 'For questions, please contact: medical-cert@mdmat.org', size: 12
+    pdf.text 'For questions, please contact: mat.program1@maryland.gov', size: 12
   end
 
   # Get the contact methods that were available for the medical provider

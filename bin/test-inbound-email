@@ -71,7 +71,7 @@ esac
 
 # Test with the generic proof email pattern (for backward compatibility)
 if [ "$PROVIDER" = "postmark" ]; then
-  send_postmark_test_email "Income Proof Test" "proof@example.com"
+  send_postmark_test_email "Income Proof Test" "proof@mdmat.org"
 fi
 
 echo "Health check complete. Verify in Rails logs that the emails were processed correctly."

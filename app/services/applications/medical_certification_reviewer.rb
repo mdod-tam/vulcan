@@ -67,7 +67,7 @@ module Applications
 
       return failure(service_result[:error]&.message || 'Disability certification service failed') unless service_result[:success]
 
-      # Notify medical provider (fax if available, email fallback)
+      # Notify provider via fax channel and attach delivery metadata to notification
       notify_medical_provider(rejection_reason)
 
       success

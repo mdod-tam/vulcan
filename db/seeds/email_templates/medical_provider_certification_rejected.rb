@@ -34,12 +34,12 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
 
     ----------
 
-    For questions, please contact us at medical-cert@mdmat.org or call 410-767-6960.
+    For questions, please contact us at mat.program1@maryland.gov or call 410-767-6960.
     Maryland Accessible Telecommunications (MAT) - Improving lives through accessible communication.
   TEXT
   template.variables = {
-    'required' => %w[constituent_full_name application_id rejection_reason remaining_attempts],
-    'optional' => []
+    'required' => %w[constituent_full_name application_id rejection_reason],
+    'optional' => %w[remaining_attempts]
   }
   template.version = 1
 end

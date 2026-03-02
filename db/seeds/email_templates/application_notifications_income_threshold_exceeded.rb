@@ -25,12 +25,12 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_income_thresho
 
     If your financial situation changes, or if you believe this determination was made in error, you may submit a new application with updated information.
 
-    If you have any questions or need assistance, please contact our support team.
+    If you have any questions or need assistance, please contact our team at %<support_email>s or call (410) 767-6960.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text constituent_first_name annual_income_formatted household_size threshold_formatted footer_text],
+    'required' => %w[header_text constituent_first_name annual_income_formatted household_size threshold_formatted footer_text support_email],
     'optional' => %w[additional_notes]
   }
   template.version = 1

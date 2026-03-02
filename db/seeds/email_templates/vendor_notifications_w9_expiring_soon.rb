@@ -27,13 +27,12 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', 
 
     %<status_box_info_text>s
 
-    If you have any questions or need assistance, please contact our vendor support team.
+    If you have any questions or need assistance, please contact our team at %<support_email>s or call (410) 767-6960.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text vendor_business_name status_box_warning_text days_until_expiry
-                     expiration_date_formatted vendor_portal_url status_box_info_text footer_text],
+    'required' => %w[header_text vendor_business_name status_box_warning_text days_until_expiry expiration_date_formatted vendor_portal_url status_box_info_text footer_text support_email],
     'optional' => []
   }
   template.version = 1

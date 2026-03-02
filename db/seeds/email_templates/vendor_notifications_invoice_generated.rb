@@ -29,13 +29,12 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_generated',
 
     A PDF copy of this invoice is attached for your records.
 
-    If you have any questions about this invoice, please contact our support team at more.info@maryland.gov.
+    If you have any questions about this invoice, please contact our team at %<support_email>s or call (410) 767-6960.
 
     Thank you for participating in our program!
   TEXT
   template.variables = {
-    'required' => %w[vendor_business_name invoice_number period_start_formatted period_end_formatted
-                     total_amount_formatted transactions_text_list],
+    'required' => %w[vendor_business_name invoice_number period_start_formatted period_end_formatted total_amount_formatted transactions_text_list support_email],
     'optional' => []
   }
   template.version = 1

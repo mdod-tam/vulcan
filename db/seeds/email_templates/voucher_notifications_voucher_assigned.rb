@@ -34,13 +34,12 @@ EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_assigned',
     HOW TO USE YOUR VOUCHER:
     You can use your voucher at any of our authorized vendors. Simply give them your voucher code and they will ask to verify your date of birth to process the purchase.
 
-    If you have any questions, please reply to this email or contact our support team.
+    If you have any questions, please reply to this email or contact our team at %<support_email>s or call (410) 767-6960.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text user_first_name voucher_code initial_value_formatted expiration_date_formatted
-                     validity_period_months minimum_redemption_amount_formatted footer_text],
+    'required' => %w[header_text user_first_name voucher_code initial_value_formatted expiration_date_formatted validity_period_months minimum_redemption_amount_formatted footer_text support_email],
     'optional' => []
   }
   template.version = 1

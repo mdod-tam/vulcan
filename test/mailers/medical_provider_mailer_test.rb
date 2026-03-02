@@ -38,7 +38,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     assert_equal 1, emails.size
     email = emails.first
 
-    assert_equal ['info@mdmat.org'], email.from
+    assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@application.medical_provider_email], email.to
     # Assert against the rendered subject from the mock template
     expected_subject = "Mock Request Cert Subject for #{@constituent.full_name}"
@@ -66,7 +66,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     email = emails.first
 
     # Verify email basics
-    assert_equal ['info@mdmat.org'], email.from
+    assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@application.medical_provider_email], email.to
     # Assert against the rendered subject
     expected_subject = "Certification Rejected: #{@constituent.full_name}"
@@ -95,7 +95,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     email = emails.first
 
     # Verify email details
-    assert_equal ['info@mdmat.org'], email.from
+    assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [provider.email], email.to
     # Assert against the rendered subject
     expected_subject = "Submission Error: #{provider.email}"

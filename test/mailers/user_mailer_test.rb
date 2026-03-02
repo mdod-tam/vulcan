@@ -38,10 +38,10 @@ class UserMailerTest < ActionMailer::TestCase
     )
 
     # Stub the find_by! calls to return our mocks
-    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text)
+    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text, locale: 'en')
                  .returns(password_reset_template)
 
-    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_email_verification', format: :text)
+    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_email_verification', format: :text, locale: 'en')
                  .returns(email_verification_template)
 
     # Stub the URL helpers that our mailer uses

@@ -143,7 +143,7 @@ module ApplicationStatusManagement
 
     begin
       # Use Current.user if available, otherwise fall back to a system user for automated processes
-      acting_user = Current.user || User.find_by(email: 'system@example.com') || User.first
+      acting_user = Current.user || User.find_by(email: 'system@mdmat.org') || User.first
       AuditEventService.log(
         actor: acting_user,
         action: 'application_auto_approved',

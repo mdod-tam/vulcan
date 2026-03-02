@@ -15,7 +15,7 @@ class MessageStreamTest < ActionMailer::TestCase
     @password_reset_template = mock('EmailTemplate')
     @password_reset_template.stubs(:enabled?).returns(true)
     @password_reset_template.stubs(:render).returns(['Reset Your Password', 'Password reset email body'])
-    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text).returns(@password_reset_template)
+    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text, locale: 'en').returns(@password_reset_template)
   end
 
   test 'notifications mailer uses correct message stream' do

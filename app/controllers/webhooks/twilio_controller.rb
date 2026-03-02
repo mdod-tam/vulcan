@@ -3,6 +3,7 @@
 module Webhooks
   # Controller for handling Twilio webhook callbacks
   class TwilioController < ApplicationController
+    skip_before_action :authenticate_user!
     skip_before_action :verify_authenticity_token
     before_action :verify_twilio_signature, only: [:fax_status]
 

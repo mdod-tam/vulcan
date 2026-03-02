@@ -111,7 +111,7 @@ class MedicalCertificationMailboxTest < ActionMailbox::TestCase
   #                           attachments: { 'cert.pdf' => @pdf_content })
   #     {
   #       from: from,
-  #       to: 'medical-cert@mdmat.org',
+  #       to: 'disability_cert@mdmat.org',
   #       subject: subject,
   #       body: body,
   #       attachments: attachments.map do |filename, content|

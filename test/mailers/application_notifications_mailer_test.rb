@@ -34,10 +34,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                            'Text Body: Application %<application_id>s archived for ' \
                                            '%<user_first_name>s. Reapply after %<reapply_date_formatted>s.')
     @mock_reminder = mock_template('Mock Reminder: %<stale_reviews_count>s Apps Need Review',
-                                   '<p>HTML Body: Reminder for %<admin_first_name>s. ' \
+                                   '<p>HTML Body: Reminder for %<admin_full_name>s. ' \
                                    '%<stale_reviews_count>s apps need review. %<stale_reviews_html_table>s</p>')
     @mock_reminder_text = mock_template('Mock Reminder: %<stale_reviews_count>s Apps Need Review',
-                                        'Text Body: Reminder for %<admin_first_name>s. ' \
+                                        'Text Body: Reminder for %<admin_full_name>s. ' \
                                         '%<stale_reviews_count>s apps need review. %<stale_reviews_text_list>s')
     @mock_account_created = mock_template('Mock Account Created for %<constituent_first_name>s',
                                           '<p>HTML Body: Welcome %<constituent_first_name>s! Your password is ' \
@@ -318,7 +318,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_not email.multipart?
 
     # Check the content of the email
-    assert_includes email.body.to_s, "Reminder for #{@admin.first_name}"
+    assert_includes email.body.to_s, "Reminder for #{@admin.full_name}"
     assert_includes email.body.to_s, "#{applications.count} apps need review"
     assert_includes email.body.to_s, "ID: #{@application.id}" # Check list content
   end

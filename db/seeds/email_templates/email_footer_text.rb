@@ -14,8 +14,8 @@ EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text, local
     This is an automated message. Please do not reply directly to this email.
   TEXT
   template.variables = {
-    'required' => %w[organization_name contact_email website_url],
-    'optional' => %w[show_automated_message]
+    'required' => %w[contact_email website_url],
+    'optional' => %w[show_automated_message organization_name]
   }
   template.version = 1
 end

@@ -98,21 +98,25 @@ module Admin
     test 'validate_variables_in_body allows optional variables' do
       # Test that optional variables are allowed
       optional_vars = @template_text.optional_variables
-
-      if optional_vars.any?
-        @template_text.body = "Hello %<name>s, optional: %<#{optional_vars.first}>s"
-        assert @template_text.valid?, 'Template should be valid with optional variables'
+      if optional_vars.empty?
+        @template_text.variables = {
+          'required' => @template_text.required_variables,
+          'optional' => ['optional_field']
+        }
+        optional_vars = @template_text.optional_variables
       end
+
+      @template_text.body = "Hello %<name>s, optional: %<#{optional_vars.first}>s"
+      assert @template_text.valid?, 'Template should be valid with optional variables'
     end
 
     test 'validate_variables_in_body allows required variables' do
       # Test that required variables are allowed
       required_vars = @template_text.required_variables
+      assert required_vars.any?, 'Template fixture should define at least one required variable for this test'
 
-      if required_vars.any?
-        @template_text.body = "Hello %<#{required_vars.first}>s"
-        assert @template_text.valid?, 'Template should be valid with required variables'
-      end
+      @template_text.body = "Hello %<#{required_vars.first}>s"
+      assert @template_text.valid?, 'Template should be valid with required variables'
     end
 
     test 'validate_variables_in_body rejects multiple unauthorized variables' do

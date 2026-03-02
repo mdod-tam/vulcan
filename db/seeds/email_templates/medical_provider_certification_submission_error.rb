@@ -13,9 +13,9 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_submissio
 
     The error message is: %<error_message>s
 
-    Please review the error and resubmit the certification form to medical-certification@maryland.gov or by fax to (410) 767-4276.
+    Please review the error and resubmit the certification form to disability_cert@mdmat.org or by fax to (410) 767-4276.
 
-    If you continue to experience issues or have questions, please contact us at medical-cert@mdmat.org or call 410-767-6960.
+    If you continue to experience issues or have questions, please contact us at mat.program1@maryland.gov or call 410-767-6960.
 
     Sincerely,
     Maryland Accessible Telecommunications Program

@@ -20,10 +20,9 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_c
 
     To apply for assistance:
 
-    1. Visit your dashboard to access your profile: %<dashboard_url>s
-    2. Start a new application: %<new_application_url>s
-    3. Provide all required information, including proof of residency and contact information for a professional who can certify your disability status
-    4. Submit your application for review
+    1. Start a new application.
+    2. Provide all required information, including proof of residency and contact information for a professional who can certify your disability status.
+    3. Submit your application for review.
 
     Once your application is approved, you'll receive a voucher with a fixed value that can be used to purchase eligible products, along with information about which products are eligible and which vendors are authorized to accept the vouchers.
 
@@ -43,13 +42,13 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_c
 
     Once your application is approved, you'll receive a voucher to purchase eligible products through these vendors.
 
-    If you have any questions about our program or need assistance with your application, please don't hesitate to contact us at more.info@maryland.gov or 410-697-9700.
+    If you have any questions about our program or need assistance with your application, please don't hesitate to contact us at %<support_email>s or 410-697-9700.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text user_full_name dashboard_url new_application_url active_vendors_text_list footer_text],
-    'optional' => []
+    'required' => %w[header_text user_full_name active_vendors_text_list footer_text support_email],
+    'optional' => %w[dashboard_url new_application_url]
   }
   template.version = 1
 end

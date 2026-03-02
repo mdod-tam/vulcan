@@ -69,7 +69,7 @@ class InboundEmailProcessingTest < ActionDispatch::IntegrationTest
     if defined?(ApplicationMailbox)
       ApplicationMailbox.instance_eval do
         routing(/proof@/i => :proof_submission)
-        routing(/medical-cert@/i => :proof_submission) # Route medical cert emails to proof_submission mailbox
+        routing(/disability_cert@/i => :proof_submission) # Route disability cert emails to proof_submission mailbox
         routing(/.+/ => :default)
       end
     end
@@ -86,7 +86,7 @@ class InboundEmailProcessingTest < ActionDispatch::IntegrationTest
     # Use ActionMailbox::TestHelper to directly process the email and route it
     assert_difference -> { ActionMailbox::InboundEmail.count } do
       inbound_email = receive_inbound_email_from_mail(
-        to: 'proof@example.com',
+        to: 'proof@mdmat.org',
         from: @test_email,
         subject: 'Income Proof Submission',
         body: 'Please find my income proof attached.'
@@ -148,7 +148,7 @@ class InboundEmailProcessingTest < ActionDispatch::IntegrationTest
     # Mock the mail.to address to be a medical certification email
     # and include the application ID in the subject for proper routing
     receive_inbound_email_from_mail(
-      to: 'medical-cert@example.com',
+      to: 'disability_cert@mdmat.org',
       from: @doctor_email,
       subject: "Medical Certification for Application ##{@application.id}",
       body: 'Please find the signed medical certification attached.',
@@ -183,7 +183,7 @@ class InboundEmailProcessingTest < ActionDispatch::IntegrationTest
       # The mailbox throws :bounce for unknown senders, which is expected behavior
       assert_throws :bounce do
         receive_inbound_email_from_mail(
-          to: 'proof@example.com',
+          to: 'proof@mdmat.org',
           from: unknown_email,
           subject: 'Income Proof Submission',
           body: 'Please find my income proof attached.'
@@ -215,7 +215,7 @@ class InboundEmailProcessingTest < ActionDispatch::IntegrationTest
     # and check that it generates an admin notification email
     assert_emails 1 do
       receive_inbound_email_from_mail(
-        to: 'proof@example.com',
+        to: 'proof@mdmat.org',
         from: @test_email,
         subject: 'Income Proof Submission',
         body: 'Please find my income proof attached.',
@@ -236,7 +236,7 @@ class InboundEmailProcessingTest < ActionDispatch::IntegrationTest
     # Use the helper to create and route the email
     assert_difference -> { ActionMailbox::InboundEmail.count } do
       inbound_email = receive_inbound_email_from_mail(
-        to: 'proof@example.com',
+        to: 'proof@mdmat.org',
         from: @test_email,
         subject: 'Income Proof Submission',
         body: 'Please find my income proofs attached.'

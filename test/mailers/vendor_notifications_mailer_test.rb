@@ -56,15 +56,15 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     # Stub EmailTemplate.find_by! for text format only
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_rejected', format: :text)
+                 .with(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'en')
                  .returns(rejected_template)
 
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_approved', format: :text)
+                 .with(name: 'vendor_notifications_w9_approved', format: :text, locale: 'en')
                  .returns(approved_template)
 
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_payment_issued', format: :text)
+                 .with(name: 'vendor_notifications_payment_issued', format: :text, locale: 'en')
                  .returns(payment_template)
   end
 
@@ -84,7 +84,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     # Override stubs for this test
     EmailTemplate.unstub(:find_by!)
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_payment_issued', format: :text)
+                 .with(name: 'vendor_notifications_payment_issued', format: :text, locale: 'en')
                  .returns(payment_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -116,7 +116,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     # Update the stub for this test
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_approved', format: :text)
+                 .with(name: 'vendor_notifications_w9_approved', format: :text, locale: 'en')
                  .returns(approved_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -150,7 +150,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     # Update the stub for this test
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_rejected', format: :text)
+                 .with(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'en')
                  .returns(rejected_template)
 
     # Using Rails 7.1.0+ capture_emails helper

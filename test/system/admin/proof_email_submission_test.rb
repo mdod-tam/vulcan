@@ -39,7 +39,7 @@ module Admin
 
       # Create and process an inbound email
       inbound_email = create_inbound_email_with_attachment(
-        to: 'proof@example.com',
+        to: 'proof@mdmat.org',
         from: @constituent_email,
         subject: 'Income Proof Submission',
         body: 'Please find my income proof attached.',
@@ -73,7 +73,7 @@ module Admin
 
       # Route the inbound email (system tests run with truncation globally)
       inbound_email = create_inbound_email_with_attachment(
-        to: 'proof@example.com',
+        to: 'proof@mdmat.org',
         from: unique_email,
         subject: 'Income Proof Submission',
         body: 'Please find my income proof attached.',
@@ -111,7 +111,7 @@ module Admin
 
       # Route both emails (global truncation already used for system tests)
       income_email = create_inbound_email_with_attachment(
-        to: 'proof@example.com',
+        to: 'proof@mdmat.org',
         from: unique_email,
         subject: 'Income Proof Submission',
         body: 'Please find my income proof attached.',
@@ -121,7 +121,7 @@ module Admin
       income_email.route
 
       residency_email = create_inbound_email_with_attachment(
-        to: 'proof@example.com',
+        to: 'proof@mdmat.org',
         from: unique_email,
         subject: 'Residency Proof Submission',
         body: 'Please find my residency proof attached.',

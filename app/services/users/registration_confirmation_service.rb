@@ -21,7 +21,7 @@ module Users
       failure("Failed to send registration confirmation: #{e.message}")
     end
 
-    private
+                                                  private
 
     attr_reader :user, :request
 
@@ -52,7 +52,8 @@ module Users
         new_application_url: apply_url,
         active_vendors_text_list: active_vendors_list,
         header_text: header_text_content,
-        footer_text: footer_text_content
+        footer_text: footer_text_content,
+        support_email: support_email
       }
     end
 
@@ -83,8 +84,8 @@ module Users
     end
 
     def support_email
-      Policy.get('support_email') || 'support@example.com'
-    end
+      Policy.get('support_email') || 'mat.program1@maryland.gov'
+       end
 
     def website_root_url
       root_url(host: default_host)

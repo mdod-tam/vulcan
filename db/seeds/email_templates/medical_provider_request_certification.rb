@@ -24,14 +24,14 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_request_certification',
     1. Download the form at: %<download_form_url>s
     2. Complete all required fields
     3. Sign the form
-    4. Return the completed form by email to medical-certification@maryland.gov or by fax to (410) 767-4276
+    4. Return the completed form by email to disability_cert@mdmat.org or by fax to (410) 767-4276
 
-    If you have questions or need assistance, please contact our medical certification team at more.info@maryland.gov or call (410) 767-6960.
+    If you have questions or need assistance, please contact our team at %<support_email>s or call (410) 767-6960.
 
     Thank you for your prompt attention to this important matter.
 
     Sincerely,
-    Maryland Assistive Technology Program
+    Maryland Accessible Telecommunications Program
 
     ---
 
@@ -39,10 +39,9 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_request_certification',
     CONFIDENTIALITY NOTICE: This email may contain confidential health information protected by state and federal privacy laws.
   TEXT
   template.variables = {
-    'required' => %w[constituent_full_name request_count_message timestamp_formatted constituent_dob_formatted
-                          constituent_address_formatted application_id download_form_url],
+    'required' => %w[constituent_full_name request_count_message timestamp_formatted constituent_dob_formatted constituent_address_formatted application_id download_form_url support_email],
     'optional' => []
-  }                          
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded medical_provider_request_certification (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

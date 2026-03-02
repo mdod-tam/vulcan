@@ -41,9 +41,7 @@ module Admin
       return base_sample_data unless template
 
       # Auto-generate sample data for extracted variables
-      generated = template.extract_variables.each_with_object({}) do |var, hash|
-        hash[var] = "Sample #{var.humanize}"
-      end
+      generated = template.extract_variables.index_with { |var| "Sample #{var.humanize}" }
 
       base_sample_data.merge(generated)
     end
@@ -74,6 +72,7 @@ module Admin
         'constituent_address_formatted' => "123 Main St\nAnytown, MD 12345",
         'constituent_phone_formatted' => '555-123-4567',
         'constituent_email' => 'jamie.doe@example.com',
+        'admin_full_name' => 'Admin User',
         'admin_first_name' => 'Admin User',
         'evaluator_full_name' => 'Dr. Evaluation Expert',
         'trainer_full_name' => 'Training Specialist',

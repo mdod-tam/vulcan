@@ -17,12 +17,12 @@ class User < ApplicationRecord
     # Ensure the system user is always an up-to-date administrator
     # Clear memoized value if user is not found or not an admin
     if @system_user.nil? || !@system_user.persisted? || !@system_user.admin?
-      @system_user = find_by_email('system@example.com')
+      @system_user = find_by_email('system@mdmat.org')
       if @system_user.nil?
         @system_user = User.create!(
           first_name: 'System',
           last_name: 'User',
-          email: 'system@example.com',
+          email: 'system@mdmat.org',
           password: SecureRandom.hex(32),
           type: 'Users::Administrator',
           verified: true

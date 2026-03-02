@@ -19,8 +19,8 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_approved
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text user_first_name proof_type_formatted organization_name footer_text],
-    'optional' => %w[all_proofs_approved_message_text]
+    'required' => %w[header_text user_first_name proof_type_formatted footer_text],
+    'optional' => %w[organization_name all_proofs_approved_message_text]
   }
 
   template.version = 1
