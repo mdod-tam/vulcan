@@ -4,6 +4,7 @@ FactoryBot.define do
   factory :application_note do
     application
     admin factory: %i[admin]
+    assigned_to { nil }
     content { 'This is a note about the application.' }
     internal_only { true }
 
@@ -15,6 +16,10 @@ FactoryBot.define do
     trait :internal do
       content { 'This is an internal note only visible to admins.' }
       internal_only { true }
+    end
+
+    trait :assigned do
+      assigned_to factory: %i[admin]
     end
   end
 end

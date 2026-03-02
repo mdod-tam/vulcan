@@ -4,7 +4,7 @@
 %>
 <div class="flex justify-between items-start">
   <div class="flex items-center gap-3">
-    <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Medical Certification</h2>
+    <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Disability Certification</h2>
     <% if @application.medical_certification_status == 'not_requested' %>
       <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-gray-100 text-gray-700">
         Not Requested
@@ -18,8 +18,32 @@
 </div>
 
 <div class="mt-6 space-y-4">
-  <!-- Medical Certification Upload Form (Visible unless approved) -->
+  <!-- Disability Certification Upload Form (Visible unless approved) -->
   <%= render "medical_certification_upload" %>
+
+  <!-- Medical Certification -->
+  <% if @application.medical_certification.attached? %>
+    <div class="mb-4" data-testid="medical-certification">
+      <h3 class="text-sm font-medium text-gray-700 mb-2">Medical Certification</h3>
+      <div class="pl-4 border-l-2 border-gray-200">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-gray-900">
+              <%= @application.medical_certification.blob.filename %>
+            </p>
+            <p class="text-xs text-gray-500">
+              <%= number_to_human_size(@application.medical_certification.blob.byte_size) %>
+            </p>
+          </div>
+          <a href="<%= rails_blob_path(@application.medical_certification, disposition: "attachment") %>"
+             class="inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+             download>
+            Download
+          </a>
+        </div>
+      </div>
+    </div>
+  <% end %>
 
   <!-- Provider Information -->
   <% if @application.medical_provider_name.present? %>
@@ -88,7 +112,7 @@
               class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
               data: {
                 disable_with: "Sending...",
-                turbo_confirm: "Send digital signing request to #{@application.medical_provider_name} (#{@application.medical_provider_email}) for #{@application.constituent_full_name}'s medical certification?"
+                turbo_confirm: "Send digital signing request to #{@application.medical_provider_name} (#{@application.medical_provider_email}) for #{@application.constituent_full_name}'s disability certification?"
               },
               'aria-label': "Send DocuSeal digital signing request to #{@application.medical_provider_name}" do %>
             <%= docuseal_text %>
@@ -139,9 +163,8 @@
             data-action="click->modal#open"
             data-modal-id="medicalCertificationReviewModal"
             class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none">
-        Review Certification
+        Review Disability Certification
       </button>
     <% end %>
   </div>
 </div>
-

@@ -60,13 +60,13 @@ module BadgeHelper
     status = application.medical_certification_status.to_s
     label = case status
             when 'requested'
-              'Medical Certification Request'
+              'Disability Certification Request'
             when 'received'
-              'Medical Certification Received'
+              'Disability Certification Received'
             when 'approved'
-              'Medical Certification Approved'
+              'Disability Certification Approved'
             when 'not_requested', 'rejected'
-              'Medical Certification'
+              'Disability Certification'
             else
               'Unknown Certification Status'
             end

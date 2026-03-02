@@ -146,12 +146,12 @@
       </dl>
     </section>
 
-    <%# Medical Provider & Certification Section %>
+    <%# Disability Certification Section %>
     <section aria-labelledby="medical-heading" class="mb-6 p-4 bg-gray-50 rounded">
-      <h2 id="medical-heading" class="text-xl font-semibold mb-4 text-gray-900">Medical Provider & Certification</h2>
+      <h2 id="medical-heading" class="text-xl font-semibold mb-4 text-gray-900">Disability Certification</h2>
       <% if @application.medical_provider_name.present? %>
         <div class="mb-4">
-          <h3 class="text-lg font-medium text-gray-900 mb-3">Medical Provider Information</h3>
+          <h3 class="text-lg font-medium text-gray-900 mb-3">Certifying Professional Information</h3>
           <dl class="space-y-3">
             <div>
               <dt class="text-sm font-medium text-gray-700">Name</dt>
@@ -171,7 +171,7 @@
           </dl>
         </div>
       <% else %>
-        <p class="text-sm text-gray-700 mb-4">No medical provider information provided.</p>
+        <p class="text-sm text-gray-700 mb-4">No certifying professional information provided.</p>
       <% end %>
       
       <div>
@@ -179,7 +179,7 @@
         <% status = @application.medical_certification_status %>
         <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= badge_class_for(:certification, status) %>"
               role="status"
-              aria-label="Medical certification status: <%= status.titleize %>">
+              aria-label="Disability certification status: <%= status.titleize %>">
           <%= status.titleize %>
         </span>
       </div>

@@ -99,7 +99,7 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     assert_equal 'requested', @application.medical_certification_status
 
     # Verify medical certification status is shown
-    assert_select 'h2', text: /Medical Provider & Certification/
+    assert_select 'h2', text: /Disability Certification/
 
     # With more complex pages, sometimes we need to verify content exists
     # without using exact selectors

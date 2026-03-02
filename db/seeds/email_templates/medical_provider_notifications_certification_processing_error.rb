@@ -24,7 +24,10 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_notifications_certifica
 
     This is an automated message. Please do not reply directly to this email.
   TEXT
-  template.variables = %w[constituent_full_name application_id error_message]
+  template.variables = {
+    'required' => %w[constituent_full_name application_id error_message],
+    'optional' => []
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded medical_provider_notifications_certification_processing_error (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?
