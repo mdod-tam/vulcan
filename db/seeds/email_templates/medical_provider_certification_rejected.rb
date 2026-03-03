@@ -27,8 +27,6 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
     1. Email: Reply to this email with the updated certification form attached
     2. Fax: Send the updated form to 410-767-4276
 
-    Note: The application has %<remaining_attempts>s remaining submission attempts before they must reapply.
-
     Thank you for your assistance in helping this applicant access needed telecommunications services.
 
     Sincerely,
@@ -40,7 +38,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
     Maryland Accessible Telecommunications (MAT) - Improving lives through accessible communication.
   TEXT
   template.variables = {
-    'required' => %w[constituent_full_name application_id rejection_reason remaining_attempts],
+    'required' => %w[constituent_full_name application_id rejection_reason],
     'optional' => []
   }
   template.version = 1
