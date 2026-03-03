@@ -39,7 +39,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
   TEXT
   template.variables = {
     'required' => %w[constituent_full_name application_id rejection_reason],
-    'optional' => %w[remaining_attempts]
+    'optional' => []
   }
   template.version = 1
 end

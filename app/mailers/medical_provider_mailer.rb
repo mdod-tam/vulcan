@@ -133,14 +133,12 @@ class MedicalProviderMailer < ApplicationMailer
   def build_rejection_variables(locale = 'en')
     application = params[:application]
     constituent = application.user
-    remaining_attempts = 8 - application.total_rejections
     rejection_reason = resolve_medical_cert_rejection_reason(application, locale)
 
     {
       constituent_full_name: constituent.full_name,
       application_id: application.id,
       rejection_reason: rejection_reason,
-      remaining_attempts: remaining_attempts,
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
