@@ -3,7 +3,7 @@
 # Seed File for "medical_provider_certification_submission_error"
 EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_submission_error', format: :text, locale: 'es') do |template|
   template.subject = 'Error de Envío de Certificación Médica'
-  template.description = 'Sent to a medical provider when an error occurs during the automated processing of their submitted certification form.'
+  template.description = 'Enviado a un proveedor médico cuando ocurre un error durante el procesamiento automático de su formulario de certificación enviado.'
   template.body = <<~TEXT
     Error de Envío de Certificación Médica
 

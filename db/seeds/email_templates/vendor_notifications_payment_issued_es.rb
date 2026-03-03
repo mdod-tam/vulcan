@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_payment_issued', format: :text, locale: 'es') do |template|
   template.subject = 'Pago Emitido'
-  template.description = 'Sent to a vendor when their invoice payment has been issued by the General Accounting Department (GAD).'
+  template.description = 'Enviado a un proveedor cuando el Departamento de Contabilidad General (GAD) ha emitido el pago de su factura.'
   template.body = <<~TEXT
     Pago Emitido
 

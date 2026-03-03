@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_no_show', format: :text, locale: 'es') do |template|
   template.subject = 'Ausencia en Sesión de Entrenamiento'
-  template.description = 'Sent to the user when they have not shown up for their scheduled training session.'
+  template.description = 'Enviado al usuario cuando no se ha presentado a su sesión de capacitación programada.'
   template.body = <<~TEXT
     %<header_text>s
 

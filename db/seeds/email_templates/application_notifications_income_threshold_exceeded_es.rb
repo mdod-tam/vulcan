@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'es') do |template|
   template.subject = 'Información Importante Sobre Su Solicitud MAT'
-  template.description = 'Sent when an application is rejected because income exceeds the eligibility threshold.'
+  template.description = 'Enviado cuando se rechaza una solicitud porque los ingresos superan el umbral de elegibilidad.'
   template.body = <<~TEXT
     %<header_text>s
 

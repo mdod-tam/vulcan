@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_submission_error', format: :text, locale: 'es') do |template|
   template.subject = 'Error al Procesar su Envío de Prueba'
-  template.description = 'Sent to the user when an error occurs during the automated processing of a proof submitted via email.'
+  template.description = 'Enviado al usuario cuando ocurre un error durante el procesamiento automático de una prueba enviada por correo electrónico.'
   template.body = <<~TEXT
     %<header_text>s
 

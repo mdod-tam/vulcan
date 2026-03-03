@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_completed', format: :text, locale: 'es') do |template|
   template.subject = 'Sesión de Entrenamiento Completada'
-  template.description = 'Sent to the user after their training session has been successfully completed and marked as such by the trainer.'
+  template.description = 'Enviado al usuario después de que su sesión de capacitación se haya completado con éxito y el capacitador la haya marcado como tal.'
   template.body = <<~TEXT
     %<header_text>s
 

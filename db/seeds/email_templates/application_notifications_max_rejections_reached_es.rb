@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_max_rejections_reached', format: :text, locale: 'es') do |template|
   template.subject = 'Actualización Importante del Estado de su Solicitud'
-  template.description = 'Sent when an application is archived because the maximum number of document revision attempts has been reached.'
+  template.description = 'Enviado cuando se archiva una solicitud porque se ha alcanzado el número máximo de intentos de revisión de documentos.'
   template.body = <<~TEXT
     %<header_text>s
 

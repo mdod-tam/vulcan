@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_redeemed', format: :text, locale: 'es') do |template|
   template.subject = 'Vale Canjeado Exitosamente en Su Negocio'
-  template.description = 'Sent to the vendor when a constituent redeems a voucher at their business.'
+  template.description = 'Enviado al proveedor cuando un constituyente canjea un vale en su negocio.'
   template.body = <<~TEXT
     %<header_text>s
 

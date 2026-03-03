@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'es') do |template|
   template.subject = 'El Formulario W9 Requiere Corrección'
-  template.description = 'Sent to a vendor when their submitted W9 form has been rejected and requires corrections.'
+  template.description = 'Enviado a un proveedor cuando su formulario W9 enviado ha sido rechazado y requiere correcciones.'
   template.body = <<~TEXT
     %<header_text>s
 

@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', format: :text, locale: 'es') do |template|
   template.subject = 'Acción Requerida: Su Formulario W9 Caduca Pronto'
-  template.description = 'Sent to a vendor as a warning that their W9 form on file is nearing its expiration date.'
+  template.description = 'Enviado a un proveedor como advertencia de que su formulario W9 archivado se acerca a su fecha de vencimiento.'
   template.body = <<~TEXT
     %<header_text>s
 

@@ -3,7 +3,7 @@
 # Seed File for "medical_provider_certification_rejected"
 EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected', format: :text, locale: 'es') do |template|
   template.subject = 'Certificación de Discapacidad Rechazada'
-  template.description = 'Sent to a medical provider when the submitted disability certification form is rejected.'
+  template.description = 'Enviado a un proveedor médico cuando se rechaza el formulario de certificación de discapacidad enviado.'
   template.body = <<~TEXT
     TELECOMUNICACIONES ACCESIBLES DE MARYLAND
 

@@ -3,7 +3,7 @@
 # Seed File for "medical_provider_request_certification"
 EmailTemplate.create_or_find_by!(name: 'medical_provider_request_certification', format: :text, locale: 'es') do |template|
   template.subject = 'SOLICITUD DE FORMULARIO DE CERTIFICACIÓN DE DISCAPACIDAD'
-  template.description = 'Sent to a certifying professional requesting they complete and submit a disability certification form for an applicant.'
+  template.description = 'Enviado a un profesional certificador solicitándole que complete y envíe un formulario de certificación de discapacidad para un solicitante.'
   template.body = <<~TEXT
     SOLICITUD DE FORMULARIO DE CERTIFICACIÓN DE DISCAPACIDAD
 

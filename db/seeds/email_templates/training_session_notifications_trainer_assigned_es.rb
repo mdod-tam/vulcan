@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'es') do |template|
   template.subject = 'Entrenador Asignado'
-  template.description = 'Sent to the user when a trainer has been assigned to them.'
+  template.description = 'Enviado al usuario cuando se le ha asignado un capacitador.'
   template.body = <<~TEXT
     %<header_text>s
 

@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_approved', format: :text, locale: 'es') do |template|
   template.subject = 'Formulario W9 Aprobado'
-  template.description = 'Sent to a vendor when their submitted W9 form has been reviewed and approved, activating their account.'
+  template.description = 'Enviado a un proveedor cuando su formulario W9 enviado ha sido revisado y aprobado, activando su cuenta.'
   template.body = <<~TEXT
     %<header_text>s
 

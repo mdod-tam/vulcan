@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'user_mailer_email_verification', format: :text, locale: 'es') do |template|
   template.subject = 'Por favor confirme su dirección de correo electrónico'
-  template.description = 'Sent to a user to verify their email address by clicking a confirmation link.'
+  template.description = 'Enviado a un usuario para verificar su dirección de correo electrónico haciendo clic en un enlace de confirmación.'
   template.body = <<~TEXT
     Hola,
 

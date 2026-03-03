@@ -3,7 +3,7 @@
 # Seed File for "email_footer_text"
 EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text, locale: 'es') do |template|
   template.subject = 'Texto del Pie de Página del Correo Electrónico'
-  template.description = 'Standard text footer used in all email templates'
+  template.description = 'Pie de página de texto estándar utilizado en todas las plantillas de correo electrónico'
   template.body = <<~TEXT
     --
     %<organization_name>s

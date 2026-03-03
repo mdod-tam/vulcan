@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_account_created', format: :text, locale: 'es') do |template|
   template.subject = 'Su Cuenta de Telecomunicaciones Accesibles de Maryland'
-  template.description = 'Sent when an application is received and a constituent account is created, providing initial login details.'
+  template.description = 'Enviado cuando se recibe una solicitud y se crea una cuenta de constituyente, proporcionando los detalles iniciales de inicio de sesión.'
   template.body = <<~TEXT
     %<header_text>s
 

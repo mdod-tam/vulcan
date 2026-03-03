@@ -5,14 +5,16 @@ module Admin
     include Pagy::Backend # Include Pagy for pagination
 
     before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled mark_synced create_counterpart]
-    before_action :load_locale_templates, only: %i[edit update]
-    before_action :eager_load_template_associations, only: %i[edit update]
+    before_action :load_locale_templates, only: %i[show edit update]
 
     # GET /admin/email_templates
     def index
       # Fetch all templates, including both HTML and text formats
-      # Using a custom query to ensure we get all templates regardless of format
-      templates = EmailTemplate.all
+      # Group by name, but grab just one locale variant per name as the main representation.
+      # The show/edit views will handle loading both variants together.
+      templates = EmailTemplate.where(locale: 'en').or(EmailTemplate.where(locale: 'es'))
+                               .select('DISTINCT ON (name, format) *')
+                               .order(:name, :format, :locale)
 
       # Group templates by name for better organization
       grouped_templates = templates.group_by(&:name).map do |_name, group|
@@ -29,7 +31,7 @@ module Admin
       # Log the count of templates by format for diagnostics
       Rails.logger.info "Templates loaded - HTML: #{templates.count(&:html?)}, TEXT: #{templates.count do |t|
         t.format.to_s == 'text'
-      end}, Total: #{templates.count}"
+      end}, Total: #{templates.length}"
     end
 
     # GET /admin/email_templates/:id
@@ -38,14 +40,25 @@ module Admin
       # @template_definition is set by before_action
 
       # Expensive computation in controller
-      @sample_data = view_context.sample_data_for_template(@email_template.name)
+      @en_sample_data = view_context.sample_data_for_template(@email_template.name, locale: 'en', subject: @en_template&.subject)
+      @es_sample_data = view_context.sample_data_for_template(@email_template.name, locale: 'es', subject: @es_template&.subject)
 
-      # Render template with sample data for preview
-      begin
-        @rendered_subject, @rendered_body = @email_template.render(**@sample_data)
-      rescue StandardError => e
-        @rendered_subject = "Error rendering subject: #{e.message}"
-        @rendered_body = "Error rendering template: #{e.message}"
+      if @en_template
+        begin
+          @en_rendered_subject, @en_rendered_body = @en_template.render(**@en_sample_data)
+        rescue StandardError => e
+          @en_rendered_subject = "Error rendering subject: #{e.message}"
+          @en_rendered_body = "Error rendering template: #{e.message}"
+        end
+      end
+
+      if @es_template
+        begin
+          @es_rendered_subject, @es_rendered_body = @es_template.render(**@es_sample_data)
+        rescue StandardError => e
+          @es_rendered_subject = "Error rendering subject: #{e.message}"
+          @es_rendered_body = "Error rendering template: #{e.message}"
+        end
       end
 
       log_audit_event('email_template_viewed')
@@ -237,14 +250,6 @@ module Admin
       redirect_to admin_email_templates_path, alert: t('alerts.e_template_not_found')
     end
 
-    def eager_load_template_associations
-      # Preload updated_by for edit/update actions which use the template helpers
-      ActiveRecord::Associations::Preloader.new(
-        records: [@email_template],
-        associations: [:updated_by]
-      ).call
-    end
-
     def email_template_params
       params.expect(email_template: %i[subject body description])
     end
@@ -320,12 +325,6 @@ module Admin
                                          .index_by(&:locale)
       @en_template = templates_by_locale['en']
       @es_template = templates_by_locale['es']
-
-      # Preload updated_by for both templates when needed in edit view
-      ActiveRecord::Associations::Preloader.new(
-        records: [@en_template, @es_template].compact,
-        associations: [:updated_by]
-      ).call
     end
 
     def template_for_locale(locale)

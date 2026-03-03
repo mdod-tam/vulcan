@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_application_submitted', format: :text, locale: 'es') do |template|
   template.subject = 'Su Solicitud Ha Sido Enviada'
-  template.description = 'Sent when an application is submitted.'
+  template.description = 'Enviado cuando se envía una solicitud.'
   template.body = <<~TEXT
     %<header_text>s
 

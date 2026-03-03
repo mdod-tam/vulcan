@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 # Seed File for "application_notifications_medical_certification_not_provided"
-EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certification_not_provided', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certification_not_provided', format: :text, locale: 'es') do |template|
   template.subject = 'Se Requiere Certificación de Discapacidad Para Su Solicitud'
-  template.description = 'Sent to a constituent when they submit an application without providing disability ' \
-                         'certification or provider contact information, or when a submitted certification ' \
-                         'has been rejected.'
+  template.description = 'Enviado a un constituyente cuando envía una solicitud sin proporcionar certificación de ' \
+                         'discapacidad o información de contacto del proveedor, o cuando se ha rechazado una ' \
+                         'certificación enviada.'
   template.body = <<~TEXT
     %<header_text>s
 

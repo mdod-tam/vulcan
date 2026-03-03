@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_needs_review_reminder', format: :text, locale: 'es') do |template|
   template.subject = 'Solicitudes Pendientes de Revisión'
-  template.description = 'Sent to administrators summarizing applications that have been awaiting review for too long (e.g., > 3 days).'
+  template.description = 'Enviado a los administradores resumiendo las solicitudes que han estado esperando revisión durante demasiado tiempo (por ejemplo, > 3 días).'
   template.body = <<~TEXT
     %<header_text>s
 

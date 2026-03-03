@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'es') do |template|
   template.subject = 'Confirmación de Envío de Evaluación'
-  template.description = 'Sent to the evaluator after they have submitted their evaluation.'
+  template.description = 'Enviado al evaluador después de haber enviado su evaluación.'
   template.body = <<~TEXT
     %<header_text>s
 

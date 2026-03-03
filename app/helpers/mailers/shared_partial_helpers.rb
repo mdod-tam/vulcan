@@ -105,9 +105,9 @@ module Mailers
         description: 'Auto-created fallback template for testing',
         body: body,
         # Tests need generic variable arrays so validations don't block creation
-        variables: { 'required' => [], 'optional' => [] }, 
+        variables: { 'required' => [], 'optional' => [] },
         version: 1
-        )
+      )
     rescue StandardError => e
       Rails.logger.error "Failed to create fallback template #{template_name}: #{e.message}"
       nil
@@ -117,27 +117,29 @@ module Mailers
 
     # Renders the text header template.
     # Expects locals like: :title, :subtitle (optional)
-    def header_text(title:, subtitle: '', logo_url: '')
+    def header_text(title:, subtitle: '', logo_url: '', locale: nil)
       render_email_template('email_header_text', :text, {
-        title: title.to_s,
-        subtitle: subtitle.to_s,
-        logo_url: logo_url.to_s
-      })
+                              title: title.to_s,
+                              subtitle: subtitle.to_s,
+                              logo_url: logo_url.to_s,
+                              locale: locale
+                            })
     end
 
     # Renders the text footer template.
     # Expects locals like: :contact_email, :website_url, :organization_name, :show_automated_message (boolean)
-    def footer_text(organization_name: nil, contact_email: nil, website_url: nil, show_automated_message: true)
+    def footer_text(organization_name: nil, contact_email: nil, website_url: nil, locale: nil, **_kwargs)
       org_name  = organization_name || Policy.get('organization_name') || 'MAT Program'
       email     = contact_email || Policy.get('support_email') || 'support@example.com'
       web_url   = website_url || root_url(host: default_url_options[:host])
 
       render_email_template('email_footer_text', :text, {
-        organization_name: org_name.to_s,
-        contact_email: email.to_s,
-        website_url: web_url.to_s,
-        show_automated_message: "" # Blank string so "true" doesn't print
-      })
+                              organization_name: org_name.to_s,
+                              contact_email: email.to_s,
+                              website_url: web_url.to_s,
+                              show_automated_message: '', # Blank string so "true" doesn't print
+                              locale: locale
+                            })
     end
 
     # Generates a simple text representation for a status box.

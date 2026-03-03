@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_expired', format: :text, locale: 'es') do |template|
   template.subject = 'Su Vale ha Expirado'
-  template.description = 'Sent to the constituent when their assigned voucher has expired.'
+  template.description = 'Enviado al constituyente cuando su vale asignado ha caducado.'
   template.body = <<~TEXT
     %<header_text>s
 

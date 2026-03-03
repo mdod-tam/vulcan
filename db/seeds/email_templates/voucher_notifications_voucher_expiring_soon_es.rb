@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'es') do |template|
   template.subject = 'Importante: Su Vale Expirará Pronto'
-  template.description = 'Sent to the vendor as a reminder that their voucher is nearing its expiration date.'
+  template.description = 'Enviado al proveedor como recordatorio de que su vale se acerca a su fecha de vencimiento.'
   template.body = <<~TEXT
     Importante: Su Vale Expirará Pronto
 

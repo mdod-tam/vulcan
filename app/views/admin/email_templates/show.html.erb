@@ -87,35 +87,35 @@
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="template-body-title">
       <h2 id="template-body-title" class="text-xl font-semibold text-gray-900 mb-4">Template Body (Version <%= @email_template.version %>)</h2>
       
-      <% 
-        # Parse body to separate variable placeholders at the top from actual content
-        body_lines = @email_template.body.split("\n")
-        variable_lines = []
-        content_lines = []
-        
-        body_lines.each do |line|
-          if line.strip.match?(/^%\{[a-z_]+\}$/)
-            variable_lines << line
-          else
-            content_lines << line
-          end
-        end
-        
-        # Join content lines back together, starting from the first non-variable line
-        cleaned_body = content_lines.join("\n")
-        
-        # Find the corresponding template in the other format (html <-> text)
-        other_format = @email_template.format == 'html' ? 'text' : 'html'
-        other_template = EmailTemplate.find_by(name: @email_template.name, format: other_format)
-      %>
-      
-      <div class="mb-4">
-        <h3 class="text-lg font-medium text-gray-900 mb-2">
-          Template Content
-        </h3>
-        <div class="prose max-w-none bg-gray-50 p-4 rounded border border-gray-200 overflow-x-auto">
-          <pre class="text-sm"><%= cleaned_body %></pre>
-        </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <% [@en_template, @es_template].compact.each do |template| %>
+          <% 
+            # Parse body to separate variable placeholders at the top from actual content
+            body_lines = template.body.split("\n")
+            variable_lines = []
+            content_lines = []
+            
+            body_lines.each do |line|
+              if line.strip.match?(/^%\{[a-z_]+\}$/)
+                variable_lines << line
+              else
+                content_lines << line
+              end
+            end
+            
+            # Join content lines back together, starting from the first non-variable line
+            cleaned_body = content_lines.join("\n")
+          %>
+          
+          <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">
+              Template Content (<%= template.locale.upcase %>)
+            </h3>
+            <div class="prose max-w-none bg-gray-50 p-4 rounded border border-gray-200 overflow-x-auto h-full">
+              <pre class="whitespace-pre-wrap text-sm"><%= cleaned_body %></pre>
+            </div>
+          </div>
+        <% end %>
       </div>
     </section>
 
@@ -123,26 +123,50 @@
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="template-preview-title">
       <h2 id="template-preview-title" class="text-xl font-semibold text-gray-900 mb-4">Rendered Preview</h2>
       
-      <div class="mb-4">
-        <h3 class="text-lg font-medium text-gray-900 mb-2">
-          Subject: <span class="font-normal"><%= @rendered_subject %></span>
-        </h3>
-      </div>
-      
-      <div class="prose max-w-none mb-4">
-        <h3 class="text-lg font-medium text-gray-900 mb-2">
-          Body Preview
-        </h3>
-        
-        <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white">
-          <% if @email_template.format == 'html' %>
-            <div class="email-preview">
-              <%= raw @rendered_body %>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <% if @en_template %>
+          <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">
+              English Preview
+            </h3>
+            <div class="mb-4">
+              <span class="font-medium text-gray-700">Subject:</span> <span class="font-normal"><%= @en_rendered_subject %></span>
             </div>
-          <% else %>
-            <pre class="whitespace-pre-wrap text-sm"><%= @rendered_body %></pre>
-          <% end %>
-        </div>
+            <div class="prose max-w-none mb-4">
+              <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white h-full">
+                <% if @en_template.format == 'html' %>
+                  <div class="email-preview">
+                    <%= raw @en_rendered_body %>
+                  </div>
+                <% else %>
+                  <pre class="whitespace-pre-wrap text-sm"><%= @en_rendered_body %></pre>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+
+        <% if @es_template %>
+          <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">
+              Spanish Preview
+            </h3>
+            <div class="mb-4">
+              <span class="font-medium text-gray-700">Subject:</span> <span class="font-normal"><%= @es_rendered_subject %></span>
+            </div>
+            <div class="prose max-w-none mb-4">
+              <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white h-full">
+                <% if @es_template.format == 'html' %>
+                  <div class="email-preview">
+                    <%= raw @es_rendered_body %>
+                  </div>
+                <% else %>
+                  <pre class="whitespace-pre-wrap text-sm"><%= @es_rendered_body %></pre>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
       </div>
       
       <div class="text-sm text-gray-600 mt-2 italic">
@@ -155,6 +179,13 @@
       <h2 id="variables-title" class="text-xl font-semibold text-gray-900 mb-4">Available Variables</h2>
       
       <% 
+        # Parse body to separate variable placeholders at the top from actual content for the active template
+        body_lines = @email_template.body.split("\n")
+        variable_lines = []
+        body_lines.each do |line|
+          variable_lines << line if line.strip.match?(/^%\{[a-z_]+\}$/)
+        end
+
         # Extract variable names from variable_lines
         detected_vars = variable_lines.map do |line|
           line.strip.match(/%\{([a-z_]+)\}/) ? $1 : nil

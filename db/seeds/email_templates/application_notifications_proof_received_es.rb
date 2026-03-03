@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_received', format: :text, locale: 'es') do |template|
   template.subject = 'Documento Recibido'
-  template.description = 'Sent when a piece of documentation submitted by the applicant has been received and is awaiting review.'
+  template.description = 'Enviado cuando se ha recibido un documento enviado por el solicitante y está esperando revisión.'
   template.body = <<~TEXT
     %<header_text>s
 

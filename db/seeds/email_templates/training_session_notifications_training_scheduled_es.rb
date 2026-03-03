@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_scheduled', format: :text, locale: 'es') do |template|
   template.subject = 'Sesión de Entrenamiento Programada'
-  template.description = 'Sent to the user when their training session has been scheduled.'
+  template.description = 'Enviado al usuario cuando se ha programado su sesión de capacitación.'
   template.body = <<~TEXT
     %<header_text>s
 

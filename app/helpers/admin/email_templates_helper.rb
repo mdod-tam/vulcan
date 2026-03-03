@@ -36,25 +36,27 @@ module Admin
 
     # Provides sample data for rendering email template previews or tests.
     # Auto-extracts variables from the template body and generates generic sample values.
-    def sample_data_for_template(template_name)
-      template = EmailTemplate.find_by(name: template_name)
-      return base_sample_data unless template
+    def sample_data_for_template(template_name, locale: 'en', subject: nil)
+      template = EmailTemplate.find_by(name: template_name, locale: locale) || EmailTemplate.find_by(name: template_name)
+      return base_sample_data(locale: locale, subject: subject) unless template
 
       # Auto-generate sample data for extracted variables
       generated = template.extract_variables.index_with { |var| "Sample #{var.humanize}" }
 
-      base_sample_data.merge(generated)
+      generated.merge(base_sample_data(locale: locale, subject: subject || template.subject))
     end
 
     private
 
     # Base sample data shared across all templates
-    def base_sample_data
+    def base_sample_data(locale: 'en', subject: nil) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity,Metrics/MethodLength
+      is_es = locale.to_s == 'es'
       {
-        'header_text' => render(partial: 'shared/mailers/header', formats: [:text], locals: { title: 'Sample Email Title' }),
+        'header_text' => render(partial: 'shared/mailers/header', formats: [:text],
+                                locals: { title: subject || (is_es ? 'Título de Correo de Muestra' : 'Sample Email Title') }),
         'footer_text' => render(partial: 'shared/mailers/footer', formats: [:text], locals: { show_automated_message: true }),
         'header_logo_url' => asset_url('TAM_color.png'),
-        'header_subtitle' => 'Sample Subtitle',
+        'header_subtitle' => is_es ? 'Subtítulo de Muestra' : 'Sample Subtitle',
         'footer_contact_email' => 'support@example.com',
         'footer_website_url' => 'http://example.com',
         'footer_show_automated_message' => true,
@@ -64,11 +66,11 @@ module Admin
         'admin_dashboard_url' => 'http://example.com/admin/dashboard',
         'vendor_portal_url' => 'http://example.com/vendor',
         'application_id' => '12345',
-        'user_first_name' => 'Alex',
+        'user_first_name' => is_es ? 'Alejandro' : 'Alex',
         'user_email' => 'alex@example.com',
-        'constituent_first_name' => 'Jamie',
-        'constituent_full_name' => 'Jamie Doe',
-        'constituent_dob_formatted' => 'January 15, 1985',
+        'constituent_first_name' => is_es ? 'Jaime' : 'Jamie',
+        'constituent_full_name' => is_es ? 'Jaime Doe' : 'Jamie Doe',
+        'constituent_dob_formatted' => is_es ? '15 de Enero, 1985' : 'January 15, 1985',
         'constituent_address_formatted' => "123 Main St\nAnytown, MD 12345",
         'constituent_phone_formatted' => '555-123-4567',
         'constituent_email' => 'jamie.doe@example.com',
@@ -84,17 +86,17 @@ module Admin
         'transaction_date_formatted' => Date.current.strftime('%B %d, %Y'),
         'period_start_formatted' => (Date.current - 1.month).beginning_of_month.strftime('%B %d, %Y'),
         'period_end_formatted' => (Date.current - 1.month).end_of_month.strftime('%B %d, %Y'),
-        'status_box_text' => 'INFO: Sample Status Message',
-        'status_box_warning_text' => 'WARNING: Sample Warning Message',
-        'status_box_info_text' => 'INFO: Sample Info Message',
-        'error_message' => 'A sample error occurred during processing.',
-        'rejection_reason' => 'Information provided was incomplete.',
-        'additional_instructions' => 'Please provide documents X, Y, and Z.',
+        'status_box_text' => is_es ? 'INFO: Mensaje de estado de muestra' : 'INFO: Sample Status Message',
+        'status_box_warning_text' => is_es ? 'ADVERTENCIA: Mensaje de advertencia de muestra' : 'WARNING: Sample Warning Message',
+        'status_box_info_text' => is_es ? 'INFO: Mensaje de información de muestra' : 'INFO: Sample Info Message',
+        'error_message' => is_es ? 'Ocurrió un error de muestra durante el procesamiento.' : 'A sample error occurred during processing.',
+        'rejection_reason' => is_es ? 'La información proporcionada estaba incompleta.' : 'Information provided was incomplete.',
+        'additional_instructions' => is_es ? 'Por favor, proporcione los documentos X, Y y Z.' : 'Please provide documents X, Y, and Z.',
         'remaining_attempts' => 2,
-        'remaining_attempts_message_text' => 'You have 2 attempts remaining.',
-        'archived_message_text' => 'Your application has been archived.',
-        'default_options_text' => 'Please sign in to review.',
-        'all_proofs_approved_message_text' => 'All required proofs have been approved!',
+        'remaining_attempts_message_text' => is_es ? 'Te quedan 2 intentos.' : 'You have 2 attempts remaining.',
+        'archived_message_text' => is_es ? 'Tu solicitud ha sido archivada.' : 'Your application has been archived.',
+        'default_options_text' => is_es ? 'Por favor, inicia sesión para revisar.' : 'Please sign in to review.',
+        'all_proofs_approved_message_text' => is_es ? '¡Todas las pruebas requeridas han sido aprobadas!' : 'All required proofs have been approved!',
         'active_vendors_text_list' => "- Vendor A\n- Vendor B",
         'stale_reviews_count' => 5,
         'stale_reviews_text_list' => "- App 1\n- App 2\n- App 3\n- App 4\n- App 5",
@@ -108,7 +110,7 @@ module Admin
         'gad_invoice_reference' => 'GADREF98765',
         'check_number' => 'CHK1001',
         'days_until_expiry' => 30,
-        'vendor_association_message' => 'Your association is active.',
+        'vendor_association_message' => is_es ? 'Tu asociación está activa.' : 'Your association is active.',
         'voucher_code' => 'VOUCHER123XYZ',
         'initial_value_formatted' => '$500.00',
         'unused_value_formatted' => '$150.00',
@@ -117,17 +119,17 @@ module Admin
         'minimum_redemption_amount_formatted' => '$25.00',
         'transaction_amount_formatted' => '$150.00',
         'transaction_reference_number' => 'TXNREFABCDE',
-        'transaction_history_text' => "- Redeemed $100 at Vendor A\n- Redeemed $50 at Vendor B",
-        'remaining_value_message_text' => 'Your remaining balance is $350.00.',
-        'fully_redeemed_message_text' => 'This voucher has been fully redeemed.',
+        'transaction_history_text' => is_es ? "- Canjeó $100 en el Vendedor A\n- Canjeó $50 en el Vendedor B" : "- Redeemed $100 at Vendor A\n- Redeemed $50 at Vendor B",
+        'remaining_value_message_text' => is_es ? 'Tu saldo restante es de $350.00.' : 'Your remaining balance is $350.00.',
+        'fully_redeemed_message_text' => is_es ? 'Este vale ha sido canjeado en su totalidad.' : 'This voucher has been fully redeemed.',
         'download_form_url' => 'http://example.com/forms/medical_cert.pdf',
-        'request_count_message' => '(Request #1)',
+        'request_count_message' => is_es ? '(Solicitud #1)' : '(Request #1)',
         'temp_password' => 'temporaryP@ssw0rd',
         'household_size' => 4,
         'annual_income_formatted' => '$45,000.00',
         'threshold_formatted' => '$55,000.00',
-        'proof_type_formatted' => 'Income Verification',
-        'additional_notes' => 'These are some additional notes.'
+        'proof_type_formatted' => is_es ? 'Verificación de Ingresos' : 'Income Verification',
+        'additional_notes' => is_es ? 'Estas son algunas notas adicionales.' : 'These are some additional notes.'
       }
     end
   end

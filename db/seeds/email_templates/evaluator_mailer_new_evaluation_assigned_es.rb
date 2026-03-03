@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_new_evaluation_assigned', format: :text, locale: 'es') do |template|
   template.subject = 'Nueva Evaluación Asignada'
-  template.description = 'Sent to an evaluator when a new constituent evaluation has been assigned to them.'
+  template.description = 'Enviado a un evaluador cuando se le ha asignado una nueva evaluación de un constituyente.'
   template.body = <<~TEXT
     %<header_text>s
 

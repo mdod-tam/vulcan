@@ -4,7 +4,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_confirmation', format: :text, locale: 'es') do |template|
   template.subject = 'Bienvenido/a al Programa de Telecomunicaciones Accesibles de Maryland'
-  template.description = 'Sent to a user immediately after they register an account, outlining program and next steps.'
+  template.description = 'Enviado a un usuario inmediatamente después de registrar una cuenta, describiendo el programa y los próximos pasos.'
   template.body = <<~TEXT
     %<header_text>s
 

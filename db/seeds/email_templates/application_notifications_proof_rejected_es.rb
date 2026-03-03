@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_rejected', format: :text, locale: 'es') do |template|
   template.subject = 'Actualización de Revisión de Documentos'
-  template.description = 'Sent when a specific piece of documentation submitted by the applicant has been rejected.'
+  template.description = 'Enviado cuando se ha rechazado un documento específico enviado por el solicitante.'
   template.body = <<~TEXT
     %<header_text>s
 

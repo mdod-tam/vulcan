@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_generated', format: :text, locale: 'es') do |template|
   template.subject = 'Nueva Factura Generada'
-  template.description = 'Sent to a vendor when a new invoice has been generated based on their recent voucher transactions.'
+  template.description = 'Enviado a un proveedor cuando se ha generado una nueva factura basada en sus transacciones recientes de vales.'
   template.body = <<~TEXT
     Nueva Factura Generada
 

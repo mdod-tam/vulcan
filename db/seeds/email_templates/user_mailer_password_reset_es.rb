@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'user_mailer_password_reset', format: :text, locale: 'es') do |template|
   template.subject = 'Instrucciones para restablecer contraseña'
-  template.description = 'Sent when a user requests to reset their password. Contains a link to set a new password.'
+  template.description = 'Enviado cuando un usuario solicita restablecer su contraseña. Contiene un enlace para establecer una nueva contraseña.'
   template.body = <<~TEXT
     Hola,
 
