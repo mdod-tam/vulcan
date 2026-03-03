@@ -25,8 +25,17 @@ class DocumentProofHandlerController extends Controller {
   }
 
   connect() {
+    // Restore state from form data if rejection fields have values
+    this.restoreStateFromFormData();
+    
     // Set initial state based on selected radio button
     this.updateVisibility();
+    
+    // Preview and populate rejection notes if rejection is selected
+    if (this.hasRejectRadioTarget && this.rejectRadioTarget.checked) {
+      this.previewRejectionReason();
+      this.populateRejectionNotes();
+    }
     
     // Add event listener for rejection reason selection
     if (this.hasRejectionReasonSelectTarget) {
@@ -34,6 +43,27 @@ class DocumentProofHandlerController extends Controller {
         this.previewRejectionReason();
         this.populateRejectionNotes();
       });
+    }
+  }
+
+  /**
+   * Restore the rejection state if rejection fields contain values
+   * This handles cases where the form is re-rendered after validation errors
+   */
+  restoreStateFromFormData() {
+    if (!this.hasRejectRadioTarget || !this.hasRejectionReasonSelectTarget) {
+      return;
+    }
+
+    const reasonSelect = this.rejectionReasonSelectTarget;
+    const notesField = this.hasRejectionNotesTarget ? this.rejectionNotesTarget : null;
+
+    // If rejection reason or notes have values, the user had selected reject
+    if (reasonSelect.value || (notesField && notesField.value)) {
+      this.rejectRadioTarget.checked = true;
+      if (this.hasAcceptRadioTarget) {
+        this.acceptRadioTarget.checked = false;
+      }
     }
   }
 
