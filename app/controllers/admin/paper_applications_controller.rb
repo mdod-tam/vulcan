@@ -264,11 +264,29 @@ module Admin
     end
 
     def repopulate_form_data(service, existing_application)
+      submitted_params = build_submitted_params
+      
+      # Get or build constituent with submitted data
+      constituent = service.constituent || existing_application&.user || Constituent.new
+      
+      # If constituent is a new record, populate it with submitted data
+      if constituent.new_record? && submitted_params[:constituent].present?
+        constituent.assign_attributes(submitted_params[:constituent])
+      end
+      
+      # Get or build application with submitted data
+      application = service.application || existing_application || Application.new
+      if application.new_record? && submitted_params[:application].present?
+        application.assign_attributes(submitted_params[:application])
+      end
+      
       @paper_application = {
-        application: service.application || existing_application || Application.new,
-        constituent: service.constituent || existing_application&.user || Constituent.new,
+        application: application,
+        constituent: constituent,
         guardian_user_for_app: service.guardian_user_for_app,
-        submitted_params: build_submitted_params
+        applicant_attributes: submitted_params[:applicant_attributes] || {},
+        guardian_attributes: submitted_params[:guardian_attributes] || {},
+        submitted_params: submitted_params
       }
     end
 
