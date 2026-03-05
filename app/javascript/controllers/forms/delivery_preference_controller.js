@@ -30,9 +30,6 @@ export default class extends Controller {
         setVisible(el, show, { required: false })
       }
     })
-
-    this.emailInputTarget.setAttribute("aria-required", show ? "false" : "true")
-    setVisible(this.emailInputTarget, show, { required: !show })
   }
 
   initializeAddressFields() {
