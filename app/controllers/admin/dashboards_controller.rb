@@ -17,13 +17,15 @@ module Admin
                               .order(created_at: :desc)
                               .limit(5)
 
-      # Load incomplete notes assigned to current user
-      @assigned_notes = ApplicationNote
-                        .where(assigned_to: current_user)
-                        .incomplete
-                        .includes(:application, :admin)
-                        .recent_first
-                        .limit(10)
+      # Load incomplete notes assigned to current user with pagination (3 per page)
+      @pagy_assigned_notes, @assigned_notes = pagy(
+        ApplicationNote
+          .where(assigned_to: current_user)
+          .incomplete
+          .includes(:admin, application: :user)
+          .recent_first,
+        limit: 3
+      )
     end
   end
 end
