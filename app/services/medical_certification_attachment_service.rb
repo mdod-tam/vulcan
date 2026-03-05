@@ -281,9 +281,9 @@ class MedicalCertificationAttachmentService
       medical_certification_verified_at: Time.current,
       medical_certification_verified_by_id: params[:admin].id,
       medical_certification_rejection_reason: params[:reason],
+      medical_certification_rejection_reason_code: params[:reason_code].presence,
       updated_at: Time.current
     }
-    update_attrs[:medical_certification_rejection_reason_code] = params[:reason_code] if params[:reason_code].present?
 
     params[:application].update_columns(**update_attrs)
     params[:application].reload

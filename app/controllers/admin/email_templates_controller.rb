@@ -312,7 +312,7 @@ module Admin
     end
 
     def counterpart_template
-      target_locale = @email_template.locale == 'en' ? 'es' : 'en'
+      target_locale = counterpart_locale_for(@email_template.locale)
       EmailTemplate.find_by(
         name: @email_template.name,
         format: @email_template.format,
