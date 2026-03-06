@@ -36,8 +36,9 @@ module Admin
 
     # Provides sample data for rendering email template previews or tests.
     # Auto-extracts variables from the template body and generates generic sample values.
-    def sample_data_for_template(template_name, locale: 'en', subject: nil)
-      template = EmailTemplate.find_by(name: template_name, locale: locale) || EmailTemplate.find_by(name: template_name)
+    def sample_data_for_template(template_name, locale: 'en', subject: nil, format: :text)
+      template = EmailTemplate.find_by(name: template_name, format: format, locale: locale) ||
+                 EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
       return base_sample_data(locale: locale, subject: subject) unless template
 
       # Auto-generate sample data for extracted variables

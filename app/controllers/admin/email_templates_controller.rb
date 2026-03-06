@@ -40,8 +40,18 @@ module Admin
       # @template_definition is set by before_action
 
       # Expensive computation in controller
-      @en_sample_data = view_context.sample_data_for_template(@email_template.name, locale: 'en', subject: @en_template&.subject)
-      @es_sample_data = view_context.sample_data_for_template(@email_template.name, locale: 'es', subject: @es_template&.subject)
+      @en_sample_data = view_context.sample_data_for_template(
+        @email_template.name,
+        locale: 'en',
+        subject: @en_template&.subject,
+        format: @email_template.format
+      )
+      @es_sample_data = view_context.sample_data_for_template(
+        @email_template.name,
+        locale: 'es',
+        subject: @es_template&.subject,
+        format: @email_template.format
+      )
 
       if @en_template
         begin
@@ -70,7 +80,7 @@ module Admin
       # @template_definition is set by before_action
 
       # Get sample data and render the template with it for preview
-      sample_data = view_context.sample_data_for_template(@email_template.name)
+      sample_data = view_context.sample_data_for_template(@email_template.name, format: @email_template.format)
       @rendered_subject, @rendered_body = @email_template.render(**sample_data)
 
       @test_email_form = ::Admin::TestEmailForm.new(
@@ -89,7 +99,7 @@ module Admin
       # @template_definition is set by before_action
 
       # Expensive computation done in controller for form preview
-      @sample_data = view_context.sample_data_for_template(@email_template.name)
+      @sample_data = view_context.sample_data_for_template(@email_template.name, format: @email_template.format)
       @counterpart_template = counterpart_template
     end
 
@@ -120,7 +130,7 @@ module Admin
         end
 
         # Re-prepare sample data for form re-render on validation failure
-        @sample_data = view_context.sample_data_for_template(@email_template.name)
+        @sample_data = view_context.sample_data_for_template(@email_template.name, format: @email_template.format)
         @counterpart_template = counterpart_template
         flash.now[:alert] = "Failed to update #{target_locale} template: #{target_template.errors.full_messages.join(', ')}"
         render :edit, status: :unprocessable_content
@@ -276,7 +286,7 @@ module Admin
     end
 
     def send_test_email
-      sample_data = helpers.sample_data_for_template(@email_template.name)
+      sample_data = helpers.sample_data_for_template(@email_template.name, format: @email_template.format)
       rendered_subject, rendered_body = @email_template.render(**sample_data)
 
       AdminTestMailer.with(

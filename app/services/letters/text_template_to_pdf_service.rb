@@ -4,6 +4,21 @@ module Letters
   # This service converts database-stored email text templates to PDFs for printing
   # It allows us to maintain a single source of templates (in the database with versioning logic)
   class TextTemplateToPdfService
+    DEFAULT_LETTER_TITLES = {
+      'application_notifications_account_created' => 'Your Maryland Accessible Telecommunications Account',
+      'application_notifications_registration_confirmation' => 'Welcome to the Maryland Accessible Telecommunications Program',
+      'application_notifications_proof_rejected' => 'Document Verification Follow-up Required',
+      'application_notifications_income_threshold_exceeded' => 'Income Eligibility Review',
+      'application_notifications_proof_approved' => 'Document Verification Approved',
+      'application_notifications_proof_received' => 'Document Verification Received',
+      'application_notifications_max_rejections_reached' => 'Important Application Status Update',
+      'application_notifications_proof_submission_error' => 'Document Submission Error',
+      'medical_provider_request_certification' => 'Request for Medical Certification',
+      'voucher_notifications_voucher_assigned' => 'Your Accessibility Equipment Voucher',
+      'voucher_notifications_voucher_redeemed' => 'Voucher Redemption Confirmation',
+      'evaluator_mailer_evaluation_submission_confirmation' => 'Evaluation Submission Confirmation'
+    }.freeze
+
     attr_reader :template_name, :format, :template, :variables, :recipient
 
     def initialize(template_name:, recipient:, variables: {})
@@ -111,8 +126,8 @@ module Letters
     end
 
     def add_date(pdf)
-      date_str = Time.current.strftime('%B %d, %Y')
-      pdf.text "Date: #{date_str}", align: :right
+      date_str = I18n.l(Time.current.to_date, format: :long, locale: resolved_locale.to_sym)
+      pdf.text "#{I18n.t('letters.pdf.date_label', locale: resolved_locale)}: #{date_str}", align: :right
       pdf.move_down 10
     end
 
@@ -129,7 +144,7 @@ module Letters
     end
 
     def add_salutation(pdf)
-      pdf.text "Dear #{recipient.first_name},"
+      pdf.text I18n.t('letters.pdf.salutation', first_name: recipient.first_name, locale: resolved_locale)
       pdf.move_down 10
     end
 
@@ -162,10 +177,10 @@ module Letters
 
     def add_closing(pdf)
       pdf.move_down 30
-      pdf.text 'Sincerely,'
+      pdf.text I18n.t('letters.pdf.closing', locale: resolved_locale)
       pdf.move_down 15
-      pdf.text 'Maryland Accessible Telecommunications'
-      pdf.text 'Customer Service Team'
+      pdf.text I18n.t('letters.pdf.signature.organization', locale: resolved_locale)
+      pdf.text I18n.t('letters.pdf.signature.team', locale: resolved_locale)
     end
 
     def add_footer(pdf)
@@ -174,12 +189,14 @@ module Letters
       pdf.stroke_horizontal_rule
       pdf.move_down 10
       support_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-      pdf.text 'Maryland Accessible Telecommunications | 123 Main Street, Baltimore, MD 21201', align: :center
-      pdf.text "Phone: 555-123-4567 | Email: #{support_email} | Website: mdmat.org", align: :center
+      pdf.text I18n.t('letters.pdf.footer.address', locale: resolved_locale), align: :center
+      pdf.text I18n.t('letters.pdf.footer.contact_line', support_email: support_email, locale: resolved_locale), align: :center
     end
 
     def add_page_numbers(pdf)
-      pdf.number_pages 'Page <page> of <total>',
+      page_number_text = I18n.t('letters.pdf.page_number', page: '<page>', total: '<total>', locale: resolved_locale)
+
+      pdf.number_pages page_number_text,
                        {
                          at: [pdf.bounds.right - 150, 0],
                          width: 150,
@@ -198,36 +215,8 @@ module Letters
     end
 
     def determine_letter_title
-      # Convert the template name into a human-readable title
-      case template_name
-      when 'application_notifications_account_created'
-        'Your Maryland Accessible Telecommunications Account'
-      when 'application_notifications_registration_confirmation'
-        'Welcome to the Maryland Accessible Telecommunications Program'
-      when 'application_notifications_proof_rejected'
-        'Document Verification Follow-up Required'
-      when 'application_notifications_income_threshold_exceeded'
-        'Income Eligibility Review'
-      when 'application_notifications_proof_approved'
-        'Document Verification Approved'
-      when 'application_notifications_proof_received'
-        'Document Verification Received'
-      when 'application_notifications_max_rejections_reached'
-        'Important Application Status Update'
-      when 'application_notifications_proof_submission_error'
-        'Document Submission Error'
-      when 'medical_provider_request_certification'
-        'Request for Medical Certification'
-      when 'voucher_notifications_voucher_assigned'
-        'Your Accessibility Equipment Voucher'
-      when 'voucher_notifications_voucher_redeemed'
-        'Voucher Redemption Confirmation'
-      when 'evaluator_mailer_evaluation_submission_confirmation'
-        'Evaluation Submission Confirmation'
-      else
-        # If no specific title is defined, create one from the template name
-        template_name.gsub('_', ' ').titleize
-      end
+      default_title = DEFAULT_LETTER_TITLES.fetch(template_name, template_name.gsub('_', ' ').titleize)
+      I18n.t("letters.pdf.titles.#{template_name}", default: default_title, locale: resolved_locale)
     end
 
     def determine_letter_type
@@ -237,8 +226,8 @@ module Letters
 
     # Check if the template requires shared partial variables (header_text and footer_text)
     def template_requires_shared_partials?
-      template = EmailTemplate.find_by(name: template_name, locale: resolved_locale) ||
-                 EmailTemplate.find_by(name: template_name, locale: I18n.default_locale.to_s)
+      template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale) ||
+                 EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
       return false unless template
 
       template.required_variables.include?('header_text') && template.required_variables.include?('footer_text')
@@ -246,7 +235,15 @@ module Letters
 
     def resolved_locale
       locale = recipient.locale if recipient.respond_to?(:locale)
-      locale.to_s.presence || I18n.default_locale.to_s
+      normalized = normalize_locale(locale)
+      normalized || I18n.default_locale.to_s
+    end
+
+    def normalize_locale(locale)
+      candidate = locale.to_s.strip
+      return nil if candidate.empty?
+
+      candidate.tr('_', '-').split('-').first.downcase
     end
   end
 end

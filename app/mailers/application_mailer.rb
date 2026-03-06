@@ -38,10 +38,12 @@ class ApplicationMailer < ActionMailer::Base
   private
 
   def resolve_template_locale(recipient: nil, locale: nil)
-    explicit_locale = locale.to_s.presence
-    recipient_locale = recipient.locale.to_s.presence if recipient.respond_to?(:locale)
+    explicit_locale = normalize_locale(locale)
+    recipient_locale = normalize_locale(recipient.locale) if recipient.respond_to?(:locale)
+    i18n_locale = normalize_locale(I18n.locale)
+    default_locale = normalize_locale(I18n.default_locale) || 'en'
 
-    explicit_locale || recipient_locale || I18n.locale.to_s.presence || I18n.default_locale.to_s
+    explicit_locale || recipient_locale || i18n_locale || default_locale
   end
 
   def find_text_template(template_name, recipient: nil, locale: nil)
@@ -60,5 +62,12 @@ class ApplicationMailer < ActionMailer::Base
     @organization_name = 'Maryland Accessible Telecommunications Program'
     @organization_email = 'no_reply@mdmat.org'
     @organization_website = 'https://mdmat.org'
+  end
+
+  def normalize_locale(locale)
+    candidate = locale.to_s.strip
+    return nil if candidate.empty?
+
+    candidate.tr('_', '-').split('-').first.downcase
   end
 end
