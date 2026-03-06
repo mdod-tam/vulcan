@@ -260,7 +260,7 @@ class DocumentProofHandlerController extends Controller {
 • If you receive Veterans (VA) benefits, TDAP, TANF, or pharmacy/medical/housing assistance: Send your most recent benefit paperwork.
 
 • If you live on a limited or fixed income: Send your 2 most recent pay stubs, unemployment stubs, or last year's tax return.`;
-    } else if (typeValue == 'residency') {
+    } else if (this.typeValue == 'residency') {
       return 'Please provide proof of Maryland residency to complete your application. Acceptable documents include: utility bill, mortgage statement, lease agreement, bank statement, or government ID. IMPORTANT: The address shown on your proof document must match the address you provided in your application.';
     } else {
       return '';
