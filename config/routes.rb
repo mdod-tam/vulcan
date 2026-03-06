@@ -131,6 +131,7 @@ Rails.application.routes.draw do
         post :send_rejection_notification
         post :reject_for_income
         get :dependent_form
+        get :recipient_preference
       end
     end
 

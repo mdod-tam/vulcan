@@ -13,6 +13,10 @@ class User < ApplicationRecord
   attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')
 
   # Class methods
+  def self.normalize_email(email_value)
+    email_value.to_s.strip.downcase.presence
+  end
+
   def self.system_user
     # Ensure the system user is always an up-to-date administrator
     # Clear memoized value if user is not found or not an admin
@@ -36,10 +40,11 @@ class User < ApplicationRecord
 
   # Rails 8 encryption helper methods for encrypted queries
   def self.find_by_email(email_value)
-    return nil if email_value.blank?
+    normalized_email = normalize_email(email_value)
+    return nil if normalized_email.blank?
 
     # With transparent encryption, we can use regular find_by
-    User.find_by(email: email_value)
+    User.find_by(email: normalized_email)
   rescue StandardError => e
     Rails.logger.warn "find_by_email failed: #{e.message}"
     nil
@@ -55,9 +60,10 @@ class User < ApplicationRecord
   end
 
   def self.exists_with_email?(email_value, excluding_id: nil)
-    return false if email_value.blank?
+    normalized_email = normalize_email(email_value)
+    return false if normalized_email.blank?
 
-    query = User.where(email: email_value)
+    query = User.where(email: normalized_email)
     query = query.where.not(id: excluding_id) if excluding_id
     query.exists?
   rescue StandardError => e

@@ -108,6 +108,8 @@ module Admin
       if optional_vars.any?
         @template_text.body = "Hello %<name>s, optional: %<#{optional_vars.first}>s"
         assert @template_text.valid?, 'Template should be valid with optional variables'
+      else
+        assert_empty optional_vars, 'Template has no optional variables; nothing to validate'
       end
     end
 

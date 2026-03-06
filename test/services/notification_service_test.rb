@@ -27,7 +27,71 @@ class NotificationServiceTest < ActiveSupport::TestCase
       assert_equal @constituent, notification.recipient
       assert_equal @application, notification.notifiable
       assert_equal 'email', notification.metadata['channel']
+      assert_equal 'email', notification.metadata['actual_delivery_channel']
+      assert_equal 'requested_channel', notification.metadata['delivery_route_reason']
     end
+  end
+
+  test 'create_and_deliver! tracks actual letter routing when mailer returns noop delivery' do
+    @constituent.update!(communication_preference: 'letter')
+    ApplicationNotificationsMailer.stubs(:proof_approved).returns(
+      ApplicationMailer::NoopDelivery.new
+    )
+
+    notification = NotificationService.create_and_deliver!(
+      type: :proof_approved,
+      recipient: @constituent,
+      actor: @admin,
+      notifiable: @application,
+      channel: :email
+    )
+
+    assert_not_nil notification
+    notification.reload
+    assert_equal 'email', notification.metadata['channel']
+    assert_equal 'letter', notification.metadata['actual_delivery_channel']
+    assert_equal 'preference', notification.metadata['delivery_route_reason']
+  end
+
+  test 'create_and_deliver! infers actual letter routing for preference-routed actions' do
+    @constituent.update!(communication_preference: 'letter')
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.stubs(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.stubs(:proof_approved).returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :proof_approved,
+      recipient: @constituent,
+      actor: @admin,
+      notifiable: @application,
+      channel: :email
+    )
+
+    assert_not_nil notification
+    notification.reload
+    assert_equal 'email', notification.metadata['channel']
+    assert_equal 'letter', notification.metadata['actual_delivery_channel']
+    assert_equal 'preference', notification.metadata['delivery_route_reason']
+  end
+
+  test 'create_and_deliver! records actual email when requested channel is letter for non-letter mailer actions' do
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.stubs(:deliver_later).returns(true)
+    VendorNotificationsMailer.stubs(:w9_approved).returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :w9_approved,
+      recipient: @constituent,
+      actor: @admin,
+      notifiable: @application,
+      channel: :letter
+    )
+
+    assert_not_nil notification
+    notification.reload
+    assert_equal 'letter', notification.metadata['channel']
+    assert_equal 'email', notification.metadata['actual_delivery_channel']
+    assert_equal 'mailer_override', notification.metadata['delivery_route_reason']
   end
 
   test 'create_and_deliver! does NOT create an Event record directly' do

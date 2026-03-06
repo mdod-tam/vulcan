@@ -128,6 +128,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       header_subtitle: nil # Optional
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -136,7 +138,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send training_scheduled email with content: #{text_body.inspect}" }
 
     mail(
-      to: constituent.email, # Fixed: should send to constituent, not trainer
+      to: recipient_email_for(constituent),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -204,6 +206,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       header_subtitle: nil # Optional
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -212,7 +216,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send training_completed email with content: #{text_body.inspect}" }
 
     mail(
-      to: constituent.email,
+      to: recipient_email_for(constituent),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -279,6 +283,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       header_subtitle: nil # Optional
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -287,7 +293,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send training_cancelled email with content: #{text_body.inspect}" }
 
     mail(
-      to: constituent.email,
+      to: recipient_email_for(constituent),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -355,6 +361,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       header_subtitle: nil # Optional
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -363,7 +371,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send no_show_notification email with content: #{text_body.inspect}" }
 
     mail(
-      to: constituent.email,
+      to: recipient_email_for(constituent),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -386,5 +394,19 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       }
     )
     raise
+  end
+
+  private
+
+  def queue_letter_if_preferred(constituent, template_name, variables, application: nil)
+    return false unless prefers_letter_delivery?(constituent)
+
+    queue_letter_delivery(
+      recipient: constituent,
+      template_name: template_name,
+      variables: variables,
+      application: application
+    )
+    true
   end
 end
