@@ -40,14 +40,13 @@ class ApplicationMailer < ActionMailer::Base
   def resolve_template_locale(recipient: nil, locale: nil)
     explicit_locale = normalize_locale(locale)
     recipient_locale = normalize_locale(recipient.locale) if recipient.respond_to?(:locale)
-    i18n_locale = normalize_locale(I18n.locale)
     default_locale = normalize_locale(I18n.default_locale) || 'en'
 
-    explicit_locale || recipient_locale || i18n_locale || default_locale
+    explicit_locale || recipient_locale || default_locale
   end
 
-  def find_text_template(template_name, recipient: nil, locale: nil)
-    resolved_locale = resolve_template_locale(recipient: recipient, locale: locale)
+  def find_text_template(template_name, locale: nil)
+    resolved_locale = resolve_template_locale(locale: locale)
     EmailTemplate.find_by!(name: template_name, format: :text, locale: resolved_locale)
   rescue ActiveRecord::RecordNotFound
     fallback_locale = I18n.default_locale.to_s
@@ -69,5 +68,23 @@ class ApplicationMailer < ActionMailer::Base
     return nil if candidate.empty?
 
     candidate.tr('_', '-').split('-').first.downcase
+  end
+
+  def interpolate_template_text(template_text, variables = {})
+    rendered_text = template_text.to_s.dup
+    variables.each do |key, value|
+      rendered_text = rendered_text.gsub("%{#{key}}", value.to_s)
+      rendered_text = rendered_text.gsub("%<#{key}>s", value.to_s)
+    end
+    rendered_text
+  end
+
+  def header_title_from_template_subject(template:, subject_variables: {}, fallback: '')
+    return fallback.to_s if template.blank?
+
+    rendered_subject = interpolate_template_text(template.subject, subject_variables).strip
+    rendered_subject.presence || fallback.to_s
+  rescue StandardError
+    fallback.to_s
   end
 end

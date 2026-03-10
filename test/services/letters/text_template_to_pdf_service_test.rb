@@ -106,7 +106,7 @@ module Letters
 
       assert_equal 'es', service.send(:resolved_locale)
       assert_equal 'es', service.template.locale
-      assert_equal 'Su cuenta de Telecomunicaciones Accesibles de Maryland', service.send(:determine_letter_title)
+      assert_equal 'Su cuenta ha sido creada', service.send(:determine_letter_title)
     end
 
     test 'template shared-partials check uses matching format only' do

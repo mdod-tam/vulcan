@@ -17,7 +17,7 @@ class EvaluatorMailer < ApplicationMailer
     locale = resolve_template_locale(recipient: evaluation&.evaluator)
 
     text_template = load_email_template(template_name, locale: locale)
-    variables = build_new_evaluation_variables(evaluation, locale: locale)
+    variables = build_new_evaluation_variables(evaluation, template: text_template, locale: locale)
     send_email(evaluation.evaluator.email, text_template, variables)
   rescue StandardError => e
     log_email_error(e, evaluation&.evaluator, template_name, variables)
@@ -32,7 +32,7 @@ class EvaluatorMailer < ApplicationMailer
     locale = resolve_template_locale(recipient: evaluation&.constituent)
 
     text_template = load_email_template(template_name, locale: locale)
-    variables = build_submission_confirmation_variables(evaluation, locale: locale)
+    variables = build_submission_confirmation_variables(evaluation, template: text_template, locale: locale)
 
     queue_letter_if_needed(evaluation, template_name, variables)
     send_email(evaluation.constituent.email, text_template, variables)
@@ -72,13 +72,17 @@ class EvaluatorMailer < ApplicationMailer
   end
 
   # Build variables hash for new evaluation assignment email
-  def build_new_evaluation_variables(evaluation, locale: nil)
+  def build_new_evaluation_variables(evaluation, template:, locale: nil)
     evaluator = evaluation.evaluator
     constituent = evaluation.constituent
     application = evaluation.application
 
     evaluation_url = safe_evaluation_url(evaluation)
-    header_title = "New Evaluation Assigned - Application ##{application.id}"
+    header_title = header_title_from_template_subject(
+      template: template,
+      subject_variables: { application_id: application.id },
+      fallback: "New Evaluation Assigned - Application ##{application.id}"
+    )
     header_data = build_header_footer_data(header_title, locale: locale)
 
     {
@@ -95,13 +99,17 @@ class EvaluatorMailer < ApplicationMailer
   end
 
   # Build variables hash for evaluation submission confirmation email
-  def build_submission_confirmation_variables(evaluation, locale: nil)
+  def build_submission_confirmation_variables(evaluation, template:, locale: nil)
     constituent = evaluation.constituent
     application = evaluation.application
     evaluator = evaluation.evaluator
     submission_date_formatted = evaluation.try(:submitted_at)&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not Provided'
 
-    header_title = "Your Evaluation has been Submitted - Application ##{application.id}"
+    header_title = header_title_from_template_subject(
+      template: template,
+      subject_variables: { application_id: application.id },
+      fallback: "Your Evaluation has been Submitted - Application ##{application.id}"
+    )
     header_data = build_header_footer_data(header_title, locale: locale)
 
     {

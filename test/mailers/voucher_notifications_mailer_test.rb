@@ -17,15 +17,19 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
 
     # 2. Create Mocks for Main Templates
     assigned_template = mock('email_template_assigned')
+    assigned_template.stubs(:subject).returns('Voucher assigned')
     assigned_template.stubs(:render).returns(['Voucher assigned', "Text Assigned for voucher #{@voucher.code}"])
 
     expiring_soon_template = mock('email_template_expiring')
+    expiring_soon_template.stubs(:subject).returns('Voucher expiring soon')
     expiring_soon_template.stubs(:render).returns(['Voucher expiring soon', 'Text Your voucher will expire soon.'])
 
     expired_template = mock('email_template_expired')
+    expired_template.stubs(:subject).returns('Voucher expired')
     expired_template.stubs(:render).returns(['Voucher expired', "Text Expired for voucher #{@voucher.code}"])
 
     redeemed_template = mock('email_template_redeemed')
+    redeemed_template.stubs(:subject).returns('Voucher redeemed')
     redeemed_template.stubs(:render).returns(['Voucher redeemed', "Text Redeemed for voucher #{@voucher.code}"])
 
     # 3. Create Mocks for Header & Footer (CRITICAL FIX)
@@ -70,6 +74,7 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
   test 'voucher_expiring_soon' do
     # Override the generic stub from setup with a more specific one for this test
     specific_template = mock('specific_expiring')
+    specific_template.stubs(:subject).returns('Voucher expiring soon')
     # Use a generic regex match for the body to avoid fragile date math in assertions
     specific_template.stubs(:render).returns(['Voucher expiring soon', 'Text Your voucher will expire in 11 days'])
 
@@ -98,6 +103,7 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
 
     # 2. Create a specific mock for this test
     specific_redeemed_template = mock('specific_redeemed')
+    specific_redeemed_template.stubs(:subject).returns('Voucher redeemed')
     specific_redeemed_template.stubs(:render).returns(['Voucher redeemed', redeemed_text])
 
     # 3. Update ONLY the redeemed template stub (Header/Footer stubs from setup remain active!)

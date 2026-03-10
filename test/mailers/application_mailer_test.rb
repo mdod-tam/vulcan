@@ -3,5 +3,30 @@
 require 'test_helper'
 
 class ApplicationMailerTest < ActionMailer::TestCase
-  # Tests for ApplicationMailer can be added here as needed
+  test 'resolve_template_locale prioritizes explicit locale' do
+    recipient = Struct.new(:locale).new('en')
+    mailer = ApplicationMailer.new
+
+    resolved = mailer.send(:resolve_template_locale, recipient: recipient, locale: 'es-MX')
+
+    assert_equal 'es', resolved
+  end
+
+  test 'resolve_template_locale falls back to recipient locale' do
+    recipient = Struct.new(:locale).new('es-MX')
+    mailer = ApplicationMailer.new
+
+    resolved = mailer.send(:resolve_template_locale, recipient: recipient)
+
+    assert_equal 'es', resolved
+  end
+
+  test 'resolve_template_locale falls back to default locale instead of ambient i18n locale' do
+    mailer = ApplicationMailer.new
+
+    I18n.with_locale(:es) do
+      resolved = mailer.send(:resolve_template_locale)
+      assert_equal I18n.default_locale.to_s, resolved
+    end
+  end
 end

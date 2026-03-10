@@ -29,7 +29,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     application = training_session.application
 
     # Common elements for shared partials
-    header_title = "New Training Assignment - Application ##{application.id}"
+    header_title = header_title_from_template_subject(
+      template: text_template,
+      subject_variables: { application_id: application.id },
+      fallback: "New Training Assignment - Application ##{application.id}"
+    )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
@@ -107,7 +111,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     application = training_session.application
 
     # Common elements for shared partials
-    header_title = "Training Scheduled - Application ##{application.id}"
+    header_title = header_title_from_template_subject(
+      template: text_template,
+      subject_variables: { application_id: application.id },
+      fallback: "Training Scheduled - Application ##{application.id}"
+    )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
@@ -187,7 +195,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     application = training_session.application
 
     # Common elements for shared partials
-    header_title = "Training Completed - Application ##{application.id}"
+    header_title = header_title_from_template_subject(
+      template: text_template,
+      subject_variables: { application_id: application.id },
+      fallback: "Training Completed - Application ##{application.id}"
+    )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
@@ -264,7 +276,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     application = training_session.application
 
     # Common elements for shared partials
-    header_title = "Training Cancelled - Application ##{application.id}"
+    header_title = header_title_from_template_subject(
+      template: text_template,
+      subject_variables: { application_id: application.id },
+      fallback: "Training Cancelled - Application ##{application.id}"
+    )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
@@ -343,7 +359,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     application = training_session.application
 
     # Common elements for shared partials
-    header_title = "Training Session Missed - Application ##{application.id}"
+    header_title = header_title_from_template_subject(
+      template: text_template,
+      subject_variables: { application_id: application.id },
+      fallback: "Training Session Missed - Application ##{application.id}"
+    )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true

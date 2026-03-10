@@ -91,20 +91,7 @@ module Letters
     end
 
     def render_template_with_variables
-      body = template.body.dup
-
-      # Replace all placeholders with the actual values
-      variables.each do |key, value|
-        # Handle the %<key>s format (printf style)
-        placeholder = "%<#{key}>s"
-        body.gsub!(placeholder, value.to_s) if body.include?(placeholder)
-
-        # Also handle the %{key} format for backward compatibility
-        alt_placeholder = "%{#{key}}"
-        body.gsub!(alt_placeholder, value.to_s) if body.include?(alt_placeholder)
-      end
-
-      body
+      interpolate_template_text(template.body)
     end
 
     def setup_document(pdf)
@@ -215,6 +202,9 @@ module Letters
     end
 
     def determine_letter_title
+      subject_title = interpolate_template_text(template.subject).strip
+      return subject_title if subject_title.present?
+
       default_title = DEFAULT_LETTER_TITLES.fetch(template_name, template_name.gsub('_', ' ').titleize)
       I18n.t("letters.pdf.titles.#{template_name}", default: default_title, locale: resolved_locale)
     end
@@ -244,6 +234,15 @@ module Letters
       return nil if candidate.empty?
 
       candidate.tr('_', '-').split('-').first.downcase
+    end
+
+    def interpolate_template_text(text)
+      rendered_text = text.to_s.dup
+      variables.each do |key, value|
+        rendered_text = rendered_text.gsub("%<#{key}>s", value.to_s)
+        rendered_text = rendered_text.gsub("%{#{key}}", value.to_s)
+      end
+      rendered_text
     end
   end
 end

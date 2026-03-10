@@ -251,7 +251,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def build_base_email_variables(template:, organization_name: nil, locale: nil, subject_variables: {})
-    header_title = header_title_from_template_subject(template, subject_variables)
+    header_title = header_title_from_template_subject(template: template, subject_variables: subject_variables)
     org_name = organization_name || Policy.get('organization_name') || 'Maryland Accessible Telecommunications'
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
@@ -346,7 +346,10 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def build_account_created_variables(constituent, temp_password, template:, locale: nil)
-    header_title = header_title_from_template_subject(template, constituent_first_name: constituent.first_name)
+    header_title = header_title_from_template_subject(
+      template: template,
+      subject_variables: { constituent_first_name: constituent.first_name }
+    )
     base_variables = build_base_email_variables(
       template: template,
       locale: locale,
@@ -546,12 +549,4 @@ class ApplicationNotificationsMailer < ApplicationMailer
     base_variables.merge(cert_variables).compact
   end
 
-  def header_title_from_template_subject(template, subject_variables = {})
-    rendered_subject = template.subject.to_s.dup
-    subject_variables.each do |key, value|
-      rendered_subject = rendered_subject.gsub("%{#{key}}", value.to_s)
-      rendered_subject = rendered_subject.gsub("%<#{key}>s", value.to_s)
-    end
-    rendered_subject
-  end
 end
