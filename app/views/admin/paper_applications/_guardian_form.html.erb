@@ -1,0 +1,256 @@
+<%# 
+  Guardian Creation Form Partial
+  Used when creating a new guardian for a dependent applicant
+  
+  This partial provides a complete guardian information form with:
+  - Personal identification
+  - Contact information with live feedback
+  - Communication preferences
+  - Accessibility options
+%>
+
+<div class="mt-6 p-5 border-2 border-indigo-200 rounded-lg bg-indigo-50/50" data-controller="contact-feedback">
+  <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+    </svg>
+    Create New Guardian
+  </h3>
+  
+  <%= fields_for :guardian_attributes, guardian_attributes do |g| %>
+    <%# Personal Information %>
+    <div class="mb-5">
+      <h4 class="text-sm font-medium text-gray-700 mb-3">Personal Information</h4>
+      <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <div class="md:col-span-2">
+          <%= g.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700 required-label" %>
+          <%= g.text_field :first_name, 
+              required: true,
+              autocomplete: "given-name",
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
+        </div>
+        <div class="md:col-span-1">
+          <%= g.label :middle_initial, "M.I.", class: "block text-sm font-medium text-gray-700" %>
+          <%= g.text_field :middle_initial, 
+              maxlength: 1, 
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
+        </div>
+        <div class="md:col-span-2">
+          <%= g.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700 required-label" %>
+          <%= g.text_field :last_name, 
+              required: true,
+              autocomplete: "family-name",
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
+        </div>
+        <div class="md:col-span-2">
+          <%= g.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700 required-label" %>
+          <%= g.date_field :date_of_birth, 
+              required: true,
+              autocomplete: "bday",
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white",
+              "aria-required": "true",
+              max: Date.current.to_s %>
+        </div>
+      </div>
+    </div>
+
+    <%# Contact Information %>
+    <div class="mb-5">
+      <h4 class="text-sm font-medium text-gray-700 mb-3">Contact Information</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <%= g.label :email, "Email Address", class: "block text-sm font-medium text-gray-700 required-label" %>
+          <%= g.email_field :email, 
+              required: true,
+              autocomplete: "email",
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+              data: { 
+                dependent_fields_target: "guardianEmail",
+                "contact-feedback-target": "email"
+              } %>
+        </div>
+        <div>
+          <%= g.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700 required-label" %>
+          <%= g.telephone_field :phone, 
+              required: true,
+              autocomplete: "tel",
+              placeholder: "XXX-XXX-XXXX",
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+              data: { 
+                dependent_fields_target: "guardianPhone",
+                "contact-feedback-target": "phone"
+              } %>
+        </div>
+      </div>
+
+      <%# Preferred Contact Method %>
+      <fieldset class="mb-4 p-3 bg-white rounded border border-gray-200">
+        <legend class="text-sm font-medium text-gray-700 mb-2">How would you like us to contact you if we have any questions?</legend>
+        <div class="flex flex-wrap gap-4">
+          <div class="flex items-center">
+            <%= g.radio_button :phone_type, "voice", 
+                id: "guardian_phone_type_voice", 
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateFeedback" } %>
+            <%= g.label :phone_type_voice, "Call me", for: "guardian_phone_type_voice", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= g.radio_button :phone_type, "text", 
+                id: "guardian_phone_type_text",
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateFeedback" } %>
+            <%= g.label :phone_type_text, "Text me", for: "guardian_phone_type_text", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= g.radio_button :phone_type, "videophone", 
+                id: "guardian_phone_type_videophone",
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateFeedback" } %>
+            <%= g.label :phone_type_videophone, "Call me using ASL (videophone)", for: "guardian_phone_type_videophone", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= g.radio_button :phone_type, "email", 
+                id: "guardian_phone_type_email",
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateFeedback" } %>
+            <%= g.label :phone_type_email, "Email me", for: "guardian_phone_type_email", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= g.radio_button :phone_type, "letter", 
+                id: "guardian_phone_type_letter",
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateFeedback" } %>
+            <%= g.label :phone_type_letter, "Send me a letter in the mail", for: "guardian_phone_type_letter", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+        </div>
+        <div data-contact-feedback-target="feedback" class="hidden" aria-live="polite"></div>
+      </fieldset>
+
+      <%# Address %>
+      <div class="space-y-3">
+        <div>
+          <%= g.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
+          <%= g.text_field :physical_address_1, 
+              autocomplete: "address-line1",
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+              data: { dependent_fields_target: "guardianAddress1", contact_feedback_target: "address1" } %>
+        </div>
+        <div>
+          <%= g.label :physical_address_2, "Apt, suite, unit (optional)", class: "block text-sm font-medium text-gray-700" %>
+          <%= g.text_field :physical_address_2, 
+              autocomplete: "address-line2",
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+              data: { dependent_fields_target: "guardianAddress2", contact_feedback_target: "address2" } %>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="col-span-2">
+            <%= g.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
+            <%= g.text_field :city, 
+                autocomplete: "address-level2",
+                class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                data: { dependent_fields_target: "guardianCity", contact_feedback_target: "city" } %>
+          </div>
+          <div>
+            <%= g.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
+            <%= g.text_field :state, 
+                value: "MD", 
+                autocomplete: "address-level1",
+                class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                data: { dependent_fields_target: "guardianState", contact_feedback_target: "state" } %>
+          </div>
+          <div>
+            <%= g.label :zip_code, "ZIP Code", class: "block text-sm font-medium text-gray-700" %>
+            <%= g.text_field :zip_code, 
+                autocomplete: "postal-code",
+                class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white", 
+                data: { dependent_fields_target: "guardianZip", contact_feedback_target: "zipCode" } %>
+          </div>
+        </div>
+        <%# Residency proof notice - placed after all address fields for clarity %>
+        <div role="note" aria-label="Address matching requirement" class="mt-3 flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+          <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+          </svg>
+          <p class="text-sm text-blue-800">
+            <strong>Important:</strong> This address must match the address on your residency proof document.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <%# Communication Preferences %>
+    <div class="mb-5 p-4 bg-white rounded border border-gray-200">
+      <h4 class="text-sm font-medium text-gray-700 mb-3">Communication Preferences</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <%= g.label :locale, "Preferred Language", class: "block text-sm font-medium text-gray-700" %>
+          <%= g.select :locale, 
+              options_for_select([["English","en"],["Spanish","es"],["French","fr"],["American Sign Language (ASL)","asl"],["Other","other"]], g.object[:locale] || 'en'), 
+              { prompt: "Select Language" }, 
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+        </div>
+        <div>
+          <%= g.label :preferred_means_of_communication, "How do you prefer to communicate?", class: "block text-sm font-medium text-gray-700" %>
+          <%= g.select :preferred_means_of_communication, 
+              options_for_select([
+                ["Voice (spoken language)", "voice"],
+                ["Read lips", "lip_reading"],
+                ["American Sign Language (ASL)", "asl"],
+                ["Signed English", "signed_english"],
+                ["Written notes", "written"],
+                ["Typed communication", "typed"],
+                ["Braille", "braille"],
+                ["Augmentative & Alternative Communication (AAC)", "aac"]
+              ], g.object[:preferred_means_of_communication]), 
+              { prompt: "Select preference" }, 
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+        </div>
+      </div>
+
+      <fieldset class="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+        <legend class="text-base font-semibold text-blue-900 mb-1 px-2">
+          Where should we send official program documents?
+        </legend>
+        <p class="text-sm text-blue-700 mb-3 px-2">
+          Important notices, approval letters, and voucher information will be delivered here
+        </p>
+        <div class="flex flex-wrap gap-6">
+          <div class="flex items-start">
+            <%= g.radio_button :communication_preference, "email", 
+                id: "guardian_communication_preference_email", 
+                checked: true,
+                class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateDeliveryFeedback" } %>
+            <label for="guardian_communication_preference_email" class="ml-2">
+              <span class="block text-sm font-medium text-gray-700">Email</span>
+              <span class="block text-xs text-gray-500">Faster delivery</span>
+            </label>
+          </div>
+          <div class="flex items-start">
+            <%= g.radio_button :communication_preference, "letter", 
+                id: "guardian_communication_preference_letter",
+                class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateDeliveryFeedback" } %>
+            <label for="guardian_communication_preference_letter" class="ml-2">
+              <span class="block text-sm font-medium text-gray-700">Printed letter by mail</span>
+              <span class="block text-xs text-gray-500">Physical copy</span>
+            </label>
+          </div>
+        </div>
+        <div data-contact-feedback-target="deliveryFeedback" class="hidden" aria-live="polite" aria-atomic="true"></div>
+      </fieldset>
+    </div>
+  <% end %>
+
+  <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+    <%= link_to "Cancel", new_admin_paper_application_path, class: "text-sm font-medium text-gray-600 hover:text-gray-500" %>
+    <button type="button" 
+            class="inline-flex items-center gap-2 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" 
+            data-action="click->admin-user-search#createGuardian">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      Save Guardian
+    </button>
+  </div>
+</div>
