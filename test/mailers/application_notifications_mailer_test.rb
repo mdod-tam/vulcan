@@ -522,6 +522,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Create new mocks for the test
     mock_error_text = mock('EmailTemplate')
     mock_error_text.stubs(:name).returns('application_notifications_proof_submission_error')
+    mock_error_text.stubs(:subject).returns('Submission Error: %<constituent_full_name>s')
     mock_error_text.stubs(:enabled?).returns(true)
     mock_error_text.stubs(:render).returns(["Submission Error: #{@user.email}",
                                             "Text Body: Error processing submission: #{error_message}"])

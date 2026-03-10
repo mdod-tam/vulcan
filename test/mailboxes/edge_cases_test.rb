@@ -39,11 +39,13 @@ class EdgeCasesTest < ActionMailbox::TestCase
     # This allows tests to run without requiring templates to exist in test DB
     # Create a specific mock for the proof_submission_error template
     proof_submission_error_template = mock('EmailTemplate')
+    proof_submission_error_template.stubs(:subject).returns('Error Processing Your Proof Submission')
     proof_submission_error_template.stubs(:render).returns(['Error Processing Your Proof Submission', 'Test Email Body'])
     proof_submission_error_template.stubs(:enabled?).returns(true)
 
     # Create a generic mock for other templates
     generic_template = mock('EmailTemplate')
+    generic_template.stubs(:subject).returns('Test Email Subject')
     generic_template.stubs(:render).returns(['Test Email Subject', 'Test Email Body'])
     generic_template.stubs(:enabled?).returns(true)
 

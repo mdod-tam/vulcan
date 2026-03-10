@@ -43,14 +43,13 @@ module Admin
 
       # Auto-generate sample data for extracted variables
       generated = template.extract_variables.index_with { |var| "Sample #{var.humanize}" }
-
       generated.merge(base_sample_data(locale: locale, subject: subject || template.subject))
     end
 
     private
 
     # Base sample data shared across all templates
-    def base_sample_data(locale: 'en', subject: nil) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity,Metrics/MethodLength
+    def base_sample_data(locale: 'en', subject: nil) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity
       is_es = locale.to_s == 'es'
       {
         'header_text' => render(partial: 'shared/mailers/header', formats: [:text],
@@ -94,10 +93,6 @@ module Admin
         'rejection_reason' => is_es ? 'La información proporcionada estaba incompleta.' : 'Information provided was incomplete.',
         'additional_instructions' => is_es ? 'Por favor, proporcione los documentos X, Y y Z.' : 'Please provide documents X, Y, and Z.',
         'remaining_attempts' => 2,
-        'remaining_attempts_message_text' => is_es ? 'Te quedan 2 intentos.' : 'You have 2 attempts remaining.',
-        'archived_message_text' => is_es ? 'Tu solicitud ha sido archivada.' : 'Your application has been archived.',
-        'default_options_text' => is_es ? 'Por favor, inicia sesión para revisar.' : 'Please sign in to review.',
-        'all_proofs_approved_message_text' => is_es ? '¡Todas las pruebas requeridas han sido aprobadas!' : 'All required proofs have been approved!',
         'active_vendors_text_list' => "- Vendor A\n- Vendor B",
         'stale_reviews_count' => 5,
         'stale_reviews_text_list' => "- App 1\n- App 2\n- App 3\n- App 4\n- App 5",

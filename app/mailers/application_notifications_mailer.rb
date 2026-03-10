@@ -18,7 +18,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
       template_name = 'application_notifications_application_submitted'
       locale        = resolve_template_locale(recipient: @user)
       text_template = find_text_template(template_name, locale: locale)
-      variables     = build_application_submitted_variables(application, locale: locale)
+      variables     = build_application_submitted_variables(application, template: text_template, locale: locale)
       mail_options  = { message_stream: 'notifications' }
       mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
 
@@ -37,9 +37,10 @@ class ApplicationNotificationsMailer < ApplicationMailer
       variables = Variables::ProofApproved.new(
         application, proof_review,
         base_variables: build_base_email_variables(
-          "Document Review Update: #{proof_type_formatted.capitalize} Approved",
-          'MAT Program',
-          locale: locale
+          template: text_template,
+          organization_name: 'MAT Program',
+          locale: locale,
+          subject_variables: { proof_type_formatted: proof_type_formatted }
         )
       ).to_h
 
@@ -70,9 +71,10 @@ class ApplicationNotificationsMailer < ApplicationMailer
           remaining_attempts: remaining_attempts,
           reapply_date: reapply_date,
           base_variables: build_base_email_variables(
-            "Document Review Update: #{proof_type_formatted.capitalize} Needs Revision",
-            'MAT Program',
-            locale: locale
+            template: text_template,
+            organization_name: 'MAT Program',
+            locale: locale,
+            subject_variables: { proof_type_formatted: proof_type_formatted }
           ),
           sign_in_url: sign_in_url(host: default_url_options[:host]),
           locale: locale
@@ -104,7 +106,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
       reapply_date  = 3.years.from_now.to_date
       locale        = resolve_template_locale(recipient: application.user)
       text_template = find_text_template('application_notifications_max_rejections_reached', locale: locale)
-      variables     = build_max_rejections_variables(application, reapply_date, locale: locale)
+      variables     = build_max_rejections_variables(application, reapply_date, template: text_template, locale: locale)
 
       handle_letter_preference(application.user, 'max_rejections_reached', {
                                  reapply_date_formatted: reapply_date.strftime('%B %d, %Y'),
@@ -126,7 +128,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
       locale        = resolve_template_locale(recipient: admin)
       text_template = find_text_template('application_notifications_proof_needs_review_reminder', locale: locale)
-      variables     = build_review_reminder_variables(admin, stale_reviews, locale: locale)
+      variables     = build_review_reminder_variables(admin, stale_reviews, template: text_template, locale: locale)
 
       send_email(admin.email, text_template, variables)
     end
@@ -138,7 +140,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
       locale          = resolve_template_locale(recipient: constituent)
       text_template   = find_text_template('application_notifications_account_created', locale: locale)
-      variables       = build_account_created_variables(constituent, temp_password, locale: locale)
+      variables       = build_account_created_variables(constituent, temp_password, template: text_template, locale: locale)
       recipient_email = extract_recipient_email(constituent)
 
       handle_letter_preference(constituent, 'account_created', {
@@ -157,7 +159,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
       service_result = get_income_threshold_data(constituent_params, notification_params)
       locale         = resolve_template_locale(locale: service_result[:constituent][:locale])
       text_template  = find_text_template('application_notifications_income_threshold_exceeded', locale: locale)
-      variables      = build_income_threshold_variables(service_result, locale: locale)
+      variables      = build_income_threshold_variables(service_result, template: text_template, locale: locale)
 
       send_email(service_result[:constituent][:email], text_template, variables)
     end
@@ -168,7 +170,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
       recipient_info = determine_proof_error_recipient(constituent, message)
       locale         = resolve_template_locale(recipient: constituent)
       text_template  = find_text_template('application_notifications_proof_submission_error', locale: locale)
-      variables      = build_proof_error_variables(recipient_info[:full_name], message, locale: locale)
+      variables      = build_proof_error_variables(recipient_info[:full_name], message, template: text_template, locale: locale)
 
       handle_letter_preference(constituent, 'proof_submission_error', {
                                  error_message: message,
@@ -186,7 +188,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
       active_vendors_text_list = build_active_vendors_list
       locale                   = resolve_template_locale(recipient: user)
       text_template            = find_text_template('application_notifications_registration_confirmation', locale: locale)
-      variables                = build_registration_variables(user, active_vendors_text_list, locale: locale)
+      variables                = build_registration_variables(user, active_vendors_text_list, template: text_template, locale: locale)
 
       handle_letter_preference(user, 'registration_confirmation', {
                                  user_full_name: user.full_name,
@@ -203,7 +205,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     with_mailer_error_handling("proof_received application=#{application&.id}") do
       locale           = resolve_template_locale(recipient: application.user)
       text_template    = find_text_template('application_notifications_proof_received', locale: locale)
-      variables        = build_proof_received_variables(application, proof_type, locale: locale)
+      variables        = build_proof_received_variables(application, proof_type, template: text_template, locale: locale)
       subject_override = proc { |subject| subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received') }
 
       send_email(application.user.effective_email, text_template, variables, { subject_override: subject_override })
@@ -214,7 +216,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     template_name = 'application_notifications_medical_certification_not_provided'
     text_template = find_email_template(template_name)
 
-    variables = build_medical_certification_not_provided_variables(application)
+    variables = build_medical_certification_not_provided_variables(application, template: text_template)
 
     send_email(application.user.effective_email, text_template, variables)
   rescue StandardError => e
@@ -248,7 +250,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     ).queue_for_printing
   end
 
-  def build_base_email_variables(header_title, organization_name = nil, locale: nil)
+  def build_base_email_variables(template:, organization_name: nil, locale: nil, subject_variables: {})
+    header_title = header_title_from_template_subject(template, subject_variables)
     org_name = organization_name || Policy.get('organization_name') || 'Maryland Accessible Telecommunications'
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
@@ -284,8 +287,12 @@ class ApplicationNotificationsMailer < ApplicationMailer
     )
   end
 
-  def build_max_rejections_variables(application, reapply_date, locale: nil)
-    base_variables = build_base_email_variables('Important: Application Status Update', nil, locale: locale)
+  def build_max_rejections_variables(application, reapply_date, template:, locale: nil)
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: { application_id: application.id, reapply_date_formatted: reapply_date.strftime('%B %d, %Y') }
+    )
     base_variables.merge({
                            user_first_name: application.user.first_name,
                            application_id: application.id,
@@ -306,10 +313,14 @@ class ApplicationNotificationsMailer < ApplicationMailer
     nil
   end
 
-  def build_review_reminder_variables(admin, stale_reviews, locale: nil)
+  def build_review_reminder_variables(admin, stale_reviews, template:, locale: nil)
     admin_dashboard_url = admin_applications_url(host: default_url_options[:host])
     stale_reviews_text_list = build_stale_reviews_list(stale_reviews)
-    base_variables = build_base_email_variables('Reminder: Applications Awaiting Proof Review', nil, locale: locale)
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: { stale_reviews_count: stale_reviews.count, admin_full_name: admin.full_name }
+    )
 
     base_variables.merge({
                            admin_full_name: admin.full_name,
@@ -334,9 +345,13 @@ class ApplicationNotificationsMailer < ApplicationMailer
     nil
   end
 
-  def build_account_created_variables(constituent, temp_password, locale: nil)
-    header_title   = 'Your MAT Application Account Has Been Created'
-    base_variables = build_base_email_variables(header_title, nil, locale: locale)
+  def build_account_created_variables(constituent, temp_password, template:, locale: nil)
+    header_title = header_title_from_template_subject(template, constituent_first_name: constituent.first_name)
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: { constituent_first_name: constituent.first_name }
+    )
 
     is_paper_app = constituent.applications.order(created_at: :desc).first&.submission_method_paper?
 
@@ -382,7 +397,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     }
   end
 
-  def build_income_threshold_variables(service_result, locale: nil)
+  def build_income_threshold_variables(service_result, template:, locale: nil)
     constituent    = service_result[:constituent]
     notification   = service_result[:notification]
     threshold_data = service_result[:threshold_data]
@@ -390,7 +405,11 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
     status_box_title   = 'Application Status: Income Threshold Exceeded'
     status_box_message = "Based on the information provided, your household income exceeds the program's limit."
-    base_variables     = build_base_email_variables('Important Information About Your MAT Application', nil, locale: locale)
+    base_variables     = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: { constituent_first_name: constituent[:first_name] }
+    )
 
     base_variables.merge({
                            constituent_first_name: constituent[:first_name],
@@ -418,8 +437,12 @@ class ApplicationNotificationsMailer < ApplicationMailer
     end
   end
 
-  def build_proof_error_variables(constituent_full_name, message, locale: nil)
-    base_variables = build_base_email_variables('Error Processing Your Proof Submission', nil, locale: locale)
+  def build_proof_error_variables(constituent_full_name, message, template:, locale: nil)
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: { constituent_full_name: constituent_full_name, message: message }
+    )
 
     base_variables.merge({
                            constituent_full_name: constituent_full_name,
@@ -438,12 +461,13 @@ class ApplicationNotificationsMailer < ApplicationMailer
     end
   end
 
-  def build_registration_variables(user, active_vendors_text_list, locale: nil)
+  def build_registration_variables(user, active_vendors_text_list, template:, locale: nil)
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications'
     base_variables    = build_base_email_variables(
-      'Welcome to the Maryland Accessible Telecommunications Program',
-      organization_name,
-      locale: locale
+      template: template,
+      organization_name: organization_name,
+      locale: locale,
+      subject_variables: { user_full_name: user.full_name, user_first_name: user.first_name }
     )
 
     base_variables.merge({
@@ -457,8 +481,15 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   # --- Application submitted ---
 
-  def build_application_submitted_variables(application, locale: nil)
-    base_variables = build_base_email_variables('Your Application Has Been Submitted', nil, locale: locale)
+  def build_application_submitted_variables(application, template:, locale: nil)
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: {
+        application_id: application.id,
+        submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y')
+      }
+    )
 
     variables = {
       user_first_name: application.user.first_name,
@@ -475,13 +506,16 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   # --- Proof received ---
 
-  def build_proof_received_variables(application, proof_type, locale: nil)
+  def build_proof_received_variables(application, proof_type, template:, locale: nil)
     user                 = application.user
     organization_name    = Policy.get('organization_name') || 'MAT Program'
     proof_type_formatted = format_proof_type(proof_type)
-    base_variables       = build_base_email_variables("Document Received: #{proof_type_formatted.capitalize}",
-                                                      organization_name,
-                                                      locale: locale)
+    base_variables       = build_base_email_variables(
+      template: template,
+      organization_name: organization_name,
+      locale: locale,
+      subject_variables: { proof_type_formatted: proof_type_formatted }
+    )
 
     base_variables.merge({
                            user_first_name: user.first_name,
@@ -491,13 +525,18 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   # Medical certification not provided specific methods
-  def build_medical_certification_not_provided_variables(application)
+  def build_medical_certification_not_provided_variables(application, template:)
     user = application.user
-    header_title = 'Disability Certification Required for Your Application'
 
     rejection_reason_message = application.medical_certification_rejection_reason.presence || ''
 
-    base_variables = build_base_email_variables(header_title)
+    base_variables = build_base_email_variables(
+      template: template,
+      subject_variables: {
+        user_first_name: user.first_name,
+        application_id: application.id
+      }
+    )
     cert_variables = {
       user_first_name: user.first_name,
       rejection_reason_message: rejection_reason_message,
@@ -507,4 +546,12 @@ class ApplicationNotificationsMailer < ApplicationMailer
     base_variables.merge(cert_variables).compact
   end
 
+  def header_title_from_template_subject(template, subject_variables = {})
+    rendered_subject = template.subject.to_s.dup
+    subject_variables.each do |key, value|
+      rendered_subject = rendered_subject.gsub("%{#{key}}", value.to_s)
+      rendered_subject = rendered_subject.gsub("%<#{key}>s", value.to_s)
+    end
+    rendered_subject
+  end
 end
