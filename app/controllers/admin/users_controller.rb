@@ -229,7 +229,7 @@ module Admin
         log_user_service_error('to create user in admin interface', result.data[:errors] || [result.message])
         render json: {
           success: false,
-          errors: extract_error_messages(result.data[:errors] || [result.message])
+          errors: format_validation_errors(result.data[:errors] || [result.message])
         }, status: :unprocessable_content
       end
     end
@@ -646,6 +646,50 @@ module Admin
           :city, :state, :zip_code, :date_of_birth,
           :communication_preference, :locale, :needs_duplicate_review
         )
+      end
+    end
+
+    # Format validation errors into a field-keyed object for JavaScript error handling
+    # Converts error messages like "Phone is invalid" into { phone: "Phone is invalid" }
+    def format_validation_errors(errors)
+      error_hash = {}
+      
+      Array(errors).each do |error_msg|
+        next if error_msg.blank?
+        
+        # Try to extract field name from error message (e.g., "Phone is invalid" -> "phone")
+        field_name = extract_field_from_error(error_msg)
+        
+        # If we already have an error for this field, append to it; otherwise set it
+        if error_hash[field_name].present?
+          error_hash[field_name] += "; #{error_msg}"
+        else
+          error_hash[field_name] = error_msg
+        end
+      end
+      
+      error_hash
+    end
+
+    # Extract field name from error message
+    # Handles messages like "Phone is invalid", "Email can't be blank", "Failed to create user: Phone must be...", etc.
+    def extract_field_from_error(error_msg)
+      # Remove "Failed to create user: " prefix if present
+      clean_msg = error_msg.sub(/^Failed to create (user|guardian|dependent):\s*/i, '')
+      
+      case clean_msg
+      when /^Phone/i then 'phone'
+      when /^Email/i then 'email'
+      when /^First name/i then 'first_name'
+      when /^Last name/i then 'last_name'
+      when /^Date of birth/i then 'date_of_birth'
+      when /^Physical address/i then 'physical_address_1'
+      when /^City/i then 'city'
+      when /^State/i then 'state'
+      when /^Zip code/i then 'zip_code'
+      else
+        # Default: use first word lowercased with underscores
+        clean_msg.split.first.downcase.gsub(/[^a-z0-9_]/, '')
       end
     end
 
