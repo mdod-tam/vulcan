@@ -296,10 +296,7 @@
           <%= d.select :locale, 
               options_for_select([
                 ["English", "en"], 
-                ["Spanish", "es"], 
-                ["French", "fr"], 
-                ["American Sign Language (ASL)", "asl"],
-                ["Other", "other"]
+                ["Spanish", "es"]
               ], dependent&.locale || "en"), 
               { prompt: "Select Language" }, 
               id: "dependent_constituent_locale",
