@@ -6,6 +6,7 @@ module UserProfile
 
   included do
     # Callbacks
+    before_validation :normalize_email_fields
     before_validation :format_phone_number
     before_save :format_phone_number, if: :phone_changed?
     after_save :log_profile_changes, if: :saved_changes_to_profile_fields?
@@ -87,6 +88,11 @@ module UserProfile
   end
 
   private
+
+  def normalize_email_fields
+    self.email = User.normalize_email(email) if email.present?
+    self.dependent_email = User.normalize_email(dependent_email) if dependent_email.present?
+  end
 
   def format_phone_number
     return if phone.blank?

@@ -14,197 +14,243 @@ class ApplicationNotificationsMailer < ApplicationMailer
     @application = application
     @user = application.user
 
-    template_name = 'application_notifications_application_submitted'
-    text_template = find_email_template(template_name)
+    with_mailer_error_handling("application_submitted application=#{application&.id}") do
+      template_name = 'application_notifications_application_submitted'
+      text_template = find_text_template(template_name)
+      variables     = build_application_submitted_variables(application)
+      mail_options  = { message_stream: 'notifications' }
+      mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
 
-    variables = build_application_submitted_variables(application)
+      if prefers_letter_delivery?(@user)
+        queue_letter_delivery(
+          recipient: @user,
+          template_name: template_name,
+          variables: variables,
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-    # Set up mail options with CC for alternate contact if provided
-    mail_options = {
-      message_stream: 'notifications'
-    }
-    mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
-
-    send_email(@user.effective_email, text_template, variables, mail_options)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send application submitted email for application #{application&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
+      send_email(recipient_email_for(@user), text_template, variables, mail_options)
+    end
   end
 
-  # A helper method that handles common logging, instance variable setup,
-  # subject formatting, and mail object creation.
-
-  # extra_setup: an optional lambda to run any extra setup (e.g. setting
-  #   @remaining_attempts and @reapply_date) before sending the email.
+  helper Mailers::ApplicationNotificationsHelper
 
   def proof_approved(application, proof_review)
-    handle_proof_approved_letter(application, proof_review)
+    with_mailer_error_handling("proof_approved application=#{application&.id} proof_review=#{proof_review&.id}") do
+      template_name = 'application_notifications_proof_approved'
+      text_template = find_text_template(template_name)
+      variables = build_proof_approved_variables(application, proof_review)
 
-    template_name = 'application_notifications_proof_approved'
-    text_template = find_email_template(template_name)
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables.merge(proof_type: proof_review.proof_type),
+          letter_type: :proof_approved,
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-    variables = build_proof_approved_variables(application, proof_review)
-
-    send_email(application.user.effective_email, text_template, variables)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send proof approval email for application #{application&.id}, proof_review #{proof_review&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
+      send_email(recipient_email_for(application.user), text_template, variables)
+    end
   end
 
   def proof_rejected(application, proof_review)
-    # Calculate rejection info
-    remaining_attempts = 8 - application.total_rejections
-    reapply_date = 3.years.from_now.to_date
+    with_mailer_error_handling("proof_rejected application=#{application&.id} proof_review=#{proof_review&.id}") do
+      remaining_attempts   = 8 - application.total_rejections
+      reapply_date         = 3.years.from_now.to_date
+      template_name        = 'application_notifications_proof_rejected'
+      text_template        = find_text_template(template_name)
+      variables            = build_proof_rejected_variables(
+        application,
+        proof_review,
+        remaining_attempts,
+        reapply_date
+      )
 
-    handle_proof_rejected_letter(application, proof_review, remaining_attempts, reapply_date)
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables.merge(proof_type: proof_review.proof_type),
+          letter_type: proof_rejection_letter_type(proof_review.proof_type),
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-    template_name = 'application_notifications_proof_rejected'
-    text_template = find_email_template(template_name)
-
-    variables = build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date)
-
-    send_proof_rejected_email(application.user, text_template, variables)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send proof rejection email for application #{application&.id}, proof_review #{proof_review&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
+      send_proof_rejected_email(application.user, text_template, variables)
+    end
   end
 
   def max_rejections_reached(application)
     Rails.logger.info "Preparing max_rejections_reached email for Application ID: #{application.id}"
     Rails.logger.info "Delivery method: #{ActionMailer::Base.delivery_method}"
 
-    reapply_date = 3.years.from_now.to_date
-    handle_max_rejections_letter(application, reapply_date)
+    with_mailer_error_handling("max_rejections_reached application=#{application&.id}",
+                               raise_in_test_only: true) do
+      reapply_date  = 3.years.from_now.to_date
+      template_name = 'application_notifications_max_rejections_reached'
+      text_template = find_text_template(template_name)
+      variables     = build_max_rejections_variables(application, reapply_date)
 
-    template_name = 'application_notifications_max_rejections_reached'
-    text_template = find_email_template(template_name)
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :max_rejections_reached,
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-    variables = build_max_rejections_variables(application, reapply_date)
-
-    send_email(application.user.effective_email, text_template, variables)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send max rejections email for application #{application&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e if Rails.env.test? # Re-raise in test environment
+      send_email(recipient_email_for(application.user), text_template, variables)
+    end
   end
 
   def proof_needs_review_reminder(admin, applications)
-    stale_reviews = filter_stale_reviews(applications)
+    with_mailer_error_handling("proof_needs_review_reminder admin=#{admin&.id}",
+                               raise_in_test_only: true) do
+      stale_reviews = filter_stale_reviews(applications)
 
-    return handle_no_stale_reviews if stale_reviews.empty? && !Rails.env.test?
+      return handle_no_stale_reviews if stale_reviews.empty? && !Rails.env.test?
 
-    template_name = 'application_notifications_proof_needs_review_reminder'
-    text_template = find_email_template(template_name)
+      text_template = find_text_template('application_notifications_proof_needs_review_reminder')
+      variables     = build_review_reminder_variables(admin, stale_reviews)
 
-    variables = build_review_reminder_variables(admin, stale_reviews)
-
-    send_email(admin.email, text_template, variables)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send review reminder email to admin #{admin&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e if Rails.env.test? # Re-raise in test environment
+      send_email(admin.email, text_template, variables)
+    end
   end
-
-  # Private helper methods for rendering partials are in Mailers::SharedPartialHelpers
-
-  helper Mailers::ApplicationNotificationsHelper
 
   def account_created(constituent, temp_password)
-    return handle_nil_constituent if constituent.nil?
+    with_mailer_error_handling("account_created constituent=#{constituent&.id}") do
+      return handle_nil_constituent if constituent.nil?
 
-    handle_account_created_letter(constituent, temp_password)
+      template_name = 'application_notifications_account_created'
+      text_template   = find_text_template(template_name)
+      variables       = build_account_created_variables(constituent, temp_password)
+      recipient_email = extract_recipient_email(constituent)
 
-    template_name = 'application_notifications_account_created'
-    text_template = find_email_template(template_name)
+      if prefers_letter_delivery?(constituent)
+        queue_letter_delivery(
+          recipient: constituent,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :account_created
+        )
+        return noop_letter_delivery
+      end
 
-    variables = build_account_created_variables(constituent, temp_password)
-    recipient_email = extract_recipient_email(constituent)
-
-    send_email(recipient_email, text_template, variables)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send account created email for #{constituent&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e # Re-raise to ensure job failures are tracked
+      send_email(recipient_email, text_template, variables)
+    end
   end
 
-  def income_threshold_exceeded(constituent_params, notification_params)
-    service_result = get_income_threshold_data(constituent_params, notification_params)
+  def income_threshold_exceeded(constituent_params, notification_params, delivery_preference_override: nil)
+    with_mailer_error_handling('income_threshold_exceeded') do
+      template_name = 'application_notifications_income_threshold_exceeded'
+      service_result = get_income_threshold_data(constituent_params, notification_params)
+      text_template  = find_text_template(template_name)
+      variables      = build_income_threshold_variables(service_result)
 
-    template_name = 'application_notifications_income_threshold_exceeded'
-    text_template = find_email_template(template_name)
+      if prefers_letter_delivery?(constituent_params, override: delivery_preference_override)
+        queue_letter_delivery(
+          recipient: constituent_params,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :income_threshold_exceeded
+        )
+        return noop_letter_delivery
+      end
 
-    variables = build_income_threshold_variables(service_result)
-
-    send_email(service_result[:constituent][:email], text_template, variables)
-  rescue StandardError => e
-    constituent_id = constituent_params.is_a?(Hash) ? constituent_params[:id] : constituent_params&.id
-    Rails.logger.error("Failed to send income threshold exceeded email for constituent #{constituent_id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
+      send_email(service_result[:constituent][:email], text_template, variables)
+    end
   end
 
   def proof_submission_error(constituent, application, _error_type, message)
-    recipient_info = determine_proof_error_recipient(constituent, message)
-    handle_proof_error_letter(constituent, application, message)
+    with_mailer_error_handling("proof_submission_error constituent=#{constituent&.id} application=#{application&.id}") do
+      recipient_info = determine_proof_error_recipient(constituent, message)
+      template_name  = 'application_notifications_proof_submission_error'
+      text_template  = find_text_template(template_name)
+      variables      = build_proof_error_variables(recipient_info[:full_name], message)
 
-    template_name = 'application_notifications_proof_submission_error'
-    text_template = find_email_template(template_name)
+      if constituent.present? && prefers_letter_delivery?(constituent)
+        queue_letter_delivery(
+          recipient: constituent,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :proof_submission_error,
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-    variables = build_proof_error_variables(recipient_info[:full_name], message)
-
-    send_email(recipient_info[:email], text_template, variables)
-  rescue StandardError => e
-    constituent_id = constituent&.id || 'unknown'
-    application_id = application&.id || 'unknown'
-    Rails.logger.error("Failed to send proof submission error email for constituent #{constituent_id}, application #{application_id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
+      send_email(recipient_info[:email], text_template, variables)
+    end
   end
 
   def registration_confirmation(user)
-    active_vendors_text_list = build_active_vendors_list
-    handle_registration_letter(user, active_vendors_text_list)
+    with_mailer_error_handling("registration_confirmation user=#{user&.id}") do
+      active_vendors_text_list = build_active_vendors_list
+      template_name            = 'application_notifications_registration_confirmation'
+      text_template            = find_text_template(template_name)
+      variables                = build_registration_variables(user, active_vendors_text_list)
 
-    template_name = 'application_notifications_registration_confirmation'
-    text_template = find_email_template(template_name)
+      if prefers_letter_delivery?(user)
+        queue_letter_delivery(
+          recipient: user,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :registration_confirmation
+        )
+        return noop_letter_delivery
+      end
 
-    variables = build_registration_variables(user, active_vendors_text_list)
-
-    send_email(user.effective_email, text_template, variables)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send registration confirmation email for user #{user&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
+      send_email(recipient_email_for(user), text_template, variables)
+    end
   end
 
   def proof_received(application, proof_type)
-    template_name = 'application_notifications_proof_received'
-    text_template = find_email_template(template_name)
+    with_mailer_error_handling("proof_received application=#{application&.id}") do
+      template_name = 'application_notifications_proof_received'
+      text_template    = find_text_template(template_name)
+      variables        = build_proof_received_variables(application, proof_type)
+      subject_override = proc { |subject| subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received') }
 
-    variables = build_proof_received_variables(application, proof_type)
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables.merge(proof_type: proof_type),
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-    # Customize the subject to be more appropriate for "received" vs "approved"
-    subject_override = proc do |subject|
-      subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received')
+      send_email(recipient_email_for(application.user), text_template, variables, { subject_override: subject_override })
     end
-
-    send_email(application.user.effective_email, text_template, variables, { subject_override: subject_override })
-  rescue StandardError => e
-    Rails.logger.error("Failed to send proof received email for application #{application&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
   end
 
   def medical_certification_not_provided(application)
     template_name = 'application_notifications_medical_certification_not_provided'
-    text_template = find_email_template(template_name)
+    text_template = find_text_template(template_name)
 
     variables = build_medical_certification_not_provided_variables(application)
 
-    send_email(application.user.effective_email, text_template, variables)
+    if prefers_letter_delivery?(application.user)
+      queue_letter_delivery(
+        recipient: application.user,
+        template_name: template_name,
+        variables: variables,
+        application: application
+      )
+      return noop_letter_delivery
+    end
+
+    send_email(recipient_email_for(application.user), text_template, variables)
   rescue StandardError => e
     Rails.logger.error("Failed to send medical certification not provided email for application #{application&.id}: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n"))
@@ -213,31 +259,19 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   private
 
-  # Common letter generation helper
-  def generate_letter_if_preferred(recipient, template_name, variables)
-    return unless recipient.respond_to?(:communication_preference) && recipient.communication_preference == 'letter'
+  def with_mailer_error_handling(context, raise_in_test_only: false)
+    yield
+  rescue StandardError => e
+    Rails.logger.error("Mailer error (#{context}): #{e.message}\n#{e.backtrace.join("\n")}")
+    raise if !raise_in_test_only || Rails.env.test?
 
-    Letters::TextTemplateToPdfService.new(
-      template_name: template_name,
-      recipient: recipient,
-      variables: variables
-    ).queue_for_printing
+    noop_delivery
   end
 
-  # Common email template finder
-  def find_email_template(template_name)
-    EmailTemplate.find_by!(name: template_name, format: :text)
-  rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
-    raise "Email templates not found for #{template_name}"
-  end
-
-  # Common base variables builder
   def build_base_email_variables(header_title, organization_name = nil)
     org_name = organization_name || Policy.get('organization_name') || 'Maryland Accessible Telecommunications'
-    footer_contact_email = Policy.get('support_email') || 'support@example.com'
+    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = root_url(host: default_url_options[:host])
-    footer_show_automated_message = true
     header_logo_url = safe_asset_path('logo.png')
 
     {
@@ -246,13 +280,13 @@ class ApplicationNotificationsMailer < ApplicationMailer
         contact_email: footer_contact_email,
         website_url: footer_website_url,
         organization_name: org_name,
-        show_automated_message: footer_show_automated_message
+        show_automated_message: true
       ),
       header_logo_url: header_logo_url,
-      header_subtitle: nil
+      header_subtitle: nil,
+      support_email: footer_contact_email
     }
   end
-
 
   def safe_asset_path(asset_name)
     ActionController::Base.helpers.asset_path(asset_name, host: default_url_options[:host])
@@ -260,33 +294,30 @@ class ApplicationNotificationsMailer < ApplicationMailer
     nil
   end
 
-  # Proof rejected specific methods
-  def handle_proof_rejected_letter(application, proof_review, remaining_attempts, reapply_date)
-    return unless application.user.communication_preference == 'letter'
+  def build_proof_approved_variables(application, proof_review)
+    user                      = application.user
+    organization_name         = Policy.get('organization_name') || 'MAT Program'
+    proof_type_formatted      = format_proof_type(proof_review.proof_type)
+    all_proofs_approved       = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
+    all_proofs_approved_text  = all_proofs_approved ? 'All required documents for your application have now been approved.' : ''
+    header_title              = "Document Review Update: #{proof_type_formatted.capitalize} Approved"
+    base_variables            = build_base_email_variables(header_title, 'MAT Program')
 
-    generate_letter_if_preferred(
-      application.user,
-      'application_notifications_proof_rejected',
-      {
-        proof_type: proof_review.proof_type,
-        proof_type_formatted: format_proof_type(proof_review.proof_type),
-        rejection_reason: proof_review.rejection_reason || 'Documentation did not meet requirements',
-        notes: proof_review.notes || '',
-        remaining_attempts: remaining_attempts,
-        reapply_date: reapply_date.strftime('%B %d, %Y'),
-        first_name: application.user.first_name,
-        last_name: application.user.last_name,
-        application_id: application.id
-      }
-    )
+    base_variables.merge({
+                           user_first_name: user.first_name,
+                           organization_name: organization_name,
+                           proof_type_formatted: proof_type_formatted,
+                           all_proofs_approved_message_text: all_proofs_approved_text
+                         }).compact
   end
 
   def build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date)
-    user = application.user
+    user                 = application.user
     proof_type_formatted = format_proof_type(proof_review.proof_type)
-    header_title = "Document Review Update: #{proof_type_formatted.capitalize} Needs Revision"
+    header_title         = "Document Review Update: #{proof_type_formatted.capitalize} Needs Revision"
+    base_variables       = build_base_email_variables(header_title, 'MAT Program')
+    sign_in_url_value    = sign_in_url(host: default_url_options[:host])
 
-    base_variables = build_base_email_variables(header_title, 'MAT Program')
     proof_variables = {
       user_first_name: user.first_name,
       constituent_full_name: user.full_name,
@@ -294,20 +325,19 @@ class ApplicationNotificationsMailer < ApplicationMailer
       proof_type_formatted: proof_type_formatted,
       rejection_reason: proof_review.rejection_reason,
       additional_instructions: proof_review.notes,
-      sign_in_url: sign_in_url(host: default_url_options[:host])
+      sign_in_url: sign_in_url_value
     }
-    conditional_variables = build_proof_rejected_conditional_variables(remaining_attempts, reapply_date)
 
-    base_variables.merge(proof_variables).merge(conditional_variables).compact
+    base_variables.merge(proof_variables)
+                  .merge(build_proof_rejected_conditional_variables(remaining_attempts, reapply_date, sign_in_url_value))
+                  .compact
   end
 
-  def build_proof_rejected_conditional_variables(remaining_attempts, reapply_date)
-    sign_in_url_value = sign_in_url(host: default_url_options[:host])
-
+  def build_proof_rejected_conditional_variables(remaining_attempts, reapply_date, sign_in_url_value)
     if remaining_attempts.positive?
       {
         remaining_attempts_message_text: build_remaining_attempts_message(remaining_attempts, reapply_date),
-        default_options_text: build_default_options_text(sign_in_url_value),
+        default_options_text: "Please sign in to your account at #{sign_in_url_value} to upload the corrected documents or reply to this email with the documents attached.",
         archived_message_text: ''
       }
     else
@@ -320,93 +350,31 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def build_remaining_attempts_message(remaining_attempts, reapply_date)
-    "You have #{remaining_attempts} #{'attempt'.pluralize(remaining_attempts)} remaining to
-    submit the required documentation before #{reapply_date.strftime('%B %d, %Y')}."
-  end
-
-  def build_default_options_text(sign_in_url_value)
-    "Please sign in to your account at #{sign_in_url_value} to upload the corrected documents or reply to this email with the documents attached."
+    "You have #{remaining_attempts} #{'attempt'.pluralize(remaining_attempts)} remaining to submit the required documentation before #{reapply_date.strftime('%B %d, %Y')}."
   end
 
   def build_archived_message(reapply_date)
-    "Unfortunately, you have reached the maximum number of submission attempts. Your application has been archived.
-    You may reapply after #{reapply_date.strftime('%B %d, %Y')}."
+    "Unfortunately, you have reached the maximum number of submission attempts. Your application has been archived. You may reapply after #{reapply_date.strftime('%B %d, %Y')}."
   end
 
   def send_proof_rejected_email(user, text_template, variables)
     send_email(
-      user.email,
+      recipient_email_for(user),
       text_template,
       variables,
       reply_to: ["proof@#{default_url_options[:host]}"]
     )
   end
 
-  # Proof approved specific methods
-  def handle_proof_approved_letter(application, proof_review)
-    all_proofs_approved = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
-
-    generate_letter_if_preferred(
-      application.user,
-      'application_notifications_proof_approved',
-      {
-        proof_type: proof_review.proof_type,
-        proof_type_formatted: format_proof_type(proof_review.proof_type),
-        all_proofs_approved: all_proofs_approved,
-        first_name: application.user.first_name,
-        last_name: application.user.last_name,
-        application_id: application.id
-      }
-    )
-  end
-
-  def build_proof_approved_variables(application, proof_review)
-    user = application.user
-    organization_name = Policy.get('organization_name') || 'MAT Program'
-    proof_type_formatted = format_proof_type(proof_review.proof_type)
-    all_proofs_approved = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
-    all_proofs_approved_message_text = all_proofs_approved ? 'All required documents for your application have now been approved.' : ''
-    header_title = "Document Review Update: #{proof_type_formatted.capitalize} Approved"
-
-    base_variables = build_base_email_variables(header_title, 'MAT Program')
-    proof_variables = {
-      user_first_name: user.first_name,
-      organization_name: organization_name,
-      proof_type_formatted: proof_type_formatted,
-      all_proofs_approved_message_text: all_proofs_approved_message_text
-    }
-
-    base_variables.merge(proof_variables).compact
-  end
-
-  # Max rejections specific methods
-  def handle_max_rejections_letter(application, reapply_date)
-    generate_letter_if_preferred(
-      application.user,
-      'application_notifications_max_rejections_reached',
-      {
-        reapply_date_formatted: reapply_date.strftime('%B %d, %Y'),
-        first_name: application.user.first_name,
-        last_name: application.user.last_name,
-        application_id: application.id
-      }
-    )
-  end
-
   def build_max_rejections_variables(application, reapply_date)
-    header_title = 'Important: Application Status Update'
-
-    base_variables = build_base_email_variables(header_title)
-    max_rejections_variables = {
-      user_first_name: application.user.first_name,
-      application_id: application.id,
-      reapply_date_formatted: reapply_date.strftime('%B %d, %Y')
-    }
-
-    base_variables.merge(max_rejections_variables).compact
+    base_variables = build_base_email_variables('Important: Application Status Update', nil)
+    base_variables.merge({
+                           user_first_name: application.user.first_name,
+                           application_id: application.id,
+                           reapply_date_formatted: reapply_date.strftime('%B %d, %Y')
+                         }).compact
   end
 
-  # Proof needs review reminder specific methods
   def filter_stale_reviews(applications)
     applications.select do |app|
       app.respond_to?(:needs_review_since) &&
@@ -421,19 +389,17 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def build_review_reminder_variables(admin, stale_reviews)
-    header_title = 'Reminder: Applications Awaiting Proof Review'
     admin_dashboard_url = admin_applications_url(host: default_url_options[:host])
     stale_reviews_text_list = build_stale_reviews_list(stale_reviews)
+    base_variables = build_base_email_variables('Reminder: Applications Awaiting Proof Review', nil)
 
-    base_variables = build_base_email_variables(header_title)
-    reminder_variables = {
-      admin_first_name: admin.first_name,
-      stale_reviews_count: stale_reviews.count,
-      stale_reviews_text_list: stale_reviews_text_list,
-      admin_dashboard_url: admin_dashboard_url
-    }
-
-    base_variables.merge(reminder_variables).compact
+    base_variables.merge({
+                           admin_first_name: admin.first_name,
+                           admin_full_name: admin.full_name,
+                           stale_reviews_count: stale_reviews.count,
+                           stale_reviews_text_list: stale_reviews_text_list,
+                           admin_dashboard_url: admin_dashboard_url
+                         }).compact
   end
 
   def build_stale_reviews_list(stale_reviews)
@@ -443,49 +409,47 @@ class ApplicationNotificationsMailer < ApplicationMailer
     end.join("\n")
   end
 
-  # Account created specific methods
+  # --- Account created ---
+
   def handle_nil_constituent
     context = Rails.env.test? ? '[TEST_EDGE_CASE] ' : '[DATA_INTEGRITY] '
     Rails.logger.error("#{context}ApplicationNotificationsMailer#account_created called with nil constituent")
     nil
   end
 
-  def handle_account_created_letter(constituent, temp_password)
-    generate_letter_if_preferred(
-      constituent,
-      'application_notifications_account_created',
-      {
-        email: constituent.email,
-        temp_password: temp_password,
-        first_name: constituent.first_name,
-        last_name: constituent.last_name
-      }
-    )
-  end
-
   def build_account_created_variables(constituent, temp_password)
-    header_title = 'Your MAT Application Account Has Been Created'
+    header_title   = 'Your MAT Application Account Has Been Created'
+    base_variables = build_base_email_variables(header_title, nil)
 
-    base_variables = build_base_email_variables(header_title)
-    account_variables = {
+    is_paper_app = constituent.applications.order(created_at: :desc).first&.submission_method_paper?
+
+    variables = {
       constituent_first_name: constituent.first_name,
-      constituent_email: constituent.email,
-      temp_password: temp_password,
-      sign_in_url: sign_in_url(host: default_url_options[:host]),
       header_title: header_title,
-      footer_contact_email: Policy.get('support_email') || 'support@example.com',
+      footer_contact_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
       footer_website_url: root_url(host: default_url_options[:host]),
       footer_show_automated_message: true
     }
 
-    base_variables.merge(account_variables).compact
+    unless is_paper_app
+      variables.merge!({
+                         constituent_email: constituent.email,
+                         temp_password: temp_password,
+                         sign_in_url: sign_in_url(host: default_url_options[:host])
+                       })
+    end
+
+    base_variables.merge(variables).compact
   end
 
   def extract_recipient_email(constituent)
-    constituent.is_a?(Hash) ? constituent[:email] : constituent.email
+    return constituent[:email] if constituent.is_a?(Hash)
+
+    recipient_email_for(constituent)
   end
 
-  # Income threshold exceeded specific methods
+  # --- Income threshold exceeded ---
+
   def get_income_threshold_data(constituent_params, notification_params)
     result = Notifications::IncomeThresholdService.call(constituent_params, notification_params)
 
@@ -504,71 +468,52 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def build_income_threshold_variables(service_result)
-    constituent = service_result[:constituent]
-    notification = service_result[:notification]
+    constituent    = service_result[:constituent]
+    notification   = service_result[:notification]
     threshold_data = service_result[:threshold_data]
-    threshold = service_result[:threshold]
+    threshold      = service_result[:threshold]
 
-    header_title = 'Important Information About Your MAT Application'
-    status_box_title = 'Application Status: Income Threshold Exceeded'
+    status_box_title   = 'Application Status: Income Threshold Exceeded'
     status_box_message = "Based on the information provided, your household income exceeds the program's limit."
+    base_variables     = build_base_email_variables('Important Information About Your MAT Application', nil)
 
-    base_variables = build_base_email_variables(header_title)
-    threshold_variables = {
-      constituent_first_name: constituent[:first_name],
-      household_size: threshold_data[:household_size],
-      annual_income_formatted: ActionController::Base.helpers.number_to_currency(notification[:annual_income]),
-      threshold_formatted: ActionController::Base.helpers.number_to_currency(threshold),
-      status_box_text: status_box_text(status: 'error', title: status_box_title, message: status_box_message),
-      additional_notes: notification[:additional_notes]
-    }
-
-    base_variables.merge(threshold_variables).compact
+    base_variables.merge({
+                           constituent_first_name: constituent[:first_name],
+                           household_size: threshold_data[:household_size],
+                           annual_income_formatted: ActionController::Base.helpers.number_to_currency(notification[:annual_income]),
+                           threshold_formatted: ActionController::Base.helpers.number_to_currency(threshold),
+                           status_box_text: status_box_text(status: 'error', title: status_box_title, message: status_box_message),
+                           additional_notes: notification[:additional_notes]
+                         }).compact
   end
 
-  # Proof submission error specific methods
+  # --- Proof submission error ---
+
   def determine_proof_error_recipient(constituent, message)
     if constituent
       {
-        email: constituent.email,
+        email: recipient_email_for(constituent),
         full_name: constituent.full_name
       }
     else
       {
-        email: message.match(/from: ([^\s]+@[^\s]+)/)&.captures&.first || 'unknown@example.com',
-        full_name: 'Email Sender'
+        email: message.match(/from: ([^\s]+@[^\s]+)/)&.captures&.first || 'system@mdmat.org',
+        full_name: 'System User'
       }
     end
   end
 
-  def handle_proof_error_letter(constituent, application, message)
-    return unless constituent.respond_to?(:communication_preference) && constituent.communication_preference == 'letter'
-
-    generate_letter_if_preferred(
-      constituent,
-      'application_notifications_proof_submission_error',
-      {
-        error_message: message,
-        first_name: constituent.first_name,
-        last_name: constituent.last_name,
-        application_id: application&.id
-      }
-    )
-  end
-
   def build_proof_error_variables(constituent_full_name, message)
-    header_title = 'Error Processing Your Proof Submission'
+    base_variables = build_base_email_variables('Error Processing Your Proof Submission', nil)
 
-    base_variables = build_base_email_variables(header_title)
-    error_variables = {
-      constituent_full_name: constituent_full_name,
-      message: message
-    }
-
-    base_variables.merge(error_variables).compact
+    base_variables.merge({
+                           constituent_full_name: constituent_full_name,
+                           message: message
+                         }).compact
   end
 
-  # Registration confirmation specific methods
+  # --- Registration confirmation ---
+
   def build_active_vendors_list
     active_vendors = Vendor.active.order(:business_name)
     if active_vendors.any?
@@ -578,64 +523,54 @@ class ApplicationNotificationsMailer < ApplicationMailer
     end
   end
 
-  def handle_registration_letter(user, active_vendors_text_list)
-    generate_letter_if_preferred(
-      user,
-      'application_notifications_registration_confirmation',
-      {
-        user_full_name: user.full_name,
-        dashboard_url: constituent_portal_dashboard_url(host: default_url_options[:host]),
-        new_application_url: new_constituent_portal_application_url(host: default_url_options[:host]),
-        active_vendors_text_list: active_vendors_text_list
-      }
-    )
-  end
-
   def build_registration_variables(user, active_vendors_text_list)
-    header_title = 'Welcome to the Maryland Accessible Telecommunications Program'
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications'
+    base_variables    = build_base_email_variables(
+      'Welcome to the Maryland Accessible Telecommunications Program',
+      organization_name
+    )
 
-    base_variables = build_base_email_variables(header_title, organization_name)
-    registration_variables = {
-      user_first_name: user.first_name,
-      user_full_name: user.full_name,
-      dashboard_url: constituent_portal_dashboard_url(host: default_url_options[:host]),
-      new_application_url: new_constituent_portal_application_url(host: default_url_options[:host]),
-      active_vendors_text_list: active_vendors_text_list
-    }
-
-    base_variables.merge(registration_variables).compact
+    base_variables.merge({
+                           user_first_name: user.first_name,
+                           user_full_name: user.full_name,
+                           dashboard_url: constituent_portal_dashboard_url(host: default_url_options[:host]),
+                           new_application_url: new_constituent_portal_application_url(host: default_url_options[:host]),
+                           active_vendors_text_list: active_vendors_text_list
+                         }).compact
   end
 
-  # Application submitted specific methods
-  def build_application_submitted_variables(application)
-    header_title = 'Your Application Has Been Submitted'
+  # --- Application submitted ---
 
-    base_variables = build_base_email_variables(header_title)
-    submitted_variables = {
+  def build_application_submitted_variables(application)
+    base_variables = build_base_email_variables('Your Application Has Been Submitted', nil)
+
+    variables = {
       user_first_name: application.user.first_name,
       application_id: application.id,
       submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y')
     }
 
-    base_variables.merge(submitted_variables).compact
+    unless application.submission_method_paper?
+      variables[:sign_in_url] = "You can track the status of your application at any time by logging into your account: #{sign_in_url(host: default_url_options[:host])}"
+    end
+
+    base_variables.merge(variables).compact
   end
 
-  # Proof received specific methods
+  # --- Proof received ---
+
   def build_proof_received_variables(application, proof_type)
-    user = application.user
-    organization_name = Policy.get('organization_name') || 'MAT Program'
+    user                 = application.user
+    organization_name    = Policy.get('organization_name') || 'MAT Program'
     proof_type_formatted = format_proof_type(proof_type)
-    header_title = "Document Received: #{proof_type_formatted.capitalize}"
+    base_variables       = build_base_email_variables("Document Received: #{proof_type_formatted.capitalize}",
+                                                      organization_name)
 
-    base_variables = build_base_email_variables(header_title, organization_name)
-    received_variables = {
-      user_first_name: user.first_name,
-      organization_name: organization_name,
-      proof_type_formatted: proof_type_formatted
-    }
-
-    base_variables.merge(received_variables).compact
+    base_variables.merge({
+                           user_first_name: user.first_name,
+                           organization_name: organization_name,
+                           proof_type_formatted: proof_type_formatted
+                         }).compact
   end
 
   # Medical certification not provided specific methods
@@ -655,4 +590,14 @@ class ApplicationNotificationsMailer < ApplicationMailer
     base_variables.merge(cert_variables).compact
   end
 
+  def proof_rejection_letter_type(proof_type)
+    case proof_type.to_s
+    when 'income'
+      :income_proof_rejected
+    when 'residency'
+      :residency_proof_rejected
+    else
+      :other_notification
+    end
+  end
 end

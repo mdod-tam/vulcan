@@ -4,13 +4,24 @@ module Letters
   # This service converts database-stored email text templates to PDFs for printing
   # It allows us to maintain a single source of templates (in the database with versioning logic)
   class TextTemplateToPdfService
-    attr_reader :template_name, :format, :template, :variables, :recipient
+    LETTER_TYPE_BY_TEMPLATE = {
+      'application_notifications_account_created' => :account_created,
+      'application_notifications_registration_confirmation' => :registration_confirmation,
+      'application_notifications_income_threshold_exceeded' => :income_threshold_exceeded,
+      'application_notifications_proof_approved' => :proof_approved,
+      'application_notifications_max_rejections_reached' => :max_rejections_reached,
+      'application_notifications_proof_submission_error' => :proof_submission_error,
+      'evaluator_mailer_evaluation_submission_confirmation' => :evaluation_submitted
+    }.freeze
 
-    def initialize(template_name:, recipient:, variables: {})
+    attr_reader :template_name, :format, :template, :variables, :recipient, :letter_type_override
+
+    def initialize(template_name:, recipient:, variables: {}, letter_type: nil)
       @template_name = template_name
       @format = :text
       @recipient = recipient
       @variables = variables
+      @letter_type_override = letter_type
       @template = find_template
     end
 
@@ -225,8 +236,30 @@ module Letters
     end
 
     def determine_letter_type
-      # Convert the template name to a letter type symbol
-      template_name.to_sym
+      candidate = letter_type_override || letter_type_from_template
+      candidate = candidate.to_sym
+      return candidate if PrintQueueItem.letter_types.key?(candidate.to_s)
+
+      :other_notification
+    end
+
+    def letter_type_from_template
+      return proof_rejected_letter_type if template_name == 'application_notifications_proof_rejected'
+
+      LETTER_TYPE_BY_TEMPLATE.fetch(template_name, :other_notification)
+    end
+
+    def proof_rejected_letter_type
+      proof_type = variables[:proof_type] || variables['proof_type']
+      proof_type = proof_type.to_s
+      case proof_type
+      when 'income'
+        :income_proof_rejected
+      when 'residency'
+        :residency_proof_rejected
+      else
+        :other_notification
+      end
     end
 
     # Check if the template requires shared partial variables (header_text and footer_text)

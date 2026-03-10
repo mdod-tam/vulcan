@@ -51,10 +51,25 @@ module Notifications
       if source.is_a?(Hash)
         source[key] || source[key.to_s]
       else
-        source.public_send(key)
+        extract_object_value(source, key)
       end
     rescue NoMethodError
       nil
+    end
+
+    def extract_object_value(source, key)
+      case key.to_sym
+      when :email
+        source.respond_to?(:effective_email) ? source.effective_email : source.email
+      when :communication_preference
+        if source.respond_to?(:effective_communication_preference)
+          source.effective_communication_preference
+        else
+          source.communication_preference
+        end
+      else
+        source.public_send(key)
+      end
     end
   end
 end

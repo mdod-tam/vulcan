@@ -35,6 +35,8 @@ class VoucherNotificationsMailer < ApplicationMailer
       minimum_redemption_amount_formatted: number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0)
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -43,7 +45,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_assigned email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -82,7 +84,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     end
 
     # Prepare variables
-    header_title = "Important: Your voucher is expiring soon."
+    header_title = 'Important: Your voucher is expiring soon.'
     footer_contact_email = Policy.get('support_email') || 'support@example.com'
     footer_website_url = root_url(host: default_url_options[:host])
     footer_show_automated_message = true
@@ -95,7 +97,6 @@ class VoucherNotificationsMailer < ApplicationMailer
     # Use Policy.get for configuration values
     expiration_date = voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months
     days_remaining = (expiration_date - Time.current).to_i / 1.day
-    
 
     variables = {
       user_first_name: user.first_name,
@@ -105,8 +106,9 @@ class VoucherNotificationsMailer < ApplicationMailer
       header_text: header_text(title: header_title, logo_url: header_logo_url),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
                                organization_name: organization_name, show_automated_message: footer_show_automated_message)
-      # Add other required variables from AVAILABLE_TEMPLATES if needed
     }.compact
+
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
 
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
@@ -116,7 +118,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_expiring_soon email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -190,6 +192,8 @@ class VoucherNotificationsMailer < ApplicationMailer
       show_automated_message: footer_show_automated_message # Optional
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -198,7 +202,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_expired email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -223,7 +227,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     raise e
   end
 
-  def voucher_redeemed
+  def voucher_redeemed # rubocop:disable Metrics/PerceivedComplexity
     transaction = params[:transaction]
     voucher = transaction.voucher
     user = voucher.application.user
@@ -239,7 +243,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     end
 
     # Prepare variables
-    header_title = "Your voucher has been redeemed!"
+    header_title = 'Your voucher has been redeemed!'
     remaining_balance_formatted = number_to_currency(voucher.remaining_value) # After transaction
     footer_contact_email = Policy.get('support_email') || 'support@example.com'
     footer_website_url = root_url(host: default_url_options[:host])
@@ -254,7 +258,6 @@ class VoucherNotificationsMailer < ApplicationMailer
     expiration_date_formatted = (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y')
     minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0)
     redeemed_value_formatted = number_to_currency(transaction.amount)
-    header_content = "Your voucher has been redeemed!"
 
     # Optional message blocks (text only)
     remaining_value_message_text = ''
@@ -280,11 +283,13 @@ class VoucherNotificationsMailer < ApplicationMailer
       remaining_value_message_text: remaining_value_message_text,
       redeemed_value_formatted: redeemed_value_formatted,
       fully_redeemed_message_text: fully_redeemed_message_text,
-      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted,# Often used within optional blocks
+      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted, # Often used within optional blocks
       header_text: header_text(title: header_title, logo_url: header_logo_url),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
                                organization_name: organization_name, show_automated_message: footer_show_automated_message)
     }.compact
+
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
 
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
@@ -294,7 +299,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_redeemed email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -317,5 +322,19 @@ class VoucherNotificationsMailer < ApplicationMailer
       }
     )
     raise e
+  end
+
+  private
+
+  def queue_letter_if_preferred(user, template_name, variables, application: nil)
+    return false unless prefers_letter_delivery?(user)
+
+    queue_letter_delivery(
+      recipient: user,
+      template_name: template_name,
+      variables: variables,
+      application: application
+    )
+    true
   end
 end
