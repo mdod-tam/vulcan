@@ -5,8 +5,9 @@ class ApplicationMailbox < ActionMailbox::Base
 
   # Use lambdas with direct string comparison
   routing lambda { |inbound_email|
-    result = (inbound_email.mail.to || []).include?('medical-cert@mdmat.org')
-    Rails.logger.info "MAILBOX ROUTING: medical-cert check = #{result} (to: #{inbound_email.mail.to})"
+    recipients = Array(inbound_email.mail.to).map { |address| address.to_s.downcase }
+    result = recipients.any? { |address| address.match?(/\Adisability_cert(?:\+[^@]+)?@mdmat\.org\z/) }
+    Rails.logger.info "MAILBOX ROUTING: disability_cert check = #{result} (to: #{inbound_email.mail.to})"
     result
   } => :medical_certification
 
