@@ -382,7 +382,7 @@
                       <div>
                         <%= g.label :locale, "Preferred Language", class: "block text-sm font-medium text-gray-700" %>
                         <%= g.select :locale, 
-                            options_for_select([["English","en"],["Spanish","es"],["French","fr"],["American Sign Language (ASL)","asl"],["Other","other"]], g.object[:locale] || 'en'), 
+                            options_for_select([["English","en"],["Spanish","es"]], g.object[:locale] || 'en'), 
                             { prompt: "Select Language" }, 
                             class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
                       </div>

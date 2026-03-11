@@ -247,7 +247,7 @@
           <ul class="space-y-4">
             <% @application.application_notes.recent_first.each do |note| %>
               <li class="bg-gray-50 p-4 rounded-md">
-                <div class="flex justify-between items-start gap-4">
+                <div class="flex justify-between items-start gap-4" id="application-note-<%= note.id %>">
                   <div class="flex-1">
                     <p class="text-sm text-gray-900"><%= note.content %></p>
                     <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
