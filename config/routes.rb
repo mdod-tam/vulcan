@@ -20,6 +20,7 @@ Rails.application.routes.draw do
   get 'eligibility', to: 'pages#eligibility', as: :eligibility
   get 'apply', to: 'pages#apply', as: :apply
   get 'contact', to: 'pages#contact', as: :contact
+  get 'medical_certification_form/:signed_id', to: 'medical_certification_forms#show', as: :medical_certification_form
 
   # Welcome/Onboarding
   get 'welcome', to: 'welcome#index', as: :welcome
