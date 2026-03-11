@@ -49,12 +49,15 @@ class MedicalCertificationEmailJob < ApplicationJob
   private
 
   def create_notification(application, timestamp)
-    recipient = User.find_by(role: 'admin') || User.first # Default recipient - ideally admins
+    recipient = User.admins.first || User.first
+    raise ActiveRecord::RecordNotFound, 'No users available for medical certification notification recipient' unless recipient
+
     actor = begin
       Current.user
     rescue StandardError
       nil
     end
+    actor ||= recipient
 
     # Log the audit event
     AuditEventService.log(
@@ -79,7 +82,8 @@ class MedicalCertificationEmailJob < ApplicationJob
         provider: application.medical_provider_name,
         provider_email: application.medical_provider_email
       },
-      channel: :email
+      channel: :email,
+      deliver: false
     )
   end
 end

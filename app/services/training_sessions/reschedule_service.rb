@@ -27,7 +27,7 @@ module TrainingSessions
       Rails.logger.error("Error rescheduling training session: #{e.message}")
       failure(message: e.message)
     rescue ArgumentError => e
-      Rails.logger.error("Invalid parameters for rescheduling training session: #{e.message}")
+      log_validation_failure(e)
       failure(message: e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error rescheduling training session: #{e.message}")
@@ -40,6 +40,13 @@ module TrainingSessions
       return unless @params[:scheduled_for].blank? || @params[:reschedule_reason].blank?
 
       raise ArgumentError, 'scheduled_for and reschedule_reason are required'
+    end
+
+    def log_validation_failure(error)
+      message = "TrainingSessions::RescheduleService validation failed: #{error.message}"
+      return Rails.logger.warn("[EXPECTED_TEST_VALIDATION] #{message}") if Rails.env.test?
+
+      Rails.logger.warn(message)
     end
 
     def update_training_session!(_old_scheduled_for)

@@ -53,6 +53,10 @@ module ConstituentPortal
     end
 
     test 'should not create dependent if attributes are invalid' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/Failed to create dependent user:/)).once
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_VALIDATION\] Failed to create dependent:/)).once
+
       dependent_attributes = { first_name: '' } # Invalid
       guardian_relationship_attributes = { relationship_type: 'Parent' }
 
@@ -68,6 +72,10 @@ module ConstituentPortal
     end
 
     test 'should require at least one disability to be selected when created through portal' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/Failed to create dependent user: Failed to create user: At least one disability must be selected\./)).once
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_VALIDATION\] Failed to create dependent: Failed to create user: At least one disability must be selected\./)).once
+
       dependent_attributes = {
         first_name: 'Jane',
         last_name: 'Doe',

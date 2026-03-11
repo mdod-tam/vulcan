@@ -74,10 +74,6 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
     # 3. Sometimes it's returned as HTML with the JSON embedded, other times as pure JSON
     json_response = response.parsed_body
 
-    # Debug output to see the actual response format
-    # In our testing we observed the response was actually HTML containing the JSON
-    puts "WebAuthn Options Response: #{json_response.inspect}"
-
     # Flexible assertion strategy:
     # First just verify we got some kind of response
     assert json_response.present?, 'Response should include JSON data'

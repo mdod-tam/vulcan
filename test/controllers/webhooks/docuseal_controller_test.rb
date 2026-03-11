@@ -288,6 +288,9 @@ module Webhooks
     test 'handles file download failures gracefully' do
       @application.update!(medical_certification_status: :requested)
       Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(%r{Document signing download/attach failed for App})).once
+      Rails.logger.expects(:error).with(regexp_matches(/Payload data keys:/)).once
 
       # Mock HTTP download failure
       HTTP.stubs(:timeout).returns(HTTP)

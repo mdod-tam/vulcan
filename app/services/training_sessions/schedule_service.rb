@@ -25,7 +25,7 @@ module TrainingSessions
       Rails.logger.error("Error scheduling training session: #{e.message}")
       failure(message: e.message)
     rescue ArgumentError => e
-      Rails.logger.error("Invalid parameters for scheduling training session: #{e.message}")
+      log_validation_failure(e)
       failure(message: e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error scheduling training session: #{e.message}")
@@ -36,6 +36,13 @@ module TrainingSessions
 
     def validate_params!
       raise ArgumentError, 'scheduled_for is required' if @params[:scheduled_for].blank?
+    end
+
+    def log_validation_failure(error)
+      message = "TrainingSessions::ScheduleService validation failed: #{error.message}"
+      return Rails.logger.warn("[EXPECTED_TEST_VALIDATION] #{message}") if Rails.env.test?
+
+      Rails.logger.warn(message)
     end
 
     def update_training_session!
