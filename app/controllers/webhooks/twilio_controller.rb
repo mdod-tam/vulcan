@@ -3,6 +3,10 @@
 module Webhooks
   # Controller for handling Twilio webhook callbacks
   class TwilioController < ApplicationController
+    FAX_IN_PROGRESS_STATUSES = %w[queued processing sending].freeze
+    FAX_FAILURE_STATUSES = %w[failed no-answer busy canceled].freeze
+    FAX_TERMINAL_STATUSES = (['delivered'] + FAX_FAILURE_STATUSES).freeze
+
     skip_before_action :authenticate_user!
     skip_before_action :verify_authenticity_token
     before_action :verify_twilio_signature, only: [:fax_status]
@@ -53,19 +57,7 @@ module Webhooks
     end
 
     def update_notification_status(notification, status)
-      # Map Twilio fax status to our internal status
-      internal_status = case status
-                        when 'queued', 'processing', 'sending'
-                          'sending'
-                        when 'delivered'
-                          'delivered'
-                        when 'received'
-                          'received'
-                        when 'no-answer', 'busy', 'failed', 'canceled'
-                          'failed'
-                        else
-                          'unknown'
-                        end
+      internal_status = normalize_fax_status(status)
 
       # Update notification metadata with latest status
       metadata = notification.metadata || {}
@@ -73,46 +65,118 @@ module Webhooks
       metadata['fax_status_updated_at'] = Time.current.iso8601
       metadata['fax_status_details'] = status
 
-      notification.update!(
-        metadata: metadata,
-        delivery_status: internal_status == 'delivered' ? 'delivered' : 'failed'
-      )
+      update_attributes = { metadata: metadata }
+      delivery_status = normalize_delivery_status(status, notification.delivery_status)
+      update_attributes[:delivery_status] = delivery_status if delivery_status.present?
+      notification.update!(update_attributes)
 
       # Handle terminal fax statuses (delivered or failed)
-      return unless %w[delivered failed no-answer busy canceled].include?(status)
+      return unless FAX_TERMINAL_STATUSES.include?(status)
 
       Rails.logger.info "Fax reached terminal status: #{status} for notification #{notification.id}"
 
       # Trigger email fallback on fax failure
-      trigger_email_fallback(notification, status) if %w[failed no-answer busy canceled].include?(status)
+      trigger_email_fallback(notification, status) if fax_failure_status?(status)
       # Purge blob after terminal status (Twilio has already fetched it)
       purge_fax_blob(notification)
+    end
+
+    def normalize_fax_status(status)
+      case status
+      when *FAX_IN_PROGRESS_STATUSES
+        'sending'
+      when 'delivered'
+        'delivered'
+      when 'received'
+        'received'
+      when *FAX_FAILURE_STATUSES
+        'failed'
+      else
+        'unknown'
+      end
+    end
+
+    def normalize_delivery_status(status, current_delivery_status)
+      return 'delivered' if status == 'delivered'
+      return 'error' if fax_failure_status?(status)
+
+      current_delivery_status
+    end
+
+    def fax_failure_status?(status)
+      FAX_FAILURE_STATUSES.include?(status)
     end
 
     # Trigger email fallback when fax delivery fails
     def trigger_email_fallback(notification, fax_status)
       Rails.logger.info "Fax delivery failed with status: #{fax_status}, triggering email fallback"
-      application = notification.notifiable
-      return unless application.is_a?(Application)
-      return if application.medical_provider_email.blank?
 
-      # Extract rejection reason from notification metadata
-      rejection_reason = notification.metadata['reason'] ||
+      application = notification.notifiable
+      return unless fallback_email_available?(application)
+
+      queue_email_fallback(notification, application, fax_status)
+
+      Rails.logger.info "Email fallback queued for application #{application.id} after fax failure"
+    rescue StandardError => e
+      handle_email_fallback_error(notification, e)
+    end
+
+    def fallback_email_available?(application)
+      application.is_a?(Application) && application.medical_provider_email.present?
+    end
+
+    def queue_email_fallback(notification, application, fax_status)
+      notification.with_lock do
+        metadata = notification.metadata || {}
+        return if email_fallback_already_sent?(metadata, notification.id)
+
+        mail = build_email_fallback_mail(notification, application, metadata)
+        mail.deliver_later
+        message_id = mail.message_id
+
+        persist_email_fallback_metadata(notification, metadata, message_id, fax_status)
+      end
+    end
+
+    def email_fallback_already_sent?(metadata, notification_id)
+      return false if metadata['email_fallback_sent_at'].blank?
+
+      Rails.logger.info "Email fallback already queued for notification #{notification_id}; skipping duplicate callback"
+      true
+    end
+
+    def build_email_fallback_mail(notification, application, metadata)
+      rejection_reason = metadata['reason'] ||
                          application.medical_certification_rejection_reason ||
                          'Not specified'
-      admin = notification.actor
+      admin = notification.actor || User.admins.first || User.first
 
-      # Send email as fallback
       MedicalProviderMailer.with(
         application: application,
         rejection_reason: rejection_reason,
         admin: admin
-      ).certification_rejected.deliver_later
+      ).certification_rejected
+    end
 
-      Rails.logger.info "Email fallback queued for application #{application.id} after fax failure"
-    rescue StandardError => e
-      Rails.logger.error "Failed to trigger email fallback: #{e.message}"
-      # Don't fail the webhook - email fallback is best effort
+    def persist_email_fallback_metadata(notification, metadata, message_id, fax_status)
+      metadata['email_fallback_sent_at'] = Time.current.iso8601
+      metadata['email_fallback_message_id'] = message_id
+      metadata['email_fallback_status'] = 'queued'
+      metadata['email_fallback_trigger_status'] = fax_status
+      metadata['message_id'] = message_id if message_id.present?
+
+      notification.update!(metadata: metadata)
+    end
+
+    def handle_email_fallback_error(notification, error)
+      Rails.logger.error "Failed to trigger email fallback: #{error.message}"
+
+      metadata = notification.metadata || {}
+      metadata['email_fallback_error'] = error.message
+      metadata['email_fallback_error_at'] = Time.current.iso8601
+      notification.update!(metadata: metadata)
+    rescue StandardError
+      # Best effort metadata enrichment only
     end
 
     # Purge the fax blob after terminal status

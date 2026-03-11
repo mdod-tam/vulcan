@@ -30,6 +30,21 @@ module Applications
       # assert_equal('rejected', @application.reload.medical_certification_status) # Remove this for now
     end
 
+    test 'passes rejection notification id to medical provider notifier' do
+      mock_notifier = mock('medical_provider_notifier')
+      MedicalProviderNotifier.expects(:new).with(@application).returns(mock_notifier)
+      mock_notifier.expects(:send_certification_rejection_notice).with(
+        rejection_reason: 'Invalid documentation',
+        admin: @admin,
+        notification_id: 1234
+      ).returns(true)
+
+      MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
+        result = @service.reject(rejection_reason: 'Invalid documentation')
+        assert(result.success?, 'Expected reviewer service to pass through success when notifier succeeds')
+      end
+    end
+
     test 'fails when rejection reason is missing' do
       result = @service.reject(rejection_reason: '')
       assert_not(result.success?, 'Expected rejection to fail without a reason')

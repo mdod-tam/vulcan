@@ -67,16 +67,17 @@ module Applications
 
       return failure(service_result[:error]&.message || 'Disability certification service failed') unless service_result[:success]
 
-      # Notify provider via fax channel and attach delivery metadata to notification
-      notify_medical_provider(rejection_reason)
+      # Notify provider via fax/email channel and attach delivery metadata to the same notification record
+      notify_medical_provider(rejection_reason, service_result[:notification_id])
 
       success
     end
 
-    def notify_medical_provider(rejection_reason)
+    def notify_medical_provider(rejection_reason, notification_id)
       MedicalProviderNotifier.new(application).send_certification_rejection_notice(
         rejection_reason: rejection_reason,
-        admin: admin
+        admin: admin,
+        notification_id: notification_id
       )
     rescue StandardError => e
       # Log but don't fail the reviewer - the rejection already succeeded (DB updated, notification created)

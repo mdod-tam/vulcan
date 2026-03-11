@@ -70,16 +70,18 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
 
   test 'rejects medical certification without requiring an attachment' do
     assert_no_difference 'ActiveStorage::Attachment.count' do
-      assert_difference 'Notification.count', 1 do
-        result = MedicalCertificationAttachmentService.reject_certification(
-          application: @application,
-          admin: @admin,
-          reason: 'missing_signature',
-          notes: 'Test rejection note',
-          submission_method: :admin_review
-        )
+      assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+        assert_difference 'Notification.count', 1 do
+          result = MedicalCertificationAttachmentService.reject_certification(
+            application: @application,
+            admin: @admin,
+            reason: 'missing_signature',
+            notes: 'Test rejection note',
+            submission_method: :admin_review
+          )
 
-        assert result[:success], 'Rejection should succeed'
+          assert result[:success], 'Rejection should succeed'
+        end
       end
 
       @application.reload
@@ -90,6 +92,8 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
       assert_equal 'medical_certification_rejected', notification.action
       assert_equal @application.user, notification.recipient
       assert_equal @application, notification.notifiable
+      assert_nil notification.delivery_status
+      assert_nil notification.metadata&.dig('delivery_error', 'message')
     end
   end
 

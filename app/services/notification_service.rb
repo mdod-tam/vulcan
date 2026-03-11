@@ -158,7 +158,6 @@ class NotificationService
     'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
     'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
     'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created],
-    'medical_certification_rejected' => [MedicalProviderMailer, :rejected],
     'medical_certification_approved' => [MedicalProviderMailer, :approved],
     'medical_certification_requested' => [MedicalProviderMailer, :requested]
     # medical_certification_received: no email — constituent sees status in dashboard
