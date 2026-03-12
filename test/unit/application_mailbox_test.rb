@@ -74,9 +74,9 @@ class ApplicationMailboxRoutingTest < ActionMailbox::TestCase
     MatVulcan::InboundEmailConfig.inbound_email_address = original_address
   end
 
-  test 'routes medical-cert@mdmat.org emails to medical certification mailbox' do
+  test 'routes disability_cert@mdmat.org emails to medical certification mailbox' do
     assert_mailbox_routed MedicalCertificationMailbox,
-                          to: 'medical-cert@mdmat.org',
+                          to: 'disability_cert@mdmat.org',
                           from: @medical_provider.email,
                           subject: 'Medical Certification',
                           body: 'Test Medical Certification'

@@ -79,7 +79,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
       admin: create(:admin)
     }
 
-    variables = mailer.send(:build_rejection_variables, 'en')
+    variables = mailer.send(:build_rejection_variables)
 
     assert variables[:download_form_url].present?
     assert_includes variables[:download_form_url], '/medical_certification_form/'
