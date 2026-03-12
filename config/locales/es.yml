@@ -1,0 +1,60 @@
+es:
+  date:
+    formats:
+      long: "%d de %B de %Y"
+    month_names:
+      - ~
+      - enero
+      - febrero
+      - marzo
+      - abril
+      - mayo
+      - junio
+      - julio
+      - agosto
+      - septiembre
+      - octubre
+      - noviembre
+      - diciembre
+    abbr_month_names:
+      - ~
+      - ene
+      - feb
+      - mar
+      - abr
+      - may
+      - jun
+      - jul
+      - ago
+      - sep
+      - oct
+      - nov
+      - dic
+  time:
+    formats:
+      long: "%d de %B de %Y %H:%M"
+  letters:
+    pdf:
+      date_label: "Fecha"
+      salutation: "Estimado/a %{first_name},"
+      closing: "Atentamente,"
+      signature:
+        organization: "Telecomunicaciones Accesibles de Maryland"
+        team: "Equipo de Servicio al Cliente"
+      footer:
+        address: "Telecomunicaciones Accesibles de Maryland | 123 Main Street, Baltimore, MD 21201"
+        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: mdmat.org"
+      page_number: "Página %{page} de %{total}"
+      titles:
+        application_notifications_account_created: "Su cuenta de Telecomunicaciones Accesibles de Maryland"
+        application_notifications_registration_confirmation: "Bienvenido al Programa de Telecomunicaciones Accesibles de Maryland"
+        application_notifications_proof_rejected: "Se requiere seguimiento para la verificación de documentos"
+        application_notifications_income_threshold_exceeded: "Revisión de elegibilidad de ingresos"
+        application_notifications_proof_approved: "Verificación de documentos aprobada"
+        application_notifications_proof_received: "Verificación de documentos recibida"
+        application_notifications_max_rejections_reached: "Actualización importante del estado de la solicitud"
+        application_notifications_proof_submission_error: "Error en el envío de documentos"
+        medical_provider_request_certification: "Solicitud de certificación médica"
+        voucher_notifications_voucher_assigned: "Su vale para equipo de accesibilidad"
+        voucher_notifications_voucher_redeemed: "Confirmación de canje del vale"
+        evaluator_mailer_evaluation_submission_confirmation: "Confirmación de envío de evaluación"

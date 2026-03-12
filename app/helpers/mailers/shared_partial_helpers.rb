@@ -49,19 +49,31 @@ module Mailers
     # Renders an email template stored in DB, using ActionView to avoid ERB injection,
     # with caching.
     def render_email_template(template_name, format, locals = {})
-      key = [:template, template_name, format, locals.hash]
+      locals = locals.dup
+      locale = locals.delete(:locale) || locals.delete('locale')
+      resolved_locale = if respond_to?(:resolve_template_locale, true)
+                          normalize_locale(locale) || resolve_template_locale
+                        else
+                          locale.to_s.presence || I18n.default_locale.to_s
+                        end
+
+      key = [:template, template_name, format, resolved_locale, locals.hash]
       fetch_from_cache(key) do
-        template = EmailTemplate.find_by(name: template_name, format: format)
+        template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale)
+        if template.nil? && resolved_locale != I18n.default_locale.to_s
+          template = EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
+        end
+
         unless template
           # Enhanced error logging with more context
           total_templates = EmailTemplate.count
           Rails.logger.error "Missing email template: #{template_name} for format #{format}. " \
-                             "Total templates in DB: #{total_templates}. Rails env: #{Rails.env}"
+                             "Locale: #{resolved_locale}. Total templates in DB: #{total_templates}. Rails env: #{Rails.env}"
 
           # In test environment, try to create a fallback template
           return "Error: Missing email template '#{template_name}' for format #{format}" unless Rails.env.test?
 
-          template = create_fallback_template(template_name, format)
+          template = create_fallback_template(template_name, format, resolved_locale)
           return "Error: Missing email template '#{template_name}' for format #{format}" unless template
         end
 
@@ -72,29 +84,30 @@ module Mailers
     end
 
     # Creates a fallback template for test environment
-    def create_fallback_template(template_name, format)
+    def create_fallback_template(template_name, format, locale)
       return nil unless Rails.env.test?
 
       body = case template_name
-        when 'email_header_text'
-          "%<title>s\n\n%<subtitle>s"
-        when 'email_footer_text'
-          "--\n%<organization_name>s\nEmail: %<contact_email>s\nWebsite: %<website_url>s\n\n%<show_automated_message>s"
-        else
-          return nil
-        end
+             when 'email_header_text'
+               "%<title>s\n\n%<subtitle>s"
+             when 'email_footer_text'
+               "--\n%<organization_name>s\nEmail: %<contact_email>s\nWebsite: %<website_url>s\n\n%<show_automated_message>s"
+             else
+               return nil
+             end
 
       Rails.logger.warn "Creating fallback template for #{template_name} in test environment"
       EmailTemplate.create!(
         name: template_name,
         format: format,
+        locale: locale,
         subject: "#{template_name.humanize} Template",
         description: 'Auto-created fallback template for testing',
         body: body,
         # Tests need generic variable arrays so validations don't block creation
-        variables: { 'required' => [], 'optional' => [] }, 
+        variables: { 'required' => [], 'optional' => [] },
         version: 1
-        )
+      )
     rescue StandardError => e
       Rails.logger.error "Failed to create fallback template #{template_name}: #{e.message}"
       nil
@@ -104,27 +117,29 @@ module Mailers
 
     # Renders the text header template.
     # Expects locals like: :title, :subtitle (optional)
-    def header_text(title:, subtitle: '', logo_url: '')
+    def header_text(title:, subtitle: '', logo_url: '', locale: nil)
       render_email_template('email_header_text', :text, {
-        title: title.to_s,
-        subtitle: subtitle.to_s,
-        logo_url: logo_url.to_s
-      })
+                              title: title.to_s,
+                              subtitle: subtitle.to_s,
+                              logo_url: logo_url.to_s,
+                              locale: locale
+                            })
     end
 
     # Renders the text footer template.
     # Expects locals like: :contact_email, :website_url, :organization_name, :show_automated_message (boolean)
-    def footer_text(organization_name: nil, contact_email: nil, website_url: nil, show_automated_message: true)
+    def footer_text(organization_name: nil, contact_email: nil, website_url: nil, locale: nil, **_kwargs)
       org_name  = organization_name || Policy.get('organization_name') || 'MAT Program'
       email     = contact_email || Policy.get('support_email') || 'support@example.com'
       web_url   = website_url || root_url(host: default_url_options[:host])
 
       render_email_template('email_footer_text', :text, {
-        organization_name: org_name.to_s,
-        contact_email: email.to_s,
-        website_url: web_url.to_s,
-        show_automated_message: "" # Blank string so "true" doesn't print
-      })
+                              organization_name: org_name.to_s,
+                              contact_email: email.to_s,
+                              website_url: web_url.to_s,
+                              show_automated_message: '', # Blank string so "true" doesn't print
+                              locale: locale
+                            })
     end
 
     # Generates a simple text representation for a status box.

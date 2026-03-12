@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Seed File for "email_footer_text"
-EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text, locale: 'en') do |template|
   template.subject = 'Email Footer Text'
   template.description = 'Standard text footer used in all email templates'
   template.body = <<~TEXT
@@ -14,8 +14,8 @@ EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text) do |t
     This is an automated message. Please do not reply directly to this email.
   TEXT
   template.variables = {
-    'required' => %w[organization_name contact_email website_url],
-    'optional' => %w[show_automated_message]
+    'required' => %w[contact_email website_url],
+    'optional' => %w[show_automated_message organization_name]
   }
   template.version = 1
 end

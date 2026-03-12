@@ -152,6 +152,7 @@ class ProofReview < ApplicationRecord
       application.save!
     end
   rescue StandardError => e
+    Rails.logger.error "ProofReview#increment_rejections_if_rejected failed for application #{application.id}: #{e.class} #{e.message}"
     errors.add(:base, "Failed to update rejection count. Please try again. Status: #{e.message}")
     raise ActiveRecord::Rollback
   end
@@ -162,7 +163,7 @@ class ProofReview < ApplicationRecord
       archive_application_if_exceeded if application.total_rejections > 8
     end
   rescue StandardError => e
-    Rails.logger.error "Failed to process max rejections: #{e.message}"
+    Rails.logger.error "ProofReview#check_max_rejections failed for application #{application.id}: #{e.class} #{e.message}"
     errors.add(:base, 'Failed to process rejection limits')
     raise ActiveRecord::Rollback
   end

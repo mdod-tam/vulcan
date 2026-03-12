@@ -119,7 +119,8 @@ module Applications
           provider: application.medical_provider_name,
           provider_email: application.medical_provider_email
         },
-        channel: :email
+        channel: :email,
+        deliver: false
       )
     rescue StandardError => e
       # Log but don't fail the process

@@ -9,52 +9,55 @@ class MedicalCertificationEmailJob < ApplicationJob
 
     application = Application.find(application_id)
 
-    # Find or create a notification for tracking
-    notification = if notification_id
-                     Notification.find_by(id: notification_id)
-                   else
-                     # Look for an existing notification that might have been created
-                     existing = Notification.medical_certification_requests
-                                            .where(notifiable: application)
-                                            .where('created_at > ?', 1.minute.ago)
-                                            .order(created_at: :desc)
-                                            .first
-
-                     # Use the existing notification or create a new one if needed
-                     existing || create_notification(application, timestamp)
-                   end
-
-    # Send email with notification for tracking - using the .with pattern to match the mailer's expectation
-    MedicalProviderMailer.with(
-      application: application,
-      timestamp: timestamp,
-      notification_id: notification&.id
-    ).request_certification.deliver_now
+    notification = resolve_notification(application, timestamp, notification_id)
+    send_request_email(application, timestamp, notification)
 
     Rails.logger.info "Successfully sent disability certification email for application #{application_id}"
   rescue StandardError => e
-    Rails.logger.error "Failed to send certification email for application #{application_id}: #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
-
-    # Update notification with error if we have one
-    if defined?(notification) && notification.present?
-      notification.update_metadata!('error_message', e.message)
-      notification.update(delivery_status: 'error')
-    end
-
-    # Still raise to trigger retry mechanism
+    handle_job_error(application_id, e, notification)
     raise
   end
 
   private
 
+  def resolve_notification(application, timestamp, notification_id)
+    return Notification.find_by(id: notification_id) if notification_id.present?
+
+    recent_notification_for(application) || create_notification(application, timestamp)
+  end
+
+  def recent_notification_for(application)
+    Notification
+      .medical_certification_requests
+      .where(notifiable: application)
+      .where('created_at > ?', 1.minute.ago)
+      .order(created_at: :desc)
+      .first
+  end
+
+  def send_request_email(application, timestamp, notification)
+    MedicalProviderMailer.with(
+      application: application,
+      timestamp: timestamp,
+      notification_id: notification&.id
+    ).request_certification.deliver_now
+  end
+
+  def handle_job_error(application_id, error, notification)
+    Rails.logger.error "Failed to send certification email for application #{application_id}: #{error.message}"
+    Rails.logger.error error.backtrace.join("\n")
+
+    return if notification.blank?
+
+    notification.update_metadata!('error_message', error.message)
+    notification.update(delivery_status: 'error')
+  end
+
   def create_notification(application, timestamp)
-    recipient = User.find_by(role: 'admin') || User.first # Default recipient - ideally admins
-    actor = begin
-      Current.user
-    rescue StandardError
-      nil
-    end
+    recipient = User.admins.first || User.first
+    return nil unless recipient
+
+    actor = current_actor || recipient
 
     # Log the audit event
     AuditEventService.log(
@@ -68,7 +71,7 @@ class MedicalCertificationEmailJob < ApplicationJob
       }
     )
 
-    # Send the notification
+    # Create record-only notification; email delivery is owned by this job
     NotificationService.create_and_deliver!(
       type: 'medical_certification_requested',
       recipient: recipient,
@@ -79,7 +82,14 @@ class MedicalCertificationEmailJob < ApplicationJob
         provider: application.medical_provider_name,
         provider_email: application.medical_provider_email
       },
-      channel: :email
+      channel: :email,
+      deliver: false
     )
+  end
+
+  def current_actor
+    Current.user
+  rescue StandardError
+    nil
   end
 end

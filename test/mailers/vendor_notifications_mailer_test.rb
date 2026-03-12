@@ -56,15 +56,15 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     # Stub EmailTemplate.find_by! for text format only
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_rejected', format: :text)
+                 .with(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'en')
                  .returns(rejected_template)
 
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_approved', format: :text)
+                 .with(name: 'vendor_notifications_w9_approved', format: :text, locale: 'en')
                  .returns(approved_template)
 
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_payment_issued', format: :text)
+                 .with(name: 'vendor_notifications_payment_issued', format: :text, locale: 'en')
                  .returns(payment_template)
   end
 
@@ -79,12 +79,13 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     # Create a specific stub for this test
     expected_text = "Mock Payment Issued Body #{@invoice.invoice_number}"
     payment_template = mock('payment_template_specific')
+    payment_template.stubs(:subject).returns('Payment issued')
     payment_template.stubs(:render).returns(['Payment issued', expected_text])
 
     # Override stubs for this test
     EmailTemplate.unstub(:find_by!)
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_payment_issued', format: :text)
+                 .with(name: 'vendor_notifications_payment_issued', format: :text, locale: 'en')
                  .returns(payment_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -112,11 +113,12 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     # Create a specific stub for this test
     expected_text = 'Mock W9 Approved Body'
     approved_template = mock('approved_template_specific')
+    approved_template.stubs(:subject).returns('W9 approved')
     approved_template.stubs(:render).returns(['W9 approved', expected_text])
 
     # Update the stub for this test
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_approved', format: :text)
+                 .with(name: 'vendor_notifications_w9_approved', format: :text, locale: 'en')
                  .returns(approved_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -146,11 +148,12 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     # Create a specific stub for this test
     expected_text = "Mock W9 Rejected Body #{review.rejection_reason}"
     rejected_template = mock('rejected_template_specific')
+    rejected_template.stubs(:subject).returns('W9 rejected')
     rejected_template.stubs(:render).returns(['W9 rejected', expected_text])
 
     # Update the stub for this test
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_rejected', format: :text)
+                 .with(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'en')
                  .returns(rejected_template)
 
     # Using Rails 7.1.0+ capture_emails helper

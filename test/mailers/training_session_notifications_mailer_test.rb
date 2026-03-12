@@ -85,23 +85,24 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Stub EmailTemplate.find_by! for text format only
     EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_trainer_assigned',
-                                        format: :text).returns(@trainer_assigned_template)
+                                        format: :text, locale: 'en').returns(@trainer_assigned_template)
     EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_training_scheduled',
-                                        format: :text).returns(@training_scheduled_template)
+                                        format: :text, locale: 'en').returns(@training_scheduled_template)
     EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_training_completed',
-                                        format: :text).returns(@training_completed_template)
+                                        format: :text, locale: 'en').returns(@training_completed_template)
   end
 
   test 'trainer_assigned' do
     # Create a specific stub for this test to ensure consistent results
     expected_text = "Mock Body for #{@trainer.full_name} about #{@constituent.full_name}"
     trainer_assigned_template = mock('trainer_assigned_specific')
+    trainer_assigned_template.stubs(:subject).returns('Trainer assigned')
     trainer_assigned_template.stubs(:render).returns(['Trainer assigned', expected_text])
 
     # Override stub for this test
     EmailTemplate.unstub(:find_by!)
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_trainer_assigned', format: :text)
+                 .with(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en')
                  .returns(trainer_assigned_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -130,11 +131,12 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     expected_date = @scheduled_for.strftime('%B %d, %Y')
     expected_text = "Mock Body for #{@constituent.full_name} with #{@trainer.full_name} on #{expected_date}"
     training_scheduled_template = mock('training_scheduled_specific')
+    training_scheduled_template.stubs(:subject).returns('Training scheduled')
     training_scheduled_template.stubs(:render).returns(['Training scheduled', expected_text])
 
     # Re-stub for this test only
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_training_scheduled', format: :text)
+                 .with(name: 'training_session_notifications_training_scheduled', format: :text, locale: 'en')
                  .returns(training_scheduled_template)
 
     # Using Rails 7.1.0+ capture_emails helper
@@ -163,11 +165,12 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     expected_date = @completed_at.strftime('%B %d, %Y')
     expected_text = "Mock Body for #{@constituent.full_name} with #{@trainer.full_name} on #{expected_date}"
     training_completed_template = mock('training_completed_specific')
+    training_completed_template.stubs(:subject).returns('Training completed')
     training_completed_template.stubs(:render).returns(['Training completed', expected_text])
 
     # Re-stub for this test only
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_training_completed', format: :text)
+                 .with(name: 'training_session_notifications_training_completed', format: :text, locale: 'en')
                  .returns(training_completed_template)
 
     # Update the status to completed

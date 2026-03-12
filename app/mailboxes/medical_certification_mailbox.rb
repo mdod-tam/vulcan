@@ -145,7 +145,7 @@ class MedicalCertificationMailbox < ApplicationMailbox
 
   def bounce_with_notification(error_type, message)
     # Use System User if constituent isn't available (e.g., bounced before application lookup)
-    event_user = application&.constituent || User.system_user
+    event_user = application&.user || User.system_user
     AuditEventService.log(
       actor: event_user,
       action: "medical_certification_#{error_type}",

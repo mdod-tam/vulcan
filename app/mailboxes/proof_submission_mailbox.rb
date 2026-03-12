@@ -88,7 +88,7 @@ class ProofSubmissionMailbox < ApplicationMailbox
 
     # Check for medical certification keywords
     if text.match?(/\b(medical|certification|doctor|provider|health)\b/) ||
-       mail.to.to_s.downcase.include?('medical-cert')
+       mail.to.to_s.downcase.include?('disability_cert')
       :medical_certification
     # Check for residency proof keywords
     elsif text.match?(/\b(residency|address)\b/) && !text.match?(/\bincome\b/)

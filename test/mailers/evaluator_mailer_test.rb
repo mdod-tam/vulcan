@@ -6,7 +6,6 @@ require_relative 'email_template_mock_helper'
 class EvaluatorMailerTest < ActionMailer::TestCase
   include EmailTemplateMockHelper
 
-
   setup do
     # Per project strategy, HTML emails are not used. Only stub for :text format.
     # If the mailer attempts to find_by!(format: :html), it should fail (e.g., RecordNotFound)
@@ -25,11 +24,11 @@ class EvaluatorMailerTest < ActionMailer::TestCase
 
     # Stub EmailTemplate.find_by! for text format only
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'evaluator_mailer_new_evaluation_assigned', format: :text)
+                 .with(name: 'evaluator_mailer_new_evaluation_assigned', format: :text, locale: 'en')
                  .returns(new_evaluation_assigned_mock)
 
     EmailTemplate.stubs(:find_by!)
-                 .with(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text)
+                 .with(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'en')
                  .returns(evaluation_submission_mock)
 
     # Create test data using FactoryBot

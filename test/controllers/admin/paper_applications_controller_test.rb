@@ -337,7 +337,7 @@ module Admin
       assert_equal 'approved', app.reload.income_proof_status
 
       residency_review = app.proof_reviews.find_by!(proof_type: :residency, status: :rejected)
-      assert_equal 'address_mismatch', residency_review.rejection_reason
+      assert_equal 'address_mismatch', residency_review.rejection_reason_code
       assert_equal "The address on the document doesn't match for residency.", residency_review.notes
 
       # Verify events (filter for application-related events)
@@ -414,7 +414,7 @@ module Admin
         self_certify_disability: '1',
         medical_provider_name: 'Dr. No Proof',
         medical_provider_phone: '555-888-9999',
-        medical_provider_email: 'dr.noproof@example.com'
+        medical_provider_email: 'dr.noproof@mdmat.org'
       }
     end
 

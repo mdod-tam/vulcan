@@ -1,5 +1,6 @@
 <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="edit-template-title">
   <div class="max-w-7xl mx-auto">
+    <%= render 'admin/shared/communications_section_nav', current: :email_templates %>
     <%# Header Section %>
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="edit-template-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
@@ -11,10 +12,96 @@
       </div>
     </div>
 
-    <%# Form Section %>
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="edit-form-title">
-      <h2 id="edit-form-title" class="sr-only">Edit Email Template Form</h2>
-      <%= render 'form', email_template: @email_template, template_definition: @template_definition %>
-    </section>
+    <p class="text-sm text-gray-600 mb-4">
+      Edit both locales below. Save EN and ES independently; if one changes, sync badges indicate which locale still needs review.
+    </p>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <%# EN Panel %>
+      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="edit-form-title-en">
+        <div class="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 id="edit-form-title-en" class="text-lg font-semibold text-gray-900">
+              Editing <%= template_locale_label('en') %>
+            </h2>
+            <p class="text-sm text-gray-500"><%= template_last_updated_text(@en_template) %></p>
+          </div>
+
+          <% if @en_template.present? %>
+            <span class="<%= template_sync_badge_classes(@en_template) %>">
+              <%= template_sync_status(@en_template) %>
+            </span>
+          <% else %>
+            <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+              Missing
+            </span>
+          <% end %>
+        </div>
+
+        <% if @en_template.present? %>
+          <%= render 'form',
+              email_template: @en_template,
+              template_definition: @template_definition,
+              locale: 'en',
+              submit_label: 'Save EN',
+              form_action_path: admin_email_template_path(@email_template) %>
+        <% elsif @es_template.present? %>
+          <div class="border border-gray-200 rounded-md p-4 bg-gray-50">
+            <p class="text-sm text-gray-700 mb-3">
+              English template is missing for this template pair.
+            </p>
+            <%= button_to 'Create EN from ES',
+                create_counterpart_admin_email_template_path(@email_template),
+                method: :post,
+                class: "inline-flex items-center px-3 py-2 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100" %>
+          </div>
+        <% end %>
+      </section>
+
+      <%# ES Panel %>
+      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="edit-form-title-es">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 id="edit-form-title-es" class="text-lg font-semibold text-gray-900">
+              Editing <%= template_locale_label('es') %>
+            </h2>
+            <p class="text-sm text-gray-500"><%= template_last_updated_text(@es_template) %></p>
+          </div>
+
+          <% if @es_template.present? %>
+            <span class="<%= template_sync_badge_classes(@es_template) %>">
+              <%= template_sync_status(@es_template) %>
+            </span>
+          <% else %>
+            <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+              Missing
+            </span>
+          <% end %>
+        </div>
+
+        <% if @es_template.present? %>
+          <%= render 'form',
+              email_template: @es_template,
+              template_definition: @template_definition,
+              locale: 'es',
+              submit_label: 'Save ES',
+              form_action_path: admin_email_template_path(@email_template) %>
+        <% elsif @en_template.present? %>
+          <div class="border border-gray-200 rounded-md p-4 bg-gray-50">
+            <p class="text-sm text-gray-700 mb-3">
+              Spanish template is missing for this template pair.
+            </p>
+            <%= button_to 'Create ES from EN',
+                create_counterpart_admin_email_template_path(@email_template),
+                method: :post,
+                class: "inline-flex items-center px-3 py-2 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100" %>
+          </div>
+        <% else %>
+          <p class="text-sm text-gray-600">
+            No EN or ES template exists for this template pair.
+          </p>
+        <% end %>
+      </section>
+    </div>
   </div>
 </main>

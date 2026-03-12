@@ -25,11 +25,11 @@ class ActionMailboxIngressTest < ActionDispatch::IntegrationTest
     assert_routing_match_for_proof_submission(proof_sub_mail)
 
     # Test that medical certification routing lambda matches the medical cert address
-    medical_cert_mail = Mail.new(to: 'medical-cert@mdmat.org')
+    medical_cert_mail = Mail.new(to: 'disability_cert@mdmat.org')
     assert_routing_match_for_medical_certification(medical_cert_mail)
 
     # Test that proof submission routing lambda matches the backup address
-    proof_mail = Mail.new(to: 'proof@example.com')
+    proof_mail = Mail.new(to: 'proof@mdmat.org')
     assert_routing_match_for_proof_submission(proof_mail)
 
     # Different subjects should still route to proof submission
@@ -55,7 +55,7 @@ class ActionMailboxIngressTest < ActionDispatch::IntegrationTest
 
     proof_sub_lambda = lambda { |inbound_email|
       (inbound_email.mail.to || []).include?(MatVulcan::InboundEmailConfig.inbound_email_address) ||
-        (inbound_email.mail.to || []).include?('proof@example.com')
+        (inbound_email.mail.to || []).include?('proof@mdmat.org')
     }
 
     mock_inbound_email = mock('inbound_email')
@@ -68,7 +68,7 @@ class ActionMailboxIngressTest < ActionDispatch::IntegrationTest
   def assert_routing_match_for_medical_certification(mail)
     # Test the medical certification routing lambda
     medical_cert_lambda = lambda { |inbound_email|
-      (inbound_email.mail.to || []).include?('medical-cert@mdmat.org')
+      (inbound_email.mail.to || []).include?('disability_cert@mdmat.org')
     }
 
     mock_inbound_email = mock('inbound_email')
