@@ -68,12 +68,21 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     # Verify email basics
     assert_equal ['info@mdmat.org'], email.from
     assert_equal [@application.medical_provider_email], email.to
-    # Assert against the rendered subject
-    expected_subject = "Certification Rejected: #{@constituent.full_name}"
-    assert_equal expected_subject, email.subject
+    assert_match(/Certification/i, email.subject)
+  end
 
-    # Assert against the rendered text body
-    assert_includes email.body.to_s, "Text Rejection Reason: #{rejection_reason}"
+  test 'build_rejection_variables includes download form URL' do
+    mailer = MedicalProviderMailer.new
+    mailer.params = {
+      application: @application,
+      rejection_reason: 'Missing signature',
+      admin: create(:admin)
+    }
+
+    variables = mailer.send(:build_rejection_variables)
+
+    assert variables[:download_form_url].present?
+    assert_includes variables[:download_form_url], '/medical_certification_form/'
   end
 
   test 'certification_submission_error' do

@@ -24,8 +24,9 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
 
     Please submit a new disability certification form using one of the following methods:
 
-    1. Email: Reply to this email with the updated certification form attached
-    2. Fax: Send the updated form to 410-767-4276
+    1. Download the form: %<download_form_url>s
+    2. Email: Reply to this email with the updated certification form attached
+    3. Fax: Send the updated form to 410-767-4276
 
     Thank you for your assistance in helping this applicant access needed telecommunications services.
 
@@ -38,7 +39,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected'
     Maryland Accessible Telecommunications (MAT) - Improving lives through accessible communication.
   TEXT
   template.variables = {
-    'required' => %w[constituent_full_name application_id rejection_reason],
+    'required' => %w[constituent_full_name application_id rejection_reason download_form_url],
     'optional' => []
   }
   template.version = 1

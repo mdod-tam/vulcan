@@ -33,10 +33,24 @@ class ApplicationMailboxTest < ActionMailbox::TestCase
     assert_equal ProofSubmissionMailbox, mailbox_class
   end
 
-  test 'routes medical-cert@mdmat.org emails to MedicalCertificationMailbox' do
+  test 'routes disability_cert@mdmat.org emails to MedicalCertificationMailbox' do
     inbound_email = create_inbound_email_from_source(
       Mail.new(
-        to: 'medical-cert@mdmat.org',
+        to: 'disability_cert@mdmat.org',
+        from: 'doctor@example.com',
+        subject: 'Medical certification',
+        body: 'Medical certification document'
+      ).to_s
+    )
+
+    mailbox_class = ApplicationMailbox.mailbox_for(inbound_email)
+    assert_equal MedicalCertificationMailbox, mailbox_class
+  end
+
+  test 'routes disability_cert+token@mdmat.org emails to MedicalCertificationMailbox' do
+    inbound_email = create_inbound_email_from_source(
+      Mail.new(
+        to: 'disability_cert+123@mdmat.org',
         from: 'doctor@example.com',
         subject: 'Medical certification',
         body: 'Medical certification document'

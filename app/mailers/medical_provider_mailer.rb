@@ -137,7 +137,9 @@ class MedicalProviderMailer < ApplicationMailer
     {
       constituent_full_name: constituent.full_name,
       application_id: application.id,
-      rejection_reason: rejection_reason
+      rejection_reason: rejection_reason,
+      download_form_url: build_download_form_url(application),
+      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
 
