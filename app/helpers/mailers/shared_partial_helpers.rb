@@ -52,7 +52,7 @@ module Mailers
       locals = locals.dup
       locale = locals.delete(:locale) || locals.delete('locale')
       resolved_locale = if respond_to?(:resolve_template_locale, true)
-                          resolve_template_locale(locale: locale)
+                          normalize_locale(locale) || resolve_template_locale
                         else
                           locale.to_s.presence || I18n.default_locale.to_s
                         end

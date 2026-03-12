@@ -37,16 +37,15 @@ class ApplicationMailer < ActionMailer::Base
 
   private
 
-  def resolve_template_locale(recipient: nil, locale: nil)
-    explicit_locale = normalize_locale(locale)
+  def resolve_template_locale(recipient: nil)
     recipient_locale = normalize_locale(recipient.locale) if recipient.respond_to?(:locale)
     default_locale = normalize_locale(I18n.default_locale) || 'en'
 
-    explicit_locale || recipient_locale || default_locale
+    recipient_locale || default_locale
   end
 
   def find_text_template(template_name, locale: nil)
-    resolved_locale = resolve_template_locale(locale: locale)
+    resolved_locale = normalize_locale(locale) || resolve_template_locale
     EmailTemplate.find_by!(name: template_name, format: :text, locale: resolved_locale)
   rescue ActiveRecord::RecordNotFound
     fallback_locale = I18n.default_locale.to_s

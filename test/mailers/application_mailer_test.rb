@@ -3,11 +3,10 @@
 require 'test_helper'
 
 class ApplicationMailerTest < ActionMailer::TestCase
-  test 'resolve_template_locale prioritizes explicit locale' do
-    recipient = Struct.new(:locale).new('en')
+  test 'normalize_locale normalizes explicit locale value' do
     mailer = ApplicationMailer.new
 
-    resolved = mailer.send(:resolve_template_locale, recipient: recipient, locale: 'es-MX')
+    resolved = mailer.send(:normalize_locale, 'es-MX')
 
     assert_equal 'es', resolved
   end

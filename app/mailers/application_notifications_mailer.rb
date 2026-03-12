@@ -157,7 +157,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
   def income_threshold_exceeded(constituent_params, notification_params)
     with_mailer_error_handling('income_threshold_exceeded') do
       service_result = get_income_threshold_data(constituent_params, notification_params)
-      locale         = resolve_template_locale(locale: service_result[:constituent][:locale])
+      locale         = normalize_locale(service_result[:constituent][:locale]) || resolve_template_locale
       text_template  = find_text_template('application_notifications_income_threshold_exceeded', locale: locale)
       variables      = build_income_threshold_variables(service_result, template: text_template, locale: locale)
 
