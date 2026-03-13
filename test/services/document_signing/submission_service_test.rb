@@ -128,6 +128,8 @@ module DocumentSigning
 
     test 'handles DocuSeal API errors gracefully' do
       DocumentSigning::SubmissionService.any_instance.stubs(:create_submission!).raises(StandardError, 'API Error')
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/DocumentSigning::SubmissionService: API Error/)).once
 
       service = DocumentSigning::SubmissionService.new(
         application: @application,

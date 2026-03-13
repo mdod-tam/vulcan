@@ -52,6 +52,7 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     assert_equal 'medical_certification_requested', notification.action
     assert_equal @application.user.id, notification.recipient_id
     assert_equal @admin.id, notification.actor_id
+    assert_nil notification.metadata&.dig('delivery_error', 'message')
 
     # 6. Verify the job executed the email
     perform_enqueued_jobs

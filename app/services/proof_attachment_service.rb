@@ -125,6 +125,10 @@ class ProofAttachmentService
   def self.record_basic_logging(result, proof_type, status)
     if result[:success]
       Rails.logger.info "Proof #{proof_type} #{status} completed in #{result[:duration_ms]}ms"
+    elsif Rails.env.test? && result[:error]&.message.to_s.match?(/mismatched digest/i)
+      Rails.logger.debug do
+        "[EXPECTED_TEST_ATTACHMENT] Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.message}"
+      end
     else
       Rails.logger.error "Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.message}"
     end
@@ -397,10 +401,10 @@ class ProofAttachmentService
         status_attrs = { "#{context.proof_type}_proof_status" => context.status }
         status_attrs[:needs_review_since] = Time.current if context.status == :not_reviewed
         status_attrs[:updated_at] = Time.current
-        
+
         # Use update_columns to bypass validations that may require all proofs to be attached
         # This is necessary in paper application context where proofs are being processed
-        context.application.update_columns(status_attrs)
+        context.application.update_columns(status_attrs) # rubocop:disable Rails/SkipsModelValidations
         context.application.reload
       end
     end

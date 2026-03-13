@@ -31,6 +31,9 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'handles failed blob creation gracefully with fallback' do
+    Rails.logger.stubs(:error)
+    Rails.logger.expects(:error).with(regexp_matches(/Failed to create blob from uploaded file: Simulated blob creation failure/)).once
+
     # Mock Blob.create_and_upload! to simulate a failure
     ActiveStorage::Blob.stub :create_and_upload!, ->(*_args) { raise StandardError, 'Simulated blob creation failure' } do
       assert_difference 'ActiveStorage::Attachment.count' do

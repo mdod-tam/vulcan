@@ -19,12 +19,6 @@ module Admin
       html_name  = "test_template_html_#{unique_id}"
       text_name  = "test_template_text_#{unique_id}"
 
-      # Register our test template configs BEFORE creating records so validations succeed
-      template_vars = {
-        'required' => ['name'],
-        'optional' => ['footer_text']
-      }
-
       # Create template records *after* constant is ready
       @template_html = create(:email_template, :html, name: html_name, subject: 'HTML Subject',
                                                       body: '<p>HTML Body %<name>s</p>')
@@ -93,8 +87,8 @@ module Admin
 
     test 'validate_variables_in_body rejects unauthorized variables' do
       # Test that adding an unauthorized variable causes validation to fail
-      @template_text.body = "Hello %<name>s, here is an unauthorized variable: %<unauthorized_var>s"
-      
+      @template_text.body = 'Hello %<name>s, here is an unauthorized variable: %<unauthorized_var>s'
+
       assert_not @template_text.valid?, 'Template should be invalid with unauthorized variables'
       assert @template_text.errors[:body].any?, 'Should have body errors'
       assert_includes @template_text.errors[:body].first, 'unauthorized variables'
@@ -104,32 +98,37 @@ module Admin
     test 'validate_variables_in_body allows optional variables' do
       # Test that optional variables are allowed
       optional_vars = @template_text.optional_variables
-      
+
       if optional_vars.any?
         @template_text.body = "Hello %<name>s, optional: %<#{optional_vars.first}>s"
         assert @template_text.valid?, 'Template should be valid with optional variables'
+      else
+        @template_text.body = 'Hello %<name>s'
+        assert @template_text.valid?, 'Template should remain valid when no optional variables are configured'
       end
     end
 
     test 'validate_variables_in_body allows required variables' do
       # Test that required variables are allowed
       required_vars = @template_text.required_variables
-      
+
       if required_vars.any?
         @template_text.body = "Hello %<#{required_vars.first}>s"
         assert @template_text.valid?, 'Template should be valid with required variables'
+      else
+        @template_text.body = 'Hello %<name>s'
+        assert @template_text.valid?, 'Template should remain valid when no required variables are configured'
       end
     end
 
     test 'validate_variables_in_body rejects multiple unauthorized variables' do
       # Test that multiple unauthorized variables are all reported
-      @template_text.body = "Hello %<name>s, bad1: %<bad_var_1>s, bad2: %<bad_var_2>s"
-      
+      @template_text.body = 'Hello %<name>s, bad1: %<bad_var_1>s, bad2: %<bad_var_2>s'
+
       assert_not @template_text.valid?, 'Template should be invalid'
       error_message = @template_text.errors[:body].first
       assert_includes error_message, 'bad_var_1'
       assert_includes error_message, 'bad_var_2'
     end
-
   end
 end
