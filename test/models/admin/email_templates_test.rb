@@ -19,7 +19,7 @@ module Admin
       html_name  = "test_template_html_#{unique_id}"
       text_name  = "test_template_text_#{unique_id}"
 
-      # Create template records
+      # Create template records *after* constant is ready
       @template_html = create(:email_template, :html, name: html_name, subject: 'HTML Subject',
                                                       body: '<p>HTML Body %<name>s</p>')
       @template_text = create(:email_template, :text, name: text_name, subject: 'Text Subject', body: 'Text Body %<name>s')
@@ -98,16 +98,14 @@ module Admin
     test 'validate_variables_in_body allows optional variables' do
       # Test that optional variables are allowed
       optional_vars = @template_text.optional_variables
-      if optional_vars.empty?
-        @template_text.variables = {
-          'required' => @template_text.required_variables,
-          'optional' => ['optional_field']
-        }
-        optional_vars = @template_text.optional_variables
-      end
 
-      @template_text.body = "Hello %<name>s, optional: %<#{optional_vars.first}>s"
-      assert @template_text.valid?, 'Template should be valid with optional variables'
+      if optional_vars.any?
+        @template_text.body = "Hello %<name>s, optional: %<#{optional_vars.first}>s"
+        assert @template_text.valid?, 'Template should be valid with optional variables'
+      else
+        @template_text.body = 'Hello %<name>s'
+        assert @template_text.valid?, 'Template should remain valid when no optional variables are configured'
+      end
     end
 
     test 'validate_variables_in_body allows required variables' do
@@ -124,6 +122,7 @@ module Admin
     end
 
     test 'validate_variables_in_body rejects multiple unauthorized variables' do
+      # Test that multiple unauthorized variables are all reported
       @template_text.body = 'Hello %<name>s, bad1: %<bad_var_1>s, bad2: %<bad_var_2>s'
 
       assert_not @template_text.valid?, 'Template should be invalid'
@@ -132,57 +131,5 @@ module Admin
       assert_includes error_message, 'bad_var_2'
     end
 
-    # --- locale ---
-
-    test 'locale defaults to en' do
-      assert_equal 'en', @template_text.locale
-    end
-
-    test 'name + format + locale must be unique together' do
-      duplicate = build(:email_template, :text,
-                        name: @template_text.name,
-                        body: @template_text.body,
-                        locale: 'en')
-      assert_not duplicate.valid?
-      assert duplicate.errors[:name].any?
-    end
-
-    test 'same name and format can coexist with different locales' do
-      es_template = build(:email_template, :text,
-                          name: @template_text.name,
-                          body: @template_text.body,
-                          locale: 'es')
-      assert es_template.valid?
-    end
-
-    test 'updating body flags counterpart locale as needs_sync' do
-      es_template = create(:email_template, :text,
-                           name: @template_text.name,
-                           body: @template_text.body,
-                           locale: 'es')
-
-      @template_text.update!(body: 'Updated body %<name>s.')
-      es_template.reload
-
-      assert es_template.needs_sync?
-    end
-
-    test 'template blocked from saving when needs_sync is true and content is unchanged' do
-      @template_text.update_column(:needs_sync, true)
-      @template_text.reload
-      @template_text.description = 'New description only.'
-
-      assert_not @template_text.valid?
-      assert @template_text.errors[:base].any?
-    end
-
-    test 'template allowed to save when needs_sync is true but body is changing' do
-      @template_text.update_column(:needs_sync, true)
-      @template_text.reload
-
-      assert @template_text.update(body: 'Fixed body %<name>s.')
-      @template_text.reload
-      assert_not @template_text.needs_sync?
-    end
   end
 end

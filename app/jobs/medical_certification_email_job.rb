@@ -57,7 +57,12 @@ class MedicalCertificationEmailJob < ApplicationJob
     recipient = User.admins.first || User.first
     raise ActiveRecord::RecordNotFound, 'No users available for medical certification notification recipient' unless recipient
 
-    actor = current_actor || recipient
+    actor = begin
+      Current.user
+    rescue StandardError
+      nil
+    end
+    actor ||= recipient
 
     # Log the audit event
     AuditEventService.log(
@@ -85,11 +90,5 @@ class MedicalCertificationEmailJob < ApplicationJob
       channel: :email,
       deliver: false
     )
-  end
-
-  def current_actor
-    Current.user
-  rescue StandardError
-    nil
   end
 end
