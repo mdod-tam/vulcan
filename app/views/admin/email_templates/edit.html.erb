@@ -16,9 +16,9 @@
       Edit both locales below. Save EN and ES independently; if one changes, sync badges indicate which locale still needs review.
     </p>
 
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
       <%# EN Panel %>
-      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="edit-form-title-en">
+      <section class="bg-white rounded-lg shadow p-6 h-full" aria-labelledby="edit-form-title-en">
         <div class="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 id="edit-form-title-en" class="text-lg font-semibold text-gray-900">
@@ -59,8 +59,8 @@
       </section>
 
       <%# ES Panel %>
-      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="edit-form-title-es">
-        <div class="flex items-center justify-between mb-4">
+      <section class="bg-white rounded-lg shadow p-6 h-full" aria-labelledby="edit-form-title-es">
+        <div class="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 id="edit-form-title-es" class="text-lg font-semibold text-gray-900">
               Editing <%= template_locale_label('es') %>

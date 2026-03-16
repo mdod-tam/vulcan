@@ -55,7 +55,7 @@ class MedicalCertificationEmailJob < ApplicationJob
 
   def create_notification(application, timestamp)
     recipient = User.admins.first || User.first
-    return nil unless recipient
+    raise ActiveRecord::RecordNotFound, 'No users available for medical certification notification recipient' unless recipient
 
     actor = current_actor || recipient
 
