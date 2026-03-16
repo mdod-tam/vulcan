@@ -299,10 +299,7 @@ class ProofSubmissionMailboxTest < ActionMailbox::TestCase
         puts '✅ EMAIL PROCESSED SUCCESSFULLY'
         true
       when 'delivered'
-        puts '⚠️  EMAIL DELIVERED - ActionMailbox Testing Best Practice'
         puts "MEANING: Email reached mailbox and business logic likely worked, but ActionMailbox couldn't mark as 'processed'"
-        puts 'ACTION: This is acceptable - verify business outcomes (proof attached, events created)'
-        puts 'NOTE: This is a test environment quirk, not a production failure'
         true # Accept 'delivered' as valid per ActionMailbox testing guide
       when 'failed'
         puts '💥 EMAIL PROCESSING FAILED'
@@ -554,10 +551,6 @@ class ProofSubmissionMailboxTest < ActionMailbox::TestCase
   #    b. Verify same business outcomes for residency proof
   # 4. Verify both proof types work correctly with subject-based determination
   test 'determines proof type from subject' do
-    puts "\n🧪 RAILS BEST PRACTICE: ACTIONMAILBOX INTEGRATION TEST"
-    puts 'Using real test data instead of stubs for proper integration testing'
-    puts 'Focus: Testing business outcomes, not ActionMailbox status internals'
-
     puts "\n🔄 TESTING INCOME PROOF EMAIL"
 
     # Track initial state for better assertions
@@ -601,14 +594,8 @@ class ProofSubmissionMailboxTest < ActionMailbox::TestCase
                  'Should create exactly one new InboundEmail record'
 
     # RAILS BEST PRACTICE: Test business outcomes, not ActionMailbox internals
-    if inbound_email.status == 'processed'
-      puts "✅ Email marked as 'processed' - perfect!"
-    elsif inbound_email.status == 'delivered'
-      puts "⚠️  Email marked as 'delivered' - this is a test environment quirk"
-      puts '   The business logic still worked - we verify outcomes below'
-    else
-      flunk "Email has unexpected status: #{inbound_email.status}. Expected 'processed' or 'delivered'"
-    end
+    assert_includes %w[processed delivered], inbound_email.status,
+                    "Email has unexpected status: #{inbound_email.status}. Expected 'processed' or 'delivered'"
 
     # Use assert_predicate for better readability - verify business outcome
     @application.reload
@@ -643,14 +630,8 @@ class ProofSubmissionMailboxTest < ActionMailbox::TestCase
     puts "Status: #{inbound_email2.status}"
 
     # Apply the same ActionMailbox testing best practice for second email
-    if inbound_email2.status == 'processed'
-      puts "✅ Residency email marked as 'processed' - perfect!"
-    elsif inbound_email2.status == 'delivered'
-      puts "⚠️  Residency email marked as 'delivered' - test environment quirk"
-      puts '   The business logic still worked - we verify outcomes below'
-    else
-      flunk "Residency email has unexpected status: #{inbound_email2.status}. Expected 'processed' or 'delivered'"
-    end
+    assert_includes %w[processed delivered], inbound_email2.status,
+                    "Residency email has unexpected status: #{inbound_email2.status}. Expected 'processed' or 'delivered'"
 
     # Verify residency proof business outcome
     @application.reload

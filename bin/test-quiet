@@ -9,8 +9,8 @@ unset VERBOSE_TESTS
 # Run the test with minimal output
 if [ $# -eq 0 ]; then
   # No arguments - run all tests
-  rails test
+  bin/rails test
 else
   # Run specific test file(s)
-  rails test "$@"
+  bin/rails test "$@"
 fi 

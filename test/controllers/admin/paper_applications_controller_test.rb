@@ -513,6 +513,9 @@ module Admin
     end
 
     test 'should not create paper application when income exceeds threshold' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Income exceeds the maximum threshold/)).once
+
       # Generate unique email and phone for this test
       unique_email = "income_threshold_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
@@ -557,6 +560,9 @@ module Admin
     end
 
     test 'should not create paper application for constituent with active application' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: This constituent already has an active application\./)).once
+
       # Create a constituent with unique email and phone
       unique_email = "active_app_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
@@ -665,6 +671,9 @@ module Admin
     end
 
     test 'should not enqueue jobs when transaction fails' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Mocked service error/)).once
+
       # Generate unique email and phone
       unique_email = "transaction_fail_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
@@ -710,6 +719,9 @@ module Admin
     end
 
     test 'should handle missing constituent gracefully in notification job' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_EDGE_CASE\] ApplicationNotificationsMailer#account_created called with nil constituent/)).once
+
       # This test verifies that the system can handle the case where a constituent
       # is referenced in a job but doesn't exist (e.g., due to a rolled back transaction)
 
@@ -802,6 +814,9 @@ module Admin
     end
 
     test 'should handle application save failure' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Failed to create application: Mocked application error; Application creation failed/)).once
+
       # Mock Application.save to fail
       Application.any_instance.stubs(:save).returns(false)
       Application.any_instance.stubs(:errors).returns(
@@ -847,6 +862,9 @@ module Admin
     end
 
     test 'self-application should not use guardian_attributes when constituent data is missing' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Failed to create guardian: Email is required\.; Constituent processing failed/)).once
+
       # This test verifies that disability_attrs from applicant_attributes are NOT incorrectly
       # merged with guardian_attributes when creating a self-application.
       #

@@ -42,6 +42,9 @@ module Admin
     end
 
     test 'should handle validation errors' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/Failed to create user in admin interface: Failed to create user:/)).once
+
       assert_no_difference('Users::Constituent.count') do
         post admin_users_path, params: {
           # Missing required fields
