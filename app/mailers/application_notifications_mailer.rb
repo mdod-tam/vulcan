@@ -213,16 +213,14 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def medical_certification_not_provided(application)
-    template_name = 'application_notifications_medical_certification_not_provided'
-    text_template = find_email_template(template_name)
+    with_mailer_error_handling("medical_certification_not_provided application=#{application&.id}") do
+      template_name = 'application_notifications_medical_certification_not_provided'
+      locale        = resolve_template_locale(recipient: application.user)
+      text_template = find_text_template(template_name, locale: locale)
+      variables     = build_medical_certification_not_provided_variables(application, template: text_template, locale: locale)
 
-    variables = build_medical_certification_not_provided_variables(application, template: text_template)
-
-    send_email(application.user.effective_email, text_template, variables)
-  rescue StandardError => e
-    Rails.logger.error("Failed to send medical certification not provided email for application #{application&.id}: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n"))
-    raise e
+      send_email(application.user.effective_email, text_template, variables)
+    end
   end
 
   private
@@ -497,12 +495,9 @@ class ApplicationNotificationsMailer < ApplicationMailer
     variables = {
       user_first_name: application.user.first_name,
       application_id: application.id,
-      submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y')
+      submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y'),
+      sign_in_url: sign_in_url(host: default_url_options[:host])
     }
-
-    unless application.submission_method_paper?
-      variables[:sign_in_url] = "You can track the status of your application at any time by logging into your account: #{sign_in_url(host: default_url_options[:host])}"
-    end
 
     base_variables.merge(variables).compact
   end
@@ -528,13 +523,14 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   # Medical certification not provided specific methods
-  def build_medical_certification_not_provided_variables(application, template:)
+  def build_medical_certification_not_provided_variables(application, template:, locale: nil)
     user = application.user
 
     rejection_reason_message = application.medical_certification_rejection_reason.presence || ''
 
     base_variables = build_base_email_variables(
       template: template,
+      locale: locale,
       subject_variables: {
         user_first_name: user.first_name,
         application_id: application.id

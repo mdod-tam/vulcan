@@ -17,7 +17,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_application_su
 
     We will notify you of any status updates or if we need additional documentation.
 
-    %<sign_in_url>s
+    To submit additional documentation or check your application status, sign in to your account here: %<sign_in_url>s
 
     If you have any questions about your application, please contact our team at %<support_email>s or call (410) 767-6960.
 

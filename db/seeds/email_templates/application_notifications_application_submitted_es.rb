@@ -17,7 +17,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_application_su
 
     Le notificaremos de cualquier actualización de estado o si necesitamos documentación adicional.
 
-    %<sign_in_url>s
+    Para enviar documentación adicional o consultar el estado de su solicitud, inicie sesión en su cuenta aquí: %<sign_in_url>s
 
     Si tiene alguna pregunta sobre su solicitud, comuníquese con nuestro equipo a %<support_email>s o llame al (410) 767-6960.
 
