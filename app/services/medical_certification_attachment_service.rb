@@ -264,7 +264,9 @@ class MedicalCertificationAttachmentService
   # Handles rejection processing with transaction
   def self.process_rejection(params)
     ActiveRecord::Base.transaction do
+      params[:resolved_reason] = resolve_rejection_reason_text(params)
       update_rejection_status(params)
+      upsert_medical_rejection_review(params)
       create_rejection_audit_trail(params)
       notification = send_rejection_notification(params)
       { notification_id: notification&.id }
@@ -282,13 +284,28 @@ class MedicalCertificationAttachmentService
       medical_certification_status: 'rejected',
       medical_certification_verified_at: Time.current,
       medical_certification_verified_by_id: params[:admin].id,
-      medical_certification_rejection_reason: params[:reason],
-      medical_certification_rejection_reason_code: params[:reason_code].presence,
       updated_at: Time.current
     }
 
     params[:application].update_columns(**update_attrs)
     params[:application].reload
+  end
+
+  def self.upsert_medical_rejection_review(params)
+    app = params[:application]
+    review = app.proof_reviews.find_or_initialize_by(
+      proof_type: :medical_certification,
+      status: :rejected
+    )
+
+    review.assign_attributes(
+      admin: params[:admin],
+      rejection_reason: params[:resolved_reason],
+      rejection_reason_code: params[:reason_code].presence,
+      notes: params[:notes]
+    )
+    review.reviewed_at = Time.current unless review.new_record?
+    review.save!
   end
 
   def self.create_rejection_audit_trail(params)
@@ -306,7 +323,7 @@ class MedicalCertificationAttachmentService
         submission_method: params[:submission_method],
         verified_at: Time.current.iso8601,
         verified_by_id: admin.id,
-        rejection_reason: params[:reason],
+        rejection_reason: params[:resolved_reason],
         notes: params[:notes]
       },
       notes: params[:notes]
@@ -322,7 +339,7 @@ class MedicalCertificationAttachmentService
         new_status: 'rejected',
         timestamp: Time.current.iso8601,
         change_type: 'medical_certification',
-        reason: params[:reason]
+        reason: params[:resolved_reason]
       }
     )
   end
@@ -334,11 +351,19 @@ class MedicalCertificationAttachmentService
       actor: params[:admin],
       notifiable: params[:application],
       metadata: {
-        'reason' => params[:reason],
+        'reason' => params[:resolved_reason],
         'notes' => params[:notes]
       },
       channel: :email,
       deliver: false
+    )
+  end
+
+  def self.resolve_rejection_reason_text(params)
+    RejectionReason.resolve_text(
+      code: params[:reason_code].presence,
+      proof_type: 'medical_certification',
+      fallback: params[:reason]
     )
   end
 

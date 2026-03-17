@@ -292,12 +292,19 @@ module Admin
     # Accepts both modal params (rejection_reason, notes, rejection_reason_code) and
     # upload form params (medical_certification_rejection_reason, medical_certification_rejection_notes).
     def process_certification_rejection
+      rejection_reason_code = params[:rejection_reason_code].presence
       rejection_reason = params[:medical_certification_rejection_reason].presence ||
                          params[:rejection_reason]
       notes = params[:medical_certification_rejection_notes].presence ||
               params[:notes]
-      rejection_reason_code = params[:medical_certification_rejection_reason_code].presence ||
-                             params[:rejection_reason_code]
+
+      if rejection_reason.blank? && rejection_reason_code.present?
+        rejection_reason = RejectionReason.resolve_text(
+          code: rejection_reason_code,
+          proof_type: 'medical_certification',
+          fallback: nil
+        )
+      end
 
       reviewer = Applications::MedicalCertificationReviewer.new(@application, current_user)
       result = reviewer.reject(
@@ -516,7 +523,7 @@ module Admin
       if status == 'approved'
         process_accepted_certification
       elsif status == 'rejected'
-        if params[:medical_certification_rejection_reason].blank?
+        if params[:medical_certification_rejection_reason].blank? && params[:rejection_reason_code].blank?
           redirect_to admin_application_path(@application), alert: t('.m_rejection_reason')
           return
         end

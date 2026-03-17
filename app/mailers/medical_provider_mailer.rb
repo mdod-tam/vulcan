@@ -55,8 +55,8 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   # Notify a medical provider that a certification has been rejected.
-  # Uses RejectionReason.resolve when application.medical_certification_rejection_reason_code
-  # is set, so body text is DB-stored and locale-aware
+  # Uses RejectionReason.resolve when a medical-certification ProofReview stores
+  # rejection_reason_code, so body text is DB-stored and locale-aware.
   # @param application [Application] The application with the rejected certification
   # @param rejection_reason [String] Fallback reason text when no code is stored
   # @param admin [User] The admin who rejected the certification
@@ -143,17 +143,24 @@ class MedicalProviderMailer < ApplicationMailer
     }.compact
   end
 
-  # Resolves rejection body from RejectionReason when code is stored; otherwise uses passed-in text.
+  # Resolves rejection body from RejectionReason when code is stored on the latest
+  # medical-certification ProofReview; otherwise uses passed-in text.
   def resolve_medical_cert_rejection_reason(application, locale)
-    code = application.medical_certification_rejection_reason_code.presence
-    return params[:rejection_reason] || 'Not specified' if code.blank?
+    latest_review = application.latest_medical_rejection_review
+    code = latest_review&.rejection_reason_code.presence
+    fallback_reason = params[:rejection_reason] ||
+                      latest_review&.rejection_reason ||
+                      application.medical_certification_rejection_reason ||
+                      'Not specified'
+
+    return fallback_reason if code.blank?
 
     reason = RejectionReason.resolve(
       code: code,
       proof_type: 'medical_certification',
       locale: locale
     )
-    reason&.body.presence || params[:rejection_reason] || 'Not specified'
+    reason&.body.presence || fallback_reason
   end
 
   # Locale for provider-facing emails based on the associated application user.

@@ -87,6 +87,30 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
                'meses. Puede obtener una nueva carta de verificación de beneficios visitando el ' \
                'sitio web de la Administración del Seguro Social o comunicándose con su oficina local de la SSA.'
     },
+    {
+      code: 'missing_signature',
+      proof_type: 'income',
+      en_body: 'The income documentation you provided is missing a required signature. ' \
+               'Please submit documentation that is properly signed by the issuing authority.',
+      es_body: 'A la documentación de ingresos que proporcionó le falta una firma requerida. ' \
+               'Por favor, envíe documentación que esté debidamente firmada por la autoridad emisora.'
+    },
+    {
+      code: 'illegible',
+      proof_type: 'income',
+      en_body: 'The income documentation you provided is illegible or unclear. Please ' \
+               'submit a clear, readable copy of your documentation.',
+      es_body: 'La documentación de ingresos que proporcionó es ilegible o poco clara. Por favor, ' \
+               'envíe una copia clara y legible de su documentación.'
+    },
+    {
+      code: 'incomplete_documentation',
+      proof_type: 'income',
+      en_body: 'The income documentation you provided is incomplete. Please submit ' \
+               'documentation that includes all required information to verify your income.',
+      es_body: 'La documentación de ingresos que proporcionó está incompleta. Por favor, envíe ' \
+               'documentación que incluya toda la información requerida para verificar sus ingresos.'
+    },
 
     # ── Residency ──────────────────────────────────────────────────────────
     {
@@ -128,6 +152,32 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
       es_body: 'El documento que envió no es un tipo aceptable de prueba de residencia. ' \
                'Por favor, envíe uno de los siguientes: factura de servicios públicos, contrato de arrendamiento, estado de cuenta hipotecario ' \
                'u otra documentación oficial que verifique su residencia en Maryland.'
+    },
+    {
+      code: 'missing_signature',
+      proof_type: 'residency',
+      en_body: 'The residency documentation you provided is missing a required signature. ' \
+               'Please submit documentation that is properly signed (e.g., a signed lease or ' \
+               'utility bill from the provider).',
+      es_body: 'A la documentación de residencia que proporcionó le falta una firma requerida. ' \
+               'Por favor, envíe documentación que esté debidamente firmada (por ejemplo, un contrato ' \
+               'de arrendamiento firmado o una factura de servicios públicos del proveedor).'
+    },
+    {
+      code: 'illegible',
+      proof_type: 'residency',
+      en_body: 'The residency documentation you provided is illegible or unclear. Please ' \
+               'submit a clear, readable copy of your documentation.',
+      es_body: 'La documentación de residencia que proporcionó es ilegible o poco clara. Por favor, ' \
+               'envíe una copia clara y legible de su documentación.'
+    },
+    {
+      code: 'incomplete_documentation',
+      proof_type: 'residency',
+      en_body: 'The residency documentation you provided is incomplete. Please submit ' \
+               'documentation that includes all required information to verify your Maryland residence.',
+      es_body: 'La documentación de residencia que proporcionó está incompleta. Por favor, envíe ' \
+               'documentación que incluya toda la información requerida para verificar su residencia en Maryland.'
     },
 
     # ── Medical Certification ──────────────────────────────────────────────
@@ -188,6 +238,14 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
       es_body: 'Se usó el formulario de certificación incorrecto. Por favor, asegúrese de que el ' \
                'profesional certificador complete el Formulario de Certificación de Discapacidad oficial para ' \
                'la elegibilidad del programa MAT.'
+    },
+    {
+      code: 'illegible',
+      proof_type: 'medical_certification',
+      en_body: 'The disability certification you provided is illegible or unclear. Please ' \
+               'submit a clear, readable copy of the certification form.',
+      es_body: 'La certificación de discapacidad que proporcionó es ilegible o poco clara. Por favor, ' \
+               'envíe una copia clara y legible del formulario de certificación.'
     }
   ]
 

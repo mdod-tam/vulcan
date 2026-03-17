@@ -93,21 +93,19 @@
       <div id="medical_certification_rejection" class="mt-4 hidden" data-proof-status-target="rejectionSection">
         <div class="space-y-4">
           <div>
-            <%= f.label "medical_certification_rejection_reason", "Rejection Reason",
+            <%= f.label "rejection_reason_code", "Rejection Reason",
                 class: "block text-sm font-medium text-gray-700" %>
             <p id="certification_rejection_hint" class="text-xs text-gray-700 mb-2">
               Select the reason why this medical certification cannot be accepted
             </p>
-            <%= f.select "medical_certification_rejection_reason",
+            <%= f.select "rejection_reason_code",
                 options_for_select([
                   ["Missing Signature", "missing_signature"],
-                  ["Missing Information", "missing_information"],
-                  ["Outdated/Expired Document", "expired"],
-                  ["Wrong Form Used", "wrong_form"],
-                  ["Illegible Document", "illegible"],
-                  ["Incomplete Detail", "incomplete_detail"],
-                  ["Missing Provider Credentials", "missing_credentials"],
-                  ["Other", "other"]
+                  ["Missing Functional Limitations", "missing_functional_limitations"],
+                  ["Incomplete Disability Documentation", "incomplete_disability_documentation"],
+                  ["Missing Provider Credentials", "missing_provider_credentials"],
+                  ["Outdated Certification", "outdated_certification"],
+                  ["Incorrect Form Used", "incorrect_form_used"]
                 ]),
                 { include_blank: "Select a reason" },
                 { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",

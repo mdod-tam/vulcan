@@ -43,16 +43,24 @@
          'missing_amount' => 'Missing Income Amount',
          'exceeds_threshold' => 'Income Exceeds Threshold',
          'outdated_ss_award' => 'Outdated Social Security Award Letter',
-         'missing_signature' => 'Missing Provider Signature',
+         'missing_signature' => 'Missing Signature',
          'wrong_document' => 'Wrong Document Type',
          'address_mismatch' => 'Address Mismatch',
-         'missing_name' => 'Missing Name'
+         'missing_name' => 'Missing Name',
+         'missing_provider_credentials' => 'Missing Provider Credentials',
+         'incomplete_disability_documentation' => 'Incomplete Disability Documentation',
+         'outdated_certification' => 'Outdated Certification',
+         'missing_functional_limitations' => 'Missing Functional Limitations',
+         'incorrect_form_used' => 'Incorrect Form Used',
+         'incomplete_documentation' => 'Incomplete Documentation',
+         'illegible' => 'Illegible or Unclear'
        } %>
     <% reason_label_for = lambda do |code|
          custom_reason_labels[code.to_s] || code.to_s.humanize.titleize.gsub('Ss', 'SS')
        end %>
     <% income_reason_options = reason_options_for.call('income') %>
     <% residency_reason_options = reason_options_for.call('residency') %>
+    <% medical_reason_options = reason_options_for.call('medical_certification') %>
 
     <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
@@ -691,16 +699,16 @@
                               class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
                               data-document-proof-handler-target="rejectionReasonSelect">
                         <option value="">Select a reason</option>
-                        <option value="incomplete">Incomplete Documentation</option>
-                        <option value="none_provided">None Provided</option>
-                        <option value="expired">Expired Documentation</option>
-                        <option value="illegible">Illegible or Unclear</option>
-                        <option value="missing_signature">Missing Provider Signature</option>
-                        <option value="wrong_document">Wrong Document Type</option>
+                        <option value="none_provided"
+                                data-reason-text="No disability certification was provided with the application.">None Provided</option>
+                        <% medical_reason_options.each do |reason| %>
+                          <option value="<%= reason.code %>"
+                                  data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
+                        <% end %>
                         <option value="other">Other</option>
                       </select>
                     </div>
-                    <div id="medical_certification_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" data-document-proof-handler-target="reasonPreview"></div>
+                    <div id="medical_certification_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                     <div>
                       <label for="medical_certification_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Notes to Constituent</label>
                       <textarea id="medical_certification_rejection_notes" 

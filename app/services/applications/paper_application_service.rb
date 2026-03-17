@@ -278,7 +278,7 @@ module Applications
       false
     end
 
-    def build_dependent_contact_updates(attrs)
+    def build_dependent_contact_updates(attrs) # rubocop:disable Metrics/PerceivedComplexity
       updates = {}
 
       # Email (may come as dependent_email)
@@ -417,7 +417,7 @@ module Applications
       # Handle medical_certification naming convention
       file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
       signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-      
+
       file_param = params[file_key]
       signed_id_param = params[signed_id_key]
 
@@ -446,30 +446,30 @@ module Applications
       # Handle medical_certification naming convention
       file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
       signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-      
+
       blob_or_file = params[file_key].presence || params[signed_id_key].presence
 
       # Route medical certifications to the correct service
-      if type == :medical_certification
-        result = MedicalCertificationAttachmentService.attach_certification(
-          application: @application,
-          blob_or_file: blob_or_file,
-          status: :approved,
-          admin: @admin,
-          submission_method: :paper,
-          metadata: {}
-        )
-      else
-        result = ProofAttachmentService.attach_proof(
-          application: @application,
-          proof_type: type,
-          blob_or_file: blob_or_file,
-          status: :approved,
-          admin: @admin,
-          submission_method: :paper,
-          metadata: {}
-        )
-      end
+      result = if type == :medical_certification
+                 MedicalCertificationAttachmentService.attach_certification(
+                   application: @application,
+                   blob_or_file: blob_or_file,
+                   status: :approved,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               else
+                 ProofAttachmentService.attach_proof(
+                   application: @application,
+                   proof_type: type,
+                   blob_or_file: blob_or_file,
+                   status: :approved,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               end
 
       unless result[:success]
         add_error("Error processing #{type} proof: #{result[:error]&.message}")
@@ -483,13 +483,21 @@ module Applications
       # Handle medical_certification naming convention
       reason_key = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
       notes_key = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
-      
+
       # Route medical certifications to the correct service
       if type == :medical_certification
+        reason_val = params[reason_key]
+        reason_code_val = reason_val.presence && %w[none_provided other].exclude?(reason_val) ? reason_val : nil
+        reason_display = case reason_val
+                         when 'none_provided' then 'none_provided'
+                         when 'other' then params[notes_key].presence || 'Other'
+                         end
+
         result = MedicalCertificationAttachmentService.reject_certification(
           application: @application,
           admin: @admin,
-          reason: params[reason_key],
+          reason: reason_display,
+          reason_code: reason_code_val,
           notes: params[notes_key],
           submission_method: :paper,
           metadata: {}

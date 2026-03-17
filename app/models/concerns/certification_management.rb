@@ -5,6 +5,27 @@
 module CertificationManagement
   extend ActiveSupport::Concern
 
+  # Latest medical-certification rejection review for the application.
+  # Centralized so legacy call sites can read a unified source of truth.
+  def latest_medical_rejection_review
+    proof_reviews
+      .where(proof_type: :medical_certification, status: :rejected)
+      .order(created_at: :desc)
+      .first
+  end
+
+  # Backward-compatible reader for medical certification rejection reason.
+  # Data now comes from ProofReview records.
+  def medical_certification_rejection_reason
+    latest_medical_rejection_review&.rejection_reason
+  end
+
+  # Backward-compatible reader for medical certification rejection reason code.
+  # Data now comes from ProofReview records.
+  def medical_certification_rejection_reason_code
+    latest_medical_rejection_review&.rejection_reason_code
+  end
+
   # Determines if medical certification has been requested
   def medical_certification_requested?
     medical_certification_requested_at.present? ||

@@ -83,6 +83,14 @@ module Admin
     end
 
     test 'admin can reject a medical certification without uploading' do
+      RejectionReason.find_or_create_by!(
+        code: 'missing_signature',
+        proof_type: 'medical_certification',
+        locale: 'en'
+      ) do |reason|
+        reason.body = 'The disability certification is missing the required signature.'
+      end
+
       @application.update!(medical_certification_status: 'requested')
       visit admin_application_path(@application)
 
@@ -94,8 +102,8 @@ module Admin
 
       within '[data-testid="medical-certification-upload-form"]' do
         choose 'Reject Certification'
-        assert_selector 'select[name="medical_certification_rejection_reason"]', visible: true, wait: 5
-        select 'Missing Information', from: 'medical_certification_rejection_reason'
+        assert_selector 'select[name="rejection_reason_code"]', visible: true, wait: 5
+        select 'Missing Signature', from: 'rejection_reason_code'
         fill_in 'medical_certification_rejection_notes', with: 'The certification form is missing required signatures.'
         click_button 'Process Certification'
       end
@@ -106,7 +114,7 @@ module Admin
       assert_text 'Medical certification rejected and provider notified', wait: 10
       @application.reload
       assert_equal 'rejected', @application.medical_certification_status
-      assert_equal 'missing_information', @application.medical_certification_rejection_reason
+      assert_equal 'The disability certification is missing the required signature.', @application.medical_certification_rejection_reason
       assert_audit_event('medical_certification_status_changed', actor: @admin, auditable: @application)
 
       # Clear any pending network connections to prevent timeout during teardown
