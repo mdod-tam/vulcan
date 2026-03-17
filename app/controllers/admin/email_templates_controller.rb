@@ -5,7 +5,6 @@ module Admin
     include Pagy::Backend # Include Pagy for pagination
 
     before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled]
-    before_action :load_template_definition, only: %i[show edit update new_test_email] # Load definition for relevant actions
 
     # GET /admin/email_templates
     def index
@@ -177,20 +176,6 @@ module Admin
       @email_template = EmailTemplate.find(params[:id])
     rescue ActiveRecord::RecordNotFound
       redirect_to admin_email_templates_path, alert: t('alerts.e_template_not_found')
-    end
-
-    # Load the definition from the constant based on the template name
-    def load_template_definition
-      # Try loading with both symbol and string keys since the hash may have string keys in some scenarios
-      @template_definition = EmailTemplate::AVAILABLE_TEMPLATES[@email_template.name.to_sym] ||
-                             EmailTemplate::AVAILABLE_TEMPLATES[@email_template.name.to_s] ||
-                             {}
-
-      # If we don't have a description in the template definition but the template has one,
-      # use the template's description
-      return unless @template_definition[:description].blank? && @email_template.description.present?
-
-      @template_definition[:description] = @email_template.description
     end
 
     def email_template_params

@@ -78,6 +78,9 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
   test 'attach_proof handles errors gracefully' do
     # Clear events before the test
     Event.delete_all
+    Rails.logger.stubs(:error)
+    Rails.logger.expects(:error).with(regexp_matches(/\[TEST_ATTACHMENT\] Proof attachment error: Test error during transaction/)).once
+    Rails.logger.expects(:error).with(regexp_matches(/Proof income approved failed in/)).once
 
     # Stub a more specific method that won't interfere with ActiveRecord internals
     # Mock the actual attachment method to raise an error

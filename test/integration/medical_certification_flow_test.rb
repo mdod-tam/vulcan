@@ -52,6 +52,7 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     assert_equal 'medical_certification_requested', notification.action
     assert_equal @application.user.id, notification.recipient_id
     assert_equal @admin.id, notification.actor_id
+    assert_nil notification.metadata&.dig('delivery_error', 'message')
 
     # 6. Verify the job executed the email
     perform_enqueued_jobs
@@ -99,7 +100,7 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     assert_equal 'requested', @application.medical_certification_status
 
     # Verify medical certification status is shown
-    assert_select 'h2', text: /Medical Provider & Certification/
+    assert_select 'h2', text: /Disability Certification/
 
     # With more complex pages, sometimes we need to verify content exists
     # without using exact selectors

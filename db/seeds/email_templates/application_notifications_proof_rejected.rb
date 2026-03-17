@@ -29,8 +29,10 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_rejected
 
     %<footer_text>s
   TEXT
-  template.variables = %w[header_text constituent_full_name proof_type_formatted organization_name rejection_reason
-                          remaining_attempts_message_text footer_text]
+  template.variables = {
+    'required' => %w[header_text constituent_full_name proof_type_formatted organization_name rejection_reason footer_text],
+    'optional' => %w[remaining_attempts_message_text]
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded application_notifications_proof_rejected (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

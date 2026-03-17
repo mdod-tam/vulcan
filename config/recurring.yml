@@ -6,13 +6,15 @@ production:
     class: GenerateVendorInvoicesJob
     schedule: "0 0 */14 * *"
     description: "Generate biweekly invoices for vendors with pending transactions"
-  
-  check_voucher_expiration:
-    class: CheckVoucherExpirationJob
-    schedule: "<%= FeatureFlag.enabled?(:vouchers_enabled) ? '0 1 * * *' : nil %>"
-    description: "Check for expiring vouchers and notify constituents"
-    queue: "default"
-    args: []
+  <% if FeatureFlag.enabled?(:vouchers_enabled) %>
+    check_voucher_expiration:
+      class: CheckVoucherExpirationJob
+      schedule: "0 1 * * *"
+      description: "Check for expiring vouchers and notify constituents"
+      queue: "default"
+      args: []
+  <% end %>
+
   
   proof_attachment_metrics:
     class: ProofAttachmentMetricsJob

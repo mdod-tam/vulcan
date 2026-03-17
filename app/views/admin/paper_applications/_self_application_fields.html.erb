@@ -99,7 +99,7 @@
       <%# Preferred Contact Method %>
       <fieldset class="mb-4">
         <legend class="text-sm font-medium text-gray-700 mb-2">How would you like us to contact you if we have any questions?</legend>
-        <div role="radiogroup" aria-label="Contact preference" class="flex flex-wrap gap-4">
+        <div class="flex flex-wrap gap-4">
           <div class="flex items-center">
             <%= c.radio_button :phone_type, "voice", 
                 id: "constituent_phone_type_voice", 
@@ -222,10 +222,7 @@
           <%= c.select :locale, 
               options_for_select([
                 ["English", "en"], 
-                ["Spanish", "es"], 
-                ["French", "fr"], 
-                ["American Sign Language (ASL)", "asl"],
-                ["Other", "other"]
+                ["Spanish", "es"]
               ], c.object&.locale || "en"), 
               { prompt: "Select Language" }, 
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
@@ -260,7 +257,7 @@
         <p class="text-sm text-blue-700 mb-3 px-2">
           Important notices, approval letters, and voucher information will be delivered here
         </p>
-        <div role="radiogroup" aria-label="Document delivery preference" class="flex flex-wrap gap-6">
+        <div class="flex flex-wrap gap-6">
           <div class="flex items-start">
             <%= c.radio_button :communication_preference, "email", 
                 id: "constituent_communication_preference_email", 
@@ -297,7 +294,7 @@
       <%= c.label :referral_source, "How did you hear about the MAT Program?", class: "block text-sm font-medium text-gray-700 mb-1" %>
       <%= c.select :referral_source, 
           options_for_select([
-            ["Medical provider / Doctor's office", "medical_provider"],
+            ["Certifying professional / Doctor's office", "medical_provider"],
             ["Social worker / Case manager", "social_worker"],
             ["State agency (DORS, MDOD, etc.)", "state_agency"],
             ["Community organization", "community_org"],

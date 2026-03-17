@@ -57,7 +57,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_redirected_to welcome_path
+    assert_redirected_to constituent_portal_dashboard_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
     # Verify user was created correctly
@@ -91,7 +91,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     # Should succeed and redirect
-    assert_redirected_to welcome_path
+    assert_redirected_to constituent_portal_dashboard_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
     # Verify user was created correctly without disability flags set
@@ -206,7 +206,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     # Should still redirect successfully
-    assert_redirected_to welcome_path
+    assert_redirected_to constituent_portal_dashboard_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
     # Verify the new user was created AND flagged
@@ -273,7 +273,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, ActionMailer::Base.deliveries.size, 'Email should have been delivered'
 
     # Verify the registration was successful
-    assert_redirected_to welcome_path
+    assert_redirected_to constituent_portal_dashboard_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
     # Verify user was created with expected attributes

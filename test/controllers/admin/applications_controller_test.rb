@@ -66,14 +66,14 @@ module Admin
               params: { medical_certification: file, medical_certification_status: 'approved' }
 
         # Set flash manually for the test
-        flash[:notice] = 'Medical certification successfully uploaded and approved.' if flash[:notice].blank?
+        flash[:notice] = 'Disability certification successfully uploaded and approved.' if flash[:notice].blank?
 
         # Verify the results
         assert_redirected_to admin_application_path(@application)
         # Pass headers explicitly since follow_redirect! doesn't inherit default_headers
         follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
         assert_response :success
-        assert_match(/Medical certification successfully uploaded and approved/, flash[:notice])
+        assert_match(/Disability certification successfully uploaded and approved/, flash[:notice])
       end
 
       # Force the application to have the right status to make the test pass

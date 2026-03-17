@@ -54,6 +54,12 @@ module ApplicationDataLoading
                .order(created_at: :desc)
                .load
 
+    # Load application notes with admin and assigned_to to avoid N+1
+    ApplicationNote.where(application_id: application.id)
+                   .includes(:admin, :assigned_to)
+                   .recent_first
+                   .load
+
     # Access user if needed (for caching, if necessary)
     User.find_by(id: application.user_id) if application.user_id.present?
 
@@ -160,7 +166,7 @@ module ApplicationDataLoading
   # Load notifications for an application with specific actions
   # @param application [Application] The application
   # @param actions [Array<String>] Notification actions to load
-  # @return [Array<NotificationDecorator>] Decorated notifications
+  # @return [ActiveRecord::Relation] Notifications
   def load_application_notifications(application, actions: nil)
     actions ||= %w[
       medical_certification_requested medical_certification_received
@@ -174,7 +180,6 @@ module ApplicationDataLoading
       .where(notifiable_type: 'Application', notifiable_id: application.id)
       .where(action: actions)
       .order(created_at: :desc)
-      .map { |n| NotificationDecorator.new(n) }
   end
 
   # Load application events with specific actions

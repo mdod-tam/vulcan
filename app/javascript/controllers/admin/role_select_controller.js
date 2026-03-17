@@ -116,6 +116,7 @@ class RoleSelectController extends Controller {
 
       if (result.success) {
         const responseData = result.data
+        window.location.reload()
         
         if (process.env.NODE_ENV !== 'production') {
           console.log("Response data:", responseData)

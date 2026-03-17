@@ -5,7 +5,7 @@ module Webhooks
     def create
       application = Application.find_by!(
         medical_provider_email: provider_email,
-        status: :awaiting_documents
+        status: :awaiting_dcf
       )
 
       certification = create_certification(application)
@@ -55,8 +55,8 @@ module Webhooks
 
     def notify_admins(certification)
       AdminNotifier.new(
-        subject: 'New Medical Certification Received',
-        message: "Medical certification received for Application ##{certification.id}",
+        subject: 'New Disability Certification Received',
+        message: "Disability certification received for Application ##{certification.id}",
         level: :info
       ).notify_all
     end

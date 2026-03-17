@@ -4,6 +4,7 @@
 # Includes authentication, CSRF protection, and password change enforcement
 class ApplicationController < ActionController::Base
   include Authentication
+  include Pagy::Frontend
 
   protect_from_forgery with: :exception
 
@@ -114,11 +115,11 @@ class ApplicationController < ActionController::Base
 
   # Determines the appropriate dashboard path based on user type.
   def _dashboard_for(user)
-    case user
-    when Users::Administrator then admin_applications_path
-    when Users::Constituent then constituent_portal_dashboard_path
-    when Users::Evaluator then evaluators_dashboard_path
-    when Users::Vendor then vendor_portal_dashboard_path
+    case user.type
+    when 'Users::Administrator' then admin_dashboard_path
+    when 'Users::Constituent' then constituent_portal_dashboard_path
+    when 'Users::Evaluator' then evaluators_dashboard_path
+    when 'Users::Vendor' then vendor_portal_dashboard_path
     else root_path
     end
   end

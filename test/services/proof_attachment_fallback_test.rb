@@ -14,6 +14,9 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
   end
 
   test 'record_failure logs event with missing submission_method gracefully' do
+    Rails.logger.stubs(:error)
+    Rails.logger.expects(:error).with(regexp_matches(/\[TEST_ATTACHMENT\] Proof attachment error: Test error/)).once
+
     # Generate a test-specific proof type to avoid conflicts
     proof_type = "income_#{Time.now.to_i}"
 
@@ -47,6 +50,9 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
   end
 
   test 'record_failure logs event with invalid submission_method gracefully' do
+    Rails.logger.stubs(:error)
+    Rails.logger.expects(:error).with(regexp_matches(/\[TEST_ATTACHMENT\] Proof attachment error: Test error/)).once
+
     # Generate a test-specific proof type to avoid conflicts
     proof_type = "residency_#{Time.now.to_i}"
 

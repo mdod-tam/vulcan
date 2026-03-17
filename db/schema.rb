@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_26_024847) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -63,8 +63,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_26_024847) do
     t.boolean "internal_only", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "assigned_to_id"
+    t.datetime "completed_at"
     t.index ["admin_id"], name: "index_application_notes_on_admin_id"
     t.index ["application_id"], name: "index_application_notes_on_application_id"
+    t.index ["assigned_to_id"], name: "index_application_notes_on_assigned_to_id"
+    t.index ["completed_at"], name: "index_application_notes_on_completed_at"
   end
 
   create_table "application_status_changes", force: :cascade do |t|
@@ -165,7 +169,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_26_024847) do
     t.string "name", null: false
     t.string "subject"
     t.text "body"
-    t.text "variables", default: [], array: true
+    t.jsonb "variables", default: {}
     t.bigint "updated_by_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -754,6 +758,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_26_024847) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "application_notes", "applications"
   add_foreign_key "application_notes", "users", column: "admin_id"
+  add_foreign_key "application_notes", "users", column: "assigned_to_id"
   add_foreign_key "application_status_changes", "applications"
   add_foreign_key "application_status_changes", "users"
   add_foreign_key "applications", "users"

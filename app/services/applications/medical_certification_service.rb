@@ -33,10 +33,10 @@ module Applications
         # Send email with notification for tracking
         send_email(notification)
 
-        success(message: 'Medical certification requested successfully.')
+        success(message: 'Disability certification requested successfully.')
       rescue StandardError => e
         log_error(e, "Application ID: #{application.id}")
-        failure(message: "Failed to request medical certification: #{e.message}")
+        failure(message: "Failed to request disability certification: #{e.message}")
       end
     end
 
@@ -46,7 +46,7 @@ module Applications
       previous_status = application.medical_certification_status
 
       # Update the application columns directly to bypass callbacks
-      application.update_columns(
+      application.update_columns( # rubocop:disable Rails/SkipsModelValidations
         medical_certification_requested_at: timestamp,
         medical_certification_status: Application.medical_certification_statuses[:requested],
         updated_at: timestamp # Ensure timestamp is updated for audit purposes
@@ -84,7 +84,7 @@ module Applications
 
     def increment_request_count(timestamp)
       new_count = (application.medical_certification_request_count || 0) + 1
-      application.update_columns(
+      application.update_columns( # rubocop:disable Rails/SkipsModelValidations
         medical_certification_request_count: new_count,
         updated_at: timestamp
       )
@@ -119,7 +119,8 @@ module Applications
           provider: application.medical_provider_name,
           provider_email: application.medical_provider_email
         },
-        channel: :email
+        channel: :email,
+        deliver: false
       )
     rescue StandardError => e
       # Log but don't fail the process

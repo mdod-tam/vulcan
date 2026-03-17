@@ -45,7 +45,7 @@
         </div>
         <div class="md:col-span-3">
           <dt class="text-sm font-medium text-gray-500">Template Purpose</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @template_definition[:description].presence || "No description provided." %></dd>
+          <dd class="mt-1 text-sm text-gray-900"><%= @email_template.description.presence || "No description provided." %></dd>
         </div>
         <div class="md:col-span-3">
           <dt class="text-sm font-medium text-gray-500">Email Subject</dt>
@@ -132,8 +132,8 @@
         end.compact
         
         # Combine detected variables with those from the template definition
-        required_vars = @template_definition[:required_vars] || []
-        optional_vars = @template_definition[:optional_vars] || []
+        required_vars = @email_template.required_variables || []
+        optional_vars = @email_template.optional_variables || []
         
         # Add any detected variables not in required/optional to required list (if not empty)
         detected_vars.each do |var|

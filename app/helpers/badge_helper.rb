@@ -21,9 +21,9 @@ module BadgeHelper
       in_progress: 'bg-purple-100 text-purple-800',
       approved: 'bg-green-100 text-green-800',
       rejected: 'bg-red-100 text-red-800',
-      needs_information: 'bg-blue-100 text-blue-800',
+      awaiting_proof: 'bg-blue-100 text-blue-800',
       reminder_sent: 'bg-purple-100 text-purple-800',
-      awaiting_documents: 'bg-orange-100 text-orange-800',
+      awaiting_dcf: 'bg-orange-100 text-orange-800',
       default: 'bg-gray-100 text-gray-800'
     },
     evaluation: {
@@ -60,13 +60,13 @@ module BadgeHelper
     status = application.medical_certification_status.to_s
     label = case status
             when 'requested'
-              'Medical Certification Request'
+              'Disability Certification Request'
             when 'received'
-              'Medical Certification Received'
+              'Disability Certification Received'
             when 'approved'
-              'Medical Certification Approved'
+              'Disability Certification Approved'
             when 'not_requested', 'rejected'
-              'Medical Certification'
+              'Disability Certification'
             else
               'Unknown Certification Status'
             end

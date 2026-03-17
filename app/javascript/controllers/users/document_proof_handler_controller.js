@@ -11,7 +11,7 @@ class DocumentProofHandlerController extends Controller {
   static targets = [
     "acceptRadio",
     "rejectRadio",
-    "noneRadio",
+    "noneButton",
     "uploadSection",
     "rejectionSection",
     "fileInput",
@@ -21,12 +21,21 @@ class DocumentProofHandlerController extends Controller {
   ]
 
   static values = {
-    proofType: String // "income_proof" or "residency_proof"
+    type: String // "income" or "residency"
   }
 
   connect() {
+    // Restore state from form data if rejection fields have values
+    this.restoreStateFromFormData();
+    
     // Set initial state based on selected radio button
     this.updateVisibility();
+    
+    // Preview and populate rejection notes if rejection is selected
+    if (this.hasRejectRadioTarget && this.rejectRadioTarget.checked) {
+      this.previewRejectionReason();
+      this.populateRejectionNotes();
+    }
     
     // Add event listener for rejection reason selection
     if (this.hasRejectionReasonSelectTarget) {
@@ -34,6 +43,25 @@ class DocumentProofHandlerController extends Controller {
         this.previewRejectionReason();
         this.populateRejectionNotes();
       });
+    }
+  }
+
+  /**
+   * Restore the UI state based on which radio button is checked
+   * This handles cases where the form is re-rendered after validation errors
+   */
+  restoreStateFromFormData() {
+    if (!this.hasAcceptRadioTarget || !this.hasRejectRadioTarget) {
+      return;
+    }
+
+    // Check which radio button is currently selected and show the correct fields
+    const isAccepted = this.acceptRadioTarget.checked;
+    const isRejected = this.rejectRadioTarget.checked;
+
+    if (isAccepted || isRejected) {
+      // Radio button state is already set, just update visibility
+      this.updateVisibility();
     }
   }
 
@@ -47,6 +75,28 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
+   * Handle "None Provided" button click
+   * UX shortcut that automatically selects reject + none_provided reason
+   * @param {Event} event The click event from the none button
+   */
+  handleNoneProvided(event) {
+    if (!this.hasRejectRadioTarget || !this.hasRejectionReasonSelectTarget) {
+      return;
+    }
+
+    // Programmatically select the reject radio button
+    this.rejectRadioTarget.checked = true;
+
+    // Auto-select "none_provided" from rejection reason dropdown
+    this.rejectionReasonSelectTarget.value = 'none_provided';
+
+    // Update visibility and populate notes
+    this.updateVisibility();
+    this.previewRejectionReason();
+    this.populateRejectionNotes();
+  }
+
+  /**
    * Update the visibility of upload or rejection sections
    * based on the selected radio
    */
@@ -56,10 +106,10 @@ class DocumentProofHandlerController extends Controller {
     }
 
     const isAccepted = this.acceptRadioTarget.checked;
-    const noneProvided = this.noneRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
   
     // Toggle visibility of sections using utility
+    // Note: display:none automatically removes elements from accessibility tree
     setVisible(this.uploadSectionTarget, isAccepted);
     setVisible(this.rejectionSectionTarget, isRejected);
     
@@ -80,7 +130,7 @@ class DocumentProofHandlerController extends Controller {
     // Toggle required attributes on fields
     if (this.hasRejectionReasonSelectTarget) {
       const target = this.rejectionReasonSelectTarget;
-      if (isAccepted || noneProvided ) {
+      if (isAccepted) {
         target.removeAttribute('required');
       } else {
         target.setAttribute('required', 'required');
@@ -124,6 +174,7 @@ class DocumentProofHandlerController extends Controller {
   formatRejectionReason(reasonCode) {
     // This would typically come from Rails I18n
     const reasonMessages = {
+      'none_provided': this.getNoneProvidedMessage(),
       'address_mismatch': 'The address on the document does not match the application address.',
       'expired': 'The document has expired or is not within the required date range.',
       'missing_name': 'The document does not clearly show the applicant\'s name.',
@@ -131,10 +182,27 @@ class DocumentProofHandlerController extends Controller {
       'missing_amount': 'The income amount is not clearly visible on the document.',
       'exceeds_threshold': 'The income shown exceeds the program\'s threshold.',
       'outdated_ss_award': 'The Social Security award letter is from a previous year.',
+      'incomplete': 'The medical provider documentation is incomplete or missing required information.',
+      'illegible': 'The documentation is illegible or unclear. Please provide a clearer copy.',
+      'missing_signature': 'The medical provider signature is missing or illegible.',
       'other': 'There is an issue with this document. Please see notes for details.'
     };
     
     return reasonMessages[reasonCode] || 'This document was rejected. Please provide a valid document.';
+  }
+
+  /**
+   * Get the appropriate "none provided" message based on proof type
+   * @returns {string} The none provided message
+   */
+  getNoneProvidedMessage() {
+    if (this.typeValue === 'income') {
+      return 'No income proof was provided with the application.';
+    } else if (this.typeValue === 'residency') {
+      return 'No residency proof was provided with the application.';
+    } else {
+      return 'The document was not provided with the application.';
+    }
   }
 
   /**
@@ -162,6 +230,7 @@ class DocumentProofHandlerController extends Controller {
    */
   getInstructionalText(reasonCode) {
     const instructions = {
+      'none_provided': this.getNoneProvidedInstructions(),
       'address_mismatch': 'Please provide a document that shows your current address.',
       'expired': 'Please provide a current document that is not expired.',
       'missing_name': 'Please provide a document that clearly shows your name.',
@@ -169,10 +238,33 @@ class DocumentProofHandlerController extends Controller {
       'missing_amount': 'Please provide a document that clearly shows the income amount.',
       'exceeds_threshold': 'Unfortunately, your income exceeds the program eligibility threshold.',
       'outdated_ss_award': 'Please provide your most recent Social Security award letter.',
+      'incomplete': 'Please provide complete medical provider documentation with all required information.',
+      'illegible': 'Please provide a clearer copy of the medical provider documentation.',
+      'missing_signature': 'Please provide documentation that includes the medical provider\'s signature.',
       'other': 'Please contact us for more information about the required documentation.'
     };
     
     return instructions[reasonCode] || 'Please provide the required documentation.';
+  }
+
+  /**
+   * Get the appropriate instructions for "none provided" based on proof type
+   * @returns {string} The instructional text
+   */
+  getNoneProvidedInstructions() {
+    if (this.typeValue === 'income') {
+      return `Please provide ONE of the following to complete your application:
+
+• If you receive Social Security (SSA), SSI, or SSDI: Send your most recent Social Security Award Letter.
+
+• If you receive Veterans (VA) benefits, TDAP, TANF, or pharmacy/medical/housing assistance: Send your most recent benefit paperwork.
+
+• If you live on a limited or fixed income: Send your 2 most recent pay stubs, unemployment stubs, or last year's tax return.`;
+    } else if (this.typeValue == 'residency') {
+      return 'Please provide proof of Maryland residency to complete your application. Acceptable documents include: utility bill, mortgage statement, lease agreement, bank statement, or government ID. IMPORTANT: The address shown on your proof document must match the address you provided in your application.';
+    } else {
+      return '';
+    }
   }
 }
 

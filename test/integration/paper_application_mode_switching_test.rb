@@ -127,6 +127,9 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
   end
 
   test 'paper application service properly handles invalid signed_ids' do
+    Rails.logger.stubs(:error)
+    Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Error processing income proof: Failed to attach proof: mismatched digest; Proof upload failed/)).once
+
     # This test verifies the service doesn't crash when given invalid signed_ids
 
     # Create a test constituent using factory with unique email to avoid uniqueness constraint errors

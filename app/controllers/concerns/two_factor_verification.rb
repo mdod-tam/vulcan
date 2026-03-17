@@ -1,23 +1,13 @@
 # frozen_string_literal: true
 
-# TwoFactorVerification module provides comprehensive two-factor authentication
-# verification functionality for controllers.
-#
 # This module handles verification of multiple 2FA credential types:
 # - WebAuthn (security keys and biometric authenticators)
 # - TOTP (time-based one-time passwords from authenticator apps)
 # - SMS (text message verification codes)
 #
-# Key responsibilities:
-# - Unified verification interface across all 2FA credential types
-# - Challenge management (storage, retrieval, and cleanup)
-# - Error handling with user-friendly messages and proper logging
-# - Security validation and credential verification
-# - Session management for 2FA authentication flows
-#
 # The module integrates with the TwoFactorAuth service module for logging
 # and session management, ensuring consistent behavior across the application.
-module TwoFactorVerification
+module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   extend ActiveSupport::Concern
 
   protected
@@ -92,7 +82,6 @@ module TwoFactorVerification
 
     credential = find_sms_credential(credential_id)
     return [false, 'Credential not found'] if credential.nil?
-    return [false, 'Code expired'] if sms_code_expired?(credential)
 
     verify_sms_code(code, credential)
   end
@@ -170,20 +159,34 @@ module TwoFactorVerification
     user_for_2fa.sms_credentials.find_by(id: credential_id)
   end
 
-  def sms_code_expired?(credential)
-    credential.code_digest.blank? || credential.code_expires_at < Time.current
-  end
-
   def verify_sms_code(code, credential)
-    if credential.verify_code(code)
+    # Use Twilio Verify API to check the code
+    result = TwilioVerifyService.check_verification(credential.phone_number, code)
+    user_for_2fa = find_user_for_two_factor
+
+    if result[:success] && result[:status] == 'approved'
       clear_challenge
-      user_for_2fa = find_user_for_two_factor
       log_verification_success(user_for_2fa.id, :sms, credential_id: credential.id)
       [true, 'Verification successful'] # Let the controller handle completion
+    elsif result[:success]
+      error_msg = result[:error] || 'Invalid code'
+      log_verification_failure(user_for_2fa.id, :sms, error_msg, credential_id: credential.id)
+      [false, sms_verification_error_message(result[:status])]
     else
-      user_for_2fa = find_user_for_two_factor
-      log_verification_failure(user_for_2fa.id, :sms, 'Invalid code', credential_id: credential.id)
-      [false, TwoFactorAuth::ERROR_MESSAGES[:invalid_code]]
+      error_msg = result[:error] || 'Verification service unavailable'
+      log_verification_failure(user_for_2fa.id, :sms, error_msg, credential_id: credential.id)
+      [false, TwoFactorAuth::ERROR_MESSAGES[:verification_service_unavailable]]
+    end
+  end
+
+  def sms_verification_error_message(status)
+    case status
+    when 'expired'
+      TwoFactorAuth::ERROR_MESSAGES[:expired_code]
+    when 'max_attempts_reached'
+      TwoFactorAuth::ERROR_MESSAGES[:max_attempts_reached]
+    else
+      TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
     end
   end
 
@@ -268,39 +271,37 @@ module TwoFactorVerification
     )
   end
 
-  # Send an SMS verification code
-  # rubocop:disable Metrics/AbcSize
+  # Send an SMS verification code using Twilio Verify API
   def send_sms_verification_code(credential = nil)
     # If no credential is provided, use current user's first SMS credential
     credential ||= current_user&.sms_credentials&.first
     return false unless credential
 
-    # Generate code - use predictable code in test environment
-    code = Rails.env.test? ? '123456' : SecureRandom.random_number(10**6).to_s.rjust(6, '0')
+    # Use Twilio Verify API to send verification code
+    result = TwilioVerifyService.send_verification(credential.phone_number)
 
-    # Save to credential
-    credential.update!(
-      last_sent_at: Time.current,
-      code_digest: User.digest(code).to_s,
-      code_expires_at: 10.minutes.from_now
-    )
+    if result[:success]
+      # Update credential with timestamp
+      credential.update!(
+        last_sent_at: Time.current,
+        code_expires_at: 10.minutes.from_now
+      )
 
-    # Send SMS
-    ::SmsService.send_message(
-      credential.phone_number,
-      "Your verification code is: #{code}"
-    )
+      # Store challenge data with verification SID
+      store_challenge(
+        :sms,
+        result[:verification_sid],
+        { credential_id: credential.id, phone_number: credential.phone_number }
+      )
 
-    # Store challenge data
-    store_challenge(
-      :sms,
-      credential.code_digest,
-      { credential_id: credential.id }
-    )
-
-    user_id = credential.user_id
-    Rails.logger.info("[SMS] Sent verification code to user #{user_id}")
-    true
+      user_id = credential.user_id
+      Rails.logger.info("[SMS] Sent verification code to user #{user_id} via Twilio Verify")
+      true
+    else
+      Rails.logger.error("[SMS] Failed to send verification: #{result[:error]}")
+      flash.now[:alert] = 'Could not send verification code'
+      false
+    end
   rescue StandardError => e
     Rails.logger.error("[SMS] Error: #{e.message}")
     Rails.logger.error("[SMS] Error backtrace: #{e.backtrace.first(5).join("\n")}")
@@ -313,31 +314,30 @@ module TwoFactorVerification
   def send_sms_verification_code_for_user(credential, user)
     return false unless credential && user
 
-    # Generate code - use predictable code in test environment
-    code = Rails.env.test? ? '123456' : SecureRandom.random_number(10**6).to_s.rjust(6, '0')
+    # Use Twilio Verify API to send verification code
+    result = TwilioVerifyService.send_verification(credential.phone_number)
 
-    # Save to credential
-    credential.update!(
-      last_sent_at: Time.current,
-      code_digest: User.digest(code).to_s,
-      code_expires_at: 10.minutes.from_now
-    )
+    if result[:success]
+      # Update credential with timestamp
+      credential.update!(
+        last_sent_at: Time.current,
+        code_expires_at: 10.minutes.from_now
+      )
 
-    # Send SMS
-    ::SmsService.send_message(
-      credential.phone_number,
-      "Your verification code is: #{code}"
-    )
+      # Store challenge data with verification SID
+      store_challenge(
+        :sms,
+        result[:verification_sid],
+        { credential_id: credential.id, phone_number: credential.phone_number }
+      )
 
-    # Store challenge data
-    store_challenge(
-      :sms,
-      credential.code_digest,
-      { credential_id: credential.id }
-    )
-
-    Rails.logger.info("[SMS] Sent verification code to user #{user.id}")
-    true
+      Rails.logger.info("[SMS] Sent verification code to user #{user.id} via Twilio Verify")
+      true
+    else
+      Rails.logger.error("[SMS] Failed to send verification: #{result[:error]}")
+      flash.now[:alert] = 'Could not send verification code'
+      false
+    end
   rescue StandardError => e
     Rails.logger.error("[SMS] Error: #{e.message}")
     flash.now[:alert] = 'Could not send verification code'
@@ -403,7 +403,6 @@ module TwoFactorVerification
   end
 
   # WebAuthn options generation with common response handling
-  # rubocop:disable Naming/PredicateMethod
   def generate_webauthn_verification_options(user)
     return false unless user&.webauthn_credentials&.any?
 
@@ -429,14 +428,12 @@ module TwoFactorVerification
   end
 
   # Shared authentication flow validation
-  # rubocop:disable Naming/PredicateMethod
-  def ensure_two_factor_auth_in_progress
+  def ensure_two_factor_auth_in_progress # rubocop:disable Naming/PredicateMethod
     return true if two_factor_auth_in_progress?
 
     respond_with_authentication_required
     false
   end
-  # rubocop:enable Naming/PredicateMethod
 
   # Shared user finding with validation
   def find_and_validate_2fa_user

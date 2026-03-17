@@ -5,7 +5,7 @@ class MedicalCertificationEmailJob < ApplicationJob
   retry_on Net::SMTPError, wait: :exponentially_longer, attempts: 3
 
   def perform(application_id:, timestamp:, notification_id: nil)
-    Rails.logger.info "Processing medical certification email for application #{application_id}"
+    Rails.logger.info "Processing disability certification email for application #{application_id}"
 
     application = Application.find(application_id)
 
@@ -31,7 +31,7 @@ class MedicalCertificationEmailJob < ApplicationJob
       notification_id: notification&.id
     ).request_certification.deliver_now
 
-    Rails.logger.info "Successfully sent medical certification email for application #{application_id}"
+    Rails.logger.info "Successfully sent disability certification email for application #{application_id}"
   rescue StandardError => e
     Rails.logger.error "Failed to send certification email for application #{application_id}: #{e.message}"
     Rails.logger.error e.backtrace.join("\n")
@@ -49,12 +49,15 @@ class MedicalCertificationEmailJob < ApplicationJob
   private
 
   def create_notification(application, timestamp)
-    recipient = User.find_by(role: 'admin') || User.first # Default recipient - ideally admins
+    recipient = User.admins.first || User.first
+    raise ActiveRecord::RecordNotFound, 'No users available for medical certification notification recipient' unless recipient
+
     actor = begin
       Current.user
     rescue StandardError
       nil
     end
+    actor ||= recipient
 
     # Log the audit event
     AuditEventService.log(
@@ -79,7 +82,8 @@ class MedicalCertificationEmailJob < ApplicationJob
         provider: application.medical_provider_name,
         provider_email: application.medical_provider_email
       },
-      channel: :email
+      channel: :email,
+      deliver: false
     )
   end
 end

@@ -14,22 +14,37 @@ class SmsCredential < ApplicationRecord
   before_validation :set_last_sent_at, on: :create
 
   def send_code!
-    code = generate_code
-    update!(
-      last_sent_at: Time.current,
-      code_digest: User.digest(code).to_s,
-      code_expires_at: 10.minutes.from_now
-    )
-    ::SmsService.send_message(phone_number, "Your verification code is: #{code}")
+    # Use Twilio Verify API to send verification code
+    result = TwilioVerifyService.send_verification(phone_number)
+
+    if result[:success]
+      # Update last_sent_at to track when code was sent
+      # Twilio manages the code and expiration
+      # We store the verification_sid for reference but don't store the code
+      update!(
+        last_sent_at: Time.current,
+        code_expires_at: 10.minutes.from_now # Twilio's default expiration
+      )
+      true
+    else
+      Rails.logger.error("[SmsCredential] Failed to send verification: #{result[:error]}")
+      false
+    end
   end
 
   def verify_code(code)
-    # SMS credential verification checks the provided code against the stored digest
-    # This method is used during SMS setup when the user is already authenticated
-    # It differs from login verification which goes through the TwoFactorVerification concern
-    return false if code_digest.blank? || code_expires_at.blank? || code_expires_at < Time.current
+    # Use Twilio Verify API to check verification code
+    # More secure than storing codes locally
+    result = TwilioVerifyService.check_verification(phone_number, code)
 
-    BCrypt::Password.new(code_digest).is_password?(code)
+    if result[:success]
+      # Return whether the code was valid
+      result[:valid]
+    else
+      # If there was an error communicating with Twilio, log it and return false
+      Rails.logger.error("[SmsCredential] Failed to verify code: #{result[:error]}")
+      false
+    end
   end
 
   private

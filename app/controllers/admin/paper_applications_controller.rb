@@ -62,6 +62,7 @@ module Admin
 
       if service_result
         success_message = generate_success_message(service.application)
+        send_medical_certification_notification_if_needed(service.application)
         handle_success_response(
           html_redirect_path: admin_application_path(service.application),
           html_message: success_message,
@@ -263,11 +264,29 @@ module Admin
     end
 
     def repopulate_form_data(service, existing_application)
+      submitted_params = build_submitted_params
+      
+      # Get or build constituent with submitted data
+      constituent = service.constituent || existing_application&.user || Constituent.new
+      
+      # If constituent is a new record, populate it with submitted data
+      if constituent.new_record? && submitted_params[:constituent].present?
+        constituent.assign_attributes(submitted_params[:constituent])
+      end
+      
+      # Get or build application with submitted data
+      application = service.application || existing_application || Application.new
+      if application.new_record? && submitted_params[:application].present?
+        application.assign_attributes(submitted_params[:application])
+      end
+      
       @paper_application = {
-        application: service.application || existing_application || Application.new,
-        constituent: service.constituent || existing_application&.user || Constituent.new,
+        application: application,
+        constituent: constituent,
         guardian_user_for_app: service.guardian_user_for_app,
-        submitted_params: build_submitted_params
+        applicant_attributes: submitted_params[:applicant_attributes] || {},
+        guardian_attributes: submitted_params[:guardian_attributes] || {},
+        submitted_params: submitted_params
       }
     end
 
@@ -333,6 +352,8 @@ module Admin
         :income_proof_rejection_reason, :income_proof_rejection_notes,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
         :residency_proof_rejection_reason, :residency_proof_rejection_notes,
+        :medical_certification_action, :medical_certification, :medical_certification_signed_id,
+        :medical_certification_rejection_reason, :medical_certification_rejection_notes,
         :no_medical_provider_information,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
@@ -403,6 +424,15 @@ module Admin
         service_params[reason_key] = permitted[reason_key]
         service_params[notes_key]  = permitted[notes_key]
       end
+
+      # Handle medical certification (uses different naming convention)
+      service_params[:medical_certification_action] = permitted[:medical_certification_action]
+      file_val = permitted[:medical_certification]
+      signed_val = permitted[:medical_certification_signed_id]
+      service_params[:medical_certification] = file_val if file_val.present?
+      service_params[:medical_certification_signed_id] = signed_val if signed_val.present?
+      service_params[:medical_certification_rejection_reason] = permitted[:medical_certification_rejection_reason]
+      service_params[:medical_certification_rejection_notes] = permitted[:medical_certification_rejection_notes]
     end
 
     # Translate checkbox UI to email strategy parameter
@@ -463,6 +493,26 @@ module Admin
 
     def build_notification_params
       params.permit(:household_size, :annual_income, :communication_preference, :additional_notes).to_h
+    end
+
+    def send_medical_certification_notification_if_needed(application)
+      has_provider_info = application.medical_provider_name.present? || 
+                          application.medical_provider_email.present? || 
+                          application.medical_provider_phone.present?
+      is_rejected = application.medical_certification_status_rejected?
+
+      # If provider info exists AND certification is rejected for reason other than not present, notify the provider
+      if has_provider_info && is_rejected && application.medical_certification_rejection_reason != 'none_provided'
+        MedicalProviderMailer.certification_revision_needed(application).deliver_later
+        return
+      end
+
+      # If nothing is attached (no provider info AND a rejected certification), notify the constituent
+      return if has_provider_info || !is_rejected
+
+      ApplicationNotificationsMailer.medical_certification_not_provided(application).deliver_later
+    rescue StandardError => e
+      Rails.logger.error("Failed to send medical certification notification for application #{application&.id}: #{e.message}")
     end
 
     # NOTE: cast_boolean_params and cast_boolean_for are provided by the ParamCasting concern

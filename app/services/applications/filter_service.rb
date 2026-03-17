@@ -70,7 +70,7 @@ module Applications
         # Use Rails enum mapping to get the correct integer values
         scope.where(income_proof_status: :not_reviewed).or(scope.where(residency_proof_status: :not_reviewed))
       when 'awaiting_medical_response'
-        scope.where(status: :awaiting_documents)
+        scope.where(status: :awaiting_dcf)
       when 'medical_certs_to_review'
         # Only include applications that are in progress and have received certs
         scope.where(status: :in_progress, medical_certification_status: :received)

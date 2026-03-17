@@ -51,7 +51,7 @@
                       "Admin Review"
                     when log.is_a?(ApplicationStatusChange)
                       "Status Change"
-                    when log.is_a?(Notification) || log.class.name == "NotificationDecorator"
+                    when log.is_a?(Notification)
                       case log.action
                       when "proof_approved", "proof_rejected"
                         "Notification Sent"
@@ -86,7 +86,7 @@
                       log.admin.full_name
                     when log.is_a?(ApplicationStatusChange)
                       log.user&.full_name || "System"
-                    when log.is_a?(Notification) || log.class.name == "NotificationDecorator"
+                    when log.is_a?(Notification)
                       log.actor&.full_name || "System"
                     when log.is_a?(Event)
                       log.user&.full_name || "System"
@@ -111,28 +111,28 @@
                       status_text = case [log.from_status, log.to_status]
                       when [nil, "requested"], ["not_requested", "requested"]
                         provider_text = provider.present? ? " from #{provider}" : ""
-                        "Medical certification requested#{provider_text}"
+                        "Disability certification requested#{provider_text}"
                       when [_, "received"]
                         received_at = log.metadata['received_at'].present? ? Time.zone.parse(log.metadata['received_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
                         timestamp_text = received_at.present? ? " on #{received_at}" : ""
-                        "Medical certification received (via #{method})#{timestamp_text}"
+                        "Disability certification received (via #{method})#{timestamp_text}"
                       when [_, "accepted"]
                         received_at = log.metadata['received_at'].present? ? Time.zone.parse(log.metadata['received_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
                         processed_at = log.metadata['processed_at'].present? ? Time.zone.parse(log.metadata['processed_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
                         
                         # If both timestamps exist and are different, show both
                         if received_at.present? && processed_at.present? && received_at != processed_at
-                          "Medical certification received on #{received_at} and approved on #{processed_at} (via #{method})"
+                          "Disability certification received on #{received_at} and approved on #{processed_at} (via #{method})"
                         # If only processed_at exists or they're the same, just show one timestamp
                         elsif processed_at.present?
-                          "Medical certification approved on #{processed_at} (via #{method})"
+                          "Disability certification approved on #{processed_at} (via #{method})"
                         else
-                          "Medical certification approved (via #{method})"
+                          "Disability certification approved (via #{method})"
                         end
                       when [_, "rejected"]
-                        "Medical certification rejected (via #{method})#{log.metadata.try(:[], 'rejection_reason').present? ? " - #{log.metadata['rejection_reason']}" : ""}"
+                        "Disability certification rejected (via #{method})#{log.metadata.try(:[], 'rejection_reason').present? ? " - #{log.metadata['rejection_reason']}" : ""}"
                       else
-                        "Medical certification status changed from #{log.from_status&.titleize || 'Not Requested'} to #{log.to_status&.titleize}"
+                        "Disability certification status changed from #{log.from_status&.titleize || 'Not Requested'} to #{log.to_status&.titleize}"
                       end
                       "#{status_text}#{log.notes.present? ? " - #{log.notes}" : ""}"
                     else
@@ -151,16 +151,16 @@
                       end
                       "#{status_text}#{log.notes.present? ? " - #{log.notes}" : ""}"
                     end
-                  when log.is_a?(Notification) || log.class.name == "NotificationDecorator"
+                  when log.is_a?(Notification)
                     case log.action
                     when "medical_certification_requested"
-                      "Medical certification requested from #{@application.medical_provider_name}"
+                      "Disability certification requested from #{@application.medical_provider_name}"
                     when "medical_certification_received"
-                      "Medical certification received from provider"
+                      "Disability certification received from provider"
                     when "medical_certification_approved"
-                      "Medical certification approved"
+                      "Disability certification approved"
                     when "medical_certification_rejected"
-                      "Medical certification rejected#{log.metadata['reason'].present? ? " - #{log.metadata['reason']}" : ''}"
+                      "Disability certification rejected#{log.metadata['reason'].present? ? " - #{log.metadata['reason']}" : ''}"
                     when "review_requested"
                       "Review requested by constituent"
                     when "documents_requested"
@@ -206,7 +206,7 @@
                       method = log.metadata['submission_method']&.titleize || 'Unknown'
                       provider = log.metadata['provider_name']
                       provider_text = provider.present? ? " from #{provider}" : ""
-                      "Medical certification requested#{provider_text} (via #{method})"
+                      "Disability certification requested#{provider_text} (via #{method})"
                     when "voucher_assigned"
                       "Voucher #{log.metadata['voucher_code']} assigned with value #{number_to_currency(log.metadata['initial_value'])}"
                     when "voucher_redeemed"

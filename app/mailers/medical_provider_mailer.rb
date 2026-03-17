@@ -32,7 +32,7 @@ class MedicalProviderMailer < ApplicationMailer
     # Map to certification_rejected method
     self.class.with(
       application: notifiable,
-      rejection_reason: notification.metadata['rejection_reason'] || 'Not specified',
+      rejection_reason: notification.metadata['reason'] || 'Not specified',
       admin: notification.actor
     ).certification_rejected
   end
@@ -133,13 +133,11 @@ class MedicalProviderMailer < ApplicationMailer
     application = params[:application]
     rejection_reason = params[:rejection_reason]
     constituent = application.user
-    remaining_attempts = 8 - application.total_rejections
 
     {
       constituent_full_name: constituent.full_name,
       application_id: application.id,
-      rejection_reason: rejection_reason,
-      remaining_attempts: remaining_attempts
+      rejection_reason: rejection_reason
     }.compact
   end
 

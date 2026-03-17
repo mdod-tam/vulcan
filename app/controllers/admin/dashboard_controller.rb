@@ -54,7 +54,7 @@ module Admin
         scope.where(income_proof_status: 0)
              .or(scope.where(residency_proof_status: 0))
       when 'awaiting_medical_response'
-        scope.where(status: :awaiting_documents)
+        scope.where(status: :awaiting_dcf)
       when 'training_requests'
         # Filter applications with training request notifications
         application_ids = Notification.where(action: 'training_requested')

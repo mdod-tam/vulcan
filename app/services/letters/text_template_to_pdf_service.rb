@@ -231,10 +231,9 @@ module Letters
 
     # Check if the template requires shared partial variables (header_text and footer_text)
     def template_requires_shared_partials?
-      template_config = EmailTemplate::AVAILABLE_TEMPLATES[template_name.to_s]
-      template_config &&
-        template_config[:required_vars]&.include?('header_text') &&
-        template_config[:required_vars].include?('footer_text')
+      template = EmailTemplate.find_by(name: template_name)
+      return false unless template
+      template.required_variables.include?('header_text') && template.required_variables.include?('footer_text')
     end
   end
 end

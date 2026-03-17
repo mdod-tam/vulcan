@@ -113,7 +113,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     assert_current_path expected_path
 
     # Verify the WebAuthn verification page displays correctly
-    assert_text 'Security Key Verification'
+    assert_text 'Device or Security Key Verification'
     assert_text 'Use your registered security key to complete sign-in'
 
     # Test stops here - we don't try to complete actual WebAuthn verification
@@ -185,7 +185,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     system_test_sign_in(user)
     visit new_credential_two_factor_authentication_path(type: 'webauthn')
-    assert_text 'Add a Security Key'
+    assert_text 'Set up Device or Security Key'
 
     fill_in 'Nickname', with: 'My UI Key'
 
@@ -232,7 +232,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     take_screenshot('webauthn-verification-page')
 
     # Test UI elements are present and functional
-    assert_selector 'button', text: 'Verify with Security Key'
+    assert_selector 'button', text: 'Verify with Device or Security Key'
     assert_text 'Use your registered security key to verify your identity'
 
     # Test instructions are displayed
@@ -240,7 +240,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     assert_text 'Click the button below to start the verification'
 
     # Test that the verification button is clickable (but don't complete verification)
-    verification_button = find('button', text: 'Verify with Security Key')
+    verification_button = find('button', text: 'Verify with Device or Security Key')
     assert verification_button.visible?
     assert_not verification_button.disabled?
 
@@ -270,13 +270,13 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     # Should be redirected to WebAuthn verification
     assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn')
-    assert_text 'Security Key Verification' # Match the actual heading in the view
+    assert_text 'Device or Security Key Verification' # Match the actual heading in the view
     take_screenshot('webauthn-login-ui-fail-prompt')
 
     # For system tests, we focus on testing the UI behavior for failed verification
 
     # Verify the UI shows the correct verification elements
-    assert_selector 'button', text: 'Verify with Security Key'
+    assert_selector 'button', text: 'Verify with Device or Security Key'
     assert_text 'Use your registered security key to verify your identity'
 
     # Take a screenshot to verify the UI state
@@ -333,6 +333,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     # Try different possible link texts for 2FA setup
     possible_texts = [
       'Add Security Key',
+      'Set up Device or Security Key',
       'Set up Two-Factor Authentication',
       'Enable 2FA',
       'Add Authenticator',

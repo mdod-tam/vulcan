@@ -321,6 +321,9 @@ module Applications
     end
 
     test 'handles errors gracefully' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(/Error applying filters: Test error/)).once
+
       with_mocked_attachments do
         # Create a service with a scope that will raise an error when queried
         bad_scope = Object.new

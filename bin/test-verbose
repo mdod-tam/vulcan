@@ -9,8 +9,8 @@ export VERBOSE_TESTS=1
 # Run the test with full output
 if [ $# -eq 0 ]; then
   # No arguments - run all tests
-  rails test
+  bin/rails test
 else
   # Run specific test file(s)
-  rails test "$@"
+  bin/rails test "$@"
 fi 
