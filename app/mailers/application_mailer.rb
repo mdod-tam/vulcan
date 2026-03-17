@@ -38,7 +38,11 @@ class ApplicationMailer < ActionMailer::Base
   private
 
   def resolve_template_locale(recipient: nil)
-    recipient_locale = normalize_locale(recipient.locale) if recipient.respond_to?(:locale)
+    recipient_locale = if recipient.respond_to?(:effective_locale)
+                         normalize_locale(recipient.effective_locale)
+                       elsif recipient.respond_to?(:locale)
+                         normalize_locale(recipient.locale)
+                       end
     default_locale = normalize_locale(I18n.default_locale) || 'en'
 
     recipient_locale || default_locale

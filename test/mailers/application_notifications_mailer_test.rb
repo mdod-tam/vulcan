@@ -152,6 +152,62 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_match(/Income/, delivered_email.body.to_s)
   end
 
+  test 'proof_approved uses guardian locale and email when communications route to guardian' do
+    guardian = create(:constituent,
+                      email: "guardian.mailer.locale.#{SecureRandom.hex(3)}@example.com",
+                      locale: 'es')
+    dependent = create(:constituent,
+                       email: "dependent.mailer.system.#{SecureRandom.hex(3)}@system.matvulcan.local",
+                       dependent_email: guardian.email,
+                       locale: 'en')
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+    application = create(:application, user: dependent, managing_guardian: guardian)
+    proof_review = create(:proof_review, :with_income_proof, application: application, rejection_reason: 'Documento borroso')
+
+    spanish_template = mock_template('Asunto de prueba en espanol',
+                                     'Texto de prueba para %<user_first_name>s')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_proof_approved',
+      format: :text,
+      locale: 'es'
+    ).returns(spanish_template)
+
+    email = ApplicationNotificationsMailer.proof_approved(application, proof_review)
+    email.deliver_now
+
+    assert_equal [guardian.email], email.to
+    assert_equal 'Asunto de prueba en espanol', email.subject
+  end
+
+  test 'proof_approved uses dependent locale and email when communications route to dependent' do
+    guardian = create(:constituent,
+                      email: "guardian.mailer.locale.#{SecureRandom.hex(3)}@example.com",
+                      locale: 'es')
+    dependent = create(:constituent,
+                       email: "dependent.mailer.locale.#{SecureRandom.hex(3)}@example.com",
+                       dependent_email: nil,
+                       locale: 'en')
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+    application = create(:application, user: dependent, managing_guardian: guardian)
+    proof_review = create(:proof_review, :with_income_proof, application: application, rejection_reason: 'Document unclear')
+
+    english_template = mock_template('Dependent locale subject',
+                                     'Dependent locale body for %<user_first_name>s')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_proof_approved',
+      format: :text,
+      locale: 'en'
+    ).returns(english_template)
+
+    email = ApplicationNotificationsMailer.proof_approved(application, proof_review)
+    email.deliver_now
+
+    assert_equal [dependent.email], email.to
+    assert_equal 'Dependent locale subject', email.subject
+  end
+
   test 'proof_approved generates letter when preference is letter' do
     # Set user communication preference to 'letter'
     @user.update!(communication_preference: 'letter')
@@ -205,6 +261,34 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Check the content of the email
     assert_includes email.body.to_s, "needs revision for #{@user.first_name}"
     assert_includes email.body.to_s, "Reason: #{@proof_review.rejection_reason}"
+  end
+
+  test 'proof_rejected sends to guardian email when dependent communications route to guardian' do
+    guardian = create(:constituent,
+                      email: "guardian.rejected.locale.#{SecureRandom.hex(3)}@example.com",
+                      locale: 'es')
+    dependent = create(:constituent,
+                       email: "dependent.rejected.system.#{SecureRandom.hex(3)}@system.matvulcan.local",
+                       dependent_email: guardian.email,
+                       locale: 'en')
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+    application = create(:application, user: dependent, managing_guardian: guardian, total_rejections: 2)
+    proof_review = create(:proof_review, :with_income_proof, application: application, rejection_reason: 'Document unclear')
+
+    spanish_template = mock_template('Rechazo en espanol',
+                                     'Texto de rechazo para %<user_first_name>s. Reason: %<rejection_reason>s')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_proof_rejected',
+      format: :text,
+      locale: 'es'
+    ).returns(spanish_template)
+
+    email = ApplicationNotificationsMailer.proof_rejected(application, proof_review)
+    email.deliver_now
+
+    assert_equal [guardian.email], email.to
+    assert_equal 'Rechazo en espanol', email.subject
   end
 
   test 'proof_rejected generates letter when preference is letter' do

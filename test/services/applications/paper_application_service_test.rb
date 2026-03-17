@@ -254,5 +254,40 @@ module Applications
       # Status should be awaiting_proof when any proof is rejected
       assert_equal 'awaiting_proof', application.status, 'Status should be awaiting_proof when proof is rejected'
     end
+
+    test 'updates existing dependent locale and communication preferences' do
+      guardian = create(:constituent, email: "guardian-#{@timestamp}@example.com", phone: "301555#{@timestamp.to_s[-4..]}")
+      dependent = create(:constituent, email: "dependent-#{@timestamp}@example.com", phone: "302555#{@timestamp.to_s[-4..]}")
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'parent',
+        constituent: {
+          dependent_email: dependent.email,
+          dependent_phone: dependent.phone,
+          locale: 'es',
+          communication_preference: 'letter',
+          preferred_means_of_communication: 'asl'
+        },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(
+        params: service_params,
+        admin: @admin,
+        skip_income_validation: true,
+        skip_proof_processing: true
+      )
+
+      assert service.create, "Expected service to succeed, got: #{service.errors.inspect}"
+
+      dependent.reload
+      assert_equal 'es', dependent.locale
+      assert_equal 'letter', dependent.communication_preference
+      assert_equal 'asl', dependent.preferred_means_of_communication
+    end
   end
 end

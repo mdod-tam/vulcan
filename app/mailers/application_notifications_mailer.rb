@@ -277,8 +277,10 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def send_proof_rejected_email(user, text_template, variables)
+    recipient_email = user.respond_to?(:effective_email) ? user.effective_email : user.email
+
     send_email(
-      user.email,
+      recipient_email,
       text_template,
       variables,
       reply_to: ["proof@#{default_url_options[:host]}"]

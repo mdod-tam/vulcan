@@ -76,6 +76,9 @@ module ConstituentPortal
       assert_response :success
       # The new UI shows the user's name in the title
       assert_select 'h1', /New Application for/
+      assert_select 'select[name="constituent[locale]"]'
+      assert_select 'select[name="constituent[locale]"] option[value="en"]', text: 'English'
+      assert_select 'select[name="constituent[locale]"] option[value="es"]', text: 'Spanish'
     end
 
     # Test creating a draft application
@@ -113,6 +116,65 @@ module ConstituentPortal
       assert_equal 'Dr. Smith', application.medical_provider_name
       assert_equal '2025551234', application.medical_provider_phone
       assert_equal 'drsmith@example.com', application.medical_provider_email
+    end
+
+    test 'should persist selected locale from new application form' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "locale_test_#{Time.now.to_i}_#{rand(1000)}@example.com",
+                           locale: 'en')
+      sign_in_for_integration_test(unique_user)
+
+      assert_difference('Application.count') do
+        post constituent_portal_applications_path, params: {
+          application: {
+            maryland_resident: true,
+            household_size: 2,
+            annual_income: 35_000,
+            self_certify_disability: checkbox_params(true),
+            hearing_disability: checkbox_params(true)
+          },
+          medical_provider: {
+            name: 'Dr. Locale',
+            phone: '2025556789',
+            email: 'dr.locale@example.com'
+          },
+          constituent: {
+            locale: 'es'
+          },
+          save_draft: 'Save Application'
+        }
+      end
+
+      unique_user.reload
+      assert_equal 'es', unique_user.locale
+    end
+
+    test 'should preserve existing locale when no locale is submitted' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "locale_preserve_test_#{Time.now.to_i}_#{rand(1000)}@example.com",
+                           locale: 'es')
+      sign_in_for_integration_test(unique_user)
+
+      assert_difference('Application.count') do
+        post constituent_portal_applications_path, params: {
+          application: {
+            maryland_resident: true,
+            household_size: 2,
+            annual_income: 35_000,
+            self_certify_disability: checkbox_params(true),
+            hearing_disability: checkbox_params(true)
+          },
+          medical_provider: {
+            name: 'Dr. Preserve Locale',
+            phone: '2025556790',
+            email: 'dr.preserve.locale@example.com'
+          },
+          save_draft: 'Save Application'
+        }
+      end
+
+      unique_user.reload
+      assert_equal 'es', unique_user.locale
     end
 
     # Test creating an application as submitted with required proofs
@@ -210,6 +272,56 @@ module ConstituentPortal
       # Verify proofs were attached (if submitted)
       assert application.income_proof.attached?
       assert application.residency_proof.attached?
+    end
+
+    test 'guardian should persist locale to dependent applicant only' do
+      guardian = create(:constituent,
+                        email: "guardian.locale.portal.#{Time.now.to_i}@example.com",
+                        phone: '5555551050',
+                        locale: 'en')
+      dependent = create(:constituent,
+                         email: "dependent.locale.portal.#{Time.now.to_i}@example.com",
+                         phone: '5555551051',
+                         locale: 'en')
+      GuardianRelationship.create!(guardian_id: guardian.id, dependent_id: dependent.id, relationship_type: 'parent')
+
+      sign_in_for_integration_test guardian
+
+      assert_difference('Application.count') do
+        post constituent_portal_applications_path, params: {
+          application: {
+            user_id: dependent.id,
+            maryland_resident: true,
+            household_size: 2,
+            annual_income: 32_000,
+            self_certify_disability: checkbox_params(true),
+            hearing_disability: checkbox_params(true),
+            vision_disability: checkbox_params(false),
+            speech_disability: checkbox_params(false),
+            mobility_disability: checkbox_params(false),
+            cognition_disability: checkbox_params(false)
+          },
+          medical_provider: {
+            name: 'Dr. Portal Locale',
+            phone: '2025553050',
+            email: 'dr.portal.locale@example.com'
+          },
+          constituent: {
+            locale: 'es'
+          },
+          save_draft: 'Save Application'
+        }
+      end
+
+      application = Application.last
+      assert_redirected_to constituent_portal_application_path(application)
+      assert_equal dependent.id, application.user_id
+      assert_equal guardian.id, application.managing_guardian_id
+
+      guardian.reload
+      dependent.reload
+      assert_equal 'en', guardian.locale
+      assert_equal 'es', dependent.locale
     end
 
     # Test that the application show page loads correctly

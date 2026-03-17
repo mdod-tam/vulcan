@@ -294,6 +294,13 @@ module Applications
       updates[:state] = attrs[:state] if attrs[:state].present?
       updates[:zip_code] = attrs[:zip_code] if attrs[:zip_code].present?
 
+      # Communication and localization preferences
+      updates[:locale] = attrs[:locale] if attrs[:locale].present?
+      updates[:communication_preference] = attrs[:communication_preference] if attrs[:communication_preference].present?
+      updates[:preferred_means_of_communication] = attrs[:preferred_means_of_communication] if attrs[:preferred_means_of_communication].present?
+      updates[:phone_type] = attrs[:phone_type] if attrs[:phone_type].present?
+      updates[:referral_source] = attrs[:referral_source] if attrs[:referral_source].present?
+
       updates
     end
 

@@ -103,6 +103,42 @@ module Admin
       assert_equal 'paper', created_application.submission_method
     end
 
+    test 'should persist locale for self-applicant' do
+      unique_email = "self.locale.#{Time.now.to_i}@example.com"
+
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+
+      assert_difference ['Application.count', 'User.count'], 1 do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          constituent: {
+            first_name: 'Locale',
+            last_name: 'SelfApplicant',
+            email: unique_email,
+            phone: '555-000-0091',
+            physical_address_1: '910 Locale Way',
+            city: 'Baltimore',
+            state: 'MD',
+            zip_code: '21201',
+            hearing_disability: '1',
+            locale: 'es'
+          },
+          application: {
+            household_size: 1,
+            annual_income: 12_000,
+            maryland_resident: '1',
+            self_certify_disability: '1',
+            medical_provider_name: 'Dr. Locale',
+            medical_provider_phone: '555-111-0091',
+            medical_provider_email: 'dr.locale.self@example.com'
+          }
+        }
+      end
+
+      created_user = User.find_by(email: unique_email)
+      assert_not_nil created_user
+      assert_equal 'es', created_user.locale
+    end
+
     test 'should create paper application for dependent with NEW guardian' do
       dependent_email = "dependent.newguardian.#{Time.now.to_i}@example.com"
       guardian_email = "new.guardian.#{Time.now.to_i}@example.com"
@@ -170,6 +206,59 @@ module Admin
       assert_equal new_guardian.id, created_application.managing_guardian_id, 'Application should be linked to the new guardian'
       assert_response :redirect
       assert_redirected_to admin_application_path(created_application)
+    end
+
+    test 'should persist locale separately for new guardian and dependent' do
+      dependent_email = "dependent.locale.newguardian.#{Time.now.to_i}@example.com"
+      guardian_email = "new.guardian.locale.#{Time.now.to_i}@example.com"
+
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+
+      assert_difference 'User.count', 2 do
+        assert_difference 'Application.count', 1 do
+          assert_difference 'GuardianRelationship.count', 1 do
+            post admin_paper_applications_path, headers: default_headers, params: {
+              guardian_attributes: {
+                first_name: 'LocaleGuardian',
+                last_name: 'Primary',
+                email: guardian_email,
+                phone: '555-000-0092',
+                physical_address_1: '920 Guardian Rd',
+                city: 'Guardville',
+                state: 'MD',
+                zip_code: '21002',
+                locale: 'en'
+              },
+              constituent: {
+                first_name: 'LocaleDependent',
+                last_name: 'Secondary',
+                dependent_email: dependent_email,
+                date_of_birth: 11.years.ago.to_date.to_s,
+                hearing_disability: '1',
+                locale: 'es'
+              },
+              use_guardian_email: false,
+              relationship_type: 'Parent',
+              application: {
+                household_size: 2,
+                annual_income: 19_000,
+                maryland_resident: '1',
+                self_certify_disability: '1',
+                medical_provider_name: 'Dr. Locale Family',
+                medical_provider_phone: '555-333-0092',
+                medical_provider_email: 'dr.locale.family@example.com'
+              }
+            }
+          end
+        end
+      end
+
+      guardian = User.find_by(email: guardian_email)
+      dependent = User.find_by(dependent_email: dependent_email)
+      assert_not_nil guardian
+      assert_not_nil dependent
+      assert_equal 'en', guardian.locale
+      assert_equal 'es', dependent.locale
     end
 
     test 'should create paper application for dependent using guardian email' do
@@ -302,6 +391,99 @@ module Admin
       assert_equal existing_guardian.id, created_application.managing_guardian_id, 'Application should be linked to the existing guardian'
       assert_response :redirect
       assert_redirected_to admin_application_path(created_application)
+    end
+
+    test 'should update existing dependent locale without changing guardian locale' do
+      existing_guardian = create(:constituent,
+                                 email: "existing.guardian.locale.#{Time.now.to_i}@example.com",
+                                 first_name: 'Locale',
+                                 last_name: 'Guardian',
+                                 locale: 'en')
+      existing_dependent = create(:constituent,
+                                  email: "existing.dependent.locale.#{Time.now.to_i}@example.com",
+                                  first_name: 'Locale',
+                                  last_name: 'Dependent',
+                                  locale: 'en')
+      create(:guardian_relationship,
+             guardian_user: existing_guardian,
+             dependent_user: existing_dependent,
+             relationship_type: 'Parent')
+
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+
+      assert_difference 'Application.count', 1 do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          applicant_type: 'dependent',
+          guardian_id: existing_guardian.id,
+          dependent_id: existing_dependent.id,
+          relationship_type: 'Parent',
+          constituent: {
+            locale: 'es',
+            communication_preference: 'letter'
+          },
+          application: {
+            household_size: 2,
+            annual_income: 14_000,
+            maryland_resident: '1',
+            self_certify_disability: '1',
+            medical_provider_name: 'Dr. Existing Dependent',
+            medical_provider_phone: '555-444-0093',
+            medical_provider_email: 'dr.existing.dependent@example.com'
+          }
+        }
+      end
+
+      assert_response :redirect
+      existing_guardian.reload
+      existing_dependent.reload
+
+      assert_equal 'en', existing_guardian.locale
+      assert_equal 'es', existing_dependent.locale
+      assert_equal 'letter', existing_dependent.communication_preference
+    end
+
+    test 'should not overwrite existing dependent locale when locale selection is blank' do
+      existing_guardian = create(:constituent,
+                                 email: "existing.guardian.blanklocale.#{Time.now.to_i}@example.com",
+                                 first_name: 'Blank',
+                                 last_name: 'Guardian',
+                                 locale: 'en')
+      existing_dependent = create(:constituent,
+                                  email: "existing.dependent.blanklocale.#{Time.now.to_i}@example.com",
+                                  first_name: 'Blank',
+                                  last_name: 'Dependent',
+                                  locale: 'es')
+      create(:guardian_relationship,
+             guardian_user: existing_guardian,
+             dependent_user: existing_dependent,
+             relationship_type: 'Parent')
+
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+
+      assert_difference 'Application.count', 1 do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          applicant_type: 'dependent',
+          guardian_id: existing_guardian.id,
+          dependent_id: existing_dependent.id,
+          relationship_type: 'Parent',
+          constituent: {
+            locale: ''
+          },
+          application: {
+            household_size: 2,
+            annual_income: 14_000,
+            maryland_resident: '1',
+            self_certify_disability: '1',
+            medical_provider_name: 'Dr. Blank Locale',
+            medical_provider_phone: '555-444-0094',
+            medical_provider_email: 'dr.blank.locale@example.com'
+          }
+        }
+      end
+
+      assert_response :redirect
+      existing_dependent.reload
+      assert_equal 'es', existing_dependent.locale
     end
 
     # test 'should create paper application with rejected proofs and ensure ProofReview records are created' do # Original test name
