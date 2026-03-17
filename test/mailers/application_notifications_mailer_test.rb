@@ -184,11 +184,13 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     guardian = create(:constituent,
                       email: "guardian.mailer.locale.#{SecureRandom.hex(3)}@example.com",
                       locale: 'es')
+    dependent_email = "dependent.mailer.locale.#{SecureRandom.hex(3)}@example.com"
     dependent = create(:constituent,
-                       email: "dependent.mailer.locale.#{SecureRandom.hex(3)}@example.com",
-                       dependent_email: nil,
+                       email: dependent_email,
+                       dependent_email: dependent_email,
                        locale: 'en')
     create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+    assert_equal dependent.email, dependent.effective_email
 
     application = create(:application, user: dependent, managing_guardian: guardian)
     proof_review = create(:proof_review, :with_income_proof, application: application, rejection_reason: 'Document unclear')
