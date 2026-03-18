@@ -59,15 +59,15 @@ module Admin
       redirect_to admin_rejection_reasons_path, alert: 'Rejection reason not found.'
     end
 
-    def rejection_reason_params
-      params.expect(rejection_reason: [:body])
-    end
-
     def load_locale_reasons
-      reasons_by_locale = RejectionReason.where(code: @rejection_reason.code, proof_type: @rejection_reason.proof_type, locale: %w[en es])
+      reasons_by_locale = RejectionReason.includes([:updated_by]).where(code: @rejection_reason.code, proof_type: @rejection_reason.proof_type, locale: %w[en es])
                                          .index_by(&:locale)
       @en_reason = reasons_by_locale['en']
       @es_reason = reasons_by_locale['es']
+    end
+
+    def rejection_reason_params
+      params.expect(rejection_reason: [:body])
     end
 
     def reason_for_locale(locale)
