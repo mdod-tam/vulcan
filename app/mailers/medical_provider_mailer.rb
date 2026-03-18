@@ -210,7 +210,7 @@ class MedicalProviderMailer < ApplicationMailer
 
   def build_download_form_url(application)
     medical_certification_form_url(
-      application.signed_id(purpose: :medical_certification),
+      MedicalCertificationFormLink.signed_id_for(application),
       host: default_url_options[:host]
     )
   rescue StandardError
