@@ -60,7 +60,7 @@ module Admin
       end
     end
 
-    test 'selecting a rejection reason populates the notes field' do
+    test 'selecting a predefined rejection reason shows read-only content and hides custom note input' do
       visit new_admin_paper_application_path
       wait_for_turbo
 
@@ -73,23 +73,16 @@ module Admin
       # Select a rejection reason
       select 'Missing Name', from: 'income_proof_rejection_reason'
 
-      # The JavaScript controller should populate the notes field automatically
-      # But we need to trigger the change event manually in tests
-      page.execute_script("
-        const select = document.querySelector('[name=\"income_proof_rejection_reason\"]');
-        const notesField = document.querySelector('[name=\"income_proof_rejection_notes\"]');
-        if (select && notesField && select.value === 'missing_name') {
-          notesField.value = 'The document does not clearly show the applicant\\'s name. Please provide a document that clearly shows your name.';
-        }
-      ")
+      # Read-only rejection content should be shown
+      assert_selector '#income_proof_reason_preview', visible: true
+      assert_text 'Predefined reasons are read-only in this form.'
+      assert_text 'Rejection Reasons'
 
-      # Check that the notes field is populated
-      notes_field = find("[name='income_proof_rejection_notes']")
-      assert_not_empty notes_field.value
-      assert_includes notes_field.value, 'does not clearly show'
+      # Custom note input should not be visible for predefined reasons
+      assert_no_selector "[name='income_proof_rejection_notes']", visible: true
     end
 
-    test 'admin can modify the rejection notes' do
+    test 'selecting Other allows admin to enter a custom rejection note' do
       visit new_admin_paper_application_path
       wait_for_turbo
 
@@ -99,19 +92,42 @@ module Admin
       # Select reject income proof
       find_by_id('reject_income_proof').click
 
-      # Select a rejection reason
-      select 'Missing Name', from: 'income_proof_rejection_reason'
+      # Select Other to enable the custom note input
+      select 'Other', from: 'income_proof_rejection_reason'
 
-      # Clear and set the custom message explicitly
       custom_message = 'Please provide a document with your full legal name clearly visible.'
-      notes_field = find("[name='income_proof_rejection_notes']")
-
-      # Clear the field first, then set the new value
-      notes_field.set('')
+      notes_field = find("[name='income_proof_rejection_notes']", visible: true)
       notes_field.set(custom_message)
 
-      # Check that the notes field contains only the custom message
       assert_equal custom_message, notes_field.value
+    end
+
+    test 'language guidance reflects applicant locale for custom notes' do
+      visit new_admin_paper_application_path
+      wait_for_turbo
+
+      # Switch applicant preferred language to Spanish
+      select 'Spanish', from: 'constituent_locale'
+
+      find_by_id('reject_income_proof').click
+      select 'Other', from: 'income_proof_rejection_reason'
+
+      assert_text 'Applicant prefers to receive Spanish communications. Please ensure any custom note is translated.'
+    end
+
+    test 'medical certification custom note copy is certificate-signer specific and stays English' do
+      visit new_admin_paper_application_path
+      wait_for_turbo
+
+      # Applicant locale can be Spanish, but medical certification notes are for the certificate signer.
+      select 'Spanish', from: 'constituent_locale'
+
+      find_by_id('reject_medical_certification').click
+      select 'Other', from: 'medical_certification_rejection_reason'
+
+      assert_text 'Disability certification communications are sent to the certificate signer in English.'
+      assert_selector "label[for='medical_certification_rejection_notes']", text: 'Custom Note to Certificate Signer'
+      assert_selector "[name='medical_certification_rejection_notes'][placeholder='Enter a custom rejection note for the certificate signer (in English)']"
     end
   end
 end

@@ -483,31 +483,36 @@ module Applications
       # Handle medical_certification naming convention
       reason_key = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
       notes_key = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
+      selected_reason = params[reason_key].to_s
+      custom_note = params[notes_key].to_s.strip
 
       # Route medical certifications to the correct service
       if type == :medical_certification
-        reason_val = params[reason_key]
-        reason_code_val = reason_val.presence && %w[none_provided other].exclude?(reason_val) ? reason_val : nil
-        reason_display = case reason_val
-                         when 'none_provided' then 'none_provided'
-                         when 'other' then params[notes_key].presence || 'Other'
-                         end
+        reason_payload = resolve_medical_rejection_reason_payload(
+          selected_reason: selected_reason,
+          custom_note: custom_note
+        )
 
         result = MedicalCertificationAttachmentService.reject_certification(
           application: @application,
           admin: @admin,
-          reason: reason_display,
-          reason_code: reason_code_val,
+          reason: reason_payload[:reason],
+          reason_code: reason_payload[:reason_code],
           notes: params[notes_key],
           submission_method: :paper,
           metadata: {}
         )
       else
+        resolved_reason = resolve_non_medical_rejection_reason_value(
+          selected_reason: selected_reason,
+          custom_note: custom_note
+        )
+
         result = ProofAttachmentService.reject_proof_without_attachment(
           application: @application,
           proof_type: type,
           admin: @admin,
-          reason: params[reason_key],
+          reason: resolved_reason,
           notes: params[notes_key],
           submission_method: :paper,
           metadata: {}
@@ -520,6 +525,21 @@ module Applications
       end
 
       true
+    end
+
+    def resolve_non_medical_rejection_reason_value(selected_reason:, custom_note:)
+      return selected_reason unless selected_reason == 'other'
+      return 'Other' if custom_note.blank?
+
+      custom_note
+    end
+
+    def resolve_medical_rejection_reason_payload(selected_reason:, custom_note:)
+      return { reason: selected_reason, reason_code: selected_reason } if selected_reason.present? && %w[none_provided other].exclude?(selected_reason)
+      return { reason: 'none_provided', reason_code: nil } if selected_reason == 'none_provided'
+      return { reason: 'Other', reason_code: nil } if custom_note.blank?
+
+      { reason: custom_note, reason_code: nil }
     end
 
     def log_proof_submission(type, has_attachment)

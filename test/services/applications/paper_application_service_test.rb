@@ -137,7 +137,7 @@ module Applications
       ProofAttachmentService.expects(:reject_proof_without_attachment).with(
         has_entries(
           proof_type: :income,
-          reason: 'other'
+          reason: 'Test rejection'
         )
       ).returns({ success: true })
 
@@ -160,6 +160,59 @@ module Applications
 
       # Since we've mocked the service, we just need to verify that the application was created
       # and our mocked rejection service was called
+    end
+
+    test 'uses Other custom note text as income rejection reason' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-rejected-existing-#{test_timestamp}@example.com"
+      unique_phone = "202567#{test_timestamp.to_s[-4..]}"
+      matching_note = "Please provide a document with your full legal name clearly visible. [#{test_timestamp}]"
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params,
+        income_proof_action: 'reject',
+        income_proof_rejection_reason: 'other',
+        income_proof_rejection_notes: matching_note
+      }
+
+      ProofAttachmentService.expects(:reject_proof_without_attachment).with(
+        has_entries(
+          proof_type: :income,
+          reason: matching_note
+        )
+      ).returns({ success: true })
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+      assert result, "Failed to create application with custom rejection note: #{service.errors.inspect}"
+    end
+
+    test 'uses Other custom note text as medical certification rejection reason' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-medical-other-#{test_timestamp}@example.com"
+      unique_phone = "202568#{test_timestamp.to_s[-4..]}"
+      custom_note = "Provider noted additional details not covered by predefined reasons. [#{test_timestamp}]"
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params,
+        medical_certification_action: 'rejected',
+        medical_certification_rejection_reason: 'other',
+        medical_certification_rejection_notes: custom_note
+      }
+
+      MedicalCertificationAttachmentService.expects(:reject_certification).with(
+        has_entries(
+          reason: custom_note,
+          reason_code: nil,
+          notes: custom_note
+        )
+      ).returns({ success: true })
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+      assert result, "Failed to create application with medical custom rejection note: #{service.errors.inspect}"
     end
 
     test 'application creation fails when attachment validation fails' do

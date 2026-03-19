@@ -17,7 +17,8 @@ class DocumentProofHandlerController extends Controller {
     "fileInput",
     "rejectionReasonSelect",
     "rejectionNotes",
-    "reasonPreview"
+    "reasonPreview",
+    "customNotesSection"
   ]
 
   static values = {
@@ -31,18 +32,16 @@ class DocumentProofHandlerController extends Controller {
     // Set initial state based on selected radio button
     this.updateVisibility();
     
-    // Preview and populate rejection notes if rejection is selected
+    // Initialize rejection UI state if rejection is selected
     if (this.hasRejectRadioTarget && this.rejectRadioTarget.checked) {
       this.previewRejectionReason();
-      this.populateRejectionNotes();
+      this.updateReasonInputMode();
     }
     
     // Add event listener for rejection reason selection
     if (this.hasRejectionReasonSelectTarget) {
-      this.rejectionReasonSelectTarget.addEventListener('change', () => {
-        this.previewRejectionReason();
-        this.populateRejectionNotes();
-      });
+      this._boundReasonSelectionChanged = this.handleReasonSelectionChanged.bind(this);
+      this.rejectionReasonSelectTarget.addEventListener('change', this._boundReasonSelectionChanged);
     }
   }
 
@@ -90,10 +89,10 @@ class DocumentProofHandlerController extends Controller {
     // Auto-select "none_provided" from rejection reason dropdown
     this.rejectionReasonSelectTarget.value = 'none_provided';
 
-    // Update visibility and populate notes
+    // Update visibility and reason mode
     this.updateVisibility();
     this.previewRejectionReason();
-    this.populateRejectionNotes();
+    this.updateReasonInputMode();
   }
 
   /**
@@ -138,13 +137,26 @@ class DocumentProofHandlerController extends Controller {
     }
 
     if (this.hasRejectionNotesTarget) {
-      const target = this.rejectionNotesTarget;
-      if (isAccepted) {
-        target.removeAttribute('required');
-      }
-      // If rejectionNotes should be required when rejecting, add:
-      // else { target.setAttribute('required', 'required'); }
+      this.rejectionNotesTarget.removeAttribute('required');
     }
+
+    if (isRejected) {
+      this.previewRejectionReason();
+      this.updateReasonInputMode();
+    } else {
+      this.hideCustomNotesInput();
+    }
+  }
+
+  disconnect() {
+    if (this.hasRejectionReasonSelectTarget && this._boundReasonSelectionChanged) {
+      this.rejectionReasonSelectTarget.removeEventListener('change', this._boundReasonSelectionChanged);
+    }
+  }
+
+  handleReasonSelectionChanged() {
+    this.previewRejectionReason();
+    this.updateReasonInputMode();
   }
 
   /**
@@ -168,22 +180,32 @@ class DocumentProofHandlerController extends Controller {
     }
   }
 
-  /**
-   * Populate the rejection notes field with the selected reason's body text.
-   * Only populates when the field is empty to avoid overwriting admin edits.
-   */
-  populateRejectionNotes() {
-    if (!this.hasRejectionNotesTarget || !this.hasRejectionReasonSelectTarget) return
+  updateReasonInputMode() {
+    if (!this.hasRejectionReasonSelectTarget || !this.hasRejectionNotesTarget) return
 
-    const notesTarget = this.rejectionNotesTarget
-    if (notesTarget.value) return
+    const selectedReason = this.rejectionReasonSelectTarget.value
+    if (selectedReason === 'other') {
+      if (this.hasCustomNotesSectionTarget) {
+        setVisible(this.customNotesSectionTarget, true)
+      }
+      this.rejectionNotesTarget.disabled = false
+      this.rejectionNotesTarget.setAttribute('required', 'required')
+      return
+    }
 
-    const selectTarget = this.rejectionReasonSelectTarget
-    const selectedOption = selectTarget.options[selectTarget.selectedIndex]
-    const reasonText = selectedOption?.dataset.reasonText
+    this.hideCustomNotesInput()
+  }
 
-    if (reasonText) {
-      notesTarget.value = reasonText
+  hideCustomNotesInput() {
+    if (this.hasCustomNotesSectionTarget) {
+      setVisible(this.customNotesSectionTarget, false)
+    }
+    if (!this.hasRejectionNotesTarget) return
+
+    this.rejectionNotesTarget.removeAttribute('required')
+    this.rejectionNotesTarget.disabled = true
+    if (this.rejectionNotesTarget.value) {
+      this.rejectionNotesTarget.value = ''
     }
   }
 }
