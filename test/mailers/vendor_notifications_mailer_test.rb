@@ -103,7 +103,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     # For non-multipart emails, we check the body directly
     assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
+    assert_equal 'text/plain; charset=UTF-8', email.content_type
 
     # Check that the email body contains expected text
     assert_includes email.body.to_s, expected_text

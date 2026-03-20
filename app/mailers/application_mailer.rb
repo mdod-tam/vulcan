@@ -4,7 +4,8 @@ class ApplicationMailer < ActionMailer::Base
   helper :mailer
 
   default(
-    from: 'no_reply@mdmat.org'
+    from: 'no_reply@mdmat.org',
+    charset: 'UTF-8'
   )
 
   layout 'mailer'

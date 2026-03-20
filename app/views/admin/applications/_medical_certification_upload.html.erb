@@ -90,6 +90,20 @@
       </div>
       
       <!-- Rejection Section -->
+      <%
+        address_1 = @application.user&.physical_address_1.to_s
+        address_2 = @application.user&.physical_address_2.presence || ''
+        cert_city = @application.user&.city.to_s
+        cert_state = @application.user&.state.to_s
+        cert_zip = @application.user&.zip_code.to_s
+        cert_full_address = "#{address_1} #{address_2} #{cert_city}, #{cert_state} #{cert_zip}".squish
+        cert_interpolations = { address: cert_full_address }
+
+        cert_reason_codes = %w[missing_signature missing_functional_limitations incomplete_disability_documentation missing_provider_credentials outdated_certification incorrect_form_used]
+        cert_reason_texts = cert_reason_codes.index_with do |code|
+          rejection_reason_body(proof_type: 'medical_certification', code: code, locale: 'en', interpolations: cert_interpolations)
+        end
+      %>
       <div id="medical_certification_rejection" class="mt-4 hidden" data-proof-status-target="rejectionSection">
         <div class="space-y-4">
           <div>
@@ -98,31 +112,65 @@
             <p id="certification_rejection_hint" class="text-xs text-gray-700 mb-2">
               Select the reason why this medical certification cannot be accepted
             </p>
-            <%= f.select "rejection_reason_code",
-                options_for_select([
-                  ["Missing Signature", "missing_signature"],
-                  ["Missing Functional Limitations", "missing_functional_limitations"],
-                  ["Incomplete Disability Documentation", "incomplete_disability_documentation"],
-                  ["Missing Provider Credentials", "missing_provider_credentials"],
-                  ["Outdated Certification", "outdated_certification"],
-                  ["Incorrect Form Used", "incorrect_form_used"]
-                ]),
-                { include_blank: "Select a reason" },
-                { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",
-                  "aria-describedby": "certification_rejection_hint" } %>
+            <select name="rejection_reason_code"
+                    id="rejection_reason_code_select"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    aria-describedby="certification_rejection_hint"
+                    onchange="(function(el){
+                      var preview = document.getElementById('cert-rejection-reason-preview');
+                      var customArea = document.getElementById('cert-custom-reason-area');
+                      var customReason = document.getElementById('medical_certification_rejection_reason');
+                      var code = el.value;
+                      if (code === 'other') {
+                        preview.textContent = '';
+                        preview.classList.add('hidden');
+                        customArea.classList.remove('hidden');
+                        if (customReason) {
+                          customReason.disabled = false;
+                          customReason.required = true;
+                        }
+                      } else if (code && el.options[el.selectedIndex].dataset.reasonText) {
+                        preview.textContent = el.options[el.selectedIndex].dataset.reasonText;
+                        preview.classList.remove('hidden');
+                        customArea.classList.add('hidden');
+                        if (customReason) {
+                          customReason.value = '';
+                          customReason.disabled = true;
+                          customReason.required = false;
+                        }
+                      } else {
+                        preview.textContent = '';
+                        preview.classList.add('hidden');
+                        customArea.classList.add('hidden');
+                        if (customReason) {
+                          customReason.value = '';
+                          customReason.disabled = true;
+                          customReason.required = false;
+                        }
+                      }
+                    })(this)">
+              <option value="">Select a reason</option>
+              <% cert_reason_codes.each do |code| %>
+                <option value="<%= code %>" data-reason-text="<%= cert_reason_texts[code] %>"><%= code.humanize.titleize %></option>
+              <% end %>
+              <option value="other">Other (custom reason)</option>
+            </select>
+
+            <div id="cert-rejection-reason-preview"
+                 class="hidden mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 whitespace-pre-wrap">
+            </div>
+
+            <div id="cert-custom-reason-area" class="hidden mt-2">
+              <label for="medical_certification_rejection_reason" class="block text-sm font-medium text-gray-700">Custom Rejection Reason</label>
+              <textarea name="medical_certification_rejection_reason"
+                        id="medical_certification_rejection_reason"
+                        rows="3"
+                        disabled
+                        class="mt-1 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        placeholder="Enter the rejection reason that will be sent to the certifying professional..."></textarea>
+            </div>
           </div>
 
-          <div>
-            <%= f.label "medical_certification_rejection_notes", "Notes to Provider",
-                class: "block text-sm font-medium text-gray-700" %>
-            <p id="certification_notes_hint" class="text-xs text-gray-700 mb-2">
-              Provide clear instructions to help the provider understand why their certification was rejected and what they need to do next.
-            </p>
-            <%= f.text_area "medical_certification_rejection_notes",
-                rows: 3,
-                class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
-                "aria-describedby": "certification_notes_hint" %>
-          </div>
         </div>
       </div>
       

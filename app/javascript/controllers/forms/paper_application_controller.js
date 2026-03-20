@@ -156,7 +156,7 @@ export default class extends Controller {
 
     const locale = this.currentApplicantLocale();
     const message = locale === 'es'
-      ? 'Applicant prefers to receive Spanish communications. Please ensure any custom note is translated.'
+      ? 'Applicant prefers to receive Spanish communications. Please ensure any custom rejection reason is translated.'
       : 'Applicant prefers to receive English communications.';
 
     this.languagePreferenceNoticeTargets.forEach((target) => {

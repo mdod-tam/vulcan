@@ -697,6 +697,7 @@
                       <select id="medical_certification_rejection_reason" 
                               name="medical_certification_rejection_reason" 
                               class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
+                              data-action="change->document-proof-handler#handleReasonSelectionChanged"
                               data-document-proof-handler-target="rejectionReasonSelect">
                         <option value="">Select a reason</option>
                         <option value="none_provided"
@@ -713,18 +714,18 @@
                       Predefined reasons are read-only in this form. To edit that wording, use
                       <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
                     </p>
-                    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                      Disability certification communications are sent to the certificate signer in English.
-                    </div>
-                    <div class="hidden" data-document-proof-handler-target="customNotesSection">
-                      <label for="medical_certification_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Custom Note to Certificate Signer</label>
-                      <textarea id="medical_certification_rejection_notes" 
-                                name="medical_certification_rejection_notes" 
-                                rows="3" 
+                    <div class="hidden" data-document-proof-handler-target="customReasonSection">
+                      <label for="medical_certification_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
+                      <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice">
+                        Disability certification communications are sent to the certificate signer in English.
+                      </div>
+                      <textarea id="medical_certification_custom_rejection_reason"
+                                name="medical_certification_custom_rejection_reason"
+                                rows="3"
                                 disabled
-                                placeholder="Enter a custom rejection note for the certificate signer (in English)"
-                                class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
-                                data-document-proof-handler-target="rejectionNotes"></textarea>
+                                placeholder="Enter the rejection reason that will be sent to the certifying professional"
+                                class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                                data-document-proof-handler-target="customReasonField"></textarea>
                     </div>
                   </div>
                 </div>
@@ -905,6 +906,7 @@
                     <select id="income_proof_rejection_reason"
                             name="income_proof_rejection_reason"
                             class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                            data-action="change->document-proof-handler#handleReasonSelectionChanged"
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
                       <option value="none_provided"
@@ -921,18 +923,18 @@
                     Predefined reasons are read-only in this form. To edit that wording, use
                     <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
                   </p>
-                  <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-paper-application-target="languagePreferenceNotice">
-                    Applicant prefers to receive English communications.
-                  </div>
-                  <div class="hidden" data-document-proof-handler-target="customNotesSection">
-                    <label for="income_proof_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Custom Note to Constituent</label>
-                    <textarea id="income_proof_rejection_notes" 
-                              name="income_proof_rejection_notes" 
-                              rows="3" 
+                  <div class="hidden" data-document-proof-handler-target="customReasonSection">
+                    <label for="income_proof_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
+                      Applicant prefers to receive English communications.
+                    </div>
+                    <textarea id="income_proof_custom_rejection_reason"
+                              name="income_proof_custom_rejection_reason"
+                              rows="3"
                               disabled
-                              placeholder="Enter a custom rejection note in the applicant's preferred language"
-                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
-                              data-document-proof-handler-target="rejectionNotes"></textarea>
+                              placeholder="Enter the rejection reason that will be sent to the constituent"
+                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                              data-document-proof-handler-target="customReasonField"></textarea>
                   </div>
                 </div>
               </div>
@@ -1026,6 +1028,7 @@
                     <select id="residency_proof_rejection_reason"
                             name="residency_proof_rejection_reason"
                             class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                            data-action="change->document-proof-handler#handleReasonSelectionChanged"
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
                       <option value="none_provided"
@@ -1042,18 +1045,18 @@
                     Predefined reasons are read-only in this form. To edit that wording, use
                     <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
                   </p>
-                  <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" data-paper-application-target="languagePreferenceNotice">
-                    Applicant prefers to receive English communications.
-                  </div>
-                  <div class="hidden" data-document-proof-handler-target="customNotesSection">
-                    <label for="residency_proof_rejection_notes" class="block text-sm font-medium text-gray-700 mb-1">Custom Note to Constituent</label>
-                    <textarea id="residency_proof_rejection_notes" 
-                              name="residency_proof_rejection_notes" 
-                              rows="3" 
+                  <div class="hidden" data-document-proof-handler-target="customReasonSection">
+                    <label for="residency_proof_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
+                      Applicant prefers to receive English communications.
+                    </div>
+                    <textarea id="residency_proof_custom_rejection_reason"
+                              name="residency_proof_custom_rejection_reason"
+                              rows="3"
                               disabled
-                              placeholder="Enter a custom rejection note in the applicant's preferred language"
-                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm" 
-                              data-document-proof-handler-target="rejectionNotes"></textarea>
+                              placeholder="Enter the rejection reason that will be sent to the constituent"
+                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                              data-document-proof-handler-target="customReasonField"></textarea>
                   </div>
                 </div>
               </div>

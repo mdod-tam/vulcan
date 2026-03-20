@@ -57,8 +57,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
       income_proof_action: 'accept',
       income_proof: @income_proof_file, # Use fixture file directly
       residency_proof_action: 'reject',
-      residency_proof_rejection_reason: 'missing_name',
-      residency_proof_rejection_notes: 'Name is missing on document'
+      residency_proof_rejection_reason: 'missing_name'
     }
 
     assert_response :redirect

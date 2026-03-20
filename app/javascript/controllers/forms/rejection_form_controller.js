@@ -7,6 +7,7 @@ export default class extends Controller {
     "reasonCode",        // Hidden input for rejection_reason_code (snake_case DB key)
     "reasonButton",      // Predefined rejection reason buttons
     "reasonField",       // Text area for rejection reason
+    "languageNotice",    // Reminder shown only for custom "Other" reasons
     "codeStatus",        // Visible status text for code linkage
     "liveRegion",        // aria-live region for announcing reason selection
     "incomeOnlyReasons", // Income-specific rejection reasons container
@@ -39,37 +40,27 @@ export default class extends Controller {
 
   connect() {
     this._boundProofTypeChanged = this._handleProofTypeChanged.bind(this)
-    this._boundReasonFieldInput = () => {
-      this._clearReasonCode()
-      this._resetReasonSelection()
-    }
 
-    // Clear form on connect and reset any error styling
     if (this.hasReasonFieldTarget) {
       this.reasonFieldTarget.value = ""
       this.reasonFieldTarget.classList.remove('border-red-500')
-      // Clear the code whenever the admin manually edits the textarea (free text = no code)
-      this.reasonFieldTarget.addEventListener('input', this._boundReasonFieldInput)
+      this._lockReasonField()
     }
+    this._hideLanguageNotice()
     this._resetReasonCodeState()
 
     this._initializeReasonButtons()
     this._syncGroupInteractivity()
     
-    // Initialize visibility based on initial proof type only if it has a value
     if (this.hasProofTypeTarget && this.proofTypeTarget.value) {
       this._updateReasonGroupsVisibility(this.proofTypeTarget.value)
     }
     
-    // Listen for proof type changes from modal controller
     this.element.addEventListener('proof-type-changed', this._boundProofTypeChanged)
   }
   
   disconnect() {
     this.element.removeEventListener('proof-type-changed', this._boundProofTypeChanged)
-    if (this.hasReasonFieldTarget) {
-      this.reasonFieldTarget.removeEventListener('input', this._boundReasonFieldInput)
-    }
   }
   
   _handleProofTypeChanged(event) {
@@ -80,10 +71,12 @@ export default class extends Controller {
     if (this.hasProofTypeTarget) {
       this.proofTypeTarget.value = proofType
       this._resetReasonCodeState()
-      this._updateReasonGroupsVisibility(proofType)
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('RejectionForm: Updated visibility for proof type:', proofType)
+      if (this.hasReasonFieldTarget) {
+        this.reasonFieldTarget.value = ""
+        this._lockReasonField()
       }
+      this._hideLanguageNotice()
+      this._updateReasonGroupsVisibility(proofType)
     }
   }
 
@@ -189,20 +182,35 @@ export default class extends Controller {
     if (reasonText) {
       this.reasonFieldTarget.value = reasonText
       this.reasonFieldTarget.classList.remove('border-red-500')
+      this._lockReasonField()
+      this._hideLanguageNotice()
       if (this.hasReasonCodeTarget) {
         this.reasonCodeTarget.value = reasonCode || ""
       }
       this._setSelectedReasonButton(event.currentTarget)
-      this._setCodeStatus(`Linked to predefined reason code: ${reasonCode || 'none'}.`, 'linked')
+      this._setCodeStatus(`Using predefined reason: ${reasonCode || 'none'}.`, 'linked')
       this._announceReasonSelection(event.currentTarget.textContent.trim())
-      this.reasonFieldTarget.focus()
-      const textLength = this.reasonFieldTarget.value.length
-      this.reasonFieldTarget.setSelectionRange(textLength, textLength)
     } else {
       if (process.env.NODE_ENV !== 'production') {
         console.warn(`No predefined reason found for type: ${reasonType}, proof type: ${proofType}`)
       }
     }
+  }
+
+  selectOther(event) {
+    if (!this.hasReasonFieldTarget) return
+
+    this.reasonFieldTarget.value = ""
+    this._unlockReasonField()
+    this._resetReasonSelection()
+    this._showLanguageNotice()
+    this._setSelectedReasonButton(event.currentTarget)
+    if (this.hasReasonCodeTarget) {
+      this.reasonCodeTarget.value = "other"
+    }
+    this._setCodeStatus('Custom reason — type your rejection reason below.', 'unlinked')
+    this._announceReasonSelection('Other (custom reason)')
+    this.reasonFieldTarget.focus()
   }
 
   // Private helper for DRY reason lookup with early returns
@@ -273,14 +281,26 @@ export default class extends Controller {
     }
   }
 
-  // Clears the reason code when the admin edits the textarea directly.
-  // A manual edit means the text is no longer tied to a predefined code.
-  _clearReasonCode() {
-    if (this.hasReasonCodeTarget && this.reasonCodeTarget.value) {
-      this.reasonCodeTarget.value = ""
-      this._setCodeStatus('Custom edits detected. Predefined reason link removed.', 'unlinked')
-      this._announceCustomEditUnlinked()
-    }
+  _lockReasonField() {
+    if (!this.hasReasonFieldTarget) return
+    this.reasonFieldTarget.readOnly = true
+    this.reasonFieldTarget.classList.add('bg-gray-100', 'text-gray-600')
+  }
+
+  _unlockReasonField() {
+    if (!this.hasReasonFieldTarget) return
+    this.reasonFieldTarget.readOnly = false
+    this.reasonFieldTarget.classList.remove('bg-gray-100', 'text-gray-600')
+  }
+
+  _showLanguageNotice() {
+    if (!this.hasLanguageNoticeTarget) return
+    this.languageNoticeTarget.classList.remove('hidden')
+  }
+
+  _hideLanguageNotice() {
+    if (!this.hasLanguageNoticeTarget) return
+    this.languageNoticeTarget.classList.add('hidden')
   }
 
   _initializeReasonButtons() {
@@ -326,15 +346,6 @@ export default class extends Controller {
     this.liveRegionTarget.textContent = ''
     requestAnimationFrame(() => {
       this.liveRegionTarget.textContent = `Selected rejection reason: ${reasonLabel}. Reason text inserted in the reason field.`
-    })
-  }
-
-  _announceCustomEditUnlinked() {
-    if (!this.hasLiveRegionTarget) return
-
-    this.liveRegionTarget.textContent = ''
-    requestAnimationFrame(() => {
-      this.liveRegionTarget.textContent = 'Custom edits detected. Predefined reason code link removed.'
     })
   }
 

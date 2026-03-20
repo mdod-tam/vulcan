@@ -130,7 +130,7 @@ module Applications
         application: @application_params,
         income_proof_action: 'reject',
         income_proof_rejection_reason: 'other',
-        income_proof_rejection_notes: 'Test rejection'
+        income_proof_custom_rejection_reason: 'Test rejection'
       }
 
       # Mock the ProofAttachmentService for rejection
@@ -162,7 +162,7 @@ module Applications
       # and our mocked rejection service was called
     end
 
-    test 'uses Other custom note text as income rejection reason' do
+    test 'uses Other custom rejection reason text as income rejection reason' do
       test_timestamp = Time.now.to_i
       unique_email = "test-rejected-existing-#{test_timestamp}@example.com"
       unique_phone = "202567#{test_timestamp.to_s[-4..]}"
@@ -173,7 +173,7 @@ module Applications
         application: @application_params,
         income_proof_action: 'reject',
         income_proof_rejection_reason: 'other',
-        income_proof_rejection_notes: matching_note
+        income_proof_custom_rejection_reason: matching_note
       }
 
       ProofAttachmentService.expects(:reject_proof_without_attachment).with(
@@ -185,10 +185,10 @@ module Applications
 
       service = PaperApplicationService.new(params: service_params, admin: @admin)
       result = service.create
-      assert result, "Failed to create application with custom rejection note: #{service.errors.inspect}"
+      assert result, "Failed to create application with custom rejection reason: #{service.errors.inspect}"
     end
 
-    test 'uses Other custom note text as medical certification rejection reason' do
+    test 'uses Other custom rejection reason text as medical certification rejection reason' do
       test_timestamp = Time.now.to_i
       unique_email = "test-medical-other-#{test_timestamp}@example.com"
       unique_phone = "202568#{test_timestamp.to_s[-4..]}"
@@ -199,20 +199,19 @@ module Applications
         application: @application_params,
         medical_certification_action: 'rejected',
         medical_certification_rejection_reason: 'other',
-        medical_certification_rejection_notes: custom_note
+        medical_certification_custom_rejection_reason: custom_note
       }
 
       MedicalCertificationAttachmentService.expects(:reject_certification).with(
         has_entries(
           reason: custom_note,
-          reason_code: nil,
-          notes: custom_note
+          reason_code: nil
         )
       ).returns({ success: true })
 
       service = PaperApplicationService.new(params: service_params, admin: @admin)
       result = service.create
-      assert result, "Failed to create application with medical custom rejection note: #{service.errors.inspect}"
+      assert result, "Failed to create application with medical custom rejection reason: #{service.errors.inspect}"
     end
 
     test 'application creation fails when attachment validation fails' do
@@ -275,8 +274,7 @@ module Applications
         income_proof_action: 'accept',
         income_proof: @pdf_file,
         residency_proof_action: 'reject',
-        residency_proof_rejection_reason: 'address_mismatch',
-        residency_proof_rejection_notes: "Address doesn't match"
+        residency_proof_rejection_reason: 'address_mismatch'
       }
 
       # Mock ProofAttachmentService to make our test more reliable

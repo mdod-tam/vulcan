@@ -12,6 +12,13 @@
 <% state     = @application.user&.state.to_s %>
 <% zip       = @application.user&.zip_code.to_s %>
 <% full_address = "#{address_1} #{address_2} #{city}, #{state} #{zip}".squish %>
+<% preferred_locale = @application.user&.effective_locale.to_s.presence || @application.user&.locale.to_s.presence || 'en' %>
+<% proof_custom_language_notice = if preferred_locale == 'es'
+                                    'Applicant prefers to receive Spanish communications. Please ensure any custom rejection reason is translated.'
+                                  else
+                                    'Applicant prefers to receive English communications.'
+                                  end %>
+<% medical_custom_language_notice = 'Disability certification communications are sent to the certificate signer in English.' %>
 
 <% rejection_reason_text = lambda do |proof_type, code|
      rejection_reason_body(
@@ -80,9 +87,9 @@ end
 
   <%# Loop through proof types to generate modals %>
   <% [
-    { id: 'incomeProofReviewModal',  key: :income,   title: 'Review Income Proof',   approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'income', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'income', confirm_message: "Approve income proof?" },
-    { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?" },
-    { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this disability certification?" }
+    { id: 'incomeProofReviewModal',  key: :income,   title: 'Review Income Proof',   approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'income', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'income', confirm_message: "Approve income proof?", can_reject: @application.income_proof_status != 'rejected' || @application.needs_proof_type_review?("income") },
+    { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?", can_reject: @application.residency_proof_status != 'rejected' || @application.needs_proof_type_review?("residency") },
+    { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this disability certification?", can_reject: !@application.medical_certification_status_rejected? || @application.medical_certification_status_received? }
   ].each do |cfg| %>
     <dialog id="<%= cfg[:id] %>" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-controller="modal" aria-labelledby="<%= cfg[:id] %>-heading">
       <div class="p-6">
@@ -169,13 +176,24 @@ end
                 } do %>
               Approve
             <% end %>
-            <button type="button"
-                    data-action="click->modal#open"
-                    data-modal-id="<%= cfg[:reject_modal_id] %>"
-                    data-proof-type="<%= cfg[:reject_proof_type] %>"
-                    class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md">
-              Reject
-            </button>
+            <% if cfg[:can_reject] %>
+              <button type="button"
+                      data-action="click->modal#open"
+                      data-modal-id="<%= cfg[:reject_modal_id] %>"
+                      data-proof-type="<%= cfg[:reject_proof_type] %>"
+                      class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md">
+                Reject
+              </button>
+            <% else %>
+              <% latest_rejected_review = if cfg[:key] == :medical
+                                            @application.latest_medical_rejection_review
+                                          else
+                                            @application.proof_reviews.where(proof_type: cfg[:key], status: 'rejected').order(created_at: :desc).first
+                                          end %>
+              <span class="inline-flex items-center px-4 py-2 text-sm text-gray-500 italic">
+                Previously rejected on <%= latest_rejected_review&.created_at&.strftime('%B %d, %Y') || 'an earlier date' %>
+              </span>
+            <% end %>
           </div>
           <div class="mt-4">
             <button type="button"
@@ -249,6 +267,14 @@ end
                     aria-pressed="false">
               Wrong Document Type
             </button>
+            <button type="button"
+                    class="<%= reason_button_classes %>"
+                    data-action="click->rejection-form#selectOther"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Enter a custom rejection reason"
+                    aria-pressed="false">
+              Other
+            </button>
           </div>
           <div class="hidden flex flex-wrap gap-2 income-only-reasons" data-rejection-form-target="incomeOnlyReasons" aria-hidden="true">
             <button type="button"
@@ -281,6 +307,14 @@ end
                     aria-pressed="false">
               Outdated SS Award Letter
             </button>
+            <button type="button"
+                    class="<%= reason_button_classes %>"
+                    data-action="click->rejection-form#selectOther"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Enter a custom rejection reason"
+                    aria-pressed="false">
+              Other
+            </button>
           </div>
         </div>
         <%= form_with url: update_proof_status_admin_application_path(@application),
@@ -307,22 +341,15 @@ end
                 required: true,
                 placeholder: "Please provide a detailed explanation...",
                 data: { rejection_form_target: "reasonField" } %>
+            <div class="hidden mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                 data-rejection-form-target="languageNotice">
+              <%= proof_custom_language_notice %>
+            </div>
             <p class="mt-1 text-xs text-gray-500" data-rejection-form-target="codeStatus">
               No predefined rejection reason selected.
             </p>
           </div>
 
-          <div class="mt-4">
-            <%= f.label :notes, "Additional Notes to Constituent", class: "block text-sm font-medium text-gray-700" %>
-            <%= f.text_area :notes,
-                rows: 4,
-                class: "mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                placeholder: "Additional instructions or information for the constituent...",
-                data: { rejection_form_target: "notesField" } %>
-            <p class="mt-1 text-xs text-gray-500">
-              These notes will be included in the rejection email sent to the constituent.
-            </p>
-          </div>
           <div class="flex justify-end space-x-3">
             <button type="button"
                     data-action="click->modal#close"
@@ -412,6 +439,14 @@ end
                     aria-pressed="false">
               Incorrect Form Used
             </button>
+            <button type="button"
+                    class="<%= reason_button_classes %>"
+                    data-action="click->rejection-form#selectOther"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Enter a custom rejection reason"
+                    aria-pressed="false">
+              Other
+            </button>
           </div>
         </div>
         <%= form_with url: update_certification_status_admin_application_path(@application),
@@ -439,22 +474,15 @@ end
                 required: true,
                 placeholder: "Please provide a detailed explanation...",
                 data: { rejection_form_target: "reasonField" } %>
+            <div class="hidden mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                 data-rejection-form-target="languageNotice">
+              <%= medical_custom_language_notice %>
+            </div>
             <p class="mt-1 text-xs text-gray-500" data-rejection-form-target="codeStatus">
               No predefined rejection reason selected.
             </p>
           </div>
 
-          <div class="mt-4">
-            <%= f.label :notes, "Additional Notes to Certifying Professional", class: "block text-sm font-medium text-gray-700" %>
-            <%= f.text_area :notes,
-                rows: 4,
-                class: "mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                placeholder: "Additional instructions or information for the certifying professional...",
-                data: { rejection_form_target: "notesField" } %>
-            <p class="mt-1 text-xs text-gray-500">
-              These notes will be included in the rejection email sent to the certifying professional.
-            </p>
-          </div>
           <div class="flex justify-end space-x-3">
             <button type="button"
                     data-action="click->modal#close"

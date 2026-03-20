@@ -104,7 +104,6 @@ module Admin
         choose 'Reject Certification'
         assert_selector 'select[name="rejection_reason_code"]', visible: true, wait: 5
         select 'Missing Signature', from: 'rejection_reason_code'
-        fill_in 'medical_certification_rejection_notes', with: 'The certification form is missing required signatures.'
         click_button 'Process Certification'
       end
 
@@ -119,6 +118,25 @@ module Admin
 
       # Clear any pending network connections to prevent timeout during teardown
       clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
+    end
+
+    test 'selecting Other when rejecting during upload reveals the custom certification reason field' do
+      @application.update!(medical_certification_status: 'requested')
+      visit admin_application_path(@application)
+
+      wait_for_turbo
+      assert_selector '[data-testid="medical-certification-upload-form"]', wait: 10
+
+      within '[data-testid="medical-certification-upload-form"]' do
+        choose 'Reject Certification'
+        select 'Other (custom reason)', from: 'rejection_reason_code'
+
+        assert_selector '#cert-custom-reason-area', visible: true
+
+        custom_reason = find("textarea[name='medical_certification_rejection_reason']", visible: true)
+        assert_nil custom_reason[:disabled], 'Custom certification reason should be enabled after selecting Other'
+        assert_selector 'label[for="medical_certification_rejection_reason"]', text: 'Custom Rejection Reason'
+      end
     end
 
     # --- Validation Tests ---

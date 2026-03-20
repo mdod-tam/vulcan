@@ -348,6 +348,29 @@ module Admin
       end
     end
 
+    test 'selecting Other in the proof rejection modal unlocks custom reason entry' do
+      system_test_sign_in(@admin)
+      visit_admin_application_with_retry(@application, user: @admin)
+      assert_selector '#attachments-section', wait: 30
+
+      click_review_proof_and_wait('income', timeout: 15)
+
+      within('#incomeProofReviewModal') do
+        click_button 'Reject'
+      end
+
+      wait_for_modal_open('proofRejectionModal', timeout: 10)
+
+      within('#proofRejectionModal') do
+        click_modal_button("[data-rejection-form-target='generalReasons'] button[aria-label='Enter a custom rejection reason']")
+
+        reason_field = find("textarea[name='rejection_reason']")
+        assert_nil reason_field[:readonly], 'Custom reason field should be editable after selecting Other'
+        assert_selector "[data-rejection-form-target='languageNotice']", visible: true
+        assert_selector "[data-rejection-form-target='codeStatus']", text: /Custom reason/
+      end
+    end
+
     test 'admin can modify the rejection reason text' do
       # Always sign in fresh for each test
       system_test_sign_in(@admin)

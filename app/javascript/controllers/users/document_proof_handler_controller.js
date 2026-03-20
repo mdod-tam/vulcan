@@ -16,9 +16,10 @@ class DocumentProofHandlerController extends Controller {
     "rejectionSection",
     "fileInput",
     "rejectionReasonSelect",
-    "rejectionNotes",
     "reasonPreview",
-    "customNotesSection"
+    "languageNotice",
+    "customReasonSection",
+    "customReasonField"
   ]
 
   static values = {
@@ -36,12 +37,6 @@ class DocumentProofHandlerController extends Controller {
     if (this.hasRejectRadioTarget && this.rejectRadioTarget.checked) {
       this.previewRejectionReason();
       this.updateReasonInputMode();
-    }
-    
-    // Add event listener for rejection reason selection
-    if (this.hasRejectionReasonSelectTarget) {
-      this._boundReasonSelectionChanged = this.handleReasonSelectionChanged.bind(this);
-      this.rejectionReasonSelectTarget.addEventListener('change', this._boundReasonSelectionChanged);
     }
   }
 
@@ -136,23 +131,15 @@ class DocumentProofHandlerController extends Controller {
       }
     }
 
-    if (this.hasRejectionNotesTarget) {
-      this.rejectionNotesTarget.removeAttribute('required');
-    }
-
     if (isRejected) {
       this.previewRejectionReason();
       this.updateReasonInputMode();
     } else {
-      this.hideCustomNotesInput();
+      this._hideCustomReasonAndNotice();
     }
   }
 
-  disconnect() {
-    if (this.hasRejectionReasonSelectTarget && this._boundReasonSelectionChanged) {
-      this.rejectionReasonSelectTarget.removeEventListener('change', this._boundReasonSelectionChanged);
-    }
-  }
+  disconnect() {}
 
   handleReasonSelectionChanged() {
     this.previewRejectionReason();
@@ -181,31 +168,39 @@ class DocumentProofHandlerController extends Controller {
   }
 
   updateReasonInputMode() {
-    if (!this.hasRejectionReasonSelectTarget || !this.hasRejectionNotesTarget) return
+    if (!this.hasRejectionReasonSelectTarget) return
 
-    const selectedReason = this.rejectionReasonSelectTarget.value
-    if (selectedReason === 'other') {
-      if (this.hasCustomNotesSectionTarget) {
-        setVisible(this.customNotesSectionTarget, true)
-      }
-      this.rejectionNotesTarget.disabled = false
-      this.rejectionNotesTarget.setAttribute('required', 'required')
-      return
+    const isOther = this.rejectionReasonSelectTarget.value === 'other'
+
+    if (this.hasLanguageNoticeTarget) {
+      setVisible(this.languageNoticeTarget, isOther)
     }
 
-    this.hideCustomNotesInput()
+    if (this.hasCustomReasonSectionTarget) {
+      setVisible(this.customReasonSectionTarget, isOther)
+    }
+    if (this.hasCustomReasonFieldTarget) {
+      this.customReasonFieldTarget.disabled = !isOther
+      if (isOther) {
+        this.customReasonFieldTarget.setAttribute('required', 'required')
+      } else {
+        this.customReasonFieldTarget.removeAttribute('required')
+        this.customReasonFieldTarget.value = ''
+      }
+    }
   }
 
-  hideCustomNotesInput() {
-    if (this.hasCustomNotesSectionTarget) {
-      setVisible(this.customNotesSectionTarget, false)
+  _hideCustomReasonAndNotice() {
+    if (this.hasLanguageNoticeTarget) {
+      setVisible(this.languageNoticeTarget, false)
     }
-    if (!this.hasRejectionNotesTarget) return
-
-    this.rejectionNotesTarget.removeAttribute('required')
-    this.rejectionNotesTarget.disabled = true
-    if (this.rejectionNotesTarget.value) {
-      this.rejectionNotesTarget.value = ''
+    if (this.hasCustomReasonSectionTarget) {
+      setVisible(this.customReasonSectionTarget, false)
+    }
+    if (this.hasCustomReasonFieldTarget) {
+      this.customReasonFieldTarget.removeAttribute('required')
+      this.customReasonFieldTarget.disabled = true
+      this.customReasonFieldTarget.value = ''
     }
   }
 }

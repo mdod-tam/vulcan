@@ -60,7 +60,7 @@ module Admin
       end
     end
 
-    test 'selecting a predefined rejection reason shows read-only content and hides custom note input' do
+    test 'selecting a predefined rejection reason shows read-only content and hides custom reason input' do
       visit new_admin_paper_application_path
       wait_for_turbo
 
@@ -78,11 +78,11 @@ module Admin
       assert_text 'Predefined reasons are read-only in this form.'
       assert_text 'Rejection Reasons'
 
-      # Custom note input should not be visible for predefined reasons
-      assert_no_selector "[name='income_proof_rejection_notes']", visible: true
+      # Custom reason input should not be visible for predefined reasons
+      assert_no_selector "[name='income_proof_custom_rejection_reason']", visible: true
     end
 
-    test 'selecting Other allows admin to enter a custom rejection note' do
+    test 'selecting Other allows admin to enter a custom rejection reason' do
       visit new_admin_paper_application_path
       wait_for_turbo
 
@@ -92,17 +92,17 @@ module Admin
       # Select reject income proof
       find_by_id('reject_income_proof').click
 
-      # Select Other to enable the custom note input
+      # Select Other to enable the custom reason input
       select 'Other', from: 'income_proof_rejection_reason'
 
       custom_message = 'Please provide a document with your full legal name clearly visible.'
-      notes_field = find("[name='income_proof_rejection_notes']", visible: true)
-      notes_field.set(custom_message)
+      reason_field = find("[name='income_proof_custom_rejection_reason']", visible: true)
+      reason_field.set(custom_message)
 
-      assert_equal custom_message, notes_field.value
+      assert_equal custom_message, reason_field.value
     end
 
-    test 'language guidance reflects applicant locale for custom notes' do
+    test 'language guidance reflects applicant locale for custom reasons' do
       visit new_admin_paper_application_path
       wait_for_turbo
 
@@ -112,10 +112,10 @@ module Admin
       find_by_id('reject_income_proof').click
       select 'Other', from: 'income_proof_rejection_reason'
 
-      assert_text 'Applicant prefers to receive Spanish communications. Please ensure any custom note is translated.'
+      assert_text 'Applicant prefers to receive Spanish communications. Please ensure any custom rejection reason is translated.'
     end
 
-    test 'medical certification custom note copy is certificate-signer specific and stays English' do
+    test 'medical certification custom reason copy is certificate-signer specific and stays English' do
       visit new_admin_paper_application_path
       wait_for_turbo
 
@@ -126,8 +126,8 @@ module Admin
       select 'Other', from: 'medical_certification_rejection_reason'
 
       assert_text 'Disability certification communications are sent to the certificate signer in English.'
-      assert_selector "label[for='medical_certification_rejection_notes']", text: 'Custom Note to Certificate Signer'
-      assert_selector "[name='medical_certification_rejection_notes'][placeholder='Enter a custom rejection note for the certificate signer (in English)']"
+      assert_selector "label[for='medical_certification_custom_rejection_reason']", text: 'Custom Rejection Reason'
+      assert_selector "[name='medical_certification_custom_rejection_reason'][placeholder='Enter the rejection reason that will be sent to the certifying professional']"
     end
   end
 end

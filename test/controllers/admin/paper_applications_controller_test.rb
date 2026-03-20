@@ -520,7 +520,8 @@ module Admin
 
       residency_review = app.proof_reviews.find_by!(proof_type: :residency, status: :rejected)
       assert_equal 'address_mismatch', residency_review.rejection_reason_code
-      assert_equal "The address on the document doesn't match for residency.", residency_review.notes
+      assert_nil residency_review.notes
+      assert residency_review.rejection_reason.present?
 
       # Verify events (filter for application-related events)
       application_events = Event.where('action IN (?, ?, ?)', 'application_created', 'proof_submitted', 'proof_rejected').order(:created_at)
@@ -570,8 +571,7 @@ module Admin
         application: application_attrs,
         income_proof_action: 'accept',
         residency_proof_action: 'reject',
-        residency_proof_rejection_reason: 'address_mismatch',
-        residency_proof_rejection_notes: "The address on the document doesn't match for residency."
+        residency_proof_rejection_reason: 'address_mismatch'
       }
     end
 
@@ -679,8 +679,7 @@ module Admin
         },
         income_proof_action: 'accept',
         residency_proof_action: 'reject',
-        residency_proof_rejection_reason: 'address_mismatch',
-        residency_proof_rejection_notes: "The address on the document doesn't match."
+        residency_proof_rejection_reason: 'address_mismatch'
       }
 
       # Restore the environment
@@ -882,8 +881,7 @@ module Admin
             medical_provider_email: 'dr.smith@example.com'
           },
           income_proof_action: 'reject',
-          income_proof_rejection_reason: 'incomplete_documentation',
-          income_proof_rejection_notes: 'The income documentation is incomplete.'
+          income_proof_rejection_reason: 'incomplete_documentation'
         }
       end
 
@@ -972,8 +970,7 @@ module Admin
           medical_provider_email: 'dr.test@example.com'
         },
         income_proof_action: 'reject',
-        income_proof_rejection_reason: 'incomplete_documentation',
-        income_proof_rejection_notes: 'Missing required information'
+        income_proof_rejection_reason: 'incomplete_documentation'
       }
 
       # Restore the environment
