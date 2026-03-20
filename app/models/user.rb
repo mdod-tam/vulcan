@@ -99,6 +99,12 @@ class User < ApplicationRecord
   # Scopes
   scope :ordered_by_name, -> { order(:first_name) }
 
+  # Subject of a paper application (existing-adult flow). Used at trust boundaries;
+  # do not rely on UI-only filtering or raw +existing_constituent_id+.
+  def paper_applicant_candidate?
+    constituent? || applications.exists?
+  end
+
   private
 
   def reset_all_caches

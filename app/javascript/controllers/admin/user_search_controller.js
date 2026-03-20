@@ -1,6 +1,7 @@
 import BaseFormController from "../base/form_controller"
 import { railsRequest } from "../../services/rails_request"
 import { setVisible } from "../../utils/visibility"
+import { simpleDebounce } from "../../utils/debounce"
 
 class UserSearchController extends BaseFormController {
   static targets = [
@@ -12,12 +13,12 @@ class UserSearchController extends BaseFormController {
     "clearSearchButton"
   ]
 
-  static outlets = ["guardian-picker"]
+  static outlets = ["guardian-picker", "adult-picker"]
 
   static values = {
     searchUrl: String,
     createUserUrl: String,
-    defaultRole: { type: String, default: "guardian" }
+    role: { type: String, default: "guardian" }
   }
 
   connect() {
@@ -51,8 +52,9 @@ class UserSearchController extends BaseFormController {
     if (!this.hasSearchResultsTarget) return
     const turboFrame = this.searchResultsTarget
 
-    // Construct the search URL
-    const searchUrl = `${this.searchUrlValue}?q=${encodeURIComponent(q)}&role=${this.defaultRoleValue}`
+    // Construct the search URL; pass frame_id so the backend Turbo response targets the right frame
+    const frameId = turboFrame.id || ''
+    const searchUrl = `${this.searchUrlValue}?q=${encodeURIComponent(q)}&role=${this.roleValue}&frame_id=${encodeURIComponent(frameId)}`
     
     // Set the turbo frame's src to trigger navigation
     // Ensure it's visible in case it was previously hidden by clearResults()
@@ -93,7 +95,7 @@ class UserSearchController extends BaseFormController {
     if (form) {
       form.style.display = 'block'
       form.style.visibility = 'visible'
-    } else {
+    } else if (process.env.NODE_ENV !== 'production') {
       console.error('Guardian form not found')
     }
   }
@@ -124,7 +126,7 @@ class UserSearchController extends BaseFormController {
     const guardianFields = this.element.querySelectorAll('input[name^="guardian_attributes"], select[name^="guardian_attributes"]')
 
     if (guardianFields.length === 0) {
-      console.error('Guardian form fields not found')
+      if (process.env.NODE_ENV !== 'production') console.error('Guardian form fields not found')
       return
     }
 
@@ -195,39 +197,39 @@ class UserSearchController extends BaseFormController {
       }
 
     } catch (error) {
-      console.error('Guardian creation error:', error)
-      console.error('Error data:', error.data)
-      console.error('Error status:', error.status)
-      
       // Restore button state on error
       const button = event.target
       button.disabled = false
       button.textContent = 'Save Guardian'
-      
-      // Handle RequestError with validation errors
+
       if (error.data && error.data.errors) {
-        console.log('Displaying validation errors:', error.data.errors)
         this.handleValidationErrors(error.data.errors)
-      } else if (error.message) {
-        // Show generic error message
-        console.warn('Guardian creation failed:', error.message)
+      } else {
+        this.showGeneralError(error.message || 'Guardian creation failed. Please try again.')
       }
     }
   }
 
   selectUser(event) {
     event.preventDefault()
-    const { userId, userName, ...userData } = event.currentTarget.dataset
+    const row = event.currentTarget
+    const { userId, userName, userIneligible, ...userData } = row.dataset
 
     if (!userId || !userName) {
-      console.error("User data missing from selection")
+      if (process.env.NODE_ENV !== 'production') console.error("User data missing from selection")
       return
     }
 
-    // Use safe HTML escaping for security
-    const displayHTML = this.buildUserDisplayHTML(this.escapeHtml(userName), userData)
+    // Block selection of ineligible constituents
+    if (userIneligible === "true" || row.getAttribute('aria-disabled') === 'true') {
+      return
+    }
 
-    if (this.hasGuardianPickerOutlet) {
+    if (this.hasAdultPickerOutlet) {
+      const displayHTML = this.buildAdultDisplayHTML(this.escapeHtml(userName), userData)
+      this.adultPickerOutlet.selectAdult(userId, displayHTML, userData)
+    } else if (this.hasGuardianPickerOutlet) {
+      const displayHTML = this.buildUserDisplayHTML(this.escapeHtml(userName), userData)
       this.guardianPickerOutlet.selectGuardian(userId, displayHTML)
     }
 
@@ -273,6 +275,43 @@ class UserSearchController extends BaseFormController {
     return html
   }
 
+  buildAdultDisplayHTML(userName, userData) {
+    const { userEmail, userPhone, userAddress1, userCity, userState, userZip, userDob, userProducts } = userData
+
+    const safeEmail = userEmail ? this.escapeHtml(userEmail) : ''
+    const safePhone = userPhone ? this.escapeHtml(userPhone) : ''
+    const safeAddress1 = userAddress1 ? this.escapeHtml(userAddress1) : ''
+    const safeCity = userCity ? this.escapeHtml(userCity) : ''
+    const safeState = userState ? this.escapeHtml(userState) : ''
+    const safeZip = userZip ? this.escapeHtml(userZip) : ''
+    const safeDob = userDob ? this.escapeHtml(userDob) : ''
+    const safeProducts = userProducts ? this.escapeHtml(userProducts) : ''
+
+    let html = `<span class="font-medium">${userName}</span>`
+
+    if (safeDob) {
+      html += `<div class="text-sm text-gray-600 mt-1">DOB: ${safeDob}</div>`
+    }
+
+    const contactInfo = []
+    if (safeEmail) contactInfo.push(`<span class="text-indigo-700">${safeEmail}</span>`)
+    if (safePhone) contactInfo.push(`<span class="text-gray-600">Phone: ${safePhone}</span>`)
+    if (contactInfo.length > 0) {
+      html += `<div class="text-sm text-gray-600 mt-1">${contactInfo.join(' &bull; ')}</div>`
+    }
+
+    const addressParts = [safeAddress1, safeCity, safeState, safeZip].filter(Boolean)
+    if (addressParts.length > 0) {
+      html += `<div class="text-sm text-gray-600 mt-1">${addressParts.join(', ')}</div>`
+    }
+
+    if (safeProducts) {
+      html += `<div class="text-sm text-gray-500 mt-1">Last products: ${safeProducts}</div>`
+    }
+
+    return html
+  }
+
   // XSS prevention helper
   escapeHtml(unsafe) {
     return unsafe
@@ -310,10 +349,21 @@ class UserSearchController extends BaseFormController {
       input.classList.remove('border-red-500')
     })
 
-    // Remove error messages
+    // Remove error messages (field-level and general)
     this.element.querySelectorAll('.field-error-message').forEach(errorEl => {
       errorEl.remove()
     })
+  }
+
+  showGeneralError(message) {
+    const errorEl = document.createElement('p')
+    errorEl.className = 'field-error-message text-red-600 text-sm mt-2'
+    errorEl.setAttribute('role', 'alert')
+    errorEl.textContent = message
+    const container = this.hasCreateButtonTarget
+      ? (this.createButtonTarget.closest('div, form, fieldset') || this.element)
+      : this.element
+    container.appendChild(errorEl)
   }
 
   // Handle validation errors display
@@ -409,10 +459,9 @@ class UserSearchController extends BaseFormController {
   addDebouncedListener(element, event, handler, wait = 300) {
     if (!element) return
 
-    const debounced = this.debounce(handler.bind(this), wait)
+    const debounced = simpleDebounce(handler.bind(this), wait)
     element.addEventListener(event, debounced)
 
-    // Store for cleanup
     this._managedListeners = this._managedListeners || []
     this._managedListeners.push({ element, event, handler: debounced })
   }
@@ -423,18 +472,6 @@ class UserSearchController extends BaseFormController {
         element.removeEventListener(event, handler)
       })
       this._managedListeners = []
-    }
-  }
-
-  debounce(func, wait) {
-    let timeout
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout)
-        func(...args)
-      }
-      clearTimeout(timeout)
-      timeout = setTimeout(later, wait)
     }
   }
 }

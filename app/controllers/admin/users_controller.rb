@@ -97,8 +97,9 @@ module Admin
       @frame_id = params[:turbo_frame_id]
 
       if @q.present?
-        @users = Users::FilterService.new(User.all, q: @q).apply_filters.data.limit(10).to_a
+        @users = users_for_paper_search(@q, @role_filter, limit: 10)
         enhance_constituent_users(@users)
+        enhance_constituent_eligibility(@users) if @role_filter == 'constituent'
       else
         @users = []
       end
@@ -238,16 +239,16 @@ module Admin
     def search
       @q = params[:q]
       @role_filter = params[:role]
-      @frame_id = "#{@role_filter}_search_results"
+      @frame_id = params[:frame_id].presence || "#{@role_filter}_search_results"
 
-      if @q.present?
-        result = Users::FilterService.new(User.all, q: @q).apply_filters
-        @users = result.success? ? result.data.limit(10).to_a : []
-      else
-        @users = []
-      end
+      @users = if @q.present?
+                 users_for_paper_search(@q, @role_filter, limit: 10)
+               else
+                 []
+               end
 
       enhance_constituent_users(@users)
+      enhance_constituent_eligibility(@users) if @role_filter == 'constituent'
       render 'admin/users/search'
     end
 
@@ -426,13 +427,77 @@ module Admin
       end
     end
 
+    # Returns user profile + self-only application context for adult applicant prefill
+    def adult_application_context
+      user = User.find_by(id: params[:id])
+      return render json: { success: false, error: 'Not found' }, status: :not_found unless user&.paper_applicant_candidate?
+
+      last_app = user.applications.order(application_date: :desc).first
+      eligibility = adult_eligibility_context(user, last_app)
+      product_names = last_app&.products&.pluck(:name) || []
+
+      render json: {
+        success: true,
+        user: adult_user_attributes(user),
+        last_application_date: last_app&.application_date,
+        product_names: product_names,
+        **eligibility,
+        household_size: last_app&.household_size,
+        annual_income: last_app&.annual_income,
+        medical_provider_name: last_app&.medical_provider_name,
+        medical_provider_phone: last_app&.medical_provider_phone,
+        medical_provider_fax: last_app&.medical_provider_fax,
+        medical_provider_email: last_app&.medical_provider_email
+      }
+    end
+
     private
+
+    def adult_eligibility_context(user, last_app)
+      waiting_period = Policy.get('waiting_period_years') || 3
+      has_blocking = user.applications.blocking_new_submission.exists?
+      eligible_date = last_app ? (last_app.application_date + waiting_period.years) : nil
+      within_waiting = eligible_date.present? && eligible_date > Time.current
+
+      ineligibility_reason = if has_blocking
+                               'active_application'
+                             elsif within_waiting
+                               'waiting_period'
+                             end
+
+      {
+        eligible_now: ineligibility_reason.nil?,
+        ineligibility_reason: ineligibility_reason,
+        eligible_after: ineligibility_reason == 'waiting_period' ? eligible_date&.to_date : nil
+      }
+    end
+
+    def adult_user_attributes(user)
+      {
+        first_name: user.first_name,
+        middle_initial: user.try(:middle_initial),
+        last_name: user.last_name,
+        email: user.email,
+        phone: user.phone,
+        date_of_birth: user.date_of_birth,
+        physical_address_1: user.physical_address_1,
+        physical_address_2: user.physical_address_2,
+        city: user.city,
+        state: user.state,
+        zip_code: user.zip_code,
+        phone_type: user.phone_type,
+        communication_preference: user.communication_preference,
+        preferred_means_of_communication: user.preferred_means_of_communication,
+        locale: user.locale,
+        referral_source: user.try(:referral_source)
+      }
+    end
 
     # Build DependentSummary objects for a guardian's dependents
     def build_dependent_summaries(guardian, waiting_period_years)
       guardian.dependents.map do |dep|
         last_app = dep.applications.order(application_date: :desc).first
-        has_active_app = dep.applications.where.not(status: %i[archived rejected]).exists?
+        has_active_app = dep.applications.blocking_new_submission.exists?
         eligible_date = last_app ? (last_app.application_date + waiting_period_years.years) : Time.current
         eligible_now = !has_active_app && eligible_date <= Time.current
         relationship_types = guardian.relationship_types_for_dependent(dep) rescue [] # rubocop:disable Style/RescueModifier
@@ -454,6 +519,51 @@ module Admin
         waiting_period_years: waiting_period_years,
         dependents: @dependents.map(&:to_h)
       }
+    end
+
+    # Text search for paper application widgets; +role_filter+ +constituent+ means applicant candidates, not STI-only.
+    # Fetches a text-filtered pool, then keeps only paper_applicant_candidate? rows using two extra queries
+    # (constituent STI check + a single IN-list applications check) rather than N per-user queries.
+    def users_for_paper_search(query, role_filter, limit: 10)
+      if role_filter == 'constituent'
+        result = Users::FilterService.new(User.all, q: query, role: nil).apply_filters
+        pool = result.success? ? result.data.limit(50).to_a : []
+        return [] if pool.empty?
+
+        pool_ids = pool.map(&:id)
+        constituent_ids = pool.select(&:constituent?).to_set(&:id)
+        applicant_ids   = Application.where(user_id: pool_ids).distinct.pluck(:user_id).to_set
+
+        pool.select { |u| constituent_ids.include?(u.id) || applicant_ids.include?(u.id) }.first(limit)
+      else
+        result = Users::FilterService.new(User.all, q: query, role: role_filter).apply_filters
+        result.success? ? result.data.limit(limit).to_a : []
+      end
+    end
+
+    # Add eligibility metadata for adult search results (any +paper_applicant_candidate?+).
+    # Attaches virtual attributes: eligible_now, ineligible_reason, last_app_date, last_received_products
+    def enhance_constituent_eligibility(users)
+      waiting_period = Policy.get('waiting_period_years') || 3
+      users.each { |user| decorate_user_eligibility(user, waiting_period) if user.paper_applicant_candidate? }
+    end
+
+    def decorate_user_eligibility(user, waiting_period)
+      has_blocking_app = user.applications.blocking_new_submission.exists?
+      last_app = user.applications.order(application_date: :desc).first
+      eligible_date = last_app ? (last_app.application_date + waiting_period.years) : nil
+      within_waiting = eligible_date.present? && eligible_date > Time.current
+
+      user.define_singleton_method(:eligible_now) { !has_blocking_app && !within_waiting }
+      user.define_singleton_method(:ineligible_reason) do
+        if has_blocking_app
+          'Has active application'
+        elsif within_waiting
+          "Applied #{last_app.application_date.strftime('%b %Y')} — eligible after #{eligible_date.to_date.strftime('%b %d, %Y')}"
+        end
+      end
+      user.define_singleton_method(:last_app_date) { last_app&.application_date }
+      user.define_singleton_method(:last_received_products) { last_app&.products&.pluck(:name).presence || [] }
     end
 
     # Enhance constituent users with relationship data to avoid N+1 queries
@@ -653,13 +763,13 @@ module Admin
     # Converts error messages like "Phone is invalid" into { phone: "Phone is invalid" }
     def format_validation_errors(errors)
       error_hash = {}
-      
+
       Array(errors).each do |error_msg|
         next if error_msg.blank?
-        
+
         # Try to extract field name from error message (e.g., "Phone is invalid" -> "phone")
         field_name = extract_field_from_error(error_msg)
-        
+
         # If we already have an error for this field, append to it; otherwise set it
         if error_hash[field_name].present?
           error_hash[field_name] += "; #{error_msg}"
@@ -667,7 +777,7 @@ module Admin
           error_hash[field_name] = error_msg
         end
       end
-      
+
       error_hash
     end
 
@@ -676,7 +786,7 @@ module Admin
     def extract_field_from_error(error_msg)
       # Remove "Failed to create user: " prefix if present
       clean_msg = error_msg.sub(/^Failed to create (user|guardian|dependent):\s*/i, '')
-      
+
       case clean_msg
       when /^Phone/i then 'phone'
       when /^Email/i then 'email'

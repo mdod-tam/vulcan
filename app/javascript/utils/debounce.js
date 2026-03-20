@@ -85,5 +85,20 @@ export function createUIUpdateDebounce(func)     { return debounce(func, DEBOUNC
 export function createVeryShortDebounce(func)    { return debounce(func, DEBOUNCE_DELAYS.VERY_SHORT) }
 export function simpleDebounce(func, wait)        { return debounce(func, wait, { leading: false, trailing: true }) }
 
-// Note: throttle function removed - it was unused and referenced non-existent maxWait option
-// For throttling behavior, use Stimulus native debouncing: data-action="input->controller#method:debounce(300)"
+/**
+ * Throttled Stimulus dispatch — guards against rapid-fire custom events.
+ * Tracks last-dispatch time on the controller via a namespaced property.
+ * @param {Controller} controller - Stimulus controller instance
+ * @param {string} eventName - Event name passed to controller.dispatch()
+ * @param {Object} detail - Event detail payload
+ * @param {Object} [opts]
+ * @param {number} [opts.minInterval=100] - Minimum ms between dispatches
+ * @param {number} [opts.delay=10] - ms to wait before dispatching (allows DOM to settle)
+ */
+export function debouncedDispatch(controller, eventName, detail, { minInterval = 100, delay = 10 } = {}) {
+  const key = `_lastDispatch_${eventName}`
+  const now = Date.now()
+  if (now - (controller[key] || 0) < minInterval) return
+  controller[key] = now
+  setTimeout(() => controller.dispatch(eventName, { detail }), delay)
+}

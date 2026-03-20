@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
-import { setVisible } from "../../utils/visibility";
+import { setVisible, setFieldIfEmpty } from "../../utils/visibility";
+import { debouncedDispatch } from "../../utils/debounce";
 
 // Handles guardian‑selection UI toggling and central state.
 export default class extends Controller {
@@ -8,7 +9,6 @@ export default class extends Controller {
   connect() {
     this.selectedValue = !!(this.hasGuardianIdFieldTarget && this.guardianIdFieldTarget.value);
     this.togglePanes();
-    this._lastDispatchTime = 0;
   }
 
   /* Public API ----------------------------------------------------------- */
@@ -64,30 +64,15 @@ export default class extends Controller {
       const data = await response.json();
       if (!data.success || !data.application_id) return;
 
-      const setIfEmpty = (selector, value) => {
-        const el = document.querySelector(selector)
-        if (!el) return false
-        if (el.value === '' || el.value == null) {
-          el.value = value ?? ''
-          // Fire input/change events so any validators update
-          el.dispatchEvent(new Event('input', { bubbles: true }))
-          el.dispatchEvent(new Event('change', { bubbles: true }))
-          return true // Actually filled a value
-        }
-        return false
-      }
-
-      // Try immediately, retry once if elements not yet present
       let foundAny = false
-      foundAny = setIfEmpty('input[name="application[household_size]"]', data.household_size) || foundAny
-      foundAny = setIfEmpty('input[name="application[annual_income]"]', data.annual_income) || foundAny
+      foundAny = setFieldIfEmpty('input[name="application[household_size]"]', data.household_size) || foundAny
+      foundAny = setFieldIfEmpty('input[name="application[annual_income]"]', data.annual_income) || foundAny
       
-      // Track if medical provider fields were prefilled
       let medicalPrefilled = false
-      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || medicalPrefilled
-      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || medicalPrefilled
-      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || medicalPrefilled
-      medicalPrefilled = setIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || medicalPrefilled
+      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || medicalPrefilled
+      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || medicalPrefilled
+      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || medicalPrefilled
+      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || medicalPrefilled
       foundAny = foundAny || medicalPrefilled
       
       // Show prefill notice if medical provider data was reused
@@ -99,12 +84,12 @@ export default class extends Controller {
         // Retry after UI settles
         setTimeout(() => {
           let retryMedicalPrefilled = false
-          setIfEmpty('input[name="application[household_size]"]', data.household_size)
-          setIfEmpty('input[name="application[annual_income]"]', data.annual_income)
-          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || retryMedicalPrefilled
-          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || retryMedicalPrefilled
-          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || retryMedicalPrefilled
-          retryMedicalPrefilled = setIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || retryMedicalPrefilled
+          setFieldIfEmpty('input[name="application[household_size]"]', data.household_size)
+          setFieldIfEmpty('input[name="application[annual_income]"]', data.annual_income)
+          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || retryMedicalPrefilled
+          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || retryMedicalPrefilled
+          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || retryMedicalPrefilled
+          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || retryMedicalPrefilled
           
           if (retryMedicalPrefilled) {
             this.showMedicalProviderPrefillNotice(data.applicant_name, data.application_date)
@@ -149,7 +134,6 @@ export default class extends Controller {
   selectDependentFromList(event) {
     const button = event.currentTarget;
     const dependentId = button.dataset.dependentId;
-    const dependentName = button.dataset.dependentName;
     if (!dependentId) return;
 
     // Set hidden field
@@ -194,16 +178,6 @@ export default class extends Controller {
   }
 
   dispatchSelectionChange() {
-    // Debounce the dispatch to prevent rapid-fire events
-    const now = Date.now();
-    if (now - this._lastDispatchTime < 100) {
-      return; // Skip if called too recently
-    }
-    this._lastDispatchTime = now;
-    
-    // Use a small delay to ensure DOM changes are complete
-    setTimeout(() => {
-      this.dispatch("selectionChange", { detail: { selectedValue: this.selectedValue } });
-    }, 10);
+    debouncedDispatch(this, "selectionChange", { selectedValue: this.selectedValue });
   }
 }

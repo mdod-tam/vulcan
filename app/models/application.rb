@@ -165,6 +165,9 @@ class Application < ApplicationRecord
       .where.not(status: %i[draft archived rejected])
   }
 
+  # Only archived and rejected allow a new application.
+  scope :blocking_new_submission, -> { where.not(status: %i[archived rejected]) }
+
   # Guardian/Dependent relationship scopes
   scope :managed_by, lambda { |guardian_user|
     where(managing_guardian_id: guardian_user.id)

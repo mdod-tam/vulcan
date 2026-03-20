@@ -159,7 +159,7 @@ describe("UserSearchController", () => {
       configurable: true
     })
     
-    Object.defineProperty(controller, 'defaultRoleValue', {
+    Object.defineProperty(controller, 'roleValue', {
       value: 'guardian',
       writable: false,
       configurable: true
@@ -438,7 +438,9 @@ describe("UserSearchController", () => {
       
       // Verify that the turbo frame's src was set to trigger navigation
       // The controller uses the searchResultsTarget directly
-      expect(controller.searchResultsTarget.src).toBe('/admin/users/search?q=John&role=guardian')
+      expect(controller.searchResultsTarget.src).toBe(
+        '/admin/users/search?q=John&role=guardian&frame_id=searchResults'
+      )
     })
     
     it("clears results when search is empty", async () => {

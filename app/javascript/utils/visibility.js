@@ -122,6 +122,23 @@ export function toggle(element, options = {}) {
 }
 
 /**
+ * Sets a form field's value if it is currently empty, then fires input + change events.
+ * @param {string} selector - CSS selector for the field
+ * @param {*} value - Value to set
+ * @returns {boolean} true if the field was actually populated
+ */
+export function setFieldIfEmpty(selector, value) {
+  const el = document.querySelector(selector)
+  if (!el || value === undefined || value === null) return false
+  if (el.value !== '' && el.value !== null) return false
+
+  el.value = value ?? ''
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+  el.dispatchEvent(new Event('change', { bubbles: true }))
+  return true
+}
+
+/**
  * Test helper to reset deprecation warning state
  * @private Only for testing
  */

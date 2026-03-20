@@ -1,12 +1,20 @@
 <%# app/views/admin/users/_user_search_results_list.html.erb %>
 <%# This partial is rendered inside a turbo_frame_tag (e.g., "guardian_search_results") %>
-<%# It receives `users` and `role` (e.g., "guardian", "dependent") as local variables. %>
+<%# It receives `users` and `role` (e.g., "guardian", "dependent", "constituent") as local variables. %>
 
 <% if users.any? %>
   <ul class="divide-y divide-gray-200 border border-gray-200 rounded-md max-h-60 overflow-y-auto" data-turbo="false">
     <% users.each do |user| %>
-      <li class="p-3 hoverable-user-item"
+      <% is_constituent_search = role == 'constituent' %>
+      <% ineligible = is_constituent_search && user.respond_to?(:eligible_now) && !user.eligible_now %>
+      <li class="p-3 <%= ineligible ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hoverable-user-item' %>"
+          <% if ineligible %>
+          tabindex="-1"
+          <% else %>
           data-action="click->admin-user-search#selectUser"
+          role="button"
+          tabindex="0"
+          <% end %>
           data-user-id="<%= user.id %>"
           data-user-name="<%= user.full_name %>"
           data-user-email="<%= user.email %>"
@@ -16,18 +24,39 @@
           data-user-state="<%= user.state %>"
           data-user-zip="<%= user.zip_code %>"
           data-user-phone="<%= user.phone %>"
+          data-user-dob="<%= user.date_of_birth %>"
+          <% if is_constituent_search && user.respond_to?(:eligible_now) %>
+          data-user-eligible="<%= user.eligible_now %>"
+          data-user-ineligible-reason="<%= user.ineligible_reason %>"
+          data-user-last-app-date="<%= user.last_app_date %>"
+          data-user-products="<%= user.last_received_products.join(', ') %>"
+          <% end %>
           <% if role == 'guardian' && user.respond_to?(:dependents_count) %>
           data-user-dependents-count="<%= user.dependents_count %>"
           <% else %>
           data-user-dependents-count="0"
           <% end %>
-          role="button"
-          tabindex="0"
+          <% if ineligible %>
+          data-user-ineligible="true"
+          aria-disabled="true"
+          <% end %>
           data-turbo="false">
-          <div class="font-medium text-sm text-gray-900"><%= user.full_name %></div>
+          <div class="flex items-center justify-between">
+            <div class="font-medium text-sm text-gray-900"><%= user.full_name %></div>
+            <% if is_constituent_search && user.respond_to?(:eligible_now) %>
+              <% if user.eligible_now %>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Eligible</span>
+              <% else %>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Ineligible</span>
+              <% end %>
+            <% end %>
+          </div>
           <div class="text-xs text-gray-500"><%= user.email %></div>
+
+          <% if is_constituent_search && user.date_of_birth.present? %>
+            <div class="text-xs text-gray-500 mt-1">DOB: <%= user.date_of_birth.strftime('%m/%d/%Y') %></div>
+          <% end %>
           
-          <% # Display address if available %>
           <% if user.physical_address_1.present? %>
             <div class="text-xs text-gray-500 mt-1">
               <%= user.physical_address_1 %>
@@ -38,30 +67,35 @@
             </div>
           <% end %>
           
-          <% # Display phone if available %>
           <% if user.phone.present? %>
-            <div class="text-xs text-gray-500">
-              Phone: <%= user.phone %>
+            <div class="text-xs text-gray-500">Phone: <%= user.phone %></div>
+          <% end %>
+
+          <% if is_constituent_search && user.respond_to?(:ineligible_reason) && user.ineligible_reason.present? %>
+            <div class="text-xs text-red-600 mt-1"><%= user.ineligible_reason %></div>
+          <% elsif is_constituent_search && user.respond_to?(:last_received_products) && user.last_received_products.any? %>
+            <div class="text-xs text-gray-500 mt-1">Last products: <%= user.last_received_products.join(', ') %></div>
+          <% end %>
+
+          <% unless is_constituent_search %>
+            <div class="text-xs text-gray-500 mt-1">
+              Role: <%= user.type.demodulize if user.type %>
+              <% if role == 'guardian' && user.respond_to?(:dependents_count) %>
+                <% if user.dependents_count > 0 %>
+                  <span class="inline-flex items-center ml-2 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                    <%= pluralize(user.dependents_count, 'dependent') %>
+                  </span>
+                <% end %>
+              <% end %>
+              <% if role == 'dependent' && user.respond_to?(:has_guardian?) %>
+                <% if user.has_guardian? %>
+                  <span class="inline-flex items-center ml-2 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    Has guardian
+                  </span>
+                <% end %>
+              <% end %>
             </div>
           <% end %>
-          
-          <div class="text-xs text-gray-500 mt-1">
-            Role: <%= user.type.demodulize if user.type %>
-            <% if role == 'guardian' && user.respond_to?(:dependents_count) %>
-              <% if user.dependents_count > 0 %>
-                <span class="inline-flex items-center ml-2 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                  <%= pluralize(user.dependents_count, 'dependent') %>
-                </span>
-              <% end %>
-            <% end %>
-            <% if role == 'dependent' && user.respond_to?(:has_guardian?) %>
-              <% if user.has_guardian? %>
-                <span class="inline-flex items-center ml-2 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                  Has guardian
-                </span>
-              <% end %>
-            <% end %>
-          </div>
       </li>
     <% end %>
   </ul>

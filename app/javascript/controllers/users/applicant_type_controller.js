@@ -3,8 +3,8 @@ import { setVisible } from "../../utils/visibility";
 import { createVeryShortDebounce } from "../../utils/debounce";
 
 export default class extends Controller {
-  static targets = ["radio", "adultSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField", "stepNumber"];
-  static outlets = ["guardian-picker"]; // Keep guardian-picker outlet
+  static targets = ["radio", "adultSection", "adultSearchSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField", "stepNumber"];
+  static outlets = ["guardian-picker", "adult-picker"];
 
   connect() {
     // Guard against multiple connections
@@ -14,11 +14,14 @@ export default class extends Controller {
     this._lastState = null; // Track last state to prevent unnecessary dispatches
     this.debouncedRefresh = createVeryShortDebounce(() => this.executeRefresh());
 
-    // Store bound method reference for cleanup
     this._boundGuardianPickerSelectionChange = this.guardianPickerSelectionChange.bind(this);
+    this._boundAdultPickerSelectionChange = this.adultPickerSelectionChange.bind(this);
+    this._boundAdultPickerCreateNew = this.adultPickerCreateNew.bind(this);
+    this._adultCreateNew = false; // Track "Create New Applicant" state
 
-    // Listen for guardian picker selection changes
     this.element.addEventListener('guardian-picker:selectionChange', this._boundGuardianPickerSelectionChange);
+    this.element.addEventListener('adult-picker:selectionChange', this._boundAdultPickerSelectionChange);
+    this.element.addEventListener('adult-picker:createNew', this._boundAdultPickerCreateNew);
 
     this.refresh();
     // If the guardian picker outlet is available, observe it for changes.
@@ -30,14 +33,19 @@ export default class extends Controller {
     this.debouncedRefresh?.cancel();
     this._lastState = null;
 
-    // Clean up event listener
     if (this._boundGuardianPickerSelectionChange) {
       this.element.removeEventListener('guardian-picker:selectionChange', this._boundGuardianPickerSelectionChange);
+    }
+    if (this._boundAdultPickerSelectionChange) {
+      this.element.removeEventListener('adult-picker:selectionChange', this._boundAdultPickerSelectionChange);
+    }
+    if (this._boundAdultPickerCreateNew) {
+      this.element.removeEventListener('adult-picker:createNew', this._boundAdultPickerCreateNew);
     }
   }
 
   // This can be called by an action on the guardian-picker if its selection changes, or if this controller needs to react to external changes.
-  guardianPickerOutletConnected(outlet, element) {
+  guardianPickerOutletConnected(_outlet, _element) {
     if (process.env.NODE_ENV !== 'production') {
       console.log("ApplicantTypeController: Guardian Picker Outlet Connected");
     }
@@ -45,12 +53,31 @@ export default class extends Controller {
     setTimeout(() => this.refresh(), 50);
   }
 
-  guardianPickerOutletDisconnected(outlet, element) {
+  guardianPickerOutletDisconnected(_outlet, _element) {
     if (process.env.NODE_ENV !== 'production') {
       console.log("ApplicantTypeController: Guardian Picker Outlet Disconnected");
     }
     // Use a delayed refresh to avoid immediate recursion
     setTimeout(() => this.refresh(), 50);
+  }
+
+  // Adult picker outlet hooks
+  adultPickerOutletConnected() {
+    setTimeout(() => this.refresh(), 50);
+  }
+
+  adultPickerOutletDisconnected() {
+    setTimeout(() => this.refresh(), 50);
+  }
+
+  adultPickerSelectionChange(_event) {
+    this._adultCreateNew = false;
+    this.refresh();
+  }
+
+  adultPickerCreateNew(_event) {
+    this._adultCreateNew = true;
+    this.refresh();
   }
 
   // Handle guardian picker selection changes
@@ -131,12 +158,20 @@ export default class extends Controller {
         });
       }
 
-      // Adult section is hidden if dependent flow is active (either dependent radio selected or guardian chosen)
-      const showAdultSection = !dependentRadioSelected && !guardianChosen;
+      // Adult flow state
+      const adultRadioSelected = !dependentRadioSelected && !guardianChosen;
+      const adultChosen = this.hasAdultPickerOutlet && this.adultPickerOutlet.selectedValue;
+
+      // Show adult search section when adult radio is selected
+      if (this.hasAdultSearchSectionTarget) {
+        setVisible(this.adultSearchSectionTarget, adultRadioSelected);
+      }
+
+      // Adult info section visible when: adult selected AND (adult picked OR creating new)
+      const showAdultInfo = adultRadioSelected && (adultChosen || this._adultCreateNew);
       if (this.hasAdultSectionTarget) {
-        setVisible(this.adultSectionTarget, showAdultSection);
-        // Disable form fields in hidden adult section to prevent form submission conflicts
-        this._toggleFormFieldsDisabled(this.adultSectionTarget, !showAdultSection);
+        setVisible(this.adultSectionTarget, showAdultInfo);
+        this._toggleFormFieldsDisabled(this.adultSectionTarget, !showAdultInfo);
       }
 
       // Disable radio buttons if a guardian is chosen and add title
@@ -150,24 +185,18 @@ export default class extends Controller {
         }
       });
 
-      // If a guardian is chosen, ensure the 'dependent' radio is selected
       if (guardianChosen) {
         this.selectRadio("dependent");
-        // Ensure dependent info section is visible (already handled by toggle above)
-        // Ensure guardian picker section is visible (already handled by toggle above, will be hidden by guardian-picker itself if needed)
       }
-      // If no guardian is chosen, and dependent was auto-selected, but then user clicks "The Adult"
-      // ensure dependent section is hidden. This is handled by showDependentSection logic.
 
-      // SHOW commonSections when adult flow OR dependent-with-guardian flow
-      const showCommon = (!dependentRadioSelected && !guardianChosen) || (dependentRadioSelected && guardianChosen);
+      // Common sections: (adult info visible) OR (dependent-with-guardian)
+      const showCommon = showAdultInfo || (dependentRadioSelected && guardianChosen);
       if (this.hasCommonSectionsTarget) {
         setVisible(this.commonSectionsTarget, showCommon);
       }
 
-      // Update step numbers in common sections based on applicant type
-      // Adult flow: 3, 4, 5 | Dependent flow: 4, 5, 6 (because step 3 is Dependent Information)
-      this._updateStepNumbers(showDependentSections);
+      // Both flows use baseStep=4 for common sections
+      this._updateStepNumbers();
 
       // Only dispatch event if the meaningful state has changed
       const currentIsDependentSelected = this.isDependentRadioChecked(); // Re-check after potential selectRadio call
@@ -226,18 +255,20 @@ export default class extends Controller {
   }
 
   /**
-   * Update step numbers in common sections based on applicant type
-   * @param {boolean} isDependentFlow - Whether the dependent flow is active
+   * Update step numbers in common sections.
+   * Both adult and dependent flows use baseStep=4.
    * @private
    */
-  _updateStepNumbers(isDependentFlow) {
+  _updateStepNumbers() {
     if (!this.hasStepNumberTargets || this.stepNumberTargets.length === 0) {
       return;
     }
 
     try {
-      // Adult flow: 3, 4, 5 | Dependent flow: 4, 5, 6
-      const baseStep = isDependentFlow ? 4 : 3;
+      // Both adult and dependent flows: common sections start at step 4
+      // Adult: 1=type, 2=search, 3=info, 4+=common
+      // Dependent: 1=type, 2=guardian, 3=dependent, 4+=common
+      const baseStep = 4;
       this.stepNumberTargets.forEach((stepEl, index) => {
         stepEl.textContent = baseStep + index;
       });

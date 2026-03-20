@@ -77,6 +77,12 @@ module Applications
       Current.paper_context = nil
     end
 
+    ADULT_CONTACT_FIELDS = %i[
+      email phone phone_type physical_address_1 physical_address_2
+      city state zip_code communication_preference locale
+      preferred_means_of_communication
+    ].freeze
+
     private
 
     def failure(message)
@@ -128,8 +134,11 @@ module Applications
       applicant_data = params[:constituent]
       relationship_type = params[:relationship_type]
       dependent_id = params[:dependent_id]
+      existing_constituent_id = params[:existing_constituent_id]
 
-      if existing_dependent_scenario?(guardian_id, dependent_id)
+      if existing_self_applicant_scenario?(existing_constituent_id)
+        process_existing_self_applicant(existing_constituent_id)
+      elsif existing_dependent_scenario?(guardian_id, dependent_id)
         process_existing_dependent(guardian_id, dependent_id, relationship_type)
       elsif guardian_scenario?(guardian_id, new_guardian_attrs, applicant_data)
         process_guardian_dependent(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
@@ -139,6 +148,40 @@ module Applications
         add_error('Sufficient constituent or guardian/dependent parameters missing.')
         false
       end
+    end
+
+    def existing_self_applicant_scenario?(existing_constituent_id)
+      existing_constituent_id.present? && params[:applicant_type] != 'dependent'
+    end
+
+    def process_existing_self_applicant(existing_constituent_id)
+      user = User.find_by(id: existing_constituent_id)
+      return add_error('Applicant not found') unless user
+      return add_error('Selected user is not eligible as an applicant.') unless user.paper_applicant_candidate?
+
+      # Dual eligibility check
+      return add_error('This constituent already has an active or pending application.') if user.applications.blocking_new_submission.exists?
+
+      return false unless waiting_period_eligible?(user)
+
+      return add_error('Verify contact information against the paper application before submitting.') unless existing_adult_contact_info_verified?
+
+      @constituent = user
+
+      if params[:constituent].present? && attributes_present?(params[:constituent]) &&
+         existing_adult_contact_updates_allowed? && !update_existing_adult_contact_info(user)
+        return false
+      end
+
+      true
+    end
+
+    def existing_adult_contact_info_verified?
+      ActiveModel::Type::Boolean.new.cast(params.fetch(:contact_info_verified, false))
+    end
+
+    def existing_adult_contact_updates_allowed?
+      params[:contact_info_mode].to_s != 'on_file'
     end
 
     def guardian_scenario?(guardian_id, new_guardian_attrs, applicant_data)
@@ -186,21 +229,20 @@ module Applications
       return false if params[:constituent].present? && attributes_present?(params[:constituent]) && !update_dependent_contact_info(dependent)
 
       # Validate no active application for dependent
-      return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).where.not(status: :archived).exists?
+      return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).blocking_new_submission.exists?
 
       waiting_period_eligible?(dependent)
     end
 
-    def waiting_period_eligible?(dependent)
-      # Fast-path waiting period check for better UX (model validation remains authoritative)
-      last_app = dependent.applications.order(application_date: :desc).first
+    def waiting_period_eligible?(user)
+      last_app = user.applications.order(application_date: :desc).first
       return true if last_app.blank?
 
       waiting_period = Policy.get('waiting_period_years') || 3
       eligible_date = last_app.application_date + waiting_period.years
       return true if eligible_date <= Time.current
 
-      add_error("Dependent is not yet eligible. Reapply after #{eligible_date.to_date.strftime('%B %d, %Y')}")
+      add_error("Not yet eligible for a new application. Eligible after #{eligible_date.to_date.strftime('%B %d, %Y')}.")
       false
     end
 
@@ -247,7 +289,7 @@ module Applications
     end
 
     def validate_no_active_application(user_type)
-      return true unless @constituent.applications.where.not(status: :archived).exists?
+      return true unless @constituent.applications.blocking_new_submission.exists?
 
       error_message = case user_type
                       when 'dependent'
@@ -279,21 +321,52 @@ module Applications
     end
 
     def build_dependent_contact_updates(attrs)
+      build_contact_updates(
+        attrs,
+        fields: %i[physical_address_1 physical_address_2 city state zip_code],
+        aliases: { dependent_email: :email, dependent_phone: :phone }
+      )
+    end
+
+    def update_existing_adult_contact_info(user)
+      attrs = params[:constituent]
+      return true if attrs.blank?
+
+      updates = build_adult_contact_updates(attrs)
+      return true if updates.empty?
+
+      changed_fields = updates.each_with_object({}) do |(key, new_val), changes|
+        old_val = user.read_attribute(key)
+        changes[key] = { from: old_val, to: new_val } if old_val.to_s != new_val.to_s
+      end
+
+      return true if changed_fields.empty?
+
+      if user.update(updates)
+        AuditEventService.log(
+          action: 'constituent_contact_updated',
+          actor: @admin,
+          auditable: user,
+          metadata: {
+            source: 'paper_application',
+            changes: changed_fields
+          }
+        )
+        true
+      else
+        add_error("Failed to update applicant information: #{user.errors.full_messages.join(', ')}")
+        false
+      end
+    end
+
+    def build_adult_contact_updates(attrs)
+      build_contact_updates(attrs, fields: ADULT_CONTACT_FIELDS)
+    end
+
+    def build_contact_updates(attrs, fields:, aliases: {})
       updates = {}
-
-      # Email (may come as dependent_email)
-      updates[:email] = attrs[:dependent_email] if attrs[:dependent_email].present?
-
-      # Phone (may come as dependent_phone)
-      updates[:phone] = attrs[:dependent_phone] if attrs[:dependent_phone].present?
-
-      # Address fields
-      updates[:physical_address_1] = attrs[:physical_address_1] if attrs[:physical_address_1].present?
-      updates[:physical_address_2] = attrs[:physical_address_2] if attrs[:physical_address_2].present?
-      updates[:city] = attrs[:city] if attrs[:city].present?
-      updates[:state] = attrs[:state] if attrs[:state].present?
-      updates[:zip_code] = attrs[:zip_code] if attrs[:zip_code].present?
-
+      fields.each { |f| updates[f] = attrs[f] if attrs[f].present? }
+      aliases.each { |src, dest| updates[dest] = attrs[src] if attrs[src].present? }
       updates
     end
 
@@ -410,7 +483,7 @@ module Applications
       # Handle medical_certification naming convention
       file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
       signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-      
+
       file_param = params[file_key]
       signed_id_param = params[signed_id_key]
 
@@ -439,30 +512,30 @@ module Applications
       # Handle medical_certification naming convention
       file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
       signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-      
+
       blob_or_file = params[file_key].presence || params[signed_id_key].presence
 
       # Route medical certifications to the correct service
-      if type == :medical_certification
-        result = MedicalCertificationAttachmentService.attach_certification(
-          application: @application,
-          blob_or_file: blob_or_file,
-          status: :approved,
-          admin: @admin,
-          submission_method: :paper,
-          metadata: {}
-        )
-      else
-        result = ProofAttachmentService.attach_proof(
-          application: @application,
-          proof_type: type,
-          blob_or_file: blob_or_file,
-          status: :approved,
-          admin: @admin,
-          submission_method: :paper,
-          metadata: {}
-        )
-      end
+      result = if type == :medical_certification
+                 MedicalCertificationAttachmentService.attach_certification(
+                   application: @application,
+                   blob_or_file: blob_or_file,
+                   status: :approved,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               else
+                 ProofAttachmentService.attach_proof(
+                   application: @application,
+                   proof_type: type,
+                   blob_or_file: blob_or_file,
+                   status: :approved,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               end
 
       unless result[:success]
         add_error("Error processing #{type} proof: #{result[:error]&.message}")
@@ -476,28 +549,28 @@ module Applications
       # Handle medical_certification naming convention
       reason_key = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
       notes_key = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
-      
+
       # Route medical certifications to the correct service
-      if type == :medical_certification
-        result = MedicalCertificationAttachmentService.reject_certification(
-          application: @application,
-          admin: @admin,
-          reason: params[reason_key],
-          notes: params[notes_key],
-          submission_method: :paper,
-          metadata: {}
-        )
-      else
-        result = ProofAttachmentService.reject_proof_without_attachment(
-          application: @application,
-          proof_type: type,
-          admin: @admin,
-          reason: params[reason_key],
-          notes: params[notes_key],
-          submission_method: :paper,
-          metadata: {}
-        )
-      end
+      result = if type == :medical_certification
+                 MedicalCertificationAttachmentService.reject_certification(
+                   application: @application,
+                   admin: @admin,
+                   reason: params[reason_key],
+                   notes: params[notes_key],
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               else
+                 ProofAttachmentService.reject_proof_without_attachment(
+                   application: @application,
+                   proof_type: type,
+                   admin: @admin,
+                   reason: params[reason_key],
+                   notes: params[notes_key],
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               end
 
       unless result[:success]
         add_error("Error rejecting #{type} proof: #{result[:error]&.message}")
