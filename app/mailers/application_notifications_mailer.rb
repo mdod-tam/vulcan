@@ -33,21 +33,26 @@ class ApplicationNotificationsMailer < ApplicationMailer
       locale = resolve_template_locale(recipient: application.user)
       text_template = find_text_template('application_notifications_proof_approved', locale: locale)
       proof_type_formatted = format_proof_type(proof_review.proof_type)
+      all_proofs_approved = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
 
-      variables = Variables::ProofApproved.new(
-        application, proof_review,
-        base_variables: build_base_email_variables(
-          template: text_template,
-          organization_name: 'MAT Program',
-          locale: locale,
-          subject_variables: { proof_type_formatted: proof_type_formatted }
-        )
-      ).to_h
+      base_variables = build_base_email_variables(
+        template: text_template,
+        organization_name: 'MAT Program',
+        locale: locale,
+        subject_variables: { proof_type_formatted: proof_type_formatted }
+      )
+
+      variables = base_variables.merge({
+        user_first_name: application.user.first_name,
+        organization_name: 'MAT Program',
+        proof_type_formatted: proof_type_formatted,
+        all_proofs_approved_message_text: all_proofs_approved ? 'All required documents for your application have now been approved.' : ''
+      }).compact
 
       handle_letter_preference(application.user, 'proof_approved', {
                                  proof_type: proof_review.proof_type,
                                  proof_type_formatted: proof_type_formatted,
-                                 all_proofs_approved: application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?,
+                                 all_proofs_approved: all_proofs_approved,
                                  first_name: application.user.first_name,
                                  last_name: application.user.last_name,
                                  application_id: application.id
@@ -64,28 +69,36 @@ class ApplicationNotificationsMailer < ApplicationMailer
       proof_type_formatted = format_proof_type(proof_review.proof_type)
       locale               = resolve_template_locale(recipient: application.user)
       text_template        = find_text_template('application_notifications_proof_rejected', locale: locale)
+      sign_in_url          = sign_in_url(host: default_url_options[:host])
 
-      variables = Variables::ProofRejected.new(
-        application, proof_review,
-        context: {
-          remaining_attempts: remaining_attempts,
-          reapply_date: reapply_date,
-          base_variables: build_base_email_variables(
-            template: text_template,
-            organization_name: 'MAT Program',
-            locale: locale,
-            subject_variables: { proof_type_formatted: proof_type_formatted }
-          ),
-          sign_in_url: sign_in_url(host: default_url_options[:host]),
-          locale: locale
-        }
-      ).to_h
+      base_variables = build_base_email_variables(
+        template: text_template,
+        organization_name: 'MAT Program',
+        locale: locale,
+        subject_variables: { proof_type_formatted: proof_type_formatted }
+      )
+
+      rejection_reason = resolve_rejection_reason(proof_review, locale)
+      remaining_attempts_message = build_remaining_attempts_message(remaining_attempts, reapply_date)
+      default_options_text = build_resubmission_options(application, sign_in_url)
+      archived_message = build_archived_message(reapply_date)
+
+      variables = base_variables.merge({
+        user_first_name: application.user.first_name,
+        constituent_full_name: application.user.full_name,
+        organization_name: 'MAT Program',
+        proof_type_formatted: proof_type_formatted,
+        rejection_reason: rejection_reason,
+        sign_in_url: sign_in_url,
+        remaining_attempts_message_text: remaining_attempts.positive? ? remaining_attempts_message : '',
+        default_options_text: remaining_attempts.positive? ? default_options_text : '',
+        archived_message_text: remaining_attempts.positive? ? '' : archived_message
+      }).compact
 
       handle_letter_preference(application.user, 'proof_rejected', {
                                  proof_type: proof_review.proof_type,
                                  proof_type_formatted: proof_type_formatted,
                                  rejection_reason: proof_review.rejection_reason || 'Documentation did not meet requirements',
-                                 notes: proof_review.notes || '',
                                  remaining_attempts: remaining_attempts,
                                  reapply_date: reapply_date.strftime('%B %d, %Y'),
                                  first_name: application.user.first_name,
@@ -274,6 +287,70 @@ class ApplicationNotificationsMailer < ApplicationMailer
     ActionController::Base.helpers.asset_path(asset_name, host: default_url_options[:host])
   rescue StandardError
     nil
+  end
+
+  def resolve_rejection_reason(proof_review, locale)
+    return proof_review.rejection_reason if proof_review.rejection_reason_code.blank?
+
+    reason = RejectionReason.resolve(
+      code: proof_review.rejection_reason_code,
+      proof_type: proof_review.proof_type,
+      locale: locale
+    )
+    return proof_review.rejection_reason unless reason&.body
+
+    interpolate_address_placeholder(reason.body, proof_review.application)
+  end
+
+  def interpolate_address_placeholder(body, application)
+    return body unless body.include?('%<address>s') || body.include?('%<address>')
+
+    format(body, address: build_application_address(application))
+  rescue KeyError, ArgumentError
+    body
+  end
+
+  def build_application_address(application)
+    user = application.user
+    return '' unless user
+
+    addr1 = user.physical_address_1.to_s
+    addr2 = user.physical_address_2.presence || ''
+    city = user.city.to_s
+    state = user.state.to_s
+    zip = user.zip_code.to_s
+    "#{addr1} #{addr2} #{city}, #{state} #{zip}".squish
+  end
+
+  def build_remaining_attempts_message(remaining_attempts, reapply_date)
+    "You have #{remaining_attempts} #{'attempt'.pluralize(remaining_attempts)} remaining to submit the required documentation before #{reapply_date.strftime('%B %d, %Y')}."
+  end
+
+  def build_resubmission_options(application, sign_in_url)
+    if application.submission_method_paper?
+      <<~TEXT.strip
+        HOW TO RESUBMIT YOUR DOCUMENTATION:
+        1. Reply to this email: Simply reply to this email and attach your updated documentation.
+        2. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
+           Maryland Accessible Telecommunications
+           123 Main Street
+           Baltimore, MD 21201
+      TEXT
+    else
+      <<~TEXT.strip
+        HOW TO RESUBMIT YOUR DOCUMENTATION:
+        1. Reply to this email: Simply reply to this email and attach your updated documentation.
+        2. Upload Online: Sign in to your account dashboard at #{sign_in_url} and upload your new documents securely.
+        3. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
+           Maryland Accessible Telecommunications
+           123 Main Street
+           Baltimore, MD 21201
+      TEXT
+    end
+  end
+
+  def build_archived_message(reapply_date)
+    "Unfortunately, you have reached the maximum number of submission attempts. Your application has been archived. You may reapply after #{reapply_date.strftime('%B %d, %Y')}."
   end
 
   def send_proof_rejected_email(user, text_template, variables)
