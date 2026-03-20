@@ -108,7 +108,7 @@ module Admin
     end
 
     test 'search role constituent returns evaluator who is paper applicant candidate' do
-      evaluator = create(:evaluator, email: generate(:email), first_name: 'PaperCandEvalX')
+      evaluator = create(:evaluator, email: generate(:email), first_name: 'PaperCandEvalX', hearing_disability: true)
       create(:application, :archived, user: evaluator)
 
       get search_admin_users_path(q: 'PaperCandEvalX', role: 'constituent', frame_id: 'adult_search_results'),

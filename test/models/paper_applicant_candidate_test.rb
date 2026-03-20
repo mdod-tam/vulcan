@@ -14,7 +14,7 @@ class PaperApplicantCandidateTest < ActiveSupport::TestCase
   end
 
   test 'evaluator with prior application as subject user is a candidate' do
-    user = create(:evaluator, email: generate(:email))
+    user = create(:evaluator, email: generate(:email), hearing_disability: true)
     assert_not user.paper_applicant_candidate?
 
     create(:application, :archived, user: user)
