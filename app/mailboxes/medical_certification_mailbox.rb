@@ -167,7 +167,6 @@ class MedicalCertificationMailbox < ApplicationMailbox
     bounce_with medical_provider_submission_error_mail(error_type, message)
   rescue StandardError => e
     Rails.logger.error("Failed to send mailbox bounce notification: #{e.message}")
-    bounce_with message
   end
 
   def medical_provider_submission_error_mail(error_type, message)
