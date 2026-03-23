@@ -3,8 +3,13 @@ import { setVisible } from "../../utils/visibility"
 
 export default class extends Controller {
   static targets = [
-    "proofType",         // Hidden input for proof type 
+    "proofType",         // Hidden input for proof type
+    "reasonCode",        // Hidden input for rejection_reason_code (snake_case DB key)
+    "reasonButton",      // Predefined rejection reason buttons
     "reasonField",       // Text area for rejection reason
+    "languageNotice",    // Reminder shown only for custom "Other" reasons
+    "codeStatus",        // Visible status text for code linkage
+    "liveRegion",        // aria-live region for announcing reason selection
     "incomeOnlyReasons", // Income-specific rejection reasons container
     "medicalOnlyReasons", // Medical-specific rejection reasons container
     "generalReasons"     // General rejection reasons container (income/residency)
@@ -34,24 +39,28 @@ export default class extends Controller {
   }
 
   connect() {
-    // Clear form on connect and reset any error styling
+    this._boundProofTypeChanged = this._handleProofTypeChanged.bind(this)
+
     if (this.hasReasonFieldTarget) {
       this.reasonFieldTarget.value = ""
       this.reasonFieldTarget.classList.remove('border-red-500')
+      this._lockReasonField()
     }
+    this._hideLanguageNotice()
+    this._resetReasonCodeState()
+
+    this._initializeReasonButtons()
+    this._syncGroupInteractivity()
     
-    // Initialize visibility based on initial proof type only if it has a value
     if (this.hasProofTypeTarget && this.proofTypeTarget.value) {
       this._updateReasonGroupsVisibility(this.proofTypeTarget.value)
     }
     
-    // Listen for proof type changes from modal controller
-    this.element.addEventListener('proof-type-changed', this._handleProofTypeChanged.bind(this))
+    this.element.addEventListener('proof-type-changed', this._boundProofTypeChanged)
   }
   
   disconnect() {
-    // Note: We can't remove the exact bound function, but this prevents memory leaks
-    this.element.removeEventListener('proof-type-changed', this._handleProofTypeChanged)
+    this.element.removeEventListener('proof-type-changed', this._boundProofTypeChanged)
   }
   
   _handleProofTypeChanged(event) {
@@ -61,10 +70,13 @@ export default class extends Controller {
     }
     if (this.hasProofTypeTarget) {
       this.proofTypeTarget.value = proofType
-      this._updateReasonGroupsVisibility(proofType)
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('RejectionForm: Updated visibility for proof type:', proofType)
+      this._resetReasonCodeState()
+      if (this.hasReasonFieldTarget) {
+        this.reasonFieldTarget.value = ""
+        this._lockReasonField()
       }
+      this._hideLanguageNotice()
+      this._updateReasonGroupsVisibility(proofType)
     }
   }
 
@@ -94,9 +106,9 @@ export default class extends Controller {
 
     // Handle empty or unknown proof types gracefully - reset all groups to hidden
     if (!proofType) {
-      if (this.hasIncomeOnlyReasonsTarget) setVisible(this.incomeOnlyReasonsTarget, false, { ariaHidden: true })
-      if (this.hasMedicalOnlyReasonsTarget) setVisible(this.medicalOnlyReasonsTarget, false, { ariaHidden: true })
-      if (this.hasGeneralReasonsTarget) setVisible(this.generalReasonsTarget, false, { ariaHidden: true })
+      if (this.hasIncomeOnlyReasonsTarget) setVisible(this.incomeOnlyReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
+      if (this.hasMedicalOnlyReasonsTarget) setVisible(this.medicalOnlyReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
+      if (this.hasGeneralReasonsTarget) setVisible(this.generalReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
       return
     }
     
@@ -120,9 +132,12 @@ export default class extends Controller {
         if (process.env.NODE_ENV !== 'production') {
           console.log(`RejectionForm: Setting ${name} group visibility to ${show}`)
         }
-        setVisible(target, show, { ariaHidden: !show })
+        setVisible(target, show, { ariaHidden: !show, inlineStyleFallback: false })
       }
     })
+
+    this._resetReasonSelection()
+    this._syncGroupInteractivity()
   }
 
   // Handle predefined reason selection
@@ -162,15 +177,40 @@ export default class extends Controller {
     }
 
     const reasonText = this._lookupReason(reasonType, proofType)
-    
+    const reasonCode = event.currentTarget.dataset.reasonCode || null
+
     if (reasonText) {
       this.reasonFieldTarget.value = reasonText
       this.reasonFieldTarget.classList.remove('border-red-500')
+      this._lockReasonField()
+      this._hideLanguageNotice()
+      if (this.hasReasonCodeTarget) {
+        this.reasonCodeTarget.value = reasonCode || ""
+      }
+      this._setSelectedReasonButton(event.currentTarget)
+      this._setCodeStatus(`Using predefined reason: ${reasonCode || 'none'}.`, 'linked')
+      this._announceReasonSelection(event.currentTarget.textContent.trim())
     } else {
       if (process.env.NODE_ENV !== 'production') {
         console.warn(`No predefined reason found for type: ${reasonType}, proof type: ${proofType}`)
       }
     }
+  }
+
+  selectOther(event) {
+    if (!this.hasReasonFieldTarget) return
+
+    this.reasonFieldTarget.value = ""
+    this._unlockReasonField()
+    this._resetReasonSelection()
+    this._showLanguageNotice()
+    this._setSelectedReasonButton(event.currentTarget)
+    if (this.hasReasonCodeTarget) {
+      this.reasonCodeTarget.value = "other"
+    }
+    this._setCodeStatus('Custom reason — type your rejection reason below.', 'unlinked')
+    this._announceReasonSelection('Other (custom reason)')
+    this.reasonFieldTarget.focus()
   }
 
   // Private helper for DRY reason lookup with early returns
@@ -226,7 +266,7 @@ export default class extends Controller {
     }
 
     reasonField.classList.remove('border-red-500')
-    
+
     // Notify any parent modal controllers that a form is being submitted
     // This helps ensure proper scroll restoration after the form submission
     document.dispatchEvent(new CustomEvent('turbo-form-submit', {
@@ -239,5 +279,124 @@ export default class extends Controller {
     if (process.env.NODE_ENV !== 'production') {
       console.log("Form submission validated, proceeding with submit");
     }
+  }
+
+  _lockReasonField() {
+    if (!this.hasReasonFieldTarget) return
+    this.reasonFieldTarget.readOnly = true
+    this.reasonFieldTarget.classList.add('bg-gray-100', 'text-gray-600')
+  }
+
+  _unlockReasonField() {
+    if (!this.hasReasonFieldTarget) return
+    this.reasonFieldTarget.readOnly = false
+    this.reasonFieldTarget.classList.remove('bg-gray-100', 'text-gray-600')
+  }
+
+  _showLanguageNotice() {
+    if (!this.hasLanguageNoticeTarget) return
+    this.languageNoticeTarget.classList.remove('hidden')
+  }
+
+  _hideLanguageNotice() {
+    if (!this.hasLanguageNoticeTarget) return
+    this.languageNoticeTarget.classList.add('hidden')
+  }
+
+  _initializeReasonButtons() {
+    if (!this.hasReasonButtonTarget) return
+
+    this.reasonButtonTargets.forEach((button) => {
+      button.setAttribute('aria-pressed', 'false')
+      this._applyReasonButtonState(button, false)
+    })
+  }
+
+  _resetReasonSelection() {
+    if (!this.hasReasonButtonTarget) return
+
+    this.reasonButtonTargets.forEach((button) => {
+      button.setAttribute('aria-pressed', 'false')
+      this._applyReasonButtonState(button, false)
+    })
+  }
+
+  _setSelectedReasonButton(selectedButton) {
+    this._resetReasonSelection()
+    selectedButton.setAttribute('aria-pressed', 'true')
+    this._applyReasonButtonState(selectedButton, true)
+  }
+
+  _applyReasonButtonState(button, selected) {
+    const selectedClasses = ['bg-indigo-600', 'text-white', 'border-indigo-700']
+    const unselectedClasses = ['bg-gray-100', 'text-gray-800', 'border-gray-300']
+
+    if (selected) {
+      button.classList.remove(...unselectedClasses)
+      button.classList.add(...selectedClasses)
+    } else {
+      button.classList.remove(...selectedClasses)
+      button.classList.add(...unselectedClasses)
+    }
+  }
+
+  _announceReasonSelection(reasonLabel) {
+    if (!this.hasLiveRegionTarget) return
+
+    this.liveRegionTarget.textContent = ''
+    requestAnimationFrame(() => {
+      this.liveRegionTarget.textContent = `Selected rejection reason: ${reasonLabel}. Reason text inserted in the reason field.`
+    })
+  }
+
+  _setCodeStatus(message, state = 'neutral') {
+    if (!this.hasCodeStatusTarget) return
+
+    const status = this.codeStatusTarget
+    status.textContent = message
+    status.classList.remove('text-gray-500', 'text-emerald-700', 'text-amber-700')
+
+    if (state === 'linked') {
+      status.classList.add('text-emerald-700')
+    } else if (state === 'unlinked') {
+      status.classList.add('text-amber-700')
+    } else {
+      status.classList.add('text-gray-500')
+    }
+  }
+
+  _resetReasonCodeState() {
+    if (this.hasReasonCodeTarget) {
+      this.reasonCodeTarget.value = ""
+    }
+    this._setCodeStatus('No predefined rejection reason selected.', 'neutral')
+  }
+
+  _syncGroupInteractivity() {
+    const groups = [
+      this.hasIncomeOnlyReasonsTarget ? this.incomeOnlyReasonsTarget : null,
+      this.hasMedicalOnlyReasonsTarget ? this.medicalOnlyReasonsTarget : null,
+      this.hasGeneralReasonsTarget ? this.generalReasonsTarget : null
+    ].filter(Boolean)
+
+    groups.forEach((group) => this._setGroupButtonInteractivity(group, this._isGroupVisible(group)))
+  }
+
+  _isGroupVisible(group) {
+    return !group.classList.contains('hidden') &&
+      group.getAttribute('aria-hidden') !== 'true' &&
+      group.style.display !== 'none'
+  }
+
+  _setGroupButtonInteractivity(group, enabled) {
+    const buttons = group.querySelectorAll("button[data-rejection-form-target='reasonButton']")
+    buttons.forEach((button) => {
+      button.disabled = !enabled
+      if (enabled) {
+        button.removeAttribute('tabindex')
+      } else {
+        button.setAttribute('tabindex', '-1')
+      }
+    })
   }
 }

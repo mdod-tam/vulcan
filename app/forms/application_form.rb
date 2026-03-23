@@ -26,6 +26,7 @@ class ApplicationForm
   attribute :speech_disability, :boolean, default: false
   attribute :mobility_disability, :boolean, default: false
   attribute :cognition_disability, :boolean, default: false
+  attribute :locale, :string
 
   # Address attributes
   attribute :physical_address_1, :string
@@ -120,6 +121,7 @@ class ApplicationForm
     assign_disability_attributes(app_params)
 
     extract_address_attributes(app_params)
+    extract_locale_attribute(params, app_params)
     extract_medical_provider_attributes(params)
 
     self.is_submission = params[:submit_application].present?
@@ -166,6 +168,11 @@ class ApplicationForm
     self.city = app_params[:city] if app_params[:city]
     self.state = app_params[:state] if app_params[:state]
     self.zip_code = app_params[:zip_code] if app_params[:zip_code]
+  end
+
+  def extract_locale_attribute(params, app_params)
+    selected_locale = params.dig(:constituent, :locale) || app_params[:locale]
+    self.locale = selected_locale if selected_locale.present?
   end
 
   def extract_medical_provider_attributes(params)

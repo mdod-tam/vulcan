@@ -3,7 +3,7 @@
 # Seed File for "training_session_notifications_training_scheduled"
 # (Suggest saving as db/seeds/email_templates/training_session_notifications_training_scheduled.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_scheduled', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_scheduled', format: :text, locale: 'en') do |template|
   template.subject = 'Training Session Scheduled'
   template.description = 'Sent to the user when their training session has been scheduled.'
   template.body = <<~TEXT
@@ -28,9 +28,9 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_
   TEXT
   template.variables = {
     'required' => %w[header_text constituent_full_name scheduled_date_formatted scheduled_time_formatted
-                          trainer_full_name trainer_email trainer_phone_formatted footer_text],
+                     trainer_full_name trainer_email trainer_phone_formatted footer_text],
     'optional' => []
-  }                    
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded training_session_notifications_training_scheduled (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

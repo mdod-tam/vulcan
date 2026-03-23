@@ -5,7 +5,7 @@ require 'test_helper'
 module Admin
   class EmailTemplatesTest < ActiveSupport::TestCase
     MockViewContext = Struct.new(:sample_data_for_template) do
-      def sample_data_for_template(_template_name)
+      def sample_data_for_template(_template_name, **_kwargs)
         { 'name' => 'System Test User' }
       end
     end
@@ -25,7 +25,7 @@ module Admin
       @template_text = create(:email_template, :text, name: text_name, subject: 'Text Subject', body: 'Text Body %<name>s')
 
       # Override the helper method completely for tests to avoid any expensive operations
-      Admin::EmailTemplatesHelper.define_method(:sample_data_for_template) do |_template_name|
+      Admin::EmailTemplatesHelper.define_method(:sample_data_for_template) do |_template_name, **_kwargs|
         { 'name' => 'System Test User' }
       end
 

@@ -7,8 +7,5 @@ class DefaultMailbox < ApplicationMailbox
 
     # Log the email for debugging
     Rails.logger.debug { "Email details: #{mail.inspect}" }
-
-    # Optionally forward to an admin
-    # forward_to "admin@example.com"
   end
 end

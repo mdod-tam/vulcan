@@ -292,12 +292,12 @@ module Admin
 
       # Handle proof documents - both rejected with reasons
       find("input[id='reject_income_proof']", visible: :all).click
-      select 'Missing Income Amount', from: 'income_proof_rejection_reason'
-      fill_in 'income_proof_rejection_notes', with: 'Please provide documentation showing income amounts'
+      select 'Other', from: 'income_proof_rejection_reason'
+      fill_in 'income_proof_custom_rejection_reason', with: 'Please provide documentation showing income amounts'
 
       find("input[id='reject_residency_proof']", visible: :all).click
-      select 'Expired Documentation', from: 'residency_proof_rejection_reason'
-      fill_in 'residency_proof_rejection_notes', with: 'Please provide current documentation'
+      select 'Other', from: 'residency_proof_rejection_reason'
+      fill_in 'residency_proof_custom_rejection_reason', with: 'Please provide current documentation'
 
       # Submit the form
       click_on 'Submit Paper Application'

@@ -72,19 +72,70 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'rejects medical certification without requiring an attachment' do
-    assert_no_difference 'ActiveStorage::Attachment.count' do
-      result = MedicalCertificationAttachmentService.reject_certification(
-        application: @application,
-        admin: @admin,
-        reason: 'missing_signature',
-        notes: 'Test rejection note',
-        submission_method: :admin_review
-      )
+    starting_rejections = @application.total_rejections
 
-      assert result[:success], 'Rejection should succeed'
-      assert_equal 'rejected', @application.reload.medical_certification_status
+    assert_no_difference 'ActiveStorage::Attachment.count' do
+      assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+        assert_difference 'Notification.count', 1 do
+          result = MedicalCertificationAttachmentService.reject_certification(
+            application: @application,
+            admin: @admin,
+            reason: 'missing_signature',
+            notes: 'Test rejection note',
+            submission_method: :admin_review
+          )
+
+          assert result[:success], 'Rejection should succeed'
+        end
+      end
+
+      @application.reload
+      assert_equal 'rejected', @application.medical_certification_status
       assert_equal 'missing_signature', @application.medical_certification_rejection_reason
+      assert_equal starting_rejections, @application.total_rejections
+      review = @application.proof_reviews.find_by!(proof_type: :medical_certification, status: :rejected)
+      assert_equal 'missing_signature', review.rejection_reason
+      assert_nil review.rejection_reason_code
+
+      notification = Notification.order(:created_at).last
+      assert_equal 'medical_certification_rejected', notification.action
+      assert_equal @application.user, notification.recipient
+      assert_equal @application, notification.notifiable
+      assert_nil notification.delivery_status
+      assert_nil notification.metadata&.dig('delivery_error', 'message')
     end
+  end
+
+  test 'clears stored rejection reason code when rejecting with free text' do
+    first_result = MedicalCertificationAttachmentService.reject_certification(
+      application: @application,
+      admin: @admin,
+      reason: 'Initial coded rejection reason',
+      reason_code: 'missing_signature',
+      submission_method: :admin_review
+    )
+
+    assert first_result[:success], 'Initial coded rejection should succeed'
+    @application.reload
+    first_review = @application.proof_reviews.find_by!(proof_type: :medical_certification, status: :rejected)
+    assert_equal 'missing_signature', @application.medical_certification_rejection_reason_code
+    assert_equal 'missing_signature', first_review.rejection_reason_code
+
+    second_result = MedicalCertificationAttachmentService.reject_certification(
+      application: @application,
+      admin: @admin,
+      reason: 'Custom follow-up rejection text',
+      reason_code: '',
+      submission_method: :admin_review
+    )
+
+    assert second_result[:success], 'Follow-up free-text rejection should succeed'
+    @application.reload
+    second_review = @application.proof_reviews.find_by!(proof_type: :medical_certification, status: :rejected)
+    assert_equal 'Custom follow-up rejection text', @application.medical_certification_rejection_reason
+    assert_nil @application.medical_certification_rejection_reason_code
+    assert_equal 'Custom follow-up rejection text', second_review.rejection_reason
+    assert_nil second_review.rejection_reason_code
   end
 
   private

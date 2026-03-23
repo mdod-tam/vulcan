@@ -2,7 +2,7 @@
 
 # Seed File for "training_session_notifications_training_cancelled"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_cancelled', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_cancelled', format: :text, locale: 'en') do |template|
   template.subject = 'Training Session Cancelled'
   template.description = 'Sent to the user when their scheduled training session has been cancelled.'
   template.body = <<~TEXT
@@ -12,7 +12,7 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_
 
     Your training session that was scheduled for %<scheduled_date_time_formatted>s has been cancelled. We apologize for any inconvenience.
 
-    If you have questions or would like to reschedule, please contact our support team at %<support_email>s.
+    If you have questions or would like to reschedule, please contact our team at %<support_email>s or call (410) 767-6960.
 
     %<footer_text>s
   TEXT

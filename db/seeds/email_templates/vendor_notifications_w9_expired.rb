@@ -3,7 +3,7 @@
 # Seed File for "vendor_notifications_w9_expired"
 # (Suggest saving as db/seeds/email_templates/vendor_notifications_w9_expired.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expired', format: :text) do |template|
+EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expired', format: :text, locale: 'en') do |template|
   template.subject = 'W9 Form Has Expired'
   template.description = 'Sent to a vendor when their W9 form on file has expired, requiring them to upload a new one to continue receiving payments.'
   template.body = <<~TEXT
@@ -28,15 +28,14 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expired', format
 
     If you have already submitted an updated W9 form, please disregard this message.
 
-    If you have any questions or need assistance, please contact our vendor support team immediately.
+    If you have any questions or need assistance, please contact our team at %<support_email>s or call (410) 767-6960.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text vendor_business_name status_box_error_text status_box_warning_text
-                          expiration_date_formatted status_box_info_text vendor_portal_url footer_text],
+    'required' => %w[header_text vendor_business_name status_box_error_text status_box_warning_text expiration_date_formatted status_box_info_text vendor_portal_url footer_text support_email],
     'optional' => []
-  }                      
+  }
   template.version = 1
 end
 Rails.logger.debug 'Seeded vendor_notifications_w9_expired (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

@@ -5,13 +5,13 @@ class ApplicationMailbox < ActionMailbox::Base
 
   # Use lambdas with direct string comparison
   routing lambda { |inbound_email|
-    result = (inbound_email.mail.to || []).include?('medical-cert@mdmat.org')
-    Rails.logger.info "MAILBOX ROUTING: medical-cert check = #{result} (to: #{inbound_email.mail.to})"
+    result = (inbound_email.mail.to || []).include?('disability_cert@mdmat.org')
+    Rails.logger.info "MAILBOX ROUTING: disability_cert check = #{result} (to: #{inbound_email.mail.to})"
     result
   } => :medical_certification
 
   routing lambda { |inbound_email|
-    result = (inbound_email.mail.to || []).include?('proof@example.com')
+    result = (inbound_email.mail.to || []).include?('proof@mdmat.org')
     Rails.logger.info "MAILBOX ROUTING: proof@example check = #{result} (to: #{inbound_email.mail.to})"
     result
   } => :proof_submission

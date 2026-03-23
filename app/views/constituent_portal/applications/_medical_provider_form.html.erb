@@ -71,7 +71,7 @@
     <div class="bg-white p-3 rounded border mb-4">
       <h4 class="text-sm font-medium text-gray-900 mb-2">MAT Program Contact Information</h4>
       <div class="space-y-1 text-xs text-gray-700">
-        <p><strong>Email:</strong> <a href="mailto:mat.program1@maryland.gov" class="text-indigo-600 hover:text-indigo-500">mat.program1@maryland.gov</a></p>
+        <p><strong>Email:</strong> <a href="mailto:<%= Policy.get('support_email') || 'mat.program1@maryland.gov' %>" class="text-indigo-600 hover:text-indigo-500"><%= Policy.get('support_email') || 'mat.program1@maryland.gov' %></a></p>
         <p><strong>Phone:</strong> <a href="tel:8005527724" class="text-indigo-600 hover:text-indigo-500">800-552-7724</a></p>
         <p><strong>Voice/TTY:</strong> <a href="tel:4107677253" class="text-indigo-600 hover:text-indigo-500">410-767-7253</a></p>
         <p><strong>Video Phone:</strong> <a href="tel:4108019618" class="text-indigo-600 hover:text-indigo-500">410-801-9618</a></p>

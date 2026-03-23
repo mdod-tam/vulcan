@@ -278,7 +278,7 @@ module Applications
       false
     end
 
-    def build_dependent_contact_updates(attrs)
+    def build_dependent_contact_updates(attrs) # rubocop:disable Metrics/PerceivedComplexity
       updates = {}
 
       # Email (may come as dependent_email)
@@ -293,6 +293,13 @@ module Applications
       updates[:city] = attrs[:city] if attrs[:city].present?
       updates[:state] = attrs[:state] if attrs[:state].present?
       updates[:zip_code] = attrs[:zip_code] if attrs[:zip_code].present?
+
+      # Communication and localization preferences
+      updates[:locale] = attrs[:locale] if attrs[:locale].present?
+      updates[:communication_preference] = attrs[:communication_preference] if attrs[:communication_preference].present?
+      updates[:preferred_means_of_communication] = attrs[:preferred_means_of_communication] if attrs[:preferred_means_of_communication].present?
+      updates[:phone_type] = attrs[:phone_type] if attrs[:phone_type].present?
+      updates[:referral_source] = attrs[:referral_source] if attrs[:referral_source].present?
 
       updates
     end
@@ -410,7 +417,7 @@ module Applications
       # Handle medical_certification naming convention
       file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
       signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-      
+
       file_param = params[file_key]
       signed_id_param = params[signed_id_key]
 
@@ -439,30 +446,30 @@ module Applications
       # Handle medical_certification naming convention
       file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
       signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-      
+
       blob_or_file = params[file_key].presence || params[signed_id_key].presence
 
       # Route medical certifications to the correct service
-      if type == :medical_certification
-        result = MedicalCertificationAttachmentService.attach_certification(
-          application: @application,
-          blob_or_file: blob_or_file,
-          status: :approved,
-          admin: @admin,
-          submission_method: :paper,
-          metadata: {}
-        )
-      else
-        result = ProofAttachmentService.attach_proof(
-          application: @application,
-          proof_type: type,
-          blob_or_file: blob_or_file,
-          status: :approved,
-          admin: @admin,
-          submission_method: :paper,
-          metadata: {}
-        )
-      end
+      result = if type == :medical_certification
+                 MedicalCertificationAttachmentService.attach_certification(
+                   application: @application,
+                   blob_or_file: blob_or_file,
+                   status: :approved,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               else
+                 ProofAttachmentService.attach_proof(
+                   application: @application,
+                   proof_type: type,
+                   blob_or_file: blob_or_file,
+                   status: :approved,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               end
 
       unless result[:success]
         add_error("Error processing #{type} proof: #{result[:error]&.message}")
@@ -473,27 +480,36 @@ module Applications
     end
 
     def process_reject_proof(type)
-      # Handle medical_certification naming convention
-      reason_key = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
-      notes_key = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
-      
-      # Route medical certifications to the correct service
+      reason_key        = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
+      custom_reason_key = type == :medical_certification ? "#{type}_custom_rejection_reason" : "#{type}_proof_custom_rejection_reason"
+      selected_reason   = fetch_param(reason_key).to_s
+      custom_reason     = fetch_param(custom_reason_key).to_s.strip
+
       if type == :medical_certification
+        reason_payload = resolve_medical_rejection_reason_payload(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason
+        )
+
         result = MedicalCertificationAttachmentService.reject_certification(
           application: @application,
           admin: @admin,
-          reason: params[reason_key],
-          notes: params[notes_key],
+          reason: reason_payload[:reason],
+          reason_code: reason_payload[:reason_code],
           submission_method: :paper,
           metadata: {}
         )
       else
+        resolved_reason = resolve_rejection_reason_value(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason
+        )
+
         result = ProofAttachmentService.reject_proof_without_attachment(
           application: @application,
           proof_type: type,
           admin: @admin,
-          reason: params[reason_key],
-          notes: params[notes_key],
+          reason: resolved_reason,
           submission_method: :paper,
           metadata: {}
         )
@@ -505,6 +521,25 @@ module Applications
       end
 
       true
+    end
+
+    def resolve_rejection_reason_value(selected_reason:, custom_reason:)
+      return selected_reason unless selected_reason == 'other'
+      return 'Other' if custom_reason.blank?
+
+      custom_reason
+    end
+
+    def resolve_medical_rejection_reason_payload(selected_reason:, custom_reason:)
+      return { reason: selected_reason, reason_code: selected_reason } if selected_reason.present? && %w[none_provided other].exclude?(selected_reason)
+      return { reason: 'none_provided', reason_code: nil } if selected_reason == 'none_provided'
+      return { reason: 'Other', reason_code: nil } if custom_reason.blank?
+
+      { reason: custom_reason, reason_code: nil }
+    end
+
+    def fetch_param(key)
+      params[key] || params[key.to_sym]
     end
 
     def log_proof_submission(type, has_attachment)

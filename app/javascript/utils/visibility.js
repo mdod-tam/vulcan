@@ -15,6 +15,7 @@ let _legacyWarned = false;
  * @param {boolean} options.required - Whether to set/remove required attribute
  * @param {string} options.hiddenClass - CSS class for hiding (default: 'hidden')
  * @param {boolean} options.ariaHidden - Whether to set aria-hidden attribute
+ * @param {boolean} options.inlineStyleFallback - Whether to use inline display fallback (default: true)
  * @returns {HTMLElement|null} The element for chaining, or null if invalid
  */
 export function setVisible(element, visible, options = {}) {
@@ -29,20 +30,21 @@ export function setVisible(element, visible, options = {}) {
     return element;
   }
 
-  const { required, hiddenClass = 'hidden', ariaHidden } = options;
+  const { required, hiddenClass = 'hidden', ariaHidden, inlineStyleFallback = true } = options;
 
   // Toggle visibility
   if (visible) {
     element.classList.remove(hiddenClass);
     // Remove inline display:none that might override CSS classes
-    if (element.style.display === 'none') {
+    if (inlineStyleFallback && element.style.display === 'none') {
       element.style.display = '';
     }
   } else {
     element.classList.add(hiddenClass);
-    // Set inline style as fallback in case CSS fails to load
-    // This prevents sensitive sections from being visible if .hidden class doesn't apply
-    element.style.display = 'none';
+    // Optional inline style fallback for sections that must never flash visible.
+    if (inlineStyleFallback) {
+      element.style.display = 'none';
+    }
   }
 
   // Handle required attribute if specified
