@@ -168,8 +168,13 @@ class NotificationServiceTest < ActiveSupport::TestCase
 
     medical_cert_notif = Notification.new(action: 'medical_certification_rejected')
     mailer, method = NotificationService.send(:resolve_mailer, medical_cert_notif)
+    assert_nil mailer
+    assert_nil method
+
+    requested_cert_notif = Notification.new(action: 'medical_certification_requested')
+    mailer, method = NotificationService.send(:resolve_mailer, requested_cert_notif)
     assert_equal MedicalProviderMailer, mailer
-    assert_equal :rejected, method
+    assert_equal :requested, method
 
     unknown_notif = Notification.new(action: 'some_unknown_action')
     mailer, method = NotificationService.send(:resolve_mailer, unknown_notif)

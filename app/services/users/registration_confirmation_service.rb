@@ -16,7 +16,7 @@ module Users
       failure("Failed to send registration confirmation: #{e.message}")
     end
 
-    private
+                                                  private
 
     attr_reader :user, :request
 

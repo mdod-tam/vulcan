@@ -135,7 +135,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
     system_user = User.system_user
 
     assert system_user.persisted?
-    assert_equal 'system@example.com', system_user.email
+    assert_equal 'system@mdmat.org', system_user.email
     assert_equal 'Users::Administrator', system_user.type
     assert system_user.admin?
   end

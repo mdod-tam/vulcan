@@ -3,15 +3,13 @@
   user = current_user
   
   # Set up navigation links once
-  navigation_links = [
-    ["Home", root_path]
-  ]
+  navigation_links = []
 
     #Saving this for later incase we want to add it back to navbar
     #["About", "/about"],
     #["Contact", "/contact"]
 
-  # Determine dashboard path once if user is logged in
+  # Determine dashboard path and logo link once if user is logged in
   if user
     dashboard_path = if user.admin?
                        admin_dashboard_path
@@ -27,8 +25,16 @@
                        admin_dashboard_path
                      end
     
+    logo_link_path = dashboard_path
+    logo_aria_label = "Go to your dashboard"
+    logo_sr_text = "TAM Logo - Go to Dashboard"
+    
     # Check if user has 2FA set up
     has_webauthn = user.webauthn_credentials.exists?
+  else
+    logo_link_path = root_path
+    logo_aria_label = "Return to homepage"
+    logo_sr_text = "TAM Logo - Return to Homepage"
   end
 %>
 
@@ -38,14 +44,14 @@
       <div class="flex items-center justify-between h-16">
         <!-- Logo -->
         <div class="flex items-center">
-          <%= link_to root_path, 
+          <%= link_to logo_link_path, 
               class: "focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md", 
-              aria: { label: "Return to homepage" } do %>
+              aria: { label: logo_aria_label } do %>
             <img src="<%= asset_path("TAM_color.png") %>" 
                  alt="TAM Logo" 
                  class="h-8 w-auto"
                  aria-hidden="true">
-            <span class="sr-only">TAM Logo - Return to Homepage</span>
+            <span class="sr-only"><%= logo_sr_text %></span>
           <% end %>
         </div>
 

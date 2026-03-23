@@ -7,7 +7,7 @@ class ProofReview < ApplicationRecord
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
 
   # Enums (using the original syntax to avoid argument errors)
-  enum :proof_type, { income: 0, residency: 1 }, prefix: true
+  enum :proof_type, { income: 0, residency: 1, medical_certification: 2 }, prefix: true
   enum :status, { approved: 0, rejected: 1 }, prefix: true
   enum :submission_method, { web: 0, email: 1, scanned: 2, paper: 3 }, prefix: true
 
@@ -42,6 +42,9 @@ class ProofReview < ApplicationRecord
   end
 
   def should_validate_proof_attachment?
+    # Medical certification rejections are allowed without an uploaded attachment.
+    return false if status_rejected? && proof_type_medical_certification?
+
     # Don't validate proof attachment for paper submissions with rejected proofs
     # This check is the highest priority and applies in all environments
     return false if status_rejected? && submission_method_paper?
@@ -66,6 +69,7 @@ class ProofReview < ApplicationRecord
     proof = case proof_type
             when 'income' then application&.income_proof
             when 'residency' then application&.residency_proof
+            when 'medical_certification' then application&.medical_certification
             end
     errors.add(:base, "No #{proof_type} proof found for review") unless proof&.attached?
   end
@@ -93,6 +97,8 @@ class ProofReview < ApplicationRecord
   end
 
   def process_rejection_flow
+    return if proof_type_medical_certification?
+
     ActiveRecord::Base.transaction do
       if status_rejected?
         Rails.logger.info 'Status is rejected, handling rejection flow'
@@ -105,6 +111,9 @@ class ProofReview < ApplicationRecord
   end
 
   def send_status_notification
+    # Medical certification reviews have their own provider notification flow.
+    return if proof_type_medical_certification?
+
     # Skip notifications if this is a paper application context
     # Paper applications handle their own notifications in PaperApplicationService
     return if Current.paper_context
@@ -152,6 +161,7 @@ class ProofReview < ApplicationRecord
       application.save!
     end
   rescue StandardError => e
+    Rails.logger.error "ProofReview#increment_rejections_if_rejected failed for application #{application.id}: #{e.class} #{e.message}"
     errors.add(:base, "Failed to update rejection count. Please try again. Status: #{e.message}")
     raise ActiveRecord::Rollback
   end
@@ -162,7 +172,7 @@ class ProofReview < ApplicationRecord
       archive_application_if_exceeded if application.total_rejections > 8
     end
   rescue StandardError => e
-    Rails.logger.error "Failed to process max rejections: #{e.message}"
+    Rails.logger.error "ProofReview#check_max_rejections failed for application #{application.id}: #{e.class} #{e.message}"
     errors.add(:base, 'Failed to process rejection limits')
     raise ActiveRecord::Rollback
   end

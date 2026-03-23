@@ -150,8 +150,6 @@ module AdminTests
     end
 
     test 'modal preserves scroll state across multiple proof reviews' do
-      # Test two consecutive modal opens/closes using existing modal helpers to ensure scroll state is preserved
-
       # Simplified navigation with retry for browser corruption
       visit_admin_application_with_retry(@application, user: @admin)
 

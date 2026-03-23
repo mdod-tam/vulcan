@@ -48,12 +48,14 @@ module Applications
       form = create_valid_form(@user)
       form.hearing_disability = true
       form.physical_address_1 = '123 Test St'
+      form.locale = 'es'
 
       ApplicationCreator.call(form)
 
       @user.reload
       assert @user.hearing_disability?
       assert_equal '123 Test St', @user.physical_address_1
+      assert_equal 'es', @user.locale
     end
 
     test 'sets medical provider details' do

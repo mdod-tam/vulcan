@@ -376,6 +376,19 @@ end
 5. Verify authentication state
 6. Check browser dev tools for JS errors
 
+### Expected Error Logging in Tests
+When a test intentionally triggers a rescue path, assert logging behavior so output stays clean and behavior is verified:
+
+```ruby
+Rails.logger.stubs(:error) # silence noisy output for this test
+Rails.logger.expects(:error).with(regexp_matches(/expected failure context/)).once
+
+result = service.call
+assert result.failure?
+```
+
+Use this for stimulated failures (validation failures, simulated API failures, fault-tolerant audit failures). Prefer matching a stable message fragment instead of full dynamic strings.
+
 ### Anti-Patterns to Avoid
 - Over-stubbing database queries
 - Stubbing core business services

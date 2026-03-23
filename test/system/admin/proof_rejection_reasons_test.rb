@@ -327,6 +327,9 @@ module Admin
         # Click rejection reason button using scroll-safe helper (no within_modal since we're already scoped)
         click_modal_button("button[data-reason-type='missingName']")
 
+        selected_button = find("button[data-reason-type='missingName']")
+        assert_equal 'true', selected_button['aria-pressed']
+
         # Wait for textarea to be populated - use intelligent waiting
         assert_selector("textarea[name='rejection_reason']")
 
@@ -334,9 +337,37 @@ module Admin
         reason_field = find("textarea[name='rejection_reason']")
         assert reason_field.value.present?, 'Rejection reason field should be populated'
         assert_includes reason_field.value, 'does not show your name'
+        assert_equal reason_field[:id], page.evaluate_script('document.activeElement.id')
+
+        assert_selector("[data-rejection-form-target='liveRegion']",
+                        text: /Selected rejection reason: Missing Name/i,
+                        visible: :all)
 
         # Close the modal using scroll-safe helper
         click_modal_button('Cancel')
+      end
+    end
+
+    test 'selecting Other in the proof rejection modal unlocks custom reason entry' do
+      system_test_sign_in(@admin)
+      visit_admin_application_with_retry(@application, user: @admin)
+      assert_selector '#attachments-section', wait: 30
+
+      click_review_proof_and_wait('income', timeout: 15)
+
+      within('#incomeProofReviewModal') do
+        click_button 'Reject'
+      end
+
+      wait_for_modal_open('proofRejectionModal', timeout: 10)
+
+      within('#proofRejectionModal') do
+        click_modal_button("[data-rejection-form-target='generalReasons'] button[aria-label='Enter a custom rejection reason']")
+
+        reason_field = find("textarea[name='rejection_reason']")
+        assert_nil reason_field[:readonly], 'Custom reason field should be editable after selecting Other'
+        assert_selector "[data-rejection-form-target='languageNotice']", visible: true
+        assert_selector "[data-rejection-form-target='codeStatus']", text: /Custom reason/
       end
     end
 

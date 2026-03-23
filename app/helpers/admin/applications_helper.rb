@@ -2,6 +2,8 @@
 
 module Admin
   module ApplicationsHelper
+    include RejectionReasonsHelper
+
     def medical_certification_link(application, style = :link)
       return nil unless application.medical_certification.attached?
 

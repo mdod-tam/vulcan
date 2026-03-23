@@ -71,6 +71,7 @@ class ProofReviewService < BaseService
       proof_type: proof_type,
       status: status,
       rejection_reason: params[:rejection_reason],
+      rejection_reason_code: params[:rejection_reason_code].presence,
       notes: params[:notes]
     }
   end

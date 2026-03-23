@@ -109,6 +109,27 @@
           <% end %>
         </section>
 
+        <!-- Communication Preferences Section -->
+        <section aria-labelledby="communication-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+          <h2 id="communication-section-title" class="text-lg font-medium text-gray-900">Communication Preferences</h2>
+          <div>
+            <%= label_tag "constituent_locale", "Preferred Language", class: "block text-sm font-medium text-gray-700" %>
+            <%= select_tag "constituent[locale]",
+                options_for_select(
+                  [
+                    ["English", "en"],
+                    ["Spanish", "es"]
+                  ],
+                  params.dig(:constituent, :locale).presence || @applicant_user&.locale.presence || current_user&.locale.presence || "en"
+                ),
+                id: "constituent_locale",
+                class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+            <p class="mt-1 text-xs text-gray-700">
+              We will use this language for notifications when Spanish templates are available.
+            </p>
+          </div>
+        </section>
+
         <!-- Address Information Section -->
         <section aria-labelledby="address-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="address-section-title" class="text-lg font-medium text-gray-900">Address Information</h2>

@@ -183,16 +183,35 @@ class UserSearchController extends BaseFormController {
         button.disabled = false
         button.textContent = originalText
       } else {
-        throw new Error('Guardian creation failed')
+        // Handle validation errors from server
+        if (result.data && result.data.errors) {
+          this.handleValidationErrors(result.data.errors)
+        } else {
+          throw new Error(result.data?.message || 'Guardian creation failed')
+        }
+        // Restore button state on error
+        button.disabled = false
+        button.textContent = 'Save Guardian'
       }
 
     } catch (error) {
       console.error('Guardian creation error:', error)
-
+      console.error('Error data:', error.data)
+      console.error('Error status:', error.status)
+      
       // Restore button state on error
       const button = event.target
       button.disabled = false
       button.textContent = 'Save Guardian'
+      
+      // Handle RequestError with validation errors
+      if (error.data && error.data.errors) {
+        console.log('Displaying validation errors:', error.data.errors)
+        this.handleValidationErrors(error.data.errors)
+      } else if (error.message) {
+        // Show generic error message
+        console.warn('Guardian creation failed:', error.message)
+      }
     }
   }
 
@@ -299,23 +318,48 @@ class UserSearchController extends BaseFormController {
 
   // Handle validation errors display
   handleValidationErrors(errors) {
+    // Scroll to first error for visibility
+    let firstErrorInput = null
+
     Object.entries(errors).forEach(([field, message]) => {
       if (message) {
         // Look for input with guardian_attributes format
-        const input = this.element.querySelector(`input[name="guardian_attributes[${field}]"], select[name="guardian_attributes[${field}]"]`)
+        const input = this.element.querySelector(`input[name="guardian_attributes[${field}]"], select[name="guardian_attributes[${field}]"], textarea[name="guardian_attributes[${field}]"]`)
         if (input) {
-          input.classList.add('border-red-500')
-          // Try to find or create error display
-          let errorEl = input.parentElement.querySelector('.field-error-message')
-          if (!errorEl) {
-            errorEl = document.createElement('div')
-            errorEl.className = 'field-error-message text-red-600 text-sm mt-1'
-            input.parentElement.appendChild(errorEl)
+          input.classList.add('border-red-500', 'border-2')
+          input.setAttribute('aria-invalid', 'true')
+          
+          // Remove any existing error message
+          const existingError = input.parentElement.querySelector('.field-error-message')
+          if (existingError) {
+            existingError.remove()
           }
-          errorEl.textContent = message
+          
+          // Create and insert error display
+          const errorEl = document.createElement('div')
+          errorEl.className = 'field-error-message text-red-600 text-sm mt-1 flex items-start gap-1'
+          errorEl.setAttribute('role', 'alert')
+          errorEl.innerHTML = `
+            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+            </svg>
+            <span>${this.escapeHtml(message)}</span>
+          `
+          input.parentElement.appendChild(errorEl)
+          
+          // Track first error for scrolling
+          if (!firstErrorInput) {
+            firstErrorInput = input
+          }
         }
       }
     })
+
+    // Scroll first error into view
+    if (firstErrorInput) {
+      firstErrorInput.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      firstErrorInput.focus()
+    }
   }
 
   // Override from BaseFormController for success handling

@@ -177,3 +177,28 @@ en:
         signin_pass: "Signed in successfully"
       complete_two_factor_authentication:
         signin_pass_2fa: "Signed in successfully"
+  letters:
+    pdf:
+      date_label: "Date"
+      salutation: "Dear %{first_name},"
+      closing: "Sincerely,"
+      signature:
+        organization: "Maryland Accessible Telecommunications"
+        team: "Customer Service Team"
+      footer:
+        address: "Maryland Accessible Telecommunications | 123 Main Street, Baltimore, MD 21201"
+        contact_line: "Phone: 555-123-4567 | Email: %{support_email} | Website: mdmat.org"
+      page_number: "Page %{page} of %{total}"
+      titles:
+        application_notifications_account_created: "Your Maryland Accessible Telecommunications Account"
+        application_notifications_registration_confirmation: "Welcome to the Maryland Accessible Telecommunications Program"
+        application_notifications_proof_rejected: "Document Verification Follow-up Required"
+        application_notifications_income_threshold_exceeded: "Income Eligibility Review"
+        application_notifications_proof_approved: "Document Verification Approved"
+        application_notifications_proof_received: "Document Verification Received"
+        application_notifications_max_rejections_reached: "Important Application Status Update"
+        application_notifications_proof_submission_error: "Document Submission Error"
+        medical_provider_request_certification: "Request for Medical Certification"
+        voucher_notifications_voucher_assigned: "Your Accessibility Equipment Voucher"
+        voucher_notifications_voucher_redeemed: "Voucher Redemption Confirmation"
+        evaluator_mailer_evaluation_submission_confirmation: "Evaluation Submission Confirmation"

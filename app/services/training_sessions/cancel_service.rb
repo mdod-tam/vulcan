@@ -25,7 +25,7 @@ module TrainingSessions
       Rails.logger.error("Error cancelling training session: #{e.message}")
       failure(message: e.message)
     rescue ArgumentError => e
-      Rails.logger.error("Invalid parameters for cancelling training session: #{e.message}")
+      log_validation_failure(e)
       failure(message: e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error cancelling training session: #{e.message}")
@@ -38,6 +38,13 @@ module TrainingSessions
       return if @params[:cancellation_reason].present?
 
       raise ArgumentError, 'cancellation_reason is required'
+    end
+
+    def log_validation_failure(error)
+      message = "TrainingSessions::CancelService validation failed: #{error.message}"
+      return Rails.logger.warn("[EXPECTED_TEST_VALIDATION] #{message}") if Rails.env.test?
+
+      Rails.logger.warn(message)
     end
 
     def update_training_session!

@@ -125,6 +125,10 @@ class ProofAttachmentService
   def self.record_basic_logging(result, proof_type, status)
     if result[:success]
       Rails.logger.info "Proof #{proof_type} #{status} completed in #{result[:duration_ms]}ms"
+    elsif Rails.env.test? && result[:error]&.message.to_s.match?(/mismatched digest/i)
+      Rails.logger.debug do
+        "[EXPECTED_TEST_ATTACHMENT] Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.message}"
+      end
     else
       Rails.logger.error "Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.message}"
     end
@@ -397,10 +401,10 @@ class ProofAttachmentService
         status_attrs = { "#{context.proof_type}_proof_status" => context.status }
         status_attrs[:needs_review_since] = Time.current if context.status == :not_reviewed
         status_attrs[:updated_at] = Time.current
-        
+
         # Use update_columns to bypass validations that may require all proofs to be attached
         # This is necessary in paper application context where proofs are being processed
-        context.application.update_columns(status_attrs)
+        context.application.update_columns(status_attrs) # rubocop:disable Rails/SkipsModelValidations
         context.application.reload
       end
     end
@@ -419,24 +423,29 @@ class ProofAttachmentService
     end
 
     def perform_rejection(application:, proof_type:, admin:, submission_method:, rejection_details:)
-      reason = rejection_details.fetch(:reason, 'other')
-      notes = rejection_details.fetch(:notes, nil)
+      raw_reason = rejection_details.fetch(:reason, 'other')
+      notes      = rejection_details.fetch(:notes, nil)
+
+      resolved = RejectionReason.resolve_for_persistence(
+        code: raw_reason, proof_type: proof_type.to_s, fallback: raw_reason
+      )
+      reason_text = resolved[:text]
+      reason_code = resolved[:code]
 
       with_paper_context(submission_method, proof_type) do
-        # Update the proof status
         application.reject_proof_without_attachment!(
           proof_type,
           admin: admin,
-          reason: reason,
+          reason: reason_text,
           notes: notes || 'Rejected during paper application submission'
         )
 
-        # Create the proof review record
         application.proof_reviews.create!(
           admin: admin,
           proof_type: proof_type,
           status: 'rejected',
-          rejection_reason: reason,
+          rejection_reason: reason_text,
+          rejection_reason_code: reason_code,
           notes: notes,
           reviewed_at: Time.current,
           submission_method: submission_method

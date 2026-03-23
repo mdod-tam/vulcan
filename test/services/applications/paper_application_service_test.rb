@@ -130,14 +130,14 @@ module Applications
         application: @application_params,
         income_proof_action: 'reject',
         income_proof_rejection_reason: 'other',
-        income_proof_rejection_notes: 'Test rejection'
+        income_proof_custom_rejection_reason: 'Test rejection'
       }
 
       # Mock the ProofAttachmentService for rejection
       ProofAttachmentService.expects(:reject_proof_without_attachment).with(
         has_entries(
           proof_type: :income,
-          reason: 'other'
+          reason: 'Test rejection'
         )
       ).returns({ success: true })
 
@@ -160,6 +160,58 @@ module Applications
 
       # Since we've mocked the service, we just need to verify that the application was created
       # and our mocked rejection service was called
+    end
+
+    test 'uses Other custom rejection reason text as income rejection reason' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-rejected-existing-#{test_timestamp}@example.com"
+      unique_phone = "202567#{test_timestamp.to_s[-4..]}"
+      matching_note = "Please provide a document with your full legal name clearly visible. [#{test_timestamp}]"
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params,
+        income_proof_action: 'reject',
+        income_proof_rejection_reason: 'other',
+        income_proof_custom_rejection_reason: matching_note
+      }
+
+      ProofAttachmentService.expects(:reject_proof_without_attachment).with(
+        has_entries(
+          proof_type: :income,
+          reason: matching_note
+        )
+      ).returns({ success: true })
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+      assert result, "Failed to create application with custom rejection reason: #{service.errors.inspect}"
+    end
+
+    test 'uses Other custom rejection reason text as medical certification rejection reason' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-medical-other-#{test_timestamp}@example.com"
+      unique_phone = "202568#{test_timestamp.to_s[-4..]}"
+      custom_note = "Provider noted additional details not covered by predefined reasons. [#{test_timestamp}]"
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params,
+        medical_certification_action: 'rejected',
+        medical_certification_rejection_reason: 'other',
+        medical_certification_custom_rejection_reason: custom_note
+      }
+
+      MedicalCertificationAttachmentService.expects(:reject_certification).with(
+        has_entries(
+          reason: custom_note,
+          reason_code: nil
+        )
+      ).returns({ success: true })
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+      assert result, "Failed to create application with medical custom rejection reason: #{service.errors.inspect}"
     end
 
     test 'application creation fails when attachment validation fails' do
@@ -222,8 +274,7 @@ module Applications
         income_proof_action: 'accept',
         income_proof: @pdf_file,
         residency_proof_action: 'reject',
-        residency_proof_rejection_reason: 'address_mismatch',
-        residency_proof_rejection_notes: "Address doesn't match"
+        residency_proof_rejection_reason: 'address_mismatch'
       }
 
       # Mock ProofAttachmentService to make our test more reliable
@@ -253,6 +304,41 @@ module Applications
       # Verify the application was created
       # Status should be awaiting_proof when any proof is rejected
       assert_equal 'awaiting_proof', application.status, 'Status should be awaiting_proof when proof is rejected'
+    end
+
+    test 'updates existing dependent locale and communication preferences' do
+      guardian = create(:constituent, email: "guardian-#{@timestamp}@example.com", phone: "301555#{@timestamp.to_s[-4..]}")
+      dependent = create(:constituent, email: "dependent-#{@timestamp}@example.com", phone: "302555#{@timestamp.to_s[-4..]}")
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'parent',
+        constituent: {
+          dependent_email: dependent.email,
+          dependent_phone: dependent.phone,
+          locale: 'es',
+          communication_preference: 'letter',
+          preferred_means_of_communication: 'asl'
+        },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(
+        params: service_params,
+        admin: @admin,
+        skip_income_validation: true,
+        skip_proof_processing: true
+      )
+
+      assert service.create, "Expected service to succeed, got: #{service.errors.inspect}"
+
+      dependent.reload
+      assert_equal 'es', dependent.locale
+      assert_equal 'letter', dependent.communication_preference
+      assert_equal 'asl', dependent.preferred_means_of_communication
     end
   end
 end

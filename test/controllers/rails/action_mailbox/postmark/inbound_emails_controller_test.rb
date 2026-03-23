@@ -10,7 +10,7 @@ module Rails
           # Create a sample raw email content
           raw_email = <<~EMAIL
             From: sender@example.com
-            To: proof@example.com
+            To: proof@mdmat.org
             Subject: Test Inbound Email
             Message-ID: <test-message-id-123@example.com>
             Content-Type: text/plain
@@ -41,7 +41,7 @@ module Rails
           # Create a sample raw email content
           raw_email = <<~EMAIL
             From: sender@example.com
-            To: proof@example.com
+            To: proof@mdmat.org
             Subject: Test Inbound Email
             Message-ID: <test-message-id-123@example.com>
             Content-Type: text/plain

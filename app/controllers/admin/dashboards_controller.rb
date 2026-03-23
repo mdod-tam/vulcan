@@ -10,7 +10,8 @@ module Admin
       # Load comprehensive dashboard metrics
       @metrics = load_dashboard_metrics
 
-      # Load recent notifications with actor eager-loaded to avoid N+1 on actor queries
+      # Load recent notifications to avoid N+1 queries
+      # Preload notifiable for Notification#message, actor for view display
       @recent_notifications = Notification
                               .includes(:actor, :notifiable)
                               .where('created_at > ?', 7.days.ago)

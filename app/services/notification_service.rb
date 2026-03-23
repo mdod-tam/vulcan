@@ -149,22 +149,22 @@ class NotificationService
   end
 
   MAILER_MAP = {
-    'proof_rejected'                    => [ApplicationNotificationsMailer,           :proof_rejected],
-    'proof_approved'                    => [ApplicationNotificationsMailer,           :proof_approved],
-    'income_proof_rejected'             => [ApplicationNotificationsMailer,           :proof_rejected],
-    'residency_proof_rejected'          => [ApplicationNotificationsMailer,           :proof_rejected],
-    'account_created'                   => [ApplicationNotificationsMailer,           :account_created],
-    'income_proof_attached'             => [ApplicationNotificationsMailer,           :proof_received],
-    'residency_proof_attached'          => [ApplicationNotificationsMailer,           :proof_received],
-    'w9_approved'                       => [VendorNotificationsMailer,                :w9_approved],
-    'w9_rejected'                       => [VendorNotificationsMailer,                :w9_rejected],
-    'training_requested'                => [TrainingSessionNotificationsMailer,       :trainer_assigned],
-    'trainer_assigned'                  => [TrainingSessionNotificationsMailer,       :trainer_assigned],
-    'security_key_recovery_approved'    => [ApplicationNotificationsMailer,           :account_created],
-    'medical_certification_rejected'    => [MedicalProviderMailer,                    :rejected],
-    'medical_certification_approved'    => [MedicalProviderMailer,                    :approved]
+    'proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
+    'proof_approved' => [ApplicationNotificationsMailer, :proof_approved],
+    'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
+    'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
+    'account_created' => [ApplicationNotificationsMailer, :account_created],
+    'income_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
+    'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
+    'w9_approved' => [VendorNotificationsMailer, :w9_approved],
+    'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
+    'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
+    'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
+    'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created],
+    'medical_certification_approved' => [MedicalProviderMailer, :approved],
+    'medical_certification_requested' => [MedicalProviderMailer, :requested]
     # medical_certification_received: no email — constituent sees status in dashboard
-    # medical_certification_requested: sent directly via MedicalProviderMailer.request_certification, not through NotificationService
+    # medical_certification_requested: request email delivered through MedicalProviderMailer.requested proxy
   }.freeze
 
   PREFERENCE_ROUTED_ACTIONS = %w[
@@ -265,10 +265,14 @@ class NotificationService
   # ---- Instance orchestration ------------------------------------------------
 
   def log_notification_creation_info(opts, channel)
-    recipient_info = opts[:recipient] ? "#{opts[:recipient].class.name}##{safe_id(opts[:recipient])}" : 'nil recipient'
-    actor_info     = opts[:actor] ? "#{opts[:actor].class.name}##{safe_id(opts[:actor])}" : 'nil actor'
-    notifiable_info = opts[:notifiable] ? "#{opts[:notifiable].class.name}##{safe_id(opts[:notifiable])}" : 'nil notifiable'
-    Rails.logger.info "Creating notification: #{opts[:type]} for #{recipient_info} by #{actor_info} about #{notifiable_info} via #{channel}"
+    recipient  = opts[:recipient] || opts['recipient']
+    actor      = opts[:actor] || opts['actor']
+    notifiable = opts[:notifiable] || opts['notifiable']
+    type       = opts[:type] || opts['type']
+    recipient_info  = recipient ? "#{recipient.class.name}##{safe_id(recipient)}" : 'nil recipient'
+    actor_info      = actor ? "#{actor.class.name}##{safe_id(actor)}" : 'nil actor'
+    notifiable_info = notifiable ? "#{notifiable.class.name}##{safe_id(notifiable)}" : 'nil notifiable'
+    Rails.logger.info "Creating notification: #{type} for #{recipient_info} by #{actor_info} about #{notifiable_info} via #{channel}"
   end
 
   def perform_post_creation_actions(notification, opts, _channel)
@@ -419,7 +423,7 @@ class NotificationService
       Rails.logger.warn 'NotificationService: Adding fallback temp_password for test environment'
       # Update the notification's metadata directly
       updated_metadata = (notification.metadata || {}).merge('temp_password' => 'test_password_123')
-      notification.update_column(:metadata, updated_metadata)
+      notification.update_column(:metadata, updated_metadata) # rubocop:disable Rails/SkipsModelValidations
       return true
     end
     false
@@ -632,7 +636,7 @@ class NotificationService
   end
 
   def default_actor
-    User.admins&.first || User.find_by(email: 'mat.program1@maryland.gov')
+    User.admins&.first || User.find_by(email: Policy.get('support_email') || 'mat.program1@maryland.gov')
   end
 
   def finalized_metadata(opts)
@@ -771,7 +775,7 @@ class NotificationService
   private_class_method :normalize_options
 
   def self.default_actor
-    User.admins&.first || User.find_by(email: 'mat.program1@maryland.gov')
+    User.admins&.first || User.find_by(email: Policy.get('support_email') || 'mat.program1@maryland.gov')
   end
   private_class_method :default_actor
 
