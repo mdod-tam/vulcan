@@ -141,7 +141,10 @@ class ApplicationController < ActionController::Base
       # Clear the challenge only after successful sign-in
       TwoFactorAuth.clear_challenge(session)
       # Redirect to stored location or appropriate dashboard
-      redirect_to stored_location || _dashboard_for(user), notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
+      Rails.logger.info("[2FA] Stored location: #{stored_location}")
+      redirect_path = stored_location || _dashboard_for(user)
+      Rails.logger.info("[2FA] Redirecting user #{user.id} (type: #{user.type.inspect}) to #{redirect_path}")
+      redirect_to redirect_path, notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
     else
       redirect_to sign_in_path, alert: t('alerts.session_fail')
     end
@@ -158,9 +161,10 @@ class ApplicationController < ActionController::Base
     return nil unless user_id
     
     user = User.find(user_id)
-    user.reload if user  # Ensure type column is properly loaded
+    Rails.logger.debug("[find_user_for_two_factor] Found user #{user.id} with type: #{user.type.inspect}")
     user
   rescue ActiveRecord::RecordNotFound
+    Rails.logger.warn("[find_user_for_two_factor] User #{user_id} not found")
     nil
   end
 
