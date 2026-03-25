@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class TrainingSession < ApplicationRecord
-  include TrainingStatusManagement
+  include StatusManagement
   include NotificationDelivery
 
   # Associations

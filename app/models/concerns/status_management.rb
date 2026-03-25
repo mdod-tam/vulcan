@@ -18,7 +18,7 @@ module StatusManagement
     scope :pending, -> { where(status: %i[scheduled confirmed]) }
     scope :completed_sessions, -> { where(status: :completed) }
     scope :needing_followup, -> { where(status: %i[no_show cancelled]) }
-    scope :requested_items, -> { where(status: :requested) }
+    scope :requested_sessions, -> { where(status: :requested) }
   end
 
   def active?

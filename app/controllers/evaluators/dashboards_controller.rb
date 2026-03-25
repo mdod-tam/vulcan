@@ -28,18 +28,18 @@ module Evaluators
 
     def load_admin_data
       # For admins, show all evaluations
-      @requested_evaluations = Evaluation.requested_evaluations
+      @requested_evaluations = Evaluation.requested_sessions
       @scheduled_evaluations = Evaluation.active
-      @completed_evaluations = Evaluation.completed_evaluations
+      @completed_evaluations = Evaluation.completed_sessions
       @followup_evaluations = Evaluation.needing_followup
       @assigned_constituents = Constituent.where(evaluator_id: Evaluator.select(:id)).to_a.uniq(&:id)
     end
 
     def load_evaluator_data
       # For evaluators, show only their evaluations
-      @requested_evaluations = current_user.evaluations.requested_evaluations
+      @requested_evaluations = current_user.evaluations.requested_sessions
       @scheduled_evaluations = current_user.evaluations.active
-      @completed_evaluations = current_user.evaluations.completed_evaluations
+      @completed_evaluations = current_user.evaluations.completed_sessions
       @followup_evaluations = current_user.evaluations.needing_followup
       @assigned_constituents = current_user.assigned_constituents.to_a.uniq(&:id)
     end
@@ -53,11 +53,11 @@ module Evaluators
     def evaluations_for_filter(filter_type)
       case filter_type
       when 'requested'
-        current_user.admin? ? Evaluation.requested_evaluations : current_user.evaluations.requested_evaluations
+        current_user.admin? ? Evaluation.requested_sessions : current_user.evaluations.requested_sessions
       when 'scheduled'
         current_user.admin? ? Evaluation.active : current_user.evaluations.active
       when 'completed'
-        current_user.admin? ? Evaluation.completed_evaluations : current_user.evaluations.completed_evaluations
+        current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions
       when 'needs_followup'
         current_user.admin? ? Evaluation.needing_followup : current_user.evaluations.needing_followup
       end
@@ -98,7 +98,7 @@ module Evaluators
       @requested_evaluations_display = @requested_evaluations.order(created_at: :desc).limit(5)
       @upcoming_evaluations = (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
                               .order(evaluation_date: :asc).limit(5)
-      @recent_evaluations = (current_user.admin? ? Evaluation.completed_evaluations : current_user.evaluations.completed_evaluations)
+      @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
                             .order(evaluation_date: :desc).limit(5)
     end
 
