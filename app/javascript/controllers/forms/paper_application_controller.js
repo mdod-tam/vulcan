@@ -67,12 +67,12 @@ export default class extends Controller {
    */
   _adultVerificationBlocksSubmit() {
     const idInput = this.element.querySelector('[name="existing_constituent_id"]');
-    if (!idInput || !String(idInput.value || "").trim()) return false;
+    if (!idInput || idInput.disabled || !String(idInput.value || "").trim()) return false;
 
     const checkbox = this.element.querySelector(
       'input[type="checkbox"][name="contact_info_verified"][data-adult-picker-target="verificationCheckbox"]'
     );
-    if (!checkbox) return false;
+    if (!checkbox || checkbox.disabled) return false;
 
     return !checkbox.checked;
   }
@@ -113,13 +113,11 @@ export default class extends Controller {
     const fieldset = checkbox.closest('fieldset');
     const medicalProviderFields = fieldset.querySelectorAll('[name*="medical_provider"]');
     const description = fieldset.querySelector('p.text-sm');
-    const prefillNotice = fieldset.querySelector('#medical-provider-prefill-notice');
     const fieldsContainer = fieldset.querySelector('.grid');
     
     if (isChecked) {
       // Hide only the form fields and description, keep the header visible
       if (description) description.classList.add('hidden');
-      if (prefillNotice) prefillNotice.classList.add('hidden');
       if (fieldsContainer) fieldsContainer.classList.add('hidden');
       
       // Remove required attribute from all medical provider fields

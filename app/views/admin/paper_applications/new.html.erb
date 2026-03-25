@@ -30,6 +30,7 @@
         turbo: false,
         controller: "paper-application applicant-type income-validation",
         action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
+        "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
         "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
         "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']", 
         "income-validation-fpl-thresholds-value": fpl_thresholds_json, 
@@ -84,6 +85,11 @@
       </section>
 
       <%# ============================================================ %>
+      <% submitted_params = @paper_application[:submitted_params] || {} %>
+      <% existing_constituent_id = submitted_params[:existing_constituent_id].presence %>
+      <% contact_info_mode = submitted_params[:contact_info_mode].presence || "update" %>
+      <% contact_info_verified = ActiveModel::Type::Boolean.new.cast(submitted_params[:contact_info_verified]) %>
+
       <%# Adult self flow: one Stimulus controller wraps search + applicant sections so targets resolve. %>
       <%# ============================================================ %>
       <div class="contents" data-controller="adult-picker">
@@ -179,8 +185,8 @@
             </div>
           </div>
 
-          <%# Hidden input placed outside toggled divs so it is never disabled %>
-          <input type="hidden" name="existing_constituent_id" data-adult-picker-target="constituentIdField">
+          <%# Hidden input stays in the adult-search section so Rails omits it when that branch is inactive. %>
+          <%= hidden_field_tag :existing_constituent_id, existing_constituent_id, data: { adult_picker_target: "constituentIdField" } %>
         </div>
       </section>
 
@@ -209,6 +215,20 @@
                 Applicant on File
               </h4>
               <div data-adult-picker-target="onFileSummaryContent" class="text-sm text-gray-700"></div>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <button type="button"
+                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                        data-adult-picker-target="incomeCopyButton"
+                        data-action="adult-picker#useLastApplicationIncomeInfo">
+                  Use last application household and income
+                </button>
+                <button type="button"
+                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                        data-adult-picker-target="medicalCopyButton"
+                        data-action="adult-picker#useLastApplicationMedicalProvider">
+                  Use last application medical provider
+                </button>
+              </div>
             </div>
           </div>
 
@@ -219,7 +239,7 @@
               <p class="text-xs text-amber-700 mb-3">Choose how to handle contact information for this applicant</p>
               <div class="flex flex-wrap gap-6">
                 <label class="flex items-start cursor-pointer">
-                  <input type="radio" name="contact_info_mode" value="update" checked
+                  <input type="radio" name="contact_info_mode" value="update" <%= "checked" if contact_info_mode != "on_file" %>
                          class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                          data-adult-picker-target="contactModeRadio"
                          data-action="change->adult-picker#contactModeChanged">
@@ -229,7 +249,7 @@
                   </span>
                 </label>
                 <label class="flex items-start cursor-pointer">
-                  <input type="radio" name="contact_info_mode" value="on_file"
+                  <input type="radio" name="contact_info_mode" value="on_file" <%= "checked" if contact_info_mode == "on_file" %>
                          class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                          data-adult-picker-target="contactModeRadio"
                          data-action="change->adult-picker#contactModeChanged">
@@ -249,7 +269,7 @@
             <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <label class="flex items-start cursor-pointer">
                 <%= hidden_field_tag :contact_info_verified, "0", id: nil %>
-                <input type="checkbox" name="contact_info_verified" value="1"
+                <input type="checkbox" name="contact_info_verified" value="1" <%= "checked" if contact_info_verified %>
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                        data-adult-picker-target="verificationCheckbox"
                        data-action="change->adult-picker#verificationChanged">
@@ -361,6 +381,27 @@
                   <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block" do %>
                     <%# dependents list will load here when guardian is selected %>
                   <% end %>
+                  <div data-guardian-picker-target="lastApplicationSummary" class="hidden mt-4 rounded-md bg-blue-50 p-3">
+                    <p class="text-sm text-blue-700">
+                      <span class="font-medium">Last application on file:</span>
+                      <span data-guardian-picker-target="lastApplicationSource"></span>
+                    </p>
+                    <p data-guardian-picker-target="lastApplicationDetails" class="mt-2 text-xs text-blue-700"></p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button type="button"
+                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                              data-guardian-picker-target="incomeCopyButton"
+                              data-action="guardian-picker#useLastApplicationIncomeInfo">
+                        Use last application household and income
+                      </button>
+                      <button type="button"
+                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                              data-guardian-picker-target="medicalCopyButton"
+                              data-action="guardian-picker#useLastApplicationMedicalProvider">
+                        Use last application medical provider
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <button type="button"
                         class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
@@ -467,22 +508,6 @@
               <legend class="text-base font-medium text-gray-900 px-2">Certifying Professional Information</legend>
               <p class="text-sm text-gray-600 mb-4">We'll contact this provider to verify the disability certification</p>
               
-              <%# Prefill Notice %>
-              <div id="medical-provider-prefill-notice" 
-                   class="hidden rounded-md bg-blue-50 p-3 mb-4"
-                   role="status"
-                   aria-live="polite">
-                <div class="flex items-start gap-2">
-                  <svg class="h-5 w-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                  </svg>
-                  <p class="text-sm text-blue-700">
-                    <span class="font-medium">Pre-filled from previous application:</span>
-                    <span id="medical-provider-prefill-source"></span>
-                  </p>
-                </div>
-              </div>
-
               <%= fields_for :application do |a| %>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="md:col-span-2">

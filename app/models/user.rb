@@ -102,7 +102,7 @@ class User < ApplicationRecord
   # Subject of a paper application (existing-adult flow). Used at trust boundaries;
   # do not rely on UI-only filtering or raw +existing_constituent_id+.
   def paper_applicant_candidate?
-    constituent? || applications.exists?
+    constituent?
   end
 
   private

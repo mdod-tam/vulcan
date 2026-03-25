@@ -28,5 +28,25 @@ module Admin
       # Assuming the view renders "Select" when eligible_now is true
       assert_match 'Select', response.body
     end
+
+    test 'show page allows starting paper application for dependent with rejected application' do
+      create(:application, user: @dependent, status: :rejected, application_date: 5.years.ago)
+
+      get admin_user_path(@guardian)
+      assert_response :success
+
+      assert_select "a[href='#{new_admin_paper_application_path(guardian_id: @guardian.id, dependent_id: @dependent.id)}']",
+                    text: 'Start Paper Application'
+    end
+
+    test 'show page hides start paper application for dependent with blocking application' do
+      create(:application, :in_progress, user: @dependent)
+
+      get admin_user_path(@guardian)
+      assert_response :success
+
+      assert_select "a[href='#{new_admin_paper_application_path(guardian_id: @guardian.id, dependent_id: @dependent.id)}']",
+                    false
+    end
   end
 end

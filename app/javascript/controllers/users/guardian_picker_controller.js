@@ -1,14 +1,33 @@
 import { Controller } from "@hotwired/stimulus";
-import { setVisible, setFieldIfEmpty } from "../../utils/visibility";
+import { setVisible, setFieldValue } from "../../utils/visibility";
 import { debouncedDispatch } from "../../utils/debounce";
 
 // Handles guardian‑selection UI toggling and central state.
 export default class extends Controller {
-  static targets = ["searchPane", "selectedPane", "guardianIdField", "dependentsFrame", "dependentIdField", "applicantTypeRadioDependent", "displaySelection"];
+  static targets = [
+    "searchPane",
+    "selectedPane",
+    "guardianIdField",
+    "dependentsFrame",
+    "dependentIdField",
+    "applicantTypeRadioDependent",
+    "displaySelection",
+    "lastApplicationSummary",
+    "lastApplicationSource",
+    "lastApplicationDetails",
+    "incomeCopyButton",
+    "medicalCopyButton"
+  ];
 
   connect() {
     this.selectedValue = !!(this.hasGuardianIdFieldTarget && this.guardianIdFieldTarget.value);
+    this._lastApplicationContext = null;
     this.togglePanes();
+
+    if (this.selectedValue && this.guardianIdFieldTarget.value) {
+      this.loadDependentsFrame(this.guardianIdFieldTarget.value);
+      this.loadLastApplicationContext(this.guardianIdFieldTarget.value);
+    }
   }
 
   /* Public API ----------------------------------------------------------- */
@@ -20,17 +39,18 @@ export default class extends Controller {
     this.togglePanes();
     this.dispatchSelectionChange();
     this.loadDependentsFrame(id);
-    this.prefillFromLastApplication(id);
+    this.loadLastApplicationContext(id);
   }
 
   clearSelection() {
     if (this.hasGuardianIdFieldTarget) this.guardianIdFieldTarget.value = "";
-    this.clearDependentSelection();
     this.selectedValue = false;
+    this.clearDependentSelection({ dispatch: false });
     this.togglePanes();
     this.dispatchSelectionChange();
     this.clearDependentsFrame();
-    this.hideMedicalProviderPrefillNotice();
+    this._lastApplicationContext = null;
+    this.hideLastApplicationSummary();
   }
 
   /* Internal helpers ----------------------------------------------------- */
@@ -52,82 +72,78 @@ export default class extends Controller {
     this.dependentsFrameTarget.innerHTML = "";
   }
 
-  async prefillFromLastApplication(guardianId) {
+  async loadLastApplicationContext(guardianId) {
     try {
-      // Slight delay to allow DOM sections to toggle
-      await new Promise(r => setTimeout(r, 50))
       const response = await fetch(`/admin/users/${guardianId}/last_application_values`, {
         headers: { 'Accept': 'application/json' },
         credentials: 'same-origin'
       })
       if (!response.ok) return;
       const data = await response.json();
-      if (!data.success || !data.application_id) return;
+      if (!data.success || !data.application_id) return this.hideLastApplicationSummary();
 
-      let foundAny = false
-      foundAny = setFieldIfEmpty('input[name="application[household_size]"]', data.household_size) || foundAny
-      foundAny = setFieldIfEmpty('input[name="application[annual_income]"]', data.annual_income) || foundAny
-      
-      let medicalPrefilled = false
-      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || medicalPrefilled
-      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || medicalPrefilled
-      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || medicalPrefilled
-      medicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || medicalPrefilled
-      foundAny = foundAny || medicalPrefilled
-      
-      // Show prefill notice if medical provider data was reused
-      if (medicalPrefilled) {
-        this.showMedicalProviderPrefillNotice(data.applicant_name, data.application_date)
-      }
-
-      if (!foundAny) {
-        // Retry after UI settles
-        setTimeout(() => {
-          let retryMedicalPrefilled = false
-          setFieldIfEmpty('input[name="application[household_size]"]', data.household_size)
-          setFieldIfEmpty('input[name="application[annual_income]"]', data.annual_income)
-          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name) || retryMedicalPrefilled
-          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone) || retryMedicalPrefilled
-          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax) || retryMedicalPrefilled
-          retryMedicalPrefilled = setFieldIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email) || retryMedicalPrefilled
-          
-          if (retryMedicalPrefilled) {
-            this.showMedicalProviderPrefillNotice(data.applicant_name, data.application_date)
-          }
-        }, 150)
-      }
+      this._lastApplicationContext = data;
+      this.showLastApplicationSummary(data);
     } catch (e) {
-      // Silent fail to avoid interrupting admin flow
-      console.warn('prefillFromLastApplication failed', e);
+      console.warn('loadLastApplicationContext failed', e);
     }
   }
 
-  showMedicalProviderPrefillNotice(applicantName, applicationDate) {
-    const notice = document.getElementById('medical-provider-prefill-notice')
-    const source = document.getElementById('medical-provider-prefill-source')
-    if (!notice || !source) return
+  showLastApplicationSummary(data) {
+    if (!this.hasLastApplicationSummaryTarget) return;
 
-    // Format date if available
-    let dateStr = ''
-    if (applicationDate) {
-      const date = new Date(applicationDate)
+    const parts = [];
+    if (data.household_size) parts.push(`Household size: ${data.household_size}`);
+    if (data.annual_income) parts.push(`Annual income: $${Number(data.annual_income).toLocaleString()}`);
+    if (data.medical_provider_name) parts.push(`Medical provider: ${data.medical_provider_name}`);
+
+    let dateStr = '';
+    if (data.application_date) {
+      const date = new Date(data.application_date)
       dateStr = ` (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`
     }
+    const sourceText = data.applicant_name
+      ? `${data.applicant_name}'s application${dateStr}`
+      : `previous application${dateStr}`;
 
-    // Update source text with applicant info
-    source.textContent = applicantName 
-      ? `${applicantName}'s application${dateStr}`
-      : `previous application${dateStr}`
+    if (this.hasLastApplicationSourceTarget) this.lastApplicationSourceTarget.textContent = sourceText;
+    if (this.hasLastApplicationDetailsTarget) this.lastApplicationDetailsTarget.textContent = parts.join(' • ');
+    if (this.hasIncomeCopyButtonTarget) {
+      setVisible(this.incomeCopyButtonTarget, !!(data.household_size || data.annual_income));
+    }
+    if (this.hasMedicalCopyButtonTarget) {
+      setVisible(this.medicalCopyButtonTarget, !!(
+        data.medical_provider_name ||
+        data.medical_provider_phone ||
+        data.medical_provider_fax ||
+        data.medical_provider_email
+      ));
+    }
 
-    // Show the notice
-    notice.classList.remove('hidden')
+    setVisible(this.lastApplicationSummaryTarget, true);
   }
 
-  hideMedicalProviderPrefillNotice() {
-    const notice = document.getElementById('medical-provider-prefill-notice')
-    if (notice) {
-      notice.classList.add('hidden')
-    }
+  hideLastApplicationSummary() {
+    this._lastApplicationContext = null;
+    if (this.hasLastApplicationSummaryTarget) setVisible(this.lastApplicationSummaryTarget, false);
+  }
+
+  useLastApplicationIncomeInfo() {
+    const data = this._lastApplicationContext;
+    if (!data) return;
+
+    setFieldValue('input[name="application[household_size]"]', data.household_size);
+    setFieldValue('input[name="application[annual_income]"]', data.annual_income);
+  }
+
+  useLastApplicationMedicalProvider() {
+    const data = this._lastApplicationContext;
+    if (!data) return;
+
+    setFieldValue('input[name="application[medical_provider_name]"]', data.medical_provider_name);
+    setFieldValue('input[name="application[medical_provider_phone]"]', data.medical_provider_phone);
+    setFieldValue('input[name="application[medical_provider_fax]"]', data.medical_provider_fax);
+    setFieldValue('input[name="application[medical_provider_email]"]', data.medical_provider_email);
   }
 
   // Called from dependents list partial buttons
@@ -162,7 +178,7 @@ export default class extends Controller {
   }
 
   // Clear dependent selection and reload blank form
-  clearDependentSelection() {
+  clearDependentSelection({ dispatch = true } = {}) {
     if (this.hasDependentIdFieldTarget) {
       this.dependentIdFieldTarget.value = "";
     }
@@ -174,7 +190,9 @@ export default class extends Controller {
       this.displaySelectionTarget.innerHTML = '';
     }
 
-    this.dispatchSelectionChange();
+    if (dispatch) {
+      this.dispatchSelectionChange();
+    }
   }
 
   dispatchSelectionChange() {

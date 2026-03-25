@@ -107,7 +107,7 @@ module Admin
       assert_match legacy.full_name, response.body
     end
 
-    test 'search role constituent returns evaluator who is paper applicant candidate' do
+    test 'search role constituent excludes non-constituent users even with prior applications' do
       evaluator = create(:evaluator, email: generate(:email), first_name: 'PaperCandEvalX', hearing_disability: true)
       create(:application, :archived, user: evaluator)
 
@@ -115,7 +115,18 @@ module Admin
           headers: default_headers
       assert_response :success
 
-      assert_match evaluator.full_name, response.body
+      assert_no_match evaluator.full_name, response.body
+    end
+
+    test 'adult_application_context returns not found for non-constituent with applicant history' do
+      evaluator = create(:evaluator, email: generate(:email), hearing_disability: true)
+      create(:application, :archived, user: evaluator)
+
+      get adult_application_context_admin_user_path(evaluator), headers: default_headers, as: :json
+      assert_response :not_found
+
+      json = response.parsed_body
+      assert_equal false, json['success']
     end
 
     # --- compute_applicant_type normalization ---

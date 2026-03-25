@@ -13,11 +13,18 @@ class PaperApplicantCandidateTest < ActiveSupport::TestCase
     assert_not user.paper_applicant_candidate?
   end
 
-  test 'evaluator with prior application as subject user is a candidate' do
+  test 'non-constituent with prior application as subject user is not a candidate' do
     user = create(:evaluator, email: generate(:email), hearing_disability: true)
     assert_not user.paper_applicant_candidate?
 
     create(:application, :archived, user: user)
-    assert user.reload.paper_applicant_candidate?
+    assert_not user.reload.paper_applicant_candidate?
+  end
+
+  test 'legacy Constituent STI row is a paper applicant candidate' do
+    user = create(:constituent, email: generate(:email))
+    user.update_column(:type, 'Constituent')
+
+    assert User.find(user.id).paper_applicant_candidate?
   end
 end

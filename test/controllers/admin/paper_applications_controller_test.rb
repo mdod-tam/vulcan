@@ -55,6 +55,34 @@ module Admin
       assert_select 'h1', 'Upload Paper Application'
     end
 
+    test 'invalid create-new self applicant rerender keeps create-new branch active' do
+      post admin_paper_applications_path, headers: default_headers, params: {
+        applicant_type: 'self',
+        constituent: {
+          first_name: '',
+          last_name: '',
+          email: '',
+          phone: '',
+          physical_address_1: '',
+          city: '',
+          state: 'MD',
+          zip_code: ''
+        },
+        application: {
+          household_size: 1,
+          annual_income: 10_000,
+          maryland_resident: '1',
+          self_certify_disability: '1',
+          medical_provider_name: 'Dr. Test',
+          medical_provider_phone: '555-111-2222',
+          medical_provider_email: 'doctor@example.com'
+        }
+      }
+
+      assert_response :success
+      assert_match(/data-applicant-type-initial-create-new-adult-value="true"/, response.body)
+    end
+
     test 'should create paper application for self-applicant with valid data' do
       # Ensure we're using a unique email for the new constituent
       unique_email = "self.applicant.#{Time.now.to_i}@example.com"

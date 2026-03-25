@@ -521,20 +521,15 @@ module Admin
       }
     end
 
-    # Text search for paper application widgets; +role_filter+ +constituent+ means applicant candidates, not STI-only.
-    # Fetches a text-filtered pool, then keeps only paper_applicant_candidate? rows using two extra queries
-    # (constituent STI check + a single IN-list applications check) rather than N per-user queries.
+    # Text search for paper application widgets; +role_filter+ +constituent+ means
+    # constituent-compatible applicant records, including legacy "Constituent" STI rows.
     def users_for_paper_search(query, role_filter, limit: 10)
       if role_filter == 'constituent'
         result = Users::FilterService.new(User.all, q: query, role: nil).apply_filters
         pool = result.success? ? result.data.limit(50).to_a : []
         return [] if pool.empty?
 
-        pool_ids = pool.map(&:id)
-        constituent_ids = pool.select(&:constituent?).to_set(&:id)
-        applicant_ids   = Application.where(user_id: pool_ids).distinct.pluck(:user_id).to_set
-
-        pool.select { |u| constituent_ids.include?(u.id) || applicant_ids.include?(u.id) }.first(limit)
+        pool.select(&:paper_applicant_candidate?).first(limit)
       else
         result = Users::FilterService.new(User.all, q: query, role: role_filter).apply_filters
         result.success? ? result.data.limit(limit).to_a : []

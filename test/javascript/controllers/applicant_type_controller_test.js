@@ -43,9 +43,16 @@ describe("ApplicantTypeController", () => {
           <input type="radio" name="applicant_type" value="dependent" id="dependentRadio" checked />
           <label>Apply for Dependent</label>
         </div>
+
+        <div id="adultSearchSection">
+          <input type="hidden" name="existing_constituent_id" value="123" />
+        </div>
         
         <div id="adultSection" class="hidden">
           Adult Application Section
+          <input type="text" name="constituent[first_name]" value="" />
+          <input type="text" name="constituent[last_name]" value="" />
+          <input type="email" name="constituent[email]" value="" />
         </div>
         
         <div id="guardianSection">
@@ -100,6 +107,12 @@ describe("ApplicantTypeController", () => {
       configurable: true
     })
 
+    Object.defineProperty(controller, 'adultSearchSectionTarget', {
+      value: fixture.querySelector('#adultSearchSection'),
+      writable: false,
+      configurable: true
+    })
+
     Object.defineProperty(controller, 'guardianSectionTarget', {
       value: fixture.querySelector('#guardianSection'),
       writable: false,
@@ -137,6 +150,12 @@ describe("ApplicantTypeController", () => {
       configurable: true
     })
 
+    Object.defineProperty(controller, 'hasAdultSearchSectionTarget', {
+      value: true,
+      writable: false,
+      configurable: true
+    })
+
     Object.defineProperty(controller, 'hasGuardianSectionTarget', {
       value: true,
       writable: false,
@@ -164,6 +183,12 @@ describe("ApplicantTypeController", () => {
     // Mock outlet properties (initially no outlets)
     Object.defineProperty(controller, 'hasGuardianPickerOutlet', {
       get: () => false,
+      configurable: true
+    })
+
+    Object.defineProperty(controller, 'initialCreateNewAdultValue', {
+      value: false,
+      writable: true,
       configurable: true
     })
 
@@ -367,7 +392,35 @@ describe("ApplicantTypeController", () => {
       controller.executeRefresh()
 
       const adultSection = fixture.querySelector('#adultSection')
+      expect(adultSection.classList.contains('hidden')).toBe(true)
+    })
+
+    it("shows adult section when create-new state is supplied by the server", () => {
+      const selfRadio = fixture.querySelector('#selfRadio')
+      const dependentRadio = fixture.querySelector('#dependentRadio')
+      const adultSection = fixture.querySelector('#adultSection')
+
+      controller.initialCreateNewAdultValue = true
+      controller._adultCreateNew = true
+      selfRadio.checked = true
+      dependentRadio.checked = false
+
+      controller.executeRefresh()
+
       expect(adultSection.classList.contains('hidden')).toBe(false)
+    })
+
+    it("disables adult search fields when dependent flow is active", () => {
+      const selfRadio = fixture.querySelector('#selfRadio')
+      const dependentRadio = fixture.querySelector('#dependentRadio')
+      const existingConstituentId = fixture.querySelector('input[name="existing_constituent_id"]')
+
+      selfRadio.checked = false
+      dependentRadio.checked = true
+
+      controller.executeRefresh()
+
+      expect(existingConstituentId.disabled).toBe(true)
     })
   })
 

@@ -39,7 +39,8 @@ module Admin
         application: Application.new,
         guardian_attributes: Users::Constituent.new, # For fields_for
         applicant_attributes: {}, # For disability attributes
-        constituent: Constituent.new # For dependent or self-applicant
+        constituent: Constituent.new, # For dependent or self-applicant
+        show_create_new_adult: false
       }
       # Ensure guardian_attributes is an empty hash if not already set,
       # or build from an existing model if @paper_application was a real model instance.
@@ -269,12 +270,12 @@ module Admin
       # Get or build constituent with submitted data
       constituent = service.constituent || existing_application&.user || Constituent.new
 
-      # If constituent is a new record, populate it with submitted data
-      constituent.assign_attributes(submitted_params[:constituent]) if constituent.new_record? && submitted_params[:constituent].present?
+      # Re-render the form with the submitted values, even for persisted records.
+      constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
 
       # Get or build application with submitted data
       application = service.application || existing_application || Application.new
-      application.assign_attributes(submitted_params[:application]) if application.new_record? && submitted_params[:application].present?
+      application.assign_attributes(submitted_params[:application]) if submitted_params[:application].present?
 
       @paper_application = {
         application: application,
@@ -282,13 +283,15 @@ module Admin
         guardian_user_for_app: service.guardian_user_for_app,
         applicant_attributes: submitted_params[:applicant_attributes] || {},
         guardian_attributes: submitted_params[:guardian_attributes] || {},
-        submitted_params: submitted_params
+        submitted_params: submitted_params,
+        show_create_new_adult: show_create_new_adult_from?(submitted_params)
       }
     end
 
     def build_submitted_params
       params.permit(
         :applicant_type, :relationship_type, :guardian_id, :dependent_id,
+        :existing_constituent_id, :contact_info_mode, :contact_info_verified,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         application: APPLICATION_FIELDS,
@@ -296,6 +299,12 @@ module Admin
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),
         guardian_attributes: (USER_BASE_FIELDS + USER_DISABILITY_FIELDS)
       ).to_h.with_indifferent_access
+    end
+
+    def show_create_new_adult_from?(submitted_params)
+      submitted_params[:applicant_type] == 'self' &&
+        submitted_params[:existing_constituent_id].blank? &&
+        submitted_params[:constituent].present?
     end
 
     def log_file_and_form_params

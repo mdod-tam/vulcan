@@ -5,6 +5,9 @@ import { createVeryShortDebounce } from "../../utils/debounce";
 export default class extends Controller {
   static targets = ["radio", "adultSection", "adultSearchSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField", "stepNumber"];
   static outlets = ["guardian-picker", "adult-picker"];
+  static values = {
+    initialCreateNewAdult: { type: Boolean, default: false }
+  }
 
   connect() {
     // Guard against multiple connections
@@ -17,7 +20,7 @@ export default class extends Controller {
     this._boundGuardianPickerSelectionChange = this.guardianPickerSelectionChange.bind(this);
     this._boundAdultPickerSelectionChange = this.adultPickerSelectionChange.bind(this);
     this._boundAdultPickerCreateNew = this.adultPickerCreateNew.bind(this);
-    this._adultCreateNew = false; // Track "Create New Applicant" state
+    this._adultCreateNew = this.initialCreateNewAdultValue; // Track "Create New Applicant" state
 
     this.element.addEventListener('guardian-picker:selectionChange', this._boundGuardianPickerSelectionChange);
     this.element.addEventListener('adult-picker:selectionChange', this._boundAdultPickerSelectionChange);
@@ -165,6 +168,7 @@ export default class extends Controller {
       // Show adult search section when adult radio is selected
       if (this.hasAdultSearchSectionTarget) {
         setVisible(this.adultSearchSectionTarget, adultRadioSelected);
+        this._toggleFormFieldsDisabled(this.adultSearchSectionTarget, !adultRadioSelected);
       }
 
       // Adult info section visible when: adult selected AND (adult picked OR creating new)

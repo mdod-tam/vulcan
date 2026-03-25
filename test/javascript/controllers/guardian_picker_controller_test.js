@@ -8,15 +8,21 @@ jest.mock('../../../app/javascript/utils/visibility', () => ({
     } else {
       element.classList.add('hidden')
     }
-  })
+  }),
+  setFieldValue: jest.fn()
 }))
 
-import { setVisible } from "../../../app/javascript/utils/visibility"
+import { setFieldValue, setVisible } from "../../../app/javascript/utils/visibility"
 
 describe("GuardianPickerController", () => {
   let controller, fixture
   
   beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      json: jest.fn()
+    })
+
     // Set up DOM fixture
     document.body.innerHTML = `
       <div id="test-container">
@@ -26,10 +32,22 @@ describe("GuardianPickerController", () => {
         
         <div id="selectedPane" class="hidden">
           <div class="guardian-details-container"></div>
+          <div id="lastApplicationSummary" class="hidden">
+            <div id="lastApplicationSource"></div>
+            <div id="lastApplicationDetails"></div>
+            <button type="button" id="incomeCopyButton">Income</button>
+            <button type="button" id="medicalCopyButton">Medical</button>
+          </div>
           <button type="button">Clear Selection</button>
         </div>
         
         <input type="hidden" id="guardianIdField" name="guardian_id" value="" />
+        <input type="text" name="application[household_size]" value="" />
+        <input type="text" name="application[annual_income]" value="" />
+        <input type="text" name="application[medical_provider_name]" value="" />
+        <input type="text" name="application[medical_provider_phone]" value="" />
+        <input type="text" name="application[medical_provider_fax]" value="" />
+        <input type="text" name="application[medical_provider_email]" value="" />
       </div>
     `
     
@@ -91,6 +109,7 @@ describe("GuardianPickerController", () => {
   })
   
   afterEach(() => {
+    delete global.fetch
     document.body.innerHTML = ""
     jest.clearAllMocks()
   })
@@ -195,6 +214,12 @@ describe("GuardianPickerController", () => {
       
       jest.useRealTimers()
     })
+
+    it("does not copy application fields on guardian selection", () => {
+      controller.selectGuardian("456", "<div>Guardian Info</div>")
+
+      expect(setFieldValue).not.toHaveBeenCalled()
+    })
   })
   
   describe("clearSelection", () => {
@@ -224,7 +249,7 @@ describe("GuardianPickerController", () => {
       controller.dispatch = freshDispatchMock
       
       // Reset the debounce timer to allow the dispatch to happen
-      controller._lastDispatchTime = 0
+      controller._lastDispatch_selectionChange = 0
       
       jest.useFakeTimers()
       
@@ -335,5 +360,33 @@ describe("GuardianPickerController", () => {
       
       jest.useRealTimers()
     })
+
+    it("copies last application income fields only when explicitly requested", () => {
+      controller._lastApplicationContext = {
+        household_size: 2,
+        annual_income: 18000
+      }
+
+      controller.useLastApplicationIncomeInfo()
+
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[household_size]"]', 2)
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[annual_income]"]', 18000)
+    })
+
+    it("copies last application medical provider fields only when explicitly requested", () => {
+      controller._lastApplicationContext = {
+        medical_provider_name: 'Dr. Test',
+        medical_provider_phone: '555-111-2222',
+        medical_provider_fax: '555-333-4444',
+        medical_provider_email: 'doctor@example.com'
+      }
+
+      controller.useLastApplicationMedicalProvider()
+
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_name]"]', 'Dr. Test')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_phone]"]', '555-111-2222')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_fax]"]', '555-333-4444')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_email]"]', 'doctor@example.com')
+    })
   })
-}) 
+})

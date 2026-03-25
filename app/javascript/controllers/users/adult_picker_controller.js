@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { setVisible, setFieldIfEmpty } from "../../utils/visibility"
+import { setVisible, setFieldValue } from "../../utils/visibility"
 import { debouncedDispatch } from "../../utils/debounce"
 
 // Manages adult applicant search-and-select for paper applications.
@@ -14,6 +14,8 @@ export default class extends Controller {
     "displaySelection",
     "onFileSummary",
     "onFileSummaryContent",
+    "incomeCopyButton",
+    "medicalCopyButton",
     "contactModeRadio",
     "verificationCheckbox",
     "verificationSection",
@@ -22,8 +24,13 @@ export default class extends Controller {
 
   connect() {
     this.selectedValue = !!(this.hasConstituentIdFieldTarget && this.constituentIdFieldTarget.value)
+    this._adultApplicationContext = null
     this._onFileData = {}
     this.togglePanes()
+
+    if (this.selectedValue) {
+      this.fetchAdultContext(this.constituentIdFieldTarget.value)
+    }
   }
 
   /* Public API ----------------------------------------------------------- */
@@ -44,6 +51,7 @@ export default class extends Controller {
     if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = ""
 
     this._onFileData = {}
+    this._adultApplicationContext = null
     this.selectedValue = false
     this.togglePanes()
     this._clearPrefillFields()
@@ -104,15 +112,35 @@ export default class extends Controller {
       const data = await response.json()
       if (!data.success) return
 
+      this._adultApplicationContext = data
       this._storeOnFileData(data.user)
       this._autopopulateFields(data.user)
       this._showOnFileSummary(data)
       this._showContactMode()
       this._showVerification()
-      this._prefillApplicationFields(data)
+      this._applyCurrentContactMode()
+      this._toggleCopyButtons(data)
     } catch (e) {
       console.warn('fetchAdultContext failed', e)
     }
+  }
+
+  useLastApplicationIncomeInfo() {
+    const data = this._adultApplicationContext
+    if (!data) return
+
+    setFieldValue('input[name="application[household_size]"]', data.household_size)
+    setFieldValue('input[name="application[annual_income]"]', data.annual_income)
+  }
+
+  useLastApplicationMedicalProvider() {
+    const data = this._adultApplicationContext
+    if (!data) return
+
+    setFieldValue('input[name="application[medical_provider_name]"]', data.medical_provider_name)
+    setFieldValue('input[name="application[medical_provider_phone]"]', data.medical_provider_phone)
+    setFieldValue('input[name="application[medical_provider_fax]"]', data.medical_provider_fax)
+    setFieldValue('input[name="application[medical_provider_email]"]', data.medical_provider_email)
   }
 
   /* Highlight changes before submit -------------------------------------- */
@@ -203,15 +231,6 @@ export default class extends Controller {
     }
   }
 
-  _prefillApplicationFields(data) {
-    setFieldIfEmpty('input[name="application[household_size]"]', data.household_size)
-    setFieldIfEmpty('input[name="application[annual_income]"]', data.annual_income)
-    setFieldIfEmpty('input[name="application[medical_provider_name]"]', data.medical_provider_name)
-    setFieldIfEmpty('input[name="application[medical_provider_phone]"]', data.medical_provider_phone)
-    setFieldIfEmpty('input[name="application[medical_provider_fax]"]', data.medical_provider_fax)
-    setFieldIfEmpty('input[name="application[medical_provider_email]"]', data.medical_provider_email)
-  }
-
   _showOnFileSummary(data) {
     if (!this.hasOnFileSummaryTarget) return
     setVisible(this.onFileSummaryTarget, true)
@@ -254,22 +273,35 @@ export default class extends Controller {
 
   _hideOnFileSummary() {
     if (this.hasOnFileSummaryTarget) setVisible(this.onFileSummaryTarget, false)
+    this._toggleCopyButtons()
   }
 
   _showContactMode() {
-    if (this.hasContactModeSectionTarget) setVisible(this.contactModeSectionTarget, true)
+    if (!this.hasContactModeSectionTarget) return
+
+    setVisible(this.contactModeSectionTarget, true)
+    this._toggleSectionFieldsDisabled(this.contactModeSectionTarget, false)
   }
 
   _hideContactMode() {
-    if (this.hasContactModeSectionTarget) setVisible(this.contactModeSectionTarget, false)
+    if (!this.hasContactModeSectionTarget) return
+
+    setVisible(this.contactModeSectionTarget, false)
+    this._toggleSectionFieldsDisabled(this.contactModeSectionTarget, true)
   }
 
   _showVerification() {
-    if (this.hasVerificationSectionTarget) setVisible(this.verificationSectionTarget, true)
+    if (!this.hasVerificationSectionTarget) return
+
+    setVisible(this.verificationSectionTarget, true)
+    this._toggleSectionFieldsDisabled(this.verificationSectionTarget, false)
   }
 
   _hideVerification() {
-    if (this.hasVerificationSectionTarget) setVisible(this.verificationSectionTarget, false)
+    if (this.hasVerificationSectionTarget) {
+      setVisible(this.verificationSectionTarget, false)
+      this._toggleSectionFieldsDisabled(this.verificationSectionTarget, true)
+    }
     if (this.hasVerificationCheckboxTarget) this.verificationCheckboxTarget.checked = false
   }
 
@@ -284,6 +316,34 @@ export default class extends Controller {
       el.classList.remove("bg-gray-100", "text-gray-500")
     })
     this._lockRadioGroups(false)
+  }
+
+  _applyCurrentContactMode() {
+    const selectedMode = this.contactModeRadioTargets.find(radio => radio.checked) || this.contactModeRadioTargets[0]
+    if (selectedMode) this.contactModeChanged({ target: selectedMode })
+  }
+
+  _toggleCopyButtons(data = null) {
+    const context = data || this._adultApplicationContext
+    const hasIncomeData = !!(context && (context.household_size || context.annual_income))
+    const hasMedicalProviderData = !!(context && (
+      context.medical_provider_name ||
+      context.medical_provider_phone ||
+      context.medical_provider_fax ||
+      context.medical_provider_email
+    ))
+
+    if (this.hasIncomeCopyButtonTarget) setVisible(this.incomeCopyButtonTarget, hasIncomeData)
+    if (this.hasMedicalCopyButtonTarget) setVisible(this.medicalCopyButtonTarget, hasMedicalProviderData)
+  }
+
+  _toggleSectionFieldsDisabled(section, disabled) {
+    const fields = section?.querySelectorAll('input, select, textarea')
+    if (!fields) return
+
+    fields.forEach(field => {
+      field.disabled = disabled
+    })
   }
 
   _clearPrefillFields() {
