@@ -120,7 +120,9 @@ class ApplicationController < ActionController::Base
     when 'Users::Constituent' then constituent_portal_dashboard_path
     when 'Users::Evaluator' then evaluators_dashboard_path
     when 'Users::Vendor' then vendor_portal_dashboard_path
-    else root_path
+    else
+      Rails.logger.warn("[_dashboard_for] Unknown user type: #{user.type.inspect} for user #{user.id}")
+      root_path
     end
   end
 
@@ -153,7 +155,11 @@ class ApplicationController < ActionController::Base
   # Finds the user for whom 2FA is in progress
   def find_user_for_two_factor
     user_id = TwoFactorAuth.get_temp_user_id(session)
-    user_id ? User.find(user_id) : nil
+    return nil unless user_id
+    
+    user = User.find(user_id)
+    user.reload if user  # Ensure type column is properly loaded
+    user
   rescue ActiveRecord::RecordNotFound
     nil
   end
