@@ -69,9 +69,9 @@ class SessionsController < ApplicationController
     cookies.delete(:session_token) # Ensure no old session interferes
     TwoFactorAuth.clear_challenge(session) # Clear any stale challenge
     TwoFactorAuth.store_temp_user_id(session, user.id)
-    # Only store return path if it's not the sign-in page itself
+    # Only store return path if it's not the sign-in page or root path
     return_path = session[:return_to]
-    return_path = nil if return_path&.include?('sign_in')
+    return_path = nil if return_path&.include?('sign_in') || return_path == '/'
     TwoFactorAuth.store_return_path(session, return_path)
   end
 
