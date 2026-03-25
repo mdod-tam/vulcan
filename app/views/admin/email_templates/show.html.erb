@@ -1,5 +1,6 @@
 <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="template-title">
   <div class="max-w-7xl mx-auto">
+    <%= render 'admin/shared/communications_section_nav', current: :email_templates %>
     <%# Header Section %>
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="template-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
@@ -27,6 +28,30 @@
       </div>
     </div>
 
+    <%# Out-of-sync warning %>
+    <% if @email_template.needs_sync? %>
+      <div class="mb-6 rounded-md bg-amber-50 border border-amber-300 p-4" role="alert">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3 flex-1 md:flex md:justify-between">
+            <p class="text-sm text-amber-800">
+              <strong>Out of sync.</strong>
+              Another locale variant of this template was updated. Review the content and edit this template to bring it up to date.
+            </p>
+            <div class="mt-3 md:mt-0 md:ml-6 flex-shrink-0">
+              <%= button_to "Mark Synced", mark_synced_admin_email_template_path(@email_template), method: :patch,
+                    class: "text-sm font-medium text-amber-800 underline hover:text-amber-600",
+                    data: { turbo_confirm: "Mark this template as synced without making changes?" } %>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
     <%# Template Details Section %>
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="template-details-title">
       <h2 id="template-details-title" class="text-xl font-semibold text-gray-900 mb-4">Template Details</h2>
@@ -38,6 +63,10 @@
         <div>
           <dt class="text-sm font-medium text-gray-500">Format</dt>
           <dd class="mt-1 text-sm text-gray-900"><%= @email_template.format.titleize %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Locale</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @email_template.locale.upcase %></dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-500">Version</dt>
@@ -58,35 +87,35 @@
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="template-body-title">
       <h2 id="template-body-title" class="text-xl font-semibold text-gray-900 mb-4">Template Body (Version <%= @email_template.version %>)</h2>
       
-      <% 
-        # Parse body to separate variable placeholders at the top from actual content
-        body_lines = @email_template.body.split("\n")
-        variable_lines = []
-        content_lines = []
-        
-        body_lines.each do |line|
-          if line.strip.match?(/^%\{[a-z_]+\}$/)
-            variable_lines << line
-          else
-            content_lines << line
-          end
-        end
-        
-        # Join content lines back together, starting from the first non-variable line
-        cleaned_body = content_lines.join("\n")
-        
-        # Find the corresponding template in the other format (html <-> text)
-        other_format = @email_template.format == 'html' ? 'text' : 'html'
-        other_template = EmailTemplate.find_by(name: @email_template.name, format: other_format)
-      %>
-      
-      <div class="mb-4">
-        <h3 class="text-lg font-medium text-gray-900 mb-2">
-          Template Content
-        </h3>
-        <div class="prose max-w-none bg-gray-50 p-4 rounded border border-gray-200 overflow-x-auto">
-          <pre class="text-sm"><%= cleaned_body %></pre>
-        </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <% [@en_template, @es_template].compact.each do |template| %>
+          <% 
+            # Parse body to separate variable placeholders at the top from actual content
+            body_lines = template.body.split("\n")
+            variable_lines = []
+            content_lines = []
+            
+            body_lines.each do |line|
+              if line.strip.match?(/^%\{[a-z_]+\}$/)
+                variable_lines << line
+              else
+                content_lines << line
+              end
+            end
+            
+            # Join content lines back together, starting from the first non-variable line
+            cleaned_body = content_lines.join("\n")
+          %>
+          
+          <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">
+              Template Content (<%= template.locale.upcase %>)
+            </h3>
+            <div class="prose max-w-none bg-gray-50 p-4 rounded border border-gray-200 overflow-x-auto h-full">
+              <pre class="whitespace-pre-wrap text-sm"><%= cleaned_body %></pre>
+            </div>
+          </div>
+        <% end %>
       </div>
     </section>
 
@@ -94,26 +123,50 @@
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="template-preview-title">
       <h2 id="template-preview-title" class="text-xl font-semibold text-gray-900 mb-4">Rendered Preview</h2>
       
-      <div class="mb-4">
-        <h3 class="text-lg font-medium text-gray-900 mb-2">
-          Subject: <span class="font-normal"><%= @rendered_subject %></span>
-        </h3>
-      </div>
-      
-      <div class="prose max-w-none mb-4">
-        <h3 class="text-lg font-medium text-gray-900 mb-2">
-          Body Preview
-        </h3>
-        
-        <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white">
-          <% if @email_template.format == 'html' %>
-            <div class="email-preview">
-              <%= raw @rendered_body %>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <% if @en_template %>
+          <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">
+              English Preview
+            </h3>
+            <div class="mb-4">
+              <span class="font-medium text-gray-700">Subject:</span> <span class="font-normal"><%= @en_rendered_subject %></span>
             </div>
-          <% else %>
-            <pre class="whitespace-pre-wrap text-sm"><%= @rendered_body %></pre>
-          <% end %>
-        </div>
+            <div class="prose max-w-none mb-4">
+              <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white h-full">
+                <% if @en_template.format == 'html' %>
+                  <div class="email-preview">
+                    <%= raw @en_rendered_body %>
+                  </div>
+                <% else %>
+                  <pre class="whitespace-pre-wrap text-sm"><%= @en_rendered_body %></pre>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+
+        <% if @es_template %>
+          <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-2">
+              Spanish Preview
+            </h3>
+            <div class="mb-4">
+              <span class="font-medium text-gray-700">Subject:</span> <span class="font-normal"><%= @es_rendered_subject %></span>
+            </div>
+            <div class="prose max-w-none mb-4">
+              <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white h-full">
+                <% if @es_template.format == 'html' %>
+                  <div class="email-preview">
+                    <%= raw @es_rendered_body %>
+                  </div>
+                <% else %>
+                  <pre class="whitespace-pre-wrap text-sm"><%= @es_rendered_body %></pre>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
       </div>
       
       <div class="text-sm text-gray-600 mt-2 italic">
@@ -126,6 +179,13 @@
       <h2 id="variables-title" class="text-xl font-semibold text-gray-900 mb-4">Available Variables</h2>
       
       <% 
+        # Parse body to separate variable placeholders at the top from actual content for the active template
+        body_lines = @email_template.body.split("\n")
+        variable_lines = []
+        body_lines.each do |line|
+          variable_lines << line if line.strip.match?(/^%\{[a-z_]+\}$/)
+        end
+
         # Extract variable names from variable_lines
         detected_vars = variable_lines.map do |line|
           line.strip.match(/%\{([a-z_]+)\}/) ? $1 : nil

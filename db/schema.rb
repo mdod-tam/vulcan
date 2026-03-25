@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_17_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -120,7 +120,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.integer "medical_certification_status", default: 0, null: false
     t.datetime "medical_certification_verified_at"
     t.bigint "medical_certification_verified_by_id"
-    t.text "medical_certification_rejection_reason"
     t.datetime "medical_certification_requested_at"
     t.integer "medical_certification_request_count", default: 0
     t.string "last_visited_step"
@@ -179,8 +178,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.string "previous_subject"
     t.text "previous_body"
     t.boolean "enabled", default: true, null: false
+    t.string "locale", default: "en", null: false
+    t.boolean "needs_sync", default: false, null: false
     t.index ["enabled"], name: "index_email_templates_on_enabled"
-    t.index ["name"], name: "index_email_templates_on_name", unique: true
+    t.index ["name", "format", "locale"], name: "index_email_templates_on_name_format_locale", unique: true
     t.index ["updated_by_id"], name: "index_email_templates_on_updated_by_id"
   end
 
@@ -283,23 +284,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
 
   create_table "notifications", force: :cascade do |t|
     t.bigint "recipient_id", null: false
-    t.bigint "actor_id", null: false
+    t.bigint "actor_id"
     t.string "action"
     t.datetime "read_at"
     t.jsonb "metadata"
     t.string "notifiable_type", null: false
-    t.bigint "notifiable_id", null: false
+    t.bigint "notifiable_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "message_id"
     t.string "delivery_status"
     t.datetime "delivered_at"
     t.datetime "opened_at"
-    t.boolean "created_by_service", default: false, null: false
     t.boolean "audited", default: false, null: false
     t.index ["actor_id"], name: "index_notifications_on_actor_id"
     t.index ["audited"], name: "index_notifications_on_audited"
-    t.index ["created_by_service"], name: "index_notifications_on_created_by_service"
     t.index ["message_id"], name: "index_notifications_on_message_id"
     t.index ["notifiable_type", "notifiable_id"], name: "index_notifications_on_notifiable"
     t.index ["recipient_id"], name: "index_notifications_on_recipient_id"
@@ -373,11 +372,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.text "notes"
+    t.string "rejection_reason_code"
     t.index ["admin_id", "created_at"], name: "index_proof_reviews_on_admin_id_and_created_at"
     t.index ["admin_id"], name: "index_proof_reviews_on_admin_id"
     t.index ["application_id", "proof_type", "created_at"], name: "idx_on_application_id_proof_type_created_at_4b8ffa7c5f"
     t.index ["application_id", "proof_type", "status"], name: "idx_on_application_id_proof_type_status_78cb268d0d"
     t.index ["application_id"], name: "index_proof_reviews_on_application_id"
+    t.index ["rejection_reason_code"], name: "index_proof_reviews_on_rejection_reason_code"
     t.index ["reviewed_at"], name: "index_proof_reviews_on_reviewed_at"
     t.index ["status"], name: "index_proof_reviews_on_status"
   end
@@ -393,6 +394,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_05_162224) do
     t.datetime "resolved_at"
     t.integer "resolved_by_id"
     t.index ["user_id"], name: "index_recovery_requests_on_user_id"
+  end
+
+  create_table "rejection_reasons", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "proof_type", null: false
+    t.string "locale", default: "en", null: false
+    t.text "body", null: false
+    t.boolean "needs_sync", default: false, null: false
+    t.integer "version", default: 1, null: false
+    t.text "previous_body"
+    t.bigint "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code", "proof_type", "locale"], name: "index_rejection_reasons_on_code_proof_type_locale", unique: true
+    t.index ["updated_by_id"], name: "index_rejection_reasons_on_updated_by_id"
   end
 
   create_table "role_capabilities", force: :cascade do |t|

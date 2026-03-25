@@ -112,6 +112,14 @@ module UserGuardianship
     end
   end
 
+  def effective_locale
+    if dependent? && guardian_for_contact && effective_email == guardian_for_contact.email
+      guardian_for_contact.locale
+    else
+      locale
+    end
+  end
+
   # Get the primary guardian for contact purposes
   def guardian_for_contact
     return nil unless dependent?

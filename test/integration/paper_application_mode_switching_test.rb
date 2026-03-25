@@ -57,8 +57,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
       income_proof_action: 'accept',
       income_proof: @income_proof_file, # Use fixture file directly
       residency_proof_action: 'reject',
-      residency_proof_rejection_reason: 'missing_name',
-      residency_proof_rejection_notes: 'Name is missing on document'
+      residency_proof_rejection_reason: 'missing_name'
     }
 
     assert_response :redirect
@@ -115,8 +114,8 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
 
     # For residency, we should have both a rejected review from the first step and an approved review from the second step
     residency_rejected_review = application.proof_reviews.find_by(proof_type: :residency, status: :rejected,
-                                                                  rejection_reason: 'missing_name')
-    assert_not_nil residency_rejected_review, "Should have a residency proof review with rejection_reason 'missing_name'"
+                                                                  rejection_reason_code: 'missing_name')
+    assert_not_nil residency_rejected_review, "Should have a residency proof review with rejection_reason_code 'missing_name'"
 
     # We should also have a proof review for the approved residency proof
     # The ProofReviewer service creates a proof review with status 'approved' when approving a proof

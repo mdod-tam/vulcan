@@ -69,12 +69,13 @@ class MedicalCertificationAttachmentService
 
   # Reject a medical certification without requiring a file attachment
   def self.reject_certification(application:, admin:, reason:, notes: nil,
-                                submission_method: :admin_review, metadata: {})
+                                reason_code: nil, submission_method: :admin_review, metadata: {})
     rejection_params = {
       application: application,
       admin: admin,
       reason: reason,
       notes: notes,
+      reason_code: reason_code,
       submission_method: submission_method,
       metadata: metadata
     }
@@ -134,9 +135,9 @@ class MedicalCertificationAttachmentService
         medical_certification_verified_by_id: admin&.id,
         updated_at: Time.current
       )
-      
+
       Rails.logger.info "[MedicalCertService] update_columns returned: #{update_result}"
-      
+
       # Reload to get the updated values for audit logging
       application.reload
 
@@ -232,7 +233,8 @@ class MedicalCertificationAttachmentService
     result = { success: false, error: nil, duration_ms: 0 }
 
     begin
-      yield
+      payload = yield
+      result.merge!(payload) if payload.is_a?(Hash)
       result[:success] = true
     rescue StandardError => e
       result[:error] = e
@@ -262,9 +264,12 @@ class MedicalCertificationAttachmentService
   # Handles rejection processing with transaction
   def self.process_rejection(params)
     ActiveRecord::Base.transaction do
+      params[:resolved_reason] = resolve_rejection_reason_text(params)
       update_rejection_status(params)
+      upsert_medical_rejection_review(params)
       create_rejection_audit_trail(params)
-      send_rejection_notification(params)
+      notification = send_rejection_notification(params)
+      { notification_id: notification&.id }
     end
   end
 
@@ -275,14 +280,32 @@ class MedicalCertificationAttachmentService
     params[:old_status] = old_status
 
     # Use update_columns to bypass validations
-    params[:application].update_columns(
+    update_attrs = {
       medical_certification_status: 'rejected',
       medical_certification_verified_at: Time.current,
       medical_certification_verified_by_id: params[:admin].id,
-      medical_certification_rejection_reason: params[:reason],
       updated_at: Time.current
-    )
+    }
+
+    params[:application].update_columns(**update_attrs)
     params[:application].reload
+  end
+
+  def self.upsert_medical_rejection_review(params)
+    app = params[:application]
+    review = app.proof_reviews.find_or_initialize_by(
+      proof_type: :medical_certification,
+      status: :rejected
+    )
+
+    review.assign_attributes(
+      admin: params[:admin],
+      rejection_reason: params[:resolved_reason],
+      rejection_reason_code: params[:reason_code].presence,
+      notes: params[:notes]
+    )
+    review.reviewed_at = Time.current unless review.new_record?
+    review.save!
   end
 
   def self.create_rejection_audit_trail(params)
@@ -300,7 +323,7 @@ class MedicalCertificationAttachmentService
         submission_method: params[:submission_method],
         verified_at: Time.current.iso8601,
         verified_by_id: admin.id,
-        rejection_reason: params[:reason],
+        rejection_reason: params[:resolved_reason],
         notes: params[:notes]
       },
       notes: params[:notes]
@@ -316,7 +339,7 @@ class MedicalCertificationAttachmentService
         new_status: 'rejected',
         timestamp: Time.current.iso8601,
         change_type: 'medical_certification',
-        reason: params[:reason]
+        reason: params[:resolved_reason]
       }
     )
   end
@@ -328,10 +351,19 @@ class MedicalCertificationAttachmentService
       actor: params[:admin],
       notifiable: params[:application],
       metadata: {
-        'reason' => params[:reason],
+        'reason' => params[:resolved_reason],
         'notes' => params[:notes]
       },
-      channel: :email
+      channel: :email,
+      deliver: false
+    )
+  end
+
+  def self.resolve_rejection_reason_text(params)
+    RejectionReason.resolve_text(
+      code: params[:reason_code].presence,
+      proof_type: 'medical_certification',
+      fallback: params[:reason]
     )
   end
 

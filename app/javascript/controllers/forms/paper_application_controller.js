@@ -5,6 +5,8 @@ export default class extends Controller {
   static targets = [
     "submitButton",
     "rejectionButton",
+    "applicantLocale",
+    "languagePreferenceNotice",
     // Hidden field targets in the rejection modal
     "rejectionFirstName",
     "rejectionLastName",
@@ -25,6 +27,8 @@ export default class extends Controller {
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this);
     this.element.addEventListener('income-validation:validated', this._boundHandleIncomeValidation);
 
+    this.updateLanguagePreferenceNotices();
+
     // After sibling Stimulus controllers on this element finish connect (income validation, etc.)
     requestAnimationFrame(() => this._applySubmitGating());
   }
@@ -34,6 +38,10 @@ export default class extends Controller {
     if (this._boundHandleIncomeValidation) {
       this.element.removeEventListener('income-validation:validated', this._boundHandleIncomeValidation);
     }
+  }
+
+  applicantLocaleTargetConnected() {
+    this.updateLanguagePreferenceNotices();
   }
 
   /**
@@ -175,6 +183,32 @@ export default class extends Controller {
       console.warn('rejection-modal is not a <dialog> element');
       setVisible(dialog, true);
     }
+  }
+
+  updateLanguagePreferenceNotices() {
+    if (!this.hasLanguagePreferenceNoticeTarget) return;
+
+    const locale = this.currentApplicantLocale();
+    const message = locale === 'es'
+      ? 'Applicant prefers to receive Spanish communications. Please ensure any custom rejection reason is translated.'
+      : 'Applicant prefers to receive English communications.';
+
+    this.languagePreferenceNoticeTargets.forEach((target) => {
+      target.textContent = message;
+    });
+  }
+
+  currentApplicantLocale() {
+    if (!this.hasApplicantLocaleTarget) return 'en';
+
+    const visibleSelect = this.applicantLocaleTargets.find((target) => this.elementIsVisible(target));
+    if (visibleSelect && visibleSelect.value) return visibleSelect.value;
+
+    return this.applicantLocaleTargets[0]?.value || 'en';
+  }
+
+  elementIsVisible(element) {
+    return !!(element.offsetParent || element.getClientRects().length);
   }
 
   /**

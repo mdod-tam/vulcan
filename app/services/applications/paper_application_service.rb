@@ -80,7 +80,7 @@ module Applications
     ADULT_CONTACT_FIELDS = %i[
       email phone phone_type physical_address_1 physical_address_2
       city state zip_code communication_preference locale
-      preferred_means_of_communication
+      preferred_means_of_communication referral_source
     ].freeze
 
     private
@@ -323,7 +323,11 @@ module Applications
     def build_dependent_contact_updates(attrs)
       build_contact_updates(
         attrs,
-        fields: %i[physical_address_1 physical_address_2 city state zip_code],
+        fields: %i[
+          physical_address_1 physical_address_2 city state zip_code
+          locale communication_preference preferred_means_of_communication
+          phone_type referral_source
+        ],
         aliases: { dependent_email: :email, dependent_phone: :phone }
       )
     end
@@ -546,31 +550,45 @@ module Applications
     end
 
     def process_reject_proof(type)
-      # Handle medical_certification naming convention
-      reason_key = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
-      notes_key = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
+      reason_key        = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
+      custom_reason_key = type == :medical_certification ? "#{type}_custom_rejection_reason" : "#{type}_proof_custom_rejection_reason"
+      notes_key         = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
+      selected_reason   = fetch_param(reason_key).to_s
+      custom_reason     = fetch_param(custom_reason_key).to_s.strip
+      legacy_notes      = fetch_param(notes_key).to_s.strip
+      custom_reason     = legacy_notes if custom_reason.blank? && legacy_notes.present?
 
-      # Route medical certifications to the correct service
-      result = if type == :medical_certification
-                 MedicalCertificationAttachmentService.reject_certification(
-                   application: @application,
-                   admin: @admin,
-                   reason: params[reason_key],
-                   notes: params[notes_key],
-                   submission_method: :paper,
-                   metadata: {}
-                 )
-               else
-                 ProofAttachmentService.reject_proof_without_attachment(
-                   application: @application,
-                   proof_type: type,
-                   admin: @admin,
-                   reason: params[reason_key],
-                   notes: params[notes_key],
-                   submission_method: :paper,
-                   metadata: {}
-                 )
-               end
+      if type == :medical_certification
+        reason_payload = resolve_medical_rejection_reason_payload(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason
+        )
+
+        result = MedicalCertificationAttachmentService.reject_certification(
+          application: @application,
+          admin: @admin,
+          reason: reason_payload[:reason],
+          notes: legacy_notes.presence,
+          reason_code: reason_payload[:reason_code],
+          submission_method: :paper,
+          metadata: {}
+        )
+      else
+        resolved_reason = resolve_rejection_reason_value(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason
+        )
+
+        result = ProofAttachmentService.reject_proof_without_attachment(
+          application: @application,
+          proof_type: type,
+          admin: @admin,
+          reason: resolved_reason,
+          notes: legacy_notes.presence,
+          submission_method: :paper,
+          metadata: {}
+        )
+      end
 
       unless result[:success]
         add_error("Error rejecting #{type} proof: #{result[:error]&.message}")
@@ -578,6 +596,25 @@ module Applications
       end
 
       true
+    end
+
+    def resolve_rejection_reason_value(selected_reason:, custom_reason:)
+      return selected_reason unless selected_reason == 'other'
+      return 'Other' if custom_reason.blank?
+
+      custom_reason
+    end
+
+    def resolve_medical_rejection_reason_payload(selected_reason:, custom_reason:)
+      return { reason: selected_reason, reason_code: selected_reason } if selected_reason.present? && %w[none_provided other].exclude?(selected_reason)
+      return { reason: 'none_provided', reason_code: nil } if selected_reason == 'none_provided'
+      return { reason: 'Other', reason_code: nil } if custom_reason.blank?
+
+      { reason: custom_reason, reason_code: nil }
+    end
+
+    def fetch_param(key)
+      params[key] || params[key.to_sym]
     end
 
     def log_proof_submission(type, has_attachment)

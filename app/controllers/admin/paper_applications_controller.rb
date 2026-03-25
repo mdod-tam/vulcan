@@ -355,11 +355,11 @@ module Admin
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         :income_proof_action, :income_proof, :income_proof_signed_id,
-        :income_proof_rejection_reason, :income_proof_rejection_notes,
+        :income_proof_rejection_reason, :income_proof_custom_rejection_reason,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
-        :residency_proof_rejection_reason, :residency_proof_rejection_notes,
+        :residency_proof_rejection_reason, :residency_proof_custom_rejection_reason,
         :medical_certification_action, :medical_certification, :medical_certification_signed_id,
-        :medical_certification_rejection_reason, :medical_certification_rejection_notes,
+        :medical_certification_rejection_reason, :medical_certification_custom_rejection_reason,
         :no_medical_provider_information,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
@@ -426,8 +426,8 @@ module Admin
         action_key = "#{type}_proof_action"
         file_key   = "#{type}_proof"
         signed_key = "#{type}_proof_signed_id"
-        reason_key = "#{type}_proof_rejection_reason"
-        notes_key  = "#{type}_proof_rejection_notes"
+        reason_key        = "#{type}_proof_rejection_reason"
+        custom_reason_key = "#{type}_proof_custom_rejection_reason"
 
         service_params[action_key] = permitted[action_key]
         file_val = permitted[file_key]
@@ -435,7 +435,7 @@ module Admin
         service_params[file_key] = file_val if file_val.present?
         service_params[signed_key] = signed_val if signed_val.present?
         service_params[reason_key] = permitted[reason_key]
-        service_params[notes_key]  = permitted[notes_key]
+        service_params[custom_reason_key] = permitted[custom_reason_key]
       end
 
       # Handle medical certification (uses different naming convention)
@@ -445,7 +445,7 @@ module Admin
       service_params[:medical_certification] = file_val if file_val.present?
       service_params[:medical_certification_signed_id] = signed_val if signed_val.present?
       service_params[:medical_certification_rejection_reason] = permitted[:medical_certification_rejection_reason]
-      service_params[:medical_certification_rejection_notes] = permitted[:medical_certification_rejection_notes]
+      service_params[:medical_certification_custom_rejection_reason] = permitted[:medical_certification_custom_rejection_reason]
     end
 
     # Translate checkbox UI to email strategy parameter
