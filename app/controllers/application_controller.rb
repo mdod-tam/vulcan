@@ -120,9 +120,7 @@ class ApplicationController < ActionController::Base
     when 'Users::Constituent' then constituent_portal_dashboard_path
     when 'Users::Evaluator' then evaluators_dashboard_path
     when 'Users::Vendor' then vendor_portal_dashboard_path
-    else
-      Rails.logger.warn("[_dashboard_for] Unknown user type: #{user.type.inspect} for user #{user.id}")
-      root_path
+    else root_path
     end
   end
 
@@ -141,10 +139,7 @@ class ApplicationController < ActionController::Base
       # Clear the challenge only after successful sign-in
       TwoFactorAuth.clear_challenge(session)
       # Redirect to stored location or appropriate dashboard
-      Rails.logger.info("[2FA] Stored location: #{stored_location}")
-      redirect_path = stored_location || _dashboard_for(user)
-      Rails.logger.info("[2FA] Redirecting user #{user.id} (type: #{user.type.inspect}) to #{redirect_path}")
-      redirect_to redirect_path, notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
+      redirect_to stored_location || _dashboard_for(user), notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
     else
       redirect_to sign_in_path, alert: t('alerts.session_fail')
     end
@@ -158,13 +153,8 @@ class ApplicationController < ActionController::Base
   # Finds the user for whom 2FA is in progress
   def find_user_for_two_factor
     user_id = TwoFactorAuth.get_temp_user_id(session)
-    return nil unless user_id
-    
-    user = User.find(user_id)
-    Rails.logger.debug("[find_user_for_two_factor] Found user #{user.id} with type: #{user.type.inspect}")
-    user
+    user_id ? User.find(user_id) : nil
   rescue ActiveRecord::RecordNotFound
-    Rails.logger.warn("[find_user_for_two_factor] User #{user_id} not found")
     nil
   end
 
