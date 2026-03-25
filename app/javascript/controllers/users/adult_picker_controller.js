@@ -47,7 +47,7 @@ export default class extends Controller {
     this.dispatchSelectionChange()
   }
 
-  clearSelection() {
+  clearSelection({ dispatch = true } = {}) {
     if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = ""
 
     this._onFileData = {}
@@ -59,12 +59,11 @@ export default class extends Controller {
     this._hideContactMode()
     this._hideVerification()
     this._resetContactMode()
-    this.dispatchSelectionChange()
+    if (dispatch) this.dispatchSelectionChange()
   }
 
   createNewApplicant() {
-    this.clearSelection()
-    // Dispatch event so applicant-type controller can show the adult info section
+    this.clearSelection({ dispatch: false })
     this.dispatch("createNew", { detail: { createNew: true } })
   }
 
