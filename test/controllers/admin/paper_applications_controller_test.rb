@@ -79,7 +79,7 @@ module Admin
         }
       }
 
-      assert_response :success
+      assert_response :unprocessable_content
       assert_match(/data-applicant-type-initial-create-new-adult-value="true"/, response.body)
     end
 
