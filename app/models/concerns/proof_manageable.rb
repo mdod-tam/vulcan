@@ -39,7 +39,6 @@ module ProofManageable
     # ActiveStorage attachments for proof documents
     has_one_attached :income_proof
     has_one_attached :residency_proof
-    has_one_attached :medical_certification
     has_many_attached :documents
 
     # Core validations for proof documents
@@ -52,16 +51,16 @@ module ProofManageable
     after_save :notify_admins_of_new_proofs, if: -> { needs_review_since_changed? && needs_review_since.present? }
   end
 
-  # Checks if all required proofs have been approved
-  # @return [Boolean] true if both income and residency proofs are approved
+  # Checks if all required proofs have been approved (delegates to Application predicate)
+  # @return [Boolean] true if all required proofs are approved
   def all_proofs_approved?
-    income_proof_status_approved? && residency_proof_status_approved?
+    required_proofs_approved?
   end
 
   # Checks if all currently required proofs for DCF request have been approved
   # @return [Boolean] true if required proofs are approved
   def required_proofs_for_dcf_approved?
-    all_proofs_approved?
+    required_proofs_approved?
   end
 
   # Checks if the income proof has been rejected
@@ -166,7 +165,9 @@ module ProofManageable
   def require_proof_attachments
     return if new_record? || status_draft?
 
-    errors.add(:income_proof, 'must be attached. Please upload your income documentation.') unless income_proof.attached?
+    if income_proof_required? && !income_proof.attached?
+      errors.add(:income_proof, 'must be attached. Please upload your income documentation.')
+    end
 
     return if residency_proof.attached?
 
