@@ -60,6 +60,8 @@ class Application < ApplicationRecord
     archived: 7             # Historical record
   }, prefix: true, validate: true
 
+  enum :fulfillment_type, { equipment: 0, voucher: 1 }, prefix: true
+
   enum :income_proof_status, {
     not_reviewed: 0,
     approved: 1,
@@ -140,7 +142,9 @@ class Application < ApplicationRecord
 
   before_save :ensure_managing_guardian_set, if: :user_id_changed?
   # Callbacks
+  before_create :stamp_workflow_defaults!
   before_create :ensure_managing_guardian_set
+  before_validation :scrub_income_fields, if: :should_scrub_income?
   after_update :log_status_change, if: :saved_change_to_status?
   after_save :log_alternate_contact_changes, if: :saved_change_to_alternate_contact?
 
@@ -216,6 +220,13 @@ class Application < ApplicationRecord
            Voucher.statuses[:redeemed]
          )
          .distinct # Avoid duplicates due to the join
+  }
+
+  scope :with_proofs_needing_review, lambda {
+    where(
+      'residency_proof_status = :nr OR (income_proof_required = TRUE AND income_proof_status = :nr)',
+      nr: residency_proof_statuses[:not_reviewed]
+    )
   }
 
   scope :with_pending_training, lambda {
@@ -344,6 +355,40 @@ class Application < ApplicationRecord
     managing_guardian_id.present?
   end
 
+  # --- Workflow predicates ---
+
+  def residency_proof_required?
+    true
+  end
+
+  def income_collection_enabled?
+    if persisted?
+      income_proof_required?
+    else
+      FeatureFlag.enabled?(:income_proof_required)
+    end
+  end
+
+  def voucher_fulfillment?
+    fulfillment_type_voucher?
+  end
+
+  def equipment_fulfillment?
+    fulfillment_type_equipment?
+  end
+
+  def required_proofs_approved?
+    residency_proof_status_approved? &&
+      (!income_proof_required? || income_proof_status_approved?)
+  end
+
+  def voucher_issuable?
+    voucher_fulfillment? &&
+      status_approved? &&
+      medical_certification_status_approved? &&
+      !vouchers.exists?
+  end
+
   # Returns the guardian relationship type for this application
   def guardian_relationship_type
     return nil unless for_dependent?
@@ -413,6 +458,20 @@ class Application < ApplicationRecord
   end
 
   private
+
+  def stamp_workflow_defaults!
+    self.fulfillment_type = FeatureFlag.enabled?(:vouchers_enabled) ? :voucher : :equipment
+    self.income_proof_required = FeatureFlag.enabled?(:income_proof_required)
+  end
+
+  def scrub_income_fields
+    self.annual_income = nil
+    self.household_size = nil
+  end
+
+  def should_scrub_income?
+    !income_collection_enabled? && (new_record? || status_draft?)
+  end
 
   def log_status_change
     # Guard clause to prevent infinite recursion
@@ -505,7 +564,7 @@ class Application < ApplicationRecord
 
   def pending_proof_types
     types = []
-    types << 'income' if income_proof_status_not_reviewed?
+    types << 'income' if income_proof_required? && income_proof_status_not_reviewed?
     types << 'residency' if residency_proof_status_not_reviewed?
     types
   end

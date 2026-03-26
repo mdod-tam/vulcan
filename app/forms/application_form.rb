@@ -53,7 +53,7 @@ class ApplicationForm
 
   # Validations
   validates :current_user, presence: true
-  validates :annual_income, presence: true, if: :is_submission
+  validates :annual_income, presence: true, if: -> { is_submission && income_collection_required? }
   validate :validate_disability_selection, if: :is_submission
   validate :validate_guardian_relationship, if: :for_dependent?
   validate :validate_medical_provider, if: :is_submission
@@ -236,5 +236,13 @@ class ApplicationForm
     return unless medical_provider_name.blank? || medical_provider_phone.blank? || medical_provider_email.blank?
 
     errors.add(:base, 'Medical provider information is required for submission.')
+  end
+
+  def income_collection_required?
+    if application&.persisted?
+      application.income_proof_required?
+    else
+      FeatureFlag.enabled?(:income_proof_required)
+    end
   end
 end

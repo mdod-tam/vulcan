@@ -112,8 +112,7 @@ module ApplicationStatusManagement
   end
 
   def all_requirements_met?
-    income_proof_status_approved? &&
-      residency_proof_status_approved? &&
+    required_proofs_approved? &&
       medical_certification_status_approved?
   end
 

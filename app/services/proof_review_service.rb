@@ -37,6 +37,10 @@ class ProofReviewService < BaseService
 
     return failure('Invalid proof type') unless ProofReview.reviewable_proof_type?(proof_type)
 
+    if proof_type == 'income' && !application.income_proof_required?
+      return failure('Income proof review is not applicable for this application')
+    end
+
     return failure('Invalid status') unless %w[approved rejected].include?(status)
 
     success('Parameters validated successfully') # Implicit success if no failures

@@ -113,31 +113,33 @@ module Applications
     end
 
     def check_for_auto_approval
-      # Only check for auto-approval if we're not already approved
       return if @application.status_approved?
+      return unless @application.required_proofs_approved? && @application.medical_certification_status_approved?
 
-      # Check if all requirements are met
-      if @application.income_proof_status_approved? &&
-         @application.residency_proof_status_approved? &&
-         @application.medical_certification_status_approved?
+      previous_status = @application.status
+      @application.update_column(:status, Application.statuses[:approved]) # rubocop:disable Rails/SkipsModelValidations
 
-        # Auto-approve using update_column to avoid triggering other validations
-        @application.update_column(:status, Application.statuses[:approved]) # rubocop:disable Rails/SkipsModelValidations
+      @application.status_changes.create!(
+        from_status: previous_status,
+        to_status: 'approved',
+        user: @admin,
+        notes: 'Auto-approved based on all requirements being met'
+      )
 
-        # Create an event for this automated approval
-        AuditEventService.log(
-          actor: @admin,
-          action: 'application_auto_approved',
-          auditable: @application,
-          metadata: {
-            application_id: @application.id,
-            timestamp: Time.current.iso8601,
-            trigger: "proof_#{@proof_type_key}_approved"
-          }
-        )
+      AuditEventService.log(
+        actor: @admin,
+        action: 'application_auto_approved',
+        auditable: @application,
+        metadata: {
+          application_id: @application.id,
+          old_status: previous_status,
+          new_status: 'approved',
+          auto_approval: true,
+          trigger: "proof_#{@proof_type_key}_approved"
+        }
+      )
 
-        Rails.logger.info "Application #{@application.id} auto-approved after all proofs were validated"
-      end
+      Rails.logger.info "Application #{@application.id} auto-approved after all proofs were validated"
     end
   end
 end
