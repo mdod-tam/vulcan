@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Manages the review process for income and residency proof documents
+# Manages the review process for income and residency proof documents.
+# Medical certification uses a separate workflow even though it shares this model.
 class ProofReview < ApplicationRecord
   # Associations
   belongs_to :application
@@ -10,6 +11,16 @@ class ProofReview < ApplicationRecord
   enum :proof_type, { income: 0, residency: 1, medical_certification: 2 }, prefix: true
   enum :status, { approved: 0, rejected: 1 }, prefix: true
   enum :submission_method, { web: 0, email: 1, scanned: 2, paper: 3 }, prefix: true
+
+  REVIEWABLE_PROOF_TYPES = %w[income residency].freeze
+
+  def self.reviewable_proof_types
+    REVIEWABLE_PROOF_TYPES
+  end
+
+  def self.reviewable_proof_type?(proof_type)
+    REVIEWABLE_PROOF_TYPES.include?(proof_type.to_s)
+  end
 
   # Validations
   validates :proof_type, presence: true
