@@ -7,13 +7,8 @@ module Users
              through: :evaluations,
              source: :constituent
 
-    scope :available, -> {
-      left_outer_joins(:role_capabilities)
-        .where(
-          "users.type IN (?) OR role_capabilities.capability = ?",
-          ['Users::Evaluator', 'Users::Administrator'],
-          'can_evaluate'
-        )
-    }
+    def self.available
+      User.where(type: ['Users::Administrator', 'Users::Evaluator'])
+    end
   end
 end
