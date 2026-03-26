@@ -332,5 +332,37 @@ module Admin
 
       assert_redirected_to admin_application_path(@application)
     end
+
+    test 'update strips income params when income_proof_required is false' do
+      @application.update_columns(income_proof_required: false)
+
+      patch admin_application_path(@application), params: {
+        application: {
+          household_size: 5,
+          annual_income: 99999,
+          status: @application.status
+        }
+      }
+
+      @application.reload
+      assert_not_equal 5, @application.household_size, 'household_size should not be updated when income is off'
+      assert_not_equal 99_999.0, @application.annual_income, 'annual_income should not be updated when income is off'
+    end
+
+    test 'update allows income params when income_proof_required is true' do
+      assert @application.income_proof_required?
+
+      patch admin_application_path(@application), params: {
+        application: {
+          household_size: 5,
+          annual_income: 55000.0,
+          status: @application.status
+        }
+      }
+
+      @application.reload
+      assert_equal 5, @application.household_size
+      assert_equal 55_000.0, @application.annual_income
+    end
   end
 end

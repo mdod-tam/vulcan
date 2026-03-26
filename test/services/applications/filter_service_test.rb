@@ -117,6 +117,50 @@ module Applications
       end
     end
 
+    test 'proofs_needing_review excludes income-not-required apps from income portion' do
+      with_mocked_attachments do
+        income_not_required_user = create(:user,
+                                          first_name: 'NoIncome',
+                                          last_name: 'User',
+                                          email: 'no_income_filter@example.com',
+                                          hearing_disability: true)
+        income_off_app = create(:application, status: :in_progress, user: income_not_required_user)
+        income_off_app.update_columns(
+          income_proof_required: false,
+          income_proof_status: Application.income_proof_statuses[:not_reviewed],
+          residency_proof_status: Application.residency_proof_statuses[:approved]
+        )
+
+        service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
+        result_data = service.apply_filters.data
+
+        assert_not_includes result_data, income_off_app,
+          'App with income_proof_required=false and residency approved should not appear in proofs_needing_review'
+      end
+    end
+
+    test 'proofs_needing_review includes income-not-required apps when residency is not reviewed' do
+      with_mocked_attachments do
+        residency_pending_user = create(:user,
+                                        first_name: 'ResPending',
+                                        last_name: 'User',
+                                        email: 'res_pending_filter@example.com',
+                                        hearing_disability: true)
+        residency_pending_app = create(:application, status: :in_progress, user: residency_pending_user)
+        residency_pending_app.update_columns(
+          income_proof_required: false,
+          income_proof_status: Application.income_proof_statuses[:not_reviewed],
+          residency_proof_status: Application.residency_proof_statuses[:not_reviewed]
+        )
+
+        service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
+        result_data = service.apply_filters.data
+
+        assert_includes result_data, residency_pending_app,
+          'App with income_proof_required=false but residency not_reviewed should appear in proofs_needing_review'
+      end
+    end
+
     # This test demonstrates the standardized approach to attachment mocking
     test 'filters by medical certifications to review' do
       # Set up applications with different statuses

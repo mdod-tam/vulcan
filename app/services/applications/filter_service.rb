@@ -67,8 +67,7 @@ module Applications
       when 'rejected'
         scope.where(status: :rejected)
       when 'proofs_needing_review'
-        # Use Rails enum mapping to get the correct integer values
-        scope.where(income_proof_status: :not_reviewed).or(scope.where(residency_proof_status: :not_reviewed))
+        scope.with_proofs_needing_review
       when 'awaiting_medical_response'
         scope.where(status: :awaiting_dcf)
       when 'medical_certs_to_review'

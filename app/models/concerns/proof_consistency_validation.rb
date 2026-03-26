@@ -38,7 +38,7 @@ module ProofConsistencyValidation
     # Skip validation for paper applications
     return if submission_method&.to_sym == :paper
 
-    check_proof_consistency(:income_proof, income_proof_status, income_proof)
+    check_proof_consistency(:income_proof, income_proof_status, income_proof) if income_proof_required?
     check_proof_consistency(:residency_proof, residency_proof_status, residency_proof)
   end
 

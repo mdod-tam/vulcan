@@ -138,32 +138,36 @@ module Admin
     helper_method :fpl_thresholds_json, :fpl_modifier_value
 
     def fpl_thresholds_json
-      # Generate FPL threshold data for JavaScript using IncomeThresholdCalculationService
-      # Returns JSON string of base FPL values for household sizes 1-8
+      return '{}' unless FeatureFlag.enabled?(:income_proof_required)
+
       thresholds = (1..8).to_h do |size|
         result = IncomeThresholdCalculationService.call(size)
         if result.success?
           [size.to_s, result.data[:base_fpl]]
         else
-          [size.to_s, 0] # Fallback for failed calculations
+          [size.to_s, 0]
         end
       end
       thresholds.to_json
     end
 
     def fpl_modifier_value
-      # Get FPL modifier percentage via IncomeThresholdCalculationService
-      # Returns the policy-configured modifier (e.g., 400 for 400% FPL)
+      return 0 unless FeatureFlag.enabled?(:income_proof_required)
+
       result = IncomeThresholdCalculationService.call(1)
       if result.success?
         result.data[:modifier]
       else
-        400 # Default
+        400
       end
     end
 
     def reject_for_income
-      # Build constituent params from form data for notification (no application created)
+      unless FeatureFlag.enabled?(:income_proof_required)
+        redirect_to new_admin_paper_application_path, alert: 'Income rejection is not available when income collection is disabled.'
+        return
+      end
+
       constituent_params = build_constituent_params_for_notification
       notification_params = build_notification_params
       recipient = resolve_constituent_notification_recipient(constituent_params)
@@ -194,7 +198,11 @@ module Admin
     end
 
     def send_rejection_notification
-      # Build constituent params from form data
+      unless FeatureFlag.enabled?(:income_proof_required)
+        redirect_to admin_applications_path, alert: 'Income rejection is not available when income collection is disabled.'
+        return
+      end
+
       constituent_params = build_constituent_params_for_notification
       notification_params = build_notification_params
       recipient = resolve_constituent_notification_recipient(constituent_params)

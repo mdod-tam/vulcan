@@ -94,7 +94,8 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     }
 
     # Enable Voucher Redemption feature flag
-    FeatureFlag.create!(name: 'vouchers_enabled', enabled: true)
+    FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = true }
+    FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
   end
 
   test 'full voucher redemption flow with database integrity verification' do

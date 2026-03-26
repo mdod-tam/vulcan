@@ -88,7 +88,6 @@ en:
       upload_medical_certification:
         m_blank: "Please select whether to accept or reject the certification."
         m_rejection_reason: "Please select a rejection reason"
-      process_accepted_certification:
         c_file_select: "Please select a file to upload"
         c_upload_pass: "Disability certification successfully uploaded and approved."
     email_templates:

@@ -143,8 +143,10 @@
                         </button>
                       </div>
                       <div class="flex items-center flex-wrap gap-2 mt-2">
+                        <% if active_app.income_proof_required? %>
                         <span class="text-sm text-gray-700">Income:</span>
                         <%= proof_status_badge('income', active_app.income_proof_status) %>
+                        <% end %>
                         <span class="text-sm text-gray-700">Residency:</span>
                         <%= proof_status_badge('residency', active_app.residency_proof_status) %>
                         <span class="text-sm text-gray-700">Medical:</span>
@@ -166,8 +168,10 @@
                         </button>
                       </div>
                       <div class="flex items-center flex-wrap gap-2 mt-2">
+                        <% if last_app.income_proof_required? %>
                         <span class="text-sm text-gray-700">Income:</span>
                         <%= proof_status_badge('income', last_app.income_proof_status) %>
+                        <% end %>
                         <span class="text-sm text-gray-700">Residency:</span>
                         <%= proof_status_badge('residency', last_app.residency_proof_status) %>
                         <span class="text-sm text-gray-700">Medical:</span>
@@ -289,8 +293,10 @@
                     </button>
                   </div>
                   <div class="flex items-center flex-wrap gap-2 mt-2">
+                    <% if application.income_proof_required? %>
                     <span class="text-sm text-gray-700">Income:</span>
                     <%= proof_status_badge('income', application.income_proof_status) %>
+                    <% end %>
                     <span class="text-sm text-gray-700">Residency:</span>
                     <%= proof_status_badge('residency', application.residency_proof_status) %>
                     <span class="text-sm text-gray-700">Medical:</span>

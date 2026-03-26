@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_03_17_000001) do
+ActiveRecord::Schema[8.0].define(version: 2026_03_26_001403) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -138,9 +138,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_03_17_000001) do
     t.integer "document_signing_request_count", default: 0, null: false
     t.text "document_signing_audit_url"
     t.text "document_signing_document_url"
+    t.integer "fulfillment_type", null: false
+    t.boolean "income_proof_required", null: false
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
+    t.index ["fulfillment_type"], name: "index_applications_on_fulfillment_type"
     t.index ["income_proof_status"], name: "idx_applications_on_income_proof_status"
     t.index ["income_verified_by_id"], name: "index_applications_on_income_verified_by_id"
     t.index ["last_proof_submitted_at"], name: "index_applications_on_last_proof_submitted_at"

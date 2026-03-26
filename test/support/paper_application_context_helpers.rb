@@ -13,6 +13,11 @@ module PaperApplicationContextHelpers
 
     # Also set the application skip flag that's used in ApplicationSystemTestCase
     Application.skip_wait_period_validation = true
+
+    # Ensure workflow feature flags exist with legacy defaults so that
+    # stamp_workflow_defaults! and scrub_income_fields behave correctly.
+    FeatureFlag.find_or_create_by!(name: 'income_proof_required') { |f| f.enabled = true }
+    FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
   end
 
   def teardown_paper_application_context

@@ -211,27 +211,27 @@ module ConstituentPortal
     helper_method :fpl_thresholds_json, :fpl_modifier_value
 
     def fpl_thresholds_json
-      # Generate FPL threshold data for JavaScript using IncomeThresholdCalculationService
-      # Returns JSON string of base FPL values for household sizes 1-8
+      return '{}' unless FeatureFlag.enabled?(:income_proof_required)
+
       thresholds = (1..8).to_h do |size|
         result = IncomeThresholdCalculationService.call(size)
         if result.success?
           [size.to_s, result.data[:base_fpl]]
         else
-          [size.to_s, 0] # Fallback for failed calculations
+          [size.to_s, 0]
         end
       end
       thresholds.to_json
     end
 
     def fpl_modifier_value
-      # Get FPL modifier percentage via IncomeThresholdCalculationService
-      # Returns the policy-configured modifier (e.g., 400 for 400% FPL)
+      return 0 unless FeatureFlag.enabled?(:income_proof_required)
+
       result = IncomeThresholdCalculationService.call(1)
       if result.success?
         result.data[:modifier]
       else
-        400 # Fallback default
+        400
       end
     end
 

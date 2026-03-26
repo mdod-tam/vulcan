@@ -117,7 +117,7 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'sends notification when assigned' do
-    # Create a new constituent with a unique email to avoid validation errors
+    FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
     constituent = create(:constituent, email: "unique_#{Time.now.to_i}@example.com")
     application = create(:application, status: :approved, user: constituent)
     application.update!(medical_certification_status: :approved)
@@ -130,7 +130,7 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'creates event when assigned' do
-    # Create a constituent with a unique email
+    FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
     constituent = create(:constituent, email: "unique_event_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
     application = create(:application, status: :approved, user: constituent)
     application.update!(medical_certification_status: :approved)
