@@ -29,6 +29,10 @@ describe("PaperApplicationController", () => {
         <!-- Hidden signed_id fields -->
         <input type="hidden" name="income_proof_signed_id" value="">
         <input type="hidden" name="residency_proof_signed_id" value="">
+
+        <!-- Existing adult verification controls -->
+        <input type="hidden" name="existing_constituent_id" value="">
+        <input type="checkbox" name="contact_info_verified" data-adult-picker-target="verificationCheckbox">
         
         <!-- Status text elements -->
         <div id="income_proof_upload">
@@ -75,4 +79,44 @@ describe("PaperApplicationController", () => {
     expect(controller).toBeDefined();
     expect(element).toBeDefined();
   });
+
+  test("inactive adult verification fields do not block submit", () => {
+    const directController = new PaperApplicationController()
+    const submitButton = document.querySelector("[data-paper-application-target='submitButton']")
+    const existingAdultField = document.querySelector("input[name='existing_constituent_id']")
+    const verificationCheckbox = document.querySelector("input[name='contact_info_verified']")
+
+    Object.defineProperty(directController, "element", {
+      value: element,
+      writable: false,
+      configurable: true
+    })
+
+    Object.defineProperty(directController, "hasSubmitButtonTarget", {
+      value: true,
+      writable: false,
+      configurable: true
+    })
+
+    Object.defineProperty(directController, "submitButtonTarget", {
+      value: submitButton,
+      writable: false,
+      configurable: true
+    })
+
+    Object.defineProperty(directController, "hasRejectionButtonTarget", {
+      value: false,
+      writable: false,
+      configurable: true
+    })
+
+    existingAdultField.value = "42"
+    existingAdultField.disabled = true
+    verificationCheckbox.checked = false
+    verificationCheckbox.disabled = true
+
+    directController.syncAdultVerificationGate()
+
+    expect(submitButton.disabled).toBe(false)
+  })
 })

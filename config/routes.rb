@@ -217,6 +217,7 @@ Rails.application.routes.draw do
       member do
         get :dependents
         get :last_application_values
+        get :adult_application_context
         post :approve
         post :suspend
         post :reactivate

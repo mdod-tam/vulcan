@@ -48,6 +48,7 @@ import VisibilityController from "./ui/visibility_controller"
 import StreamReadyController from "./ui/stream_ready_controller"
 
 // User Controllers
+import AdultPickerController from "./users/adult_picker_controller"
 import ApplicantTypeController from "./users/applicant_type_controller"
 import DocumentProofHandlerController from "./users/document_proof_handler_controller"
 import GuardianPickerController from "./users/guardian_picker_controller"
@@ -107,6 +108,7 @@ application.register("visibility", VisibilityController)
 application.register("stream-ready", StreamReadyController)
 
 // User Controllers
+application.register("adult-picker", AdultPickerController)
 application.register("applicant-type", ApplicantTypeController)
 application.register("document-proof-handler", DocumentProofHandlerController)
 application.register("guardian-picker", GuardianPickerController)

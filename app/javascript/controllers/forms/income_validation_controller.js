@@ -239,8 +239,17 @@ class IncomeValidationController extends Controller {
     if (this.hasWarningContainerTarget) {
       this.hideWarning(this.warningContainerTarget)
     }
-    this.updateSubmitButton(false)
     this.resetIncomeFieldsContainerStyle()
+    // Dispatch so paper-application re-applies combined gating (income + existing-adult verification).
+    // paper-application#handleIncomeValidation will call updateSubmitButton as needed.
+    this.dispatch("validated", {
+      detail: {
+        exceedsThreshold: false,
+        income: 0,
+        threshold: 0,
+        householdSize: 0
+      }
+    })
   }
 
   /**

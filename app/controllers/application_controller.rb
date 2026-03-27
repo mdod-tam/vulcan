@@ -153,7 +153,9 @@ class ApplicationController < ActionController::Base
   # Finds the user for whom 2FA is in progress
   def find_user_for_two_factor
     user_id = TwoFactorAuth.get_temp_user_id(session)
-    user_id ? User.find_by(id: user_id) : nil
+    user_id ? User.find(user_id) : nil
+  rescue ActiveRecord::RecordNotFound
+    nil
   end
 
   # Ensures a 2FA flow has been initiated
