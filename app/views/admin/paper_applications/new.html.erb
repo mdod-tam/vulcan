@@ -62,15 +62,19 @@
     <% residency_reason_options = reason_options_for.call('residency') %>
     <% medical_reason_options = reason_options_for.call('medical_certification') %>
 
+    <% paper_form_data = {
+      turbo: false,
+      controller: "applicant-type",
+      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']"
+    }
+    if FeatureFlag.enabled?(:income_proof_required)
+      paper_form_data[:controller] += " income-validation"
+      paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
+      paper_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+    end %>
     <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
-      data: { 
-        turbo: false,
-        controller: "applicant-type income-validation", 
-        "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']", 
-        "income-validation-fpl-thresholds-value": fpl_thresholds_json, 
-        "income-validation-modifier-value": fpl_modifier_value 
-      }) do |form| %>
+      data: paper_form_data) do |form| %>
 
       <%# ============================================================ %>
       <%# STEP 1: Applicant Type Selection %>
@@ -847,6 +851,8 @@
       </div>
     <% end %>
   </div>
+
+<% if FeatureFlag.enabled?(:income_proof_required) %>
 <%# ============================================================ %>
 <%# Rejection Modal %>
 <%# ============================================================ %>
@@ -922,4 +928,5 @@
     <% end %>
   </div>
 </dialog>
+<% end %>
 </div>
