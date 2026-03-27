@@ -65,8 +65,11 @@
     <% paper_form_data = {
       turbo: false,
       controller: "applicant-type",
+      action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
+      "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
       "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']"
     }
+    paper_form_data[:"applicant-type-adult-picker-outlet"] = "[data-controller='adult-picker']"
     if FeatureFlag.enabled?(:income_proof_required)
       paper_form_data[:controller] += " income-validation"
       paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
