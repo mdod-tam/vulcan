@@ -66,8 +66,11 @@
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
       data: { 
         turbo: false,
-        controller: "paper-application applicant-type income-validation", 
-        "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']", 
+        controller: "paper-application applicant-type income-validation",
+        action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
+        "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
+        "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
+        "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']", 
         "income-validation-fpl-thresholds-value": fpl_thresholds_json, 
         "income-validation-modifier-value": fpl_modifier_value 
       }) do |form| %>
@@ -90,7 +93,7 @@
                 <input type="radio" 
                        id="applicant_is_adult" 
                        name="applicant_type" 
-                       value="guardian" 
+                       value="self" 
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" 
                        <%= 'checked' unless @show_create_guardian_form %> 
                        data-applicant-type-target="radio">
@@ -120,23 +123,204 @@
       </section>
 
       <%# ============================================================ %>
-      <%# STEP 2: Applicant Information (shown for adults) %>
+      <% submitted_params = @paper_application[:submitted_params] || {} %>
+      <% existing_constituent_id = submitted_params[:existing_constituent_id].presence %>
+      <% contact_info_mode = submitted_params[:contact_info_mode].presence || "update" %>
+      <% contact_info_verified = ActiveModel::Type::Boolean.new.cast(submitted_params[:contact_info_verified]) %>
+
+      <%# Adult self flow: one Stimulus controller wraps search + applicant sections so targets resolve. %>
+      <%# ============================================================ %>
+      <div class="contents" data-controller="adult-picker">
+      <%# STEP 2: Adult Search (shown for adults) %>
+      <%# ============================================================ %>
+      <section id="adult-search-section"
+               class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hidden"
+               data-applicant-type-target="adultSearchSection"
+               aria-labelledby="step2-adult-search-heading">
+        <div class="px-6 py-4 bg-blue-50 border-b border-blue-100">
+          <h2 id="step2-adult-search-heading" class="text-lg font-semibold text-blue-900 flex items-center gap-2">
+            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white text-sm font-bold">2</span>
+            Search for Existing Applicant
+          </h2>
+          <p class="mt-1 text-sm text-blue-700">Search for an existing constituent or create a new applicant</p>
+        </div>
+        <div class="p-6">
+          <%# Search Pane %>
+          <div data-adult-picker-target="searchPane">
+            <div data-controller="admin-user-search"
+                 data-admin-user-search-search-url-value="/admin/users/search"
+                 data-admin-user-search-role-value="constituent"
+                 data-admin-user-search-adult-picker-outlet="[data-controller='adult-picker']">
+
+              <h3 class="text-base font-medium text-gray-900 mb-3">Find Existing Applicant</h3>
+              <div class="flex items-center gap-4 mb-4">
+                <div class="flex-grow">
+                  <label for="adult_search_q" class="sr-only">Search by Name or Email</label>
+                  <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                      </svg>
+                    </div>
+                    <input id="adult_search_q"
+                           placeholder="Search by Name or Email"
+                           class="block w-full pl-10 pr-3 py-2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           data-action="input->admin-user-search#performSearch"
+                           data-admin-user-search-target="searchInput"
+                           type="text"
+                           name="q"
+                           autocomplete="off">
+                  </div>
+                </div>
+                <button type="button"
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        data-action="click->admin-user-search#clearSearchAndShowForm">
+                  Clear
+                </button>
+              </div>
+
+              <%= turbo_frame_tag "adult_search_results",
+                  class: "mt-2 space-y-2",
+                  target: "_top",
+                  "data-admin-user-search-target": "searchResults" do %>
+              <% end %>
+
+              <div class="mt-4 pt-4 border-t border-gray-200">
+                <button type="button"
+                        class="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                        data-action="adult-picker#createNewApplicant">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                  </svg>
+                  Create New Applicant
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <%# Selected Adult Pane %>
+          <div data-adult-picker-target="selectedPane" class="hidden">
+            <div class="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
+              <div class="flex justify-between items-start">
+                <div class="flex-grow">
+                  <h3 class="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    Applicant Selected
+                  </h3>
+                  <div class="text-sm adult-details-container"></div>
+                </div>
+                <button type="button"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        data-action="adult-picker#clearSelection">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  Change Selection
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <%# Hidden input stays in the adult-search section so Rails omits it when that branch is inactive. %>
+          <%= hidden_field_tag :existing_constituent_id, existing_constituent_id, data: { adult_picker_target: "constituentIdField" } %>
+        </div>
+      </section>
+
+      <%# ============================================================ %>
+      <%# STEP 3: Applicant Information (shown for adults) %>
       <%# ============================================================ %>
       <fieldset class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" 
                id="self-info-section"
                data-applicant-type-target="adultSection"
-               aria-labelledby="step2-adult-heading">
+               aria-labelledby="step3-adult-heading">
         <div class="px-6 py-4 bg-blue-50 border-b border-blue-100">
-          <legend id="step2-adult-heading" class="text-lg font-semibold text-blue-900 flex items-center gap-2 w-full">
-            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white text-sm font-bold">2</span>
+          <legend id="step3-adult-heading" class="text-lg font-semibold text-blue-900 flex items-center gap-2 w-full">
+            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white text-sm font-bold">3</span>
             Applicant's Information
           </legend>
           <p class="mt-1 text-sm text-blue-700">Enter the applicant's personal details</p>
         </div>
         <div class="p-6">
+          <%# On-file summary banner (shown when existing adult selected) %>
+          <div data-adult-picker-target="onFileSummary" class="hidden mb-6">
+            <div class="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
+              <h4 class="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Applicant on File
+              </h4>
+              <div data-adult-picker-target="onFileSummaryContent" class="text-sm text-gray-700"></div>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <button type="button"
+                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                        data-adult-picker-target="incomeCopyButton"
+                        data-action="adult-picker#useLastApplicationIncomeInfo">
+                  Use last application household and income
+                </button>
+                <button type="button"
+                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                        data-adult-picker-target="medicalCopyButton"
+                        data-action="adult-picker#useLastApplicationMedicalProvider">
+                  Use last application medical provider
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <%# Contact info mode switch (shown when existing adult selected) %>
+          <div data-adult-picker-target="contactModeSection" class="hidden mb-6">
+            <fieldset class="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <legend class="text-sm font-semibold text-amber-900 px-2">Contact Information Mode</legend>
+              <p class="text-xs text-amber-700 mb-3">Choose how to handle contact information for this applicant</p>
+              <div class="flex flex-wrap gap-6">
+                <label class="flex items-start cursor-pointer">
+                  <input type="radio" name="contact_info_mode" value="update" <%= "checked" if contact_info_mode != "on_file" %>
+                         class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                         data-adult-picker-target="contactModeRadio"
+                         data-action="change->adult-picker#contactModeChanged">
+                  <span class="ml-2">
+                    <span class="block text-sm font-medium text-gray-700">Update from paper form</span>
+                    <span class="block text-xs text-gray-500">Fields are prefilled and editable. Changes will be saved.</span>
+                  </span>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                  <input type="radio" name="contact_info_mode" value="on_file" <%= "checked" if contact_info_mode == "on_file" %>
+                         class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                         data-adult-picker-target="contactModeRadio"
+                         data-action="change->adult-picker#contactModeChanged">
+                  <span class="ml-2">
+                    <span class="block text-sm font-medium text-gray-700">Use on-file contact info</span>
+                    <span class="block text-xs text-gray-500">Contact fields will be read-only. No changes saved.</span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+          </div>
+
           <%= render 'self_application_fields' %>
+
+          <%# Verification checkbox (shown when existing adult selected) %>
+          <div data-adult-picker-target="verificationSection" class="hidden mt-6">
+            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <label class="flex items-start cursor-pointer">
+                <%= hidden_field_tag :contact_info_verified, "0", id: nil %>
+                <input type="checkbox" name="contact_info_verified" value="1" <%= "checked" if contact_info_verified %>
+                       class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                       data-adult-picker-target="verificationCheckbox"
+                       data-action="change->adult-picker#verificationChanged">
+                <span class="ml-3">
+                  <span class="block text-sm font-medium text-gray-700">I verified contact info against the paper application</span>
+                  <span class="block text-xs text-gray-500 mt-1">Required when selecting an existing applicant</span>
+                </span>
+              </label>
+            </div>
+          </div>
         </div>
       </fieldset>
+      </div>
 
       <%# ============================================================ %>
       <%# STEP 2: Guardian Selection/Creation (shown for dependents) %>
@@ -235,6 +419,27 @@
                   <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block" do %>
                     <%# dependents list will load here when guardian is selected %>
                   <% end %>
+                  <div data-guardian-picker-target="lastApplicationSummary" class="hidden mt-4 rounded-md bg-blue-50 p-3">
+                    <p class="text-sm text-blue-700">
+                      <span class="font-medium">Last application on file:</span>
+                      <span data-guardian-picker-target="lastApplicationSource"></span>
+                    </p>
+                    <p data-guardian-picker-target="lastApplicationDetails" class="mt-2 text-xs text-blue-700"></p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button type="button"
+                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                              data-guardian-picker-target="incomeCopyButton"
+                              data-action="guardian-picker#useLastApplicationIncomeInfo">
+                        Use last application household and income
+                      </button>
+                      <button type="button"
+                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                              data-guardian-picker-target="medicalCopyButton"
+                              data-action="guardian-picker#useLastApplicationMedicalProvider">
+                        Use last application medical provider
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <button type="button"
                         class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
@@ -341,22 +546,6 @@
               <legend class="text-base font-medium text-gray-900 px-2">Certifying Professional Information</legend>
               <p class="text-sm text-gray-600 mb-4">We'll contact this provider to verify the disability certification</p>
               
-              <%# Prefill Notice %>
-              <div id="medical-provider-prefill-notice" 
-                   class="hidden rounded-md bg-blue-50 p-3 mb-4"
-                   role="status"
-                   aria-live="polite">
-                <div class="flex items-start gap-2">
-                  <svg class="h-5 w-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                  </svg>
-                  <p class="text-sm text-blue-700">
-                    <span class="font-medium">Pre-filled from previous application:</span>
-                    <span id="medical-provider-prefill-source"></span>
-                  </p>
-                </div>
-              </div>
-
               <%= fields_for :application do |a| %>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="md:col-span-2">

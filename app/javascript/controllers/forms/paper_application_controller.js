@@ -21,11 +21,16 @@ export default class extends Controller {
       console.log("PaperApplicationController connected");
     }
 
+    this._incomeExceedsThreshold = false;
+
     // Listen for income validation events from income_validation_controller
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this);
     this.element.addEventListener('income-validation:validated', this._boundHandleIncomeValidation);
 
     this.updateLanguagePreferenceNotices();
+
+    // After sibling Stimulus controllers on this element finish connect (income validation, etc.)
+    requestAnimationFrame(() => this._applySubmitGating());
   }
 
   disconnect() {
@@ -44,31 +49,62 @@ export default class extends Controller {
    * @param {CustomEvent} event The validation event with details about threshold status
    */
   handleIncomeValidation(event) {
-    const { exceedsThreshold } = event.detail;
-    this.updateSubmissionUI(exceedsThreshold);
+    this._incomeExceedsThreshold = !!event.detail.exceedsThreshold;
+    this._applySubmitGating();
   }
 
   /**
-   * Update submission UI based on income threshold validation
-   * @param {boolean} exceedsThreshold Whether income exceeds threshold
+   * Re-evaluate submit / rejection UI from income threshold + existing-adult verification.
    */
-  updateSubmissionUI(exceedsThreshold) {
-    if (this.hasSubmitButtonTarget) {
-      // Setting the property AND the attribute for the selector to match
-      this.submitButtonTarget.disabled = exceedsThreshold;
+  syncAdultVerificationGate() {
+    this._applySubmitGating();
+  }
 
-      // This is critical: For the CSS selector input[type=submit][disabled] to match,
-      // we need to set the HTML attribute, not just the JS property
-      if (exceedsThreshold) {
-        this.submitButtonTarget.setAttribute('disabled', 'disabled');
+  /**
+   * Highlight contact deltas on the adult picker before native form submit.
+   */
+  beforeSubmit() {
+    const root = this.element.querySelector("[data-controller~='adult-picker']");
+    if (!root || !this.application) return;
+    const picker = this.application.getControllerForElementAndIdentifier(root, "adult-picker");
+    if (picker && typeof picker.highlightChanges === "function") picker.highlightChanges();
+  }
+
+  /**
+   * @private
+   */
+  _adultVerificationBlocksSubmit() {
+    const idInput = this.element.querySelector('[name="existing_constituent_id"]');
+    if (!idInput || idInput.disabled || !String(idInput.value || "").trim()) return false;
+
+    const checkbox = this.element.querySelector(
+      'input[type="checkbox"][name="contact_info_verified"][data-adult-picker-target="verificationCheckbox"]'
+    );
+    if (!checkbox || checkbox.disabled) return false;
+
+    return !checkbox.checked;
+  }
+
+  /**
+   * @private
+   */
+  _applySubmitGating() {
+    const incomeBlocks = !!this._incomeExceedsThreshold;
+    const verifyBlocks = this._adultVerificationBlocksSubmit();
+    const disable = incomeBlocks || verifyBlocks;
+
+    if (this.hasSubmitButtonTarget) {
+      this.submitButtonTarget.disabled = disable;
+      if (disable) {
+        this.submitButtonTarget.setAttribute("disabled", "disabled");
       } else {
-        this.submitButtonTarget.removeAttribute('disabled');
+        this.submitButtonTarget.removeAttribute("disabled");
       }
     }
 
     if (this.hasRejectionButtonTarget) {
-      setVisible(this.rejectionButtonTarget, exceedsThreshold);
-    } else if (exceedsThreshold) {
+      setVisible(this.rejectionButtonTarget, incomeBlocks);
+    } else if (incomeBlocks) {
       console.warn("Missing rejectionButton target - check HTML structure");
     }
   }
@@ -85,13 +121,11 @@ export default class extends Controller {
     const fieldset = checkbox.closest('fieldset');
     const medicalProviderFields = fieldset.querySelectorAll('[name*="medical_provider"]');
     const description = fieldset.querySelector('p.text-sm');
-    const prefillNotice = fieldset.querySelector('#medical-provider-prefill-notice');
     const fieldsContainer = fieldset.querySelector('.grid');
     
     if (isChecked) {
       // Hide only the form fields and description, keep the header visible
       if (description) description.classList.add('hidden');
-      if (prefillNotice) prefillNotice.classList.add('hidden');
       if (fieldsContainer) fieldsContainer.classList.add('hidden');
       
       // Remove required attribute from all medical provider fields

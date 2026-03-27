@@ -110,7 +110,7 @@
                       <p class="text-sm text-gray-700">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
                     </div>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                      <% unless dependent.applications.where.not(status: :archived).exists? %>
+                      <% unless dependent.applications.blocking_new_submission.exists? %>
                         <%= link_to new_admin_paper_application_path(guardian_id: @user.id, dependent_id: dependent.id),
                             class: "inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
                             "aria-label": "Start paper application for #{dependent.full_name} managed by #{@user.full_name}" do %>

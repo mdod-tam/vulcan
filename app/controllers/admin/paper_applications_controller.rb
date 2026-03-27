@@ -39,7 +39,8 @@ module Admin
         application: Application.new,
         guardian_attributes: Users::Constituent.new, # For fields_for
         applicant_attributes: {}, # For disability attributes
-        constituent: Constituent.new # For dependent or self-applicant
+        constituent: Constituent.new, # For dependent or self-applicant
+        show_create_new_adult: false
       }
       # Ensure guardian_attributes is an empty hash if not already set,
       # or build from an existing model if @paper_application was a real model instance.
@@ -265,34 +266,32 @@ module Admin
 
     def repopulate_form_data(service, existing_application)
       submitted_params = build_submitted_params
-      
+
       # Get or build constituent with submitted data
       constituent = service.constituent || existing_application&.user || Constituent.new
-      
-      # If constituent is a new record, populate it with submitted data
-      if constituent.new_record? && submitted_params[:constituent].present?
-        constituent.assign_attributes(submitted_params[:constituent])
-      end
-      
+
+      # Re-render the form with the submitted values, even for persisted records.
+      constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
+
       # Get or build application with submitted data
       application = service.application || existing_application || Application.new
-      if application.new_record? && submitted_params[:application].present?
-        application.assign_attributes(submitted_params[:application])
-      end
-      
+      application.assign_attributes(submitted_params[:application]) if submitted_params[:application].present?
+
       @paper_application = {
         application: application,
         constituent: constituent,
         guardian_user_for_app: service.guardian_user_for_app,
         applicant_attributes: submitted_params[:applicant_attributes] || {},
         guardian_attributes: submitted_params[:guardian_attributes] || {},
-        submitted_params: submitted_params
+        submitted_params: submitted_params,
+        show_create_new_adult: show_create_new_adult_from?(submitted_params)
       }
     end
 
     def build_submitted_params
       params.permit(
         :applicant_type, :relationship_type, :guardian_id, :dependent_id,
+        :existing_constituent_id, :contact_info_mode, :contact_info_verified,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         application: APPLICATION_FIELDS,
@@ -300,6 +299,12 @@ module Admin
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),
         guardian_attributes: (USER_BASE_FIELDS + USER_DISABILITY_FIELDS)
       ).to_h.with_indifferent_access
+    end
+
+    def show_create_new_adult_from?(submitted_params)
+      submitted_params[:applicant_type] == 'self' &&
+        submitted_params[:existing_constituent_id].blank? &&
+        submitted_params[:constituent].present?
     end
 
     def log_file_and_form_params
@@ -345,7 +350,8 @@ module Admin
 
     def permitted_paper_params
       params.permit(
-        :relationship_type, :guardian_id, :dependent_id, :applicant_type,
+        :relationship_type, :guardian_id, :dependent_id, :applicant_type, :existing_constituent_id,
+        :contact_info_mode, :contact_info_verified,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         :income_proof_action, :income_proof, :income_proof_signed_id,
@@ -363,17 +369,24 @@ module Admin
     end
 
     def base_params_from(permitted)
-      base = permitted.slice(:relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information)
+      base = permitted.slice(
+        :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
+        :existing_constituent_id, :contact_info_mode, :contact_info_verified
+      )
       base[:applicant_type] = compute_applicant_type(permitted)
       base
     end
 
     def compute_applicant_type(permitted)
-      # Dependent indicators (guardian + constituent data) take precedence
       return 'dependent' if inferred_dependent_application_from(permitted)
 
-      # Use explicit value if provided, otherwise default to 'self'
-      permitted[:applicant_type].presence || 'self'
+      raw = permitted[:applicant_type].presence || 'self'
+
+      # Defensive: if "guardian" was submitted but no guardian/dependent IDs present,
+      # the admin selected the adult radio (legacy value bug). Normalize to "self".
+      return 'self' if raw == 'guardian' && permitted[:guardian_id].blank? && permitted[:dependent_id].blank?
+
+      raw
     end
 
     def apply_strategies!(service_params, permitted)
@@ -496,8 +509,8 @@ module Admin
     end
 
     def send_medical_certification_notification_if_needed(application)
-      has_provider_info = application.medical_provider_name.present? || 
-                          application.medical_provider_email.present? || 
+      has_provider_info = application.medical_provider_name.present? ||
+                          application.medical_provider_email.present? ||
                           application.medical_provider_phone.present?
       is_rejected = application.medical_certification_status_rejected?
 
