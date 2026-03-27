@@ -7,8 +7,13 @@ module Users
              through: :evaluations,
              source: :constituent
 
-    enum :status, { inactive: 0, active: 1, suspended: 2 }, default: :inactive, prefix: true
-
-    scope :available, -> { where(status: :active) }
+    scope :available, -> {
+      left_outer_joins(:role_capabilities)
+        .where(
+          "users.type IN (?) OR role_capabilities.capability = ?",
+          ['Users::Evaluator', 'Users::Administrator'],
+          'can_evaluate'
+        )
+    }
   end
 end
