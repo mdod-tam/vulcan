@@ -282,7 +282,7 @@ module Admin
 
     test 'should send document signing request successfully' do
       # Mock the service to match actual controller call signature
-      mock_result = OpenStruct.new(success?: true, message: 'Document signing request sent successfully')
+      mock_result = BaseService::Result.new(success: true, message: 'Document signing request sent successfully')
       mock_service = mock('service')
       mock_service.stubs(:call).returns(mock_result)
       DocumentSigning::SubmissionService.stubs(:new).with(
@@ -301,7 +301,7 @@ module Admin
 
     test 'should handle document signing request failure' do
       # Mock a failed service call to match actual controller call signature
-      mock_result = OpenStruct.new(success?: false, message: 'Medical provider email is required')
+      mock_result = BaseService::Result.new(success: false, message: 'Medical provider email is required')
       mock_service = mock('service')
       mock_service.stubs(:call).returns(mock_result)
       DocumentSigning::SubmissionService.stubs(:new).with(
@@ -321,7 +321,7 @@ module Admin
     test 'should pass correct parameters to document signing service' do
       # Verify that the service is called with the right parameters including service param
       mock_service = mock('service')
-      mock_service.stubs(:call).returns(OpenStruct.new(success?: true, message: 'Success'))
+      mock_service.stubs(:call).returns(BaseService::Result.new(success: true, message: 'Success'))
       DocumentSigning::SubmissionService.expects(:new).with(
         application: @application,
         actor: @admin,

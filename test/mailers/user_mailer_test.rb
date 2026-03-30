@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require 'ostruct' # Ensure OpenStruct is required
 
 class UserMailerTest < ActionMailer::TestCase
   # Helper to create mock templates that respond to render method

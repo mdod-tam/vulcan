@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require 'ostruct' # Keep ostruct for the Struct used below
 
 class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
   # Helper to create mock templates that respond to render method
