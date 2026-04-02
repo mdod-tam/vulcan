@@ -319,4 +319,30 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_includes app.send(:pending_proof_types), 'income'
     assert_includes app.send(:pending_proof_types), 'residency'
   end
+
+  # --- proof_type_reviewable? ---
+
+  test 'proof_type_reviewable? allows rejected attached proofs to be reviewed again' do
+    app = create(:application, :in_progress)
+    app.income_proof.attach(
+      io: StringIO.new('income proof'),
+      filename: 'income.pdf',
+      content_type: 'application/pdf'
+    )
+    app.update_columns(income_proof_status: Application.income_proof_statuses[:rejected])
+
+    assert app.proof_type_reviewable?(:income)
+  end
+
+  test 'proof_type_reviewable? skips income when income proof is not required' do
+    app = create(:application, :in_progress, :income_not_required)
+    app.income_proof.attach(
+      io: StringIO.new('income proof'),
+      filename: 'income.pdf',
+      content_type: 'application/pdf'
+    )
+    app.update_columns(income_proof_status: Application.income_proof_statuses[:not_reviewed])
+
+    assert_not app.proof_type_reviewable?(:income)
+  end
 end

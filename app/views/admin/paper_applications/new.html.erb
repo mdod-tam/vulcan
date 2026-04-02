@@ -64,20 +64,18 @@
 
     <% paper_form_data = {
       turbo: false,
-<<<<<<< HEAD
-      controller: "paper-application applicant-type",
+      controller: "paper-application applicant-type income-validation",
       action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
       "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
-=======
-      controller: "applicant-type",
->>>>>>> 2676f953 (Resolve conflict)
-      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']"
+      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
+      "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']"
     }
     paper_form_data[:"applicant-type-adult-picker-outlet"] = "[data-controller='adult-picker']"
     if FeatureFlag.enabled?(:income_proof_required)
-      paper_form_data[:controller] += " income-validation"
       paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
       paper_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+    else
+      paper_form_data[:controller] = "paper-application applicant-type"
     end %>
     <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
@@ -101,7 +99,7 @@
                 <input type="radio" 
                        id="applicant_is_adult" 
                        name="applicant_type" 
-                       value="self"
+                       value="self" 
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" 
                        <%= 'checked' unless @show_create_guardian_form %> 
                        data-applicant-type-target="radio">

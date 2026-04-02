@@ -326,17 +326,19 @@
           <% latest_evaluation = @application.latest_evaluation %>
 
           <!-- Evaluator Section -->
-          <%= render "assignment_section",
-            type: "evaluator",
-            entity: latest_evaluation,
-            assigned_person: latest_evaluation&.evaluator,
-            status_badge_method: :evaluation_status_badge,
-            scheduled_date: latest_evaluation&.evaluation_date,
-            scheduled_time: false,
-            view_path: latest_evaluation.present? ? evaluators_evaluation_path(latest_evaluation) : nil,
-            assign_path: ->(evaluator) { assign_evaluator_admin_application_path(@application, evaluator_id: evaluator.id) },
-            available_assignees: Users::Evaluator.available
-          %>
+          <% if @application.equipment_fulfillment? %>
+            <%= render "assignment_section",
+              type: "evaluator",
+              entity: latest_evaluation,
+              assigned_person: latest_evaluation&.evaluator,
+              status_badge_method: :evaluation_status_badge,
+              scheduled_date: latest_evaluation&.evaluation_date,
+              scheduled_time: false,
+              view_path: latest_evaluation.present? ? evaluators_evaluation_path(latest_evaluation) : nil,
+              assign_path: ->(evaluator) { assign_evaluator_admin_application_path(@application, evaluator_id: evaluator.id) },
+              available_assignees: Users::Evaluator.available
+            %>
+          <% end %>
 
           <!-- Trainer Section (Conditional based on policy limit) -->
           <% if @completed_training_sessions_count < @max_training_sessions %>
@@ -386,7 +388,7 @@
             </p>
           <% end %>
         </div>
-        <% if latest_evaluation&.status_completed? %>
+        <% if @application.voucher_fulfillment? || latest_evaluation&.status_completed? %>
           <div>
             <h3 class="text-sm font-medium text-gray-500 mb-2">Training Sessions (<%= @application.training_sessions.count %>)</h3>
             <% if @application.training_sessions.any? %>

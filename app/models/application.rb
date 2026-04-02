@@ -319,15 +319,68 @@ class Application < ApplicationRecord
     latest_audit.present? && latest_review.present? && latest_audit.created_at > latest_review.created_at
   end
 
+  def proof_review_state(proof_type)
+    proof_type = proof_type.to_s
+    return :not_applicable unless ProofReview.reviewable_proof_type?(proof_type)
+    return :not_applicable if proof_type == 'income' && !income_proof_required?
+
+    attachment = public_send("#{proof_type}_proof")
+    return :missing_attachment unless attachment.attached?
+
+    if public_send("#{proof_type}_proof_status_approved?")
+      return needs_proof_type_review?(proof_type) ? :resubmitted : :approved_current
+    end
+
+    return :rejected if public_send("#{proof_type}_proof_status_rejected?")
+    return :pending if public_send("#{proof_type}_proof_status_not_reviewed?")
+
+    :pending
+  end
+
+  def proof_type_reviewable?(proof_type)
+    proof_review_state(proof_type).in?(%i[pending rejected resubmitted])
+  end
+
+  def proofs_reviewable?
+    %w[income residency].any? { |proof_type| proof_type_reviewable?(proof_type) }
+  end
+
+  def proof_review_button_text(proof_type)
+    case proof_review_state(proof_type)
+    when :resubmitted
+      'Review Resubmitted Proof'
+    when :rejected
+      'Review Rejected Proof'
+    else
+      'Review Proof'
+    end
+  end
+
+  def proof_review_button_class(proof_type)
+    proof_review_state(proof_type) == :rejected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+  end
+
   # Retrieves the latest review and audit for a given proof type
   # @param proof_type [String] The type of proof ("income" or "residency")
   # @return [Array] A two-element array containing the latest review and audit
   def latest_review_and_audit(proof_type)
     latest_review = proof_reviews.where(proof_type: proof_type).order(created_at: :desc).first
-    action_name = "#{proof_type}_proof_submitted"
-    latest_audit = events.where(action: action_name).order(created_at: :desc).first
+    latest_audit = latest_proof_submission_event(proof_type)
 
     [latest_review, latest_audit]
+  end
+
+  def latest_proof_submission_event(proof_type)
+    proof_type = proof_type.to_s
+    events
+      .where(
+        "(action = :generic_action AND metadata->>'proof_type' = :proof_type) OR action IN (:legacy_actions)",
+        generic_action: 'proof_submitted',
+        proof_type: proof_type,
+        legacy_actions: ["#{proof_type}_proof_submitted", "#{proof_type}_proof_attached"]
+      )
+      .order(created_at: :desc)
+      .first
   end
 
   # Application status change tracking
