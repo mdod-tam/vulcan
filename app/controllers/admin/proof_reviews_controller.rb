@@ -46,12 +46,23 @@ module Admin
     end
 
     def create
-      @proof_review = @application.proof_reviews.build(proof_review_params)
-      @proof_review.admin = current_user
+      result = ProofReviewService.new(
+        @application,
+        current_user,
+        proof_review_params.to_h.symbolize_keys
+      ).call
 
-      if @proof_review.save
+      if result.success?
         redirect_to admin_application_path(@application), notice: t('.proof_completed')
       else
+        @proof_type = proof_review_params[:proof_type]
+        @proof_review = @application.proof_reviews.build(proof_review_params)
+        @proof = case @proof_type
+                 when 'income'
+                   @application.income_proof
+                 when 'residency'
+                   @application.residency_proof
+                 end
         render :new, status: :unprocessable_content, alert: 'Proof review failed to save'
       end
     end
@@ -97,9 +108,15 @@ module Admin
     end
 
     def ensure_reviewable_status
-      return if @application.proofs_reviewable?
+      return if @application.proof_type_reviewable?(requested_proof_type)
 
       redirect_to admin_application_path(@application), alert: t('.app_not_reviewable')
+    end
+
+    def requested_proof_type
+      proof_review_params[:proof_type].presence || params[:proof_type]
+    rescue ActionController::ParameterMissing
+      params[:proof_type]
     end
   end
 end

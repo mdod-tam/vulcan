@@ -6,6 +6,16 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   setup do
     @application = create(:application, :in_progress, skip_proofs: true)
     @admin = create(:admin)
+    @application.income_proof.attach(
+      io: StringIO.new('income proof'),
+      filename: 'income-proof.pdf',
+      content_type: 'application/pdf'
+    )
+    @application.residency_proof.attach(
+      io: StringIO.new('residency proof'),
+      filename: 'residency-proof.pdf',
+      content_type: 'application/pdf'
+    )
   end
 
   test 'uses the reviewable proof type boundary from ProofReview' do
@@ -66,5 +76,18 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
 
       assert result.success?, "Residency review should still work when income is off: #{result.message}"
     end
+  end
+
+  test 'rejects proof review when the proof is not currently reviewable' do
+    @application.update_columns(income_proof_status: Application.income_proof_statuses[:approved])
+
+    result = ProofReviewService.new(
+      @application,
+      @admin,
+      { proof_type: 'income', status: 'approved' }
+    ).call
+
+    assert_not result.success?
+    assert_equal 'Proof is not reviewable for this application', result.message
   end
 end

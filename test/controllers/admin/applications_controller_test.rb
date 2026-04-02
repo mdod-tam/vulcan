@@ -195,6 +195,50 @@ module Admin
       assert_select 'button[data-proof-type="income"]', text: 'Review Rejected Proof'
     end
 
+    test 'show page displays resubmitted proof button text for generic proof_submitted audit events' do
+      application = create(:application, :in_progress,
+                           user: create(:constituent, email: generate(:email)),
+                           income_proof_status: :approved)
+
+      application.income_proof.attach(io: StringIO.new('test content'), filename: 'income.pdf')
+      create(:proof_review,
+             application: application,
+             proof_type: 'income',
+             status: :approved)
+
+      Event.create!(
+        user: application.user,
+        action: 'proof_submitted',
+        auditable: application,
+        metadata: {
+          application_id: application.id,
+          proof_type: 'income',
+          submission_method: 'web'
+        },
+        created_at: 1.minute.from_now
+      )
+
+      get admin_application_path(application)
+      assert_response :success
+      assert_select 'button[data-proof-type="income"]', text: 'Review Resubmitted Proof'
+    end
+
+    test 'show page hides evaluator section and shows training history for voucher applications' do
+      voucher_app = create(
+        :application,
+        :completed,
+        :voucher_fulfillment,
+        user: create(:constituent, email: generate(:email))
+      )
+      create(:training_session, application: voucher_app, trainer: create(:trainer), status: :requested)
+
+      get admin_application_path(voucher_app)
+      assert_response :success
+
+      assert_no_match(/Current Evaluator|Assign Evaluator/, response.body)
+      assert_match(/Training Sessions \(1\)/, response.body)
+    end
+
     test 'show page uses db-backed rejection reason text in modal data attributes' do
       income_body = 'DB income missing-name reason for modal test.'
       medical_body = 'DB medical missing-signature reason for modal test.'
