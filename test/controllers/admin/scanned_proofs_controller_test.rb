@@ -27,18 +27,29 @@ module Admin
     def test_creates_proof_with_valid_parameters
       # Clear events before the test to ensure we only count events from this test
       Event.delete_all
+      clear_enqueued_jobs
 
-      assert_difference 'Event.count', 1 do # Expect one event from ProofAttachmentService
-        post admin_application_scanned_proofs_path(@application),
-             params: {
-               proof_type: 'income',
-               file: @file
-             },
-             headers: default_headers
+      assert_no_difference -> { Notification.where(notifiable: @application, action: 'income_proof_attached').count } do
+        assert_no_difference -> { Notification.where(notifiable: @application, action: 'proof_submitted').count } do
+          assert_enqueued_jobs 1, only: ActionMailer::MailDeliveryJob do
+            assert_difference 'Event.count', 1 do # Controller creates one proof_submitted event; service audit event is skipped
+              post admin_application_scanned_proofs_path(@application),
+                   params: {
+                     proof_type: 'income',
+                     file: @file
+                   },
+                   headers: default_headers
+            end
+          end
+        end
       end
 
+      @application.reload
+
       # Verify the application has the proof attached first
-      assert @application.reload.income_proof.attached?, 'Proof was not attached to the application'
+      assert @application.income_proof.attached?, 'Proof was not attached to the application'
+      assert_equal 'approved', @application.income_proof_status
+      assert_nil @application.needs_review_since, 'Approved scanned proofs should not set needs_review_since'
 
       # Verify the redirect
       assert_redirected_to admin_application_path(@application)

@@ -11,20 +11,28 @@ class MedicalCertificationMailbox < ApplicationMailbox
   before_processing :validate_attachments
 
   def process
-    create_audit_record
+    # Application has a single medical_certification attachment, so we treat the
+    # first valid attachment as the canonical submission for this email.
+    attachment = mail.attachments.first
 
-    mail.attachments.each do |attachment|
-      attach_certification(attachment)
-    end
+    MedicalCertificationAttachmentService.attach_certification(
+      application: application,
+      blob_or_file: build_blob_from_attachment(attachment),
+      status: :received,
+      admin: User.system_user,
+      submission_method: :email,
+      metadata: certification_metadata
+    )
 
-    transition_application_to_received!
-
-    notify_admin
-    notify_constituent
+    AuditEventService.log(
+      actor: User.system_user,
+      action: 'medical_certification_received',
+      auditable: application,
+      metadata: certification_metadata
+    )
   end
 
   private
-
   def create_audit_record
     record_audit_event('medical_certification_received',
                        sender_email: sender_email,
@@ -222,6 +230,10 @@ class MedicalCertificationMailbox < ApplicationMailbox
     User.system_user
   end
 
+  def medical_provider
+    @medical_provider = MedicalProvider.find_by_email(mail.from.first)
+  end
+
   def application
     return @application if defined?(@application)
 
@@ -249,5 +261,24 @@ class MedicalCertificationMailbox < ApplicationMailbox
     Application.find_signed(token, purpose: :medical_certification)&.id
   rescue ActiveSupport::MessageVerifier::InvalidSignature
     nil
+  end
+
+  def build_blob_from_attachment(attachment)
+    ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new(attachment.body.decoded),
+      filename: attachment.filename,
+      content_type: attachment.content_type
+    )
+  end
+
+  def certification_metadata
+    {
+      application_id: application.id,
+      medical_provider_id: medical_provider.id,
+      inbound_email_id: inbound_email.id,
+      email_subject: mail.subject,
+      email_from: mail.from.first,
+      submission_method: 'email'
+    }
   end
 end

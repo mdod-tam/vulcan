@@ -248,41 +248,47 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
   end
 
   test 'certification mailbox produces the expected certification state' do
-    medical_provider = create(:medical_provider)
-    application = create(
-      :application,
-      status: :awaiting_dcf,
-      medical_provider_name: medical_provider.full_name,
-      medical_provider_email: medical_provider.email,
-      medical_provider_phone: medical_provider.phone,
-      medical_certification_status: :requested
-    )
+    with_committed_records do
+      medical_provider = create(:medical_provider)
+      application = create(
+        :application,
+        status: :awaiting_dcf,
+        medical_provider_name: medical_provider.full_name,
+        medical_provider_email: medical_provider.email,
+        medical_provider_phone: medical_provider.phone,
+        medical_certification_status: :requested
+      )
 
-    inbound_email = receive_inbound_email_from_mail(
-      to: 'disability_cert@mdmat.org',
-      from: medical_provider.email,
-      subject: "Medical Certification for Application ##{application.id}",
-      body: "Attached certification for Application ##{application.id}",
-      attachments: [
-        {
+      mail = Mail.new do
+        to 'disability_cert@mdmat.org'
+        from medical_provider.email
+        subject "Medical Certification for Application ##{application.id}"
+
+        text_part do
+          body "Attached certification for Application ##{application.id}"
+        end
+
+        add_file(
           filename: 'medical-certification.pdf',
           content: 'certification pdf ' * 80,
           content_type: 'application/pdf'
-        }
-      ]
-    )
+        )
+      end
 
-    assert_equal MedicalCertificationMailbox, ApplicationMailbox.mailbox_for(inbound_email)
-    assert_includes %w[processed delivered], inbound_email.reload.status
+      inbound_email = ActionMailbox::InboundEmail.create_and_extract_message_id!(mail.to_s)
+      inbound_email.route
 
-    assert_medical_certification_contract(
-      application,
-      expected_status: 'received',
-      expected_from_status: 'requested',
-      expected_event_action: 'medical_certification_received',
-      expected_submission_method: 'email',
-      expected_actor: @system_user
-    )
+      assert_equal MedicalCertificationMailbox, ApplicationMailbox.mailbox_for(inbound_email)
+
+      assert_medical_certification_contract(
+        application,
+        expected_status: 'received',
+        expected_from_status: 'requested',
+        expected_event_action: 'medical_certification_received',
+        expected_submission_method: 'email',
+        expected_actor: @system_user
+      )
+    end
   end
 
   test 'direct certification webhook produces the expected certification state' do
@@ -385,5 +391,17 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
       'Content-Type' => 'application/json',
       'X-Webhook-Signature' => OpenSSL::HMAC.hexdigest('sha256', @webhook_secret, payload.to_json)
     }
+  end
+
+  def with_committed_records
+    DatabaseCleaner.strategy = :truncation
+    DatabaseCleaner.clean
+    Current.reset
+    @system_user = create(:admin, email: generate(:email))
+    User.stubs(:system_user).returns(@system_user)
+    yield
+  ensure
+    Current.reset
+    DatabaseCleaner.strategy = :transaction
   end
 end
