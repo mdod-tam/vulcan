@@ -397,16 +397,11 @@ class ProofAttachmentService
     end
 
     def update_application_status(context)
-      ActiveRecord::Base.transaction do
-        status_attrs = { "#{context.proof_type}_proof_status" => context.status }
-        status_attrs[:needs_review_since] = Time.current if context.status == :not_reviewed
-        status_attrs[:updated_at] = Time.current
+      attrs = { "#{context.proof_type}_proof_status" => context.status }
+      attrs[:needs_review_since] = Time.current if context.status == :not_reviewed
 
-        # Use update_columns to bypass validations that may require all proofs to be attached
-        # This is necessary in paper application context where proofs are being processed
-        context.application.update_columns(status_attrs) # rubocop:disable Rails/SkipsModelValidations
-        context.application.reload
-      end
+      context.application.update!(attrs)
+      context.application.reload
     end
 
     def send_notification(context, event_metadata)
