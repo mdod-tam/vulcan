@@ -186,7 +186,8 @@ module ProofManageable
     (Rails.env.test? && ENV['REQUIRE_PROOF_VALIDATIONS'] != 'true') ||
       Current.skip_proof_validation ||
       Current.paper_context? ||
-      submission_method_paper? # Skip for paper applications (matches ProofConsistencyValidation line 39)
+      Current.proof_attachment_service_context? ||
+      submission_method_paper?
   end
 
   def transitioning_from_draft?

@@ -483,6 +483,7 @@ class Application < ApplicationRecord
 
   def notify_admins_of_new_proofs
     return unless user
+    return if Current.paper_context?
 
     admins = User.where(type: 'Users::Administrator')
     return if admins.empty?
