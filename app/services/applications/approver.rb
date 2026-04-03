@@ -18,7 +18,7 @@ module Applications
     # @return [Boolean] True if successful, false otherwise
     def call
       ApplicationRecord.transaction do
-        application.update!(status: :approved)
+        application.transition_status!(:approved, actor: actor)
 
         # Create event for approval
         AuditEventService.log(
