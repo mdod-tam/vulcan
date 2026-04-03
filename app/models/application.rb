@@ -141,7 +141,7 @@ class Application < ApplicationRecord
   before_save :ensure_managing_guardian_set, if: :user_id_changed?
   # Callbacks
   before_create :ensure_managing_guardian_set
-  after_update :log_status_change, if: :saved_change_to_status?
+  after_update :log_status_change, if: :should_log_status_change?
   after_save :log_alternate_contact_changes, if: :saved_change_to_alternate_contact?
 
   # Scopes
@@ -284,6 +284,51 @@ class Application < ApplicationRecord
   # Delegate document request logic to the Applications::DocumentRequester service object
   def request_documents!(user: Current.user)
     Applications::DocumentRequester.new(self, by: user).call
+  end
+
+  # Explicit status transition API for new lifecycle paths.
+  # This writes the status change, status-change record, and audit event atomically.
+  # Audit failures propagate and roll back the status change.
+  def transition_status!(new_status, actor:, notes: nil, metadata: {})
+    raise ArgumentError, 'actor is required' if actor.blank?
+
+    with_lock do
+      old_status = status
+      target_status = new_status.to_s
+
+      return true if old_status == target_status
+
+      # Transitional coexistence guard while the legacy log_status_change callback still exists.
+      # Remove this when callback-owned status logging is deleted.
+      @skip_status_change_logging = true
+      update!(status: target_status)
+
+      status_changes.create!(
+        from_status: old_status,
+        to_status: status,
+        user: actor,
+        notes: notes
+      )
+
+      AuditEventService.log(
+        action: 'application_status_changed',
+        actor: actor,
+        auditable: self,
+        metadata: metadata.reverse_merge(
+          application_id: id,
+          old_status: old_status,
+          new_status: status,
+          submission_method: submission_method,
+          notes: notes
+        )
+      )
+
+      true
+    end
+  ensure
+    # Method-level ensure guarantees cleanup even if locking or auditing raises
+    # before the coexistence guard can be unset inside the locked section.
+    @skip_status_change_logging = false
   end
 
   def constituent_full_name
@@ -456,6 +501,10 @@ class Application < ApplicationRecord
       @pending_status_change_user = nil
       @pending_status_change_notes = nil
     end
+  end
+
+  def should_log_status_change?
+    saved_change_to_status? && !@skip_status_change_logging
   end
 
   def waiting_period_completed
