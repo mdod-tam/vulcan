@@ -64,7 +64,7 @@ module Applications
       assert_nil review.rejection_reason
     end
 
-    test 'approved review uses callback chain for auto-approval audit' do
+    test 'approved review triggers reconciler auto-approval audit' do
       app = create(:application, :in_progress, :income_not_required)
       app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
       app.residency_proof.attach(
@@ -79,7 +79,7 @@ module Applications
 
       assert_difference -> { app.status_changes.count }, 1 do
         assert_difference -> { Event.where(action: 'application_status_changed', auditable: app).count }, 1 do
-          assert_difference -> { Event.where(action: 'application_auto_approved', auditable: app).count }, 1 do
+          assert_no_difference -> { Event.where(action: 'application_auto_approved', auditable: app).count } do
             reviewer.review(proof_type: :residency, status: :approved)
           end
         end
@@ -87,8 +87,14 @@ module Applications
 
       app.reload
       assert app.status_approved?
+
       status_change = app.status_changes.order(:created_at).last
       assert_equal @admin, status_change.user
+      assert_equal 'auto_approval', status_change.metadata['trigger']
+
+      status_event = Event.where(action: 'application_status_changed', auditable: app).order(:created_at).last
+      assert_equal 'auto_approval', status_event.metadata['trigger']
+      assert_equal 'approved', status_event.metadata['new_status']
     end
   end
 end

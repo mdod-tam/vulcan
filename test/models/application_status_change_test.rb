@@ -55,33 +55,27 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     assert_equal 'Test status change', change.notes
   end
 
-  test 'auto-approval creates single status change record' do
-    # Create application with all proofs attached
+  test 'reconciler auto-approval creates single status change record with metadata' do
     application = create(:application, :in_progress, :with_all_proofs, user: @constituent)
 
-    # First approve income and residency proofs (without medical)
-    application.update!(
-      income_proof_status: :approved,
-      residency_proof_status: :approved
+    application.update_columns(
+      income_proof_status: Application.income_proof_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      medical_certification_status: Application.medical_certification_statuses[:approved]
     )
+    application.reload
 
-    ApplicationStatusChange.count
+    initial_count = ApplicationStatusChange.where(application: application, to_status: 'approved').count
 
-    # Now approve medical certification - this should trigger auto-approval
-    # because all requirements are now met and the callback checks saved_change_to_*
-    application.update!(
-      medical_certification_status: :approved
-    )
+    application.reconcile_workflow_state!(actor: @admin, trigger: :test)
 
-    # Verify exactly one record was created for the auto-approval
-    new_records = ApplicationStatusChange.where(
-      application: application,
-      to_status: 'approved'
-    )
+    new_records = ApplicationStatusChange.where(application: application, to_status: 'approved')
+    assert_equal initial_count + 1, new_records.count
 
-    # Should have exactly one auto-approval record
-    assert_equal 1, new_records.count
-    assert_equal 'Auto-approved based on all requirements being met', new_records.first.notes
+    record = new_records.last
+    assert_equal 'Auto-approved based on all requirements being met', record.notes
+    assert_equal 'auto_approval', record.metadata['trigger']
+    assert_equal 0, Event.where(auditable: application, action: 'application_auto_approved').count
   end
 
   test 'multiple sequential status changes create separate records' do

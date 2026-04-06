@@ -63,6 +63,7 @@ module Admin
 
       if service_result
         success_message = generate_success_message(service.application)
+        success_message += " #{service.reconciliation_note}" if service.reconciliation_note.present?
         send_medical_certification_notification_if_needed(service.application)
         handle_success_response(
           html_redirect_path: admin_application_path(service.application),
@@ -90,10 +91,12 @@ module Admin
       )
 
       if service.update(application)
+        update_message = generate_success_message(application)
+        update_message += " #{service.reconciliation_note}" if service.reconciliation_note.present?
         handle_success_response(
           html_redirect_path: admin_application_path(application),
-          html_message: generate_success_message(application),
-          turbo_message: generate_success_message(application),
+          html_message: update_message,
+          turbo_message: update_message,
           turbo_redirect_path: admin_application_path(application)
         )
       else

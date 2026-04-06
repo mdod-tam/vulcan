@@ -189,7 +189,7 @@ module ApplicationDataLoading
   def load_application_events(application, actions: nil)
     actions ||= %w[
       voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
-      application_created evaluator_assigned trainer_assigned application_auto_approved
+      application_created evaluator_assigned trainer_assigned
     ]
 
     Event

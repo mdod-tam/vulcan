@@ -239,7 +239,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
            'Expected ApplicationStatusChange record for auto-approval'
   end
 
-  test 'ProofReviewer creates audit event on auto-approval' do
+  test 'ProofReviewer creates audit event on auto-approval via reconciler' do
     app = create(:application, :in_progress, :income_not_required)
     app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
     app.residency_proof.attach(
@@ -252,9 +252,15 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     reviewer = Applications::ProofReviewer.new(app, admin)
 
-    assert_difference -> { Event.where(action: 'application_auto_approved').count }, 1 do
-      reviewer.review(proof_type: :residency, status: :approved)
+    assert_no_difference -> { Event.where(action: 'application_auto_approved').count } do
+      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
+        reviewer.review(proof_type: :residency, status: :approved)
+      end
     end
+
+    status_event = Event.where(action: 'application_status_changed', auditable: app).order(:created_at).last
+    assert_equal 'auto_approval', status_event.metadata['trigger']
+    assert_equal 'approved', status_event.metadata['new_status']
   end
 
   # --- ProofConsistencyValidation respects income_proof_required ---

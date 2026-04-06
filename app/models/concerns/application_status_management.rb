@@ -4,8 +4,6 @@ module ApplicationStatusManagement
   extend ActiveSupport::Concern
 
   included do
-    after_save :auto_approve_if_eligible, if: :should_auto_approve?
-
     enum :application_type, {
       new: 0,
       renewal: 1
@@ -72,6 +70,29 @@ module ApplicationStatusManagement
     !status_draft?
   end
 
+  # Unified reconciliation entry point for workflow state transitions.
+  # Checks whether the application should be auto-approved (all requirements met)
+  # or escalated to DCF (proofs approved, cert pending). Row-locked, idempotent,
+  # and safe to call redundantly from any writer path.
+  def reconcile_workflow_state!(actor:, trigger: nil)
+    with_lock do
+      reload
+      return if status_approved? || status_rejected? || status_archived?
+
+      if all_requirements_met?
+        transition_status!(
+          :approved,
+          actor: actor,
+          notes: 'Auto-approved based on all requirements being met',
+          metadata: { trigger: 'auto_approval', source: trigger&.to_s }.compact
+        )
+        return
+      end
+
+      escalate_to_dcf!(actor: actor, trigger: trigger) if required_proofs_for_dcf_approved?
+    end
+  end
+
   # Consolidates DCF escalation: transitions to awaiting_dcf and conditionally
   # requests medical certification. Safe to call from any path — idempotent,
   # locked, and self-healing (repairs a missing cert request on re-entry).
@@ -98,67 +119,8 @@ module ApplicationStatusManagement
 
   private
 
-  # --- Auto Approve Application Process ---
-  # Determines if the application should be auto-approved.
-  # Auto-approval occurs when all three requirements (income, residency, medical certification)
-  # are approved, regardless of the order in which they were approved.
-  # This check runs on every save to catch cases where requirements were met out of order.
-  def should_auto_approve?
-    # Don't auto-approve if already in a terminal state
-    return false if status_approved? || status_rejected? || status_archived?
-
-    # Check if all requirements are met (income, residency, and disability certification approved)
-    all_requirements_met?
-  end
-
   def all_requirements_met?
     required_proofs_approved? &&
       medical_certification_status_approved?
-  end
-
-  # Auto-approves the application when all requirements are met
-  # Uses proper Rails update mechanisms to ensure audit trails are created
-  def auto_approve_if_eligible
-    previous_status = status
-    update_application_status_to_approved
-    create_auto_approval_audit_event(previous_status)
-  end
-
-  # Updates the application status using Rails update! method
-  # The after_save callback handles status change record creation automatically
-  def update_application_status_to_approved
-    # Use Current.user (the admin who triggered the action) for audit trail
-    # Store notes for the callback to use
-    @pending_status_change_user = Current.user
-    @pending_status_change_notes = 'Auto-approved based on all requirements being met'
-
-    # Update status - log_status_change callback handles ApplicationStatusChange creation
-    update!(status: 'approved')
-  end
-
-  # Creates an audit event for the auto-approval
-  def create_auto_approval_audit_event(previous_status)
-    return unless defined?(AuditEventService)
-
-    begin
-      # Use Current.user if available, otherwise fall back to a system user for automated processes
-      acting_user = Current.user || User.find_by(email: 'system@mdmat.org') || User.first
-      AuditEventService.log(
-        actor: acting_user,
-        action: 'application_auto_approved',
-        auditable: self,
-        metadata: {
-          application_id: id,
-          old_status: previous_status,
-          new_status: status,
-          timestamp: Time.current.iso8601,
-          auto_approval: true,
-          triggered_by_user_id: acting_user&.id
-        }
-      )
-    rescue StandardError => e
-      # Log error but don't prevent the auto-approval
-      Rails.logger.error("Failed to create event for auto-approval: #{e.message}")
-    end
   end
 end

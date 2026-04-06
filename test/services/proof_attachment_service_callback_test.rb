@@ -92,7 +92,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
 
   # --- Auto-approval fires through callback chain ---
 
-  test 'proof attachment with approved status triggers auto-approval when all requirements met' do
+  test 'proof attachment with approved status triggers reconciler auto-approval when all requirements met' do
     app = create_application_ready_for_final_proof
 
     Current.user = @admin
@@ -112,16 +112,17 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     app.reload
 
     assert_equal 'approved', app.status,
-                 'Application should be auto-approved when all requirements are met'
+                 'Application should be auto-approved via reconciler when all requirements are met'
 
     status_change = app.status_changes.find_by(to_status: 'approved')
     assert_not_nil status_change, 'ApplicationStatusChange record should exist for auto-approval'
+    assert_equal 'auto_approval', status_change.metadata['trigger']
 
-    auto_approved_event = Event.find_by(action: 'application_auto_approved', auditable: app)
-    assert_not_nil auto_approved_event, 'application_auto_approved audit event should exist'
+    status_event = Event.find_by(action: 'application_status_changed', auditable: app)
+    assert_not_nil status_event, 'application_status_changed event should exist'
+    assert_equal 'auto_approval', status_event.metadata['trigger']
 
-    status_changed_event = Event.find_by(action: 'application_status_changed', auditable: app)
-    assert_not_nil status_changed_event, 'application_status_changed audit event should exist'
+    assert_equal 0, Event.where(auditable: app, action: 'application_auto_approved').count
   end
 
   test 'proof attachment with not_reviewed status does not trigger auto-approval' do
@@ -188,13 +189,14 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
 
   # --- Proof ingress participates in callback-driven lifecycle ---
 
-  test 'proof status update fires after_save callbacks (not bypassed)' do
+  test 'proof status update uses update! so validations and callbacks fire' do
     app = create(:application, :in_progress, user: @constituent)
-    callback_fired = false
+    validation_ran = false
 
-    app.define_singleton_method(:should_auto_approve?) do
-      callback_fired = true
-      false
+    original_valid = app.method(:valid?)
+    app.define_singleton_method(:valid?) do |*args|
+      validation_ran = true
+      original_valid.call(*args)
     end
 
     ProofAttachmentService.attach_proof(
@@ -208,7 +210,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
       metadata: {}
     )
 
-    assert callback_fired, 'after_save callback chain should fire (should_auto_approve? was evaluated)'
+    assert validation_ran, 'Validations should run (update! used, not update_columns)'
   end
 
   private

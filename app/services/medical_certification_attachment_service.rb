@@ -191,6 +191,11 @@ class MedicalCertificationAttachmentService
           channel: :email
         )
       end
+
+      if status.to_sym == :approved
+        application.reload
+        application.reconcile_workflow_state!(actor: admin, trigger: :medical_certification_approved)
+      end
     end
   end
 

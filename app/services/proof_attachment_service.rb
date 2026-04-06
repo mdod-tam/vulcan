@@ -192,11 +192,25 @@ class ProofAttachmentService
       with_paper_context(flow_data.submission_method, flow_data.proof_type) do
         attach_and_verify_initial_save(flow_data.application, flow_data.proof_type, flow_data.attachment_param)
         log_attachment_events_from_flow_data(flow_data, params)
-        # Removed verify_attachment_persisted_after_update - status updates don't affect attachments
-
         result[:blob_size] = flow_data.blob_size
         result[:success] = true
       end
+
+      # Reconcile AFTER with_paper_context has restored Current.paper_context to its
+      # pre-call value. This is the key distinction:
+      #   - ScannedProofsController: never sets paper_context → restored to nil → reconciles here.
+      #   - PaperApplicationService: sets paper_context = true before calling the service →
+      #     restored to true → skips here. process_proof_uploads reconciles once at the end,
+      #     preventing mid-batch DCF escalation (and spurious cert-request emails) when proofs
+      #     and a cert are submitted together in the same paper-app creation.
+      return unless params.fetch(:status).to_sym == :approved
+      return if Current.paper_context?
+
+      reconcile_if_approved(
+        application: flow_data.application,
+        admin: params.fetch(:admin),
+        proof_type: flow_data.proof_type
+      )
     end
 
     def attach_and_verify_initial_save(application, proof_type, attachment_param)
@@ -402,6 +416,16 @@ class ProofAttachmentService
 
       context.application.update!(attrs)
       context.application.reload
+    end
+
+    def reconcile_if_approved(application:, admin:, proof_type:)
+      actor = admin || Current.user || application.user
+      application.reconcile_workflow_state!(
+        actor: actor,
+        trigger: :"#{proof_type}_proof_approved"
+      )
+    rescue StandardError => e
+      Rails.logger.error "Workflow reconciliation failed for Application #{application.id}: #{e.message}\n#{e.backtrace.join("\n")}"
     end
 
     def send_notification(context, event_metadata)

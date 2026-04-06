@@ -318,7 +318,14 @@ class Application < ApplicationRecord
         from_status: old_status,
         to_status: status,
         user: actor,
-        notes: notes
+        notes: notes,
+        metadata: metadata.reverse_merge(
+          application_id: id,
+          old_status: old_status,
+          new_status: status,
+          submission_method: submission_method,
+          notes: notes
+        )
       )
 
       AuditEventService.log(
@@ -568,19 +575,20 @@ class Application < ApplicationRecord
   end
 
   def log_status_change
-    # Guard clause to prevent infinite recursion
     return if @logging_status_change
 
-    # Use pending user/notes from deprecated update_status, or fall back to Current.user
     acting_user = @pending_status_change_user || Current.user || user
     status_notes = @pending_status_change_notes
 
-    return if acting_user.blank?
+    if acting_user.blank?
+      @pending_status_change_user = nil
+      @pending_status_change_notes = nil
+      return
+    end
 
     @logging_status_change = true
 
     begin
-      # Create ApplicationStatusChange record for audit logs
       status_changes.create!(
         from_status: status_before_last_save,
         to_status: status,
@@ -588,7 +596,6 @@ class Application < ApplicationRecord
         notes: status_notes
       )
 
-      # Also create Event record for other audit purposes
       AuditEventService.log(
         action: 'application_status_changed',
         actor: acting_user,
@@ -605,7 +612,6 @@ class Application < ApplicationRecord
       Rails.logger.error "Failed to log status change for application #{id}: #{e.message}"
     ensure
       @logging_status_change = false
-      # Clear pending attributes after use
       @pending_status_change_user = nil
       @pending_status_change_notes = nil
     end
