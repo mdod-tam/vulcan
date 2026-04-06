@@ -266,4 +266,158 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal(minor_applicant, application_for_minor.user, "Application's user should be the minor.")
     assert_equal(guardian, application_for_minor.managing_guardian, "Application's managing_guardian should be the guardian.")
   end
+
+  # --- escalate_to_dcf! tests ---
+
+  test 'escalate_to_dcf! transitions to awaiting_dcf and requests certification when proofs approved' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    application.update_columns(
+      status: Application.statuses[:in_progress],
+      income_proof_status: Application.income_proof_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      updated_at: Time.current
+    )
+    application.reload
+
+    request_mail = mock('request_mail')
+    request_mail.expects(:deliver_later).once
+    MedicalProviderMailer.expects(:request_certification).with(application).returns(request_mail).once
+
+    assert_difference -> { ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count }, 1 do
+      assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
+        application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
+      end
+    end
+
+    application.reload
+    assert_equal 'awaiting_dcf', application.status
+    assert_equal 'requested', application.medical_certification_status
+  end
+
+  test 'escalate_to_dcf! transitions to awaiting_dcf but skips cert request when proofs not approved' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    application.update_columns(
+      status: Application.statuses[:in_progress],
+      income_proof_status: Application.income_proof_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:not_reviewed],
+      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      updated_at: Time.current
+    )
+    application.reload
+
+    MedicalProviderMailer.expects(:request_certification).never
+
+    application.escalate_to_dcf!(actor: @admin, trigger: :document_request)
+
+    application.reload
+    assert_equal 'awaiting_dcf', application.status
+    assert_equal 'not_requested', application.medical_certification_status
+  end
+
+  test 'escalate_to_dcf! self-heals: skips transition but requests cert when already awaiting_dcf' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    application.update_columns(
+      status: Application.statuses[:awaiting_dcf],
+      income_proof_status: Application.income_proof_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      updated_at: Time.current
+    )
+    application.reload
+
+    request_mail = mock('request_mail')
+    request_mail.expects(:deliver_later).once
+    MedicalProviderMailer.expects(:request_certification).with(application).returns(request_mail).once
+
+    assert_no_difference -> { ApplicationStatusChange.where(application: application).count } do
+      application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
+    end
+
+    application.reload
+    assert_equal 'awaiting_dcf', application.status
+    assert_equal 'requested', application.medical_certification_status
+  end
+
+  test 'escalate_to_dcf! no-ops for terminal statuses' do
+    %i[approved rejected archived].each do |terminal_status|
+      application = create(:application, skip_proofs: true, status: terminal_status)
+      application.update_columns(
+        income_proof_status: Application.income_proof_statuses[:approved],
+        residency_proof_status: Application.residency_proof_statuses[:approved],
+        medical_certification_status: Application.medical_certification_statuses[:not_requested],
+        updated_at: Time.current
+      )
+      application.reload
+
+      MedicalProviderMailer.expects(:request_certification).never
+
+      assert_no_difference -> { ApplicationStatusChange.where(application: application).count } do
+        application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
+      end
+
+      application.reload
+      assert_equal terminal_status.to_s, application.status,
+                   "Expected #{terminal_status} to remain unchanged"
+      assert_equal 'not_requested', application.medical_certification_status,
+                   "Expected cert status to remain not_requested for #{terminal_status}"
+    end
+  end
+
+  test 'escalate_to_dcf! is idempotent when already awaiting_dcf with cert requested' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    application.update_columns(
+      status: Application.statuses[:awaiting_dcf],
+      income_proof_status: Application.income_proof_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      medical_certification_status: Application.medical_certification_statuses[:requested],
+      updated_at: Time.current
+    )
+    application.reload
+
+    MedicalProviderMailer.expects(:request_certification).never
+
+    assert_no_difference -> { ApplicationStatusChange.where(application: application).count } do
+      assert_no_difference -> { Event.where(auditable: application, action: 'application_status_changed').count } do
+        application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
+      end
+    end
+
+    application.reload
+    assert_equal 'awaiting_dcf', application.status
+    assert_equal 'requested', application.medical_certification_status
+  end
+
+  test 'escalate_to_dcf! creates exactly one status change and one audit event' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    application.update_columns(
+      status: Application.statuses[:in_progress],
+      income_proof_status: Application.income_proof_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      updated_at: Time.current
+    )
+    application.reload
+
+    request_mail = mock('request_mail')
+    request_mail.expects(:deliver_later).once
+    MedicalProviderMailer.expects(:request_certification).with(application).returns(request_mail).once
+
+    assert_difference -> { ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count }, 1 do
+      assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
+        application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
+      end
+    end
+
+    status_change = ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').last
+    refute_nil status_change
+    assert_equal 'in_progress', status_change.from_status
+    assert_equal @admin, status_change.user
+
+    event = Event.where(auditable: application, action: 'application_status_changed').last
+    refute_nil event
+    assert_equal @admin, event.user
+    assert_equal 'awaiting_dcf', event.metadata['new_status']
+    assert_equal 'proof_review_approved', event.metadata['trigger']
+  end
 end
