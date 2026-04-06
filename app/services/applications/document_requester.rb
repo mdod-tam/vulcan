@@ -18,16 +18,14 @@ module Applications
     # @return [Boolean] True if successful, false otherwise
     def call
       ApplicationRecord.transaction do
-        application.update!(status: :awaiting_dcf)
+        application.escalate_to_dcf!(actor: actor, trigger: :document_request)
 
-        # Log the audit event
         AuditEventService.log(
           action: 'documents_requested',
           actor: actor,
           auditable: application
         )
 
-        # Send the notification
         NotificationService.create_and_deliver!(
           type: 'documents_requested',
           recipient: application.user,
@@ -35,11 +33,10 @@ module Applications
           notifiable: application,
           channel: :email
         )
-        true # Indicate success
       end
+      true
     rescue StandardError => e
       log_error(e, context: { application_id: application.id, actor_id: actor.id })
-      # The add_error is called within log_error, which returns false
     end
   end
 end

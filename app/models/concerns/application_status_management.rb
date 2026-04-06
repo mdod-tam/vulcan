@@ -4,7 +4,6 @@ module ApplicationStatusManagement
   extend ActiveSupport::Concern
 
   included do
-    after_save :handle_status_change, if: :saved_change_to_status?
     after_save :auto_approve_if_eligible, if: :should_auto_approve?
 
     enum :application_type, {
@@ -73,30 +72,31 @@ module ApplicationStatusManagement
     !status_draft?
   end
 
-  private
-
-  # Triggers the auto-request for disability certification when transitioning to 'awaiting_dcf'.
-  def handle_status_change
-    return unless status_previously_changed?(to: 'awaiting_dcf')
-
-    handle_awaiting_dcf_transition
-  end
-
-  # --- Auto Request Disability Certification Process ---
-  # Checks if required proofs are approved when the application status transitions to 'awaiting_dcf'
-  # If so, updates the disability certification status to 'requested' and sends an email to the certifying professional.
-  def handle_awaiting_dcf_transition
-    # Ensure required proofs are approved (policy-aware method allows future flexibility)
-    return unless required_proofs_for_dcf_approved?
-    # Avoid re-requesting if already requested
-    return if medical_certification_status_requested?
-
-    # Update certification status and send email
+  # Consolidates DCF escalation: transitions to awaiting_dcf and conditionally
+  # requests medical certification. Safe to call from any path — idempotent,
+  # locked, and self-healing (repairs a missing cert request on re-entry).
+  def escalate_to_dcf!(actor:, trigger: nil)
     with_lock do
+      reload
+
+      return if status_approved? || status_rejected? || status_archived?
+
+      transition_status!(
+        :awaiting_dcf,
+        actor: actor,
+        notes: 'Requesting medical certification documents',
+        metadata: { trigger: trigger&.to_s }.compact
+      ) unless status_awaiting_dcf?
+
+      return unless required_proofs_for_dcf_approved?
+      return unless medical_certification_status_not_requested?
+
       update!(medical_certification_status: :requested)
       MedicalProviderMailer.request_certification(self).deliver_later
     end
   end
+
+  private
 
   # --- Auto Approve Application Process ---
   # Determines if the application should be auto-approved.
