@@ -119,6 +119,19 @@ module Admin
       )
     end
 
+    def recipient_preference
+      recipient = resolve_notification_recipient_for_lookup(
+        recipient_id: params[:id],
+        email: params[:email]
+      )
+
+      render json: {
+        found: recipient.present?,
+        recipient_id: recipient&.id,
+        communication_preference: recipient&.effective_communication_preference&.to_s
+      }
+    end
+
     # Server-rendered FPL data helper methods
     # These inject threshold data into HTML data attributes for client-side validation
     # See: app/services/income_threshold_calculation_service.rb for core FPL logic
@@ -153,10 +166,19 @@ module Admin
       # Build constituent params from form data for notification (no application created)
       constituent_params = build_constituent_params_for_notification
       notification_params = build_notification_params
+      recipient = resolve_constituent_notification_recipient(constituent_params)
+
+      if requested_letter_delivery?(notification_params) && !recipient.is_a?(User)
+        handle_error_response(
+          html_redirect_path: admin_applications_path,
+          error_message: 'Cannot queue a mailed letter without an existing constituent account.'
+        )
+        return
+      end
 
       # Send rejection notification without creating an application
       ApplicationNotificationsMailer.income_threshold_exceeded(
-        constituent_params,
+        recipient,
         notification_params
       ).deliver_later
 
@@ -165,8 +187,8 @@ module Admin
 
       handle_success_response(
         html_redirect_path: admin_applications_path,
-        html_message: 'Application rejected due to income threshold. Rejection notification has been sent.',
-        turbo_message: 'Application rejected due to income threshold. Rejection notification has been sent.',
+        html_message: rejection_success_message(notification_params),
+        turbo_message: rejection_success_message(notification_params),
         turbo_redirect_path: admin_applications_path
       )
     end
@@ -175,32 +197,29 @@ module Admin
       # Build constituent params from form data
       constituent_params = build_constituent_params_for_notification
       notification_params = build_notification_params
+      recipient = resolve_constituent_notification_recipient(constituent_params)
 
-      notification_method = params[:communication_preference]
-
-      if notification_method == 'letter'
-        # For letter notifications, queue for printing
-        # This would integrate with a print queue system
-        handle_success_response(
+      if requested_letter_delivery?(notification_params) && !recipient.is_a?(User)
+        handle_error_response(
           html_redirect_path: admin_applications_path,
-          html_message: 'Rejection letter has been queued for printing',
-          turbo_message: 'Rejection letter has been queued for printing',
-          turbo_redirect_path: admin_applications_path
+          error_message: 'Cannot queue a mailed letter without an existing constituent account.'
         )
-      else
-        # For email notifications, send immediately
-        ApplicationNotificationsMailer.income_threshold_exceeded(
-          constituent_params,
-          notification_params
-        ).deliver_later
-
-        handle_success_response(
-          html_redirect_path: admin_applications_path,
-          html_message: 'Rejection notification has been sent',
-          turbo_message: 'Rejection notification has been sent',
-          turbo_redirect_path: admin_applications_path
-        )
+        return
       end
+
+      ApplicationNotificationsMailer.income_threshold_exceeded(
+        recipient,
+        notification_params
+      ).deliver_later
+
+      success_message = rejection_success_message(notification_params)
+
+      handle_success_response(
+        html_redirect_path: admin_applications_path,
+        html_message: success_message,
+        turbo_message: success_message,
+        turbo_redirect_path: admin_applications_path
+      )
     end
 
     private
@@ -500,12 +519,63 @@ module Admin
     end
 
     def build_constituent_params_for_notification
-      # Simplified for notification, might need adjustment based on actual form fields for notification
-      params.permit(:first_name, :last_name, :email, :phone).to_h
+      constituent_params = params.permit(
+        :id, :first_name, :last_name, :email, :dependent_email, :phone, :communication_preference
+      ).to_h
+
+      constituent_params['email'] = normalized_contact_email(constituent_params['email']) ||
+                                    normalized_contact_email(constituent_params['dependent_email'])
+      constituent_params['dependent_email'] = normalized_contact_email(constituent_params['dependent_email'])
+      constituent_params
     end
 
     def build_notification_params
       params.permit(:household_size, :annual_income, :communication_preference, :additional_notes).to_h
+    end
+
+    def resolve_constituent_notification_recipient(constituent_params)
+      constituent_id = constituent_params['id'].presence
+      recipient = User.find_by(id: constituent_id) if constituent_id
+      return recipient if recipient.present?
+
+      constituent_email = normalized_contact_email(constituent_params['email'])
+      return constituent_params if constituent_email.blank?
+
+      find_user_by_contact_email(constituent_email) || constituent_params
+    end
+
+    def resolve_notification_recipient_for_lookup(recipient_id:, email:)
+      user = User.find_by(id: recipient_id) if recipient_id.present?
+      return user if user.present?
+
+      normalized_email = normalized_contact_email(email)
+      return nil if normalized_email.blank?
+
+      find_user_by_contact_email(normalized_email)
+    end
+
+    def find_user_by_contact_email(email)
+      normalized_email = normalized_contact_email(email)
+      return nil if normalized_email.blank?
+
+      User.find_by_email(normalized_email) || User.find_by(dependent_email: normalized_email)
+    end
+
+    def normalized_contact_email(value)
+      User.normalize_email(value)
+    end
+
+    def requested_letter_delivery?(source_params)
+      notification_delivery_preference(source_params) == 'letter'
+    end
+
+    def notification_delivery_preference(source_params)
+      preference = source_params[:communication_preference] || source_params['communication_preference']
+      preference.to_s.strip.downcase.presence
+    end
+
+    def rejection_success_message(source_params)
+      requested_letter_delivery?(source_params) ? 'Rejection letter has been queued for printing' : 'Rejection notification has been sent'
     end
 
     def send_medical_certification_notification_if_needed(application)

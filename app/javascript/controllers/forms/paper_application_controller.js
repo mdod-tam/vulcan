@@ -7,13 +7,16 @@ export default class extends Controller {
     "rejectionButton",
     "applicantLocale",
     "languagePreferenceNotice",
-    // Hidden field targets in the rejection modal
     "rejectionFirstName",
     "rejectionLastName",
+    "rejectionRecipientId",
     "rejectionEmail",
+    "rejectionDependentEmail",
     "rejectionPhone",
     "rejectionHouseholdSize",
-    "rejectionAnnualIncome"
+    "rejectionAnnualIncome",
+    "rejectionExistingPreferenceNotice",
+    "rejectionExistingPreferenceValue"
   ];
 
   connect() {
@@ -221,25 +224,75 @@ export default class extends Controller {
                       this.element.querySelector('[name="guardian_attributes[first_name]"]')?.value || '';
     const lastName = this.element.querySelector('[name="constituent[last_name]"]')?.value ||
                      this.element.querySelector('[name="guardian_attributes[last_name]"]')?.value || '';
+    const dependentEmail = this.element.querySelector('[name="constituent[dependent_email]"]')?.value || '';
     const email = this.element.querySelector('[name="constituent[email]"]')?.value ||
+                  dependentEmail ||
                   this.element.querySelector('[name="guardian_attributes[email]"]')?.value || '';
     const phone = this.element.querySelector('[name="constituent[phone]"]')?.value ||
                   this.element.querySelector('[name="guardian_attributes[phone]"]')?.value || '';
+    const recipientId = this.element.querySelector('[name="dependent_id"]')?.value || '';
     const householdSize = this.element.querySelector('[name="application[household_size]"]')?.value || '';
     const annualIncome = this.element.querySelector('[name="application[annual_income]"]')?.value || '';
 
-    // Set values in rejection modal hidden fields
     if (this.hasRejectionFirstNameTarget) this.rejectionFirstNameTarget.value = firstName;
     if (this.hasRejectionLastNameTarget) this.rejectionLastNameTarget.value = lastName;
+    if (this.hasRejectionRecipientIdTarget) this.rejectionRecipientIdTarget.value = recipientId;
     if (this.hasRejectionEmailTarget) this.rejectionEmailTarget.value = email;
+    if (this.hasRejectionDependentEmailTarget) this.rejectionDependentEmailTarget.value = dependentEmail;
     if (this.hasRejectionPhoneTarget) this.rejectionPhoneTarget.value = phone;
     if (this.hasRejectionHouseholdSizeTarget) this.rejectionHouseholdSizeTarget.value = householdSize;
     if (this.hasRejectionAnnualIncomeTarget) this.rejectionAnnualIncomeTarget.value = annualIncome;
 
+    this._loadExistingRecipientPreference({ recipientId, email });
+
     if (process.env.NODE_ENV !== 'production') {
       console.log('Populated rejection modal fields:', {
-        firstName, lastName, email, phone, householdSize, annualIncome
+        firstName, lastName, recipientId, email, dependentEmail, phone, householdSize, annualIncome
       });
     }
+  }
+
+  async _loadExistingRecipientPreference({ recipientId, email }) {
+    if (!this.hasRejectionExistingPreferenceNoticeTarget || !this.hasRejectionExistingPreferenceValueTarget) return;
+
+    this.rejectionExistingPreferenceNoticeTarget.classList.add('hidden');
+    this.rejectionExistingPreferenceValueTarget.textContent = '';
+
+    if (!recipientId && !email) return;
+
+    const query = new URLSearchParams();
+    if (recipientId) query.set('id', recipientId);
+    if (email) query.set('email', email.trim().toLowerCase());
+
+    try {
+      const response = await fetch(`/admin/paper_applications/recipient_preference?${query.toString()}`, {
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin'
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (!data.found) return;
+
+      if (data.recipient_id && this.hasRejectionRecipientIdTarget) {
+        this.rejectionRecipientIdTarget.value = data.recipient_id;
+      }
+
+      const preference = (data.communication_preference || '').toString().toLowerCase();
+      if (!['email', 'letter'].includes(preference)) return;
+
+      this._setNotificationPreferenceRadio(preference);
+
+      this.rejectionExistingPreferenceValueTarget.textContent =
+        preference === 'letter' ? 'Printed Letter' : 'Email';
+      this.rejectionExistingPreferenceNoticeTarget.classList.remove('hidden');
+    } catch (_error) {
+      // Non-blocking enhancement: keep modal functional even if lookup fails.
+    }
+  }
+
+  _setNotificationPreferenceRadio(preference) {
+    const radio = this.element.querySelector(`input[name="communication_preference"][value="${preference}"]`);
+    if (radio) radio.checked = true;
   }
 }

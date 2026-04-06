@@ -22,7 +22,17 @@ class ApplicationNotificationsMailer < ApplicationMailer
       mail_options  = { message_stream: 'notifications' }
       mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
 
-      send_email(@user.effective_email, text_template, variables, mail_options)
+      if prefers_letter_delivery?(@user)
+        queue_letter_delivery(
+          recipient: @user,
+          template_name: template_name,
+          variables: variables,
+          application: application
+        )
+        return noop_letter_delivery
+      end
+
+      send_email(recipient_email_for(@user), text_template, variables, mail_options)
     end
   end
 
@@ -30,35 +40,23 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   def proof_approved(application, proof_review)
     with_mailer_error_handling("proof_approved application=#{application&.id} proof_review=#{proof_review&.id}") do
+      template_name = 'application_notifications_proof_approved'
       locale = resolve_template_locale(recipient: application.user)
-      text_template = find_text_template('application_notifications_proof_approved', locale: locale)
-      proof_type_formatted = format_proof_type(proof_review.proof_type)
-      all_proofs_approved = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
+      text_template = find_text_template(template_name, locale: locale)
+      variables = build_proof_approved_variables(application, proof_review, template: text_template, locale: locale)
 
-      base_variables = build_base_email_variables(
-        template: text_template,
-        organization_name: 'MAT Program',
-        locale: locale,
-        subject_variables: { proof_type_formatted: proof_type_formatted }
-      )
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables.merge(proof_type: proof_review.proof_type),
+          letter_type: :proof_approved,
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-      variables = base_variables.merge({
-        user_first_name: application.user.first_name,
-        organization_name: 'MAT Program',
-        proof_type_formatted: proof_type_formatted,
-        all_proofs_approved_message_text: all_proofs_approved ? 'All required documents for your application have now been approved.' : ''
-      }).compact
-
-      handle_letter_preference(application.user, 'proof_approved', {
-                                 proof_type: proof_review.proof_type,
-                                 proof_type_formatted: proof_type_formatted,
-                                 all_proofs_approved: all_proofs_approved,
-                                 first_name: application.user.first_name,
-                                 last_name: application.user.last_name,
-                                 application_id: application.id
-                               })
-
-      send_email(application.user.effective_email, text_template, variables)
+      send_email(recipient_email_for(application.user), text_template, variables)
     end
   end
 
@@ -66,45 +64,28 @@ class ApplicationNotificationsMailer < ApplicationMailer
     with_mailer_error_handling("proof_rejected application=#{application&.id} proof_review=#{proof_review&.id}") do
       remaining_attempts   = 8 - application.total_rejections
       reapply_date         = 3.years.from_now.to_date
-      proof_type_formatted = format_proof_type(proof_review.proof_type)
+      template_name        = 'application_notifications_proof_rejected'
       locale               = resolve_template_locale(recipient: application.user)
-      text_template        = find_text_template('application_notifications_proof_rejected', locale: locale)
-      sign_in_url          = sign_in_url(host: default_url_options[:host])
-
-      base_variables = build_base_email_variables(
+      text_template        = find_text_template(template_name, locale: locale)
+      variables            = build_proof_rejected_variables(
+        application,
+        proof_review,
+        remaining_attempts,
+        reapply_date,
         template: text_template,
-        organization_name: 'MAT Program',
-        locale: locale,
-        subject_variables: { proof_type_formatted: proof_type_formatted }
+        locale: locale
       )
 
-      rejection_reason = resolve_rejection_reason(proof_review, locale)
-      remaining_attempts_message = build_remaining_attempts_message(remaining_attempts, reapply_date)
-      default_options_text = build_resubmission_options(application, sign_in_url)
-      archived_message = build_archived_message(reapply_date)
-
-      variables = base_variables.merge({
-        user_first_name: application.user.first_name,
-        constituent_full_name: application.user.full_name,
-        organization_name: 'MAT Program',
-        proof_type_formatted: proof_type_formatted,
-        rejection_reason: rejection_reason,
-        sign_in_url: sign_in_url,
-        remaining_attempts_message_text: remaining_attempts.positive? ? remaining_attempts_message : '',
-        default_options_text: remaining_attempts.positive? ? default_options_text : '',
-        archived_message_text: remaining_attempts.positive? ? '' : archived_message
-      }).compact
-
-      handle_letter_preference(application.user, 'proof_rejected', {
-                                 proof_type: proof_review.proof_type,
-                                 proof_type_formatted: proof_type_formatted,
-                                 rejection_reason: proof_review.rejection_reason || 'Documentation did not meet requirements',
-                                 remaining_attempts: remaining_attempts,
-                                 reapply_date: reapply_date.strftime('%B %d, %Y'),
-                                 first_name: application.user.first_name,
-                                 last_name: application.user.last_name,
-                                 application_id: application.id
-                               })
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables.merge(proof_type: proof_review.proof_type),
+          letter_type: proof_rejection_letter_type(proof_review.proof_type),
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
       send_proof_rejected_email(application.user, text_template, variables)
     end
@@ -117,18 +98,23 @@ class ApplicationNotificationsMailer < ApplicationMailer
     with_mailer_error_handling("max_rejections_reached application=#{application&.id}",
                                raise_in_test_only: true) do
       reapply_date  = 3.years.from_now.to_date
+      template_name = 'application_notifications_max_rejections_reached'
       locale        = resolve_template_locale(recipient: application.user)
-      text_template = find_text_template('application_notifications_max_rejections_reached', locale: locale)
+      text_template = find_text_template(template_name, locale: locale)
       variables     = build_max_rejections_variables(application, reapply_date, template: text_template, locale: locale)
 
-      handle_letter_preference(application.user, 'max_rejections_reached', {
-                                 reapply_date_formatted: reapply_date.strftime('%B %d, %Y'),
-                                 first_name: application.user.first_name,
-                                 last_name: application.user.last_name,
-                                 application_id: application.id
-                               })
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :max_rejections_reached,
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
-      send_email(application.user.effective_email, text_template, variables)
+      send_email(recipient_email_for(application.user), text_template, variables)
     end
   end
 
@@ -151,17 +137,21 @@ class ApplicationNotificationsMailer < ApplicationMailer
     with_mailer_error_handling("account_created constituent=#{constituent&.id}") do
       return handle_nil_constituent if constituent.nil?
 
+      template_name   = 'application_notifications_account_created'
       locale          = resolve_template_locale(recipient: constituent)
-      text_template   = find_text_template('application_notifications_account_created', locale: locale)
+      text_template   = find_text_template(template_name, locale: locale)
       variables       = build_account_created_variables(constituent, temp_password, template: text_template, locale: locale)
       recipient_email = extract_recipient_email(constituent)
 
-      handle_letter_preference(constituent, 'account_created', {
-                                 email: constituent.email,
-                                 temp_password: temp_password,
-                                 first_name: constituent.first_name,
-                                 last_name: constituent.last_name
-                               })
+      if prefers_letter_delivery?(constituent)
+        queue_letter_delivery(
+          recipient: constituent,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :account_created
+        )
+        return noop_letter_delivery
+      end
 
       send_email(recipient_email, text_template, variables)
     end
@@ -169,10 +159,22 @@ class ApplicationNotificationsMailer < ApplicationMailer
 
   def income_threshold_exceeded(constituent_params, notification_params)
     with_mailer_error_handling('income_threshold_exceeded') do
+      template_name = 'application_notifications_income_threshold_exceeded'
       service_result = get_income_threshold_data(constituent_params, notification_params)
       locale         = normalize_locale(service_result[:constituent][:locale]) || resolve_template_locale
-      text_template  = find_text_template('application_notifications_income_threshold_exceeded', locale: locale)
+      text_template  = find_text_template(template_name, locale: locale)
       variables      = build_income_threshold_variables(service_result, template: text_template, locale: locale)
+
+      notification_pref = notification_params[:communication_preference] || notification_params['communication_preference']
+      if prefers_letter_delivery?(constituent_params, override: notification_pref.presence)
+        queue_letter_delivery(
+          recipient: constituent_params,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :income_threshold_exceeded
+        )
+        return noop_letter_delivery
+      end
 
       send_email(service_result[:constituent][:email], text_template, variables)
     end
@@ -181,16 +183,21 @@ class ApplicationNotificationsMailer < ApplicationMailer
   def proof_submission_error(constituent, application, _error_type, message)
     with_mailer_error_handling("proof_submission_error constituent=#{constituent&.id} application=#{application&.id}") do
       recipient_info = determine_proof_error_recipient(constituent, message)
+      template_name  = 'application_notifications_proof_submission_error'
       locale         = resolve_template_locale(recipient: constituent)
-      text_template  = find_text_template('application_notifications_proof_submission_error', locale: locale)
+      text_template  = find_text_template(template_name, locale: locale)
       variables      = build_proof_error_variables(recipient_info[:full_name], message, template: text_template, locale: locale)
 
-      handle_letter_preference(constituent, 'proof_submission_error', {
-                                 error_message: message,
-                                 first_name: constituent&.first_name,
-                                 last_name: constituent&.last_name,
-                                 application_id: application&.id
-                               })
+      if constituent.present? && prefers_letter_delivery?(constituent)
+        queue_letter_delivery(
+          recipient: constituent,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :proof_submission_error,
+          application: application
+        )
+        return noop_letter_delivery
+      end
 
       send_email(recipient_info[:email], text_template, variables)
     end
@@ -199,29 +206,44 @@ class ApplicationNotificationsMailer < ApplicationMailer
   def registration_confirmation(user)
     with_mailer_error_handling("registration_confirmation user=#{user&.id}") do
       active_vendors_text_list = build_active_vendors_list
+      template_name            = 'application_notifications_registration_confirmation'
       locale                   = resolve_template_locale(recipient: user)
-      text_template            = find_text_template('application_notifications_registration_confirmation', locale: locale)
+      text_template            = find_text_template(template_name, locale: locale)
       variables                = build_registration_variables(user, active_vendors_text_list, template: text_template, locale: locale)
 
-      handle_letter_preference(user, 'registration_confirmation', {
-                                 user_full_name: user.full_name,
-                                 dashboard_url: constituent_portal_dashboard_url(host: default_url_options[:host]),
-                                 new_application_url: new_constituent_portal_application_url(host: default_url_options[:host]),
-                                 active_vendors_text_list: active_vendors_text_list
-                               })
+      if prefers_letter_delivery?(user)
+        queue_letter_delivery(
+          recipient: user,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :registration_confirmation
+        )
+        return noop_letter_delivery
+      end
 
-      send_email(user.effective_email, text_template, variables)
+      send_email(recipient_email_for(user), text_template, variables)
     end
   end
 
   def proof_received(application, proof_type)
     with_mailer_error_handling("proof_received application=#{application&.id}") do
+      template_name    = 'application_notifications_proof_received'
       locale           = resolve_template_locale(recipient: application.user)
-      text_template    = find_text_template('application_notifications_proof_received', locale: locale)
+      text_template    = find_text_template(template_name, locale: locale)
       variables        = build_proof_received_variables(application, proof_type, template: text_template, locale: locale)
       subject_override = proc { |subject| subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received') }
 
-      send_email(application.user.effective_email, text_template, variables, { subject_override: subject_override })
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables.merge(proof_type: proof_type),
+          application: application
+        )
+        return noop_letter_delivery
+      end
+
+      send_email(recipient_email_for(application.user), text_template, variables, { subject_override: subject_override })
     end
   end
 
@@ -232,7 +254,17 @@ class ApplicationNotificationsMailer < ApplicationMailer
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_medical_certification_not_provided_variables(application, template: text_template, locale: locale)
 
-      send_email(application.user.effective_email, text_template, variables)
+      if prefers_letter_delivery?(application.user)
+        queue_letter_delivery(
+          recipient: application.user,
+          template_name: template_name,
+          variables: variables,
+          application: application
+        )
+        return noop_letter_delivery
+      end
+
+      send_email(recipient_email_for(application.user), text_template, variables)
     end
   end
 
@@ -244,21 +276,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     Rails.logger.error("Mailer error (#{context}): #{e.message}\n#{e.backtrace.join("\n")}")
     raise if !raise_in_test_only || Rails.env.test?
 
+    noop_delivery
     nil
-  end
-
-  def handle_letter_preference(user, template_key, variables)
-    generate_letter_if_preferred(user, "application_notifications_#{template_key}", variables)
-  end
-
-  def generate_letter_if_preferred(recipient, template_name, variables)
-    return unless recipient.respond_to?(:communication_preference) && recipient.communication_preference == 'letter'
-
-    Letters::TextTemplateToPdfService.new(
-      template_name: template_name,
-      recipient: recipient,
-      variables: variables
-    ).queue_for_printing
   end
 
   def build_base_email_variables(template:, organization_name: nil, locale: nil, subject_variables: {})
@@ -287,6 +306,58 @@ class ApplicationNotificationsMailer < ApplicationMailer
     ActionController::Base.helpers.asset_path(asset_name, host: default_url_options[:host])
   rescue StandardError
     nil
+  end
+
+  def build_proof_approved_variables(application, proof_review, template:, locale: nil)
+    user                      = application.user
+    organization_name         = Policy.get('organization_name') || 'MAT Program'
+    proof_type_formatted      = format_proof_type(proof_review.proof_type)
+    all_proofs_approved       = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
+    all_proofs_approved_text  = all_proofs_approved ? 'All required documents for your application have now been approved.' : ''
+
+    base_variables = build_base_email_variables(
+      template: template,
+      organization_name: 'MAT Program',
+      locale: locale,
+      subject_variables: { proof_type_formatted: proof_type_formatted }
+    )
+
+    base_variables.merge({
+                           user_first_name: user.first_name,
+                           organization_name: organization_name,
+                           proof_type_formatted: proof_type_formatted,
+                           all_proofs_approved_message_text: all_proofs_approved_text
+                         }).compact
+  end
+
+  def build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date, template:, locale: nil)
+    user                 = application.user
+    proof_type_formatted = format_proof_type(proof_review.proof_type)
+    sign_in_url          = sign_in_url(host: default_url_options[:host])
+
+    base_variables = build_base_email_variables(
+      template: template,
+      organization_name: 'MAT Program',
+      locale: locale,
+      subject_variables: { proof_type_formatted: proof_type_formatted }
+    )
+
+    rejection_reason = resolve_rejection_reason(proof_review, locale)
+    remaining_attempts_message = build_remaining_attempts_message(remaining_attempts, reapply_date)
+    default_options_text = build_resubmission_options(application, sign_in_url)
+    archived_message = build_archived_message(reapply_date)
+
+    base_variables.merge({
+                           user_first_name: user.first_name,
+                           constituent_full_name: user.full_name,
+                           organization_name: 'MAT Program',
+                           proof_type_formatted: proof_type_formatted,
+                           rejection_reason: rejection_reason,
+                           sign_in_url: sign_in_url,
+                           remaining_attempts_message_text: remaining_attempts.positive? ? remaining_attempts_message : '',
+                           default_options_text: remaining_attempts.positive? ? default_options_text : '',
+                           archived_message_text: remaining_attempts.positive? ? '' : archived_message
+                         }).compact
   end
 
   def resolve_rejection_reason(proof_review, locale)
@@ -354,10 +425,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def send_proof_rejected_email(user, text_template, variables)
-    recipient_email = user.respond_to?(:effective_email) ? user.effective_email : user.email
-
     send_email(
-      recipient_email,
+      recipient_email_for(user),
       text_template,
       variables,
       reply_to: ["proof@#{default_url_options[:host]}"]
@@ -400,6 +469,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     )
 
     base_variables.merge({
+                           admin_first_name: admin.first_name,
                            admin_full_name: admin.full_name,
                            stale_reviews_count: stale_reviews.count,
                            stale_reviews_text_list: stale_reviews_text_list,
@@ -455,7 +525,9 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def extract_recipient_email(constituent)
-    constituent.is_a?(Hash) ? constituent[:email] : constituent.email
+    return constituent[:email] if constituent.is_a?(Hash)
+
+    recipient_email_for(constituent)
   end
 
   # --- Income threshold exceeded ---
@@ -506,7 +578,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
   def determine_proof_error_recipient(constituent, message)
     if constituent
       {
-        email: constituent.email,
+        email: recipient_email_for(constituent),
         full_name: constituent.full_name
       }
     else
@@ -624,4 +696,14 @@ class ApplicationNotificationsMailer < ApplicationMailer
     base_variables.merge(cert_variables).compact
   end
 
+  def proof_rejection_letter_type(proof_type)
+    case proof_type.to_s
+    when 'income'
+      :income_proof_rejected
+    when 'residency'
+      :residency_proof_rejected
+    else
+      :other_notification
+    end
+  end
 end

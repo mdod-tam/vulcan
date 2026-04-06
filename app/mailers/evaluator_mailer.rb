@@ -34,8 +34,9 @@ class EvaluatorMailer < ApplicationMailer
     text_template = load_email_template(template_name, locale: locale)
     variables = build_submission_confirmation_variables(evaluation, template: text_template, locale: locale)
 
-    queue_letter_if_needed(evaluation, template_name, variables)
-    send_email(evaluation.constituent.email, text_template, variables)
+    return noop_letter_delivery if queue_letter_if_needed(evaluation, template_name, variables)
+
+    send_email(recipient_email_for(evaluation.constituent), text_template, variables)
   rescue StandardError => e
     log_submission_error(e, evaluation)
     raise
@@ -184,14 +185,17 @@ class EvaluatorMailer < ApplicationMailer
   # Queue letter if constituent prefers print communication
   def queue_letter_if_needed(evaluation, template_name, variables)
     constituent = evaluation.constituent
-    return unless constituent.communication_preference == 'letter'
-    return if letter_already_queued?(evaluation, 'evaluation_submission_confirmation')
+    return false unless prefers_letter_delivery?(constituent)
+    return false if letter_already_queued?(evaluation, 'evaluation_submission_confirmation')
 
-    Letters::TextTemplateToPdfService.new(
-      template_name: template_name,
+    queue_letter_delivery(
       recipient: constituent,
-      variables: variables.slice(:constituent_first_name, :application_id, :evaluator_full_name, :submission_date_formatted)
-    ).queue_for_printing
+      template_name: template_name,
+      variables: variables,
+      letter_type: :evaluation_submitted,
+      application: evaluation.application
+    )
+    true
   end
 
   # Log submission confirmation errors

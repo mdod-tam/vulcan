@@ -94,8 +94,8 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     # Call the mailer method
     email = EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation
 
-    # Deliver the email to trigger the service call
-    assert_emails 1 do
+    # Letter-routing returns noop delivery object; no outbound email should be sent.
+    assert_no_emails do
       email.deliver_later
     end
 

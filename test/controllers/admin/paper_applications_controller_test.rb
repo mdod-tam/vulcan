@@ -863,6 +863,57 @@ module Admin
       assert_match 'Rejection notification has been sent', flash[:notice]
     end
 
+    test 'recipient preference lookup is case-insensitive for primary email' do
+      recipient = create(:constituent, email: "Lookup.Primary.#{SecureRandom.hex(4)}@Example.COM")
+
+      get recipient_preference_admin_paper_applications_path,
+          headers: default_headers,
+          params: { email: recipient.email.upcase }
+
+      assert_response :success
+      payload = JSON.parse(response.body)
+      assert_equal true, payload['found']
+      assert_equal recipient.id, payload['recipient_id']
+    end
+
+    test 'recipient preference lookup supports dependent_email fallback' do
+      recipient = create(:constituent, email: "lookup-dependent-#{SecureRandom.hex(4)}@example.com")
+      recipient.update!(dependent_email: "Dependent.Lookup.#{SecureRandom.hex(4)}@Example.COM")
+
+      get recipient_preference_admin_paper_applications_path,
+          headers: default_headers,
+          params: { email: recipient.dependent_email.upcase }
+
+      assert_response :success
+      payload = JSON.parse(response.body)
+      assert_equal true, payload['found']
+      assert_equal recipient.id, payload['recipient_id']
+    end
+
+    test 'send rejection notification falls back to dependent_email when email is blank' do
+      captured_recipient = nil
+      ApplicationNotificationsMailer.stubs(:income_threshold_exceeded).with do |recipient, notification_params|
+        captured_recipient = recipient
+        pref = notification_params[:communication_preference] || notification_params['communication_preference']
+        pref.to_s == 'email'
+      end.returns(stub(deliver_later: true))
+
+      post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+        first_name: 'Dependent',
+        last_name: 'Recipient',
+        email: '',
+        dependent_email: 'Dependent.Recipient@Example.COM',
+        phone: '555-123-4567',
+        household_size: '2',
+        annual_income: '100000',
+        communication_preference: 'email',
+        additional_notes: 'Income exceeds threshold'
+      }
+
+      assert_redirected_to admin_applications_path
+      assert_equal 'dependent.recipient@example.com', captured_recipient['email']
+    end
+
     test 'should send rejection letter notification' do
       post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
         first_name: 'John',

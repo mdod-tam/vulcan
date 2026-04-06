@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class NotificationService
-  VALID_CHANNELS = %i[email].freeze # Only :email is currently implemented for delivery
+  VALID_CHANNELS = %i[email letter].freeze
 
   # ---- Public API (backward-compatible) --------------------------------------
 
@@ -17,6 +17,9 @@ class NotificationService
   #   audit: true,
   #   deliver: true
   # )
+  #
+  # NOTE: `channel` is stored as delivery intent for metadata/auditing.
+  # Recipient-facing mailers remain the source of truth for email-vs-letter routing.
   #
   def self.create_and_deliver!(type:, recipient:, **options)
     opts = normalize_options(options)
@@ -163,6 +166,19 @@ class NotificationService
     # medical_certification_received: no email — constituent sees status in dashboard
     # medical_certification_requested: request email delivered through MedicalProviderMailer.requested proxy
   }.freeze
+
+  PREFERENCE_ROUTED_ACTIONS = %w[
+    proof_rejected
+    proof_approved
+    income_proof_rejected
+    residency_proof_rejected
+    account_created
+    income_proof_attached
+    residency_proof_attached
+    training_requested
+    trainer_assigned
+    security_key_recovery_approved
+  ].freeze
 
   # ---- Creation + validation -------------------------------------------------
 
@@ -336,9 +352,9 @@ class NotificationService
   # ---- Delivery --------------------------------------------------------------
 
   def deliver_notification!(notification, channel:)
-    # The builder strictly validates channels, so only supported channels should reach here.
-    # If more channels are added to VALID_CHANNELS, ensure delivery logic is implemented below.
-    return false unless channel == :email
+    # `channel` represents requested delivery intent (metadata/audit context).
+    # Recipient-facing mailers resolve the final route to honor communication preference.
+    return false unless VALID_CHANNELS.include?(channel)
 
     enforce_delivery_contracts!(notification)
 
@@ -350,8 +366,22 @@ class NotificationService
       return false
     end
 
-    send_notification_email(notification, mailer_class, method_name)
-    ActiveSupport::Notifications.instrument 'notification_service.deliver', notification: notification, channel: channel
+    actual_delivery_channel, delivery_route_reason = send_notification_email(
+      notification, mailer_class, method_name, requested_channel: channel
+    )
+
+    persist_delivery_routing_metadata(
+      notification,
+      actual_delivery_channel: actual_delivery_channel,
+      delivery_route_reason: delivery_route_reason
+    )
+
+    ActiveSupport::Notifications.instrument(
+      'notification_service.deliver',
+      notification: notification,
+      channel: channel,
+      actual_delivery_channel: actual_delivery_channel
+    )
     true # Delivery successful
   rescue StandardError => e
     ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: e, stage: 'delivery', channel: channel
@@ -399,21 +429,94 @@ class NotificationService
     false
   end
 
-  def send_notification_email(notification, mailer_class, method_name)
+  def send_notification_email(notification, mailer_class, method_name, requested_channel:)
+    mail_delivery = build_mail_delivery(notification, mailer_class, method_name)
+    actual_delivery_channel = resolve_actual_delivery_channel(mail_delivery, notification: notification)
+    explicit_reason = mail_delivery.is_a?(ApplicationMailer::NoopDelivery) ? mail_delivery.reason : nil
+    delivery_route_reason = explicit_reason.presence || resolve_delivery_route_reason(
+      requested_channel: requested_channel,
+      actual_delivery_channel: actual_delivery_channel
+    )
+
+    raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
+
+    mail_delivery.deliver_later
+    redact_temp_password(notification) if notification.action == 'account_created'
+
+    [actual_delivery_channel, delivery_route_reason]
+  end
+
+  def build_mail_delivery(notification, mailer_class, method_name)
     case notification.action
     when 'account_created'
       temp_password = notification.metadata&.dig('temp_password') # Already validated to be present
-      mailer_class.public_send(method_name, notification.recipient, temp_password).deliver_later
-      redact_temp_password(notification)
+      mailer_class.public_send(method_name, notification.recipient, temp_password)
     when 'proof_rejected', 'proof_approved'
       # These mailers expect (application, proof_review) - find the most recent proof review
       application = notification.notifiable
       proof_type = notification.metadata&.dig('proof_type')
       proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
-      mailer_class.public_send(method_name, application, proof_review).deliver_later
+      mailer_class.public_send(method_name, application, proof_review)
     else
-      mailer_class.public_send(method_name, notification.notifiable, notification).deliver_later
+      mailer_class.public_send(method_name, notification.notifiable, notification)
     end
+  end
+
+  def resolve_actual_delivery_channel(mail_delivery, notification:)
+    if mail_delivery.is_a?(ApplicationMailer::NoopDelivery)
+      return mail_delivery.channel if mail_delivery.channel.present?
+
+      return 'letter'
+    end
+
+    return inferred_actual_delivery_channel(notification) if mail_delivery.is_a?(ActionMailer::MessageDelivery)
+    return inferred_actual_delivery_channel(notification) if mail_delivery.respond_to?(:deliver_later)
+
+    'unknown'
+  end
+
+  def inferred_actual_delivery_channel(notification)
+    return 'letter' if letter_preference_route?(notification)
+
+    'email'
+  end
+
+  def letter_preference_route?(notification)
+    return false unless PREFERENCE_ROUTED_ACTIONS.include?(notification.action.to_s)
+
+    recipient_prefers_letter?(notification.recipient)
+  end
+
+  def recipient_prefers_letter?(recipient)
+    preference =
+      if recipient.respond_to?(:effective_communication_preference)
+        recipient.effective_communication_preference
+      elsif recipient.respond_to?(:communication_preference)
+        recipient.communication_preference
+      end
+
+    preference.to_s == 'letter'
+  end
+
+  def resolve_delivery_route_reason(requested_channel:, actual_delivery_channel:)
+    requested = requested_channel.to_s
+    return 'requested_channel' if actual_delivery_channel == requested
+    return 'preference' if actual_delivery_channel == 'letter'
+
+    'mailer_override'
+  end
+
+  def persist_delivery_routing_metadata(notification, actual_delivery_channel:, delivery_route_reason:)
+    merged_meta = (notification.metadata || {}).merge(
+      'actual_delivery_channel' => actual_delivery_channel.to_s,
+      'delivery_route_reason' => delivery_route_reason.to_s
+    )
+
+    return if notification.update(metadata: merged_meta)
+
+    notification.update_column(:metadata, merged_meta)
+  rescue StandardError => e
+    Rails.logger.warn "NotificationService: Failed to persist routing metadata for Notification ##{notification.id}: #{e.message}"
   end
 
   def redact_temp_password(notification)
@@ -482,6 +585,10 @@ class NotificationService
                      "notification_#{notification.action}_created"
                    end
 
+    notification_metadata = notification.metadata.is_a?(Hash) ? notification.metadata : {}
+    requested_channel = notification_metadata['channel'] || 'unknown'
+    actual_channel = notification_metadata['actual_delivery_channel'] || requested_channel
+
     AuditEventService.log(
       actor: notification.actor || notification.recipient,
       action: event_action,
@@ -490,7 +597,10 @@ class NotificationService
         notification_id: notification.id,
         recipient_class: notification.recipient.class.name,
         recipient_id: notification.recipient_id,
-        channel: notification.metadata['channel'] || 'unknown',
+        channel: actual_channel,
+        requested_channel: requested_channel,
+        actual_delivery_channel: actual_channel,
+        delivery_route_reason: notification_metadata['delivery_route_reason'],
         delivery_attempted: should_deliver || false,
         delivery_successful: delivery_successful || false,
         timestamp: Time.current.iso8601
@@ -565,6 +675,7 @@ class NotificationService
 
   def merge_service_metadata(meta, opts)
     meta.merge(
+      # Backward-compatible key: requested delivery intent from caller.
       'channel' => (opts['channel'] || opts[:channel]).to_s
     )
   end
@@ -586,7 +697,9 @@ class NotificationService
     h
   end
   private :defaults, :finalized_metadata, :extract_raw_metadata, :validate_and_normalize_metadata,
-          :add_timestamp_to_metadata, :merge_service_metadata, :normalize_builder_params, :coerce_channel
+          :add_timestamp_to_metadata, :merge_service_metadata, :normalize_builder_params, :coerce_channel,
+          :build_mail_delivery, :resolve_actual_delivery_channel, :resolve_delivery_route_reason,
+          :persist_delivery_routing_metadata
 
   def safe_id(record)
     record.respond_to?(:id) ? record.id : 'unknown'

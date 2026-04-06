@@ -210,29 +210,25 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal 'Dependent locale subject', email.subject
   end
 
-  test 'proof_approved generates letter when preference is letter' do
-    # Set user communication preference to 'letter'
-    @user.update!(communication_preference: 'letter')
+  test 'proof_approved routes to Spanish letter when user prefers letter and has Spanish locale' do
+    @user.update!(communication_preference: 'letter', locale: 'es')
 
-    # Create a mock for the TextTemplateToPdfService instance
+    spanish_template = mock_template('Documento Aprobado: Ingreso',
+                                     'Texto: Ingreso aprobado para %<user_first_name>s.')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_proof_approved',
+      format: :text,
+      locale: 'es'
+    ).returns(spanish_template)
+
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
+    Letters::TextTemplateToPdfService.expects(:new).with(
+      has_entries(template_name: 'application_notifications_proof_approved')
+    ).returns(pdf_service_mock)
 
-    # Stub the new method to return our mock
-    Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
-
-    # Call the mailer method
-    email = ApplicationNotificationsMailer.proof_approved(@application, @proof_review)
-
-    # Set default mail parameters to ensure consistency
-    ActionMailer::Base.default from: 'no_reply@mdmat.org'
-
-    # Call deliver now
-    email.deliver_now
-
-    # Basic email assertions
-    expected_subject = 'Mock Proof Approved: Income' # Match the mock setup
-    assert_equal expected_subject, email.subject
+    delivery = ApplicationNotificationsMailer.proof_approved(@application, @proof_review)
+    assert_no_emails { delivery.deliver_now }
   end
 
   test 'proof_rejected' do
@@ -294,31 +290,17 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'proof_rejected generates letter when preference is letter' do
-    # Set user communication preference to 'letter'
     @user.update!(communication_preference: 'letter')
-
-    # Set up the remaining_attempts for the test (needed by the mailer method)
     @application.update_column(:total_rejections, 3)
 
-    # Create a mock for the TextTemplateToPdfService instance
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
-
-    # Stub the new method to return our mock
     Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
 
-    # Call the mailer method
-    email = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review)
-
-    # Set subject explicitly to match mock
-    expected_subject = "Mock Proof Needs Revision: #{format_proof_type(@proof_review.proof_type)}"
-    email.subject = expected_subject
-
-    # Deliver now for synchronous testing
-    email.deliver_now
-
-    # Basic email assertions
-    assert_equal expected_subject, email.subject
+    delivery = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review)
+    assert_no_emails do
+      delivery.deliver_now
+    end
   end
 
   test 'max_rejections_reached' do
@@ -349,28 +331,16 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'max_rejections_reached generates letter when preference is letter' do
-    # Set user communication preference to 'letter'
     @user.update!(communication_preference: 'letter')
 
-    # Create a mock for the TextTemplateToPdfService instance
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
-
-    # Stub the new method to return our mock
     Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
 
-    # Call the mailer method
-    email = ApplicationNotificationsMailer.max_rejections_reached(@application)
-
-    # Set subject explicitly to match mock
-    expected_subject = 'Mock Application Archived - ID 7'
-    email.subject = expected_subject
-
-    # Deliver now for synchronous testing
-    email.deliver_now
-
-    # Basic email assertions
-    assert_equal expected_subject, email.subject
+    delivery = ApplicationNotificationsMailer.max_rejections_reached(@application)
+    assert_no_emails do
+      delivery.deliver_now
+    end
   end
 
   test 'proof_needs_review_reminder' do
@@ -465,33 +435,14 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     )
     temp_password = 'temporary123'
 
-    # Mock just for verification, don't set expectations
     pdf_service_mock = mock('pdf_service')
-    pdf_service_mock.stubs(:queue_for_printing).returns(true)
+    pdf_service_mock.expects(:queue_for_printing).once
     Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
 
-    # Call the mailer method and deliver with deliver_now
-    email = nil
-    assert_emails 1 do
-      email = ApplicationNotificationsMailer.account_created(constituent, temp_password)
-      email.deliver_now
+    delivery = ApplicationNotificationsMailer.account_created(constituent, temp_password)
+    assert_no_emails do
+      delivery.deliver_now
     end
-
-    # Verify that queue_for_printing was called by checking if Letters::TextTemplateToPdfService was instantiated
-    assert_not_nil Letters::TextTemplateToPdfService.new(
-      template_name: 'application_notifications_account_created',
-      recipient: constituent,
-      variables: {
-        email: constituent.email,
-        temp_password: temp_password,
-        first_name: constituent.first_name,
-        last_name: constituent.last_name
-      }
-    )
-
-    # Basic email assertions can still be included if desired
-    expected_subject = "Mock Account Created for #{constituent.first_name}"
-    assert_equal expected_subject, email.subject
   end
 
   # Helper method to set up common data for income threshold tests
@@ -519,43 +470,22 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   test 'income_threshold_exceeded generates letter when preference is letter' do
     setup_income_threshold_test_data
 
-    # Mock the letter service without expectations
     pdf_service_mock = mock('pdf_service')
-    pdf_service_mock.stubs(:queue_for_printing).returns(true)
+    pdf_service_mock.expects(:queue_for_printing).once
     Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
 
-    # Call the mailer method and deliver directly
-    email = nil
-    assert_emails 1 do
-      email = ApplicationNotificationsMailer.income_threshold_exceeded(@constituent_params, @notification_params)
-      email.deliver_now # Use deliver_now instead of deliver_later for direct testing
-    end
-
-    # Calculate the expected threshold based on policies for assertion verification
-    base_fpl_calc = Policy.get("fpl_#{[@notification_params[:household_size], 8].min}_person").to_i
-    modifier = Policy.get('fpl_modifier_percentage').to_i
-    expected_threshold = base_fpl_calc * (modifier / 100.0)
-
-    # Verify that queue_for_printing was called by checking if Letters::TextTemplateToPdfService was instantiated
-    assert_not_nil Letters::TextTemplateToPdfService.new(
-      template_name: 'application_notifications_income_threshold_exceeded',
-      recipient: @constituent_params,
-      variables: {
-        household_size: @notification_params[:household_size],
-        annual_income: @notification_params[:annual_income],
-        threshold: expected_threshold,
-        first_name: @constituent_params[:first_name],
-        last_name: @constituent_params[:last_name]
-      }
+    delivery = ApplicationNotificationsMailer.income_threshold_exceeded(
+      @constituent_params,
+      @notification_params.merge(communication_preference: 'letter')
     )
-
-    # Basic email assertions can still be included if desired
-    expected_subject = "Mock Income Threshold Exceeded for #{@constituent_params[:first_name]}"
-    assert_equal expected_subject, email.subject
+    assert_no_emails do
+      delivery.deliver_now
+    end
   end
 
   test 'income_threshold_exceeded' do
     setup_income_threshold_test_data
+    @constituent_params[:communication_preference] = 'email'
 
     # Create new mocks for the test to ensure they're fresh
     mock_income_exceeded_text = mock_template("Mock Income Threshold Exceeded for #{@constituent_params[:first_name]}",
@@ -624,25 +554,15 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Stub the new method to return our mock
     Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
 
-    # Set default mail parameters to ensure consistency
-    ActionMailer::Base.default from: 'no_reply@mdmat.org'
-
-    # Call the mailer method with the constituent and application
-    email = ApplicationNotificationsMailer.proof_submission_error(
+    delivery = ApplicationNotificationsMailer.proof_submission_error(
       @user, # Use existing user
       @application, # Use the application from setup
       :invalid_format,
       error_message
     )
-
-    # Deliver the email directly
-    assert_emails 1 do
-      email.deliver_now # Use deliver_now instead of deliver_later for direct testing
+    assert_no_emails do
+      delivery.deliver_now
     end
-
-    # Basic email assertions can still be included if desired
-    expected_subject = "Submission Error: #{@user.email}" # Match the mock
-    assert_equal expected_subject, email.subject
   end
 
   test 'registration_confirmation' do
@@ -715,26 +635,14 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     Vendor.stubs(:active).returns(Vendor.none)
     Vendor.none.stubs(:order).returns(active_vendors)
 
-    # Mock the letter service without expectations
     pdf_service_mock = mock('pdf_service')
-    pdf_service_mock.stubs(:queue_for_printing).returns(true)
+    pdf_service_mock.expects(:queue_for_printing).once
     Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
 
-    # Generate the email and deliver directly
-    email = nil
-    assert_emails 1 do
-      email = ApplicationNotificationsMailer.registration_confirmation(user)
-      # Force the subject to be set correctly
-      email.subject = 'Mock Welcome Jane!'
-      email.deliver_now
+    delivery = ApplicationNotificationsMailer.registration_confirmation(user)
+    assert_no_emails do
+      delivery.deliver_now
     end
-
-    # Basic email assertions
-    expected_subject = 'Mock Welcome Jane!'
-    assert_equal expected_subject, email.subject
-
-    # Verify active vendors list rendering
-    assert_includes email.body.to_s, 'No authorized vendors found at this time'
   end
 
   test 'with_mailer_error_handling suppresses re-raise outside test when configured' do

@@ -57,6 +57,8 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -65,7 +67,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_assigned email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -133,8 +135,9 @@ class VoucherNotificationsMailer < ApplicationMailer
                                organization_name: organization_name, show_automated_message: footer_show_automated_message,
                                locale: locale),
       support_email: footer_contact_email
-      # Add other required variables from AVAILABLE_TEMPLATES if needed
     }.compact
+
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
 
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
@@ -144,7 +147,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_expiring_soon email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -225,6 +228,8 @@ class VoucherNotificationsMailer < ApplicationMailer
       show_automated_message: footer_show_automated_message # Optional
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -233,7 +238,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_expired email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -258,7 +263,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     raise e
   end
 
-  def voucher_redeemed
+  def voucher_redeemed # rubocop:disable Metrics/PerceivedComplexity
     transaction = params[:transaction]
     voucher = transaction.voucher
     user = voucher.application.user
@@ -327,6 +332,8 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+
     # Render subject and body from the text template
     rendered_subject, rendered_text_body = text_template.render(**variables)
 
@@ -335,7 +342,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.logger.debug { "DEBUG: Preparing to send voucher_redeemed email with content: #{text_body.inspect}" }
 
     mail(
-      to: user.email,
+      to: recipient_email_for(user),
       subject: rendered_subject,
       message_stream: 'notifications',
       body: text_body,
@@ -358,5 +365,19 @@ class VoucherNotificationsMailer < ApplicationMailer
       }
     )
     raise e
+  end
+
+  private
+
+  def queue_letter_if_preferred(user, template_name, variables, application: nil)
+    return false unless prefers_letter_delivery?(user)
+
+    queue_letter_delivery(
+      recipient: user,
+      template_name: template_name,
+      variables: variables,
+      application: application
+    )
+    true
   end
 end

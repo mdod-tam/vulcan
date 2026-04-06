@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8">
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8" data-controller="paper-application">
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
     <%# ================================================================ %>
     <%# Page Header %>
@@ -62,18 +62,22 @@
     <% residency_reason_options = reason_options_for.call('residency') %>
     <% medical_reason_options = reason_options_for.call('medical_certification') %>
 
+    <% paper_form_data = {
+      turbo: false,
+      controller: "applicant-type",
+      action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
+      "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
+      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']"
+    }
+    paper_form_data[:"applicant-type-adult-picker-outlet"] = "[data-controller='adult-picker']"
+    if FeatureFlag.enabled?(:income_proof_required)
+      paper_form_data[:controller] += " income-validation"
+      paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
+      paper_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+    end %>
     <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
-      data: { 
-        turbo: false,
-        controller: "paper-application applicant-type income-validation",
-        action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
-        "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
-        "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
-        "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']", 
-        "income-validation-fpl-thresholds-value": fpl_thresholds_json, 
-        "income-validation-modifier-value": fpl_modifier_value 
-      }) do |form| %>
+      data: paper_form_data) do |form| %>
 
       <%# ============================================================ %>
       <%# STEP 1: Applicant Type Selection %>
@@ -93,7 +97,7 @@
                 <input type="radio" 
                        id="applicant_is_adult" 
                        name="applicant_type" 
-                       value="self" 
+                       value="self"
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" 
                        <%= 'checked' unless @show_create_guardian_form %> 
                        data-applicant-type-target="radio">
@@ -1036,8 +1040,8 @@
       </div>
     <% end %>
   </div>
-</div>
 
+<% if FeatureFlag.enabled?(:income_proof_required) %>
 <%# ============================================================ %>
 <%# Rejection Modal %>
 <%# ============================================================ %>
@@ -1056,9 +1060,11 @@
     
     <%= form_with(url: send_rejection_notification_admin_paper_applications_path, method: :post, local: false, data: { turbo: true }) do |form| %>
       <%# Hidden fields for constituent information %>
+      <%= form.hidden_field :id, id: "rejection_modal_recipient_id", data: { "paper-application-target": "rejectionRecipientId" } %>
       <%= form.hidden_field :first_name, id: "rejection_modal_first_name", data: { "paper-application-target": "rejectionFirstName" } %>
       <%= form.hidden_field :last_name, id: "rejection_modal_last_name", data: { "paper-application-target": "rejectionLastName" } %>
       <%= form.hidden_field :email, id: "rejection_modal_email", data: { "paper-application-target": "rejectionEmail" } %>
+      <%= form.hidden_field :dependent_email, id: "rejection_modal_dependent_email", data: { "paper-application-target": "rejectionDependentEmail" } %>
       <%= form.hidden_field :phone, id: "rejection_modal_phone", data: { "paper-application-target": "rejectionPhone" } %>
       <%= form.hidden_field :household_size, id: "rejection_modal_household_size", data: { "paper-application-target": "rejectionHouseholdSize" } %>
       <%= form.hidden_field :annual_income, id: "rejection_modal_annual_income", data: { "paper-application-target": "rejectionAnnualIncome" } %>
@@ -1068,9 +1074,21 @@
           A notification will be sent informing the applicant that their income exceeds the maximum threshold for their household size.
         </p>
       </div>
+
+      <div class="mb-4 hidden rounded-md border border-blue-200 bg-blue-50 p-3"
+           data-paper-application-target="rejectionExistingPreferenceNotice"
+           role="status"
+           aria-live="polite">
+        <p class="text-sm text-blue-900">
+          Existing profile preference:
+          <span class="font-semibold" data-paper-application-target="rejectionExistingPreferenceValue"></span>.
+          You may override this for this notification.
+        </p>
+      </div>
       
       <fieldset class="mb-4">
-        <legend class="block text-sm font-medium text-gray-700 mb-2">Notification Method</legend>
+        <legend class="block text-sm font-medium text-gray-700 mb-1">Notification Method</legend>
+        <p class="mb-2 text-xs text-gray-500">This choice applies to this rejection notice only.</p>
         <div class="flex flex-wrap gap-4">
           <label class="flex items-center">
             <%= form.radio_button :communication_preference, "email", checked: true, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
@@ -1099,3 +1117,5 @@
     <% end %>
   </div>
 </dialog>
+<% end %>
+</div>
