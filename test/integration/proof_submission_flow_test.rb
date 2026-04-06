@@ -40,27 +40,31 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
                    to: 'not_reviewed' do
       # Instead of checking exact change in needs_review_since, just verify it gets set
       before_value = @application.needs_review_since
-      assert_difference 'Event.count', 2 do # ProofAttachmentService creates income_proof_attached, tracking creates proof_submitted
-        # Use the direct path
-        post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-             params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+      assert_difference -> { Notification.where(notifiable: @application, action: 'income_proof_attached').count }, 1 do
+        assert_no_difference -> { Notification.where(notifiable: @application, action: 'proof_submitted').count } do
+          assert_difference 'Event.count', 2 do # ProofAttachmentService creates income_proof_attached, tracking creates proof_submitted
+            # Use the direct path
+            post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
+                 params: { proof_type: 'income', income_proof_upload: @valid_pdf }
 
-        # Verify response and flash
-        assert_response :redirect
-        follow_redirect_with_user!
-        assert_equal 'Proof submitted successfully', flash[:notice]
+            # Verify response and flash
+            assert_response :redirect
+            follow_redirect_with_user!
+            assert_equal 'Proof submitted successfully', flash[:notice]
 
-        # Verify needs_review_since was updated
-        @application.reload
-        assert @application.needs_review_since != before_value, 'needs_review_since should be updated'
+            # Verify needs_review_since was updated
+            @application.reload
+            assert @application.needs_review_since != before_value, 'needs_review_since should be updated'
 
-        # Verify application updates
-        assert @application.income_proof.attached?, 'Income proof should be attached'
-        assert_equal 'not_reviewed', @application.income_proof_status
-        assert_not_nil @application.needs_review_since
+            # Verify application updates
+            assert @application.income_proof.attached?, 'Income proof should be attached'
+            assert_equal 'not_reviewed', @application.income_proof_status
+            assert_not_nil @application.needs_review_since
 
-        # Verify audit trail and events
-        assert_audit_and_events
+            # Verify audit trail and events
+            assert_audit_and_events
+          end
+        end
       end
     end
   end
@@ -113,6 +117,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
     assert_equal @user, attachment_event.user
     assert_equal @application, attachment_event.auditable
     assert_equal 'income', attachment_event.metadata['proof_type']
+    assert_equal 'web', attachment_event.metadata['submission_method']
   end
 
   test 'requires authentication' do

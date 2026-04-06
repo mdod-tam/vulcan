@@ -6,95 +6,28 @@ class MedicalCertificationMailbox < ApplicationMailbox
   before_processing :validate_attachments
 
   def process
-    # Create an audit record for the submission
-    audit = create_audit_record
+    # Application has a single medical_certification attachment, so we treat the
+    # first valid attachment as the canonical submission for this email.
+    attachment = mail.attachments.first
 
-    # Process each attachment
-    mail.attachments.each do |attachment|
-      # Attach the certification to the application
-      attach_certification(attachment, audit)
-    end
+    MedicalCertificationAttachmentService.attach_certification(
+      application: application,
+      blob_or_file: build_blob_from_attachment(attachment),
+      status: :received,
+      admin: User.system_user,
+      submission_method: :email,
+      metadata: certification_metadata
+    )
 
-    # Create an application status change for consistent tracking across submission methods
-    create_status_change_record(audit)
-
-    # Notify admin of new certification submission
-    notify_admin
-
-    # Notify constituent that their certification has been received
-    notify_constituent
+    AuditEventService.log(
+      actor: User.system_user,
+      action: 'medical_certification_received',
+      auditable: application,
+      metadata: certification_metadata
+    )
   end
 
   private
-
-  def create_audit_record
-    AuditEventService.log(
-      actor: application.constituent,
-      action: 'medical_certification_received',
-      auditable: application,
-      metadata: {
-        application_id: application.id,
-        medical_provider_id: medical_provider.id,
-        inbound_email_id: inbound_email.id,
-        email_subject: mail.subject,
-        email_from: mail.from.first,
-        submission_method: 'email'
-      }
-    )
-  end
-
-  # Creates an ApplicationStatusChange record for better audit trail consistency
-  def create_status_change_record(_audit)
-    ApplicationStatusChange.create!(
-      application: application,
-      user: nil, # No admin user for auto-processing
-      from_status: 'requested',
-      to_status: 'received',
-      metadata: {
-        change_type: 'medical_certification',
-        submission_method: 'email',
-        received_at: Time.current.iso8601,
-        medical_provider_id: medical_provider.id,
-        inbound_email_id: inbound_email.id
-      }
-    )
-  end
-
-  def attach_certification(attachment, _audit)
-    # Create a blob from the attachment
-    blob = ActiveStorage::Blob.create_and_upload!(
-      io: StringIO.new(attachment.body.decoded),
-      filename: attachment.filename,
-      content_type: attachment.content_type
-    )
-
-    # Attach the blob to the application's medical certification
-    application.medical_certification.attach(blob)
-  end
-
-  def notify_admin
-    # Notify admin of new certification submission
-    AuditEventService.log(
-      actor: application.constituent,
-      action: 'medical_certification_received',
-      auditable: application,
-      metadata: {
-        application_id: application.id,
-        medical_provider_id: medical_provider.id,
-        inbound_email_id: inbound_email.id
-      }
-    )
-  end
-
-  def notify_constituent
-    # Notify constituent that their certification has been received
-    return unless defined?(ApplicationNotificationsMailer.medical_certification_received)
-
-    ApplicationNotificationsMailer.medical_certification_received(
-      application.constituent,
-      application
-    ).deliver_later
-  end
 
   def ensure_medical_provider
     return if medical_provider
@@ -174,7 +107,7 @@ class MedicalCertificationMailbox < ApplicationMailbox
   def medical_provider
     return @medical_provider if defined?(@medical_provider)
 
-    @medical_provider = MedicalProvider.find_by(email: mail.from.first)
+    @medical_provider = MedicalProvider.find_by_email(mail.from.first)
   end
 
   def application
@@ -205,5 +138,24 @@ class MedicalCertificationMailbox < ApplicationMailbox
     end
 
     nil
+  end
+
+  def build_blob_from_attachment(attachment)
+    ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new(attachment.body.decoded),
+      filename: attachment.filename,
+      content_type: attachment.content_type
+    )
+  end
+
+  def certification_metadata
+    {
+      application_id: application.id,
+      medical_provider_id: medical_provider.id,
+      inbound_email_id: inbound_email.id,
+      email_subject: mail.subject,
+      email_from: mail.from.first,
+      submission_method: 'email'
+    }
   end
 end
