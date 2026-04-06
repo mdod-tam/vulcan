@@ -122,8 +122,8 @@ To ensure participants maintain access to modern technology as their needs evolv
 
 ## Technical Stack
 
-- **Ruby** 3.4.7
-- **Rails** 8.0.3
+- **Ruby** 4.0.2
+- **Rails** 8.1.3
 - **PostgreSQL** 17+
 - **Tailwind CSS**
 - **Propshaft** (Asset Pipeline)
@@ -174,7 +174,7 @@ To ensure participants maintain access to modern technology as their needs evolv
 
 ## Prerequisites
 
-- Ruby 3.4.7 or higher
+- Ruby 4.0.2 or higher
 - PostgreSQL 17 or higher
 - Node.js v24 (LTS) or higher
 - Yarn

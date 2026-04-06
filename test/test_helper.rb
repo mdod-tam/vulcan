@@ -88,7 +88,6 @@ end
 
 # Core test libraries
 require 'minitest/mock'
-require 'ostruct'
 require 'mocha/minitest'
 require 'capybara/rails'
 
