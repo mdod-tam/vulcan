@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Evaluation < ApplicationRecord
-  include EvaluationStatusManagement
+  include StatusManagement
   include NotificationDelivery
 
   belongs_to :evaluator, class_name: 'Users::Evaluator'

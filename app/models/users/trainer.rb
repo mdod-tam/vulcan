@@ -7,13 +7,8 @@ module Users
              through: :training_sessions,
              source: :constituent
 
-    scope :available, -> {
-      left_outer_joins(:role_capabilities)
-        .where(
-          "users.type IN (?) OR role_capabilities.capability = ?",
-          ['Users::Trainer', 'Users::Administrator'],
-          'can_train'
-        )
-    }
+    def self.available
+      User.where(type: ['Users::Administrator', 'Users::Trainer'])
+    end
   end
 end

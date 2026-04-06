@@ -107,7 +107,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Using Rails 7.1.0+ capture_emails helper
     emails = capture_emails do
-      TrainingSessionNotificationsMailer.with(training_session: @training_session).trainer_assigned.deliver_now
+      TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
     end
 
     # Verify we captured an email
@@ -141,7 +141,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Using Rails 7.1.0+ capture_emails helper
     emails = capture_emails do
-      TrainingSessionNotificationsMailer.with(training_session: @training_session).training_scheduled.deliver_now
+      TrainingSessionNotificationsMailer.training_scheduled(@training_session).deliver_now
     end
 
     # Verify we captured an email
@@ -178,7 +178,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Using Rails 7.1.0+ capture_emails helper
     emails = capture_emails do
-      TrainingSessionNotificationsMailer.with(training_session: @training_session).training_completed.deliver_now
+      TrainingSessionNotificationsMailer.training_completed(@training_session).deliver_now
     end
 
     # Verify we captured an email

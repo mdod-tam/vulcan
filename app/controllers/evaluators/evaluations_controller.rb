@@ -44,7 +44,7 @@ module Evaluators
                                  .includes(:constituent)
                                  .order(created_at: :desc)
                      else
-                       current_user.evaluations.requested_evaluations
+                       current_user.evaluations.requested_sessions
                                    .includes(:constituent)
                                    .order(created_at: :desc)
                      end
@@ -72,7 +72,7 @@ module Evaluators
     end
 
     def completed
-      @evaluations = current_user.evaluations.completed_evaluations
+      @evaluations = current_user.evaluations.completed_sessions
                                  .includes(:constituent)
                                  .order(evaluation_date: :desc)
       render :index

@@ -10,8 +10,6 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_a
 
     Hello %<constituent_full_name>s,
 
-    %<status_box_text>s
-
     TRAINER ASSIGNED
     A trainer has been assigned to train you on using telecommunications products.#{' '}
 
@@ -20,25 +18,16 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_a
     - Email: %<trainer_email>s
     - Phone: %<trainer_phone_formatted>s
 
-    Your Details:
-    - Address: %<constituent_address_formatted>s
-    - Phone: %<constituent_phone_formatted>s
-    - Email: %<constituent_email>s
-
     Training Session Schedule:
     %<training_session_schedule_text>s
-
-    Additional Notes:
-    %<constituent_disabilities_text_list>s
 
     Please reach out to your trainer to discuss your training needs and schedule a session.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text constituent_full_name status_box_text trainer_full_name trainer_email
-                     trainer_phone_formatted training_session_schedule_text constituent_address_formatted
-                     constituent_phone_formatted constituent_email constituent_disabilities_text_list footer_text],
+    'required' => %w[header_text constituent_full_name trainer_full_name trainer_email
+                     trainer_phone_formatted training_session_schedule_text footer_text],
     'optional' => []
   }
   template.version = 1

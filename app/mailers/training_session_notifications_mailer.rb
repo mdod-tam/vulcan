@@ -11,8 +11,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
   # Notify a trainer that a new training session has been assigned
   # Expects training_session passed via .with(training_session: ...)
-  def trainer_assigned
-    training_session = params[:training_session] # Use params
+  def trainer_assigned(training_session)
+    training_session = training_session
     trainer = training_session.trainer
     locale = resolve_template_locale(recipient: trainer)
     template_name = 'training_session_notifications_trainer_assigned'
@@ -46,8 +46,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     variables = {
       trainer_full_name: trainer.full_name,
+      trainer_email: trainer.email,
+      trainer_phone_formatted: trainer.phone,
       constituent_full_name: constituent.full_name,
       application_id: application.id,
+      training_session_schedule_text: "#{training_session.scheduled_for.strftime('%B %d, %Y at %I:%M %p')}",
       # Shared partial variables (rendered content - text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -93,8 +96,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
   # Notify constituent that training is scheduled
   # Expects training_session passed via .with(training_session: ...)
-  def training_scheduled
-    training_session = params[:training_session] # Use params
+  def training_scheduled(training_session)
+    training_session = training_session
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_scheduled'
@@ -177,8 +180,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
   # Notify constituent that training is completed
   # Expects training_session passed via .with(training_session: ...)
-  def training_completed
-    training_session = params[:training_session] # Use params
+  def training_completed(training_session)
+    training_session = training_session
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_completed'
