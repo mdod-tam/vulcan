@@ -202,16 +202,75 @@ module Applications
         medical_certification_custom_rejection_reason: custom_note
       }
 
+      reviewer_result = stub(success?: true)
+      Applications::MedicalCertificationReviewer.any_instance.expects(:reject).with(
+        rejection_reason: custom_note,
+        notes: nil,
+        rejection_reason_code: nil
+      ).returns(reviewer_result)
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+      assert result, "Failed to create application with medical custom rejection reason: #{service.errors.inspect}"
+    end
+
+    test 'routes none provided medical certification rejection directly through attachment service' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-medical-none-#{test_timestamp}@example.com"
+      unique_phone = "202569#{test_timestamp.to_s[-4..]}"
+
+      service_params = {
+        no_medical_provider_information: true,
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email),
+        medical_certification_action: 'rejected',
+        medical_certification_rejection_reason: 'none_provided'
+      }
+
+      Applications::MedicalCertificationReviewer.any_instance.expects(:reject).never
       MedicalCertificationAttachmentService.expects(:reject_certification).with(
         has_entries(
-          reason: custom_note,
-          reason_code: nil
+          reason: 'none_provided',
+          reason_code: nil,
+          submission_method: :paper
         )
       ).returns({ success: true })
 
       service = PaperApplicationService.new(params: service_params, admin: @admin)
       result = service.create
-      assert result, "Failed to create application with medical custom rejection reason: #{service.errors.inspect}"
+      assert result, "Failed to create application with medical certification marked none provided: #{service.errors.inspect}"
+    end
+
+    test 'routes medical certification rejection directly when provider contact information is missing' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-medical-missing-provider-#{test_timestamp}@example.com"
+      unique_phone = "202570#{test_timestamp.to_s[-4..]}"
+      custom_reason = "No provider contact details were available. [#{test_timestamp}]"
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params.merge(
+          medical_provider_name: '',
+          medical_provider_phone: '',
+          medical_provider_email: ''
+        ),
+        medical_certification_action: 'rejected',
+        medical_certification_rejection_reason: 'other',
+        medical_certification_custom_rejection_reason: custom_reason
+      }
+
+      Applications::MedicalCertificationReviewer.any_instance.expects(:reject).never
+      MedicalCertificationAttachmentService.expects(:reject_certification).with(
+        has_entries(
+          reason: custom_reason,
+          reason_code: nil,
+          submission_method: :paper
+        )
+      ).returns({ success: true })
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+      assert result, "Failed to create application with missing provider contact info: #{service.errors.inspect}"
     end
 
     test 'application creation fails when attachment validation fails' do

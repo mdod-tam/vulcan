@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 # Seed File for Spanish "medical_provider_certification_rejected"
-# Use a distinct template name until locale-aware lookup is wired in mailers/services.
-scope = { name: 'medical_provider_certification_rejected_es', format: :text }
+scope = { name: 'medical_provider_certification_rejected', format: :text }
 scope[:locale] = 'es' if EmailTemplate.column_names.include?('locale')
 
 EmailTemplate.create_or_find_by!(scope) do |template|

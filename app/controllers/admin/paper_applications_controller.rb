@@ -89,10 +89,11 @@ module Admin
       )
 
       if service.update(application)
+        success_message = generate_success_message(application)
         handle_success_response(
           html_redirect_path: admin_application_path(application),
-          html_message: generate_success_message(application),
-          turbo_message: generate_success_message(application),
+          html_message: success_message,
+          turbo_message: success_message,
           turbo_redirect_path: admin_application_path(application)
         )
       else
@@ -576,6 +577,7 @@ module Admin
     def rejection_success_message(source_params)
       requested_letter_delivery?(source_params) ? 'Rejection letter has been queued for printing' : 'Rejection notification has been sent'
     end
+
     # NOTE: cast_boolean_params and cast_boolean_for are provided by the ParamCasting concern
     # The complex parameter casting is handled by cast_complex_boolean_params
   end

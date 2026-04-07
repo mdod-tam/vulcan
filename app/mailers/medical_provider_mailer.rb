@@ -139,7 +139,7 @@ class MedicalProviderMailer < ApplicationMailer
       constituent_full_name: constituent.full_name,
       application_id: application.id,
       rejection_reason: rejection_reason,
-      download_form_url: build_download_form_url(application),
+      download_form_url: build_download_form_url,
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
@@ -179,9 +179,11 @@ class MedicalProviderMailer < ApplicationMailer
       request_count_message: format_request_count_message(application),
       timestamp_formatted: format_request_timestamp(timestamp),
       constituent_dob_formatted: format_constituent_dob(constituent),
+      constituent_phone_formatted: format_constituent_phone(constituent),
+      constituent_email: format_constituent_email(constituent),
       constituent_address_formatted: format_constituent_address(constituent),
       application_id: application.id,
-      download_form_url: build_download_form_url(application),
+      download_form_url: build_download_form_url,
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
@@ -200,6 +202,14 @@ class MedicalProviderMailer < ApplicationMailer
     constituent.date_of_birth&.strftime('%m/%d/%Y') || 'Not Provided'
   end
 
+  def format_constituent_phone(constituent)
+    constituent.phone.presence || 'Not Provided'
+  end
+
+  def format_constituent_email(constituent)
+    constituent.email.presence || 'Not Provided'
+  end
+
   def format_constituent_address(constituent)
     [
       constituent.physical_address_1,
@@ -208,11 +218,8 @@ class MedicalProviderMailer < ApplicationMailer
     ].compact_blank.join("\n")
   end
 
-  def build_download_form_url(application)
-    medical_certification_form_url(
-      MedicalCertificationFormLink.signed_id_for(application),
-      host: default_url_options[:host]
-    )
+  def build_download_form_url
+    medical_certification_form_url(host: default_url_options[:host])
   rescue StandardError
     '#'
   end

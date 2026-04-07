@@ -559,26 +559,18 @@ module Applications
       custom_reason     = legacy_notes if custom_reason.blank? && legacy_notes.present?
 
       result = if type == :medical_certification
-                 reject_medical_certification_via_reviewer(
+                 reject_medical_certification(
                    selected_reason: selected_reason,
                    custom_reason: custom_reason,
                    notes: legacy_notes.presence
                  )
                else
-        resolved_reason = resolve_rejection_reason_value(
-          selected_reason: selected_reason,
-          custom_reason: custom_reason
-        )
-
-        result = ProofAttachmentService.reject_proof_without_attachment(
-          application: @application,
-          proof_type: type,
-          admin: @admin,
-          reason: resolved_reason,
-          notes: legacy_notes.presence,
-          submission_method: :paper,
-          metadata: {}
-        )
+                 reject_non_medical_proof(
+                   type: type,
+                   selected_reason: selected_reason,
+                   custom_reason: custom_reason,
+                   notes: legacy_notes.presence
+                 )
                end
 
       unless result[:success]
@@ -594,6 +586,23 @@ module Applications
       return 'Other' if custom_reason.blank?
 
       custom_reason
+    end
+
+    def reject_non_medical_proof(type:, selected_reason:, custom_reason:, notes:)
+      resolved_reason = resolve_rejection_reason_value(
+        selected_reason: selected_reason,
+        custom_reason: custom_reason
+      )
+
+      ProofAttachmentService.reject_proof_without_attachment(
+        application: @application,
+        proof_type: type,
+        admin: @admin,
+        reason: resolved_reason,
+        notes: notes,
+        submission_method: :paper,
+        metadata: {}
+      )
     end
 
     def resolve_medical_rejection_reason_payload(selected_reason:, custom_reason:)
@@ -617,6 +626,31 @@ module Applications
       params[key] || params[key.to_sym]
     end
 
+    def reject_medical_certification(selected_reason:, custom_reason:, notes:)
+      if medical_certification_reviewer_path?(selected_reason)
+        reject_medical_certification_via_reviewer(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason,
+          notes: notes
+        )
+      else
+        reject_medical_certification_directly(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason,
+          notes: notes
+        )
+      end
+    end
+
+    def medical_certification_reviewer_path?(selected_reason)
+      selected_reason != 'none_provided' && medical_provider_notification_available?
+    end
+
+    def medical_provider_notification_available?
+      @application.medical_provider_name.present? &&
+        (@application.medical_provider_email.present? || @application.medical_provider_fax.present?)
+    end
+
     def reject_medical_certification_via_reviewer(selected_reason:, custom_reason:, notes:)
       reason_payload = resolve_medical_rejection_reason_payload(
         selected_reason: selected_reason,
@@ -632,6 +666,23 @@ module Applications
       return { success: true } if reviewer_result.success?
 
       { success: false, error: StandardError.new(reviewer_result.message) }
+    end
+
+    def reject_medical_certification_directly(selected_reason:, custom_reason:, notes:)
+      reason_payload = resolve_medical_rejection_reason_payload(
+        selected_reason: selected_reason,
+        custom_reason: custom_reason
+      )
+
+      MedicalCertificationAttachmentService.reject_certification(
+        application: @application,
+        admin: @admin,
+        reason: reason_payload[:reason],
+        notes: notes,
+        reason_code: reason_payload[:reason_code],
+        submission_method: :paper,
+        metadata: {}
+      )
     end
 
     def log_proof_submission(type, has_attachment)

@@ -82,7 +82,42 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     variables = mailer.send(:build_rejection_variables)
 
     assert variables[:download_form_url].present?
-    assert_includes variables[:download_form_url], '/medical_certification_form/'
+    assert_match %r{/medical_certification_form\z}, variables[:download_form_url]
+  end
+
+  test 'build_request_certification_variables includes constituent contact info and static form URL' do
+    mailer = MedicalProviderMailer.new
+    mailer.params = {
+      application: @application,
+      timestamp: Time.current.iso8601
+    }
+
+    variables = mailer.send(:build_request_certification_variables)
+
+    assert_equal @constituent.phone, variables[:constituent_phone_formatted]
+    assert_equal @constituent.email, variables[:constituent_email]
+    assert_match %r{/medical_certification_form\z}, variables[:download_form_url]
+  end
+
+  test 'certification_rejected uses locale-aware base template name for spanish recipients' do
+    @constituent.update!(locale: 'es')
+
+    spanish_template = mock('spanish_rejected_template')
+    spanish_template.stubs(:render).returns(['Certificacion rechazada', 'Motivo traducido'])
+    EmailTemplate.expects(:find_by!).with(
+      name: 'medical_provider_certification_rejected',
+      format: :text,
+      locale: 'es'
+    ).returns(spanish_template)
+
+    email = MedicalProviderMailer.with(
+      application: @application,
+      rejection_reason: 'Falta informacion',
+      admin: create(:admin)
+    ).certification_rejected
+
+    assert_equal [@application.medical_provider_email], email.to
+    assert_equal 'Certificacion rechazada', email.subject
   end
 
   test 'certification_submission_error' do

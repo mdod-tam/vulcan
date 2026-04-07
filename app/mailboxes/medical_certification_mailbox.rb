@@ -113,11 +113,10 @@ class MedicalCertificationMailbox < ApplicationMailbox
     end
 
     return if sender_matches_provider?
-    return if sender_from_provider_domain?
 
     bounce_with_notification(
       :unauthorized_sender,
-      'Sender email does not match the requesting medical provider. Please reply from the provider office domain or contact support.'
+      'Sender email does not match the requesting medical provider. Please reply from the provider email address or contact support.'
     )
   end
 
@@ -194,25 +193,10 @@ class MedicalCertificationMailbox < ApplicationMailbox
     sender_email.present? && provider_email.present? && sender_email == provider_email
   end
 
-  def sender_from_provider_domain?
-    sender_domain = email_domain(sender_email)
-    provider_domain = email_domain(provider_email)
-    return false if sender_domain.blank? || provider_domain.blank?
-
-    sender_domain == provider_domain
-  end
-
   def sender_verification
     return 'provider_exact' if sender_matches_provider?
-    return 'provider_domain_delegate' if sender_from_provider_domain?
 
     'unverified'
-  end
-
-  def email_domain(email)
-    return nil if email.blank?
-
-    email.split('@').last
   end
 
   def record_audit_event(action, metadata = {})
