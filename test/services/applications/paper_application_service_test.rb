@@ -242,18 +242,15 @@ module Applications
     end
 
     test 'routes medical certification rejection directly when provider contact information is missing' do
-      test_timestamp = Time.now.to_i
-      unique_email = "test-medical-missing-provider-#{test_timestamp}@example.com"
-      unique_phone = "202570#{test_timestamp.to_s[-4..]}"
-      custom_reason = "No provider contact details were available. [#{test_timestamp}]"
+      custom_reason = "No provider contact details were available. [#{Time.now.to_i}]"
+      application = create(:application, user: create(:constituent, :with_disabilities))
+      application.update_columns(
+        medical_provider_email: nil,
+        medical_provider_fax: nil,
+        updated_at: Time.current
+      )
 
       service_params = {
-        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
-        application: @application_params.merge(
-          medical_provider_name: '',
-          medical_provider_phone: '',
-          medical_provider_email: ''
-        ),
         medical_certification_action: 'rejected',
         medical_certification_rejection_reason: 'other',
         medical_certification_custom_rejection_reason: custom_reason
@@ -269,8 +266,8 @@ module Applications
       ).returns({ success: true })
 
       service = PaperApplicationService.new(params: service_params, admin: @admin)
-      result = service.create
-      assert result, "Failed to create application with missing provider contact info: #{service.errors.inspect}"
+      result = service.update(application)
+      assert result, "Failed to update application with missing provider contact info: #{service.errors.inspect}"
     end
 
     test 'application creation fails when attachment validation fails' do
