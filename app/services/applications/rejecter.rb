@@ -11,14 +11,18 @@ module Applications
     def initialize(application, by:)
       super() # Initialize BaseService errors array
       @application = application
-      @actor = by # Although not used in current logic, good practice to have
+      @actor = by
     end
 
     # Executes the rejection process
     # @return [Boolean] True if successful, false otherwise
     def call
       ApplicationRecord.transaction do
-        application.update!(status: :rejected)
+        application.transition_status!(
+          :rejected,
+          actor: actor,
+          metadata: { trigger: 'admin_rejection' }
+        )
         # NOTE: The original model method didn't have event/notification for rejection.
         # If needed, they would be added here.
         true # Indicate success

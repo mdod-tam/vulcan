@@ -44,6 +44,17 @@ module Applications
       assert_equal @user, result.application.managing_guardian
     end
 
+    test 'submission creates exactly one application_status_changed event' do
+      application = create_application_for(@user)
+      form = create_form_with_application(@user, application)
+      form.is_submission = true
+
+      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
+        result = ApplicationCreator.call(form)
+        assert result.success?
+      end
+    end
+
     test 'updates user attributes' do
       form = create_valid_form(@user)
       form.hearing_disability = true

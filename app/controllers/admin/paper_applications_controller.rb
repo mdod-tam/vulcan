@@ -63,7 +63,6 @@ module Admin
 
       if service_result
         success_message = generate_success_message(service.application)
-        success_message += " #{service.reconciliation_note}" if service.reconciliation_note.present?
         send_medical_certification_notification_if_needed(service.application)
         handle_success_response(
           html_redirect_path: admin_application_path(service.application),
@@ -73,7 +72,18 @@ module Admin
         )
       else
         Rails.logger.info "[PaperApplicationsController] Handling service failure, request format: #{request.format}"
-        handle_service_failure(service)
+
+        # If the application was persisted but reconciliation failed, redirect to the application
+        # with an alert instead of re-rendering the form.
+        if service.application&.persisted?
+          error_msg = service.errors.any? ? service.errors.join('; ') : 'An unexpected error occurred.'
+          handle_error_response(
+            html_redirect_path: admin_application_path(service.application),
+            error_message: error_msg
+          )
+        else
+          handle_service_failure(service)
+        end
       end
     end
 
@@ -92,12 +102,19 @@ module Admin
 
       if service.update(application)
         update_message = generate_success_message(application)
-        update_message += " #{service.reconciliation_note}" if service.reconciliation_note.present?
         handle_success_response(
           html_redirect_path: admin_application_path(application),
           html_message: update_message,
           turbo_message: update_message,
           turbo_redirect_path: admin_application_path(application)
+        )
+      elsif service.application&.persisted? && service.errors.any? { |e| e.include?('Workflow status update failed') }
+        # If the application was updated but reconciliation failed, redirect to the application
+        # with an alert instead of re-rendering the form.
+        error_msg = service.errors.join('; ')
+        handle_error_response(
+          html_redirect_path: admin_application_path(service.application),
+          error_message: error_msg
         )
       else
         handle_service_failure(service, application)

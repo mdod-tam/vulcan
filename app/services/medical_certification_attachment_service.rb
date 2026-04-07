@@ -68,7 +68,7 @@ class MedicalCertificationAttachmentService
   end
 
   # Reject a medical certification without requiring a file attachment
-  def self.reject_certification(application:, admin:, reason:, notes: nil,
+  def self.reject_certification(application:, admin:, reason:, notes: nil, # rubocop:disable Metrics/ParameterLists
                                 reason_code: nil, submission_method: :admin_review, metadata: {})
     rejection_params = {
       application: application,
@@ -129,7 +129,7 @@ class MedicalCertificationAttachmentService
       # Update certification status using update_columns to bypass validations
       # This is necessary because validations may require proofs to be attached,
       # but in paper application context we're still processing proofs
-      update_result = application.update_columns(
+      update_result = application.update_columns( # rubocop:disable Rails/SkipsModelValidations
         medical_certification_status: status.to_s,
         medical_certification_verified_at: Time.current,
         medical_certification_verified_by_id: admin&.id,
@@ -180,6 +180,12 @@ class MedicalCertificationAttachmentService
       # Get the notification action name based on the status
       notification_action = action_mapping[status.to_sym]
 
+      if status.to_sym == :approved
+        application.reload
+        actor = admin.presence || application.user
+        application.reconcile_workflow_state!(actor: actor, trigger: :medical_certification_approved) if actor.present?
+      end
+
       # Create notification if we have a valid action for this status
       if notification_action.present?
         NotificationService.create_and_deliver!(
@@ -190,11 +196,6 @@ class MedicalCertificationAttachmentService
           metadata: metadata,
           channel: :email
         )
-      end
-
-      if status.to_sym == :approved
-        application.reload
-        application.reconcile_workflow_state!(actor: admin, trigger: :medical_certification_approved)
       end
     end
   end
@@ -292,7 +293,7 @@ class MedicalCertificationAttachmentService
       updated_at: Time.current
     }
 
-    params[:application].update_columns(**update_attrs)
+    params[:application].update_columns(**update_attrs) # rubocop:disable Rails/SkipsModelValidations
     params[:application].reload
   end
 

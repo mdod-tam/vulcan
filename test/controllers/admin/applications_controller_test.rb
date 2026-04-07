@@ -383,7 +383,7 @@ module Admin
       patch admin_application_path(@application), params: {
         application: {
           household_size: 5,
-          annual_income: 99999,
+          annual_income: 99_999,
           status: @application.status
         }
       }
@@ -399,7 +399,7 @@ module Admin
       patch admin_application_path(@application), params: {
         application: {
           household_size: 5,
-          annual_income: 55000.0,
+          annual_income: 55_000.0,
           status: @application.status
         }
       }
@@ -407,6 +407,60 @@ module Admin
       @application.reload
       assert_equal 5, @application.household_size
       assert_equal 55_000.0, @application.annual_income
+    end
+
+    test 'batch_approve updates multiple applications and redirects' do
+      app1 = create(:application, :in_progress)
+      app2 = create(:application, :in_progress)
+
+      Application.expects(:batch_update_status)
+                 .with([app1.id.to_s, app2.id.to_s], :approved, actor: @admin)
+                 .returns({ success: true, success_count: 2, errors: [] })
+
+      post batch_approve_admin_applications_path, params: { ids: [app1.id, app2.id] }
+
+      assert_redirected_to admin_applications_path
+      assert_equal I18n.t('admin.applications.batch_approve.b_approved'), flash[:notice]
+    end
+
+    test 'batch_approve handles errors and returns unprocessable_content' do
+      app1 = create(:application, :in_progress)
+
+      Application.expects(:batch_update_status)
+                 .with([app1.id.to_s], :approved, actor: @admin)
+                 .returns({ success: false, success_count: 0, errors: ['Failed'] })
+
+      post batch_approve_admin_applications_path, params: { ids: [app1.id] }
+
+      assert_response :unprocessable_content
+      assert_equal 'Unable to approve applications', response.parsed_body['error']
+    end
+
+    test 'batch_reject updates multiple applications and redirects' do
+      app1 = create(:application, :in_progress)
+      app2 = create(:application, :in_progress)
+
+      Application.expects(:batch_update_status)
+                 .with([app1.id.to_s, app2.id.to_s], :rejected, actor: @admin)
+                 .returns({ success: true, success_count: 2, errors: [] })
+
+      post batch_reject_admin_applications_path, params: { ids: [app1.id, app2.id] }
+
+      assert_redirected_to admin_applications_path
+      assert_equal I18n.t('admin.applications.batch_reject.b_rejected'), flash[:notice]
+    end
+
+    test 'batch_reject handles errors and returns unprocessable_content' do
+      app1 = create(:application, :in_progress)
+
+      Application.expects(:batch_update_status)
+                 .with([app1.id.to_s], :rejected, actor: @admin)
+                 .returns({ success: false, success_count: 0, errors: ['Failed'] })
+
+      post batch_reject_admin_applications_path, params: { ids: [app1.id] }
+
+      assert_response :unprocessable_content
+      assert_equal 'Unable to reject applications', response.parsed_body['error']
     end
   end
 end

@@ -86,16 +86,6 @@ module ConstituentPortal
       result = Applications::ApplicationCreator.call(@form)
 
       if result.success?
-        # Create audit event for application creation
-        AuditEventService.log(
-          action: 'application_created',
-          actor: current_user,
-          auditable: result.application,
-          metadata: {
-            submission_method: 'online',
-            message: 'Application created via Online method'
-          }
-        )
         handle_creation_success(result)
       else
         handle_creation_failure(result)
@@ -154,13 +144,16 @@ module ConstituentPortal
 
     def submit
       @application = current_user.applications.find(params[:id])
-      if @application.update(submission_params.merge(status: :in_progress))
-        ApplicationNotificationsMailer.application_submitted(@application).deliver_later
-        redirect_with_notice(constituent_portal_application_path(@application),
-                             'Application submitted successfully!')
-      else
-        render :verify, status: :unprocessable_content
+      ApplicationRecord.transaction do
+        @application.assign_attributes(submission_params)
+        @application.save!
+        @application.submit!(actor: current_user)
       end
+      ApplicationNotificationsMailer.application_submitted(@application).deliver_later
+      redirect_with_notice(constituent_portal_application_path(@application),
+                           'Application submitted successfully!')
+    rescue ActiveRecord::RecordInvalid
+      render :verify, status: :unprocessable_content
     end
 
     def resubmit_proof
@@ -501,7 +494,6 @@ module ConstituentPortal
                         medical_release_authorized]
       )
     end
-
 
     def set_application
       @application = find_application_by_standard_query

@@ -96,10 +96,16 @@ module Applications
         household_size: @form.household_size,
         maryland_resident: @form.maryland_resident,
         self_certify_disability: @form.self_certify_disability,
-        status: determine_status,
         submission_method: @form.submission_method,
         application_date: target_application.application_date || Date.current
       }
+      # Submission moves draft -> in_progress via transition_status! after save (canonical audit).
+      attributes[:status] =
+        if @form.is_submission
+          target_application.persisted? ? target_application.status : :draft
+        else
+          determine_status
+        end
 
       # Only set user if this is a new application or explicitly changing the user
       attributes[:user] = applicant_user if target_application.new_record? || @form.user_id.present?
@@ -129,17 +135,17 @@ module Applications
     end
 
     def save_application_with_audit
-      action_type = target_application.new_record? ? 'application_created' : 'application_updated'
+      was_new_record = target_application.new_record?
       target_application.save!
       actor = determine_audit_actor
 
-      if action_type == 'application_created'
+      target_application.submit!(actor: actor) if @form.is_submission
+
+      if was_new_record
         log_application_created_event(actor)
-      elsif action_type == 'application_updated'
+      else
         log_application_updated_event(actor)
       end
-
-      log_status_change_event(actor) if @form.is_submission
     end
 
     def determine_audit_actor
@@ -185,20 +191,6 @@ module Applications
       )
     end
 
-    def log_status_change_event(actor)
-      Rails.logger.debug { "Logging application_status_changed event for application #{target_application.id}" }
-      AuditEventService.log(
-        action: 'application_status_changed',
-        actor: actor,
-        auditable: target_application,
-        metadata: {
-          new_status: 'in_progress',
-          old_status: 'draft',
-          submission_method: @form.submission_method
-        }
-      )
-    end
-
     def log_events
       return unless target_application.persisted?
 
@@ -221,8 +213,6 @@ module Applications
     end
 
     def determine_status
-      return 'in_progress' if @form.is_submission
-
       @form.application&.status || 'draft'
     end
 

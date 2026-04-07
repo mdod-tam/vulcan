@@ -124,18 +124,23 @@ module Admin
     end
 
     def batch_approve
-      result = Application.batch_update_status(params[:ids], :approved)
-      if result
+      result = Application.batch_update_status(params[:ids], :approved, actor: current_user)
+      if result[:success]
         redirect_to admin_applications_path, notice: t('.b_approved')
       else
-        render json: { error: 'Unable to approve applications' },
+        render json: { error: 'Unable to approve applications', details: result[:errors] },
                status: :unprocessable_content
       end
     end
 
     def batch_reject
-      Application.batch_update_status(params[:ids], :rejected)
-      redirect_to admin_applications_path, notice: t('.b_rejected')
+      result = Application.batch_update_status(params[:ids], :rejected, actor: current_user)
+      if result[:success]
+        redirect_to admin_applications_path, notice: t('.b_rejected')
+      else
+        render json: { error: 'Unable to reject applications', details: result[:errors] },
+               status: :unprocessable_content
+      end
     end
 
     def request_documents
