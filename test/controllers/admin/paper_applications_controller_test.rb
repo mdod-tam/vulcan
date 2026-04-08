@@ -52,7 +52,7 @@ module Admin
     test 'should get new' do
       get new_admin_paper_application_path, headers: default_headers
       assert_response :success
-      assert_select 'h1', 'Upload Paper Application'
+      assert_select 'h1', 'Apply for Constitutent'
     end
 
     test 'invalid create-new self applicant rerender keeps create-new branch active' do
