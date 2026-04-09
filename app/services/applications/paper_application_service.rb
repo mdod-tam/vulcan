@@ -708,6 +708,17 @@ module Applications
       @application.proof_reviews.reload.each do |review|
         next unless review.status_rejected?
 
+        if review.proof_type == 'medical_certification' && review.rejection_reason_code == 'none_provided'
+          NotificationService.create_and_deliver!(
+            type: 'medical_certification_not_provided',
+            recipient: @constituent,
+            actor: @admin,
+            notifiable: @application,
+            channel: @constituent.communication_preference.to_sym
+          )
+          next
+        end
+
         NotificationService.create_and_deliver!(
           type: 'proof_rejected',
           recipient: @constituent,
