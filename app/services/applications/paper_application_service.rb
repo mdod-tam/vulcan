@@ -558,37 +558,20 @@ module Applications
       legacy_notes      = fetch_param(notes_key).to_s.strip
       custom_reason     = legacy_notes if custom_reason.blank? && legacy_notes.present?
 
-      if type == :medical_certification
-        reason_payload = resolve_medical_rejection_reason_payload(
-          selected_reason: selected_reason,
-          custom_reason: custom_reason
-        )
-
-        result = MedicalCertificationAttachmentService.reject_certification(
-          application: @application,
-          admin: @admin,
-          reason: reason_payload[:reason],
-          notes: legacy_notes.presence,
-          reason_code: reason_payload[:reason_code],
-          submission_method: :paper,
-          metadata: {}
-        )
-      else
-        resolved_reason = resolve_rejection_reason_value(
-          selected_reason: selected_reason,
-          custom_reason: custom_reason
-        )
-
-        result = ProofAttachmentService.reject_proof_without_attachment(
-          application: @application,
-          proof_type: type,
-          admin: @admin,
-          reason: resolved_reason,
-          notes: legacy_notes.presence,
-          submission_method: :paper,
-          metadata: {}
-        )
-      end
+      result = if type == :medical_certification
+                 reject_medical_certification(
+                   selected_reason: selected_reason,
+                   custom_reason: custom_reason,
+                   notes: legacy_notes.presence
+                 )
+               else
+                 reject_non_medical_proof(
+                   type: type,
+                   selected_reason: selected_reason,
+                   custom_reason: custom_reason,
+                   notes: legacy_notes.presence
+                 )
+               end
 
       unless result[:success]
         add_error("Error rejecting #{type} proof: #{result[:error]&.message}")
@@ -605,8 +588,34 @@ module Applications
       custom_reason
     end
 
+    def reject_non_medical_proof(type:, selected_reason:, custom_reason:, notes:)
+      resolved_reason = resolve_rejection_reason_value(
+        selected_reason: selected_reason,
+        custom_reason: custom_reason
+      )
+
+      ProofAttachmentService.reject_proof_without_attachment(
+        application: @application,
+        proof_type: type,
+        admin: @admin,
+        reason: resolved_reason,
+        notes: notes,
+        submission_method: :paper,
+        metadata: {}
+      )
+    end
+
     def resolve_medical_rejection_reason_payload(selected_reason:, custom_reason:)
-      return { reason: selected_reason, reason_code: selected_reason } if selected_reason.present? && %w[none_provided other].exclude?(selected_reason)
+      if selected_reason.present? && %w[none_provided other].exclude?(selected_reason)
+        resolved_reason = RejectionReason.resolve_text(
+          code: selected_reason,
+          proof_type: 'medical_certification',
+          fallback: selected_reason
+        )
+
+        return { reason: resolved_reason, reason_code: selected_reason }
+      end
+
       return { reason: 'none_provided', reason_code: nil } if selected_reason == 'none_provided'
       return { reason: 'Other', reason_code: nil } if custom_reason.blank?
 
@@ -615,6 +624,65 @@ module Applications
 
     def fetch_param(key)
       params[key] || params[key.to_sym]
+    end
+
+    def reject_medical_certification(selected_reason:, custom_reason:, notes:)
+      if medical_certification_reviewer_path?(selected_reason)
+        reject_medical_certification_via_reviewer(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason,
+          notes: notes
+        )
+      else
+        reject_medical_certification_directly(
+          selected_reason: selected_reason,
+          custom_reason: custom_reason,
+          notes: notes
+        )
+      end
+    end
+
+    def medical_certification_reviewer_path?(selected_reason)
+      selected_reason != 'none_provided' && medical_provider_notification_available?
+    end
+
+    def medical_provider_notification_available?
+      @application.medical_provider_name.present? &&
+        (@application.medical_provider_email.present? || @application.medical_provider_fax.present?)
+    end
+
+    def reject_medical_certification_via_reviewer(selected_reason:, custom_reason:, notes:)
+      reason_payload = resolve_medical_rejection_reason_payload(
+        selected_reason: selected_reason,
+        custom_reason: custom_reason
+      )
+
+      reviewer_result = Applications::MedicalCertificationReviewer.new(@application, @admin).reject(
+        rejection_reason: reason_payload[:reason],
+        notes: notes,
+        rejection_reason_code: reason_payload[:reason_code]
+      )
+
+      return { success: true } if reviewer_result.success?
+
+      { success: false, error: StandardError.new(reviewer_result.message) }
+    end
+
+    def reject_medical_certification_directly(selected_reason:, custom_reason:, notes:)
+      reason_payload = resolve_medical_rejection_reason_payload(
+        selected_reason: selected_reason,
+        custom_reason: custom_reason
+      )
+
+      MedicalCertificationAttachmentService.reject_certification(
+        application: @application,
+        admin: @admin,
+        reason: reason_payload[:reason],
+        notes: notes,
+        reason_code: reason_payload[:reason_code],
+        submission_method: :paper,
+        metadata: {}
+      )
     end
 
     def log_proof_submission(type, has_attachment)
@@ -639,6 +707,17 @@ module Applications
     def send_proof_rejection_notifications
       @application.proof_reviews.reload.each do |review|
         next unless review.status_rejected?
+
+        if review.proof_type == 'medical_certification' && review.rejection_reason_code == 'none_provided'
+          NotificationService.create_and_deliver!(
+            type: 'medical_certification_not_provided',
+            recipient: @constituent,
+            actor: @admin,
+            notifiable: @application,
+            channel: @constituent.communication_preference.to_sym
+          )
+          next
+        end
 
         NotificationService.create_and_deliver!(
           type: 'proof_rejected',

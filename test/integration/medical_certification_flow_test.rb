@@ -139,17 +139,20 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
 
   def create_medical_provider_email_templates
     # Create medical_provider_request_certification template
-    return if EmailTemplate.exists?(name: 'medical_provider_request_certification', format: :text)
+    return if EmailTemplate.exists?(name: 'medical_provider_request_certification', format: :text, locale: 'en')
 
     EmailTemplate.create!(
       name: 'medical_provider_request_certification',
       format: :text,
+      locale: 'en',
       subject: 'Medical Certification Request',
       body: "Dear Medical Provider,\n\n" \
             "We need medical certification for %<constituent_full_name>s.\n\n" \
             "Application ID: %<application_id>s\n" \
             "Date: %<timestamp_formatted>s\n" \
             "DOB: %<constituent_dob_formatted>s\n" \
+            "Phone: %<constituent_phone_formatted>s\n" \
+            "Email: %<constituent_email>s\n" \
             "Address: %<constituent_address_formatted>s\n\n" \
             "%<request_count_message>s\n\n" \
             "Download form: %<download_form_url>s\n\n" \

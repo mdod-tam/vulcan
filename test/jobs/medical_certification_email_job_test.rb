@@ -66,13 +66,15 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
   private
 
   def ensure_request_certification_template!
-    EmailTemplate.find_or_create_by!(name: 'medical_provider_request_certification', format: :text) do |template|
+    EmailTemplate.find_or_create_by!(name: 'medical_provider_request_certification', format: :text, locale: 'en') do |template|
       template.subject = 'Medical Certification Request for %<constituent_full_name>s'
       template.body = <<~TEXT
         Please complete the requested certification for %<constituent_full_name>s.
         Request: %<request_count_message>s
         Timestamp: %<timestamp_formatted>s
         DOB: %<constituent_dob_formatted>s
+        Phone: %<constituent_phone_formatted>s
+        Email: %<constituent_email>s
         Address: %<constituent_address_formatted>s
         Application ID: %<application_id>s
         Form URL: %<download_form_url>s
@@ -84,6 +86,8 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
           request_count_message
           timestamp_formatted
           constituent_dob_formatted
+          constituent_phone_formatted
+          constituent_email
           constituent_address_formatted
           application_id
           download_form_url

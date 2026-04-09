@@ -18,9 +18,7 @@ class User < ApplicationRecord
   end
 
   def self.system_user
-    # Ensure the system user is always an up-to-date administrator
-    # Clear memoized value if user is not found or not an admin
-    if @system_user.nil? || !@system_user.persisted? || !@system_user.admin?
+    if @system_user.nil? || !system_user_valid?(@system_user)
       @system_user = find_by_email('system@mdmat.org')
       if @system_user.nil?
         @system_user = User.create!(
@@ -37,6 +35,11 @@ class User < ApplicationRecord
     end
     @system_user
   end
+
+  def self.system_user_valid?(user)
+    user.persisted? && user.admin? && self.exists?(user.id)
+  end
+  private_class_method :system_user_valid?
 
   # Rails 8 encryption helper methods for encrypted queries
   def self.find_by_email(email_value)

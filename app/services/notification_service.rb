@@ -162,7 +162,8 @@ class NotificationService
     'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
     'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created],
     'medical_certification_approved' => [MedicalProviderMailer, :approved],
-    'medical_certification_requested' => [MedicalProviderMailer, :requested]
+    'medical_certification_requested' => [MedicalProviderMailer, :requested],
+    'medical_certification_not_provided' => [ApplicationNotificationsMailer, :medical_certification_not_provided]
     # medical_certification_received: no email — constituent sees status in dashboard
     # medical_certification_requested: request email delivered through MedicalProviderMailer.requested proxy
   }.freeze
@@ -178,6 +179,7 @@ class NotificationService
     training_requested
     trainer_assigned
     security_key_recovery_approved
+    medical_certification_not_provided
   ].freeze
 
   # ---- Creation + validation -------------------------------------------------
@@ -397,6 +399,8 @@ class NotificationService
                   when 'account_created'
                     ensure_action_contract?(notification, recipient_class: User) &&
                     validate_account_created_temp_password?(notification)
+                  when 'medical_certification_not_provided'
+                    ensure_action_contract?(notification, notifiable_class: Application, actor_presence: true)
                   else
                     true # No specific contract for other actions
                   end

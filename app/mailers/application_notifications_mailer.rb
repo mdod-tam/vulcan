@@ -247,7 +247,7 @@ class ApplicationNotificationsMailer < ApplicationMailer
     end
   end
 
-  def medical_certification_not_provided(application)
+  def medical_certification_not_provided(application, _notification = nil)
     with_mailer_error_handling("medical_certification_not_provided application=#{application&.id}") do
       template_name = 'application_notifications_medical_certification_not_provided'
       locale        = resolve_template_locale(recipient: application.user)
