@@ -34,7 +34,6 @@ class ProofReview < ApplicationRecord
   # Callbacks
   before_validation :set_reviewed_at, on: :create
   after_commit :handle_post_review_actions, on: :create
-  after_commit :check_all_proofs_approved, on: :create, if: :status_approved?
 
   # Scopes
   scope :recent, -> { order(created_at: :desc) }
@@ -210,28 +209,6 @@ class ProofReview < ApplicationRecord
   def archive_application_if_exceeded
     application.update!(status: :archived)
     ApplicationNotificationsMailer.max_rejections_reached(application).deliver_later
-  end
-
-  def check_all_proofs_approved
-    # Reload the application to ensure we have the latest status
-    application.reload
-
-    # Check if required proofs are approved (policy-aware) and certification not already requested
-    if application.required_proofs_for_dcf_approved? && application.medical_certification_status_not_requested?
-      Rails.logger.info "Required proofs approved for Application ID: #{application.id}, transitioning to awaiting_dcf and requesting medical certification"
-
-      # Update certification status, application status, and send email
-      application.with_lock do
-        application.update!(
-          medical_certification_status: :requested,
-          status: :awaiting_dcf
-        )
-        # Use deliver_later to enqueue a job
-        MedicalProviderMailer.request_certification(application).deliver_later
-      end
-    end
-  rescue StandardError => e
-    Rails.logger.error "Failed to process required proofs approved: #{e.message}\n#{e.backtrace.join("\n")}"
   end
 
   def admin_must_be_admin_type
