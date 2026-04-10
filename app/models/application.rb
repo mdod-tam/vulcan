@@ -144,12 +144,8 @@ class Application < ApplicationRecord
   # Callbacks
   before_create :stamp_workflow_defaults!
   before_create :ensure_managing_guardian_set
-<<<<<<< dcf-escalation
-  after_update :log_status_change, if: :should_log_status_change?
-=======
   before_validation :scrub_income_fields, if: :should_scrub_income?
-  after_update :log_status_change, if: :saved_change_to_status?
->>>>>>> main
+  after_update :log_status_change, if: :should_log_status_change?
   after_save :log_alternate_contact_changes, if: :saved_change_to_alternate_contact?
 
   # Scopes
