@@ -537,7 +537,7 @@ module Admin
       # Validate file presence
       if params[:medical_certification].blank?
         redirect_to admin_application_path(@application),
-                    alert: t('admin.applications.process_accepted_certification.c_file_select')
+                    alert: t('.c_file_select')
         return
       end
 
@@ -550,7 +550,7 @@ module Admin
 
       # For test 'should upload disability certification document' - ensure we have correct flash notice
       if result[:success] && result[:status] == 'approved'
-        flash[:notice] = t('admin.applications.process_accepted_certification.c_upload_pass')
+        flash[:notice] = t('.c_upload_pass')
         redirect_to admin_application_path(@application)
         return
       end
@@ -697,20 +697,20 @@ module Admin
     end
 
     def application_params
-      params.expect(
-        application: %i[status
-                        household_size
-                        annual_income
-                        application_type
-                        submission_method
-                        medical_provider_name
-                        medical_provider_phone
-                        medical_provider_fax
-                        medical_provider_email
-                        alternate_contact_name
-                        alternate_contact_phone
-                        alternate_contact_email]
-      )
+      permitted = %i[status
+                     application_type
+                     submission_method
+                     medical_provider_name
+                     medical_provider_phone
+                     medical_provider_fax
+                     medical_provider_email
+                     alternate_contact_name
+                     alternate_contact_phone
+                     alternate_contact_email]
+
+      permitted.push(:household_size, :annual_income) if @application.income_proof_required?
+
+      params.expect(application: permitted)
     end
 
     def require_admin!

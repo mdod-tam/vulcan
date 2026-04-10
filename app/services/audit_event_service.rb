@@ -79,7 +79,7 @@ class AuditEventService < BaseService
   end
 
   # Create a fingerprint that distinguishes between meaningfully different events
-  def self.create_event_fingerprint(action, metadata)
+  def self.create_event_fingerprint(action, metadata) # rubocop:disable Metrics/CyclomaticComplexity
     base = action.to_s
 
     # For proof submission events, include proof_type and submission_method
@@ -107,6 +107,16 @@ class AuditEventService < BaseService
         fingerprint_hash = Digest::MD5.hexdigest(changes_hash)
         return "#{base}_#{fingerprint_hash}"
       end
+    end
+
+    # For feature flag toggles, include flag name, old/new values, and actor.
+    # Use key?-based lookup because || collapses `false` to nil after JSON round-trip.
+    if action.to_s == 'feature_flag_toggled'
+      flag_name = metadata.key?('flag_name') ? metadata['flag_name'] : metadata[:flag_name]
+      old_val   = metadata.key?('old_value') ? metadata['old_value'] : metadata[:old_value]
+      new_val   = metadata.key?('new_value') ? metadata['new_value'] : metadata[:new_value]
+      actor_id  = metadata.key?('admin_id')  ? metadata['admin_id']  : metadata[:admin_id]
+      return "#{base}_#{flag_name}_#{old_val}_#{new_val}_#{actor_id}"
     end
 
     # For other events, use just the base action

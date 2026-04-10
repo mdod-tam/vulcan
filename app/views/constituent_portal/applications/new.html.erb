@@ -21,21 +21,25 @@
         </div>
       <% end %>
 
+      <% new_app_form_data = {
+        controller: "currency-formatter accessibility-announcer autosave",
+        autosave_target: "form",
+        autosave_url_value: autosave_field_constituent_portal_applications_path,
+        autosave_debounce_wait_value: 1000,
+        autosave_edit_form_url_value: constituent_portal_application_path(':id'),
+        autosave_edit_autosave_url_value: autosave_field_constituent_portal_application_path(':id')
+      }
+      if FeatureFlag.enabled?(:income_proof_required)
+        new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
+        new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
+        new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+      end %>
       <%= form_with(model: [:constituent_portal, @application],
           local: true,
           class: "space-y-6",
           html: { "aria-label": "Application form" },
           "aria-labelledby": "form-title",
-          data: { 
-            controller: "income-validation currency-formatter accessibility-announcer autosave", 
-            autosave_target: "form",
-            autosave_url_value: autosave_field_constituent_portal_applications_path,
-            autosave_debounce_wait_value: 1000,
-            autosave_edit_form_url_value: constituent_portal_application_path(':id'),
-            autosave_edit_autosave_url_value: autosave_field_constituent_portal_application_path(':id'),
-            "income-validation-fpl-thresholds-value": fpl_thresholds_json,
-            "income-validation-modifier-value": fpl_modifier_value
-          }) do |form| %>
+          data: new_app_form_data) do |form| %>
           
         <!-- Autosave status indicator -->
         <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden" role="status" aria-live="polite"></div>
@@ -275,6 +279,7 @@
         <fieldset class="space-y-6 p-4 bg-gray-50 rounded">
           <legend class="text-lg font-medium text-gray-900">Required Documentation</legend>
           
+          <% if FeatureFlag.enabled?(:income_proof_required) %>
           <!-- Income Verification Subsection -->
           <div class="space-y-4">
             <h3 class="text-base font-medium text-gray-900">Income Verification</h3>
@@ -348,6 +353,7 @@
               </p>
             </div>
           </div>
+          <% end %>
 
           <!-- Residency Verification Subsection -->
           <div class="space-y-4 pt-4 border-t border-gray-200">

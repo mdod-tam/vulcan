@@ -314,11 +314,7 @@ module Applications
     end
 
     def add_proof_review_metrics(data)
-      data[:proofs_needing_review_count] = Application
-                                           .where(income_proof_status: :not_reviewed)
-                                           .or(Application.where(residency_proof_status: :not_reviewed))
-                                           .distinct
-                                           .count
+      data[:proofs_needing_review_count] = Application.with_proofs_needing_review.distinct.count
 
       data[:medical_certs_to_review_count] = Application
                                              .where.not(status: %i[rejected archived])

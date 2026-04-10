@@ -64,16 +64,18 @@
 
     <% paper_form_data = {
       turbo: false,
-      controller: "applicant-type",
+      controller: "paper-application applicant-type income-validation",
       action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
       "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
-      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']"
+      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
+      "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']"
     }
     paper_form_data[:"applicant-type-adult-picker-outlet"] = "[data-controller='adult-picker']"
     if FeatureFlag.enabled?(:income_proof_required)
-      paper_form_data[:controller] += " income-validation"
       paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
       paper_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+    else
+      paper_form_data[:controller] = "paper-application applicant-type"
     end %>
     <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
@@ -97,7 +99,7 @@
                 <input type="radio" 
                        id="applicant_is_adult" 
                        name="applicant_type" 
-                       value="self"
+                       value="self" 
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" 
                        <%= 'checked' unless @show_create_guardian_form %> 
                        data-applicant-type-target="radio">
@@ -736,6 +738,7 @@
           </div>
           
           <div class="p-6 space-y-8">
+            <% if FeatureFlag.enabled?(:income_proof_required) %>
             <%# Income Proof Section %>
             <div data-controller="document-proof-handler" data-document-proof-handler-type-value="income">
               <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -889,6 +892,8 @@
               </div>
             </div>
 
+            <% end %>
+
             <hr class="border-gray-200">
 
             <%# Residency Proof Section %>
@@ -1022,6 +1027,7 @@
           <%= link_to "Cancel", admin_applications_path, 
               class: "inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
           
+          <% if FeatureFlag.enabled?(:income_proof_required) %>
           <%= button_tag type: "button", 
               id: "rejection-button", 
               class: "hidden inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500", 
@@ -1030,6 +1036,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
             Reject (Income Over Threshold)
+          <% end %>
           <% end %>
           
           <%= form.submit "Submit Paper Application", 

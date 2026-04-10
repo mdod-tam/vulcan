@@ -930,6 +930,29 @@ module Admin
       assert_match 'Rejection letter has been queued for printing', flash[:notice]
     end
 
+    test 'reject_for_income is gated when income collection is disabled' do
+      FeatureFlag.find_by!(name: 'income_proof_required').update!(enabled: false)
+
+      post reject_for_income_admin_paper_applications_path, headers: default_headers, params: {
+        first_name: 'John', last_name: 'Doe', email: 'john@example.com'
+      }
+
+      assert_redirected_to new_admin_paper_application_path
+      assert_match 'Income rejection is not available', flash[:alert]
+    end
+
+    test 'send_rejection_notification is gated when income collection is disabled' do
+      FeatureFlag.find_by!(name: 'income_proof_required').update!(enabled: false)
+
+      post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+        first_name: 'John', last_name: 'Doe', email: 'john@example.com',
+        communication_preference: 'email'
+      }
+
+      assert_redirected_to admin_applications_path
+      assert_match 'Income rejection is not available', flash[:alert]
+    end
+
     test 'should not enqueue jobs when transaction fails' do
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Mocked service error/)).once

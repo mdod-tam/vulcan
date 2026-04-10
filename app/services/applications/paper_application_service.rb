@@ -389,8 +389,8 @@ module Applications
     end
 
     def validate_income_threshold(application_attrs)
-      # Skip validation if explicitly requested (e.g., for rejection cases)
       return true if @skip_income_validation
+      return true unless FeatureFlag.enabled?(:income_proof_required)
 
       household_size = application_attrs[:household_size]
       annual_income = application_attrs[:annual_income]
@@ -424,20 +424,18 @@ module Applications
     end
 
     def determine_initial_status
-      # awaiting_proof if:
-      # 1. No medical provider info provided
-      # 2. No proofs provided (income_proof_action: 'none' or residency_proof_action: 'none')
-      # 3. Proofs were rejected (income_proof_action: 'reject' or residency_proof_action: 'reject')
-
       return :awaiting_proof if params[:no_medical_provider_information]
 
       income_action = params[:income_proof_action]
       residency_action = params[:residency_proof_action]
 
-      # If no proofs provided or any proofs rejected, awaiting proof
-      return :awaiting_proof if income_action.in?(%w[none reject]) || residency_action.in?(%w[none reject])
+      # Only consider income action when income collection is enabled
+      if FeatureFlag.enabled?(:income_proof_required)
+        return :awaiting_proof if income_action.in?(%w[none reject]) || residency_action.in?(%w[none reject])
+      elsif residency_action.in?(%w[none reject])
+        return :awaiting_proof
+      end
 
-      # Otherwise, in progress (has all initial documentation)
       :in_progress
     end
 
@@ -457,7 +455,10 @@ module Applications
     def process_proof_uploads
       Current.paper_context = true
 
-      %i[income residency medical_certification].each do |proof_type|
+      proof_types = %i[income residency medical_certification]
+      proof_types -= %i[income] unless @application.income_proof_required?
+
+      proof_types.each do |proof_type|
         return false unless process_proof(proof_type)
       end
 

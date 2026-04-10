@@ -25,10 +25,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
           metrics[key] = value
         end
       end
-      # Load proof review counts
-      metrics[:proofs_needing_review_count] = Application.where(income_proof_status: :not_reviewed)
-                                                         .or(Application.where(residency_proof_status: :not_reviewed))
-                                                         .distinct.count
+      metrics[:proofs_needing_review_count] = Application.with_proofs_needing_review.distinct.count
 
       # Load certification review counts
       metrics[:medical_certs_to_review_count] = Application.where.not(status: %i[rejected archived])
@@ -88,9 +85,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   # Loads counts for proofs needing review
   def load_proof_review_counts
     proofs_count = cached_count('proofs_needing_review') do
-      Application.where(income_proof_status: :not_reviewed)
-                 .or(Application.where(residency_proof_status: :not_reviewed))
-                 .distinct.count
+      Application.with_proofs_needing_review.distinct.count
     end
 
     safe_assign(:proofs_needing_review_count, proofs_count)

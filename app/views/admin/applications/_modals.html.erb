@@ -86,11 +86,14 @@ end
   <%= render "certification_history_modal" %>
 
   <%# Loop through proof types to generate modals %>
-  <% [
-    { id: 'incomeProofReviewModal',  key: :income,   title: 'Review Income Proof',   approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'income', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'income', confirm_message: "Approve income proof?", can_reject: @application.income_proof_status != 'rejected' || @application.needs_proof_type_review?("income") },
-    { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?", can_reject: @application.residency_proof_status != 'rejected' || @application.needs_proof_type_review?("residency") },
-    { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this disability certification?", can_reject: !@application.medical_certification_status_rejected? || @application.medical_certification_status_received? }
-  ].each do |cfg| %>
+  <% proof_modal_configs = []
+     if @application.income_proof_required?
+       proof_modal_configs << { id: 'incomeProofReviewModal',  key: :income,   title: 'Review Income Proof',   approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'income', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'income', confirm_message: "Approve income proof?", can_reject: @application.proof_type_reviewable?("income") }
+     end
+     proof_modal_configs << { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?", can_reject: @application.proof_type_reviewable?("residency") }
+     proof_modal_configs << { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this disability certification?", can_reject: !@application.medical_certification_status_rejected? || @application.medical_certification_status_received? }
+  %>
+  <% proof_modal_configs.each do |cfg| %>
     <dialog id="<%= cfg[:id] %>" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-controller="modal" aria-labelledby="<%= cfg[:id] %>-heading">
       <div class="p-6">
           <h3 id="<%= cfg[:id] %>-heading" class="text-lg font-medium text-gray-900 mb-4"><%= cfg[:title] %></h3>

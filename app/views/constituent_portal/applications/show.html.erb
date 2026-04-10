@@ -56,14 +56,18 @@
           <dt class="text-sm font-medium text-gray-700">Application Date</dt>
           <dd class="mt-1 text-sm text-gray-900"><%= @application.application_date&.strftime("%B %d, %Y") || "Not specified" %></dd>
         </div>
+        <% if @application.household_size.present? %>
         <div>
           <dt class="text-sm font-medium text-gray-700">Household Size</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @application.household_size || "Not specified" %></dd>
+          <dd class="mt-1 text-sm text-gray-900"><%= @application.household_size %></dd>
         </div>
+        <% end %>
+        <% if @application.annual_income.present? %>
         <div>
           <dt class="text-sm font-medium text-gray-700">Annual Income</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @application.annual_income ? number_to_currency(@application.annual_income) : "Not specified" %></dd>
+          <dd class="mt-1 text-sm text-gray-900"><%= number_to_currency(@application.annual_income) %></dd>
         </div>
+        <% end %>
       </dl>
     </section>
 
@@ -189,6 +193,7 @@
     <section aria-labelledby="documents-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="documents-heading" class="text-xl font-semibold mb-4 text-gray-900">Uploaded Documents</h2>
       
+      <% if @application.income_proof_required? %>
       <%# Income Proof %>
       <div class="mb-6">
         <h3 class="text-lg font-medium text-gray-900 mb-3">Income Proof</h3>
@@ -225,6 +230,7 @@
           </div>
         <% end %>
       </div>
+      <% end %>
       
       <%# Residency Proof %>
       <div>
