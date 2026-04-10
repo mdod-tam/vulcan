@@ -90,17 +90,7 @@ module ApplicationHelper
   # @param proof_type [String] The type of proof ("income" or "residency")
   # @return [String] The appropriate button text
   def proof_review_button_text(application, proof_type)
-    latest_review, latest_audit = latest_review_and_audit(application, proof_type)
-
-    if latest_review&.status_rejected?
-      if latest_audit && latest_review && latest_audit.created_at > latest_review.created_at
-        'Review Resubmitted Proof'
-      else
-        'Review Rejected Proof'
-      end
-    else
-      'Review Proof'
-    end
+    application.proof_review_button_text(proof_type)
   end
 
   # Determines the appropriate CSS classes for the proof review button
@@ -108,20 +98,7 @@ module ApplicationHelper
   # @param proof_type [String] The type of proof ("income" or "residency")
   # @return [String] The appropriate CSS class string for the button
   def proof_review_button_class(application, proof_type)
-    latest_review, latest_audit = latest_review_and_audit(application, proof_type)
-
-    if latest_review&.status_rejected?
-      if latest_audit && latest_review && latest_audit.created_at > latest_review.created_at
-        # Resubmitted proof - keep blue
-        'bg-blue-600 hover:bg-blue-700'
-      else
-        # Rejected proof - use red
-        'bg-red-600 hover:bg-red-700'
-      end
-    else
-      # Initial review - keep blue
-      'bg-blue-600 hover:bg-blue-700'
-    end
+    application.proof_review_button_class(proof_type)
   end
 
   # Alias for the constituent portal proof route helper
@@ -129,17 +106,5 @@ module ApplicationHelper
   # but views and tests expect new_proof_constituent_portal_application_path
   def new_proof_constituent_portal_application_path(application, **)
     constituent_portal_application_new_proof_path(application, **)
-  end
-
-  private
-
-  # Fetches the latest proof review and submission audit for a given proof type
-  # @param application [Application] The application instance
-  # @param type [String] The proof type ('income' or 'residency')
-  # @return [Array<ProofReview, Event>] An array containing the latest review and audit, or nils
-  def latest_review_and_audit(application, type)
-    latest_review = application.proof_reviews.where(proof_type: type).order(created_at: :desc).first
-    latest_audit = application.events.where(action: 'proof_submitted').where("metadata->>'proof_type' = ?", type).order(created_at: :desc).first
-    [latest_review, latest_audit]
   end
 end

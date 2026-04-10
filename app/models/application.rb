@@ -60,6 +60,8 @@ class Application < ApplicationRecord
     archived: 7             # Historical record
   }, prefix: true, validate: true
 
+  enum :fulfillment_type, { equipment: 0, voucher: 1 }, prefix: true
+
   enum :income_proof_status, {
     not_reviewed: 0,
     approved: 1,
@@ -140,8 +142,14 @@ class Application < ApplicationRecord
 
   before_save :ensure_managing_guardian_set, if: :user_id_changed?
   # Callbacks
+  before_create :stamp_workflow_defaults!
   before_create :ensure_managing_guardian_set
+<<<<<<< dcf-escalation
   after_update :log_status_change, if: :should_log_status_change?
+=======
+  before_validation :scrub_income_fields, if: :should_scrub_income?
+  after_update :log_status_change, if: :saved_change_to_status?
+>>>>>>> main
   after_save :log_alternate_contact_changes, if: :saved_change_to_alternate_contact?
 
   # Scopes
@@ -216,6 +224,13 @@ class Application < ApplicationRecord
            Voucher.statuses[:redeemed]
          )
          .distinct # Avoid duplicates due to the join
+  }
+
+  scope :with_proofs_needing_review, lambda {
+    where(
+      'residency_proof_status = :nr OR (income_proof_required = TRUE AND income_proof_status = :nr)',
+      nr: residency_proof_statuses[:not_reviewed]
+    )
   }
 
   scope :with_pending_training, lambda {
@@ -353,15 +368,68 @@ class Application < ApplicationRecord
     latest_audit.present? && latest_review.present? && latest_audit.created_at > latest_review.created_at
   end
 
+  def proof_review_state(proof_type)
+    proof_type = proof_type.to_s
+    return :not_applicable unless ProofReview.reviewable_proof_type?(proof_type)
+    return :not_applicable if proof_type == 'income' && !income_proof_required?
+
+    attachment = public_send("#{proof_type}_proof")
+    return :missing_attachment unless attachment.attached?
+
+    if public_send("#{proof_type}_proof_status_approved?")
+      return needs_proof_type_review?(proof_type) ? :resubmitted : :approved_current
+    end
+
+    return :rejected if public_send("#{proof_type}_proof_status_rejected?")
+    return :pending if public_send("#{proof_type}_proof_status_not_reviewed?")
+
+    :pending
+  end
+
+  def proof_type_reviewable?(proof_type)
+    proof_review_state(proof_type).in?(%i[pending rejected resubmitted])
+  end
+
+  def proofs_reviewable?
+    %w[income residency].any? { |proof_type| proof_type_reviewable?(proof_type) }
+  end
+
+  def proof_review_button_text(proof_type)
+    case proof_review_state(proof_type)
+    when :resubmitted
+      'Review Resubmitted Proof'
+    when :rejected
+      'Review Rejected Proof'
+    else
+      'Review Proof'
+    end
+  end
+
+  def proof_review_button_class(proof_type)
+    proof_review_state(proof_type) == :rejected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+  end
+
   # Retrieves the latest review and audit for a given proof type
   # @param proof_type [String] The type of proof ("income" or "residency")
   # @return [Array] A two-element array containing the latest review and audit
   def latest_review_and_audit(proof_type)
     latest_review = proof_reviews.where(proof_type: proof_type).order(created_at: :desc).first
-    action_name = "#{proof_type}_proof_submitted"
-    latest_audit = events.where(action: action_name).order(created_at: :desc).first
+    latest_audit = latest_proof_submission_event(proof_type)
 
     [latest_review, latest_audit]
+  end
+
+  def latest_proof_submission_event(proof_type)
+    proof_type = proof_type.to_s
+    events
+      .where(
+        "(action = :generic_action AND metadata->>'proof_type' = :proof_type) OR action IN (:legacy_actions)",
+        generic_action: 'proof_submitted',
+        proof_type: proof_type,
+        legacy_actions: ["#{proof_type}_proof_submitted", "#{proof_type}_proof_attached"]
+      )
+      .order(created_at: :desc)
+      .first
   end
 
   # Application status change tracking
@@ -387,6 +455,40 @@ class Application < ApplicationRecord
   # New method to check if the application is for a dependent (managed by a guardian)
   def for_dependent?
     managing_guardian_id.present?
+  end
+
+  # --- Workflow predicates ---
+
+  def residency_proof_required?
+    true
+  end
+
+  def income_collection_enabled?
+    if persisted?
+      income_proof_required?
+    else
+      FeatureFlag.enabled?(:income_proof_required)
+    end
+  end
+
+  def voucher_fulfillment?
+    fulfillment_type_voucher?
+  end
+
+  def equipment_fulfillment?
+    fulfillment_type_equipment?
+  end
+
+  def required_proofs_approved?
+    residency_proof_status_approved? &&
+      (!income_proof_required? || income_proof_status_approved?)
+  end
+
+  def voucher_issuable?
+    voucher_fulfillment? &&
+      status_approved? &&
+      medical_certification_status_approved? &&
+      !vouchers.exists?
   end
 
   # Returns the guardian relationship type for this application
@@ -458,6 +560,20 @@ class Application < ApplicationRecord
   end
 
   private
+
+  def stamp_workflow_defaults!
+    self.fulfillment_type = FeatureFlag.enabled?(:vouchers_enabled) ? :voucher : :equipment
+    self.income_proof_required = FeatureFlag.enabled?(:income_proof_required)
+  end
+
+  def scrub_income_fields
+    self.annual_income = nil
+    self.household_size = nil
+  end
+
+  def should_scrub_income?
+    !income_collection_enabled? && (new_record? || status_draft?)
+  end
 
   def log_status_change
     # Guard clause to prevent infinite recursion
@@ -554,7 +670,7 @@ class Application < ApplicationRecord
 
   def pending_proof_types
     types = []
-    types << 'income' if income_proof_status_not_reviewed?
+    types << 'income' if income_proof_required? && income_proof_status_not_reviewed?
     types << 'residency' if residency_proof_status_not_reviewed?
     types
   end

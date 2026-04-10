@@ -14,6 +14,7 @@ module Applications
     end
 
     teardown do
+      Current.user = nil
       Current.paper_context = nil
     end
 
@@ -61,6 +62,33 @@ module Applications
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :approved)
       assert_nil review.rejection_reason_code
       assert_nil review.rejection_reason
+    end
+
+    test 'approved review uses callback chain for auto-approval audit' do
+      app = create(:application, :in_progress, :income_not_required)
+      app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
+      app.residency_proof.attach(
+        io: StringIO.new('test residency proof'),
+        filename: 'residency-proof.pdf',
+        content_type: 'application/pdf'
+      )
+      app.stubs(:purge_rejected_proof).returns(true)
+      Current.user = @admin
+
+      reviewer = ProofReviewer.new(app, @admin)
+
+      assert_difference -> { app.status_changes.count }, 1 do
+        assert_difference -> { Event.where(action: 'application_status_changed', auditable: app).count }, 1 do
+          assert_difference -> { Event.where(action: 'application_auto_approved', auditable: app).count }, 1 do
+            reviewer.review(proof_type: :residency, status: :approved)
+          end
+        end
+      end
+
+      app.reload
+      assert app.status_approved?
+      status_change = app.status_changes.order(:created_at).last
+      assert_equal @admin, status_change.user
     end
   end
 end

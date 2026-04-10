@@ -92,7 +92,6 @@ module Applications
       validate_proof_attachment_if_approved
       update_proof_status_column
       @application.reload
-      check_for_auto_approval
     end
 
     def validate_proof_attachment_if_approved
@@ -106,13 +105,8 @@ module Applications
     end
 
     def update_proof_status_column
-      # IMPORTANT: Using update_column bypasses ActiveRecord callbacks and validations.
-      # This means after_save callbacks like purge_proof_if_rejected won't be triggered.
-      # We must explicitly call purge_if_rejected method below for rejected proofs.
-      # This design pattern is important for handling attachment purges when rejecting proofs.
       column_name = "#{@proof_type_key}_proof_status"
-      status_enum_value = Application.send(column_name.pluralize.to_s).fetch(@status_key.to_sym)
-      @application.update_column(column_name, status_enum_value) # rubocop:disable Rails/SkipsModelValidations
+      @application.update!(column_name => @status_key)
     end
 
     # Explicitly call purge logic on the application if the status was just set to rejected
@@ -122,34 +116,6 @@ module Applications
       Rails.logger.info "[ProofReviewer] Status is rejected for #{@proof_type_key}, attempting purge."
       # Call a method on the application model to handle the purge
       @application.purge_rejected_proof(@proof_type_key)
-    end
-
-    def check_for_auto_approval
-      # Only check for auto-approval if we're not already approved
-      return if @application.status_approved?
-
-      # Check if all requirements are met
-      if @application.income_proof_status_approved? &&
-         @application.residency_proof_status_approved? &&
-         @application.medical_certification_status_approved?
-
-        # Auto-approve using update_column to avoid triggering other validations
-        @application.update_column(:status, Application.statuses[:approved]) # rubocop:disable Rails/SkipsModelValidations
-
-        # Create an event for this automated approval
-        AuditEventService.log(
-          actor: @admin,
-          action: 'application_auto_approved',
-          auditable: @application,
-          metadata: {
-            application_id: @application.id,
-            timestamp: Time.current.iso8601,
-            trigger: "proof_#{@proof_type_key}_approved"
-          }
-        )
-
-        Rails.logger.info "Application #{@application.id} auto-approved after all proofs were validated"
-      end
     end
   end
 end

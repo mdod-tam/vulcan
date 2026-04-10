@@ -1,310 +1,186 @@
 # Paper Application Architecture (Rails)
 
-A concise reference for how the admin-only “paper” application path works and how to extend or test it safely.
-
----
+This document describes the current admin-only paper application workflow.
 
 ## 1 · High-Level Flow
 
-```
-Admin → Admin::PaperApplicationsController → Applications::PaperApplicationService
-            ↘ proofs (accept/reject) ↙
-                     Audits / Notifications
-```
-
-* **Why a separate path?** Paper apps bypass online-only validations (proof uploads, attachment checks) while still preserving audit trails.
-* **Key difference from portal:** Uses `Current.paper_context = true` to bypass some validations. Approvals still require attachments; only rejections may proceed without a file.
-
----
-
-## 2 · Key Components
-
-### 2.1 · Applications::PaperApplicationService
-
-```ruby
-service = Applications::PaperApplicationService.new(
-  params: paper_application_processing_params,
-  admin: current_user
-)
-service.create  # returns true/false
+```text
+Admin
+  -> Admin::PaperApplicationsController
+  -> Applications::PaperApplicationService
+  -> GuardianDependentManagementService / UserCreationService
+  -> Application
+  -> ProofAttachmentService / MedicalCertificationAttachmentService
+  -> NotificationService / Mailers / AuditEventService
 ```
 
-| Responsibility | Notes |
-|----------------|-------|
-| Constituent lookup / create | Delegates to `GuardianDependentManagementService` and `UserCreationService` |
-| GuardianRelationship | Handled by `GuardianDependentManagementService` |
-| Proof processing | Upload, accept with file, reject without file using `ProofAttachmentService` |
-| Thread-local context | `Current.paper_context = true` (auto-managed in ensure block) |
-| Audits & notifications | Uses `AuditEventService` and `NotificationService` |
+Paper intake uses `Current.paper_context = true` during the main service flow so paper-specific validation bypasses remain active while the application and proofs are created.
 
----
+## 2 · Main Entry Points
 
-### 2.2 · Admin::PaperApplicationsController
+### 2.1 Controller
 
-```ruby
-def create
-  service = Applications::PaperApplicationService
-              .new(params: paper_application_processing_params, admin: current_user)
+`Admin::PaperApplicationsController` currently:
 
-  if service.create
-    redirect_to admin_application_path(service.application),
-                notice: generate_success_message(service.application)
-  else
-    handle_service_failure(service)
-  end
-end
-```
+- normalizes guardian/dependent/application/proof params
+- derives `email_strategy`, `phone_strategy`, and `address_strategy`
+- calls `Applications::PaperApplicationService` for create and update
+- sends a follow-up medical-certification notification in specific rejected/no-provider cases after a successful create
 
-Handles web UI, guardian search/creation, proof buttons, and FPL checks.
+### 2.2 Service
 
----
+`Applications::PaperApplicationService` currently:
 
-## 3 · Thread-Local Context
+- processes self-applicant, dependent, and existing-dependent scenarios
+- creates or reuses guardian/dependent users
+- creates the paper `Application`
+- sets `submission_method` to `paper`
+- determines the initial application status
+- processes income, residency, and medical-certification proof actions
+- sends account-creation and proof-rejection notifications after successful completion
+
+## 3 · Current.paper_context
+
+The service wraps create/update flows like this:
 
 ```ruby
 Current.paper_context = true
 begin
-  # create application, process proofs, etc.
+  # create/update application and process proof actions
 ensure
   Current.paper_context = nil
 end
 ```
 
-* Skips certain validations for paper flows via `Current.paper_context`.
-* Approvals still require an attached file; rejections do not.
-* Always reset in `ensure` or test teardown.
+This is the current mechanism used to bypass proof-related validations during paper processing.
 
----
+## 4 · Guardian and Dependent Handling
 
-## 4 · Guardian / Dependent Logic
+Current dependent intake supports:
 
-| Flow | Key Points |
-|------|------------|
-| **Self-applicant** | `managing_guardian_id` is `nil`. |
-| **Dependent** | Guardian selected/created → `GuardianRelationship` made → app’s `managing_guardian_id` set. |
+- selecting an existing guardian
+- creating a new guardian
+- selecting an existing dependent for a guardian
+- creating a new dependent
 
-Guardian creation snippet:
+Current relationship handling:
 
-```ruby
-# Actual implementation delegates to GuardianDependentManagementService:
-service = GuardianDependentManagementService.new(params)
-result = service.process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
+- `GuardianRelationship` is created when needed
+- `Application#managing_guardian_id` is set for dependent applications
 
-if result.success?
-  @guardian_user_for_app = result.data[:guardian]
-  @constituent = result.data[:dependent]
-end
-```
+Current contact-strategy handling:
 
----
+- `email_strategy`
+- `phone_strategy`
+- `address_strategy`
 
-## 5 · Proof Processing
+These strategies are resolved by the controller and applied by `Applications::GuardianDependentManagementService`.
 
-Paper applications can process proofs in two ways:
+## 5 · Current Proof Processing
 
-1. **Accept with file**: Uses `ProofAttachmentService.attach_proof` to attach and approve
-2. **Reject without file**: Uses `ProofAttachmentService.reject_proof_without_attachment`
+### 5.1 Income and residency
 
-```ruby
-# Accept with file
-result = ProofAttachmentService.attach_proof(
-  application: @application,
-  proof_type: type,
-  blob_or_file: blob_or_file,
-  status: :approved,
-  admin: @admin,
-  submission_method: :paper
-)
-```
+Paper proof actions support:
 
-<!-- Accept without file is not allowed when approving. Selecting approve without a file will return a validation error. -->
+1. `accept` / `approved`
+2. `reject` / `rejected`
+3. `none`
 
-```ruby
-# Reject
-ProofAttachmentService.reject_proof_without_attachment(
-  application: @application,
-  proof_type: type,
-  admin: @admin,
-  reason: params["#{type}_proof_rejection_reason"],
-  notes: params["#{type}_proof_rejection_notes"],
-  submission_method: :paper
-)
-```
+Current service behavior:
 
----
+- accepted income/residency proofs use `ProofAttachmentService.attach_proof`
+- rejected income/residency proofs use `ProofAttachmentService.reject_proof_without_attachment`
+- approval requires a file or signed blob ID
 
-## 6 · Form Front-End
+### 5.2 Medical certification
 
-| Stimulus Controller | Role |
-|---------------------|------|
-| `paper_application_controller` | Overall coordination / income check |
-| `applicant_type_controller`    | Adult vs dependent toggle |
-| `dependent_fields_controller`  | Dependent-only inputs |
-| `guardian_picker_controller`   | Search & select/create guardian |
-| `document_proof_handler_controller` | Accept / reject buttons |
+Paper medical-certification actions support:
 
-Form sections (in order):
+1. `approved`
+2. `rejected`
+3. `not_requested`
 
-1. Applicant type  
-2. Guardian info (if dependent)  
-3. Applicant info  
-4. Application details (household size, income, provider)  
-5. Proof documents  
+Current service behavior:
 
----
+- approval uses `MedicalCertificationAttachmentService.attach_certification`
+- rejection uses `MedicalCertificationAttachmentService.reject_certification`
+- status-only updates after creation are handled from the admin application show page
 
-## 7 · Parameter Shape
+## 6 · Initial Status Assignment
+
+`Applications::PaperApplicationService` currently sets the initial application status as follows:
+
+- `awaiting_proof` when medical-provider information is intentionally missing
+- `awaiting_proof` when either income or residency proof is rejected or marked as none
+- `in_progress` when the paper application includes the expected starting documentation
+
+## 7 · Front-End Pieces
+
+Current paper form controllers include:
+
+- `paper_application_controller`
+- `applicant_type_controller`
+- `dependent_fields_controller`
+- `guardian_picker_controller`
+- `document_proof_handler_controller`
+
+The dependent form currently includes checkbox-driven controls for using guardian email, phone, and address.
+
+## 8 · Parameter Shape
+
+The paper service currently works from a normalized parameter hash shaped like:
 
 ```ruby
 {
-  applicant_type:   "dependent",
-  relationship_type:"Parent",
-  guardian_id:      123,           # or guardian_attributes
-  guardian_attributes: { ... },
-  constituent: { ... },            # applicant
-  email_strategy:  "dependent",    # or "guardian"
-  phone_strategy:  "guardian",
-  address_strategy:"guardian",
-  application: { household_size:3, annual_income:25_000 },
-  income_proof_action:    "accept",
+  applicant_type: "dependent",
+  relationship_type: "Parent",
+  guardian_id: 123,
+  dependent_id: 456,
+  email_strategy: "guardian",
+  phone_strategy: "guardian",
+  address_strategy: "guardian",
+  constituent: { ... },
+  application: { ... },
+  income_proof_action: "accept",
   residency_proof_action: "reject",
-  # proof files or signed IDs may be included
+  medical_certification_action: "not_requested"
 }
 ```
 
-Processing steps:
+Uploads can be sent as direct file params or signed blob IDs.
 
-1. Validate & cast → **FPL threshold check**.  
-2. Process guardian (if dependent).  
-3. Process applicant.  
-4. Apply contact strategies.  
-5. Create GuardianRelationship.  
-6. Build Application.  
-7. Handle proofs.  
-8. Audit & notify.
+## 9 · Notifications and Auditing
 
----
+Current paper-flow notifications include:
 
-## 8 · Testing Guide
+- account-creation notifications for newly created users
+- proof-rejection notifications for rejected paper proofs
+- follow-up medical-certification notifications in specific rejected/no-provider cases
 
-### 8.1 · Context Setup
+Current paper-flow auditing includes:
 
-```ruby
-setup    { Current.paper_context = true }
-teardown { Current.paper_context = nil }
-```
+- `application_created` or `application_updated`
+- proof attachment/rejection audit events from the attachment services
+- any `ProofReview` or `ApplicationStatusChange` records created by the downstream services
 
-### 8.2 · Guardian Relationship
+## 10 · Medical Certification Channels
 
-```ruby
-assert_difference ['GuardianRelationship.count', 'Application.count'] do
-  service = Applications::PaperApplicationService
-              .new(params: dependent_params, admin: @admin)
-  assert service.create
-  assert service.application.persisted?
-end
-```
+Current paper-related medical-certification handling includes:
 
-<!-- Removed: approval without file is not supported. Approvals require an attachment. -->
+- email request delivery through `Applications::MedicalCertificationService`
+- digital signing requests through `DocumentSigning::SubmissionService`
+- fax-based provider rejection notices through `MedicalProviderNotifier`
+- admin upload/review from the application detail page
 
----
+Email and inbound fax automation are not yet fully working; consult TODOs for the remaining steps.
 
-## 9 · Error Handling
+## 11 · Testing Notes
 
-```ruby
-def handle_service_failure(service, existing_application = nil)
-  error_msg = if service.errors.any?
-                service.errors.join('; ')
-              else
-                'An error occurred while processing the application.'
-              end
-  
-  flash.now[:alert] = error_msg
-  repopulate_form_data(service, existing_application)
-  render(existing_application ? :edit : :new, status: :unprocessable_entity)
-end
-```
+Current tests around this flow live primarily in:
 
-Typical failures: FPL too high, missing guardian data, proof issues, user validation errors.
+- `test/controllers/admin/paper_applications_controller_test.rb`
+- `test/services/applications/paper_application_service_test.rb`
+- `test/system/admin/paper_applications_test.rb`
+- `test/system/admin/paper_application_dependent_guardian_test.rb`
 
----
-
-## 10 · Medical Certification Submission Methods
-
-Paper applications support the same medical certification submission methods as online applications:
-
-1. **Email**: Automated processing via `MedicalCertificationMailbox`
-2. **Fax**: **PARTIALLY IMPLEMENTED** - Outbound only (see gaps below)
-3. **Snail Mail**: Admin receives mail, scans document, uploads via admin interface (`admin/applications#show`)
-
-All methods update the `medical_certification_status` to 'received' and create appropriate audit trails.
-
-### 10.1 · Fax Implementation Status
-
-**Currently Implemented:**
-- ✅ **Outbound Fax Sending**: `FaxService` + `MedicalProviderNotifier` can send certification requests via Twilio
-- ✅ **Fax Status Tracking**: `TwilioController#fax_status` webhook handles delivery status updates
-- ✅ **Fallback Logic**: Auto-falls back to email if fax fails
-- ✅ **PDF Generation**: Creates formatted PDFs for fax transmission
-
-**Implementation Gaps (Manual Process Required):**
-- ❌ **Inbound Fax Processing**: No automated processing of incoming faxes from providers
-- ❌ **Fax-to-Email Bridge**: No Twilio webhook to convert received faxes to email for mailbox processing
-- ❌ **Fax Media URL Handling**: `FaxService#send_pdf_fax` uses placeholder `file://` URLs (needs S3 integration)
-
-### 10.2 · Required Work for Full Fax Support
-
-To fully implement inbound fax processing, the following components need to be added:
-
-1. **Twilio Fax Receive Webhook** (`webhooks/twilio#fax_received`):
-   ```ruby
-   # Handle incoming faxes from Twilio
-   def fax_received
-     media_url = params[:MediaUrl]
-     from_number = params[:From]
-     # Download fax media, identify application, attach to medical_certification
-   end
-   ```
-
-2. **Fax Media Processing Service**:
-   ```ruby
-   # Service to download and process fax media from Twilio
-   class FaxMediaProcessor
-     def process_inbound_fax(media_url:, from_number:, fax_sid:)
-       # Download media, identify provider/application, create attachment
-     end
-   end
-   ```
-
-3. **Provider Phone Number Mapping**:
-   ```ruby
-   # Add fax number tracking to applications table or medical_providers
-   add_column :applications, :medical_provider_fax, :string
-   # Or create MedicalProvider model with phone/fax/email mapping
-   ```
-
-4. **S3 Integration for Outbound Fax**:
-   ```ruby
-   # Update FaxService to upload PDFs to S3 before sending
-   def upload_pdf_to_s3(pdf_path)
-     # Upload to S3, return public URL for Twilio media_url
-   end
-   ```
-
-**Current Workaround**: Providers can fax to a dedicated fax number, admin manually scans/uploads via `admin/applications#show` interface.
-
----
-
-## 11 · Current Implementation Details
-
-The current implementation has the following characteristics:
-
-*   **Validation**: Some validation logic resides in client-side JavaScript.
-*   **Service Layer**: The `PaperApplicationService` handles the core creation and update logic, but the controller still performs significant processing.
-*   **Views**: The form is rendered using ERB partials, which contain some repetitive logic.
-
-Recent controller enhancements include:
-
-*   Unified `constituent` parameters.
-*   The addition of `email_strategy`, `phone_strategy`, and `address_strategy` to manage contact information.
-*   Inference of dependent applications when `guardian_attributes` are present.
+When writing paper-flow tests, keep `Current.paper_context` behavior in mind.

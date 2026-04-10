@@ -1,5 +1,6 @@
 <div class="space-y-6" data-controller="stream-ready">
 
+  <% if @application.income_proof_required? %>
   <!-- Income Proof Section -->
   <div class="border rounded-lg overflow-hidden bg-white">
     <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
@@ -162,7 +163,7 @@
       <div class="mt-4 flex space-x-2">
 
         <% if @application.income_proof.attached? %>
-          <% if @application.income_proof_status == "approved" && !@application.needs_proof_type_review?("income") %>
+          <% if @application.proof_review_state("income") == :approved_current %>
             <!-- If proof is approved and there's no newer submission, open in new tab -->
             <%= link_to rails_blob_path(@application.income_proof, disposition: :inline),
                     target: "_blank",
@@ -189,6 +190,7 @@
       </div>
     </div>
   </div>
+  <% end %>
 
   <!-- Residency Proof Section -->
   <div class="border rounded-lg overflow-hidden bg-white">
@@ -351,7 +353,7 @@
       <!-- Action Buttons -->
       <div class="mt-4 flex space-x-2">
         <% if @application.residency_proof.attached? %>
-          <% if @application.residency_proof_status == "approved" && !@application.needs_proof_type_review?("residency") %>
+          <% if @application.proof_review_state("residency") == :approved_current %>
             <!-- If proof is approved and there's no newer submission, open in new tab -->
             <%= link_to rails_blob_path(@application.residency_proof, disposition: :inline),
                     target: "_blank",

@@ -269,6 +269,18 @@ FactoryBot.define do
       end
     end
 
+    trait :voucher_fulfillment do
+      after(:create) do |app|
+        app.update_columns(fulfillment_type: Application.fulfillment_types[:voucher])
+      end
+    end
+
+    trait :income_not_required do
+      after(:create) do |app|
+        app.update_columns(income_proof_required: false)
+      end
+    end
+
     # DEPRECATED: Use :for_dependent trait for more clarity.
     trait :submitted_by_guardian do
       for_dependent # Delegates to the new :for_dependent trait

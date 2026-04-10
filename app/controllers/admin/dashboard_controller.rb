@@ -51,8 +51,7 @@ module Admin
       when 'approved'
         scope.where(status: :approved)
       when 'proofs_needing_review'
-        scope.where(income_proof_status: 0)
-             .or(scope.where(residency_proof_status: 0))
+        scope.with_proofs_needing_review
       when 'awaiting_medical_response'
         scope.where(status: :awaiting_dcf)
       when 'training_requests'

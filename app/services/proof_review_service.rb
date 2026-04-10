@@ -35,7 +35,13 @@ class ProofReviewService < BaseService
   def validate_params
     return failure('Proof type and status are required') if proof_type.blank? || status.blank?
 
-    return failure('Invalid proof type') unless %w[income residency].include?(proof_type)
+    return failure('Invalid proof type') unless ProofReview.reviewable_proof_type?(proof_type)
+
+    if proof_type == 'income' && !application.income_proof_required?
+      return failure('Income proof review is not applicable for this application')
+    end
+
+    return failure('Proof is not reviewable for this application') unless application.proof_type_reviewable?(proof_type)
 
     return failure('Invalid status') unless %w[approved rejected].include?(status)
 

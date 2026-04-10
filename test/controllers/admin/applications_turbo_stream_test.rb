@@ -16,8 +16,13 @@ module Admin
       @application.income_proof.attach(io: StringIO.new('test content'), filename: 'income.pdf', content_type: 'application/pdf')
     end
 
+    def stub_reviewable_proofs!
+      Application.any_instance.stubs(:proof_type_reviewable?).returns(true)
+    end
+
     test 'approve income proof responds with turbo streams: update modals container and replace attachments' do
       attach_income_proof!
+      stub_reviewable_proofs!
 
       approved_review = build(
         :proof_review,
@@ -44,6 +49,7 @@ module Admin
 
     test 'reject income proof responds with turbo streams: update modals container and replace attachments' do
       attach_income_proof!
+      stub_reviewable_proofs!
 
       rejected_review = build(
         :proof_review,
@@ -72,6 +78,7 @@ module Admin
     test 'approve residency proof responds with turbo streams: update modals container and replace attachments' do
       # Attach residency proof and keep income untouched
       @application.residency_proof.attach(io: StringIO.new('test content'), filename: 'residency.pdf', content_type: 'application/pdf')
+      stub_reviewable_proofs!
 
       approved_review = build(
         :proof_review,

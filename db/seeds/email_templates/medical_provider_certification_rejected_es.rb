@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 # Seed File for Spanish "medical_provider_certification_rejected"
-EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected_es', format: :text, locale: 'es') do |template|
+scope = { name: 'medical_provider_certification_rejected', format: :text }
+scope[:locale] = 'es' if EmailTemplate.column_names.include?('locale')
+
+EmailTemplate.create_or_find_by!(scope) do |template|
   template.subject = 'Certificación de Discapacidad Rechazada'
   template.description = 'Enviado a un proveedor médico cuando se rechaza el formulario de certificación de discapacidad enviado.'
   template.body = <<~TEXT
@@ -24,8 +27,9 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected_
 
     Por favor envíe un nuevo formulario de certificación de discapacidad utilizando uno de los siguientes métodos:
 
-    1. Correo electrónico: Responda a este correo electrónico con el formulario de certificación actualizado adjunto
-    2. Fax: Envíe el formulario actualizado al 410-767-4276
+    1. Descargue el formulario: %<download_form_url>s
+    2. Correo electrónico: Responda a este correo electrónico con el formulario de certificación actualizado adjunto
+    3. Fax: Envíe el formulario actualizado al 410-767-4276
 
     Gracias por su ayuda para que este solicitante acceda a los servicios de telecomunicaciones que necesita.
 
@@ -38,7 +42,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_rejected_
     Telecomunicaciones Accesibles de Maryland (MAT) - Mejorando vidas a través de la comunicación accesible.
   TEXT
   template.variables = {
-    'required' => %w[constituent_full_name application_id rejection_reason],
+    'required' => %w[constituent_full_name application_id rejection_reason download_form_url],
     'optional' => %w[remaining_attempts]
   }
   template.version = 1

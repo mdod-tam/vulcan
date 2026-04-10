@@ -28,6 +28,25 @@
 #       enabled: "ON"
 
 en:
+  document_signing:
+    medical_certification_request:
+      submission_name: "Medical Certification - %{constituent_full_name} (Application %{application_id})"
+      subject: "Disability Certification Request for %{constituent_full_name}"
+      body: |
+        Please complete the disability certification request for %{constituent_full_name}.
+
+        Applicant information:
+        - Name: %{constituent_full_name}
+        - Date of Birth: %{constituent_dob_formatted}
+        - Phone: %{constituent_phone_formatted}
+        - Email: %{constituent_email}
+        - Address: %{constituent_address_formatted}
+        - Application ID: %{application_id}
+
+        Use the signing link below to review, complete, and sign the certification:
+        {{submitter.link}}
+
+        If you have questions, please contact %{support_email}.
   shared:
     unauthorized: "Not authorized"
     enabled: "Enabled"
@@ -88,7 +107,6 @@ en:
       upload_medical_certification:
         m_blank: "Please select whether to accept or reject the certification."
         m_rejection_reason: "Please select a rejection reason"
-      process_accepted_certification:
         c_file_select: "Please select a file to upload"
         c_upload_pass: "Disability certification successfully uploaded and approved."
     email_templates:

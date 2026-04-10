@@ -4,17 +4,21 @@
    <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
  </header>
 
+ <% edit_form_data = {
+   controller: "currency-formatter autosave",
+   autosave_target: "form",
+   autosave_url_value: autosave_field_constituent_portal_application_path(@application),
+   autosave_debounce_wait_value: 1000
+ }
+ if @application.income_collection_enabled?
+   edit_form_data[:controller] = "income-validation #{edit_form_data[:controller]}"
+   edit_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
+   edit_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+ end %>
  <%= form_with(model: [:constituent_portal, @application], 
               local: true, 
               class: "space-y-8", 
-              data: { 
-                controller: "income-validation currency-formatter autosave", 
-                autosave_target: "form",
-                autosave_url_value: autosave_field_constituent_portal_application_path(@application),
-                autosave_debounce_wait_value: 1000,
-                "income-validation-fpl-thresholds-value": fpl_thresholds_json,
-                "income-validation-modifier-value": fpl_modifier_value
-              }) do |f| %>
+              data: edit_form_data) do |f| %>
    
    <!-- Autosave status indicator -->
    <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden"></div>
@@ -72,6 +76,7 @@
        </div>
 
       <!-- Household Information Section -->
+      <% if @application.income_collection_enabled? %>
       <fieldset class="space-y-6">
         <legend class="text-lg font-medium text-gray-900">Household Information</legend>
         
@@ -113,6 +118,7 @@
 
        <!-- Income Threshold Warning Container -->
        <div id="income-threshold-warning" hidden class="hidden" data-income-validation-target="warningContainer"></div>
+      <% end %>
 
         <!-- Applicant and Guardian Display -->
         <section aria-labelledby="applicant-guardian-title" class="space-y-4 p-4 bg-gray-50 rounded">
@@ -222,6 +228,7 @@
                  accept: ".pdf,.jpg,.jpeg,.png" %>
            </div>
 
+           <% if @application.income_collection_enabled? %>
            <div>
              <%= f.label :income_proof, "Income Verification",
                  class: "block text-sm font-medium text-gray-700 required-label" %>
@@ -233,6 +240,7 @@
                  "aria-describedby": "income-hint",
                  accept: ".pdf,.jpg,.jpeg,.png" %>
            </div>
+           <% end %>
          </div>
        </section>
      </div>

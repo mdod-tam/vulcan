@@ -97,5 +97,18 @@ module Admin
       @feature_flag.reload
       assert_equal 'test_feature', @feature_flag.name
     end
+
+    test 'update rolls back flag change when audit raises non-validation error' do
+      AuditEventService.stubs(:log).raises(RuntimeError, 'simulated audit failure')
+
+      assert_no_difference('Event.count') do
+        patch :update, params: { id: @feature_flag.id, feature_flag: { enabled: false } }
+      end
+
+      @feature_flag.reload
+      assert @feature_flag.enabled?, 'Flag should remain unchanged after rollback'
+      assert_redirected_to admin_feature_flags_path
+      assert_match 'simulated audit failure', flash[:alert]
+    end
   end
 end

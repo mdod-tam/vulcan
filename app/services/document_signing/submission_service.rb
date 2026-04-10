@@ -67,13 +67,17 @@ module DocumentSigning
 
     def create_submission!
       data = {
-        name: "Medical Certification - App #{@application.id}",
+        name: submission_name,
         submitters: [{
           role: 'Medical Provider',
           email: @application.medical_provider_email,
           name: @application.medical_provider_name
         }],
         send_email: true,
+        message: {
+          subject: request_message_subject,
+          body: request_message_body
+        },
         completed_redirect_url: Rails.application.routes.url_helpers.admin_application_url(
           @application,
           host: Rails.application.config.action_mailer.default_url_options[:host]
@@ -84,6 +88,57 @@ module DocumentSigning
       # Note: This assumes template-based submission. If using HTML, the implementation
       # would call ::Docuseal.create_submission_from_html instead
       ::Docuseal.create_submission(data)
+    end
+
+    def request_message_subject
+      I18n.t(
+        'document_signing.medical_certification_request.subject',
+        locale: request_locale,
+        constituent_full_name: constituent.full_name
+      )
+    end
+
+    def request_message_body
+      I18n.t(
+        'document_signing.medical_certification_request.body',
+        locale: request_locale,
+        constituent_full_name: constituent.full_name,
+        constituent_dob_formatted: constituent.date_of_birth&.strftime('%m/%d/%Y') || localized_not_provided,
+        constituent_phone_formatted: constituent.phone.presence || localized_not_provided,
+        constituent_email: constituent.email.presence || localized_not_provided,
+        constituent_address_formatted: constituent_address_formatted,
+        application_id: @application.id,
+        support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
+      )
+    end
+
+    def submission_name
+      I18n.t(
+        'document_signing.medical_certification_request.submission_name',
+        locale: request_locale,
+        constituent_full_name: constituent.full_name,
+        application_id: @application.id
+      )
+    end
+
+    def request_locale
+      constituent.locale.presence || I18n.default_locale.to_s
+    end
+
+    def constituent
+      @application.user
+    end
+
+    def constituent_address_formatted
+      [
+        constituent.physical_address_1,
+        constituent.physical_address_2,
+        "#{constituent.city}, #{constituent.state} #{constituent.zip_code}"
+      ].compact_blank.join("\n").presence || localized_not_provided
+    end
+
+    def localized_not_provided
+      request_locale.to_s == 'es' ? 'No proporcionado' : 'Not Provided'
     end
   end
 end
