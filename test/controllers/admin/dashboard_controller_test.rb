@@ -8,6 +8,7 @@ module Admin
       # Use factory and standard helper for authentication
       @admin = create(:admin)
       sign_in_as(@admin)
+      Rails.cache.clear
 
       # Create applications with different statuses for testing
       @draft_app = create(:application, :draft, user: create(:constituent, email: "draft#{@admin.email}"))
@@ -124,7 +125,56 @@ module Admin
                       "Application #{application_id} should be included in the filtered results"
     end
 
+    def test_dashboard_training_requests_count_falls_back_to_sessions_when_notifications_absent
+      clear_training_request_sources
+
+      trainer = create(:trainer)
+      session_app = create(:application, :approved, user: create(:constituent, email: "session_only#{@admin.email}"))
+      TrainingSession.create!(
+        application: session_app,
+        trainer: trainer,
+        scheduled_for: 1.day.from_now,
+        status: :requested
+      )
+
+      get admin_dashboard_path
+      assert_response :success
+
+      assert_equal 1, assigns(:metrics)[:training_requests_count],
+                   'Dashboard should fall back to pending training sessions when no notifications exist'
+    end
+
+    def test_dashboard_training_requests_count_prefers_notifications_over_sessions
+      clear_training_request_sources
+
+      notification_app = create(:application, :approved, user: create(:constituent, email: "notification_only#{@admin.email}"))
+      session_app = create(:application, :approved, user: create(:constituent, email: "session_ignored#{@admin.email}"))
+      trainer = create(:trainer)
+
+      Notification.create!(
+        action: 'training_requested',
+        notifiable: notification_app,
+        recipient: @admin,
+        actor: notification_app.user,
+        metadata: { application_id: notification_app.id }
+      )
+
+      TrainingSession.create!(
+        application: session_app,
+        trainer: trainer,
+        scheduled_for: 1.day.from_now,
+        status: :requested
+      )
+
+      get admin_dashboard_path
+      assert_response :success
+
+      assert_equal 1, assigns(:metrics)[:training_requests_count],
+                   'Dashboard should count notification-backed requests and ignore session-only apps when notifications exist'
+    end
+
     def teardown
+      Rails.cache.clear
       Current.reset if defined?(Current) && Current.respond_to?(:reset)
     end
 
@@ -159,6 +209,7 @@ module Admin
     def setup_training_requests
       # Clear any existing training request notifications to start fresh.
       Notification.where(action: 'training_requested').delete_all
+      Rails.cache.clear
 
       # Create exactly 4 training request notifications with unique applications.
       4.times do |i|
@@ -183,6 +234,12 @@ module Admin
                    'Database should have 4 distinct applications with training requests'
       assert_equal 4, assigns(:metrics)[:training_requests_count],
                    'Controller should assign 4 training requests'
+    end
+
+    def clear_training_request_sources
+      Notification.where(action: 'training_requested').delete_all
+      TrainingSession.where(status: %i[requested scheduled confirmed]).delete_all
+      Rails.cache.clear
     end
   end
 end
