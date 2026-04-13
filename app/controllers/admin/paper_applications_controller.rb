@@ -11,7 +11,7 @@ module Admin
       first_name middle_initial last_name email phone phone_type
       physical_address_1 physical_address_2 city state zip_code
       communication_preference locale date_of_birth
-      preferred_means_of_communication referral_source
+      preferred_means_of_communication referral_source newsletter_signup
     ].freeze
 
     USER_DISABILITY_FIELDS = %i[
