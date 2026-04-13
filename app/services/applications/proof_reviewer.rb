@@ -36,6 +36,8 @@ module Applications
 
       @application.reload
       @application.reconcile_workflow_state!(actor: @admin, trigger: :proof_review_approved)
+    rescue StandardError => e
+      Rails.logger.error "Workflow reconciliation failed for Application #{@application.id}: #{e.message}\n#{e.backtrace.join("\n")}"
     end
 
     def create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)

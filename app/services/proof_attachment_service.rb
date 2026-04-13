@@ -427,6 +427,8 @@ class ProofAttachmentService
         actor: actor,
         trigger: :"#{proof_type}_proof_approved"
       )
+    rescue StandardError => e
+      Rails.logger.error "Workflow reconciliation failed for Application #{application.id}: #{e.message}\n#{e.backtrace.join("\n")}"
     end
 
     def send_notification(context, event_metadata)

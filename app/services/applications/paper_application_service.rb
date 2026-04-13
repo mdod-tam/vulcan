@@ -6,7 +6,7 @@ module Applications
   class PaperApplicationService < BaseService
     include Rails.application.routes.url_helpers
 
-    attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app
+    attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false)
       super()
@@ -17,6 +17,7 @@ module Applications
       @guardian_user_for_app = nil
       @errors = []
       @temp_passwords = {}
+      @reconciliation_note = nil
       @skip_income_validation = skip_income_validation
       @skip_proof_processing = skip_proof_processing
     end
@@ -34,16 +35,16 @@ module Applications
       end
 
       if application_created
-        # Reconcile outside the transaction so proof writes are committed regardless of
-        # reconciliation outcome. Failure here means the application is stuck at the wrong
-        # status, so we return false and surface the error to the admin.
-        return false unless reconcile_after_paper_write(:paper_application_created)
-
         begin
           handle_successful_application(:create)
         rescue StandardError => e
           log_error(e, 'Failed to send notifications after successful application creation')
         end
+
+        # Reconcile outside the transaction so proof writes are committed regardless of
+        # reconciliation outcome. Failure here means the application is stuck at the wrong
+        # status, and we surface that to the admin via reconciliation_note.
+        reconcile_after_paper_write(:paper_application_created)
       end
 
       application_created
@@ -69,11 +70,7 @@ module Applications
         update_succeeded = true
       end
 
-      if update_succeeded
-        return false unless reconcile_after_paper_write(:paper_application_updated)
-
-        handle_successful_application(:update) if @application.persisted?
-      end
+      reconcile_after_paper_write(:paper_application_updated) if update_succeeded
 
       update_succeeded
     rescue StandardError => e
@@ -461,11 +458,9 @@ module Applications
 
     def reconcile_after_paper_write(trigger)
       @application.reload.reconcile_workflow_state!(actor: @admin, trigger: trigger)
-      true
     rescue StandardError => e
       log_error(e, "Workflow reconciliation failed after paper application #{@application&.id} #{trigger}")
-      @errors << "Workflow status update failed: #{e.message}"
-      false
+      @reconciliation_note = 'Workflow status update failed -- please verify this application status and advance it manually if needed.'
     end
 
     def process_proof_uploads
