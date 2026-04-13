@@ -9,7 +9,6 @@ module Webhooks
       )
 
       certification = create_certification(application)
-      notify_admins(certification)
 
       head :ok
     rescue ActiveRecord::RecordNotFound
@@ -25,40 +24,34 @@ module Webhooks
     end
 
     def create_certification(application)
-      ApplicationRecord.transaction do
-        # Attach the certification document
-        document = URI.open(params[:document_url])
-        application.medical_certification.attach(
-          io: document,
-          filename: "certification-#{application.id}.pdf"
+      document = URI.open(params[:document_url])
+      blob = ActiveStorage::Blob.create_and_upload!(
+        io: document,
+        filename: params[:original_filename].presence || "certification-#{application.id}.pdf",
+        content_type: 'application/pdf'
+      )
+
+      MedicalCertificationAttachmentService.attach_certification(
+        application: application,
+        blob_or_file: blob,
+        status: :received,
+        admin: User.system_user,
+        submission_method: :webhook,
+        metadata: certification_metadata
+      )
+
+      AuditEventService.log(
+        actor: User.system_user,
+        action: 'medical_certification_received',
+        auditable: application,
+        metadata: certification_metadata.merge(
+          application_id: application.id,
+          submission_method: 'webhook'
         )
+      )
 
-        # Update application status
-        application.update!(
-          medical_certification_status: :received,
-          last_activity_at: Time.current
-        )
-
-        # Create an audit trail
-        CertificationSubmissionAudit.create!(
-          application: application,
-          provider_email: provider_email,
-          provider_name: params[:provider_name],
-          submission_method: 'webhook',
-          metadata: certification_metadata
-        )
-
-        # Return the updated application
-        application
-      end
-    end
-
-    def notify_admins(certification)
-      AdminNotifier.new(
-        subject: 'New Disability Certification Received',
-        message: "Disability certification received for Application ##{certification.id}",
-        level: :info
-      ).notify_all
+      application.update!(last_activity_at: Time.current)
+      application
     end
 
     def provider_email
