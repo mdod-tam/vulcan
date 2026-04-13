@@ -52,6 +52,18 @@
               max: Date.current.to_s %>
         </div>
       </div>
+
+      <%# Terms Acceptance -->
+      <div class="mt-6 flex items-start">
+        <%= fields_for :application, @paper_application[:application] do |a| %>
+          <%= a.check_box :terms_accepted, 
+              { required: true, class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" } %>
+          <label for="application_terms_accepted" class="ml-3">
+            <span class="block text-sm font-medium text-gray-700 required-label">I accept the terms and conditions</span>
+            <span class="block text-xs text-gray-500 mt-1">I have read and agree to the program terms and conditions</span>
+          </label>
+        <% end %>
+      </div>
     </div>
 
     <%# Contact Information %>
@@ -239,6 +251,16 @@
         </div>
         <div data-contact-feedback-target="deliveryFeedback" class="hidden" aria-live="polite" aria-atomic="true"></div>
       </fieldset>
+
+      <%# Newsletter Signup %>
+      <div class="mt-6 flex items-start">
+        <%= g.check_box :newsletter_signup, 
+            class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+        <label for="guardian_attributes_newsletter_signup" class="ml-3">
+          <span class="block text-sm font-medium text-gray-700">Subscribe to newsletter</span>
+          <span class="block text-xs text-gray-500 mt-1">I would like to receive updates and information about program news and resources</span>
+        </label>
+      </div>
     </div>
   <% end %>
 

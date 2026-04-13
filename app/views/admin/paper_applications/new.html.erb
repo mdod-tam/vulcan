@@ -582,6 +582,16 @@
                         class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
                   </div>
                 </div>
+
+                <%# Medical Release Authorization %>
+                <div class="mt-6 flex items-start">
+                  <%= a.check_box :medical_release_authorized, 
+                      { required: true, class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" } %>
+                  <label for="application_medical_release_authorized" class="ml-3">
+                    <span class="block text-sm font-medium text-gray-700 required-label">I authorize medical release</span>
+                    <span class="block text-xs text-gray-500 mt-1">I authorize the program to contact this provider to verify my disability certification</span>
+                  </label>
+                </div>
               <% end %>
 
               <%# Medical Provider Documentation Upload %>
