@@ -7,7 +7,7 @@
       <div class="px-6 py-4 border-b border-slate-200">
         <div class="flex justify-between items-center">
           <div>
-            <h1 class="text-2xl font-bold text-slate-900">Upload Paper Application</h1>
+            <h1 class="text-2xl font-bold text-slate-900">Apply for Constitutent</h1>
             <p class="mt-1 text-sm text-slate-600">Enter information from a handwritten application form</p>
             <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
           </div>
@@ -64,16 +64,18 @@
 
     <% paper_form_data = {
       turbo: false,
-      controller: "applicant-type",
+      controller: "paper-application applicant-type income-validation",
       action: "submit->paper-application#beforeSubmit adult-picker:selectionChange->paper-application#syncAdultVerificationGate adult-picker:verificationChange->paper-application#syncAdultVerificationGate adult-picker:createNew->paper-application#syncAdultVerificationGate",
       "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
-      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']"
+      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
+      "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']"
     }
     paper_form_data[:"applicant-type-adult-picker-outlet"] = "[data-controller='adult-picker']"
     if FeatureFlag.enabled?(:income_proof_required)
-      paper_form_data[:controller] += " income-validation"
       paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
       paper_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+    else
+      paper_form_data[:controller] = "paper-application applicant-type"
     end %>
     <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
@@ -97,7 +99,7 @@
                 <input type="radio" 
                        id="applicant_is_adult" 
                        name="applicant_type" 
-                       value="self"
+                       value="self" 
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" 
                        <%= 'checked' unless @show_create_guardian_form %> 
                        data-applicant-type-target="radio">

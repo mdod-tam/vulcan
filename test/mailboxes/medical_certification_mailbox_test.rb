@@ -30,6 +30,36 @@ class MedicalCertificationMailboxTest < ActionMailbox::TestCase
     assert true
   end
 
+  test 'ensure_sender_authorized accepts exact provider email match' do
+    mailbox = MedicalCertificationMailbox.allocate
+    mailbox.stubs(:application).returns(stub)
+    mailbox.stubs(:provider_email).returns('provider@example.com')
+    mailbox.stubs(:sender_email).returns('provider@example.com')
+    mailbox.expects(:bounce_with_notification).never
+
+    mailbox.send(:ensure_sender_authorized)
+  end
+
+  test 'ensure_sender_authorized rejects same-domain delegate addresses' do
+    mailbox = MedicalCertificationMailbox.allocate
+    mailbox.stubs(:application).returns(stub)
+    mailbox.stubs(:provider_email).returns('provider@gmail.com')
+    mailbox.stubs(:sender_email).returns('assistant@gmail.com')
+    mailbox.expects(:bounce_with_notification).with(
+      :unauthorized_sender,
+      regexp_matches(/does not match the requesting medical provider/)
+    ).once
+
+    mailbox.send(:ensure_sender_authorized)
+  end
+
+  test 'sender_verification reports unverified for non-matching sender' do
+    mailbox = MedicalCertificationMailbox.allocate
+    mailbox.stubs(:sender_matches_provider?).returns(false)
+
+    assert_equal 'unverified', mailbox.send(:sender_verification)
+  end
+
   #   setup do
   #     # Create test users and application
   #     @medical_provider = create(:medical_provider)

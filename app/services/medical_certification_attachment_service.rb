@@ -180,6 +180,8 @@ class MedicalCertificationAttachmentService
       # Get the notification action name based on the status
       notification_action = action_mapping[status.to_sym]
 
+      # Only approved certifications should trigger the downstream approval
+      # workflow; received/rejected statuses still need review or follow-up.
       if status.to_sym == :approved
         application.reload
         actor = admin.presence || application.user
