@@ -6,7 +6,9 @@ module DocumentSigning
   class SubmissionServiceTest < ActiveSupport::TestCase
     setup do
       @admin = create(:admin)
+      @constituent = create(:constituent, :with_address_and_phone)
       @application = create(:application, :in_progress,
+                            user: @constituent,
                             medical_provider_email: 'doctor@example.com',
                             medical_provider_name: 'Dr. Jane Smith')
 
@@ -196,6 +198,45 @@ module DocumentSigning
       @application.reload
       assert_equal original_doc_count + 1, @application.document_signing_request_count
       assert_equal original_med_count + 1, @application.medical_certification_request_count
+    end
+
+    test 'creates a custom signer email message with applicant context' do
+      service = DocumentSigning::SubmissionService.new(
+        application: @application,
+        actor: @admin
+      )
+
+      Docuseal.expects(:create_submission).with do |payload|
+        assert_equal "Medical Certification - #{@application.user.full_name} (Application #{@application.id})", payload[:name]
+        assert_equal "Disability Certification Request for #{@application.user.full_name}", payload.dig(:message, :subject)
+        assert_includes payload.dig(:message, :body), @application.user.full_name
+        assert_includes payload.dig(:message, :body), @application.user.date_of_birth.strftime('%m/%d/%Y')
+        assert_includes payload.dig(:message, :body), @application.user.phone
+        assert_includes payload.dig(:message, :body), @application.user.email
+        assert_includes payload.dig(:message, :body), '{{submitter.link}}'
+        true
+      end.returns(@mock_submission)
+
+      service.send(:create_submission!)
+    end
+
+    test 'localizes the custom signer email message for spanish applicants' do
+      @application.user.update!(locale: 'es')
+
+      service = DocumentSigning::SubmissionService.new(
+        application: @application,
+        actor: @admin
+      )
+
+      Docuseal.expects(:create_submission).with do |payload|
+        assert_equal "Certificacion medica - #{@application.user.full_name} (Solicitud #{@application.id})", payload[:name]
+        assert_equal "Solicitud de certificacion de discapacidad para #{@application.user.full_name}", payload.dig(:message, :subject)
+        assert_includes payload.dig(:message, :body), 'Informacion del solicitante'
+        assert_includes payload.dig(:message, :body), '{{submitter.link}}'
+        true
+      end.returns(@mock_submission)
+
+      service.send(:create_submission!)
     end
   end
 end

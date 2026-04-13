@@ -1,4 +1,23 @@
 es:
+  document_signing:
+    medical_certification_request:
+      submission_name: "Certificacion medica - %{constituent_full_name} (Solicitud %{application_id})"
+      subject: "Solicitud de certificacion de discapacidad para %{constituent_full_name}"
+      body: |
+        Por favor complete la solicitud de certificacion de discapacidad para %{constituent_full_name}.
+
+        Informacion del solicitante:
+        - Nombre: %{constituent_full_name}
+        - Fecha de nacimiento: %{constituent_dob_formatted}
+        - Telefono: %{constituent_phone_formatted}
+        - Correo electronico: %{constituent_email}
+        - Direccion: %{constituent_address_formatted}
+        - ID de solicitud: %{application_id}
+
+        Use el siguiente enlace de firma para revisar, completar y firmar la certificacion:
+        {{submitter.link}}
+
+        Si tiene preguntas, comuniquese con %{support_email}.
   date:
     formats:
       long: "%d de %B de %Y"

@@ -1,7 +1,12 @@
 # frozen_string_literal: true
 
 class MedicalCertificationMailbox < ApplicationMailbox
-  before_processing :ensure_medical_provider
+  APPLICATION_ID_PATTERN = /\bApplication(?:\s+ID)?\s*[:#]?\s*(\d+)\b/i
+  MAX_ATTACHMENT_SIZE = 10.megabytes
+  ALLOWED_ATTACHMENT_TYPES = %w[application/pdf image/jpeg image/png image/gif].freeze
+
+  before_processing :ensure_application
+  before_processing :ensure_sender_authorized
   before_processing :ensure_valid_certification_request
   before_processing :validate_attachments
 
@@ -16,25 +21,64 @@ class MedicalCertificationMailbox < ApplicationMailbox
       status: :received,
       admin: User.system_user,
       submission_method: :email,
-      metadata: certification_metadata
+      metadata: attach_metadata
     )
 
     AuditEventService.log(
-      actor: User.system_user,
+      actor: audit_actor,
       action: 'medical_certification_received',
       auditable: application,
-      metadata: certification_metadata
+      metadata: received_event_metadata
     )
+
+    notify_admin
   end
 
   private
 
-  def ensure_medical_provider
-    return if medical_provider
+  def attach_metadata
+    base_audit_metadata.merge(
+      sender_email: sender_email,
+      sender_verification: sender_verification,
+      medical_provider_id: MedicalProvider.find_by(email: sender_email)&.id
+    )
+  end
+
+  def received_event_metadata
+    attach_metadata
+  end
+
+  def notify_admin
+    record_audit_event('medical_certification_received_admin_notified',
+                       sender_email: sender_email,
+                       sender_verification: sender_verification)
+  end
+
+  def ensure_application
+    return if application.present?
 
     bounce_with_notification(
-      :provider_not_found,
-      'Email sender not recognized as a registered medical provider'
+      :application_not_found,
+      'Unable to match this email to an application. Include the Application ID from the original request.'
+    )
+  end
+
+  def ensure_sender_authorized
+    return if application.blank?
+
+    if provider_email.blank?
+      bounce_with_notification(
+        :provider_not_found,
+        'No medical provider email is configured for this application.'
+      )
+      return
+    end
+
+    return if sender_matches_provider?
+
+    bounce_with_notification(
+      :unauthorized_sender,
+      'Sender email does not match the requesting medical provider. Please reply from the provider email address or contact support.'
     )
   end
 
@@ -53,90 +97,119 @@ class MedicalCertificationMailbox < ApplicationMailbox
         :no_attachments,
         'No attachments found in email'
       )
+      return
     end
 
-    mail.attachments.each do |attachment|
-      validate_attachment(attachment)
+    mail.attachments.each do |att|
+      validate_attachment!(att)
     rescue StandardError => e
       bounce_with_notification(
         :invalid_attachment,
         "Invalid attachment: #{e.message}"
       )
+      break
     end
   end
 
-  def validate_attachment(attachment)
-    # Check file size
-    raise 'File size exceeds 10MB limit' if attachment.body.decoded.size > 10.megabytes
+  def validate_attachment!(attachment)
+    raise 'File size exceeds 10MB limit' if attachment.body.decoded.size > MAX_ATTACHMENT_SIZE
 
-    # Check file type
-    allowed_types = %w[application/pdf image/jpeg image/png image/gif]
-    return if allowed_types.include?(attachment.content_type)
+    return if ALLOWED_ATTACHMENT_TYPES.include?(attachment.content_type)
 
     raise 'File type not allowed. Allowed types: PDF, JPEG, PNG, GIF'
   end
 
   def bounce_with_notification(error_type, message)
-    # Use System User if constituent isn't available (e.g., bounced before application lookup)
-    event_user = application&.user || User.system_user
-    AuditEventService.log(
-      actor: event_user,
-      action: "medical_certification_#{error_type}",
-      auditable: application,
-      metadata: {
-        application_id: application&.id,
-        medical_provider_id: medical_provider&.id,
-        error: message,
-        inbound_email_id: inbound_email.id
-      }
-    )
+    record_audit_event("medical_certification_#{error_type}",
+                       error: message,
+                       sender_email: sender_email,
+                       sender_verification: sender_verification)
 
-    if defined?(MedicalProviderMailer.certification_submission_error)
-      bounce_with MedicalProviderMailer.certification_submission_error(
-        medical_provider,
-        application,
-        error_type,
-        message
-      )
-    else
-      # If the mailer method doesn't exist, just bounce with a simple message
-      bounce_with message
-    end
+    bounce_with medical_provider_submission_error_mail(error_type, message)
+  rescue StandardError => e
+    Rails.logger.error("Failed to send mailbox bounce notification: #{e.message}")
   end
 
-  def medical_provider
-    return @medical_provider if defined?(@medical_provider)
+  def medical_provider_submission_error_mail(error_type, message)
+    MedicalProviderMailer.with(
+      medical_provider: bounce_sender_contact,
+      application: application,
+      error_type: error_type,
+      message: message
+    ).certification_submission_error
+  end
 
-    @medical_provider = MedicalProvider.find_by_email(mail.from.first)
+  def bounce_sender_contact
+    Struct.new(:email).new(sender_email.presence || provider_email || 'unknown@example.com')
+  end
+
+  def sender_email
+    @sender_email ||= mail.from&.first.to_s.downcase.strip
+  end
+
+  def provider_email
+    application&.medical_provider_email.to_s.downcase.strip
+  end
+
+  def sender_matches_provider?
+    sender_email.present? && provider_email.present? && sender_email == provider_email
+  end
+
+  def sender_verification
+    return 'provider_exact' if sender_matches_provider?
+
+    'unverified'
+  end
+
+  def record_audit_event(action, metadata = {})
+    AuditEventService.log(
+      actor: audit_actor,
+      action: action,
+      auditable: application,
+      metadata: base_audit_metadata.merge(metadata)
+    )
+  end
+
+  def base_audit_metadata
+    {
+      application_id: application&.id,
+      inbound_email_id: inbound_email.id,
+      email_subject: mail.subject,
+      email_from: sender_email,
+      submission_method: 'email'
+    }
+  end
+
+  def audit_actor
+    User.system_user
   end
 
   def application
-    # Extract application ID from the email subject or body
-    # This assumes you include an application ID in the original request email
+    return @application if defined?(@application)
+
     application_id = extract_application_id_from_email
-    if defined?(@application)
-      @application
-    else
-      @application = Application.find_by(id: application_id)
-    end
+    @application = Application.find_by(id: application_id)
   end
 
   def extract_application_id_from_email
-    # Look for application ID in subject (e.g., "Medical Certification for Application #123")
-    subject_match = mail.subject.match(/Application #?(\d+)/i)
+    subject_match = mail.subject.to_s.match(APPLICATION_ID_PATTERN)
     return subject_match[1] if subject_match
 
-    # Look for application ID in email body
-    body_match = mail.body.decoded.match(/Application #?(\d+)/i)
+    body_match = mail.body.decoded.to_s.match(APPLICATION_ID_PATTERN)
     return body_match[1] if body_match
 
-    # If we can't find an ID, check if this is a reply to a specific request
-    # This assumes you're using a mailbox hash with the application ID
-    if mail.to.any? { |to| to.include?('+') }
-      mailbox_hash = mail.to.find { |to| to.include?('+') }.split('@').first.split('+').last
-      return mailbox_hash if mailbox_hash.match?(/^\d+$/)
-    end
+    extract_application_id_from_plus_address
+  end
 
+  def extract_application_id_from_plus_address
+    plus_address = Array(mail.to).find { |to| to.to_s.include?('+') }
+    return nil unless plus_address
+
+    token = plus_address.to_s.split('@').first.split('+').last
+    return token if token.match?(/^\d+$/)
+
+    Application.find_signed(token, purpose: :medical_certification)&.id
+  rescue ActiveSupport::MessageVerifier::InvalidSignature
     nil
   end
 
@@ -146,16 +219,5 @@ class MedicalCertificationMailbox < ApplicationMailbox
       filename: attachment.filename,
       content_type: attachment.content_type
     )
-  end
-
-  def certification_metadata
-    {
-      application_id: application.id,
-      medical_provider_id: medical_provider.id,
-      inbound_email_id: inbound_email.id,
-      email_subject: mail.subject,
-      email_from: mail.from.first,
-      submission_method: 'email'
-    }
   end
 end

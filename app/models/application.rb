@@ -462,6 +462,10 @@ class Application < ApplicationRecord
 
   # --- Workflow predicates ---
 
+  def residency_proof_required?
+    true
+  end
+
   def income_collection_enabled?
     if persisted?
       income_proof_required?

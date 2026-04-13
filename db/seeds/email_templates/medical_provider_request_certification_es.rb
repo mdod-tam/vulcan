@@ -16,6 +16,8 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_request_certification',
      INFORMACIÓN:
     - Nombre: %<constituent_full_name>s
     - Fecha de Nacimiento: %<constituent_dob_formatted>s
+    - Teléfono: %<constituent_phone_formatted>s
+    - Correo electrónico: %<constituent_email>s
     - Dirección: %<constituent_address_formatted>s
     - ID de Solicitud: %<application_id>s
 
@@ -39,7 +41,7 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_request_certification',
     AVISO DE CONFIDENCIALIDAD: Este correo electrónico puede contener información de salud confidencial protegida por las leyes de privacidad estatales y federales.
   TEXT
   template.variables = {
-    'required' => %w[constituent_full_name request_count_message timestamp_formatted constituent_dob_formatted constituent_address_formatted application_id
+    'required' => %w[constituent_full_name request_count_message timestamp_formatted constituent_dob_formatted constituent_phone_formatted constituent_email constituent_address_formatted application_id
                      download_form_url support_email],
     'optional' => []
   }

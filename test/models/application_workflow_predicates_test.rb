@@ -109,6 +109,13 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not app.equipment_fulfillment?
   end
 
+  # --- residency_proof_required? ---
+
+  test 'residency_proof_required? always returns true' do
+    app = Application.new
+    assert app.residency_proof_required?
+  end
+
   # --- required_proofs_approved? ---
 
   test 'required_proofs_approved? requires both proofs when income is required' do
