@@ -192,6 +192,8 @@ class MedicalCertificationAttachmentService
         )
       end
 
+      # Only approved certifications should trigger the downstream approval
+      # workflow; received/rejected statuses still need review or follow-up.
       if status.to_sym == :approved
         application.reload
         application.reconcile_workflow_state!(actor: admin, trigger: :medical_certification_approved)
