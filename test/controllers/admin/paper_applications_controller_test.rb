@@ -915,10 +915,13 @@ module Admin
     end
 
     test 'should send rejection letter notification' do
+      recipient_email = "john.doe.#{SecureRandom.hex(4)}@example.com"
+      create(:constituent, email: recipient_email, phone: '555-123-4567')
+
       post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
         first_name: 'John',
         last_name: 'Doe',
-        email: 'john.doe@example.com',
+        email: recipient_email,
         phone: '555-123-4567',
         household_size: '2',
         annual_income: '100000',

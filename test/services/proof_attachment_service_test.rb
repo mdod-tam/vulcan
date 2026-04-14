@@ -137,8 +137,9 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'invalid_document', proof_review.rejection_reason
 
     # Verify audit event was created
-    event = Event.last
-    assert_equal 'income_proof_rejected', event.action # Action name from ProofReview
+    event = Event.where(action: 'income_proof_rejected').order(:created_at).last
+    assert_not_nil event, 'Expected an income_proof_rejected audit event'
+    assert_equal 'income_proof_rejected', event.action
     assert_equal @application.id, event.auditable_id
     assert_equal 'Application', event.auditable_type
     assert_equal @admin.id, event.user_id
