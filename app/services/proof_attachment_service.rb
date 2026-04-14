@@ -24,7 +24,7 @@ class ProofAttachmentService
   AttachmentEventContext = Struct.new(
     :application, :proof_type, :status, :submission_method,
     :admin, :metadata, :blob_size, :skip_audit_events,
-    keyword_init: true
+    keyword_init: true # rubocop:disable Style/RedundantStructKeywordInit
   )
   # Attaches a proof document to an application
   #
@@ -189,28 +189,28 @@ class ProofAttachmentService
     def perform_attachment_flow(result, params)
       flow_data = prepare_flow_data(params)
 
-      with_paper_context(flow_data.submission_method, flow_data.proof_type) do
+      with_paper_context(flow_data.submission_method, flow_data.proof_type) do |original_paper_context|
         attach_and_verify_initial_save(flow_data.application, flow_data.proof_type, flow_data.attachment_param)
-        log_attachment_events_from_flow_data(flow_data, params)
+        context, event_metadata = log_attachment_events_from_flow_data(flow_data, params)
         result[:blob_size] = flow_data.blob_size
         result[:success] = true
+
+        # Reconcile inside the transaction/paper context block to ensure atomicity.
+        # We check original_paper_context because if the caller (e.g. PaperApplicationService)
+        # already set paper_context=true, we want to skip reconciliation here and let the caller
+        # do it once at the end. But if the caller didn't set it (e.g. ScannedProofsController),
+        # we want to reconcile here, even though we temporarily set paper_context=true for the attachment.
+        if params.fetch(:status).to_sym == :approved && !original_paper_context
+          reconcile_if_approved(
+            application: flow_data.application,
+            admin: params.fetch(:admin),
+            proof_type: flow_data.proof_type
+          )
+        end
+
+        # Send notification after reconciliation succeeds
+        send_notification(context, event_metadata)
       end
-
-      # Reconcile AFTER with_paper_context has restored Current.paper_context to its
-      # pre-call value. This is the key distinction:
-      #   - ScannedProofsController: never sets paper_context → restored to nil → reconciles here.
-      #   - PaperApplicationService: sets paper_context = true before calling the service →
-      #     restored to true → skips here. process_proof_uploads reconciles once at the end,
-      #     preventing mid-batch DCF escalation (and spurious cert-request emails) when proofs
-      #     and a cert are submitted together in the same paper-app creation.
-      return unless params.fetch(:status).to_sym == :approved
-      return if Current.paper_context?
-
-      reconcile_if_approved(
-        application: flow_data.application,
-        admin: params.fetch(:admin),
-        proof_type: flow_data.proof_type
-      )
     end
 
     def attach_and_verify_initial_save(application, proof_type, attachment_param)
@@ -333,7 +333,9 @@ class ProofAttachmentService
       result = { success: false, error: nil, duration_ms: 0 }
 
       begin
-        yield(result)
+        ApplicationRecord.transaction do
+          yield(result)
+        end
       rescue StandardError => e
         result[:success] = false
         result[:error] = e
@@ -378,7 +380,8 @@ class ProofAttachmentService
 
       log_audit_event(context, event_metadata) unless context.skip_audit_events
       update_application_status(context)
-      send_notification(context, event_metadata)
+
+      event_metadata
     end
 
     def build_event_metadata(context)
@@ -505,7 +508,7 @@ class ProofAttachmentService
     def prepare_flow_data(params)
       blob_or_file = params.fetch(:blob_or_file)
 
-      Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new(
+      Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new( # rubocop:disable Style/RedundantStructKeywordInit
         application: params.fetch(:application),
         proof_type: params.fetch(:proof_type),
         attachment_param: prepare_attachment_param(blob_or_file, params.fetch(:proof_type)),
@@ -526,14 +529,14 @@ class ProofAttachmentService
         skip_audit_events: params.fetch(:skip_audit_events)
       )
 
-      log_attachment_events(context)
+      [context, log_attachment_events(context)]
     end
 
     def with_paper_context(submission_method, _proof_type)
       original_paper_context = Current.paper_context
       begin
         Current.paper_context = true if submission_method.to_sym == :paper
-        yield
+        yield(original_paper_context)
       ensure
         Current.paper_context = original_paper_context
       end

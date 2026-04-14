@@ -13,14 +13,14 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     Current.reset
   end
 
-  test 'status change creates single ApplicationStatusChange record via callback' do
+  test 'transition_status! creates single ApplicationStatusChange record' do
     application = create(:application, :draft, user: @constituent)
 
     # Track initial count
     initial_count = ApplicationStatusChange.count
 
-    # Update status directly - callback should handle logging
-    application.update!(status: :in_progress)
+    # Update status via transition_status!
+    application.transition_status!(:in_progress, actor: @admin, metadata: { trigger: 'test' })
 
     # Verify exactly one record was created
     assert_equal initial_count + 1, ApplicationStatusChange.count
@@ -32,22 +32,19 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     assert_equal @admin.id, change.user_id
   end
 
-  test 'deprecated update_status method creates single record not duplicate' do
+  test 'transition_status! method creates single record with notes' do
     application = create(:application, :draft, user: @constituent)
 
     # Track initial count
     initial_count = ApplicationStatusChange.count
 
-    # Suppress deprecation warning for test
-    Rails.logger.stub :warn, nil do
-      # Use deprecated method with user and notes
-      application.update_status(:in_progress, user: @admin, notes: 'Test status change')
-    end
+    # Use transition_status! with user and notes
+    application.transition_status!(:in_progress, actor: @admin, notes: 'Test status change', metadata: { trigger: 'test' })
 
-    # Verify exactly one record was created (not two!)
+    # Verify exactly one record was created
     assert_equal initial_count + 1, ApplicationStatusChange.count
 
-    # Verify the record includes notes from deprecated method
+    # Verify the record includes notes
     change = ApplicationStatusChange.last
     assert_equal 'draft', change.from_status
     assert_equal 'in_progress', change.to_status
@@ -84,15 +81,15 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     initial_count = ApplicationStatusChange.count
 
     # Change 1: draft -> in_progress
-    application.update!(status: :in_progress)
+    application.transition_status!(:in_progress, actor: @admin, metadata: { trigger: 'test' })
     assert_equal initial_count + 1, ApplicationStatusChange.count
 
     # Change 2: in_progress -> awaiting_proof
-    application.update!(status: :awaiting_proof)
+    application.transition_status!(:awaiting_proof, actor: @admin, metadata: { trigger: 'test' })
     assert_equal initial_count + 2, ApplicationStatusChange.count
 
     # Change 3: awaiting_proof -> in_progress
-    application.update!(status: :in_progress)
+    application.transition_status!(:in_progress, actor: @admin, metadata: { trigger: 'test' })
     assert_equal initial_count + 3, ApplicationStatusChange.count
 
     # Verify all changes are distinct
@@ -102,14 +99,14 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     assert_equal %w[in_progress awaiting_proof in_progress], changes.map(&:to_status)
   end
 
-  test 'status change without Current.user falls back to application user' do
+  test 'status change attributes actor explicitly without Current.user' do
     Current.user = nil
     application = create(:application, :draft, user: @constituent)
 
     initial_count = ApplicationStatusChange.count
 
-    # Update status - should use application.user as fallback
-    application.update!(status: :in_progress)
+    # Update status via transition_status!
+    application.transition_status!(:in_progress, actor: @constituent, metadata: { trigger: 'test' })
 
     assert_equal initial_count + 1, ApplicationStatusChange.count
     change = ApplicationStatusChange.last

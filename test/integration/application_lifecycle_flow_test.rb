@@ -164,7 +164,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       reviewer = Applications::ProofReviewer.new(application, admin)
 
       assert_difference -> { application.proof_reviews.where(proof_type: :residency, status: :approved).count }, 1 do
-        assert_difference -> { Event.where(auditable: application, action: 'application_auto_approved').count }, 1 do
+        assert_no_difference -> { Event.where(auditable: application, action: 'application_auto_approved').count } do
           reviewer.review(proof_type: :residency, status: :approved)
         end
       end
@@ -179,10 +179,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       end
       assert_equal 1, approved_status_events.count
       assert_equal admin, approved_status_events.first.user
-
-      auto_approval_event = Event.where(auditable: application, action: 'application_auto_approved').order(:created_at).last
-      refute_nil auto_approval_event
-      assert_equal admin, auto_approval_event.user
+      assert_equal 'auto_approval', approved_status_events.first.metadata['trigger']
     end
   end
 
@@ -361,7 +358,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_difference -> { Voucher.where(application: application).count }, 1 do
         assert_difference -> { Event.where(auditable: application, action: 'application_approved').count }, 1 do
           assert_difference -> { Event.where(action: 'voucher_assigned', auditable_type: 'Voucher').count }, 1 do
-          assert service.call
+            assert service.call
           end
         end
       end
@@ -378,7 +375,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_equal admin, approved_status_events.first.user
 
       approval_event = Event.where(auditable: application, action: 'application_approved').order(:created_at).last
-      refute_nil approval_event
+      assert_not_nil approval_event
       assert_equal admin, approval_event.user
 
       voucher = Voucher.find_by!(application: application)
@@ -388,14 +385,12 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  # CHARACTERIZATION: When status changes via update! (e.g. Approver, DocumentRequester),
-  # the after_update :log_status_change callback fires and creates both an
-  # ApplicationStatusChange and an application_status_changed event. This is the
-  # callback-driven path — contrast with the update_column path tested above.
-  test 'update! status change creates ApplicationStatusChange and event via callback' do
+  # CHARACTERIZATION: When status changes via transition_status! (e.g. Approver, DocumentRequester),
+  # it creates both an ApplicationStatusChange and an application_status_changed event.
+  # This is the explicit API-driven path.
+  test 'transition_status! creates ApplicationStatusChange and application_status_changed for manual path' do
     with_after_commit_callbacks do
       admin = create(:admin)
-      Current.user = admin
 
       application = create_application_with_documents
       set_application_state(
@@ -408,12 +403,12 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       assert_difference -> { ApplicationStatusChange.where(application: application).count }, 1 do
         assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
-          application.update!(status: :awaiting_dcf)
+          application.transition_status!(:awaiting_dcf, actor: admin, metadata: { trigger: 'test' })
         end
       end
 
       change = ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').last
-      refute_nil change
+      assert_not_nil change
       assert_equal 'in_progress', change.from_status
       assert_equal admin, change.user
 
@@ -423,36 +418,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  # BUG FIX TEST: Previously, if log_status_change was called with acting_user.blank?,
-  # the method returned early before the ensure block, leaving @pending_status_change_user
-  # and @pending_status_change_notes set. A subsequent status change on the same instance
-  # would then use those stale values for actor attribution.
-  test 'log_status_change clears pending ivars even when acting_user is blank' do
-    with_after_commit_callbacks do
-      application = create_application_with_documents
-      set_application_state(
-        application,
-        status: :in_progress,
-        income_proof_status: :not_reviewed,
-        residency_proof_status: :not_reviewed,
-        medical_certification_status: :not_requested
-      )
-
-      # Set up the blank-actor condition:
-      # pending user is nil, Current.user is nil, and stub `user` to return nil
-      application.instance_variable_set(:@pending_status_change_user, nil)
-      application.instance_variable_set(:@pending_status_change_notes, 'stale notes from prior call')
-      Current.user = nil
-      application.stubs(:user).returns(nil)
-
-      # Call the private method directly — acting_user will be blank
-      application.send(:log_status_change)
-
-      # After the early return, pending ivars must be cleared (this is the fix)
-      assert_nil application.instance_variable_get(:@pending_status_change_user)
-      assert_nil application.instance_variable_get(:@pending_status_change_notes)
-    end
-  end
+  # (Deleted stale log_status_change test here as the method and ivars were removed in PR 99)
 
   private
 

@@ -19,9 +19,8 @@ module Applications
         create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
         update_application_status
         purge_if_rejected
+        reconcile_if_approved
       end
-
-      reconcile_if_approved
 
       true
     rescue StandardError => e
@@ -34,6 +33,7 @@ module Applications
 
     def reconcile_if_approved
       return unless @status_key == 'approved'
+
       @application.reload
       @application.reconcile_workflow_state!(actor: @admin, trigger: :proof_review_approved)
     rescue StandardError => e

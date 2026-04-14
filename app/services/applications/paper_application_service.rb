@@ -43,7 +43,7 @@ module Applications
 
         # Reconcile outside the transaction so proof writes are committed regardless of
         # reconciliation outcome. Failure here means the application is stuck at the wrong
-        # status — visible to the admin via reconciliation_note on the service.
+        # status, and we surface that to the admin via reconciliation_note.
         reconcile_after_paper_write(:paper_application_created)
       end
 
@@ -67,7 +67,6 @@ module Applications
         return failure('Application update failed') unless update_application_attributes
         return failure('Proof upload failed') unless process_proof_uploads
 
-        handle_successful_application(:update) if @application.persisted?
         update_succeeded = true
       end
 
@@ -461,7 +460,7 @@ module Applications
       @application.reload.reconcile_workflow_state!(actor: @admin, trigger: trigger)
     rescue StandardError => e
       log_error(e, "Workflow reconciliation failed after paper application #{@application&.id} #{trigger}")
-      @reconciliation_note = 'Workflow status update failed — please verify this application\'s status and manually advance it if needed.'
+      @reconciliation_note = 'Workflow status update failed -- please verify this application status and advance it manually if needed.'
     end
 
     def process_proof_uploads

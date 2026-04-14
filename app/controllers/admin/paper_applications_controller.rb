@@ -72,7 +72,18 @@ module Admin
         )
       else
         Rails.logger.info "[PaperApplicationsController] Handling service failure, request format: #{request.format}"
-        handle_service_failure(service)
+
+        # If the application was persisted but reconciliation failed, redirect to the application
+        # with an alert instead of re-rendering the form.
+        if service.application&.persisted?
+          error_msg = service.errors.any? ? service.errors.join('; ') : 'An unexpected error occurred.'
+          handle_error_response(
+            html_redirect_path: admin_application_path(service.application),
+            error_message: error_msg
+          )
+        else
+          handle_service_failure(service)
+        end
       end
     end
 
@@ -91,12 +102,19 @@ module Admin
 
       if service.update(application)
         update_message = generate_success_message(application)
-        update_message += " #{service.reconciliation_note}" if service.reconciliation_note.present?
         handle_success_response(
           html_redirect_path: admin_application_path(application),
           html_message: update_message,
           turbo_message: update_message,
           turbo_redirect_path: admin_application_path(application)
+        )
+      elsif service.application&.persisted? && service.errors.any? { |e| e.include?('Workflow status update failed') }
+        # If the application was updated but reconciliation failed, redirect to the application
+        # with an alert instead of re-rendering the form.
+        error_msg = service.errors.join('; ')
+        handle_error_response(
+          html_redirect_path: admin_application_path(service.application),
+          error_message: error_msg
         )
       else
         handle_service_failure(service, application)
@@ -586,6 +604,26 @@ module Admin
 
     def rejection_success_message(source_params)
       requested_letter_delivery?(source_params) ? 'Rejection letter has been queued for printing' : 'Rejection notification has been sent'
+    end
+
+    def send_medical_certification_notification_if_needed(application)
+      has_provider_info = application.medical_provider_name.present? ||
+                          application.medical_provider_email.present? ||
+                          application.medical_provider_phone.present?
+      is_rejected = application.medical_certification_status_rejected?
+
+      # If provider info exists AND certification is rejected for reason other than not present, notify the provider
+      if has_provider_info && is_rejected && application.medical_certification_rejection_reason != 'none_provided'
+        MedicalProviderMailer.certification_revision_needed(application).deliver_later
+        return
+      end
+
+      # If nothing is attached (no provider info AND a rejected certification), notify the constituent
+      return if has_provider_info || !is_rejected
+
+      ApplicationNotificationsMailer.medical_certification_not_provided(application).deliver_later
+    rescue StandardError => e
+      Rails.logger.error("Failed to send medical certification notification for application #{application&.id}: #{e.message}")
     end
 
     # NOTE: cast_boolean_params and cast_boolean_for are provided by the ParamCasting concern

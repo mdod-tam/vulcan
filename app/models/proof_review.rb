@@ -207,7 +207,12 @@ class ProofReview < ApplicationRecord
   end
 
   def archive_application_if_exceeded
-    application.update!(status: :archived)
+    application.transition_status!(
+      :archived,
+      actor: admin,
+      notes: 'Application archived after exceeding maximum proof rejections',
+      metadata: { trigger: 'max_proof_rejections' }
+    )
     ApplicationNotificationsMailer.max_rejections_reached(application).deliver_later
   end
 

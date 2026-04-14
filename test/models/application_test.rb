@@ -91,75 +91,148 @@ class ApplicationTest < ActiveSupport::TestCase
     end
   end
 
-  test 'log_status_change uses application user when Current.user is nil' do
+  test 'transition_status! logs application_status_changed with explicit constituent actor' do
     # Set Current attributes to disable notifications in tests
     Current.force_notifications = false
 
     # Create an application with a known user (proofs will be attached by factory default)
     application = create(:application, :draft)
-    constituent = application.user
-
-    # Store the initial event count
-    initial_event_count = Event.count
 
     # Ensure Current.user is nil
     Current.user = nil
 
-    begin
-      # Change the application status to trigger log_status_change
-      # Use update_attribute to bypass validations and some callbacks
-      application.update!(status: :in_progress)
+    # Verify initial state
+    assert_equal 'draft', application.status
 
-      # Verify an event was created
-      assert_equal initial_event_count + 1, Event.count
-
-      # Get the latest event
-      event = Event.last
-
-      # Verify the event was created with the application's user
-      assert_equal constituent.id, event.user_id
-      assert_equal 'application_status_changed', event.action
-      assert_equal application.id, event.metadata['application_id']
-      assert_equal 'draft', event.metadata['old_status']
-      assert_equal 'in_progress', event.metadata['new_status']
-    ensure
-      # Reset Current attributes
-      Current.reset if defined?(Current) && Current.respond_to?(:reset)
+    assert_difference -> { ApplicationStatusChange.count }, 1 do
+      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
+        # Change the application status to trigger transition_status!
+        application.transition_status!(:in_progress, actor: application.user, metadata: { trigger: 'test' })
+      end
     end
+
+    # Verify the status change was logged correctly
+    status_change = application.status_changes.last
+    assert_equal 'draft', status_change.from_status
+    assert_equal 'in_progress', status_change.to_status
+    assert_equal application.user, status_change.user
+
+    # Verify audit event was created correctly
+    audit_event = Event.where(action: 'application_status_changed', auditable: application).last
+    assert_equal application.user, audit_event.user
+    assert_equal 'in_progress', audit_event.metadata['new_status']
+    assert_equal 'draft', audit_event.metadata['old_status']
   end
 
-  test 'log_status_change uses Current.user when available' do
+  test 'transition_status! attributes audit to passed actor not Current.user' do
     # Set Current attributes to disable notifications in tests
     Current.force_notifications = false
 
-    # Create an application (proofs will be attached by factory default)
+    # Create an application and an admin user
     application = create(:application, :draft)
+    admin = create(:admin)
 
-    # Store the initial event count
-    initial_event_count = Event.count
+    # Set Current.user to admin
+    Current.user = admin
 
-    # Set Current.user to an admin
-    Current.user = @admin
+    # Verify initial state
+    assert_equal 'draft', application.status
 
-    begin
-      # Change the application status to trigger log_status_change
-      application.update!(status: :in_progress)
+    assert_difference -> { ApplicationStatusChange.count }, 1 do
+      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
+        # Pass a different actor to transition_status!
+        other_admin = create(:admin)
+        application.transition_status!(:in_progress, actor: other_admin, metadata: { trigger: 'test' })
+      end
+    end
 
-      # Verify an event was created
-      assert_equal initial_event_count + 1, Event.count
+    # Verify the status change used the passed actor, not Current.user
+    status_change = application.status_changes.last
+    assert_equal 'draft', status_change.from_status
+    assert_equal 'in_progress', status_change.to_status
+    assert_not_equal admin, status_change.user
 
-      # Get the latest event
-      event = Event.last
+    # Verify audit event used the passed actor
+    audit_event = Event.where(action: 'application_status_changed', auditable: application).last
+    assert_not_equal admin, audit_event.user
+  end
 
-      # Verify the event was created with Current.user
-      assert_equal @admin.id, event.user_id
-      assert_equal 'application_status_changed', event.action
-      assert_equal application.id, event.metadata['application_id']
-      assert_equal 'draft', event.metadata['old_status']
-      assert_equal 'in_progress', event.metadata['new_status']
-    ensure
-      # Reset Current attributes to avoid affecting other tests
-      Current.reset if defined?(Current) && Current.respond_to?(:reset)
+  test 'submit! transitions status to in_progress and logs audit event' do
+    application = create(:application, :draft)
+    actor = application.user
+
+    assert_difference -> { ApplicationStatusChange.count }, 1 do
+      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
+        application.submit!(actor: actor)
+      end
+    end
+
+    assert application.status_in_progress?
+
+    status_change = application.status_changes.last
+    assert_equal 'in_progress', status_change.to_status
+    assert_equal actor, status_change.user
+    assert_equal 'submission', status_change.metadata['trigger']
+  end
+
+  test 'batch_update_status updates multiple applications and returns success' do
+    app1 = create(:application, :draft)
+    app2 = create(:application, :draft)
+    admin = create(:admin)
+
+    assert_difference -> { ApplicationStatusChange.count }, 2 do
+      result = Application.batch_update_status([app1.id, app2.id], :in_progress, actor: admin)
+      assert result[:success]
+      assert_equal 2, result[:success_count]
+      assert_empty result[:errors]
+    end
+
+    assert app1.reload.status_in_progress?
+    assert app2.reload.status_in_progress?
+  end
+
+  test 'batch_update_status handles errors and returns them, rolling back all changes' do
+    app1 = create(:application, :draft)
+    app2 = create(:application, :draft)
+    admin = create(:admin)
+
+    # Force an error on the second application
+    Application.any_instance.stubs(:transition_status!).returns(true).then.raises(StandardError.new('Test error'))
+
+    assert_no_difference -> { ApplicationStatusChange.count } do
+      result = Application.batch_update_status([app1.id, app2.id], :in_progress, actor: admin)
+      assert_not result[:success]
+      assert_equal 0, result[:success_count]
+      assert_includes result[:errors].first, 'Test error'
+    end
+
+    # Verify both applications rolled back
+    assert app1.reload.status_draft?
+    assert app2.reload.status_draft?
+  end
+
+  test 'batch_update_status handles missing application IDs' do
+    app1 = create(:application, :draft)
+    admin = create(:admin)
+
+    assert_no_difference -> { ApplicationStatusChange.count } do
+      result = Application.batch_update_status([app1.id, 999999], :in_progress, actor: admin)
+      assert_not result[:success]
+      assert_equal 0, result[:success_count]
+      assert_includes result[:errors].first, 'Applications not found: 999999'
+    end
+
+    assert app1.reload.status_draft?
+  end
+
+  test 'batch_update_status handles empty IDs array' do
+    admin = create(:admin)
+
+    assert_no_difference -> { ApplicationStatusChange.count } do
+      result = Application.batch_update_status([], :in_progress, actor: admin)
+      assert_not result[:success]
+      assert_equal 0, result[:success_count]
+      assert_includes result[:errors].first, 'No applications selected'
     end
   end
 
@@ -410,12 +483,12 @@ class ApplicationTest < ActiveSupport::TestCase
     end
 
     status_change = ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').last
-    refute_nil status_change
+    assert_not_nil status_change
     assert_equal 'in_progress', status_change.from_status
     assert_equal @admin, status_change.user
 
     event = Event.where(auditable: application, action: 'application_status_changed').last
-    refute_nil event
+    assert_not_nil event
     assert_equal @admin, event.user
     assert_equal 'awaiting_dcf', event.metadata['new_status']
     assert_equal 'proof_review_approved', event.metadata['trigger']

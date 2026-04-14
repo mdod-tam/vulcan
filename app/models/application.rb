@@ -5,7 +5,7 @@
 class Application < ApplicationRecord
   # Constants
   # Definition for Medical Provider Info struct
-  MedicalProviderInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do
+  MedicalProviderInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
     def present?
       name.present? || phone.present? || fax.present? || email.present?
     end
@@ -20,7 +20,7 @@ class Application < ApplicationRecord
   end
 
   # Definition for ProofResult struct
-  ProofResult = Struct.new(:success, :type, :message, :error, keyword_init: true) do
+  ProofResult = Struct.new(:success, :type, :message, :error, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
     def success?
       success == true
     end
@@ -140,12 +140,11 @@ class Application < ApplicationRecord
   validate :constituent_must_have_disability, if: :validate_disability?
   validate :managing_guardian_cannot_be_applicant
 
+  before_validation :scrub_income_fields, if: :should_scrub_income?
   before_save :ensure_managing_guardian_set, if: :user_id_changed?
   # Callbacks
   before_create :stamp_workflow_defaults!
   before_create :ensure_managing_guardian_set
-  before_validation :scrub_income_fields, if: :should_scrub_income?
-  after_update :log_status_change, if: :should_log_status_change?
   after_save :log_alternate_contact_changes, if: :saved_change_to_alternate_contact?
 
   # Scopes
@@ -272,6 +271,47 @@ class Application < ApplicationRecord
       .count
   end
 
+  def self.batch_update_status(ids, new_status, actor:) # rubocop:disable Metrics/PerceivedComplexity
+    return { success: false, success_count: 0, errors: ['No applications selected'] } if ids.blank?
+
+    success_count = 0
+    errors = []
+
+    transaction do
+      applications = where(id: ids)
+      found_ids = applications.pluck(:id).map(&:to_s)
+      missing_ids = ids.map(&:to_s) - found_ids
+
+      errors << "Applications not found: #{missing_ids.join(', ')}" if missing_ids.any?
+
+      applications.find_each do |application|
+        success = if new_status.to_sym == :approved
+                    application.approve!(user: actor)
+                  elsif new_status.to_sym == :rejected
+                    application.reject!(user: actor)
+                  else
+                    application.transition_status!(new_status, actor: actor, metadata: { trigger: 'batch_update' })
+                  end
+
+        if success
+          success_count += 1
+        else
+          errors << "Application ##{application.id} failed to update"
+        end
+      rescue StandardError => e
+        errors << "Application ##{application.id}: #{e.message}"
+      end
+
+      raise ActiveRecord::Rollback if errors.any?
+    end
+
+    if errors.any?
+      { success: false, success_count: 0, errors: errors }
+    else
+      { success: true, success_count: success_count, errors: [] }
+    end
+  end
+
   # Allow test suite to disable certain validations globally
   cattr_accessor :skip_wait_period_validation, default: false
 
@@ -297,6 +337,15 @@ class Application < ApplicationRecord
     Applications::DocumentRequester.new(self, by: user).call
   end
 
+  # Submits the application, moving it from draft to in_progress
+  def submit!(actor:)
+    transition_status!(
+      :in_progress,
+      actor: actor,
+      metadata: { trigger: 'submission' }
+    )
+  end
+
   # Explicit status transition API for new lifecycle paths.
   # This writes the status change, status-change record, and audit event atomically.
   # Audit failures propagate and roll back the status change.
@@ -309,9 +358,6 @@ class Application < ApplicationRecord
 
       return true if old_status == target_status
 
-      # Transitional coexistence guard while the legacy log_status_change callback still exists.
-      # Remove this when callback-owned status logging is deleted.
-      @skip_status_change_logging = true
       update!(status: target_status)
 
       status_changes.create!(
@@ -343,10 +389,6 @@ class Application < ApplicationRecord
 
       true
     end
-  ensure
-    # Method-level ensure guarantees cleanup even if locking or auditing raises
-    # before the coexistence guard can be unset inside the locked section.
-    @skip_status_change_logging = false
   end
 
   def constituent_full_name
@@ -435,22 +477,6 @@ class Application < ApplicationRecord
       .first
   end
 
-  # Application status change tracking
-  # @deprecated Use direct status updates instead - the after_save callback handles audit trail
-  # This method creates duplicate ApplicationStatusChange records and will be removed in a future version.
-  # Instead of: application.update_status(:approved, user: admin)
-  # Use: application.update!(status: :approved) # callback handles status_changes automatically
-  def update_status(new_status, user: nil, notes: nil)
-    Rails.logger.warn '[DEPRECATION] Application#update_status is deprecated. Use direct status updates - callbacks handle audit trail.'
-
-    # Temporarily store user/notes for callback to use
-    @pending_status_change_user = user
-    @pending_status_change_notes = notes
-
-    # Update status - callback will create status_change record
-    update(status: new_status)
-  end
-
   def medical_provider_name
     self[:medical_provider_name]
   end
@@ -461,10 +487,6 @@ class Application < ApplicationRecord
   end
 
   # --- Workflow predicates ---
-
-  def residency_proof_required?
-    true
-  end
 
   def income_collection_enabled?
     if persisted?
@@ -576,53 +598,6 @@ class Application < ApplicationRecord
 
   def should_scrub_income?
     !income_collection_enabled? && (new_record? || status_draft?)
-  end
-
-  def log_status_change
-    return if @logging_status_change
-
-    acting_user = @pending_status_change_user || Current.user || user
-    status_notes = @pending_status_change_notes
-
-    if acting_user.blank?
-      @pending_status_change_user = nil
-      @pending_status_change_notes = nil
-      return
-    end
-
-    @logging_status_change = true
-
-    begin
-      status_changes.create!(
-        from_status: status_before_last_save,
-        to_status: status,
-        user: acting_user,
-        notes: status_notes
-      )
-
-      AuditEventService.log(
-        action: 'application_status_changed',
-        actor: acting_user,
-        auditable: self,
-        metadata: {
-          application_id: id,
-          old_status: status_before_last_save,
-          new_status: status,
-          submission_method: submission_method,
-          notes: status_notes
-        }
-      )
-    rescue StandardError => e
-      Rails.logger.error "Failed to log status change for application #{id}: #{e.message}"
-    ensure
-      @logging_status_change = false
-      @pending_status_change_user = nil
-      @pending_status_change_notes = nil
-    end
-  end
-
-  def should_log_status_change?
-    saved_change_to_status? && !@skip_status_change_logging
   end
 
   def waiting_period_completed
