@@ -342,7 +342,7 @@
 
           <!-- Trainer Section (Conditional based on policy limit) -->
           <% if @completed_training_sessions_count < @max_training_sessions %>
-            <% latest_training = @application.training_sessions.where(status: [:requested, :scheduled, :confirmed]).order(created_at: :desc).first %>
+            <% latest_training = @application.active_training_session %>
             <%
               # Get trainers by type and by capability
               trainers_by_type = User.where(type: "Users::Trainer", status: :active)

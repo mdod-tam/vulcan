@@ -51,6 +51,11 @@ class NotificationComposer
     "#{trainer_name} assigned to train #{constituent_name} for Application ##{@notifiable&.id}#{status_info}."
   end
 
+  def message_for_training_requested
+    constituent_name = @actor&.full_name || @notifiable&.constituent_full_name || 'A constituent'
+    "#{constituent_name} requested training for Application ##{@notifiable&.id}."
+  end
+
   def message_for_proof_rejected
     proof_type = @metadata['proof_type']&.titleize || 'Proof'
     reason = @metadata['rejection_reason']

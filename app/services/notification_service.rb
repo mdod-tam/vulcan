@@ -158,7 +158,7 @@ class NotificationService
     'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
     'w9_approved' => [VendorNotificationsMailer, :w9_approved],
     'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
-    'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
+    'training_requested' => [ApplicationNotificationsMailer, :training_requested],
     'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
     'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created],
     'medical_certification_approved' => [MedicalProviderMailer, :approved],
@@ -518,7 +518,8 @@ class NotificationService
 
     return if notification.update(metadata: merged_meta)
 
-    notification.update_column(:metadata, merged_meta)
+    notification.assign_attributes(metadata: merged_meta)
+    notification.save(validate: false)
   rescue StandardError => e
     Rails.logger.warn "NotificationService: Failed to persist routing metadata for Notification ##{notification.id}: #{e.message}"
   end
@@ -581,21 +582,13 @@ class NotificationService
     should_deliver = notification.instance_variable_get(:@should_deliver)
     delivery_successful = notification.instance_variable_get(:@delivery_successful)
 
-    event_action = if should_deliver && delivery_successful
-                     "notification_#{notification.action}_sent"
-                   elsif should_deliver && !delivery_successful
-                     "notification_#{notification.action}_failed"
-                   else
-                     "notification_#{notification.action}_created"
-                   end
-
     notification_metadata = notification.metadata.is_a?(Hash) ? notification.metadata : {}
     requested_channel = notification_metadata['channel'] || 'unknown'
     actual_channel = notification_metadata['actual_delivery_channel'] || requested_channel
 
     AuditEventService.log(
       actor: notification.actor || notification.recipient,
-      action: event_action,
+      action: audit_event_action(notification, should_deliver, delivery_successful),
       auditable: notification,
       metadata: {
         notification_id: notification.id,
@@ -613,6 +606,17 @@ class NotificationService
   rescue StandardError => e
     handle_audit_trail_error(notification, e)
   end
+
+  def audit_event_action(notification, should_deliver, delivery_successful)
+    if should_deliver && delivery_successful
+      "notification_#{notification.action}_sent"
+    elsif should_deliver
+      "notification_#{notification.action}_failed"
+    else
+      "notification_#{notification.action}_created"
+    end
+  end
+  private :audit_event_action
 
   def handle_audit_trail_error(notification, error)
     ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: error, stage: 'audit'

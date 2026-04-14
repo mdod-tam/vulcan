@@ -110,7 +110,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:digitally_signed_needs_review_count, digitally_signed_count)
   end
 
-  # Loads training request counts with fallback logic
+  # Loads training request counts from the application-owned request queue
   def load_training_request_counts
     training_count = cached_count('training_requests') { calculate_training_requests_count }
     safe_assign(:training_requests_count, training_count)
@@ -360,16 +360,9 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   private
 
-  # Calculate training request count with fallback logic
+  # Calculate training request count from the application-owned request queue
   def calculate_training_requests_count
-    count = Notification.where(action: 'training_requested', notifiable_type: 'Application')
-                        .distinct.count(:notifiable_id)
-
-    return count unless count.zero?
-
-    Application.joins(:training_sessions)
-               .where(training_sessions: { status: %i[requested scheduled confirmed] })
-               .distinct.count
+    Application.with_pending_training_request.count
   end
 
   # Get the current fiscal year (July 1 - June 30)

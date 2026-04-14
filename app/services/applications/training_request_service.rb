@@ -2,6 +2,9 @@
 
 module Applications
   class TrainingRequestService < BaseService
+    DUPLICATE_REQUEST_MESSAGE = 'Training session requested. A trainer will reach out soon to schedule your training.'
+    ACTIVE_SESSION_MESSAGE = 'You already have a training session in progress.'
+
     attr_reader :application, :current_user
 
     def initialize(application:, current_user:)
@@ -12,10 +15,14 @@ module Applications
 
     def call
       return failure('Only approved applications are eligible for training.') unless validate_eligibility
+      return failure(DUPLICATE_REQUEST_MESSAGE) if application.training_request_pending?
+      return failure(ACTIVE_SESSION_MESSAGE) if application.active_training_session_present?
       return failure('You have used all of your available training sessions.') unless check_session_limit?
 
+      application.update!(training_requested_at: Time.current)
       create_notifications
       log_request
+      Application.expire_training_request_metrics_cache!
       success('Training request submitted. An administrator will contact you to schedule your session.')
     end
 
@@ -27,7 +34,7 @@ module Applications
 
     def check_session_limit?
       max_sessions = Policy.get('max_training_sessions') || 3
-      application.training_sessions.count < max_sessions
+      application.training_sessions.completed_sessions.count < max_sessions
     end
 
     def create_notifications

@@ -606,26 +606,6 @@ module Admin
       requested_letter_delivery?(source_params) ? 'Rejection letter has been queued for printing' : 'Rejection notification has been sent'
     end
 
-    def send_medical_certification_notification_if_needed(application)
-      has_provider_info = application.medical_provider_name.present? ||
-                          application.medical_provider_email.present? ||
-                          application.medical_provider_phone.present?
-      is_rejected = application.medical_certification_status_rejected?
-
-      # If provider info exists AND certification is rejected for reason other than not present, notify the provider
-      if has_provider_info && is_rejected && application.medical_certification_rejection_reason != 'none_provided'
-        MedicalProviderMailer.certification_revision_needed(application).deliver_later
-        return
-      end
-
-      # If nothing is attached (no provider info AND a rejected certification), notify the constituent
-      return if has_provider_info || !is_rejected
-
-      ApplicationNotificationsMailer.medical_certification_not_provided(application).deliver_later
-    rescue StandardError => e
-      Rails.logger.error("Failed to send medical certification notification for application #{application&.id}: #{e.message}")
-    end
-
     # NOTE: cast_boolean_params and cast_boolean_for are provided by the ParamCasting concern
     # The complex parameter casting is handled by cast_complex_boolean_params
   end

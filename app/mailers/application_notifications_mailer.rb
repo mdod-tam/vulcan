@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class ApplicationNotificationsMailer < ApplicationMailer
+class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metrics/ClassLength
   layout false
   include Rails.application.routes.url_helpers
   include Mailers::ApplicationNotificationsHelper
@@ -33,6 +33,28 @@ class ApplicationNotificationsMailer < ApplicationMailer
       end
 
       send_email(recipient_email_for(@user), text_template, variables, mail_options)
+    end
+  end
+
+  def training_requested(application, notification)
+    with_mailer_error_handling("training_requested application=#{application&.id} notification=#{notification&.id}") do
+      admin = notification.recipient
+      template_name = 'application_notifications_training_requested'
+      locale = resolve_template_locale(recipient: admin)
+      text_template = find_text_template(template_name, locale: locale)
+      variables = build_training_requested_variables(application, notification, template: text_template, locale: locale)
+
+      if prefers_letter_delivery?(admin)
+        queue_letter_delivery(
+          recipient: admin,
+          template_name: template_name,
+          variables: variables,
+          application: application
+        )
+        return noop_letter_delivery
+      end
+
+      send_email(recipient_email_for(admin), text_template, variables)
     end
   end
 
@@ -394,7 +416,9 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def build_remaining_attempts_message(remaining_attempts, reapply_date)
-    "You have #{remaining_attempts} #{'attempt'.pluralize(remaining_attempts)} remaining to submit the required documentation before #{reapply_date.strftime('%B %d, %Y')}."
+    "You have #{remaining_attempts} #{'attempt'.pluralize(remaining_attempts)} " \
+      'remaining to submit the required documentation before ' \
+      "#{reapply_date.strftime('%B %d, %Y')}."
   end
 
   def build_resubmission_options(application, sign_in_url)
@@ -421,7 +445,9 @@ class ApplicationNotificationsMailer < ApplicationMailer
   end
 
   def build_archived_message(reapply_date)
-    "Unfortunately, you have reached the maximum number of submission attempts. Your application has been archived. You may reapply after #{reapply_date.strftime('%B %d, %Y')}."
+    'Unfortunately, you have reached the maximum number of submission attempts. ' \
+      'Your application has been archived. You may reapply after ' \
+      "#{reapply_date.strftime('%B %d, %Y')}."
   end
 
   def send_proof_rejected_email(user, text_template, variables)
@@ -648,6 +674,30 @@ class ApplicationNotificationsMailer < ApplicationMailer
       application_id: application.id,
       submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y'),
       sign_in_url: sign_in_url(host: default_url_options[:host])
+    }
+
+    base_variables.merge(variables).compact
+  end
+
+  def build_training_requested_variables(application, notification, template:, locale: nil)
+    admin = notification.recipient
+    constituent = notification.actor || application.user
+
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: {
+        application_id: application.id,
+        constituent_full_name: constituent.full_name
+      }
+    )
+
+    variables = {
+      admin_full_name: admin.full_name,
+      constituent_full_name: constituent.full_name,
+      application_id: application.id,
+      request_date_formatted: application.training_requested_at&.strftime('%B %d, %Y at %I:%M %p') || Time.current.strftime('%B %d, %Y at %I:%M %p'),
+      admin_application_url: admin_application_url(application, host: default_url_options[:host])
     }
 
     base_variables.merge(variables).compact

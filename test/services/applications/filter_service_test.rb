@@ -105,6 +105,31 @@ module Applications
       end
     end
 
+    test 'filters by pending training requests using application state' do
+      with_mocked_attachments do
+        pending_request = create(:application, :approved, user: create(:constituent, email: 'pending_training_filter@example.com'))
+        pending_request.update!(training_requested_at: 1.hour.ago)
+
+        fulfilled_request = create(:application, :approved, user: create(:constituent, email: 'fulfilled_training_filter@example.com'))
+        fulfilled_request.update!(training_requested_at: 2.hours.ago)
+        create(:training_session, application: fulfilled_request, trainer: create(:trainer), status: :requested)
+
+        notification_only = create(:application, :approved, user: create(:constituent, email: 'notification_only_filter@example.com'))
+        create(:notification,
+               recipient: create(:admin),
+               actor: notification_only.user,
+               notifiable: notification_only,
+               action: 'training_requested')
+
+        service = FilterService.new(@scope, { filter: 'training_requests' })
+        result_data = service.apply_filters.data
+
+        assert_includes result_data, pending_request
+        assert_not_includes result_data, fulfilled_request
+        assert_not_includes result_data, notification_only
+      end
+    end
+
     test 'filters by proofs needing review' do
       with_mocked_attachments do
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
@@ -134,8 +159,11 @@ module Applications
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
         result_data = service.apply_filters.data
 
-        assert_not_includes result_data, income_off_app,
+        assert_not_includes(
+          result_data,
+          income_off_app,
           'App with income_proof_required=false and residency approved should not appear in proofs_needing_review'
+        )
       end
     end
 
@@ -156,8 +184,11 @@ module Applications
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
         result_data = service.apply_filters.data
 
-        assert_includes result_data, residency_pending_app,
+        assert_includes(
+          result_data,
+          residency_pending_app,
           'App with income_proof_required=false but residency not_reviewed should appear in proofs_needing_review'
+        )
       end
     end
 
@@ -361,96 +392,6 @@ module Applications
         assert_includes result_data, @dependent_app
         assert_not_includes result_data, @active_app
         assert_not_includes result_data, @approved_app
-      end
-    end
-
-    # CHARACTERIZATION: The training_requests filter uses notification-derived state.
-    # It queries Notification records with action 'training_requested', not application columns.
-    # If notifications exist, it returns applications referenced by those notifications.
-    # If no notifications exist, it falls back to with_pending_training (training sessions join).
-    test 'filters by training_requests using notification-derived state' do
-      with_mocked_attachments do
-        admin = create(:admin)
-        approved_app = create(:application, :completed, user: create(:constituent, speech_disability: true))
-
-        Notification.create!(
-          action: 'training_requested',
-          notifiable: approved_app,
-          recipient: admin,
-          actor: approved_app.user,
-          metadata: { application_id: approved_app.id }
-        )
-
-        service = FilterService.new(@scope, { filter: 'training_requests' })
-        service_result = service.apply_filters
-
-        assert service_result.success?
-        result_data = service_result.data
-        assert_includes result_data, approved_app
-        assert_not_includes result_data, @active_app
-      end
-    end
-
-    # CHARACTERIZATION: When no training_requested notifications exist, the filter
-    # falls back to with_pending_training scope (joins training_sessions with active status).
-    test 'training_requests filter falls back to training sessions when no notifications exist' do
-      with_mocked_attachments do
-        trainer = create(:trainer)
-
-        # Ensure no training_requested notifications exist
-        Notification.where(action: 'training_requested').delete_all
-
-        TrainingSession.create!(
-          application: @approved_app,
-          trainer: trainer,
-          scheduled_for: 1.day.from_now,
-          status: :requested
-        )
-
-        service = FilterService.new(@scope, { filter: 'training_requests' })
-        service_result = service.apply_filters
-
-        assert service_result.success?
-        result_data = service_result.data
-        assert_includes result_data, @approved_app
-        assert_not_includes result_data, @active_app
-      end
-    end
-
-    # CHARACTERIZATION: Notification-derived and session-derived queries can disagree.
-    # If a training_requested notification exists for app A, and a training session
-    # exists for app B, the filter returns app A (notifications take precedence).
-    test 'training_requests filter prefers notifications over sessions when both exist' do
-      with_mocked_attachments do
-        admin = create(:admin)
-        trainer = create(:trainer)
-
-        other_user = create(:constituent, speech_disability: true)
-        other_app = create(:application, :completed, user: other_user)
-
-        Notification.create!(
-          action: 'training_requested',
-          notifiable: @approved_app,
-          recipient: admin,
-          actor: @approved_app.user,
-          metadata: { application_id: @approved_app.id }
-        )
-
-        TrainingSession.create!(
-          application: other_app,
-          trainer: trainer,
-          scheduled_for: 1.day.from_now,
-          status: :requested
-        )
-
-        service = FilterService.new(@scope, { filter: 'training_requests' })
-        service_result = service.apply_filters
-
-        assert service_result.success?
-        result_data = service_result.data
-        # Notifications win — other_app's session is ignored
-        assert_includes result_data, @approved_app
-        assert_not_includes result_data, other_app
       end
     end
 

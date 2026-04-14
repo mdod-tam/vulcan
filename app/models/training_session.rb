@@ -10,6 +10,8 @@ class TrainingSession < ApplicationRecord
   has_one :constituent, through: :application, source: :user
   belongs_to :product_trained_on, class_name: 'Product', optional: true # Added association
 
+  scope :assigned_or_scheduled, -> { where(status: %i[requested scheduled confirmed]) }
+
   # Validations
   validates :scheduled_for, presence: true, if: -> { status_scheduled? || status_confirmed? || will_be_scheduled? }
   validates :reschedule_reason, presence: true, if: :rescheduling?

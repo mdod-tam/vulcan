@@ -41,6 +41,8 @@ module TrainingManagement
 
       # Send email notification to the trainer with constituent contact info
       TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_later
+
+      Application.expire_training_request_metrics_cache!
     end
     true
   rescue ::ActiveRecord::RecordInvalid => e

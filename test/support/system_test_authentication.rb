@@ -414,7 +414,7 @@ module SystemTestAuthentication
   def user_dashboard_path(user)
     case user.type
     when 'Users::Administrator'
-      admin_applications_path # Match ApplicationController#_dashboard_for
+      admin_dashboard_path
     when 'Users::Constituent'
       constituent_portal_dashboard_path
     when 'Users::Evaluator'
