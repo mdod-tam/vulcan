@@ -9,21 +9,28 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     # Clear emails before each test
     ActionMailer::Base.deliveries.clear
 
-    # Ensure the required email template exists for tests, creating it only if necessary.
-    # Using find_or_create_by! ensures idempotency across test runs.
-    EmailTemplate.find_or_create_by!(name: 'application_notifications_registration_confirmation') do |template|
-      admin = User.find_by(email: 'david.bahar@maryland.gov') || create(:admin, email: 'david.bahar@maryland.gov') # Ensure admin exists
+    admin = User.find_by(email: 'david.bahar@maryland.gov') || create(:admin, email: 'david.bahar@maryland.gov')
+    template = EmailTemplate.find_or_initialize_by(
+      name: 'application_notifications_registration_confirmation',
+      format: :text,
+      locale: 'en'
+    )
 
-      template.assign_attributes(
-        format: :text,
-        subject: 'Welcome to the Maryland Accessible Telecommunications Program',
-        body: 'This is a test text body for registration confirmation. %<user_first_name>s, %<user_full_name>s, %<dashboard_url>s, %<new_application_url>s, %<header_text>s, %<footer_text>s, %<active_vendors_text_list>s',
-        description: 'Sent to a user upon successful account registration confirmation.',
-        updated_by: admin
-        # NOTE: `create!` behavior is implicit within find_or_create_by! block assignment + save
-      )
-      # No need to explicitly call save!, find_or_create_by! handles it.
-    end
+    template.assign_attributes(
+      subject: 'Welcome to the Maryland Accessible Telecommunications Program',
+      body: 'This is a test text body for registration confirmation. ' \
+            '%<user_first_name>s, %<user_full_name>s, %<dashboard_url>s, ' \
+            '%<new_application_url>s, %<header_text>s, %<footer_text>s, ' \
+            '%<active_vendors_text_list>s',
+      description: 'Sent to a user upon successful account registration confirmation.',
+      variables: {
+        'required' => %w[user_first_name user_full_name],
+        'optional' => %w[dashboard_url new_application_url header_text footer_text active_vendors_text_list]
+      },
+      updated_by: admin,
+      enabled: true
+    )
+    template.save!
   end
 
   teardown do
