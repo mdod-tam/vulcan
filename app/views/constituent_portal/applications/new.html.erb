@@ -262,6 +262,23 @@
               <%= form.text_field :alternate_contact_name, autocomplete: "name", class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
             </div>
             
+            <div>
+              <%= form.label :alternate_contact_relationship_type, "Relationship", class: "block text-sm font-medium text-gray-700" %>
+              <% relationship_options = [
+                [t("applications.alternate_contact_relationship_types.parent"), "parent"],
+                [t("applications.alternate_contact_relationship_types.spouse"), "spouse"],
+                [t("applications.alternate_contact_relationship_types.child"), "child"],
+                [t("applications.alternate_contact_relationship_types.sibling"), "sibling"],
+                [t("applications.alternate_contact_relationship_types.neighbor"), "neighbor"],
+                [t("applications.alternate_contact_relationship_types.friend"), "friend"],
+                [t("applications.alternate_contact_relationship_types.other"), "other"]
+              ] %>
+              <%= form.select :alternate_contact_relationship_type,
+                  options_for_select(relationship_options, @application.alternate_contact_relationship_type),
+                  { prompt: "Select a relationship" },
+                  class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+            </div>
+            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <%= form.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>

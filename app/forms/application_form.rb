@@ -45,6 +45,12 @@ class ApplicationForm
   attribute :user_id, :integer # For dependent applications
   attribute :managing_guardian_id, :integer
 
+  # Alternate contact attributes
+  attribute :alternate_contact_name, :string
+  attribute :alternate_contact_phone, :string
+  attribute :alternate_contact_email, :string
+  attribute :alternate_contact_relationship_type, :string
+
   # Form state
   attribute :is_submission, :boolean, default: false
 
@@ -123,6 +129,7 @@ class ApplicationForm
     extract_address_attributes(app_params)
     extract_locale_attribute(params, app_params)
     extract_medical_provider_attributes(params)
+    extract_alternate_contact_attributes(app_params)
 
     self.is_submission = params[:submit_application].present?
   end
@@ -191,6 +198,13 @@ class ApplicationForm
     self.medical_provider_phone = mp_attrs[:phone] if mp_attrs[:phone]
     self.medical_provider_fax = mp_attrs[:fax] if mp_attrs[:fax]
     self.medical_provider_email = mp_attrs[:email] if mp_attrs[:email]
+  end
+
+  def extract_alternate_contact_attributes(app_params)
+    self.alternate_contact_name = app_params[:alternate_contact_name] if app_params.key?(:alternate_contact_name)
+    self.alternate_contact_phone = app_params[:alternate_contact_phone] if app_params.key?(:alternate_contact_phone)
+    self.alternate_contact_email = app_params[:alternate_contact_email] if app_params.key?(:alternate_contact_email)
+    self.alternate_contact_relationship_type = app_params[:alternate_contact_relationship_type] if app_params.key?(:alternate_contact_relationship_type)
   end
 
   def determine_applicant_user

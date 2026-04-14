@@ -100,12 +100,18 @@
     <%# Alternate Contact Section %>
     <section aria-labelledby="alternate-contact-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="alternate-contact-heading" class="text-xl font-semibold mb-4 text-gray-900">Alternate Contact Information</h2>
-      <% if @application.alternate_contact_name.present? || @application.alternate_contact_phone.present? || @application.alternate_contact_email.present? %>
+      <% if @application.alternate_contact_name.present? || @application.alternate_contact_phone.present? || @application.alternate_contact_email.present? || @application.alternate_contact_relationship_type.present? %>
         <dl class="space-y-3">
           <% if @application.alternate_contact_name.present? %>
             <div>
               <dt class="text-sm font-medium text-gray-700">Name</dt>
               <dd class="mt-1 text-sm text-gray-900"><%= @application.alternate_contact_name %></dd>
+            </div>
+          <% end %>
+          <% if @application.alternate_contact_relationship_type.present? %>
+            <div>
+              <dt class="text-sm font-medium text-gray-700">Relationship</dt>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.alternate_contact_relationship_type.titleize %></dd>
             </div>
           <% end %>
           <% if @application.alternate_contact_phone.present? %>

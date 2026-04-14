@@ -97,7 +97,11 @@ module Applications
         maryland_resident: @form.maryland_resident,
         self_certify_disability: @form.self_certify_disability,
         submission_method: @form.submission_method,
-        application_date: target_application.application_date || Date.current
+        application_date: target_application.application_date || Date.current,
+        alternate_contact_name: @form.alternate_contact_name,
+        alternate_contact_phone: @form.alternate_contact_phone,
+        alternate_contact_email: @form.alternate_contact_email,
+        alternate_contact_relationship_type: @form.alternate_contact_relationship_type
       }
       # Submission moves draft -> in_progress via transition_status! after save (canonical audit).
       attributes[:status] =

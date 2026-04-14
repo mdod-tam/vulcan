@@ -94,6 +94,7 @@ module Admin
         # Fill in Alternate Contact (optional) - This was missing from previous tests
         within 'fieldset', text: 'Alternate Contact (optional)' do
           fill_in 'application[alternate_contact_name]', with: 'Jane Doe'
+          select 'Neighbor', from: 'application[alternate_contact_relationship_type]'
           fill_in 'application[alternate_contact_phone]', with: '555-123-4567'
           fill_in 'application[alternate_contact_email]', with: 'jane.doe@example.com'
         end
@@ -145,6 +146,7 @@ module Admin
       assert_equal 'dr.smith@example.com', application.medical_provider_email
       assert_equal '555-987-6544', application.medical_provider_fax
       assert_equal 'Jane Doe', application.alternate_contact_name
+      assert_equal 'neighbor', application.alternate_contact_relationship_type
       assert_equal '555-123-4567', application.alternate_contact_phone
       assert_equal 'jane.doe@example.com', application.alternate_contact_email
       assert application.user.date_of_birth.present?

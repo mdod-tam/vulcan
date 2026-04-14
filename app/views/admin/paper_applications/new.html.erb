@@ -710,11 +710,27 @@
           
           <div class="p-6">
             <%= fields_for :application do |a| %>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <%= a.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
                   <%= a.text_field :alternate_contact_name, 
                       autocomplete: "name",
+                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                </div>
+                <div>
+                  <%= a.label :alternate_contact_relationship_type, "Relationship", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.select :alternate_contact_relationship_type,
+                      options_for_select([
+                        ["Select", ""],
+                        ["Parent", "parent"],
+                        ["Spouse", "spouse"],
+                        ["Child", "child"],
+                        ["Sibling", "sibling"],
+                        ["Neighbor", "neighbor"],
+                        ["Friend", "friend"],
+                        ["Other", "other"]
+                      ]),
+                      { include_blank: false },
                       class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
                 </div>
                 <div>
