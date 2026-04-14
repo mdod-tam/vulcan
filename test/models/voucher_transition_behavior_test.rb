@@ -213,8 +213,14 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     assert result, "Expected success: #{service.errors}"
 
     app = service.application
-    assert_equal 'in_progress', app.status,
-                 "Expected in_progress when income action=none but flag off (only residency matters)"
+    # When income is not required and residency is approved, required_proofs_for_dcf_approved?
+    # returns true. The reconciler fires inside ProofAttachmentService after writing the approved
+    # proof status, so the application correctly escalates to awaiting_dcf. This verifies that
+    # income is ignored in the proof-sufficiency check when the flag is off.
+    assert_equal 'awaiting_dcf', app.status,
+                 "Expected awaiting_dcf: income ignored (flag off), residency approved triggers DCF escalation"
+    assert_equal 'requested', app.medical_certification_status,
+                 "Expected cert request to be sent when proofs are sufficient"
   end
 
   # --- PaperApplicationService: income proof processing skip ---

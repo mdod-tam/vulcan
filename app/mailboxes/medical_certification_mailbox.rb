@@ -21,83 +21,37 @@ class MedicalCertificationMailbox < ApplicationMailbox
       status: :received,
       admin: User.system_user,
       submission_method: :email,
-      metadata: certification_metadata
+      metadata: attach_metadata
     )
 
     AuditEventService.log(
-      actor: User.system_user,
+      actor: audit_actor,
       action: 'medical_certification_received',
       auditable: application,
-      metadata: certification_metadata
+      metadata: received_event_metadata
     )
+
+    notify_admin
   end
 
   private
-  def create_audit_record
-    record_audit_event('medical_certification_received',
-                       sender_email: sender_email,
-                       sender_verification: sender_verification)
-  end
 
-  def transition_application_to_received!
-    previous_status = application.medical_certification_status || 'requested'
-
-    application.update!(
-      medical_certification_status: 'received',
-      updated_at: Time.current
-    )
-
-    ApplicationStatusChange.create!(
-      application: application,
-      user: nil, # No admin user for auto-processing
-      from_status: previous_status,
-      to_status: 'received',
-      metadata: {
-        change_type: 'medical_certification',
-        submission_method: 'email',
-        received_at: Time.current.iso8601,
-        inbound_email_id: inbound_email.id,
-        sender_email: sender_email,
-        sender_verification: sender_verification
-      }
+  def attach_metadata
+    base_audit_metadata.merge(
+      sender_email: sender_email,
+      sender_verification: sender_verification,
+      medical_provider_id: MedicalProvider.find_by(email: sender_email)&.id
     )
   end
 
-  def attach_certification(attachment)
-    blob = ActiveStorage::Blob.create_and_upload!(
-      io: StringIO.new(attachment.body.decoded),
-      filename: attachment.filename,
-      content_type: attachment.content_type
-    )
-
-    application.medical_certification.attach(blob)
+  def received_event_metadata
+    attach_metadata
   end
 
   def notify_admin
     record_audit_event('medical_certification_received_admin_notified',
                        sender_email: sender_email,
                        sender_verification: sender_verification)
-  end
-
-  def notify_constituent
-    return if application&.user.blank?
-
-    NotificationService.create_and_deliver!(
-      type: 'medical_certification_received',
-      recipient: application.user,
-      actor: audit_actor,
-      notifiable: application,
-      metadata: {
-        inbound_email_id: inbound_email.id,
-        sender_email: sender_email,
-        sender_verification: sender_verification,
-        submission_method: 'email'
-      },
-      channel: :email,
-      deliver: false
-    )
-  rescue StandardError => e
-    Rails.logger.error("Failed to create constituent notification for medical certification email: #{e.message}")
   end
 
   def ensure_application
@@ -146,8 +100,8 @@ class MedicalCertificationMailbox < ApplicationMailbox
       return
     end
 
-    mail.attachments.each do |attachment|
-      validate_attachment!(attachment)
+    mail.attachments.each do |att|
+      validate_attachment!(att)
     rescue StandardError => e
       bounce_with_notification(
         :invalid_attachment,
@@ -230,10 +184,6 @@ class MedicalCertificationMailbox < ApplicationMailbox
     User.system_user
   end
 
-  def medical_provider
-    @medical_provider = MedicalProvider.find_by_email(mail.from.first)
-  end
-
   def application
     return @application if defined?(@application)
 
@@ -269,16 +219,5 @@ class MedicalCertificationMailbox < ApplicationMailbox
       filename: attachment.filename,
       content_type: attachment.content_type
     )
-  end
-
-  def certification_metadata
-    {
-      application_id: application.id,
-      medical_provider_id: medical_provider.id,
-      inbound_email_id: inbound_email.id,
-      email_subject: mail.subject,
-      email_from: mail.from.first,
-      submission_method: 'email'
-    }
   end
 end

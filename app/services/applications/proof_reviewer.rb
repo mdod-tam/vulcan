@@ -19,9 +19,8 @@ module Applications
         create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
         update_application_status
         purge_if_rejected
+        reconcile_if_approved
       end
-
-      reconcile_if_approved
 
       true
     rescue StandardError => e
@@ -34,12 +33,11 @@ module Applications
 
     def reconcile_if_approved
       return unless @status_key == 'approved'
-      @application.reload
-      return unless @application.required_proofs_for_dcf_approved?
 
-      @application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
+      @application.reload
+      @application.reconcile_workflow_state!(actor: @admin, trigger: :proof_review_approved)
     rescue StandardError => e
-      Rails.logger.error "DCF escalation failed for Application #{@application.id}: #{e.message}\n#{e.backtrace.join("\n")}"
+      Rails.logger.error "Workflow reconciliation failed for Application #{@application.id}: #{e.message}\n#{e.backtrace.join("\n")}"
     end
 
     def create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)

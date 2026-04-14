@@ -20,7 +20,7 @@ module Admin
       Application.any_instance.stubs(:proof_type_reviewable?).returns(true)
     end
 
-    test 'approve income proof responds with turbo streams: update modals container and replace attachments' do
+    test 'approve income proof responds with turbo redirect when workflow state may change' do
       attach_income_proof!
       stub_reviewable_proofs!
 
@@ -38,13 +38,8 @@ module Admin
             params: { proof_type: 'income', status: 'approved' },
             as: :turbo_stream
 
-      assert_response :success
-      # Must be a turbo stream response
-      assert_equal 'text/vnd.turbo-stream.html', response.media_type
-
-      # Validate stream actions - modals container is replaced (closes all modals and regenerates them)
-      assert_turbo_stream action: 'update', target: 'modals'
-      assert_turbo_stream action: 'update', target: 'attachments-section'
+      assert_response :see_other
+      assert_redirected_to admin_application_path(@application)
     end
 
     test 'reject income proof responds with turbo streams: update modals container and replace attachments' do
@@ -75,7 +70,7 @@ module Admin
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
 
-    test 'approve residency proof responds with turbo streams: update modals container and replace attachments' do
+    test 'approve residency proof responds with turbo redirect when workflow state may change' do
       # Attach residency proof and keep income untouched
       @application.residency_proof.attach(io: StringIO.new('test content'), filename: 'residency.pdf', content_type: 'application/pdf')
       stub_reviewable_proofs!
@@ -94,12 +89,8 @@ module Admin
             params: { proof_type: 'residency', status: 'approved' },
             as: :turbo_stream
 
-      assert_response :success
-      assert_equal 'text/vnd.turbo-stream.html', response.media_type
-
-      # Modals container is replaced (closes all modals and regenerates them)
-      assert_turbo_stream action: 'update', target: 'modals'
-      assert_turbo_stream action: 'update', target: 'attachments-section'
+      assert_response :see_other
+      assert_redirected_to admin_application_path(@application)
     end
   end
 end

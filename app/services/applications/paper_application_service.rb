@@ -6,7 +6,7 @@ module Applications
   class PaperApplicationService < BaseService
     include Rails.application.routes.url_helpers
 
-    attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app
+    attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false)
       super()
@@ -17,31 +17,34 @@ module Applications
       @guardian_user_for_app = nil
       @errors = []
       @temp_passwords = {}
+      @reconciliation_note = nil
       @skip_income_validation = skip_income_validation
       @skip_proof_processing = skip_proof_processing
     end
 
     def create
       Current.paper_context = true
+      application_created = false
 
-      # First, create the application and attachments in a transaction
-      application_created = ActiveRecord::Base.transaction do
+      ActiveRecord::Base.transaction do
         return failure('Constituent processing failed') unless process_constituent
         return failure('Application creation failed') unless create_application
         return failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
 
-        @application.persisted?
+        application_created = @application.persisted?
       end
 
-      # If application was successfully created, send notifications outside the transaction
-      if application_created && @application.persisted?
+      if application_created
         begin
           handle_successful_application(:create)
         rescue StandardError => e
-          # Log notification errors but don't fail the entire operation
           log_error(e, 'Failed to send notifications after successful application creation')
-          # Application creation was successful, notifications failed but that's not critical
         end
+
+        # Reconcile outside the transaction so proof writes are committed regardless of
+        # reconciliation outcome. Failure here means the application is stuck at the wrong
+        # status, and we surface that to the admin via reconciliation_note.
+        reconcile_after_paper_write(:paper_application_created)
       end
 
       application_created
@@ -55,20 +58,21 @@ module Applications
 
     def update(application)
       Current.paper_context = true
+      update_succeeded = false
 
       ActiveRecord::Base.transaction do
         @application = application
         @constituent = application.user
 
-        # Update application attributes if provided
         return failure('Application update failed') unless update_application_attributes
-
-        # Process proof uploads (accept/reject)
         return failure('Proof upload failed') unless process_proof_uploads
 
-        handle_successful_application(:update) if @application.persisted?
-        return true
+        update_succeeded = true
       end
+
+      reconcile_after_paper_write(:paper_application_updated) if update_succeeded
+
+      update_succeeded
     rescue StandardError => e
       log_error(e, 'Failed to update paper application')
       @errors << e.message
@@ -450,6 +454,13 @@ module Applications
 
       add_error("Failed to update application: #{@application.errors.full_messages.join(', ')}")
       false
+    end
+
+    def reconcile_after_paper_write(trigger)
+      @application.reload.reconcile_workflow_state!(actor: @admin, trigger: trigger)
+    rescue StandardError => e
+      log_error(e, "Workflow reconciliation failed after paper application #{@application&.id} #{trigger}")
+      @reconciliation_note = 'Workflow status update failed -- please verify this application status and advance it manually if needed.'
     end
 
     def process_proof_uploads

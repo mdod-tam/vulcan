@@ -124,18 +124,23 @@ module Admin
     end
 
     def batch_approve
-      result = Application.batch_update_status(params[:ids], :approved)
-      if result
+      result = Application.batch_update_status(params[:ids], :approved, actor: current_user)
+      if result[:success]
         redirect_to admin_applications_path, notice: t('.b_approved')
       else
-        render json: { error: 'Unable to approve applications' },
+        render json: { error: 'Unable to approve applications', details: result[:errors] },
                status: :unprocessable_content
       end
     end
 
     def batch_reject
-      Application.batch_update_status(params[:ids], :rejected)
-      redirect_to admin_applications_path, notice: t('.b_rejected')
+      result = Application.batch_update_status(params[:ids], :rejected, actor: current_user)
+      if result[:success]
+        redirect_to admin_applications_path, notice: t('.b_rejected')
+      else
+        render json: { error: 'Unable to reject applications', details: result[:errors] },
+               status: :unprocessable_content
+      end
     end
 
     def request_documents
@@ -182,23 +187,32 @@ module Admin
       end
     end
 
-    # Handles a successful proof review
+    # Handles a successful proof review.
+    # Approved proof reviews get a full Turbo redirect because the reconciler may
+    # change application status or medical_certification_status (self-healing path),
+    # requiring a full page refresh. Non-approved reviews keep partial updates.
     def handle_successful_review
       message = "#{params[:proof_type].capitalize} proof #{params[:status]} successfully."
+      @application.reload
 
-      # TurboStreamResponseHandling concern: Handles both HTML and Turbo Stream responses uniformly
-      # Flow: handle_success_response -> responds with redirect for HTML or turbo streams for AJAX
-      # For Turbo Streams, updates specified elements and removes open modals
-      # For HTML: redirects with notice message
-      handle_success_response(
-        html_redirect_path: admin_application_path(@application),
-        html_message: message,
-        turbo_updates: {
-          'attachments-section' => 'attachments',      # Updates attachment display
-          'audit-logs' => 'audit_logs',                # Updates audit log section
-          'modals' => 'modals'                         # Regenerates modals container (closes and resets all modals)
-        }
-      )
+      if params[:status] == 'approved'
+        handle_success_response(
+          html_redirect_path: admin_application_path(@application),
+          html_message: message,
+          turbo_redirect_path: admin_application_path(@application),
+          turbo_message: message
+        )
+      else
+        handle_success_response(
+          html_redirect_path: admin_application_path(@application),
+          html_message: message,
+          turbo_updates: {
+            'attachments-section' => 'attachments',
+            'audit-logs' => 'audit_logs',
+            'modals' => 'modals'
+          }
+        )
+      end
     end
 
     # Removed original process_application_status method - logic moved to concern
@@ -361,30 +375,27 @@ module Admin
       end
     end
 
-    # Handles successful certification status updates using Turbo
     def handle_successful_status_update(_status)
-      # The model's after_save :auto_approve_if_eligible callback handles the approval logic
-      @application.reload # Ensure we have the latest status after callbacks
-
+      @application.reload
       message = if @application.status_approved?
                   'Disability certification status updated and application auto-approved.'
                 else
                   'Disability certification status updated.'
                 end
-
       handle_successful_certification_update(message)
     end
 
-    # Handler for successful certification updates (approval or rejection) via Turbo
+    # Handler for successful certification updates (approval or rejection) via Turbo.
+    # Always performs a full Turbo redirect because certification status changes are
+    # infrequent admin actions that almost always change workflow-visible state
+    # (cert approval can trigger auto-approval; cert receipt changes the cert section).
     def handle_successful_certification_update(message)
+      @application.reload
       handle_success_response(
         html_redirect_path: admin_application_path(@application),
         html_message: message,
-        turbo_updates: {
-          'medical-certification-section' => 'medical_certification_section',
-          'audit-logs' => 'audit_logs',
-          'modals' => 'modals' # Regenerates modals container (closes and resets all modals)
-        }
+        turbo_redirect_path: admin_application_path(@application),
+        turbo_message: message
       )
     end
 
@@ -627,7 +638,7 @@ module Admin
         .where("action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ?)",
                %w[
                  voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
-                 application_created evaluator_assigned trainer_assigned application_auto_approved
+                 application_created evaluator_assigned trainer_assigned
                ],
                @application.id.to_s,
                { application_id: @application.id }.to_json)

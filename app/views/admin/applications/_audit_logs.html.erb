@@ -143,7 +143,11 @@
                       when ["draft", "in_progress"]
                         "Application submitted for review"
                       when [_, "approved"]
-                        "Application approved" 
+                        if log.metadata.try(:[], 'trigger') == 'auto_approval'
+                          "Application automatically approved after all requirements validated"
+                        else
+                          "Application approved"
+                        end
                       when [_, "rejected"]
                         "Application rejected"
                       else
@@ -186,22 +190,6 @@
                       "Evaluator #{log.metadata['evaluator_name']} assigned to application"
                     when "trainer_assigned"
                       "Trainer #{log.metadata['trainer_name']} assigned to application"
-                    when "application_auto_approved"
-                      triggered_by_id = log.metadata['triggered_by_user_id']
-                      trigger = log.metadata['trigger'].to_s
-                      triggered_by_name = nil
-                      if triggered_by_id.present?
-                        user = User.find_by(id: triggered_by_id)
-                        triggered_by_name = user&.full_name
-                      end
-                      trigger_text = if triggered_by_name.present?
-                                       triggered_by_name
-                                     elsif trigger.present?
-                                       trigger.gsub('proof_', '').titleize
-                                     else
-                                       'System'
-                                     end
-                      "Application automatically approved after all proofs validated (triggered by: #{trigger_text})"
                     when "medical_certification_requested"
                       method = log.metadata['submission_method']&.titleize || 'Unknown'
                       provider = log.metadata['provider_name']
