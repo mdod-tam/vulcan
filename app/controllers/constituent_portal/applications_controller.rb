@@ -545,7 +545,7 @@ module ConstituentPortal
           medical_provider_name medical_provider_phone medical_provider_fax medical_provider_email
           physical_address_1 physical_address_2 city state zip_code
           hearing_disability vision_disability speech_disability mobility_disability cognition_disability
-          alternate_contact_name alternate_contact_phone alternate_contact_email
+          alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
           medical_provider_attributes
         ]
       )

@@ -31,7 +31,7 @@ module Admin
       medical_provider_name medical_provider_phone medical_provider_fax
       medical_provider_email terms_accepted information_verified
       medical_release_authorized
-      alternate_contact_name alternate_contact_phone alternate_contact_email
+      alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
     ].freeze
 
     def new

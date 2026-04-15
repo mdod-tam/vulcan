@@ -79,10 +79,26 @@
           <%= form.text_field :alternate_contact_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
         </div>
         <div>
+          <%= form.label :alternate_contact_relationship_type, "Relationship", class: "block text-sm font-medium text-gray-700" %>
+          <%= form.select :alternate_contact_relationship_type,
+              options_for_select([
+                ["Select a relationship", ""],
+                ["Parent", "parent"],
+                ["Spouse", "spouse"],
+                ["Child", "child"],
+                ["Sibling", "sibling"],
+                ["Neighbor", "neighbor"],
+                ["Friend", "friend"],
+                ["Other", "other"]
+              ], @application.alternate_contact_relationship_type),
+              { include_blank: false },
+              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+        </div>
+        <div>
           <%= form.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
           <%= form.telephone_field :alternate_contact_phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
         </div>
-        <div class="md:col-span-2">
+        <div>
           <%= form.label :alternate_contact_email, "Email", class: "block text-sm font-medium text-gray-700" %>
           <%= form.email_field :alternate_contact_email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
         </div>

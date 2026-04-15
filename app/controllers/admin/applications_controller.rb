@@ -717,7 +717,8 @@ module Admin
                      medical_provider_email
                      alternate_contact_name
                      alternate_contact_phone
-                     alternate_contact_email]
+                     alternate_contact_email
+                     alternate_contact_relationship_type]
 
       permitted.push(:household_size, :annual_income) if @application.income_proof_required?
 

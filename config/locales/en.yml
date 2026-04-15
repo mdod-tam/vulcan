@@ -28,6 +28,15 @@
 #       enabled: "ON"
 
 en:
+  applications:
+    alternate_contact_relationship_types:
+      parent: "Parent"
+      spouse: "Spouse"
+      child: "Child"
+      sibling: "Sibling"
+      neighbor: "Neighbor"
+      friend: "Friend"
+      other: "Other"
   document_signing:
     medical_certification_request:
       submission_name: "Medical Certification - %{constituent_full_name} (Application %{application_id})"
