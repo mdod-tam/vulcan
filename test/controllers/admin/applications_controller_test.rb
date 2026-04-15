@@ -239,6 +239,33 @@ module Admin
       assert_match(/Training Sessions \(1\)/, response.body)
     end
 
+    test 'admin training mutation routes are removed' do
+      assert_raises(NoMethodError) do
+        schedule_training_admin_application_path(@application)
+      end
+
+      assert_raises(NoMethodError) do
+        complete_training_admin_application_path(@application)
+      end
+    end
+
+    test 'show page keeps training visibility but removes admin mutation controls' do
+      voucher_app = create(
+        :application,
+        :completed,
+        :voucher_fulfillment,
+        user: create(:constituent, email: generate(:email))
+      )
+      training_session = create(:training_session, :scheduled, application: voucher_app, trainer: create(:trainer))
+
+      get admin_application_path(voucher_app)
+      assert_response :success
+
+      assert_select "a[href='#{trainers_training_session_path(training_session)}']", text: 'View Session'
+      assert_no_match(%r{/admin/applications/#{voucher_app.id}/complete_training}, response.body)
+      assert_no_match(/>Complete</, response.body)
+    end
+
     test 'show page uses db-backed rejection reason text in modal data attributes' do
       income_body = 'DB income missing-name reason for modal test.'
       medical_body = 'DB medical missing-signature reason for modal test.'

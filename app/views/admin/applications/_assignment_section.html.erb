@@ -30,9 +30,9 @@
         <% end %>
       </div>
       <% if !entity.respond_to?(:status_completed?) || !entity.status_completed? %>
-        <%= link_to "View #{type.titleize == 'Trainer' ? 'Training' : type.titleize}",
+        <%= link_to(type == 'trainer' ? 'View Session' : "View #{type.titleize}",
             view_path,
-            class: "mt-4 md:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+            class: "mt-4 md:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500") %>
       <% end %>
     </div>
   <% else %>

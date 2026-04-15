@@ -28,7 +28,7 @@ module Admin
     before_action :set_application, only: %i[
       show edit update
       request_documents review_proof update_proof_status
-      approve reject assign_evaluator assign_trainer schedule_training complete_training
+      approve reject assign_evaluator assign_trainer
       update_certification_status resend_medical_certification assign_voucher
       upload_medical_certification send_document_signing_request
       queue_medical_certification_form
@@ -234,7 +234,7 @@ module Admin
                     notice: t('.eval_assign_pass')
       else
         redirect_to admin_application_path(@application),
-                    alert: t('.eval_assign_fail')
+                    alert: @application.errors.full_messages.to_sentence.presence || t('.eval_assign_fail')
       end
     end
 
@@ -247,37 +247,8 @@ module Admin
                     notice: t('.trainer_assign_pass')
       else
         redirect_to admin_application_path(@application),
-                    alert: t('.trainer_assign_fail')
+                    alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_assign_fail')
       end
-    end
-
-    def schedule_training
-      trainer = Users::Trainer.active.find_by(id: params[:trainer_id])
-      unless trainer
-        redirect_to admin_application_path(@application), alert: t('.t_schedule_invalid')
-        return
-      end
-
-      training_session = @application.schedule_training!(
-        trainer: trainer,
-        scheduled_for: params[:scheduled_for]
-      )
-
-      if training_session.persisted?
-        redirect_to admin_application_path(@application),
-                    notice: "Training session scheduled with #{trainer.full_name}"
-      else
-        redirect_to admin_application_path(@application),
-                    alert: t('.t_schedule_fail')
-      end
-    end
-
-    def complete_training
-      training_session = @application.training_sessions.find(params[:training_session_id])
-      training_session.complete!
-
-      redirect_to admin_application_path(@application),
-                  notice: t('.t_completed')
     end
 
     # Updates medical certification status and handles file uploads

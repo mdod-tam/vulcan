@@ -11,7 +11,7 @@ module ConstituentPortal
       @admin = create(:admin)
 
       # Create and approve an application
-      @application = create(:application, user: @constituent)
+      @application = create(:application, user: @constituent, application_date: 2.years.ago.to_date)
 
       # Set Current.user to avoid validation errors in callbacks
       Current.user = @admin

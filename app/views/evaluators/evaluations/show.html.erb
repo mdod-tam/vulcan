@@ -133,7 +133,11 @@
 
   <!-- Form sections for managing evaluation - Start -->
   <div class="mt-8" data-controller="evaluation-management">
-    <% if @evaluation.evaluation_date.blank? %>
+    <% if !@can_manage_evaluation %>
+      <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
+        This is a read-only oversight view. Only the assigned evaluator can update this evaluation.
+      </div>
+    <% elsif @evaluation.evaluation_date.blank? %>
       <!-- Initial Schedule Evaluation Form (only if not scheduled yet) -->
       <div class="bg-white shadow rounded-lg mb-6">
         <div class="px-4 py-5 sm:p-6">

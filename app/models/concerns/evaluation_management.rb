@@ -5,10 +5,18 @@
 module EvaluationManagement
   extend ActiveSupport::Concern
 
+  EVALUATION_SERVICE_WINDOW_ERROR = 'This application is outside the service window for evaluation services.'
+  private_constant :EVALUATION_SERVICE_WINDOW_ERROR
+
   # Assigns an evaluator to this application
   # @param evaluator [Evaluator] The evaluator to assign
   # @return [Boolean] True if the evaluator was assigned successfully
   def assign_evaluator!(evaluator)
+    unless service_window_active?
+      errors.add(:base, EVALUATION_SERVICE_WINDOW_ERROR)
+      return false
+    end
+
     with_lock do
       evaluation = evaluations.create!(
         evaluator: evaluator,
@@ -43,6 +51,7 @@ module EvaluationManagement
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to assign evaluator: #{e.message}"
+    errors.add(:base, e.message)
     false
   end
 
