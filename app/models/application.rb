@@ -323,17 +323,17 @@ class Application < ApplicationRecord
   end
 
   # Status methods- Delegate approval logic to the Applications::Approver service object
-  def approve!(user: Current.user)
+  def approve!(user:)
     Applications::Approver.new(self, by: user).call
   end
 
   # Delegate rejection logic to the Applications::Rejecter service object
-  def reject!(user: Current.user)
+  def reject!(user:)
     Applications::Rejecter.new(self, by: user).call
   end
 
   # Delegate document request logic to the Applications::DocumentRequester service object
-  def request_documents!(user: Current.user)
+  def request_documents!(user:)
     Applications::DocumentRequester.new(self, by: user).call
   end
 

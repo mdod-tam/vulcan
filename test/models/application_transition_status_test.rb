@@ -69,6 +69,14 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
     assert_equal 'actor is required', error.message
   end
 
+  test 'application lifecycle wrappers require an explicit user' do
+    application = create(:application, :in_progress, user: @constituent)
+
+    assert_raises(ArgumentError) { application.approve! }
+    assert_raises(ArgumentError) { application.reject! }
+    assert_raises(ArgumentError) { application.request_documents! }
+  end
+
   test 'transition_status! rolls back the status change if status audit logging fails' do
     application = create(:application, :in_progress, user: @constituent)
 
