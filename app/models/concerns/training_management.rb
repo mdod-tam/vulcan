@@ -5,15 +5,12 @@
 module TrainingManagement
   extend ActiveSupport::Concern
 
-  TRAINING_SERVICE_WINDOW_ERROR = 'This application is outside the service window for training services.'
-  private_constant :TRAINING_SERVICE_WINDOW_ERROR
-
   # Assigns a trainer to this application
   # @param trainer [Trainer] The trainer to assign
   # @return [Boolean] True if the trainer was assigned successfully
   def assign_trainer!(trainer)
     unless service_window_active?
-      errors.add(:base, TRAINING_SERVICE_WINDOW_ERROR)
+      errors.add(:base, :training_service_window)
       return false
     end
 

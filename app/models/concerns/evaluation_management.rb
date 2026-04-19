@@ -5,15 +5,12 @@
 module EvaluationManagement
   extend ActiveSupport::Concern
 
-  EVALUATION_SERVICE_WINDOW_ERROR = 'This application is outside the service window for evaluation services.'
-  private_constant :EVALUATION_SERVICE_WINDOW_ERROR
-
   # Assigns an evaluator to this application
   # @param evaluator [Evaluator] The evaluator to assign
   # @return [Boolean] True if the evaluator was assigned successfully
   def assign_evaluator!(evaluator)
     unless service_window_active?
-      errors.add(:base, EVALUATION_SERVICE_WINDOW_ERROR)
+      errors.add(:base, :evaluation_service_window)
       return false
     end
 

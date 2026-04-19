@@ -204,7 +204,7 @@ class ApplicationTest < ActiveSupport::TestCase
       assert_not application.assign_trainer!(trainer)
     end
 
-    assert_includes application.errors[:base], 'This application is outside the service window for training services.'
+    assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.training_service_window')
   end
 
   test 'assign_evaluator! fails outside the service window' do
@@ -216,7 +216,7 @@ class ApplicationTest < ActiveSupport::TestCase
       assert_not application.assign_evaluator!(evaluator)
     end
 
-    assert_includes application.errors[:base], 'This application is outside the service window for evaluation services.'
+    assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window')
   end
 
   test 'batch_update_status updates multiple applications and returns success' do
