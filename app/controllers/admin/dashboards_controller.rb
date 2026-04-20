@@ -13,7 +13,7 @@ module Admin
       # Load recent notifications to avoid N+1 queries
       # Preload notifiable for Notification#message, actor for view display
       @recent_notifications = Notification
-                              .includes(:actor, :notifiable)
+                              .includes(:actor, notifiable: :user)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
