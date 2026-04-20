@@ -6,6 +6,7 @@ module Evaluators
     before_action :require_evaluator!
     before_action :set_evaluation,
                   except: %i[index new create pending completed requested scheduled needs_followup filter]
+    before_action :authorize_evaluation_mutation!, only: %i[edit update schedule reschedule submit_report request_additional_info]
 
     def index
       # Redirect to dashboard for main entry point
@@ -93,6 +94,7 @@ module Evaluators
 
     def show
       # @evaluation is set by set_evaluation
+      @can_manage_evaluation = assigned_evaluator?
     end
 
     def new
@@ -210,6 +212,13 @@ module Evaluators
       redirect_to root_path, alert: 'Not authorized'
     end
 
+    def authorize_evaluation_mutation!
+      return if assigned_evaluator?
+
+      redirect_target = current_user&.admin? ? evaluators_evaluation_path(@evaluation) : evaluators_evaluations_path
+      redirect_to redirect_target, alert: 'Only the assigned evaluator can update this evaluation.'
+    end
+
     def filter_evaluations(_scope, status)
       # Base query - either all sessions or just mine
       base_query = if current_user.admin?
@@ -265,6 +274,10 @@ module Evaluators
         { 'product_id' => product_id, 'reaction' => 'Recorded during evaluation' }
       end
       params[:products_tried] = products_tried
+    end
+
+    def assigned_evaluator?
+      @evaluation&.evaluator_id == current_user&.id
     end
   end
 end

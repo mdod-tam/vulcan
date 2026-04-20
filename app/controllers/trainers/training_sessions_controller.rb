@@ -5,6 +5,7 @@ module Trainers
   # Handles listing, filtering, showing, and updating the status of training sessions.
   class TrainingSessionsController < Trainers::BaseController
     before_action :set_training_session, only: %i[show update_status complete schedule reschedule cancel] # Removed :edit
+    before_action :authorize_training_session_mutation!, only: %i[update_status complete schedule reschedule cancel]
 
     def index
       if params[:status].present? || params[:scope].present? || params[:filter].present?
@@ -205,10 +206,19 @@ module Trainers
       end
 
       # Authorization check: Allow admins or the assigned trainer
-      return if current_user&.admin? || (@training_session && @training_session.trainer_id == current_user&.id)
+      return if current_user&.admin? || assigned_trainer?
 
       # If not authorized, redirect with an alert
       redirect_to trainers_dashboard_path, alert: "You don't have access to this training session."
+    ensure
+      @can_manage_training_session = assigned_trainer?
+    end
+
+    def authorize_training_session_mutation!
+      return if assigned_trainer?
+
+      redirect_target = current_user&.admin? ? trainers_training_session_path(@training_session) : trainers_dashboard_path
+      redirect_to redirect_target, alert: 'Only the assigned trainer can update this training session.'
     end
 
     def training_session_params
@@ -261,6 +271,10 @@ module Trainers
       Event.where('metadata @> ?', { training_session_id: @training_session.id }.to_json)
            .includes(:user)
            .order(created_at: :asc)
+    end
+
+    def assigned_trainer?
+      @training_session&.trainer_id == current_user&.id
     end
   end
 end

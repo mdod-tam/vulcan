@@ -175,6 +175,50 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal 'submission', status_change.metadata['trigger']
   end
 
+  test 'service_window_active? returns true for approved applications inside the service window' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+
+    assert application.service_window_active?
+  end
+
+  test 'service_window_active? returns false for approved applications outside the service window' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 3.years.ago.to_date)
+
+    assert_not application.service_window_active?
+  end
+
+  test 'service_window_active? returns false for non-approved applications' do
+    application = create(:application, status: :in_progress, application_date: 1.year.ago.to_date)
+
+    assert_not application.service_window_active?
+  end
+
+  test 'assign_trainer! fails outside the service window' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 4.years.ago.to_date)
+    trainer = create(:trainer)
+
+    assert_no_difference -> { TrainingSession.count } do
+      assert_not application.assign_trainer!(trainer)
+    end
+
+    assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.training_service_window')
+  end
+
+  test 'assign_evaluator! fails outside the service window' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 4.years.ago.to_date)
+    evaluator = create(:evaluator)
+
+    assert_no_difference -> { Evaluation.count } do
+      assert_not application.assign_evaluator!(evaluator)
+    end
+
+    assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window')
+  end
+
   test 'batch_update_status updates multiple applications and returns success' do
     app1 = create(:application, :draft)
     app2 = create(:application, :draft)
@@ -216,7 +260,7 @@ class ApplicationTest < ActiveSupport::TestCase
     admin = create(:admin)
 
     assert_no_difference -> { ApplicationStatusChange.count } do
-      result = Application.batch_update_status([app1.id, 999999], :in_progress, actor: admin)
+      result = Application.batch_update_status([app1.id, 999_999], :in_progress, actor: admin)
       assert_not result[:success]
       assert_equal 0, result[:success_count]
       assert_includes result[:errors].first, 'Applications not found: 999999'

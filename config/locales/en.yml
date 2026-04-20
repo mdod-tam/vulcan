@@ -28,6 +28,14 @@
 #       enabled: "ON"
 
 en:
+  activerecord:
+    errors:
+      models:
+        application:
+          attributes:
+            base:
+              training_service_window: "This application is outside the service window for training services."
+              evaluation_service_window: "This application is outside the service window for evaluation services."
   applications:
     alternate_contact_relationship_types:
       parent: "Parent"

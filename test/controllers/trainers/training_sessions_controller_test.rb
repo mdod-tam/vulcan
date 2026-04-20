@@ -57,6 +57,51 @@ module Trainers
       assert_response :success
     end
 
+    test 'admin sees training session as read-only' do
+      sign_in_for_controller_test @admin
+
+      get trainers_training_session_url(@requested_session)
+
+      assert_response :success
+      assert_includes @response.body, 'This is a read-only oversight view.'
+      assert_not_includes @response.body, 'Schedule Training'
+      assert_not_includes @response.body, 'Mark as Completed'
+      assert_not_includes @response.body, 'Cancel Training'
+    end
+
+    test 'admin cannot schedule a training session' do
+      sign_in_for_controller_test @admin
+
+      post schedule_trainers_training_session_url(@requested_session),
+           params: { scheduled_for: 2.days.from_now, notes: 'Admin attempt' }
+
+      assert_redirected_to trainers_training_session_url(@requested_session)
+      assert_equal 'Only the assigned trainer can update this training session.', flash[:alert]
+      assert_equal 'requested', @requested_session.reload.status
+    end
+
+    test 'admin cannot complete a training session' do
+      sign_in_for_controller_test @admin
+
+      post complete_trainers_training_session_url(@training_session),
+           params: { notes: 'Admin attempt', product_trained_on_id: @product.id }
+
+      assert_redirected_to trainers_training_session_url(@training_session)
+      assert_equal 'Only the assigned trainer can update this training session.', flash[:alert]
+      assert_equal 'scheduled', @training_session.reload.status
+    end
+
+    test 'other trainer cannot mutate a training session' do
+      sign_in_for_controller_test @other_trainer
+
+      post schedule_trainers_training_session_url(@requested_session),
+           params: { scheduled_for: 2.days.from_now, notes: 'Other trainer attempt' }
+
+      assert_redirected_to trainers_dashboard_path
+      assert_equal "You don't have access to this training session.", flash[:alert]
+      assert_equal 'requested', @requested_session.reload.status
+    end
+
     test 'unauthenticated user should be redirected to login' do
       get trainers_training_session_url(@training_session)
       assert_redirected_to sign_in_url

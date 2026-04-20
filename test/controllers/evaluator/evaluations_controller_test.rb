@@ -6,9 +6,12 @@ require 'test_helper'
 class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   def setup
     @evaluator = create(:evaluator)
+    @other_evaluator = create(:evaluator)
+    @admin = create(:admin)
     sign_in_for_controller_test(@evaluator)
     @product = create(:product, name: 'iPad Air')
     @evaluation = create(:evaluation, evaluator: @evaluator, status: :scheduled)
+    @requested_evaluation = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil, location: nil)
   end
 
   test 'gets pending' do
@@ -43,5 +46,66 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to evaluators_evaluation_path(@evaluation)
+  end
+
+  test 'assigned evaluator can schedule an evaluation' do
+    post schedule_evaluators_evaluation_path(@requested_evaluation),
+         params: { evaluation_date: 2.days.from_now, location: 'Library', notes: 'Scheduled by evaluator' }
+
+    assert_redirected_to evaluators_evaluation_path(@requested_evaluation)
+    assert_equal 'scheduled', @requested_evaluation.reload.status
+  end
+
+  test 'admin can view evaluation but only in read-only mode' do
+    sign_in_for_controller_test(@admin)
+
+    get evaluators_evaluation_path(@evaluation)
+
+    assert_response :success
+    assert_includes @response.body, 'This is a read-only oversight view.'
+    assert_not_includes @response.body, 'Update Evaluation'
+    assert_not_includes @response.body, 'Reschedule Evaluation'
+  end
+
+  test 'admin cannot schedule an evaluation' do
+    sign_in_for_controller_test(@admin)
+
+    post schedule_evaluators_evaluation_path(@requested_evaluation),
+         params: { evaluation_date: 2.days.from_now, location: 'Admin attempt', notes: 'Admin attempt' }
+
+    assert_redirected_to evaluators_evaluation_path(@requested_evaluation)
+    assert_equal 'Only the assigned evaluator can update this evaluation.', flash[:alert]
+    assert_equal 'requested', @requested_evaluation.reload.status
+  end
+
+  test 'admin cannot submit an evaluation report' do
+    sign_in_for_controller_test(@admin)
+
+    post submit_report_evaluators_evaluation_path(@evaluation), params: {
+      evaluation: {
+        needs: 'Admin attempt',
+        notes: 'Admin attempt',
+        location: 'Admin attempt',
+        evaluation_date: Time.current,
+        recommended_product_ids: [@product.id],
+        products_tried: [{ product_id: @product.id, reaction: 'Positive' }],
+        attendees: [{ name: 'Test User', relationship: 'Self' }]
+      }
+    }
+
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    assert_equal 'Only the assigned evaluator can update this evaluation.', flash[:alert]
+    assert_equal 'scheduled', @evaluation.reload.status
+  end
+
+  test 'other evaluator cannot mutate an evaluation' do
+    sign_in_for_controller_test(@other_evaluator)
+
+    post schedule_evaluators_evaluation_path(@requested_evaluation),
+         params: { evaluation_date: 2.days.from_now, location: 'Other evaluator attempt' }
+
+    assert_redirected_to evaluators_evaluations_path
+    assert_equal 'Evaluation not found.', flash[:alert]
+    assert_equal 'requested', @requested_evaluation.reload.status
   end
 end

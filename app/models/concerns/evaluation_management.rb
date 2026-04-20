@@ -9,6 +9,11 @@ module EvaluationManagement
   # @param evaluator [Evaluator] The evaluator to assign
   # @return [Boolean] True if the evaluator was assigned successfully
   def assign_evaluator!(evaluator)
+    unless service_window_active?
+      errors.add(:base, :evaluation_service_window)
+      return false
+    end
+
     with_lock do
       evaluation = evaluations.create!(
         evaluator: evaluator,
@@ -43,6 +48,7 @@ module EvaluationManagement
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to assign evaluator: #{e.message}"
+    errors.add(:base, e.message)
     false
   end
 

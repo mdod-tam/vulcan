@@ -348,7 +348,7 @@
 
           <!-- Trainer Section (Conditional based on policy limit) -->
           <% if @completed_training_sessions_count < @max_training_sessions %>
-            <% latest_training = @application.training_sessions.where(status: [:requested, :scheduled, :confirmed]).order(created_at: :desc).first %>
+            <% latest_training = @application.active_training_session %>
             <%
               # Get trainers by type and by capability
               trainers_by_type = User.where(type: "Users::Trainer", status: :active)
@@ -406,14 +406,9 @@
                       <%= training_session_status_badge(session) %>
                     </div>
                     <div class="flex space-x-2 mt-2 md:mt-0">
-                      <% if session.status_scheduled? %>
-                        <%= button_to complete_training_admin_application_path(@application, training_session_id: session.id),
-                            method: :patch,
-                            class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
-                            data: { confirm: "Mark training session with #{session.trainer.full_name} as completed?" } do %>
-                          Complete
-                        <% end %>
-                      <% end %>
+                      <%= link_to "View Session",
+                          trainers_training_session_path(session),
+                          class: "inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
                       <% if session.status_completed? %>
                         <span class="text-sm text-gray-600">Completed on <%= session.completed_at&.strftime("%B %d, %Y") %></span>
                       <% end %>

@@ -140,6 +140,8 @@ class Application < ApplicationRecord
   validate :constituent_must_have_disability, if: :validate_disability?
   validate :managing_guardian_cannot_be_applicant
 
+  delegate :present?, to: :active_training_session, prefix: true
+
   before_validation :scrub_income_fields, if: :should_scrub_income?
   before_save :ensure_managing_guardian_set, if: :user_id_changed?
   # Callbacks
@@ -228,6 +230,20 @@ class Application < ApplicationRecord
     )
   }
 
+  scope :with_pending_training_request, lambda {
+    where(status: :approved)
+      .where.not(training_requested_at: nil)
+      .where.not(id: TrainingSession.assigned_or_scheduled.select(:application_id))
+      .where(<<~SQL.squish)
+        NOT EXISTS (
+          SELECT 1
+          FROM training_sessions
+          WHERE training_sessions.application_id = applications.id
+            AND training_sessions.created_at >= applications.training_requested_at
+        )
+      SQL
+  }
+
   scope :with_pending_training, lambda {
     joins(:training_sessions).merge(TrainingSession.where(status: %i[requested scheduled confirmed])).distinct
   }
@@ -269,6 +285,11 @@ class Application < ApplicationRecord
       .group(:last_visited_step)
       .order(count_all: :desc)
       .count
+  end
+
+  def self.expire_training_request_metrics_cache!
+    Rails.cache.delete('admin_dashboard_metrics')
+    Rails.cache.delete('dashboard_metrics_training_requests')
   end
 
   def self.batch_update_status(ids, new_status, actor:) # rubocop:disable Metrics/PerceivedComplexity
@@ -514,6 +535,24 @@ class Application < ApplicationRecord
       status_approved? &&
       medical_certification_status_approved? &&
       !vouchers.exists?
+  end
+
+  def active_training_session
+    training_sessions.assigned_or_scheduled.order(created_at: :desc).first
+  end
+
+  def training_request_pending?
+    training_requested_at.present? &&
+      !active_training_session_present? &&
+      training_sessions.where(created_at: training_requested_at..).none?
+  end
+
+  def service_window_active?
+    return false unless status_approved?
+    return false if application_date.blank?
+
+    waiting_period = Policy.get('waiting_period_years') || 3
+    application_date.to_date + waiting_period.years > Date.current
   end
 
   # Returns the guardian relationship type for this application

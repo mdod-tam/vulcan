@@ -139,6 +139,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.integer "submission_method"
     t.boolean "terms_accepted"
     t.integer "total_rejections", default: 0, null: false
+    t.datetime "training_requested_at"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
@@ -156,6 +157,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.index ["residency_proof_status"], name: "idx_applications_on_residency_proof_status"
     t.index ["status", "needs_review_since"], name: "index_applications_on_status_and_needs_review_since"
     t.index ["total_rejections"], name: "index_applications_on_total_rejections"
+    t.index ["training_requested_at"], name: "index_applications_on_training_requested_at"
     t.index ["user_id"], name: "index_applications_on_user_id"
     t.check_constraint "income_proof_status = ANY (ARRAY[0, 1, 2])", name: "income_proof_status_check"
     t.check_constraint "residency_proof_status = ANY (ARRAY[0, 1, 2])", name: "residency_proof_status_check"

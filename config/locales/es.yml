@@ -1,4 +1,12 @@
 es:
+  activerecord:
+    errors:
+      models:
+        application:
+          attributes:
+            base:
+              training_service_window: "Esta solicitud está fuera del período de servicio para los servicios de capacitación."
+              evaluation_service_window: "Esta solicitud está fuera del período de servicio para los servicios de evaluación."
   document_signing:
     medical_certification_request:
       submission_name: "Certificacion medica - %{constituent_full_name} (Solicitud %{application_id})"

@@ -156,8 +156,6 @@ Rails.application.routes.draw do
         patch :reject
         post :assign_evaluator
         post :assign_trainer
-        post :schedule_training
-        post :complete_training
         patch :update_proof_status
         patch :update_certification_status
         post :resend_medical_certification
