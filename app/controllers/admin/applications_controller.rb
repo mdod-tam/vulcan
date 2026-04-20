@@ -430,22 +430,19 @@ module Admin
         pdf_source: pdf_source
       ).call
 
-      if result.success?
-        redirect_to admin_print_queue_index_path, notice: t('.queue_print_pass')
-      else
-        redirect_to admin_application_path(@application), alert: result.message || 'Failed to queue DCF for printing.'
-      end
-    end
-
-    def refresh_pipeline_chart
-      # Load updated chart data
-      metrics = load_dashboard_metrics
-
       respond_to do |format|
-        format.turbo_stream do
-          render turbo_stream: turbo_stream.update('pipeline_chart_frame',
-                                                   partial: 'pipeline_chart',
-                                                   locals: { data: metrics[:pipeline_chart_data] })
+        if result.success?
+          flash.now[:notice] = "#{t('.queue_print_pass')} #{view_context.link_to('View print queue', admin_print_queue_index_path)}".html_safe
+          format.turbo_stream do
+            render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
+          end
+          format.html { redirect_to admin_print_queue_index_path, notice: t('.queue_print_pass') }
+        else
+          flash.now[:alert] = result.message || 'Failed to queue DCF for printing.'
+          format.turbo_stream do
+            render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash'), status: :unprocessable_entity
+          end
+          format.html { redirect_to admin_application_path(@application), alert: result.message || 'Failed to queue DCF for printing.' }
         end
       end
     end
