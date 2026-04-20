@@ -365,9 +365,9 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     )
 
     rejection_reason = resolve_rejection_reason(proof_review, locale)
-    remaining_attempts_message = build_remaining_attempts_message(remaining_attempts, reapply_date)
-    default_options_text = build_resubmission_options(application, sign_in_url)
-    archived_message = build_archived_message(reapply_date)
+    remaining_attempts_message = build_remaining_attempts_message(remaining_attempts, reapply_date, locale: locale)
+    default_options_text = build_resubmission_options(application, sign_in_url, locale: locale)
+    archived_message = build_archived_message(reapply_date, locale: locale)
 
     base_variables.merge({
                            user_first_name: user.first_name,
@@ -415,39 +415,34 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     "#{addr1} #{addr2} #{city}, #{state} #{zip}".squish
   end
 
-  def build_remaining_attempts_message(remaining_attempts, reapply_date)
-    "You have #{remaining_attempts} #{'attempt'.pluralize(remaining_attempts)} " \
-      'remaining to submit the required documentation before ' \
-      "#{reapply_date.strftime('%B %d, %Y')}."
+  def build_remaining_attempts_message(remaining_attempts, reapply_date, locale: nil)
+    locale = locale.presence || I18n.default_locale
+    I18n.t(
+      'application_notifications.proof_rejected.remaining_attempts_message',
+      count: remaining_attempts,
+      locale: locale,
+      reapply_date: I18n.l(reapply_date, format: :long, locale: locale)
+    )
   end
 
-  def build_resubmission_options(application, sign_in_url)
-    if application.submission_method_paper?
-      <<~TEXT.strip
-        HOW TO RESUBMIT YOUR DOCUMENTATION:
-        1. Reply to this email: Simply reply to this email and attach your updated documentation.
-        2. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
-           Maryland Accessible Telecommunications
-           123 Main Street
-           Baltimore, MD 21201
-      TEXT
-    else
-      <<~TEXT.strip
-        HOW TO RESUBMIT YOUR DOCUMENTATION:
-        1. Reply to this email: Simply reply to this email and attach your updated documentation.
-        2. Upload Online: Sign in to your account dashboard at #{sign_in_url} and upload your new documents securely.
-        3. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
-           Maryland Accessible Telecommunications
-           123 Main Street
-           Baltimore, MD 21201
-      TEXT
-    end
+  def build_resubmission_options(application, sign_in_url, locale: nil)
+    locale = locale.presence || I18n.default_locale
+    option_type = application.submission_method_paper? ? 'paper' : 'online'
+
+    I18n.t(
+      "application_notifications.proof_rejected.resubmission_options.#{option_type}",
+      locale: locale,
+      sign_in_url: sign_in_url
+    ).strip
   end
 
-  def build_archived_message(reapply_date)
-    'Unfortunately, you have reached the maximum number of submission attempts. ' \
-      'Your application has been archived. You may reapply after ' \
-      "#{reapply_date.strftime('%B %d, %Y')}."
+  def build_archived_message(reapply_date, locale: nil)
+    locale = locale.presence || I18n.default_locale
+    I18n.t(
+      'application_notifications.proof_rejected.archived_message',
+      locale: locale,
+      reapply_date: I18n.l(reapply_date, format: :long, locale: locale)
+    )
   end
 
   def send_proof_rejected_email(user, text_template, variables)

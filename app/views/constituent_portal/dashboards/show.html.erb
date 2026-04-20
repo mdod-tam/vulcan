@@ -598,7 +598,7 @@
                 <% if @active_application.training_request_pending? %>
                   <div class="mb-4 rounded-md bg-blue-50 p-4">
                     <p class="text-sm text-blue-800">
-                      Training session requested. A trainer will reach out soon to schedule your training.
+                      <%= t('applications.training_requests.messages.duplicate_pending', locale: current_user.effective_locale) %>
                     </p>
                   </div>
                   <%= button_tag "Training Session Requested",

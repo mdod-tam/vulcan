@@ -295,7 +295,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     proof_review = create(:proof_review, :with_income_proof, application: application, rejection_reason: 'Document unclear')
 
     spanish_template = mock_template('Rechazo en espanol',
-                                     'Texto de rechazo para %<user_first_name>s. Reason: %<rejection_reason>s')
+                                     'Texto de rechazo para %<user_first_name>s. ' \
+                                     'Reason: %<rejection_reason>s ' \
+                                     '%<remaining_attempts_message_text>s ' \
+                                     '%<default_options_text>s')
     EmailTemplate.stubs(:find_by!).with(
       name: 'application_notifications_proof_rejected',
       format: :text,
@@ -307,6 +310,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal [guardian.email], email.to
     assert_equal 'Rechazo en espanol', email.subject
+    assert_includes email.body.to_s, 'Tiene 6 intentos restantes'
+    assert_includes email.body.to_s, I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')
+    assert_includes email.body.to_s, 'CÓMO VOLVER A ENVIAR SU DOCUMENTACIÓN'
   end
 
   test 'proof_rejected generates letter when preference is letter' do

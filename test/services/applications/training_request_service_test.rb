@@ -8,9 +8,8 @@ module Applications
       @constituent = create(:constituent)
       @admin = create(:admin)
       @application = create_reviewed_application(user: @constituent)
-      policy = Policy.find_or_initialize_by(key: 'max_training_sessions')
-      policy.value = 3
-      policy.save!
+      Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
+      Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     end
 
     test 'writes training_requested_at for a valid request' do
@@ -22,13 +21,32 @@ module Applications
       assert_not_nil @application.reload.training_requested_at
     end
 
+    test 'rejects requests outside the service window with a clear message' do
+      @application.update!(application_date: 4.years.ago.to_date)
+
+      result = TrainingRequestService.new(application: @application, current_user: @constituent).call
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.training_requests.messages.service_window'), result.message
+    end
+
     test 'rejects duplicate pending request' do
       @application.update!(training_requested_at: 1.hour.ago)
 
       result = TrainingRequestService.new(application: @application, current_user: @constituent).call
 
       assert_not result.success?
-      assert_equal TrainingRequestService::DUPLICATE_REQUEST_MESSAGE, result.message
+      assert_equal I18n.t('applications.training_requests.messages.duplicate_pending'), result.message
+    end
+
+    test 'uses constituent locale for duplicate pending request message' do
+      @constituent.update!(locale: 'es')
+      @application.update!(training_requested_at: 1.hour.ago)
+
+      result = TrainingRequestService.new(application: @application, current_user: @constituent).call
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.training_requests.messages.duplicate_pending', locale: 'es'), result.message
     end
 
     test 'rejects duplicate request when an active training session exists' do
@@ -37,7 +55,7 @@ module Applications
       result = TrainingRequestService.new(application: @application, current_user: @constituent).call
 
       assert_not result.success?
-      assert_equal TrainingRequestService::ACTIVE_SESSION_MESSAGE, result.message
+      assert_equal I18n.t('applications.training_requests.messages.active_session'), result.message
     end
 
     test 'allows re-request after cancelled session when quota remains' do
@@ -71,7 +89,7 @@ module Applications
       result = TrainingRequestService.new(application: @application, current_user: @constituent).call
 
       assert_not result.success?
-      assert_equal 'You have used all of your available training sessions.', result.message
+      assert_equal I18n.t('applications.training_requests.messages.quota_exhausted'), result.message
     end
 
     private
@@ -80,6 +98,7 @@ module Applications
       application = create(:application, skip_proofs: true, user: user, status: :in_progress)
       attach_required_proofs(application)
       application.update_columns(
+        application_date: 2.years.ago.to_date,
         status: Application.statuses[:approved],
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],

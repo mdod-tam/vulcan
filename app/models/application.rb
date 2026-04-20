@@ -244,6 +244,10 @@ class Application < ApplicationRecord
       SQL
   }
 
+  scope :with_pending_training, lambda {
+    joins(:training_sessions).merge(TrainingSession.where(status: %i[requested scheduled confirmed])).distinct
+  }
+
   scope :with_active_training_for_trainer, lambda { |trainer_id|
     joins(:training_sessions).where(
       training_sessions: {
@@ -541,6 +545,14 @@ class Application < ApplicationRecord
     training_requested_at.present? &&
       !active_training_session_present? &&
       training_sessions.where(created_at: training_requested_at..).none?
+  end
+
+  def service_window_active?
+    return false unless status_approved?
+    return false if application_date.blank?
+
+    waiting_period = Policy.get('waiting_period_years') || 3
+    application_date.to_date + waiting_period.years > Date.current
   end
 
   # Returns the guardian relationship type for this application

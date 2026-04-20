@@ -9,6 +9,11 @@ module TrainingManagement
   # @param trainer [Trainer] The trainer to assign
   # @return [Boolean] True if the trainer was assigned successfully
   def assign_trainer!(trainer)
+    unless service_window_active?
+      errors.add(:base, :training_service_window)
+      return false
+    end
+
     with_lock do
       training_session = training_sessions.create!(
         trainer: trainer,
@@ -47,24 +52,6 @@ module TrainingManagement
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to assign trainer: #{e.message}"
-    false
-  end
-
-  # Schedules a training session
-  # @param trainer [Trainer] The trainer to schedule with
-  # @param scheduled_for [DateTime] The date and time of the training
-  # @return [Boolean] True if the training was scheduled successfully
-  def schedule_training!(trainer:, scheduled_for:)
-    with_lock do
-      training_sessions.create!(
-        trainer: trainer,
-        scheduled_for: scheduled_for,
-        status: :scheduled
-      )
-    end
-    true
-  rescue ::ActiveRecord::RecordInvalid => e
-    Rails.logger.error "[Application #{id}] Failed to schedule training: #{e.message}"
     errors.add(:base, e.message)
     false
   end
