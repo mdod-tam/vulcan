@@ -1,0 +1,27 @@
+<div class="bg-white shadow rounded-lg mb-6">
+  <div class="px-4 py-5 sm:p-6">
+    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+      Schedule Initial Evaluation
+    </h3>
+
+    <%= form_with(model: evaluation, url: schedule_evaluators_evaluation_path(evaluation), method: :post, local: true, class: "space-y-4") do |f| %>
+      <div>
+        <%= f.label :evaluation_date, "Evaluation Date/Time", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.datetime_local_field :evaluation_date, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true %>
+        <p class="mt-1 text-sm text-gray-500">Please select a date and time for the initial evaluation session.</p>
+      </div>
+
+      <div>
+        <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.text_field :location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+      </div>
+
+      <div>
+        <%= f.label :notes, "Notes", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.text_area :notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
+      </div>
+
+      <%= f.submit "Schedule Evaluation", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
+    <% end %>
+  </div>
+</div>

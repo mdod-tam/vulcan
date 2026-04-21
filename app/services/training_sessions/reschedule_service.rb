@@ -22,16 +22,16 @@ module TrainingSessions
         create_event!(old_scheduled_for)
       end
 
-      success(message: 'Training session rescheduled successfully.', data: { training_session: @training_session })
+      success('Training session rescheduled successfully.', { training_session: @training_session })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error rescheduling training session: #{e.message}")
-      failure(message: e.message)
+      failure(e.message)
     rescue ArgumentError => e
       log_validation_failure(e)
-      failure(message: e.message)
+      failure(e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error rescheduling training session: #{e.message}")
-      failure(message: "An unexpected error occurred: #{e.message}")
+      failure("An unexpected error occurred: #{e.message}")
     end
 
     private
@@ -43,16 +43,14 @@ module TrainingSessions
     end
 
     def log_validation_failure(error)
-      message = "TrainingSessions::RescheduleService validation failed: #{error.message}"
-      return Rails.logger.warn("[EXPECTED_TEST_VALIDATION] #{message}") if Rails.env.test?
-
-      Rails.logger.warn(message)
+      Rails.logger.warn("TrainingSessions::RescheduleService validation failed: #{error.message}")
     end
 
     def update_training_session!(_old_scheduled_for)
       @training_session.update!(
         scheduled_for: @params[:scheduled_for],
         reschedule_reason: @params[:reschedule_reason],
+        location: @params[:location],
         status: :scheduled,
         cancellation_reason: nil, # Clear cancellation reason on reschedule
         no_show_notes: nil # Clear no show notes on reschedule
@@ -70,6 +68,7 @@ module TrainingSessions
           old_scheduled_for: old_scheduled_for&.iso8601,
           new_scheduled_for: @training_session.scheduled_for.iso8601,
           reason: @training_session.reschedule_reason,
+          location: @training_session.location,
           timestamp: Time.current.iso8601
         }
       )

@@ -577,25 +577,44 @@
             </div>
 
             <!-- Training Sessions -->
-            <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg" data-testid="training-card">
               <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">Training Sessions</h3>
               </div>
               <div class="px-4 py-5 sm:p-6">
-                <% if @remaining_training_sessions && @remaining_training_sessions > 0 %>
-                  <div class="mb-4">
-                    <p class="text-sm text-gray-700">
-                      You have <span class="font-medium"><%= @remaining_training_sessions %></span> training sessions remaining.
+                <% service_window_end = @active_application.service_window_end_date %>
+                <% if @active_application.service_window_active? %>
+                  <% if service_window_end.present? %>
+                    <p class="text-xs text-gray-500 mb-3">
+                      Service window active until <%= service_window_end.strftime("%B %d, %Y") %>.
                     </p>
-                  </div>
-                  <%= button_to "Request Training",
-                      { controller: "constituent_portal/applications", action: "request_training", id: @active_application.id },
-                      method: :post,
-                      class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                  <% end %>
+                  <% if @remaining_training_sessions && @remaining_training_sessions > 0 %>
+                    <div class="mb-4">
+                      <p class="text-sm text-gray-700">
+                        You have <span class="font-medium"><%= @remaining_training_sessions %></span> training sessions remaining.
+                      </p>
+                    </div>
+                    <%= button_to "Request Training",
+                        { controller: "constituent_portal/applications", action: "request_training", id: @active_application.id },
+                        method: :post,
+                        class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                  <% else %>
+                    <p class="text-sm text-gray-700">
+                      You have used all of your available training sessions.
+                    </p>
+                  <% end %>
                 <% else %>
-                  <p class="text-sm text-gray-700">
-                    You have used all of your available training sessions.
-                  </p>
+                  <% if service_window_end.present? %>
+                    <p class="text-sm text-gray-700">
+                      Training is no longer available because this application is outside the service window
+                      (ended <%= service_window_end.strftime("%B %d, %Y") %>).
+                    </p>
+                  <% else %>
+                    <p class="text-sm text-gray-700">
+                      Training is not currently available for this application.
+                    </p>
+                  <% end %>
                 <% end %>
               </div>
             </div>

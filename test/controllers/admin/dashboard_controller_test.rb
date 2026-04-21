@@ -98,24 +98,10 @@ module Admin
       # Explicitly create an application with a unique ID and user
       constituent = create(:constituent, email: "training_user_#{Time.now.to_i}@example.com")
       application = create(:application, :approved, user: constituent)
+      application.update_columns(training_requested_at: 1.hour.ago)
 
-      # Store the application ID before creating the notification
       application_id = application.id
 
-      # Create a notification explicitly relating to this application
-      NotificationService.create_and_deliver!(
-        type: 'training_requested',
-        recipient: @admin,
-        actor: application.user,
-        notifiable: application
-      )
-
-      # Now let's try the actual controller logic
-      controller = Admin::DashboardController.new
-      controller.params = { filter: 'training_requests' }
-      controller.request = @request
-
-      # Verify the filter directly
       get admin_applications_path, params: { filter: 'training_requests' }
       assert_response :success
 
@@ -125,26 +111,20 @@ module Admin
                       "Application #{application_id} should be included in the filtered results"
     end
 
-    def test_dashboard_training_requests_count_falls_back_to_sessions_when_notifications_absent
+    def test_dashboard_training_requests_count_uses_training_requested_at
       clear_training_request_sources
 
-      trainer = create(:trainer)
-      session_app = create(:application, :approved, user: create(:constituent, email: "session_only#{@admin.email}"))
-      TrainingSession.create!(
-        application: session_app,
-        trainer: trainer,
-        scheduled_for: 1.day.from_now,
-        status: :requested
-      )
+      requested_app = create(:application, :approved, user: create(:constituent, email: "requested#{@admin.email}"))
+      requested_app.update_columns(training_requested_at: 1.hour.ago)
 
       get admin_dashboard_path
       assert_response :success
 
       assert_equal 1, assigns(:metrics)[:training_requests_count],
-                   'Dashboard should fall back to pending training sessions when no notifications exist'
+                   'Dashboard should count persisted pending training requests'
     end
 
-    def test_dashboard_training_requests_count_prefers_notifications_over_sessions
+    def test_dashboard_training_requests_count_ignores_notification_only_and_session_only_state
       clear_training_request_sources
 
       notification_app = create(:application, :approved, user: create(:constituent, email: "notification_only#{@admin.email}"))
@@ -169,8 +149,8 @@ module Admin
       get admin_dashboard_path
       assert_response :success
 
-      assert_equal 1, assigns(:metrics)[:training_requests_count],
-                   'Dashboard should count notification-backed requests and ignore session-only apps when notifications exist'
+      assert_equal 0, assigns(:metrics)[:training_requests_count],
+                   'Dashboard should only count applications.training_requested_at-backed pending requests'
     end
 
     def teardown
@@ -181,14 +161,9 @@ module Admin
     private
 
     def setup_initial_training_request
-      # Create one training request notification so the dashboard has data for non-training counts.
+      # Create one persisted training request so the dashboard has data for non-training counts.
       application = create(:application, :approved)
-      NotificationService.create_and_deliver!(
-        type: 'training_requested',
-        recipient: @admin,
-        actor: application.user,
-        notifiable: application
-      )
+      application.update_columns(training_requested_at: 1.hour.ago)
     end
 
     def verify_dashboard_counts
@@ -207,28 +182,20 @@ module Admin
     end
 
     def setup_training_requests
-      # Clear any existing training request notifications to start fresh.
-      Notification.where(action: 'training_requested').delete_all
+      # Clear any existing training request state to start fresh.
+      Application.update_all(training_requested_at: nil)
       Rails.cache.clear
 
-      # Create exactly 4 training request notifications with unique applications.
+      # Create exactly 4 persisted training requests with unique applications.
       4.times do |i|
         application = create(:application, :approved,
                              user: create(:constituent, email: "training#{i}@example.com"))
-        # No assignment is required here.
-        NotificationService.create_and_deliver!(
-          type: 'training_requested',
-          recipient: @admin,
-          actor: application.user,
-          notifiable: application
-        )
+        application.update_columns(training_requested_at: (i + 1).hours.ago)
       end
     end
 
     def verify_training_request_counts
-      distinct_apps_count = Notification.where(action: 'training_requested')
-                                        .where(notifiable_type: 'Application')
-                                        .distinct.count(:notifiable_id)
+      distinct_apps_count = Application.with_pending_training_request.distinct.count
 
       assert_equal 4, distinct_apps_count,
                    'Database should have 4 distinct applications with training requests'
@@ -239,6 +206,7 @@ module Admin
     def clear_training_request_sources
       Notification.where(action: 'training_requested').delete_all
       TrainingSession.where(status: %i[requested scheduled confirmed]).delete_all
+      Application.update_all(training_requested_at: nil)
       Rails.cache.clear
     end
   end

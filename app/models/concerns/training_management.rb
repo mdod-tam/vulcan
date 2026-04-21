@@ -32,41 +32,22 @@ module TrainingManagement
         }
       )
 
-      # Create system notification for the constituent
       NotificationService.create_and_deliver!(
         type: 'trainer_assigned',
-        recipient: user,
+        recipient: trainer,
         actor: Current.user,
-        notifiable: self,
+        notifiable: training_session,
         metadata: {
-          application_id: id
+          application_id: id,
+          trainer_id: trainer.id
         },
         channel: :email
       )
-
-      # Send email notification to the trainer with constituent contact info
-      TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_later
     end
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to assign trainer: #{e.message}"
     errors.add(:base, e.message)
     false
-  end
-
-  private
-
-  def create_system_notification!(recipient:, actor:, action:)
-    # Use NotificationService for centralized notification creation
-    NotificationService.create_and_deliver!(
-      type: action,
-      recipient: recipient,
-      actor: actor,
-      notifiable: self,
-      metadata: {
-        application_id: id
-      },
-      channel: :email
-    )
   end
 end

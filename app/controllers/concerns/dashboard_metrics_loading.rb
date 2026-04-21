@@ -39,6 +39,9 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       # Load training requests count
       metrics[:training_requests_count] = calculate_training_requests_count
 
+      # Load evaluation requests count (admin-initiated)
+      metrics[:evaluation_requests_count] = calculate_evaluation_requests_count
+
       # Load print queue count
       metrics[:print_queue_pending_count] = PrintQueueItem.pending.count
 
@@ -360,16 +363,16 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   private
 
-  # Calculate training request count with fallback logic
+  # Count applications with an outstanding training request. Driven by
+  # persisted application state so admin queue visibility doesn't depend on
+  # notification delivery.
   def calculate_training_requests_count
-    count = Notification.where(action: 'training_requested', notifiable_type: 'Application')
-                        .distinct.count(:notifiable_id)
+    Application.with_pending_training_request.distinct.count
+  end
 
-    return count unless count.zero?
-
-    Application.joins(:training_sessions)
-               .where(training_sessions: { status: %i[requested scheduled confirmed] })
-               .distinct.count
+  # Count applications with an outstanding admin-initiated evaluation request.
+  def calculate_evaluation_requests_count
+    Application.with_pending_evaluation_request.distinct.count
   end
 
   # Get the current fiscal year (July 1 - June 30)
@@ -411,6 +414,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       medical_certs_to_review_count: 0,
       digitally_signed_needs_review_count: 0,
       training_requests_count: 0,
+      evaluation_requests_count: 0,
       print_queue_pending_count: 0,
       current_fiscal_year: current_fiscal_year,
       draft_count: 0,

@@ -104,6 +104,7 @@ FactoryBot.define do
       type { 'Users::Trainer' }
       first_name { 'Test' }
       last_name { 'Trainer' }
+      status { :active }
 
       after(:create) do |trainer|
         create(:role_capability, user: trainer, capability: 'can_train')

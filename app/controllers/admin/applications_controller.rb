@@ -28,7 +28,7 @@ module Admin
     before_action :set_application, only: %i[
       show edit update
       request_documents review_proof update_proof_status
-      approve reject assign_evaluator assign_trainer
+      approve reject assign_evaluator assign_trainer request_evaluation
       update_certification_status resend_medical_certification assign_voucher
       upload_medical_certification send_document_signing_request
       queue_medical_certification_form
@@ -46,6 +46,15 @@ module Admin
 
       # Skip heavy ActiveStorage eager-loading; we preload attachment existence separately
       scoped = filtered_scope(build_application_base_scope(exclude_statuses: excluded_statuses))
+
+      scoped = if filtered_status == :training_requests
+                 scoped.includes(:user, :training_sessions)
+               elsif filtered_status == :evaluation_requests
+                 scoped.includes(:user)
+               else
+                 scoped.includes(:user, :managing_guardian)
+               end
+
       @pagy, page_of_apps = paginate(scoped)
       # ApplicationDataLoading concern: Efficiently preloads attachments for multiple applications
       # Flow: preload_attachments_for_applications -> groups attachments by application_id to avoid N+1 queries
@@ -63,6 +72,7 @@ module Admin
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
+      preload_notification_message_dependencies(@recent_notifications)
     end
 
     def show
@@ -227,7 +237,7 @@ module Admin
 
     def assign_evaluator
       @application = Application.find(params[:id])
-      evaluator = Users::Evaluator.find(params[:evaluator_id])
+      evaluator = User.find(params[:evaluator_id])
 
       if @application.assign_evaluator!(evaluator)
         redirect_to admin_application_path(@application),
@@ -240,7 +250,7 @@ module Admin
 
     def assign_trainer
       @application = Application.find(params[:id])
-      trainer = Users::Trainer.find(params[:trainer_id])
+      trainer = User.find(params[:trainer_id])
 
       if @application.assign_trainer!(trainer)
         redirect_to admin_application_path(@application),
@@ -249,6 +259,25 @@ module Admin
         redirect_to admin_application_path(@application),
                     alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_assign_fail')
       end
+    end
+
+    # Marks this application as explicitly needing an evaluation. This is the
+    # admin-initiated "this person needs an evaluation" flag that feeds the
+    # evaluation-request queue. It is distinct from assigning an evaluator:
+    # the queue goes away once an evaluator is assigned.
+    def request_evaluation
+      @application.request_evaluation!(actor: current_user)
+      redirect_to admin_application_path(@application),
+                  notice: 'Evaluation requested. Assign an evaluator when ready.'
+    rescue ArgumentError => e
+      redirect_to admin_application_path(@application), alert: e.message
+    rescue ActiveRecord::RecordInvalid => e
+      redirect_to admin_application_path(@application),
+                  alert: e.record.errors.full_messages.to_sentence.presence || e.message
+    rescue StandardError => e
+      Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.message}"
+      redirect_to admin_application_path(@application),
+                  alert: "Failed to request evaluation: #{e.message}"
     end
 
     # Updates medical certification status and handles file uploads

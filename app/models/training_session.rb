@@ -16,7 +16,7 @@ class TrainingSession < ApplicationRecord
   validates :scheduled_for, presence: true, if: -> { status_scheduled? || status_confirmed? || will_be_scheduled? }
   validates :reschedule_reason, presence: true, if: :rescheduling?
   validate :trainer_must_be_trainer_type
-  validate :scheduled_time_must_be_future, on: :create
+  validate :scheduled_time_must_be_future
 
   # Conditional Validations based on status
   validates :cancellation_reason, presence: true, if: :status_cancelled?
@@ -58,7 +58,10 @@ class TrainingSession < ApplicationRecord
   private
 
   def trainer_must_be_trainer_type
-    return if trainer&.type == 'Users::Trainer'
+    return unless trainer
+
+    return if trainer.type == 'Users::Trainer'
+    return if trainer.type == 'Users::Administrator' && trainer.respond_to?(:capability?) && trainer.capability?('can_train')
 
     errors.add(:trainer, 'must be a trainer')
   end
@@ -66,6 +69,8 @@ class TrainingSession < ApplicationRecord
   def scheduled_time_must_be_future
     # Only apply this validation if the status being set requires a future date
     return unless status_scheduled? || status_confirmed?
+    # Only validate if the scheduled time is being set or changed
+    return unless scheduled_for_changed? || new_record?
     # Now check the date
     return unless scheduled_for.present? && scheduled_for <= Time.current
 

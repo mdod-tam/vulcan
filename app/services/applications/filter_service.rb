@@ -74,19 +74,14 @@ module Applications
         # Only include applications that are in progress and have received certs
         scope.where(status: :in_progress, medical_certification_status: :received)
       when 'training_requests'
-        # Match the controller logic: check notifications first, then fall back to training sessions
-        notification_app_ids = Notification.where(action: 'training_requested')
-                                           .where(notifiable_type: 'Application')
-                                           .select(:notifiable_id)
-                                           .distinct
-                                           .pluck(:notifiable_id)
-
-        if notification_app_ids.any?
-          scope.where(id: notification_app_ids)
-        else
-          # Fall back to training sessions if no notifications
-          scope.with_pending_training
-        end
+        # Queue is driven by persisted application state (training_requested_at)
+        # rather than notification delivery, so staff don't have to rely on
+        # email notifications being noticed to find pending requests.
+        scope.with_pending_training_request
+      when 'evaluation_requests'
+        # Explicit admin-initiated evaluation requests only. We do not auto-queue
+        # every approved equipment application as needing evaluation.
+        scope.with_pending_evaluation_request
       when 'dependent_applications'
         # Filter applications that are for dependents (have a managing_guardian)
         scope.where.not(managing_guardian_id: nil)

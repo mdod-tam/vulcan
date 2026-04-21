@@ -18,6 +18,10 @@ module Trainers
     # New action for handling scope + status filtering
     def filter
       scope_param = params[:scope] || (current_user.admin? ? 'all' : 'mine')
+
+      # If not admin, force scope to 'mine' regardless of params
+      scope_param = 'mine' unless current_user.admin?
+
       status_param = params[:status]
 
       # Apply filters
@@ -26,6 +30,7 @@ module Trainers
       # Set current selections for UI state
       @current_scope = scope_param
       @current_status = status_param
+      @trainer_filter = User.find_by(id: params[:trainer_id]) if current_user.admin? && params[:trainer_id].present?
 
       @pagy, @training_sessions = pagy(@training_sessions, items: 20)
       render :index
@@ -92,13 +97,7 @@ module Trainers
     end
 
     def show
-      @application = @training_session.application
-      @constituent = @application.user
-      @max_training_sessions = Policy.get('max_training_sessions').to_i
-      @completed_training_sessions_count = @application.training_sessions.completed_sessions.count
-      @session_number = calculate_session_number
-      @constituent_cancelled_sessions_count = count_constituent_cancelled_sessions
-      @history_events = fetch_training_session_history_events
+      prepare_show_context
     end
 
     def update_status
@@ -111,6 +110,8 @@ module Trainers
         redirect_to trainers_training_session_path(@training_session),
                     notice: result.message
       else
+        @training_session.reload # Reset invalid changes so the view renders correctly
+        prepare_show_context
         flash.now[:alert] = "Failed to update training session status: #{result.message}"
         render :show, status: :unprocessable_content
       end
@@ -125,6 +126,8 @@ module Trainers
       if result.success?
         redirect_to trainers_training_session_path(@training_session), notice: result.message
       else
+        @training_session.reload # Reset invalid changes so the view renders correctly
+        prepare_show_context
         flash.now[:alert] = "Failed to complete training session: #{result.message}"
         render :show, status: :unprocessable_content
       end
@@ -140,6 +143,8 @@ module Trainers
         redirect_to trainers_training_session_path(@training_session),
                     notice: result.message
       else
+        @training_session.reload # Reset invalid changes so the view renders correctly
+        prepare_show_context
         flash.now[:alert] = "Failed to schedule training session: #{result.message}"
         render :show, status: :unprocessable_content
       end
@@ -155,6 +160,8 @@ module Trainers
         redirect_to trainers_training_session_path(@training_session),
                     notice: result.message
       else
+        @training_session.reload # Reset invalid changes so the view renders correctly
+        prepare_show_context
         flash.now[:alert] = "Failed to reschedule training session: #{result.message}"
         render :show, status: :unprocessable_content
       end
@@ -170,12 +177,24 @@ module Trainers
       if result.success?
         redirect_to trainers_training_session_path(@training_session), notice: result.message
       else
+        @training_session.reload # Reset invalid changes so the view renders correctly
+        prepare_show_context
         flash.now[:alert] = "Failed to cancel training session: #{result.message}"
         render :show, status: :unprocessable_content
       end
     end
 
     private
+
+    def prepare_show_context
+      @application = @training_session.application
+      @constituent = @application.user
+      @max_training_sessions = Policy.get('max_training_sessions').to_i
+      @completed_training_sessions_count = @application.training_sessions.completed_sessions.count
+      @session_number = calculate_session_number
+      @constituent_cancelled_sessions_count = count_constituent_cancelled_sessions
+      @activity_logs = TrainingSessions::AuditLogBuilder.new(@training_session).build
+    end
 
     def filter_sessions(scope, status)
       query = if scope == 'all' && current_user.admin?
@@ -185,6 +204,7 @@ module Trainers
               end.then do |q|
                 status.present? ? q.where(status: status) : q
               end
+      query = query.where(trainer_id: params[:trainer_id]) if current_user.admin? && params[:trainer_id].present?
 
       ordering = {
         'completed' => { completed_at: :desc },
@@ -222,15 +242,20 @@ module Trainers
     end
 
     def training_session_params
-      params.expect(training_session: %i[status notes scheduled_for reschedule_reason cancellation_reason product_trained_on_id]) # Added new permitted parameters
+      params.expect(
+        training_session: %i[
+          status notes scheduled_for reschedule_reason cancellation_reason
+          product_trained_on_id location
+        ]
+      )
     end
 
     def schedule_params
-      params.permit(:scheduled_for, :notes)
+      params.permit(:scheduled_for, :notes, :location)
     end
 
     def reschedule_params
-      params.permit(:scheduled_for, :reschedule_reason)
+      params.permit(:scheduled_for, :reschedule_reason, :location)
     end
 
     def complete_params
@@ -265,12 +290,6 @@ module Trainers
       Event.where(action: %w[training_cancelled training_no_show])
            .where("CAST(metadata->>'training_session_id' AS INTEGER) IN (?)", constituent_training_session_ids)
            .count
-    end
-
-    def fetch_training_session_history_events
-      Event.where('metadata @> ?', { training_session_id: @training_session.id }.to_json)
-           .includes(:user)
-           .order(created_at: :asc)
     end
 
     def assigned_trainer?

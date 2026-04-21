@@ -81,8 +81,14 @@
           </dd>
         </div>
         <div>
-          <dt class="text-sm font-medium text-gray-700">Communication Preference</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @user.communication_preference&.titleize || "Not specified" %></dd>
+          <dt class="text-sm font-medium text-gray-700">Communication Preferences</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            <ul class="space-y-1">
+              <li><strong>Contact Method:</strong> <%= contact_method_label(@user.phone_type) %></li>
+              <li><strong>Preferred Language:</strong> <%= language_label(@user.locale) %></li>
+              <li><strong>Communication Modality:</strong> <%= @user.preferred_means_of_communication.presence || "Not specified" %></li>
+            </ul>
+          </dd>
         </div>
       </dl>
     </section>

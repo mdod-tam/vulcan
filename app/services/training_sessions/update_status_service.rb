@@ -21,16 +21,16 @@ module TrainingSessions
         create_event
       end
 
-      success(message: 'Training session status updated successfully.', data: { training_session: @training_session })
+      success('Training session status updated successfully.', { training_session: @training_session })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error updating training session status: #{e.message}")
-      failure(message: e.message)
+      failure(e.message)
     rescue ArgumentError => e
       Rails.logger.error("Invalid parameters for updating training session status: #{e.message}")
-      failure(message: e.message)
+      failure(e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error updating training session status: #{e.message}")
-      failure(message: "An unexpected error occurred: #{e.message}")
+      failure("An unexpected error occurred: #{e.message}")
     end
 
     private

@@ -64,9 +64,22 @@ module Trainers
 
       assert_response :success
       assert_includes @response.body, 'This is a read-only oversight view.'
+      assert_includes @response.body, 'This training has yet to be scheduled.'
+      assert_includes @response.body, 'The assigned trainer should contact the constituent and set the training date.'
       assert_not_includes @response.body, 'Schedule Training'
       assert_not_includes @response.body, 'Mark as Completed'
       assert_not_includes @response.body, 'Cancel Training'
+    end
+
+    test 'assigned trainer sees scheduling next step for requested session' do
+      sign_in_for_controller_test @trainer
+
+      get trainers_training_session_url(@requested_session)
+
+      assert_response :success
+      assert_includes @response.body, 'This training has yet to be scheduled.'
+      assert_includes @response.body, 'Contact the constituent, agree on a training time, then use the scheduling form below.'
+      assert_includes @response.body, 'Schedule Training'
     end
 
     test 'admin cannot schedule a training session' do
@@ -124,7 +137,7 @@ module Trainers
       assert_equal training_session.application.training_sessions.order(:created_at).pluck(:id).index(training_session.id) + 1,
                    assigns(:session_number)
       assert_not_nil assigns(:constituent_cancelled_sessions_count) # Test the complex query
-      assert_not_nil assigns(:history_events) # Test history events are loaded
+      assert_includes @response.body, 'Activity History'
     end
 
     test 'should get show and assign instance variables for admin' do
@@ -141,7 +154,10 @@ module Trainers
       assert_equal @training_session.application.training_sessions.order(:created_at).pluck(:id).index(@training_session.id) + 1,
                    assigns(:session_number)
       assert_not_nil assigns(:constituent_cancelled_sessions_count)
-      assert_not_nil assigns(:history_events)
+      assert_includes @response.body, 'Activity History'
+      assert_select 'a[href=?]',
+                    filtered_trainers_training_sessions_path(scope: 'all', trainer_id: @trainer.id),
+                    text: @trainer.full_name
     end
 
     test 'show action should correctly calculate constituent_cancelled_sessions_count' do
@@ -163,6 +179,27 @@ module Trainers
       assert_equal 2, assigns(:constituent_cancelled_sessions_count)
     end
 
+    test 'show renders activity history with relevant training events' do
+      sign_in_for_controller_test @trainer
+      Event.create!(
+        user: @trainer,
+        action: 'training_scheduled',
+        auditable: @training_session,
+        metadata: {
+          training_session_id: @training_session.id,
+          scheduled_for: @training_session.scheduled_for.iso8601,
+          location: 'Library'
+        }
+      )
+
+      get trainers_training_session_url(@training_session)
+
+      assert_response :success
+      assert_includes @response.body, 'Activity History'
+      assert_includes @response.body, 'Training Scheduled'
+      assert_includes @response.body, 'Library'
+    end
+
     # --- Status Update Action Tests ---
 
     test 'update_status should update status and log generic event' do
@@ -178,7 +215,7 @@ module Trainers
       @training_session.reload
       assert_equal new_status.to_s, @training_session.status
       assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session status updated successfully.', flash[:notice][:message]
+      assert_equal 'Training session status updated successfully.', flash[:notice]
 
       event = Event.last
       assert_equal 'training_status_changed', event.action
@@ -204,7 +241,7 @@ module Trainers
       assert_equal new_status.to_s, @training_session.status
       assert_equal no_show_notes, @training_session.no_show_notes
       assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session status updated successfully.', flash[:notice][:message]
+      assert_equal 'Training session status updated successfully.', flash[:notice]
 
       event = Event.last
       assert_equal 'training_no_show', event.action
@@ -259,7 +296,7 @@ module Trainers
       assert_nil @training_session.cancellation_reason # Ensure cleared
       assert_nil @training_session.no_show_notes # Ensure cleared
       assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session completed successfully.', flash[:notice][:message]
+      assert_equal 'Training session completed successfully.', flash[:notice]
 
       event = Event.last
       assert_equal 'training_completed', event.action
@@ -325,7 +362,7 @@ module Trainers
       assert_nil @requested_session.cancellation_reason # Ensure cleared
       assert_nil @requested_session.no_show_notes # Ensure cleared
       assert_redirected_to trainers_training_session_url(@requested_session)
-      assert_equal 'Training session scheduled successfully.', flash[:notice][:message]
+      assert_equal 'Training session scheduled successfully.', flash[:notice]
 
       # Verify the event content
       event = Event.last
@@ -370,7 +407,7 @@ module Trainers
       assert_nil @training_session.cancellation_reason # Ensure cleared
       assert_nil @training_session.no_show_notes # Ensure cleared
       assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session rescheduled successfully.', flash[:notice][:message]
+      assert_equal 'Training session rescheduled successfully.', flash[:notice]
 
       event = Event.last
       assert_equal 'training_rescheduled', event.action
@@ -429,7 +466,7 @@ module Trainers
       assert_nil @training_session.notes # Ensure cleared
       assert_nil @training_session.no_show_notes # Ensure cleared
       assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session cancelled successfully.', flash[:notice][:message]
+      assert_equal 'Training session cancelled successfully.', flash[:notice]
 
       event = Event.last
       assert_equal 'training_cancelled', event.action
@@ -518,6 +555,20 @@ module Trainers
       assert_not_includes assigns(:training_sessions), other_trainer_scheduled
     end
 
+    test 'trainer cannot use all trainers or trainer_id filters' do
+      sign_in_for_controller_test @trainer
+
+      get filtered_trainers_training_sessions_url(scope: 'all', status: 'scheduled', trainer_id: @other_trainer.id)
+
+      assert_response :success
+      assert_equal 'mine', assigns(:current_scope)
+      assert_nil assigns(:trainer_filter)
+      assert_includes assigns(:training_sessions), @training_session
+      assert_not_includes assigns(:training_sessions), @other_trainer_session
+      assert_select 'a', text: 'All Trainers', count: 0
+      assert_select 'a', text: 'My Sessions', count: 0
+    end
+
     test 'filter should filter sessions and render index (admin)' do
       sign_in_for_controller_test @admin
       # Sessions are created in setup
@@ -533,6 +584,20 @@ module Trainers
       assert_includes assigns(:training_sessions), trainer_scheduled
       assert_not_includes assigns(:training_sessions), trainer_completed
       assert_includes assigns(:training_sessions), other_trainer_scheduled
+    end
+
+    test 'admin can filter sessions by trainer' do
+      sign_in_for_controller_test @admin
+
+      get filtered_trainers_training_sessions_url(scope: 'all', trainer_id: @trainer.id)
+
+      assert_response :success
+      assert_equal 'all', assigns(:current_scope)
+      assert_equal @trainer, assigns(:trainer_filter)
+      assert_includes assigns(:training_sessions), @training_session
+      assert_includes assigns(:training_sessions), @completed_session
+      assert_not_includes assigns(:training_sessions), @other_trainer_session
+      assert_includes @response.body, @trainer.full_name
     end
 
     # Add tests for requested, scheduled, completed, needs_followup actions if they are still used directly

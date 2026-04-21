@@ -3,6 +3,7 @@
 # NotificationsController handles actions related to email notifications.
 class NotificationsController < ApplicationController
   include Pagy::Backend
+  include NotificationPreloading
 
   before_action :authenticate_user!
   before_action :set_notification, only: %i[check_email_status mark_as_read]
@@ -21,6 +22,7 @@ class NotificationsController < ApplicationController
 
     @current_scope = scope
     @pagy, @notifications = pagy(notifications, items: 20)
+    preload_notification_message_dependencies(@notifications)
   end
 
   def mark_as_read
@@ -28,7 +30,7 @@ class NotificationsController < ApplicationController
 
     respond_to do |format|
       format.html do
-        redirect_back(fallback_location: notifications_path)
+        redirect_back_or_to notifications_path
       end
       format.turbo_stream do
         render turbo_stream: turbo_stream.replace("notification_#{@notification.id}",
@@ -52,7 +54,7 @@ class NotificationsController < ApplicationController
     respond_to do |format|
       format.html do
         flash[tracking ? :notice : :alert] = flash_message
-        redirect_back(fallback_location: root_path)
+        redirect_back_or_to root_path
       end
       format.turbo_stream do
         flash.now[tracking ? :notice : :alert] = flash_message
@@ -69,7 +71,7 @@ class NotificationsController < ApplicationController
     respond_to do |format|
       format.html do
         flash[:alert] = 'Notification not found.'
-        redirect_back(fallback_location: root_path)
+        redirect_back_or_to root_path
       end
       format.turbo_stream do
         flash.now[:alert] = 'Notification not found.'

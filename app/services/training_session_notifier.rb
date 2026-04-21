@@ -9,6 +9,7 @@ class TrainingSessionNotifier
 
   def deliver_all
     return unless should_send_notification?
+    return unless notification_action
 
     ActiveRecord::Base.transaction do
       create_consolidated_notification
@@ -18,21 +19,13 @@ class TrainingSessionNotifier
   private
 
   def should_send_notification?
-    training_session.status_changed? ||
+    training_session.saved_change_to_status? ||
       training_session.saved_change_to_scheduled_for? ||
       training_session.saved_change_to_completed_at?
   end
 
   def create_consolidated_notification
-    # Log the audit event first
-    AuditEventService.log(
-      action: notification_action,
-      actor: training_session.trainer,
-      auditable: training_session,
-      metadata: notification_metadata
-    )
-
-    # Then, send the notification without the audit flag
+    # Send the notification (audit flag is false by default, so it only logs the notification delivery event)
     NotificationService.create_and_deliver!(
       type: notification_action,
       recipient: training_session.constituent,
@@ -52,7 +45,6 @@ class TrainingSessionNotifier
     when 'completed' then 'training_completed'
     when 'cancelled' then 'training_cancelled'
     when 'no_show' then 'training_missed'
-    else 'training_updated'
     end
   end
 

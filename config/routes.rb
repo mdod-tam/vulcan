@@ -137,6 +137,8 @@ Rails.application.routes.draw do
     end
 
     resources :applications do
+      resource :equipment_fulfillment, only: [:update]
+
       collection do
         post :batch_approve
         post :batch_reject
@@ -156,6 +158,7 @@ Rails.application.routes.draw do
         patch :reject
         post :assign_evaluator
         post :assign_trainer
+        post :request_evaluation
         patch :update_proof_status
         patch :update_certification_status
         post :resend_medical_certification

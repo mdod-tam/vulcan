@@ -21,7 +21,7 @@ module NotificationDelivery
       # Use the appropriate mailer based on the model type
       case self
       when TrainingSession
-        TrainingSessionNotificationsMailer.trainer_assigned(self).deliver_now
+        TrainingSessionNotifier.new(self).deliver_all
       else
         Rails.logger.warn("No notification handler defined for #{self.class.name}")
       end

@@ -56,7 +56,38 @@
               </time>
             </dd>
           </div>
+          <% if @training_session.location.present? %>
+            <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt class="text-sm font-medium text-gray-500">Location</dt>
+              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                <%= @training_session.location %>
+              </dd>
+            </div>
+          <% end %>
+        <% elsif @training_session.status_requested? %>
+          <div class="bg-blue-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-blue-900">Next Step</dt>
+            <dd class="mt-1 text-sm text-blue-900 sm:mt-0 sm:col-span-2">
+              <p class="font-semibold">This training has yet to be scheduled.</p>
+              <p class="mt-1">
+                This session has been assigned to <%= @training_session.trainer.full_name %>, but no date has been set yet.
+                <% if @can_manage_training_session %>
+                  Contact the constituent, agree on a training time, then use the scheduling form below.
+                <% else %>
+                  The assigned trainer should contact the constituent and set the training date.
+                <% end %>
+              </p>
+            </dd>
+          </div>
         <% end %>
+
+        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-gray-500">Assigned Trainer</dt>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+            <% trainer_sessions_path = current_user.admin? ? filtered_trainers_training_sessions_path(scope: "all", trainer_id: @training_session.trainer_id) : filtered_trainers_training_sessions_path(scope: "mine") %>
+            <%= link_to @training_session.trainer.full_name, trainer_sessions_path, class: "text-indigo-600 hover:text-indigo-900" %>
+          </dd>
+        </div>
 
         <%# Display current notes if not completed, cancelled, or no_show %>
         <% if @training_session.notes.present? && !@training_session.status_completed? && !@training_session.status_cancelled? && !@training_session.status_no_show? %>
@@ -133,7 +164,27 @@
               <p><%= @constituent.full_name %></p>
               <p><a href="mailto:<%= @constituent.email %>" class="text-indigo-600 hover:text-indigo-900"><%= @constituent.email %></a></p>
               <p><a href="tel:<%= @constituent.phone %>" class="text-indigo-600 hover:text-indigo-900"><%= @constituent.phone %></a></p>
+              <% if @constituent.physical_address_1.present? %>
+                <div class="mt-2 text-gray-600">
+                  <p><%= @constituent.physical_address_1 %></p>
+                  <% if @constituent.physical_address_2.present? %>
+                    <p><%= @constituent.physical_address_2 %></p>
+                  <% end %>
+                  <p><%= "#{@constituent.city}, #{@constituent.state} #{@constituent.zip_code}" %></p>
+                </div>
+              <% end %>
             </div>
+          </dd>
+        </div>
+
+        <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-gray-500">Communication Preferences</dt>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+            <ul class="space-y-1">
+              <li><strong>Contact Method:</strong> <%= contact_method_label(@constituent.phone_type) %></li>
+              <li><strong>Preferred Language:</strong> <%= language_label(@constituent.locale) %></li>
+              <li><strong>Communication Modality:</strong> <%= @constituent.preferred_means_of_communication.presence || "Not specified" %></li>
+            </ul>
           </dd>
         </div>
       </dl>
@@ -164,6 +215,11 @@
             </div>
 
             <div>
+              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
+              <%= f.text_field :location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
+            </div>
+
+            <div>
               <%= f.label :notes, "Notes", class: "block text-sm font-medium text-gray-700" %>
               <%= f.text_area :notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
             </div>
@@ -175,7 +231,7 @@
 
     <% elsif (@training_session.status_scheduled? || @training_session.status_confirmed?) && @training_session.scheduled_for.present? && @training_session.scheduled_for < Time.current %>
       <!-- Actions for Scheduled/Confirmed Sessions where time has passed -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="space-y-6">
         <!-- Complete Training Form -->
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
@@ -263,6 +319,11 @@
             </div>
 
             <div>
+              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
+              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
+            </div>
+
+            <div>
               <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
                 Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
@@ -292,6 +353,11 @@
             </div>
 
             <div>
+              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
+              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
+            </div>
+
+            <div>
                <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
                 Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
                <% end %>
@@ -308,6 +374,10 @@
       <%# This block intentionally left blank as the form is handled below %>
     <% end %>
   </section>
+
+  <div class="mt-8">
+    <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Activity History" %>
+  </div>
 
   <!-- Link to view the full application -->
   <div class="mt-6 text-right">

@@ -99,6 +99,10 @@ class NotificationComposer
   def find_training_session(application, actor)
     return nil unless application.respond_to?(:training_sessions) && actor
 
-    application.training_sessions.where(trainer_id: actor.id).order(:created_at).last
+    if application.training_sessions.loaded?
+      application.training_sessions.select { |ts| ts.trainer_id == actor.id }.max_by(&:created_at)
+    else
+      application.training_sessions.where(trainer_id: actor.id).order(:created_at).last
+    end
   end
 end

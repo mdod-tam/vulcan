@@ -261,7 +261,8 @@ module Admin
       get admin_application_path(voucher_app)
       assert_response :success
 
-      assert_select "a[href='#{trainers_training_session_path(training_session)}']", text: 'View Session'
+      assert_select "a[href='#{trainers_training_session_path(training_session)}'][data-turbo-frame='_top']",
+                    text: 'View Session'
       assert_no_match(%r{/admin/applications/#{voucher_app.id}/complete_training}, response.body)
       assert_no_match(/>Complete</, response.body)
     end

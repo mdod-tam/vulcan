@@ -1,9 +1,11 @@
 <div class="container mx-auto px-4 py-8">
+  <% trainer_filter_params = @trainer_filter.present? ? { trainer_id: @trainer_filter.id } : {} %>
+
   <!-- Header with context-aware title -->
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">
       <% if @current_status == 'requested' %>
-        Requested Training Sessions
+        Assigned, Needs Scheduling
       <% elsif @current_status == 'scheduled' %>
         Scheduled Training Sessions
       <% elsif @current_status == 'completed' %>
@@ -16,7 +18,7 @@
       
       <% if current_user.admin? && @current_scope.present? %>
         <span class="text-lg font-normal ml-2 text-gray-600">
-          (<%= @current_scope == 'mine' ? 'Assigned to Me' : 'All Trainers' %>)
+          (<%= @trainer_filter.present? ? @trainer_filter.full_name : (@current_scope == 'mine' ? 'Assigned to Me' : 'All Trainers') %>)
         </span>
       <% end %>
     </h1>
@@ -44,23 +46,23 @@
     <div class="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg">
       <span class="text-xs font-semibold text-gray-500 px-2">STATUS:</span>
       <%= link_to "All", 
-          current_user.admin? ? filtered_trainers_training_sessions_path(scope: @current_scope) : trainers_training_sessions_path, 
+          current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope }.merge(trainer_filter_params)) : trainers_training_sessions_path,
           class: "#{@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
           
-      <%= link_to "Requested", 
-          current_user.admin? ? filtered_trainers_training_sessions_path(scope: @current_scope, status: 'requested') : requested_trainers_training_sessions_path, 
+      <%= link_to "Needs Scheduling",
+          current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'requested' }.merge(trainer_filter_params)) : requested_trainers_training_sessions_path,
           class: "#{@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
           
       <%= link_to "Scheduled", 
-          current_user.admin? ? filtered_trainers_training_sessions_path(scope: @current_scope, status: 'scheduled') : scheduled_trainers_training_sessions_path, 
+          current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'scheduled' }.merge(trainer_filter_params)) : scheduled_trainers_training_sessions_path,
           class: "#{@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
           
       <%= link_to "Completed", 
-          current_user.admin? ? filtered_trainers_training_sessions_path(scope: @current_scope, status: 'completed') : completed_trainers_training_sessions_path, 
+          current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'completed' }.merge(trainer_filter_params)) : completed_trainers_training_sessions_path,
           class: "#{@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
           
       <%= link_to "Needs Follow-up", 
-          current_user.admin? ? filtered_trainers_training_sessions_path(scope: @current_scope, status: 'cancelled') : needs_followup_trainers_training_sessions_path, 
+          current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'cancelled' }.merge(trainer_filter_params)) : needs_followup_trainers_training_sessions_path,
           class: "#{@current_status == 'cancelled' || @current_status == 'no_show' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
     </div>
   </div>
@@ -103,20 +105,24 @@
                    end %>
                 
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= status_classes %>">
-                  <%= session.status.titleize %>
+                  <% if session.status == 'requested' %>
+                    Needs Scheduling
+                  <% else %>
+                    <%= session.status.titleize %>
+                  <% end %>
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <%= session.application.id %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <%= link_to "View Details", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200 mr-2" %>
-                
-                <% if session.status == 'scheduled' && session.trainer_id == current_user.id %>
-                  <%= button_to "Mark Complete", complete_trainers_training_session_path(session), 
-                      method: :post, 
-                      class: "bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200 mt-1", 
-                      data: { confirm: "Are you sure you want to mark this training as completed?" } %>
+                <% if session.status == 'requested' %>
+                  <%= link_to "View/Schedule", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                <% elsif session.status == 'scheduled' %>
+                  <%# Completion requires required product + notes; drive it from the session show page. %>
+                  <%= link_to "Complete Report", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                <% else %>
+                  <%= link_to "View Details", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
                 <% end %>
               </td>
             </tr>
