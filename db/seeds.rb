@@ -472,7 +472,10 @@ else
       seed_puts '📋 Creating policies...'
       create_policies
 
-      seed_puts '👥 Loading fixture data (users, applications, invoices)...'
+      seed_puts '� Seeding feature flags...'
+      load Rails.root.join('db/seeds/feature_flags.rb')
+
+      seed_puts '� Loading fixture data (users, applications, invoices)...'
       load_fixtures_data
 
       seed_puts '📧 Seeding email templates...'
@@ -504,6 +507,7 @@ else
     seed_puts "   Applications: #{Application.count}"
     seed_puts "   Products: #{Product.count}"
     seed_puts "   Policies: #{Policy.count}"
+    seed_puts "   Feature Flags: #{FeatureFlag.count}"
     seed_puts "   Email Templates: #{EmailTemplate.count}"
     seed_puts "   Rejection Reasons: #{RejectionReason.count}"
     seed_puts "   Invoices: #{Invoice.count}"
