@@ -200,8 +200,8 @@ module ConstituentPortal
       get constituent_portal_dashboard_path
 
       assert_response :success
-      assert_select 'button[disabled]', text: 'Training In Progress'
-      assert_select 'p', text: /trainer has been assigned/
+      assert_select 'button[disabled]', text: 'Training Assigned'
+      assert_select 'p', text: /training has been assigned to/
       assert_select 'form[action=?]', request_training_constituent_portal_application_path(application), count: 0
     end
 

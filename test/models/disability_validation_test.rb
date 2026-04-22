@@ -163,6 +163,18 @@ class DisabilityValidationTest < ActiveSupport::TestCase
            'disability_selected? should return true when at least one disability is selected'
   end
 
+  test 'disabilities returns concise display labels' do
+    @constituent.update(
+      hearing_disability: true,
+      vision_disability: false,
+      speech_disability: true,
+      mobility_disability: true,
+      cognition_disability: false
+    )
+
+    assert_equal %w[Hearing Speech Mobility], @constituent.disabilities
+  end
+
   test 'disability_selected? returns false when no disabilities are selected' do
     @constituent.update(
       hearing_disability: false,

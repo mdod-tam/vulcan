@@ -143,7 +143,11 @@
                     <h3 id="medical-cert-label" class="text-sm font-medium text-gray-500 truncate">Disability Certification</h3>
                     <div class="flex items-center">
                       <p class="text-lg font-medium text-gray-900">
-                        <%= current_user.valid_dcf? ? "Verified" : "Pending" %>
+                        <% if @active_application %>
+                          <%= @active_application.medical_certification_status.titleize.gsub('_', ' ') %>
+                        <% else %>
+                          <%= current_user.valid_dcf? ? "Verified" : "Pending" %>
+                        <% end %>
                       </p>
                     </div>
                   </div>
@@ -583,37 +587,85 @@
               </div>
               <div class="px-4 py-5 sm:p-6">
                 <% service_window_end = @active_application.service_window_end_date %>
-                <% active_training_session = @active_application.active_training_session %>
+
+                <%# Previous completed sessions %>
+                <% if @completed_training_sessions&.any? %>
+                  <div class="mb-5">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">Previous Sessions</h4>
+                    <% @completed_training_sessions.each do |session| %>
+                      <% session_num = @training_session_numbers[session.id] %>
+                      <div class="text-sm text-gray-600 mb-2">
+                        <span class="font-medium text-gray-800">
+                          Session <%= session_num %> of <%= @max_training_sessions %>
+                        </span>
+                        &mdash;
+                        <span class="font-medium"><%= session.trainer.full_name %></span>,
+                        completed <%= session.completed_at.strftime("%B %d, %Y") %>
+                        <% if session.product_trained_on %>
+                          on <span class="italic"><%= session.product_trained_on.name %></span>
+                        <% end %>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+
                 <% if @active_application.service_window_active? %>
                   <% if service_window_end.present? %>
                     <p class="text-xs text-gray-500 mb-3">
                       Service window active until <%= service_window_end.strftime("%B %d, %Y") %>.
                     </p>
                   <% end %>
+
+                  <%# Remaining count — always visible when in service window %>
+                  <p class="text-sm text-gray-700 mb-4">
+                    <span class="font-medium"><%= @remaining_training_sessions %></span>
+                    of
+                    <span class="font-medium"><%= @max_training_sessions %></span>
+                    training sessions remaining.
+                  </p>
+
                   <% if @active_application.training_request_pending? %>
+                    <%# Admin set training_requested_at but no session assigned yet %>
                     <div class="mb-4 rounded-md bg-blue-50 p-4">
                       <p class="text-sm text-blue-700">
-                        A trainer will reach out soon to schedule your training.
+                        A training request has been submitted. A trainer will reach out soon to schedule your session.
                       </p>
                     </div>
-                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-transparent bg-gray-300 px-4 py-2 text-sm font-medium text-gray-600">
+                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-sm">
                       Training Session Requested
                     </button>
-                  <% elsif active_training_session.present? %>
-                    <div class="mb-4 rounded-md bg-blue-50 p-4">
-                      <p class="text-sm text-blue-700">
-                        A trainer has been assigned and will coordinate your training session.
-                      </p>
-                    </div>
-                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-transparent bg-gray-300 px-4 py-2 text-sm font-medium text-gray-600">
-                      Training In Progress
+                  <% elsif @active_training_session.present? %>
+                    <% active_session_num = @training_session_numbers[@active_training_session.id] %>
+                    <% if @active_training_session.status_requested? %>
+                      <%# Trainer assigned but no date set yet %>
+                      <div class="mb-4 rounded-md bg-blue-50 p-4">
+                        <p class="text-sm font-medium text-blue-800 mb-1">
+                          Session <%= active_session_num %> of <%= @max_training_sessions %> &mdash; Awaiting Scheduling
+                        </p>
+                        <p class="text-sm text-blue-700">
+                          Assigned to
+                          <span class="font-medium"><%= @active_training_session.trainer.full_name %></span>.
+                          No date has been set yet &mdash; your trainer will contact you to schedule.
+                        </p>
+                      </div>
+                    <% else %>
+                      <%# scheduled or confirmed — a concrete date exists %>
+                      <div class="mb-4 rounded-md bg-blue-50 p-4">
+                        <p class="text-sm font-medium text-blue-800 mb-1">
+                          Session <%= active_session_num %> of <%= @max_training_sessions %> &mdash; Scheduled
+                        </p>
+                        <p class="text-sm text-blue-700">
+                          With
+                          <span class="font-medium"><%= @active_training_session.trainer.full_name %></span>
+                          on
+                          <span class="font-medium"><%= @active_training_session.scheduled_for.strftime("%B %d, %Y at %I:%M %p") %></span>.
+                        </p>
+                      </div>
+                    <% end %>
+                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-sm">
+                      Training Assigned
                     </button>
-                  <% elsif @remaining_training_sessions && @remaining_training_sessions > 0 %>
-                    <div class="mb-4">
-                      <p class="text-sm text-gray-700">
-                        You have <span class="font-medium"><%= @remaining_training_sessions %></span> training sessions remaining.
-                      </p>
-                    </div>
+                  <% elsif @remaining_training_sessions > 0 %>
                     <%= button_to "Request Training",
                         { controller: "constituent_portal/applications", action: "request_training", id: @active_application.id },
                         method: :post,

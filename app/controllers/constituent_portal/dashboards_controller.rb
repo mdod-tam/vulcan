@@ -113,10 +113,23 @@ module ConstituentPortal
     end
 
     def load_training_sessions_information
-      # Get training sessions information
-      @training_sessions = @active_application&.training_sessions || []
+      return unless @active_application
+
       @max_training_sessions = Policy.get('max_training_sessions') || 3
-      @remaining_training_sessions = @max_training_sessions - @training_sessions.count if @active_application
+
+      all_sessions = @active_application.training_sessions
+      @completed_training_sessions = all_sessions.completed_sessions.order(completed_at: :desc)
+      @active_training_session     = @active_application.active_training_session
+
+      # 1-based session numbers in chronological order; used for "Session N of M" labels
+      @training_session_numbers = all_sessions.order(created_at: :asc)
+                                              .pluck(:id)
+                                              .each_with_index
+                                              .to_h { |id, i| [id, i + 1] }
+
+      # Cancelled sessions do not count against the policy limit
+      non_cancelled_count = all_sessions.where.not(status: :cancelled).count
+      @remaining_training_sessions = [@max_training_sessions - non_cancelled_count, 0].max
     end
 
     def load_proof_status_information
