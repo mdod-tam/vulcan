@@ -55,6 +55,25 @@ module Applications
       end
     end
 
+    test 'new submitted application logs creation as draft and submission as a separate status change' do
+      form = create_valid_form(@user)
+      form.is_submission = true
+
+      assert_difference -> { Event.where(action: 'application_created').count }, 1 do
+        assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
+          result = ApplicationCreator.call(form)
+          assert result.success?
+
+          creation_event = Event.where(action: 'application_created', auditable: result.application).order(:created_at).last
+          status_event = Event.where(action: 'application_status_changed', auditable: result.application).order(:created_at).last
+
+          assert_equal 'draft', creation_event.metadata['initial_status']
+          assert_equal 'draft', status_event.metadata['old_status']
+          assert_equal 'in_progress', status_event.metadata['new_status']
+        end
+      end
+    end
+
     test 'updates user attributes' do
       form = create_valid_form(@user)
       form.hearing_disability = true
@@ -102,6 +121,43 @@ module Applications
 
       audit_event = Event.last
       assert_equal 'application_updated', audit_event.action
+    end
+
+    test 'submission without non-status changes does not log application_updated' do
+      application = create(
+        :application,
+        :draft,
+        user: @user,
+        annual_income: '40000',
+        household_size: 2,
+        submission_method: 'online',
+        terms_accepted: true,
+        information_verified: true,
+        medical_release_authorized: true
+      )
+      form = ApplicationForm.new(
+        current_user: @user,
+        application: application,
+        annual_income: application.annual_income,
+        household_size: application.household_size,
+        submission_method: application.submission_method,
+        hearing_disability: @user.hearing_disability,
+        vision_disability: true,
+        speech_disability: @user.speech_disability,
+        mobility_disability: @user.mobility_disability,
+        cognition_disability: @user.cognition_disability,
+        medical_provider_name: application.medical_provider_name,
+        medical_provider_phone: application.medical_provider_phone,
+        medical_provider_email: application.medical_provider_email,
+        is_submission: true
+      )
+
+      assert_no_difference -> { Event.where(action: 'application_updated', auditable: application).count } do
+        assert_difference -> { Event.where(action: 'application_status_changed', auditable: application).count }, 1 do
+          result = ApplicationCreator.call(form)
+          assert result.success?
+        end
+      end
     end
 
     test 'handles invalid form' do
