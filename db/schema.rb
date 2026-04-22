@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_21_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -108,6 +108,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.string "document_signing_submitter_id"
     t.integer "fulfillment_type", null: false
     t.integer "household_size"
+    t.integer "id_proof_status", default: 0, null: false
     t.text "income_details"
     t.boolean "income_proof_required", null: false
     t.integer "income_proof_status", default: 0, null: false
@@ -146,6 +147,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
     t.index ["fulfillment_type"], name: "index_applications_on_fulfillment_type"
+    t.index ["id_proof_status"], name: "idx_applications_on_id_proof_status"
     t.index ["income_proof_status"], name: "idx_applications_on_income_proof_status"
     t.index ["income_verified_by_id"], name: "index_applications_on_income_verified_by_id"
     t.index ["last_proof_submitted_at"], name: "index_applications_on_last_proof_submitted_at"
@@ -159,6 +161,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.index ["total_rejections"], name: "index_applications_on_total_rejections"
     t.index ["training_requested_at"], name: "index_applications_on_training_requested_at"
     t.index ["user_id"], name: "index_applications_on_user_id"
+    t.check_constraint "id_proof_status = ANY (ARRAY[0, 1, 2])", name: "id_proof_status_check"
     t.check_constraint "income_proof_status = ANY (ARRAY[0, 1, 2])", name: "income_proof_status_check"
     t.check_constraint "residency_proof_status = ANY (ARRAY[0, 1, 2])", name: "residency_proof_status_check"
   end

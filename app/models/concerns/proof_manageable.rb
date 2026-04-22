@@ -33,7 +33,7 @@ module ProofManageable
   MAX_FILE_SIZE = 5.megabytes
 
   # Valid proof types for the application
-  PROOF_TYPES = %w[income residency].freeze
+  PROOF_TYPES = %w[income residency id].freeze
 
   included do
     # ActiveStorage attachments for proof documents
@@ -73,6 +73,12 @@ module ProofManageable
   # @return [Boolean] true if residency proof status is rejected
   def rejected_residency_proof?
     residency_proof_status_rejected?
+  end
+
+  # Checks if the ID proof has been rejected
+  # @return [Boolean] true if ID proof status is rejected
+  def rejected_id_proof?
+    id_proof_status_rejected?
   end
 
   # Checks if the application can submit proof documents
@@ -117,7 +123,8 @@ module ProofManageable
     transaction do
       income_proof.purge if income_proof.attached?
       residency_proof.purge if residency_proof.attached?
-      update!(income_proof_status: :not_reviewed, residency_proof_status: :not_reviewed,
+      id_proof.purge if id_proof.attached?
+      update!(income_proof_status: :not_reviewed, residency_proof_status: :not_reviewed, id_proof_status: :not_reviewed,
               last_proof_submitted_at: nil, needs_review_since: nil)
     end
     true

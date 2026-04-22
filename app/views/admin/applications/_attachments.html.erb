@@ -380,4 +380,193 @@
       </div>
     </div>
   </div>
+
+  <!-- ID Proof Section -->
+  <div class="border rounded-lg overflow-hidden bg-white">
+    <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+        <h3 class="text-sm font-medium text-gray-900">ID Proof</h3>
+      </div>
+      <span class="px-2 py-1 text-sm font-medium rounded-full <%= badge_class_for(:proof, @application.id_proof_status) %>">
+        <%= @application.id_proof_status.titleize %>
+      </span>
+    </div>
+
+    <div class="p-4">
+      <!-- Proof file information if attached -->
+      <% if @application.id_proof.attached? %>
+        <div class="mb-3">
+          <p class="text-sm text-gray-600">
+            File: <%= safe_attachment_filename(@application.id_proof) %>
+            (<%= number_to_human_size(safe_attachment_byte_size(@application.id_proof)) %>)
+          </p>
+        </div>
+      <% elsif @application.id_proof_status == 'rejected' %>
+        <% latest_rejection = get_chronological_proof_history(@application, "id").find { |activity| activity.activity_type == :rejection } %>
+        <% if latest_rejection %>
+          <div class="mb-3">
+            <p class="text-sm text-gray-600 mb-1">
+              <span class="<%= latest_rejection.icon_class %>"><%= latest_rejection.icon_symbol %></span>
+              Rejected on <%= latest_rejection.created_at.strftime("%B %d, %Y at %I:%M %p") %> by <%= latest_rejection.source.admin&.full_name || "Unknown Admin" %>
+            </p>
+            <% if latest_rejection.details.present? %>
+              <p class="text-sm text-gray-600 ml-4 mb-1">
+                <span class="text-gray-500">Reason:</span> "<%= sanitize latest_rejection.details %>"
+              </p>
+            <% end %>
+            <% if latest_rejection.source.respond_to?(:notes) && latest_rejection.source.notes.present? %>
+              <p class="text-sm text-gray-600 ml-4">
+                <%= sanitize latest_rejection.source.notes %>
+              </p>
+            <% end %>
+          </div>
+        <% else %>
+           <div class="mb-3">
+            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-amber-800">
+                    <strong>Data inconsistency detected:</strong> ID proof is marked as <%= @application.id_proof_status.titleize %> but the file is not currently attached.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      <% elsif @application.id_proof_status == 'approved' %>
+         <div class="mb-3">
+            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-amber-800">
+                    <strong>Data inconsistency detected:</strong> ID proof is marked as <%= @application.id_proof_status.titleize %> but the file is not currently attached.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+      <% end %>
+
+      <!-- History Section -->
+      <% chronological_activities = get_chronological_proof_history(@application, "id") %>
+      <% if chronological_activities.any? %>
+        <div class="mt-4">
+          <h3 class="text-sm font-medium text-gray-700 mb-2">Proof History</h3>
+          <div class="proof-history pl-4 border-l-2 border-gray-200">
+            <% chronological_activities.each do |activity| %>
+              <div class="history-item mb-2">
+                <p class="text-sm text-gray-600 mb-1">
+                  <span class="<%= activity.icon_class %>"><%= activity.icon_symbol %></span>
+                  
+                  <% case activity.activity_type %>
+                  <% when :submission %>
+                    Submitted on
+                  <% when :resubmission %>
+                    Resubmitted on
+                  <% when :approval %>
+                    Approved on
+                  <% when :rejection %>
+                    Rejected on
+                  <% end %>
+                  
+                  <%= activity.created_at.strftime("%B %d, %Y at %I:%M %p") %>
+                  
+                  <% if [:submission, :resubmission].include?(activity.activity_type) %>
+                    <% if activity.source.respond_to?(:metadata) && activity.source.metadata.present? && activity.source.metadata['submission_method'].present? %>
+                      <span class="text-xs text-gray-500">(via <%= activity.source.metadata['submission_method'] %>)</span>
+                    <% else %>
+                      <span class="text-xs text-gray-500">(via application submission)</span>
+                    <% end %>
+                  <% elsif [:approval, :rejection].include?(activity.activity_type) %>
+                    by <%= activity.source.admin&.full_name || "Unknown Admin" %>
+                  <% end %>
+                </p>
+                
+                <% if activity.activity_type == :rejection && activity.details.present? %>
+                  <p class="text-sm text-gray-600 ml-4 mb-1">
+                    <span class="text-gray-500">Reason:</span> "<%= sanitize activity.details %>"
+                  </p>
+                <% elsif activity.activity_type == :approval && activity.details.present? %>
+                  <p class="text-sm text-gray-600 ml-4 mb-1">
+                    <span class="text-gray-500">Note:</span> "<%= sanitize activity.details %>"
+                  </p>
+                <% elsif activity.source.respond_to?(:notes) && activity.source.notes.present? %>
+                  <p class="text-sm text-gray-600 ml-4">
+                    <%= sanitize activity.source.notes %>
+                  </p>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% elsif @application.created_at.present? %>
+        <!-- Fallback when no audit records exist -->
+        <div class="mt-4">
+          <h3 class="text-sm font-medium text-gray-700 mb-2">Proof History</h3>
+          <div class="proof-history pl-4 border-l-2 border-gray-200">
+            <div class="history-item mb-2">
+              <p class="text-sm text-gray-600 mb-1">
+                <span class="text-blue-600">→</span> Submitted on
+                <%= @application.created_at.strftime("%B %d, %Y at %I:%M %p") %>
+                <span class="text-xs text-gray-500">(via application submission)</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      <% else %>
+        <div class="mt-4">
+          <h3 class="text-sm font-medium text-gray-700 mb-2">Proof History</h3>
+          <div class="proof-history pl-4 border-l-2 border-gray-200">
+            <div class="history-item mb-2">
+              <p class="text-sm text-gray-600 mb-1">
+                <span class="text-yellow-500">Note:</span> No detailed history available.
+              </p>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <!-- Action Buttons -->
+      <div class="mt-4 flex space-x-2">
+        <% if @application.id_proof.attached? %>
+          <% if @application.proof_review_state("id") == :approved_current %>
+            <!-- If proof is approved and there's no newer submission, open in new tab -->
+            <%= link_to rails_blob_path(@application.id_proof, disposition: :inline),
+                    target: "_blank",
+                    class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none" do %>
+              <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              View Approved Proof
+            <% end %>
+          <% else %>
+            <!-- Show review button for pending submissions or non-approved proofs -->
+            <button type="button"
+                     data-action="click->modal#open"
+                     data-modal-id="idProofReviewModal"
+                     data-proof-type="id"
+                     class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white <%= proof_review_button_class(@application, 'id') %> focus:outline-none">
+               <%= proof_review_button_text(@application, "id") %>
+             </button>
+           <% end %>
+        <% else %>
+          <span class="text-sm text-gray-500">Not Attached</span>
+        <% end %>
+      </div>
+    </div>
+  </div>
 </div>

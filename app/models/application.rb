@@ -74,6 +74,12 @@ class Application < ApplicationRecord
     rejected: 2
   }, prefix: true # Use standard boolean prefix
 
+  enum :id_proof_status, {
+    not_reviewed: 0,
+    approved: 1,
+    rejected: 2
+  }, prefix: true # Use standard boolean prefix
+
   enum :medical_certification_status, {
     not_requested: 0,
     requested: 1,
@@ -119,6 +125,7 @@ class Application < ApplicationRecord
   has_and_belongs_to_many :products
   has_one_attached :income_proof
   has_one_attached :residency_proof
+  has_one_attached :id_proof
   has_one_attached :medical_certification
 
   # Validations
