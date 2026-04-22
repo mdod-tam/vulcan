@@ -2,6 +2,7 @@
 <% time_query    = "&t=#{Time.current.to_i}" %>
 <% proof_files   = { income: @application.income_proof,
                      residency: @application.residency_proof,
+                     id: @application.id_proof,
                      medical: @application.medical_certification } %>
 <% proof_urls    = proof_files.transform_values { |f| f.attached? ? rails_blob_path(f, disposition: :inline) : nil } %>
 
@@ -91,6 +92,7 @@ end
        proof_modal_configs << { id: 'incomeProofReviewModal',  key: :income,   title: 'Review Income Proof',   approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'income', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'income', confirm_message: "Approve income proof?", can_reject: @application.proof_type_reviewable?("income") }
      end
      proof_modal_configs << { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?", can_reject: @application.proof_type_reviewable?("residency") }
+     proof_modal_configs << { id: 'idProofReviewModal', key: :id, title: 'Review ID Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'id', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'id', confirm_message: "Approve ID proof?", can_reject: @application.proof_type_reviewable?("id") }
      proof_modal_configs << { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this disability certification?", can_reject: !@application.medical_certification_status_rejected? || @application.medical_certification_status_received? }
   %>
   <% proof_modal_configs.each do |cfg| %>
@@ -179,6 +181,11 @@ end
                 } do %>
               Approve
             <% end %>
+            <% latest_rejected_review = if cfg[:key] == :medical
+                                          @application.latest_medical_rejection_review
+                                        else
+                                          @application.proof_reviews.where(proof_type: cfg[:key], status: 'rejected').order(created_at: :desc).first
+                                        end %>
             <% if cfg[:can_reject] %>
               <button type="button"
                       data-action="click->modal#open"
@@ -187,14 +194,9 @@ end
                       class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md">
                 Reject
               </button>
-            <% else %>
-              <% latest_rejected_review = if cfg[:key] == :medical
-                                            @application.latest_medical_rejection_review
-                                          else
-                                            @application.proof_reviews.where(proof_type: cfg[:key], status: 'rejected').order(created_at: :desc).first
-                                          end %>
+            <% elsif latest_rejected_review.present? %>
               <span class="inline-flex items-center px-4 py-2 text-sm text-gray-500 italic">
-                Previously rejected on <%= latest_rejected_review&.created_at&.strftime('%B %d, %Y') || 'an earlier date' %>
+                Previously rejected on <%= latest_rejected_review.created_at.strftime('%B %d, %Y') %>
               </span>
             <% end %>
           </div>
@@ -217,10 +219,14 @@ end
        data-rejection-form-address-mismatch-residency-value="<%= rejection_reason_text.call('residency', 'address_mismatch') %>"
        data-rejection-form-expired-income-value="<%= rejection_reason_text.call('income', 'expired') %>"
        data-rejection-form-expired-residency-value="<%= rejection_reason_text.call('residency', 'expired') %>"
+       data-rejection-form-expired-id-value="<%= rejection_reason_text.call('id', 'expired') %>"
        data-rejection-form-missing-name-income-value="<%= rejection_reason_text.call('income', 'missing_name') %>"
        data-rejection-form-missing-name-residency-value="<%= rejection_reason_text.call('residency', 'missing_name') %>"
+       data-rejection-form-missing-name-id-value="<%= rejection_reason_text.call('id', 'missing_name') %>"
        data-rejection-form-wrong-document-income-value="<%= rejection_reason_text.call('income', 'wrong_document') %>"
        data-rejection-form-wrong-document-residency-value="<%= rejection_reason_text.call('residency', 'wrong_document') %>"
+       data-rejection-form-wrong-document-id-value="<%= rejection_reason_text.call('id', 'wrong_document') %>"
+       data-rejection-form-illegible-id-value="<%= rejection_reason_text.call('id', 'illegible') %>"
        data-rejection-form-missing-amount-income-value="<%= rejection_reason_text.call('income', 'missing_amount') %>"
        data-rejection-form-exceeds-threshold-income-value="<%= rejection_reason_text.call('income', 'exceeds_threshold') %>"
        data-rejection-form-outdated-ss-award-income-value="<%= rejection_reason_text.call('income', 'outdated_ss_award') %>">
@@ -309,6 +315,26 @@ end
                     aria-label="Select Outdated SS Award Letter rejection reason"
                     aria-pressed="false">
               Outdated SS Award Letter
+            </button>
+            <button type="button"
+                    class="<%= reason_button_classes %>"
+                    data-action="click->rejection-form#selectOther"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Enter a custom rejection reason"
+                    aria-pressed="false">
+              Other
+            </button>
+          </div>
+          <div class="hidden flex flex-wrap gap-2 id-only-reasons" data-rejection-form-target="idOnlyReasons" aria-hidden="true">
+            <button type="button"
+                    class="<%= reason_button_classes %>"
+                    data-action="click->rejection-form#selectPredefinedReason"
+                    data-reason-type="illegible"
+                    data-reason-code="illegible"
+                    data-rejection-form-target="reasonButton"
+                    aria-label="Select Illegible ID rejection reason"
+                    aria-pressed="false">
+              Illegible
             </button>
             <button type="button"
                     class="<%= reason_button_classes %>"
