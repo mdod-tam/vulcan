@@ -158,7 +158,7 @@ class NotificationService
     'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
     'w9_approved' => [VendorNotificationsMailer, :w9_approved],
     'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
-    'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
+    'training_requested' => [ApplicationNotificationsMailer, :training_requested],
     'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
     'training_scheduled' => [TrainingSessionNotificationsMailer, :training_scheduled],
     'training_completed' => [TrainingSessionNotificationsMailer, :training_completed],
@@ -482,7 +482,7 @@ class NotificationService
       proof_type = notification.metadata&.dig('proof_type')
       proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
       mailer_class.public_send(method_name, application, proof_review)
-    when 'trainer_assigned', 'training_requested', 'training_scheduled',
+    when 'trainer_assigned', 'training_scheduled',
          'training_completed', 'training_cancelled', 'training_missed',
          'max_rejections_warning'
       mailer_class.public_send(method_name, notification.notifiable)

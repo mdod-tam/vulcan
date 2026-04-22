@@ -148,8 +148,11 @@ module Applications
       value = cast_user_field_value(attribute, field_value)
       # Update the target user (dependent if this is a dependent application, otherwise current_user)
       target_user = @application.for_dependent? ? @application.user : current_user
+      # Autosave persists individual draft fields without running full-form validations.
+      # rubocop:disable Rails/SkipsModelValidations
       target_user.update_column(attribute, value)
       @application.update_column(:last_visited_step, attribute) if @application.persisted?
+      # rubocop:enable Rails/SkipsModelValidations
       { success: true }
     rescue StandardError => e
       Rails.logger.error("Error autosaving user field #{attribute}: #{e.message}")
@@ -171,8 +174,14 @@ module Applications
       @application.valid?
       return { success: false, errors: { "application[#{attribute}]" => @application.errors[attribute] } } if @application.errors[attribute].any?
 
+      was_new_record = @application.new_record?
+
       @application.save(validate: false)
+      log_application_created_event if was_new_record
+      # Autosave records draft progress field-by-field without full validation.
+      # rubocop:disable Rails/SkipsModelValidations
       @application.update_column(:last_visited_step, attribute)
+      # rubocop:enable Rails/SkipsModelValidations
       { success: true }
     rescue StandardError => e
       Rails.logger.error("Error autosaving application field #{attribute}: #{e.message}")
@@ -213,6 +222,18 @@ module Applications
 
     def autosave_error_result(message)
       { success: false, errors: { base: [message] } }
+    end
+
+    def log_application_created_event
+      AuditEventService.log(
+        action: 'application_created',
+        actor: current_user,
+        auditable: @application,
+        metadata: {
+          submission_method: @application.submission_method,
+          initial_status: @application.status
+        }
+      )
     end
   end
 end

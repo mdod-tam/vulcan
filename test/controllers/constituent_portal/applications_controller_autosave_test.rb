@@ -66,6 +66,26 @@ module ConstituentPortal
       assert_equal @user.id, new_application.user_id
     end
 
+    test 'should log application_created when autosave creates a new draft' do
+      @draft_application.destroy
+
+      assert_difference -> { Event.where(action: 'application_created').count }, 1 do
+        patch autosave_field_constituent_portal_applications_path,
+              params: { field_name: 'application[household_size]', field_value: '3' },
+              as: :json
+      end
+
+      assert_response :success
+
+      new_application = Application.find(response.parsed_body['applicationId'])
+      event = Event.where(action: 'application_created', auditable: new_application).order(:created_at).last
+
+      assert_not_nil event
+      assert_equal @user, event.user
+      assert_equal 'draft', event.metadata['initial_status']
+      assert_equal 'online', event.metadata['submission_method']
+    end
+
     test 'should not autosave invalid Application field' do
       # Test autosaving an invalid annual_income
       patch autosave_field_constituent_portal_application_path(@draft_application),

@@ -7,6 +7,15 @@ es:
             base:
               training_service_window: "Esta solicitud está fuera del período de servicio para los servicios de capacitación."
               evaluation_service_window: "Esta solicitud está fuera del período de servicio para los servicios de evaluación."
+  applications:
+    training_requests:
+      messages:
+        ineligible: "Solo las solicitudes aprobadas son elegibles para capacitación."
+        service_window: "La capacitación ya no está disponible porque esta solicitud está fuera del período de servicio."
+        duplicate_pending: "Capacitación solicitada. Un capacitador se comunicará pronto para programar su capacitación."
+        active_session: "Ya tiene una sesión de capacitación en curso."
+        quota_exhausted: "Ya usó todas sus sesiones de capacitación disponibles."
+        submitted: "Solicitud de capacitación enviada. Un administrador se comunicará con usted para programar su sesión."
   document_signing:
     medical_certification_request:
       submission_name: "Certificacion medica - %{constituent_full_name} (Solicitud %{application_id})"

@@ -43,6 +43,8 @@ module TrainingManagement
         },
         channel: :email
       )
+
+      Application.expire_training_request_metrics_cache!
     end
     true
   rescue ::ActiveRecord::RecordInvalid => e

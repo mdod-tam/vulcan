@@ -105,15 +105,17 @@ module Admin
 
     def update
       if @application.update(application_params)
-        AuditEventService.log(
-          action: 'application_updated',
-          actor: current_user,
-          auditable: @application,
-          metadata: {
-            admin_id: current_user.id,
-            admin_name: current_user.full_name
-          }
-        )
+        if @application.saved_changes.except('updated_at').any?
+          AuditEventService.log(
+            action: 'application_updated',
+            actor: current_user,
+            auditable: @application,
+            metadata: {
+              admin_id: current_user.id,
+              admin_name: current_user.full_name
+            }
+          )
+        end
         # If this is a modal request, respond with success so the modal can close
         if params[:modal] == 'true'
           head :ok
@@ -154,7 +156,7 @@ module Admin
     end
 
     def request_documents
-      @application.request_documents!
+      @application.request_documents!(user: current_user)
       redirect_to admin_application_path(@application), notice: t('.d_requested')
     end
 

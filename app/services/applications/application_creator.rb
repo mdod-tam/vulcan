@@ -143,13 +143,13 @@ module Applications
       target_application.save!
       actor = determine_audit_actor
 
-      target_application.submit!(actor: actor) if @form.is_submission
-
       if was_new_record
         log_application_created_event(actor)
-      else
+      elsif should_log_application_updated_event?
         log_application_updated_event(actor)
       end
+
+      target_application.submit!(actor: actor) if @form.is_submission
     end
 
     def determine_audit_actor
@@ -193,6 +193,10 @@ module Applications
           submission_method: @form.submission_method
         }
       )
+    end
+
+    def should_log_application_updated_event?
+      target_application.saved_changes.except('updated_at').any?
     end
 
     def log_events

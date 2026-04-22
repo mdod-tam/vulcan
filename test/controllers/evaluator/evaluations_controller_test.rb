@@ -73,6 +73,17 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, 'Application Fulfillment'
   end
 
+  test 'show renders free text attendees without inferred relationship fallback' do
+    @evaluation.update!(attendees: [{ 'name' => 'family friend', 'relationship' => 'Not specified' }])
+
+    get evaluators_evaluation_path(@evaluation)
+
+    assert_response :success
+    assert_includes @response.body, 'family friend'
+    assert_not_includes @response.body, 'family friend -'
+    assert_not_includes @response.body, 'family friend - Not specified'
+  end
+
   test 'assigned evaluator can schedule an evaluation' do
     assert_difference('Event.where(action: "evaluation_scheduled").count', 1) do
       post schedule_evaluators_evaluation_path(@requested_evaluation),

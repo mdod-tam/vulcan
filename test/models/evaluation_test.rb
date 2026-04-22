@@ -22,6 +22,30 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_equal 'Alice Johnson', evaluation.attendees.first['name']
   end
 
+  test 'attendees field preserves evaluator-entered text' do
+    evaluation = Evaluation.new
+
+    evaluation.attendees_field = 'family friend'
+
+    assert_equal [{ 'name' => 'family friend' }], evaluation.attendees
+    assert_equal ['family friend'], evaluation.attendee_display_values
+    assert_equal 'family friend', evaluation.attendees_field
+  end
+
+  test 'attendee display remains compatible with legacy relationship values' do
+    evaluation = Evaluation.new(attendees: [{ 'name' => 'Jane Doe', 'relationship' => 'Caregiver' }])
+
+    assert_equal ['Jane Doe - Caregiver'], evaluation.attendee_display_values
+    assert_equal 'Jane Doe - Caregiver', evaluation.attendees_field
+  end
+
+  test 'attendee display suppresses old not specified relationship fallback' do
+    evaluation = Evaluation.new(attendees: [{ 'name' => 'family friend', 'relationship' => 'Not specified' }])
+
+    assert_equal ['family friend'], evaluation.attendee_display_values
+    assert_equal 'family friend', evaluation.attendees_field
+  end
+
   test 'creates an evaluation with mobile devices' do
     evaluation = create(:evaluation, :with_mobile_devices)
     assert_equal 2, evaluation.products_tried.size

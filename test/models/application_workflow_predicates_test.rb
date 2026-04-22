@@ -403,6 +403,52 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_equal app.id, event.metadata['application_id']
   end
 
+  # --- training_request_pending? / with_pending_training_request ---
+
+  test 'training_request_pending? tracks unresolved training requests' do
+    app = create(:application, :completed)
+    app.update_columns(training_requested_at: 2.hours.ago)
+
+    assert app.training_request_pending?
+
+    create(:training_session, application: app, trainer: create(:trainer), status: :requested)
+
+    assert_not app.reload.training_request_pending?
+  end
+
+  test 'training_request_pending? is true again for a later request' do
+    app = create(:application, :completed)
+    trainer = create(:trainer)
+    app.update_columns(training_requested_at: 2.hours.ago)
+    create(:training_session, :cancelled, application: app, trainer: trainer, created_at: 1.hour.ago)
+
+    app.update_columns(training_requested_at: 5.minutes.ago)
+
+    assert app.reload.training_request_pending?
+  end
+
+  test 'with_pending_training_request only returns approved unresolved requests' do
+    requested = create(:application, :completed)
+    requested.update_columns(
+      status: Application.statuses[:approved],
+      training_requested_at: 1.hour.ago
+    )
+    assigned = create(:application, :completed)
+    assigned.update_columns(
+      status: Application.statuses[:approved],
+      training_requested_at: 2.hours.ago
+    )
+    create(:training_session, application: assigned, trainer: create(:trainer), status: :requested)
+    unapproved = create(:application, :in_progress)
+    unapproved.update_columns(training_requested_at: 1.hour.ago)
+
+    results = Application.with_pending_training_request.to_a
+
+    assert_includes results, requested
+    assert_not_includes results, assigned
+    assert_not_includes results, unapproved
+  end
+
   test 'equipment fulfillment date methods update dates and log one audit event each' do
     admin = create(:admin)
     app = create(:application, :completed)

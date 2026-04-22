@@ -40,7 +40,7 @@ class Evaluation < ApplicationRecord
   def attendees_field
     return '' if attendees.blank?
 
-    attendees.map { |a| "#{a['name']} - #{a['relationship']}" }.join(', ')
+    attendee_display_values.join(', ')
   end
 
   def attendees_field=(string_value)
@@ -50,9 +50,26 @@ class Evaluation < ApplicationRecord
     end
 
     self.attendees = string_value.split(',').compact_blank.map do |str|
-      parts = str.strip.split('-').map(&:strip)
-      { 'name' => parts.first, 'relationship' => parts[1..].join('-').presence || 'Not specified' }
+      { 'name' => str.strip }
     end
+  end
+
+  def attendee_display_values
+    Array(attendees).filter_map { |attendee| attendee_display_text(attendee).presence }
+  end
+
+  def attendee_display_text(attendee)
+    return attendee if attendee.is_a?(String)
+    return unless attendee.respond_to?(:with_indifferent_access)
+
+    attendee_hash = attendee.with_indifferent_access
+    name = attendee_hash[:name].presence
+    relationship = attendee_hash[:relationship].presence
+
+    return name if name && relationship == 'Not specified'
+    return "#{name} - #{relationship}" if name && relationship
+
+    name || relationship
   end
 
   def products_tried_field
@@ -100,11 +117,10 @@ class Evaluation < ApplicationRecord
   def validate_attendees_structure
     return true unless status_completed?
 
-    unless attendees.is_a?(Array) && attendees.all? do |attendee|
-      attendee.with_indifferent_access['name'].present? && attendee.with_indifferent_access['relationship'].present?
-    end
-      errors.add(:attendees, 'must be an array of attendees with name and relationship when evaluation is completed')
-    end
+    valid_attendees = attendees.is_a?(Array) && attendees.all? { |attendee| attendee_display_text(attendee).present? }
+    return if valid_attendees
+
+    errors.add(:attendees, 'must be an array of attendee descriptions when evaluation is completed')
   end
 
   def validate_products_tried_presence

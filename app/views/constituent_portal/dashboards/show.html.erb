@@ -583,13 +583,32 @@
               </div>
               <div class="px-4 py-5 sm:p-6">
                 <% service_window_end = @active_application.service_window_end_date %>
+                <% active_training_session = @active_application.active_training_session %>
                 <% if @active_application.service_window_active? %>
                   <% if service_window_end.present? %>
                     <p class="text-xs text-gray-500 mb-3">
                       Service window active until <%= service_window_end.strftime("%B %d, %Y") %>.
                     </p>
                   <% end %>
-                  <% if @remaining_training_sessions && @remaining_training_sessions > 0 %>
+                  <% if @active_application.training_request_pending? %>
+                    <div class="mb-4 rounded-md bg-blue-50 p-4">
+                      <p class="text-sm text-blue-700">
+                        A trainer will reach out soon to schedule your training.
+                      </p>
+                    </div>
+                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-transparent bg-gray-300 px-4 py-2 text-sm font-medium text-gray-600">
+                      Training Session Requested
+                    </button>
+                  <% elsif active_training_session.present? %>
+                    <div class="mb-4 rounded-md bg-blue-50 p-4">
+                      <p class="text-sm text-blue-700">
+                        A trainer has been assigned and will coordinate your training session.
+                      </p>
+                    </div>
+                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-transparent bg-gray-300 px-4 py-2 text-sm font-medium text-gray-600">
+                      Training In Progress
+                    </button>
+                  <% elsif @remaining_training_sessions && @remaining_training_sessions > 0 %>
                     <div class="mb-4">
                       <p class="text-sm text-gray-700">
                         You have <span class="font-medium"><%= @remaining_training_sessions %></span> training sessions remaining.

@@ -117,11 +117,7 @@
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt class="text-sm font-medium text-gray-500">Attendees</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <ul class="list-disc pl-5">
-                <% @evaluation.attendees.each do |attendee| %>
-                  <li><%= "#{attendee['name']} - #{attendee['relationship']}" %></li>
-                <% end %>
-              </ul>
+              <%= safe_join(@evaluation.attendee_display_values, tag.br) %>
             </dd>
           </div>
         <% end %>

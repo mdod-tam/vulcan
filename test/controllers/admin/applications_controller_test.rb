@@ -437,6 +437,29 @@ module Admin
       assert_equal 55_000.0, @application.annual_income
     end
 
+    test 'update without real attribute changes does not log application_updated' do
+      assert_no_difference -> { Event.where(action: 'application_updated', auditable: @application).count } do
+        patch admin_application_path(@application), params: {
+          application: {
+            household_size: @application.household_size,
+            annual_income: @application.annual_income,
+            status: @application.status
+          }
+        }
+      end
+
+      assert_redirected_to admin_application_path(@application)
+    end
+
+    test 'request_documents passes the current admin as explicit lifecycle actor' do
+      @application.expects(:request_documents!).with(user: @admin).returns(true)
+      Application.expects(:find).with(@application.id.to_s).returns(@application)
+
+      post request_documents_admin_application_path(@application)
+
+      assert_redirected_to admin_application_path(@application)
+    end
+
     test 'batch_approve updates multiple applications and redirects' do
       app1 = create(:application, :in_progress)
       app2 = create(:application, :in_progress)
