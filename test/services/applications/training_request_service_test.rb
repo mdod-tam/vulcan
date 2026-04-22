@@ -27,7 +27,7 @@ module Applications
       result = TrainingRequestService.new(application: @application, current_user: @constituent).call
 
       assert_not result.success?
-      assert_equal TrainingRequestService::SERVICE_WINDOW_MESSAGE, result.message
+      assert_equal I18n.t('applications.training_requests.messages.service_window'), result.message
     end
 
     test 'rejects duplicate pending request' do
@@ -36,7 +36,17 @@ module Applications
       result = TrainingRequestService.new(application: @application, current_user: @constituent).call
 
       assert_not result.success?
-      assert_equal TrainingRequestService::DUPLICATE_REQUEST_MESSAGE, result.message
+      assert_equal I18n.t('applications.training_requests.messages.duplicate_pending'), result.message
+    end
+
+    test 'uses constituent locale for duplicate pending request message' do
+      @constituent.update!(locale: 'es')
+      @application.update!(training_requested_at: 1.hour.ago)
+
+      result = TrainingRequestService.new(application: @application, current_user: @constituent).call
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.training_requests.messages.duplicate_pending', locale: 'es'), result.message
     end
 
     test 'rejects duplicate request when an active training session exists' do
@@ -45,7 +55,7 @@ module Applications
       result = TrainingRequestService.new(application: @application, current_user: @constituent).call
 
       assert_not result.success?
-      assert_equal TrainingRequestService::ACTIVE_SESSION_MESSAGE, result.message
+      assert_equal I18n.t('applications.training_requests.messages.active_session'), result.message
     end
 
     test 'allows re-request after cancelled session when quota remains' do
@@ -79,7 +89,7 @@ module Applications
       result = TrainingRequestService.new(application: @application, current_user: @constituent).call
 
       assert_not result.success?
-      assert_equal 'You have used all of your available training sessions.', result.message
+      assert_equal I18n.t('applications.training_requests.messages.quota_exhausted'), result.message
     end
 
     private

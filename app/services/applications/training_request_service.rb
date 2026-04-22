@@ -2,9 +2,7 @@
 
 module Applications
   class TrainingRequestService < BaseService
-    DUPLICATE_REQUEST_MESSAGE = 'Training session requested. A trainer will reach out soon to schedule your training.'
-    ACTIVE_SESSION_MESSAGE = 'You already have a training session in progress.'
-    SERVICE_WINDOW_MESSAGE = 'Training is no longer available because this application is outside the service window.'
+    MESSAGE_SCOPE = 'applications.training_requests.messages'
 
     attr_reader :application, :current_user
 
@@ -15,20 +13,38 @@ module Applications
     end
 
     def call
-      return failure('Only approved applications are eligible for training.') unless application.status_approved?
-      return failure(SERVICE_WINDOW_MESSAGE) unless application.service_window_active?
-      return failure(DUPLICATE_REQUEST_MESSAGE) if application.training_request_pending?
-      return failure(ACTIVE_SESSION_MESSAGE) if application.active_training_session_present?
-      return failure('You have used all of your available training sessions.') unless check_session_limit?
+      return failure(message(:ineligible)) unless validate_eligibility
+      return failure(message(:service_window)) unless application.service_window_active?
+      return failure(message(:duplicate_pending)) if application.training_request_pending?
+      return failure(message(:active_session)) if application.active_training_session_present?
+      return failure(message(:quota_exhausted)) unless check_session_limit?
 
       application.update!(training_requested_at: Time.current)
       create_notifications
       log_request
       Application.expire_training_request_metrics_cache!
-      success('Training request submitted. An administrator will contact you to schedule your session.')
+      success(message(:submitted))
     end
 
     private
+
+    def message(key)
+      I18n.t("#{MESSAGE_SCOPE}.#{key}", locale: message_locale)
+    end
+
+    def message_locale
+      locale = if current_user.respond_to?(:effective_locale)
+                 current_user.effective_locale
+               elsif current_user.respond_to?(:locale)
+                 current_user.locale
+               end
+
+      locale.presence || I18n.default_locale
+    end
+
+    def validate_eligibility
+      application.status_approved?
+    end
 
     def check_session_limit?
       max_sessions = Policy.get('max_training_sessions') || 3

@@ -16,19 +16,7 @@ module AdminNamespace
       Current.user = @admin
       Current.reset
 
-      # Create a training request notification
-      NotificationService.create_and_deliver!(
-        type: 'training_requested',
-        recipient: @admin,
-        actor: @constituent,
-        notifiable: @application,
-        metadata: {
-          application_id: @application.id,
-          constituent_id: @constituent.id,
-          constituent_name: @constituent.full_name,
-          timestamp: Time.current.iso8601
-        }
-      )
+      @application.update!(training_requested_at: Time.current)
 
       # Sign in as admin
       sign_in(@admin)
@@ -38,9 +26,9 @@ module AdminNamespace
       Current.reset
     end
 
-    test 'admin can view applications' do
+    test 'admin can view the applications index' do
       visit admin_applications_path
-      assert_selector 'h1', text: 'Admin Dashboard'
+      assert_selector 'h1', text: 'Applications'
 
       # Basic verification that the page loaded
       assert_selector '.bg-white'

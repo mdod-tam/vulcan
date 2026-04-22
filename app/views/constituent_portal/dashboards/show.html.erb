@@ -582,20 +582,52 @@
                 <h3 class="text-lg leading-6 font-medium text-gray-900">Training Sessions</h3>
               </div>
               <div class="px-4 py-5 sm:p-6">
-                <% if @remaining_training_sessions && @remaining_training_sessions > 0 %>
+                <% active_training_session = @active_application.active_training_session %>
+                <% if @remaining_training_sessions %>
                   <div class="mb-4">
                     <p class="text-sm text-gray-700">
-                      You have <span class="font-medium"><%= @remaining_training_sessions %></span> training sessions remaining.
+                      <% if @remaining_training_sessions.positive? %>
+                        You have <span class="font-medium"><%= @remaining_training_sessions %></span> training sessions remaining.
+                      <% else %>
+                        You have used all of your available training sessions.
+                      <% end %>
                     </p>
                   </div>
+                <% end %>
+
+                <% if @active_application.training_request_pending? %>
+                  <div class="mb-4 rounded-md bg-blue-50 p-4">
+                    <p class="text-sm text-blue-800">
+                      <%= t('applications.training_requests.messages.duplicate_pending', locale: current_user.effective_locale) %>
+                    </p>
+                  </div>
+                  <%= button_tag "Training Session Requested",
+                      type: "button",
+                      disabled: true,
+                      class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-slate-400 cursor-not-allowed" %>
+                <% elsif active_training_session.present? %>
+                  <div class="mb-4 rounded-md bg-blue-50 p-4">
+                    <p class="text-sm text-blue-800">
+                      <% if active_training_session.status_requested? %>
+                        A trainer has been assigned and will contact you soon to schedule your training.
+                      <% elsif active_training_session.scheduled_for.present? %>
+                        Your training session is scheduled for <span class="font-medium"><%= active_training_session.scheduled_for.strftime("%B %d, %Y at %I:%M %p") %></span>.
+                      <% else %>
+                        Your training session is in progress.
+                      <% end %>
+                    </p>
+                  </div>
+                  <%= button_tag "Training In Progress",
+                      type: "button",
+                      disabled: true,
+                      class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-slate-400 cursor-not-allowed" %>
+                <% elsif @remaining_training_sessions&.positive? %>
                   <%= button_to "Request Training",
                       { controller: "constituent_portal/applications", action: "request_training", id: @active_application.id },
                       method: :post,
                       class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
                 <% else %>
-                  <p class="text-sm text-gray-700">
-                    You have used all of your available training sessions.
-                  </p>
+                  <p class="text-sm text-gray-700">You have used all of your available training sessions.</p>
                 <% end %>
               </div>
             </div>

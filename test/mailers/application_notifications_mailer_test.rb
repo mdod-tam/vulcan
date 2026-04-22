@@ -62,6 +62,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                             'Text Body: Welcome, Jane! Dashboard: http://example.com/dashboard. ' \
                                             'New App: http://example.com/applications/new. ' \
                                             'No authorized vendors found at this time.')
+    @mock_training_requested_text = mock_template('Training Requested for Application #%<application_id>s',
+                                                  'Training requested by %<constituent_full_name>s for application %<application_id>s.')
   end
 
   def setup_email_template_stubs
@@ -72,6 +74,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text, locale: 'en').returns(@mock_account_created_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(@mock_income_exceeded_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(@mock_registration_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_training_requested', format: :text, locale: 'en').returns(@mock_training_requested_text)
   end
 
   def create_test_data
@@ -150,6 +153,23 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Check the content of the email
     assert_match(/approved for #{@user.first_name}/, delivered_email.body.to_s)
     assert_match(/Income/, delivered_email.body.to_s)
+  end
+
+  test 'training_requested sends an application-owned admin email' do
+    admin = create(:admin, email: 'training_request_admin@example.com')
+    notification = create(:notification,
+                          recipient: admin,
+                          actor: @application.user,
+                          notifiable: @application,
+                          action: 'training_requested')
+    @application.update_column(:training_requested_at, Time.current)
+
+    email = ApplicationNotificationsMailer.training_requested(@application, notification)
+    email.deliver_now
+
+    assert_equal [admin.email], email.to
+    assert_equal "Training Requested for Application ##{@application.id}", email.subject
+    assert_match(@application.user.full_name, email.body.to_s)
   end
 
   test 'proof_approved uses guardian locale and email when communications route to guardian' do
@@ -275,7 +295,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     proof_review = create(:proof_review, :with_income_proof, application: application, rejection_reason: 'Document unclear')
 
     spanish_template = mock_template('Rechazo en espanol',
-                                     'Texto de rechazo para %<user_first_name>s. Reason: %<rejection_reason>s')
+                                     'Texto de rechazo para %<user_first_name>s. ' \
+                                     'Reason: %<rejection_reason>s ' \
+                                     '%<remaining_attempts_message_text>s ' \
+                                     '%<default_options_text>s')
     EmailTemplate.stubs(:find_by!).with(
       name: 'application_notifications_proof_rejected',
       format: :text,
@@ -287,6 +310,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal [guardian.email], email.to
     assert_equal 'Rechazo en espanol', email.subject
+    assert_includes email.body.to_s, 'Tiene 6 intentos restantes'
+    assert_includes email.body.to_s, I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')
+    assert_includes email.body.to_s, 'CÓMO VOLVER A ENVIAR SU DOCUMENTACIÓN'
   end
 
   test 'proof_rejected generates letter when preference is letter' do

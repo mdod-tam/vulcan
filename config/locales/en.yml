@@ -45,6 +45,39 @@ en:
       neighbor: "Neighbor"
       friend: "Friend"
       other: "Other"
+    training_requests:
+      messages:
+        ineligible: "Only approved applications are eligible for training."
+        service_window: "Training is no longer available because this application is outside the service window."
+        duplicate_pending: "Training session requested. A trainer will reach out soon to schedule your training."
+        active_session: "You already have a training session in progress."
+        quota_exhausted: "You have used all of your available training sessions."
+        submitted: "Training request submitted. An administrator will contact you to schedule your session."
+  application_notifications:
+    proof_rejected:
+      remaining_attempts_message:
+        one: "You have %{count} attempt remaining to submit the required documentation before %{reapply_date}."
+        other: "You have %{count} attempts remaining to submit the required documentation before %{reapply_date}."
+      resubmission_options:
+        paper: |-
+          HOW TO RESUBMIT YOUR DOCUMENTATION:
+          1. Reply to this email: Simply reply to this email and attach your updated documentation.
+          2. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
+             Maryland Accessible Telecommunications
+             123 Main Street
+             Baltimore, MD 21201
+        online: |-
+          HOW TO RESUBMIT YOUR DOCUMENTATION:
+          1. Reply to this email: Simply reply to this email and attach your updated documentation.
+          2. Upload Online: Sign in to your account dashboard at %{sign_in_url} and upload your new documents securely.
+          3. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
+             Maryland Accessible Telecommunications
+             123 Main Street
+             Baltimore, MD 21201
+      archived_message: "Unfortunately, you have reached the maximum number of submission attempts. Your application has been archived. You may reapply after %{reapply_date}."
+  date:
+    formats:
+      long: "%B %d, %Y"
   document_signing:
     medical_certification_request:
       submission_name: "Medical Certification - %{constituent_full_name} (Application %{application_id})"

@@ -535,5 +535,48 @@ module Applications
         end
       end
     end
+
+    test 'generate_index_data counts pending training requests from application state' do
+      pending_request = create_reviewed_application(
+        user: create(:constituent, email: "reporting_pending_training_#{Time.now.to_i}@example.com")
+      )
+      pending_request.update!(training_requested_at: 1.hour.ago)
+
+      fulfilled_request = create_reviewed_application(
+        user: create(:constituent, email: "reporting_fulfilled_training_#{Time.now.to_i}@example.com")
+      )
+      fulfilled_request.update!(training_requested_at: 2.hours.ago)
+      create(:training_session, application: fulfilled_request, trainer: create(:trainer), status: :requested)
+
+      service = ReportingService.new
+      result = service.generate_index_data
+
+      assert result.success?
+      assert_equal 1, result.data[:training_requests_count]
+    end
+
+    private
+
+    def create_reviewed_application(user:)
+      application = create(:application, skip_proofs: true, user: user, status: :in_progress)
+      application.income_proof.attach(
+        io: StringIO.new('income proof content'),
+        filename: 'income.pdf',
+        content_type: 'application/pdf'
+      )
+      application.residency_proof.attach(
+        io: StringIO.new('residency proof content'),
+        filename: 'residency.pdf',
+        content_type: 'application/pdf'
+      )
+      application.update_columns(
+        status: Application.statuses[:approved],
+        income_proof_status: Application.income_proof_statuses[:approved],
+        residency_proof_status: Application.residency_proof_statuses[:approved],
+        medical_certification_status: Application.medical_certification_statuses[:approved],
+        updated_at: Time.current
+      )
+      application.reload
+    end
   end
 end

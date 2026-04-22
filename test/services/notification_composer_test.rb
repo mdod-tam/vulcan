@@ -41,6 +41,16 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert_equal "Jane Trainer assigned to train John Doe for Application ##{@application.id} (Scheduled).", message
   end
 
+  test 'generate message for training_requested' do
+    message = NotificationComposer.generate(
+      'training_requested',
+      @application,
+      @constituent
+    )
+
+    assert_equal "John Doe requested training for Application ##{@application.id}.", message
+  end
+
   test 'generate message for medical_certification_rejected with reason' do
     message = NotificationComposer.generate(
       'medical_certification_rejected',

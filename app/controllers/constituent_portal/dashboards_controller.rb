@@ -116,7 +116,7 @@ module ConstituentPortal
       # Get training sessions information
       @training_sessions = @active_application&.training_sessions || []
       @max_training_sessions = Policy.get('max_training_sessions') || 3
-      @remaining_training_sessions = @max_training_sessions - @training_sessions.count if @active_application
+      @remaining_training_sessions = @max_training_sessions - @training_sessions.completed_sessions.count if @active_application
     end
 
     def load_proof_status_information

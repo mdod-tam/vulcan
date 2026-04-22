@@ -15,18 +15,7 @@ module Admin
     # Dashboard metrics loading is handled in the DashboardMetricsLoading concern
 
     def calculate_training_requests
-      # Try notifications first, fallback to training sessions
-      notification_count = Notification.where(action: 'training_requested', notifiable_type: 'Application')
-                                       .select(:notifiable_id)
-                                       .distinct
-                                       .count
-
-      return notification_count if notification_count.positive?
-
-      Application.joins(:training_sessions)
-                 .where(training_sessions: { status: %i[requested scheduled confirmed] })
-                 .distinct
-                 .count
+      Application.with_pending_training_request.count
     end
 
     # Safely assigns a value to an instance variable after sanitizing the key
@@ -55,22 +44,7 @@ module Admin
       when 'awaiting_medical_response'
         scope.where(status: :awaiting_dcf)
       when 'training_requests'
-        # Filter applications with training request notifications
-        application_ids = Notification.where(action: 'training_requested')
-                                      .where(notifiable_type: 'Application')
-                                      .pluck(:notifiable_id)
-        # Debug output to help diagnose the issue
-        Rails.logger.debug { "Training requests filter found IDs: #{application_ids.inspect}" }
-
-        # The issue might be that the application is filtered out by the base scope
-        # Use unscoped to avoid default scopes for just this specific filter
-        if application_ids.present?
-          # Ensure we include applications regardless of their status
-          Application.where(id: application_ids)
-        else
-          # Empty result set if no training requests found
-          scope.none
-        end
+        scope.with_pending_training_request
       else
         scope
       end

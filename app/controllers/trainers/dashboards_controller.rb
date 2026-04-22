@@ -33,8 +33,9 @@ module Trainers
 
       # Get count for any training sessions assigned to this user
       # For admins, always use their own trainer_id for this count to ensure consistency
-      @my_training_requests_count = TrainingSession.where(trainer_id: current_user.id,
-                                                          status: %i[requested scheduled confirmed]).count
+      @my_training_requests_count = TrainingSession.where(trainer_id: current_user.id)
+                                                   .assigned_or_scheduled
+                                                   .count
     end
 
     def apply_filter

@@ -180,5 +180,51 @@ module ConstituentPortal
       # Should show "Add New Dependent" button (updated text)
       assert_select 'a', text: 'Add New Dependent'
     end
+
+    test 'dashboard shows requested training state and disables duplicate request button' do
+      application = create_reviewed_application(user: @user)
+      application.update!(training_requested_at: 1.hour.ago)
+
+      get constituent_portal_dashboard_path
+      assert_response :success
+
+      assert_select 'button[disabled]', text: 'Training Session Requested'
+      assert_select 'p', text: /A trainer will reach out soon/
+    end
+
+    test 'dashboard shows active training session state and disables duplicate request button' do
+      application = create_reviewed_application(user: @user)
+      create(:training_session, application: application, trainer: create(:trainer), status: :requested)
+
+      get constituent_portal_dashboard_path
+      assert_response :success
+
+      assert_select 'button[disabled]', text: 'Training In Progress'
+      assert_select 'p', text: /trainer has been assigned/
+    end
+
+    private
+
+    def create_reviewed_application(user:)
+      application = create(:application, skip_proofs: true, user: user, status: :in_progress)
+      application.income_proof.attach(
+        io: StringIO.new('income proof content'),
+        filename: 'income.pdf',
+        content_type: 'application/pdf'
+      )
+      application.residency_proof.attach(
+        io: StringIO.new('residency proof content'),
+        filename: 'residency.pdf',
+        content_type: 'application/pdf'
+      )
+      application.update_columns(
+        status: Application.statuses[:approved],
+        income_proof_status: Application.income_proof_statuses[:approved],
+        residency_proof_status: Application.residency_proof_statuses[:approved],
+        medical_certification_status: Application.medical_certification_statuses[:approved],
+        updated_at: Time.current
+      )
+      application.reload
+    end
   end
 end
