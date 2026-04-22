@@ -201,7 +201,7 @@ module ConstituentPortal
 
       assert_response :success
       assert_select 'button[disabled]', text: 'Training Assigned'
-      assert_select 'p', text: /training has been assigned to/
+      assert_select 'p', text: /Assigned to/
       assert_select 'form[action=?]', request_training_constituent_portal_application_path(application), count: 0
     end
 
