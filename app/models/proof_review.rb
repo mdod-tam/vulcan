@@ -8,11 +8,11 @@ class ProofReview < ApplicationRecord
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
 
   # Enums (using the original syntax to avoid argument errors)
-  enum :proof_type, { income: 0, residency: 1, id: 2, medical_certification: 3 }, prefix: true
+  enum :proof_type, { income: 0, residency: 1, medical_certification: 2, id: 3 }, prefix: true
   enum :status, { approved: 0, rejected: 1 }, prefix: true
   enum :submission_method, { web: 0, email: 1, scanned: 2, paper: 3 }, prefix: true
 
-  REVIEWABLE_PROOF_TYPES = %w[income residency].freeze
+  REVIEWABLE_PROOF_TYPES = %w[income id residency].freeze
 
   def self.reviewable_proof_types
     REVIEWABLE_PROOF_TYPES

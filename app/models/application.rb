@@ -464,7 +464,7 @@ class Application < ApplicationRecord
   end
 
   def proofs_reviewable?
-    %w[income residency].any? { |proof_type| proof_type_reviewable?(proof_type) }
+    %w[income id residency].any? { |proof_type| proof_type_reviewable?(proof_type) }
   end
 
   def proof_review_button_text(proof_type)
@@ -533,7 +533,7 @@ class Application < ApplicationRecord
   end
 
   def required_proofs_approved?
-    residency_proof_status_approved? &&
+    residency_proof_status_approved? && id_proof_status_approved? &&
       (!income_proof_required? || income_proof_status_approved?)
   end
 
@@ -695,6 +695,7 @@ class Application < ApplicationRecord
   def pending_proof_types
     types = []
     types << 'income' if income_proof_required? && income_proof_status_not_reviewed?
+    types << 'id' if id_proof_status_not_reviewed?
     types << 'residency' if residency_proof_status_not_reviewed?
     types
   end
