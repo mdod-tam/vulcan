@@ -36,11 +36,11 @@ module Admin
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
 
       # Fill in medical provider info
-      within('section', text: 'Medical Professional Information') do
+      within('section', text: 'Certifying Professional Information and Authorization to Contact') do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Email', with: 'smith@example.com'
         fill_in 'Phone', with: '555-123-4567'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
       # Submit the form instead of saving as draft
@@ -48,27 +48,6 @@ module Admin
 
       # Verify application was submitted
       assert_text 'Application submitted successfully'
-
-      # Debug: Check if application was actually created
-      created_application = Application.find_by(user: @constituent)
-      puts "Created application: #{created_application.inspect}"
-      puts "Application ID: #{created_application&.id}"
-      puts "Application user: #{created_application&.user&.full_name}"
-      puts "Application status: #{created_application&.status}"
-
-      # Verify audit event with debug info
-      events = Event.where(auditable: created_application).order(created_at: :desc)
-      puts "Events for application #{created_application.id}:"
-      events.each do |e|
-        puts "- #{e.action} by #{e.user&.email} at #{e.created_at}: #{e.metadata.inspect}"
-      end
-
-      event = events.find { |e| e.action == 'application_created' }
-      if event
-        puts "Found application_created event: #{event.attributes}"
-      else
-        puts "ERROR: No application_created event found for application #{created_application.id}"
-      end
 
       # Sign out and sign in as admin
       sign_out
@@ -78,34 +57,15 @@ module Admin
       # Sign in as admin
       sign_in(@admin)
 
-      # Debug: Check admin authentication
-      puts "Admin user: #{@admin.email}, admin?: #{@admin.admin?}"
-      puts "Current URL after admin sign in: #{current_url}"
-      puts "Page has admin content: #{page.has_content?('Dashboard')}"
-
       # Find and view the application
       visit admin_applications_path
-
-      # Debug: Check what's on the admin applications page
-      puts "Admin applications page URL: #{current_url}"
-      puts "Page title: #{page.title}"
-      puts "Page has applications: #{page.has_content?('Applications')}"
-      puts "Page content (first 500 chars): #{page.text[0..500]}"
-
-      # Check if there are any applications in the database
-      puts "Total applications in DB: #{Application.count}"
-      puts "Applications by user: #{Application.all.map { |a| "#{a.id}: #{a.user.full_name}" }}"
-
-      # Debug: List all links on the page
-      all_links = all('a').map(&:text)
-      puts "All links on admin applications page: #{all_links}"
 
       # Find the "View" link for the application and get the href
       view_link = nil
       within 'table' do
         row = first('tr', text: @constituent.email)
         within row do
-          view_link = find_link('View')
+          view_link = find_link('View Application')
         end
       end
 
@@ -126,9 +86,9 @@ module Admin
       # Use Capybara's intelligent waiting to wait for the specific audit log text to appear
       # This handles the timing between application submission and audit log updates
       within '#audit-logs' do
-        # Wait for the audit log to show the in_progress status - Capybara will retry until timeout
-        assert_text 'Application created via Online method with status: In Progress', wait: 10
+        assert_text 'Application created via Online method with status: Draft', wait: 10
         assert_text 'Application created via Online method'
+        assert_text 'Application submitted for review'
       end
     end
 
@@ -140,13 +100,19 @@ module Admin
 
       # Select applicant type first to make form fields visible
       choose 'An Adult (applying for themselves)'
+      click_button 'Create New Applicant'
 
       # Fill in constituent info
       within '#self-info-section' do
         fill_in 'First Name', with: 'John'
         fill_in 'Last Name', with: 'Paper'
-        fill_in 'Email', with: 'john.paper@example.com'
-        fill_in 'Phone', with: '555-987-6543'
+        fill_in 'Date of Birth', with: '1980-01-15'
+        check 'I accept the terms and conditions'
+        fill_in 'Email Address', with: 'john.paper@example.com'
+        fill_in 'Phone Number', with: '555-987-6543'
+        fill_in 'Street Address', with: '123 Paper St'
+        fill_in 'City', with: 'Baltimore'
+        fill_in 'ZIP Code', with: '21201'
       end
 
       # Wait for the application fields to become visible after selecting applicant type
@@ -160,10 +126,11 @@ module Admin
       check 'Hearing'
 
       # Fill in medical provider info
-      within('fieldset', text: 'Medical Provider Information') do
-        fill_in 'Name', with: 'Dr. Jones'
+      within('fieldset', text: 'Certifying Professional Information') do
+        fill_in 'Provider Name', with: 'Dr. Jones'
         fill_in 'Email', with: 'jones@example.com'
         fill_in 'Phone', with: '555-333-4444'
+        check 'I authorize medical release'
       end
 
       # Upload proof documents
@@ -173,8 +140,8 @@ module Admin
       # Submit the form
       click_button 'Submit Paper Application'
 
-      # Verify application was created
-      assert_text 'Paper application successfully submitted'
+      # Verify we landed on the created paper application's detail page
+      assert_text(/Application #\d+ Details/i, wait: 10)
 
       # Verify the audit log shows the application creation
       within '#audit-logs' do

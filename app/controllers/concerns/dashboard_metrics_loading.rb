@@ -113,7 +113,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:digitally_signed_needs_review_count, digitally_signed_count)
   end
 
-  # Loads training request counts with fallback logic
+  # Loads training request counts from the application-owned request queue
   def load_training_request_counts
     training_count = cached_count('training_requests') { calculate_training_requests_count }
     safe_assign(:training_requests_count, training_count)
@@ -367,12 +367,12 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   # persisted application state so admin queue visibility doesn't depend on
   # notification delivery.
   def calculate_training_requests_count
-    Application.with_pending_training_request.distinct.count
+    Application.with_pending_training_request.count
   end
 
   # Count applications with an outstanding admin-initiated evaluation request.
   def calculate_evaluation_requests_count
-    Application.with_pending_evaluation_request.distinct.count
+    Application.with_pending_evaluation_request.count
   end
 
   # Get the current fiscal year (July 1 - June 30)

@@ -543,7 +543,8 @@ class NotificationService
 
     return if notification.update(metadata: merged_meta)
 
-    notification.update_column(:metadata, merged_meta) # rubocop:disable Rails/SkipsModelValidations
+    notification.assign_attributes(metadata: merged_meta)
+    notification.save(validate: false)
   rescue StandardError => e
     Rails.logger.warn "NotificationService: Failed to persist routing metadata for Notification ##{notification.id}: #{e.message}"
   end
@@ -601,18 +602,10 @@ class NotificationService
 
   # ---- Audit ----------------------------------------------------------------
 
-  def log_to_audit_trail(notification) # rubocop:disable Metrics/PerceivedComplexity
+  def log_to_audit_trail(notification)
     # Determine accurate event name based on actual delivery outcome
     should_deliver = notification.instance_variable_get(:@should_deliver)
     delivery_successful = notification.instance_variable_get(:@delivery_successful)
-
-    event_action = if should_deliver && delivery_successful
-                     "notification_#{notification.action}_sent"
-                   elsif should_deliver && !delivery_successful
-                     "notification_#{notification.action}_failed"
-                   else
-                     "notification_#{notification.action}_created"
-                   end
 
     notification_metadata = notification.metadata.is_a?(Hash) ? notification.metadata : {}
     requested_channel = notification_metadata['channel'] || 'unknown'
@@ -620,7 +613,7 @@ class NotificationService
 
     AuditEventService.log(
       actor: notification.actor || notification.recipient,
-      action: event_action,
+      action: audit_event_action(notification, should_deliver, delivery_successful),
       auditable: notification,
       metadata: {
         notification_id: notification.id,
@@ -638,6 +631,17 @@ class NotificationService
   rescue StandardError => e
     handle_audit_trail_error(notification, e)
   end
+
+  def audit_event_action(notification, should_deliver, delivery_successful)
+    if should_deliver && delivery_successful
+      "notification_#{notification.action}_sent"
+    elsif should_deliver
+      "notification_#{notification.action}_failed"
+    else
+      "notification_#{notification.action}_created"
+    end
+  end
+  private :audit_event_action
 
   def handle_audit_trail_error(notification, error)
     ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: error, stage: 'audit'

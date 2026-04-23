@@ -54,4 +54,19 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_equal iphone.id, evaluation.products_tried.first['product_id']
     assert_equal pixel.id, evaluation.products_tried.second['product_id']
   end
+
+  test 'allows administrators as evaluators through inherent capability' do
+    evaluation = build(:evaluation, evaluator: create(:admin))
+
+    assert evaluation.valid?, -> { evaluation.errors.full_messages.join(', ') }
+  end
+
+  test 'does not allow trainers as evaluators even with explicit can_evaluate capability' do
+    trainer = create(:trainer)
+    create(:role_capability, user: trainer, capability: 'can_evaluate')
+    evaluation = build(:evaluation, evaluator: trainer)
+
+    assert_not evaluation.valid?
+    assert_includes evaluation.errors[:evaluator], 'must be an Evaluator or an administrator with evaluation capability'
+  end
 end

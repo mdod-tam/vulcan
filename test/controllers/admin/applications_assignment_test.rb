@@ -31,42 +31,48 @@ module Admin
       assert_select 'button', text: /Assign Test Trainer/, count: 0
     end
 
-    test 'trainer dropdown excludes admins without can_train capability' do
+    test 'trainer dropdown includes active admins through inherent can_train capability' do
       trainer = create(:trainer)
-      _plain_admin = create(:admin)
+      admin = create(:admin, first_name: 'Training', last_name: 'Admin')
 
       get admin_application_path(@application)
 
       assert_select 'select[name=trainer_id] option', text: trainer.full_name
-      assert_select 'select[name=trainer_id] option', text: 'Admin User', count: 0
+      assert_select 'select[name=trainer_id] option', text: admin.full_name
     end
 
-    test 'trainer dropdown includes admins with can_train capability' do
-      capable_admin = create(:admin, first_name: 'Trainable', last_name: 'Admin')
-      create(:role_capability, user: capable_admin, capability: 'can_train')
+    test 'trainer dropdown excludes inactive admins' do
+      inactive_admin = create(:admin, first_name: 'Inactive', last_name: 'Admin', status: :inactive)
 
       get admin_application_path(@application)
-      assert_includes @response.body, capable_admin.full_name
+
+      assert_select 'select[name=trainer_id] option', text: inactive_admin.full_name, count: 0
     end
 
-    test 'evaluator dropdown includes admins with can_evaluate capability' do
+    test 'evaluator dropdown includes active admins through inherent can_evaluate capability' do
       evaluator = create(:evaluator)
-      capable_admin = create(:admin, first_name: 'Adminy', last_name: 'Evaluator')
-      create(:role_capability, user: capable_admin, capability: 'can_evaluate')
+      admin = create(:admin, first_name: 'Evaluation', last_name: 'Admin')
 
       get admin_application_path(@application)
       assert_select 'select[name=evaluator_id] option', text: evaluator.full_name
-      assert_select 'select[name=evaluator_id] option', text: capable_admin.full_name
+      assert_select 'select[name=evaluator_id] option', text: admin.full_name
     end
 
-    test 'evaluator dropdown excludes admins without can_evaluate capability' do
-      evaluator = create(:evaluator)
-      plain_admin = create(:admin, first_name: 'Plain', last_name: 'Admin')
+    test 'evaluator dropdown excludes suspended admins' do
+      suspended_admin = create(:admin, first_name: 'Suspended', last_name: 'Admin', status: :suspended)
 
       get admin_application_path(@application)
 
-      assert_select 'select[name=evaluator_id] option', text: evaluator.full_name
-      assert_select 'select[name=evaluator_id] option', text: plain_admin.full_name, count: 0
+      assert_select 'select[name=evaluator_id] option', text: suspended_admin.full_name, count: 0
+    end
+
+    test 'evaluator dropdown excludes trainers with explicit can_evaluate capability' do
+      trainer = create(:trainer, first_name: 'Cross', last_name: 'Trainer')
+      create(:role_capability, user: trainer, capability: 'can_evaluate')
+
+      get admin_application_path(@application)
+
+      assert_select 'select[name=evaluator_id] option', text: trainer.full_name, count: 0
     end
 
     test 'assigned training detail link exits the application turbo frame' do

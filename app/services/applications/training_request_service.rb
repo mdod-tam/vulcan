@@ -13,7 +13,7 @@ module Applications
     end
 
     def call
-      return failure(message(:ineligible)) unless application.status_approved?
+      return failure(message(:ineligible)) unless validate_eligibility
       return failure(message(:service_window)) unless application.service_window_active?
       return failure(message(:duplicate_pending)) if application.training_request_pending?
       return failure(message(:active_session)) if application.active_training_session_present?
@@ -33,7 +33,17 @@ module Applications
     end
 
     def message_locale
-      current_user&.effective_locale || current_user&.locale || I18n.locale
+      locale = if current_user.respond_to?(:effective_locale)
+                 current_user.effective_locale
+               elsif current_user.respond_to?(:locale)
+                 current_user.locale
+               end
+
+      locale.presence || I18n.locale
+    end
+
+    def validate_eligibility
+      application.status_approved?
     end
 
     def check_session_limit?

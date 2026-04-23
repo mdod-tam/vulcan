@@ -153,8 +153,7 @@ class Evaluation < ApplicationRecord
 
   def evaluator_must_be_assignable
     return if evaluator.nil?
-    return if evaluator.type == 'Users::Evaluator'
-    return if evaluator.type == 'Users::Administrator' && evaluator.capability?('can_evaluate')
+    return if evaluator.assignable_evaluator?
 
     errors.add(:evaluator, 'must be an Evaluator or an administrator with evaluation capability')
   end

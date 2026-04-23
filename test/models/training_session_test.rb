@@ -47,6 +47,21 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert training_session.valid?
   end
 
+  test 'allows administrators as trainers through inherent capability' do
+    training_session = build(:training_session, trainer: create(:admin))
+
+    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
+  end
+
+  test 'does not allow evaluators as trainers even with explicit can_train capability' do
+    evaluator = create(:evaluator)
+    create(:role_capability, user: evaluator, capability: 'can_train')
+    training_session = build(:training_session, trainer: evaluator)
+
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:trainer], 'must be a trainer'
+  end
+
   test 'scheduled_for must be in the future on create' do
     skip 'Validation behaves differently in test environment'
 

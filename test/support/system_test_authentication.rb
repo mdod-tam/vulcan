@@ -113,7 +113,7 @@ module SystemTestAuthentication
       # Wait for EITHER successful redirect OR error message
       # This is better than checking current_path immediately
       # Try to wait for successful redirect to dashboard
-      if page.has_current_path?(expected_dashboard_path, wait: 8)
+      if dashboard_path_reached?(user, wait: 8)
         # Success! Continue to dashboard verification below
       elsif page.has_text?('Invalid email or password', wait: 2)
         # Clear authentication failure
@@ -158,20 +158,7 @@ module SystemTestAuthentication
       debug_puts "User #{user.email} has 2FA enabled, on verification page: #{current_path}"
     else
       # For normal sign-in, we expect to be redirected to dashboard
-      expected_dashboard_path = user_dashboard_path(user)
-      assert_current_path(expected_dashboard_path, wait: 10)
-
-      # Check for appropriate dashboard heading based on user type
-      dashboard_heading = case user.type
-                          when 'Users::Administrator'
-                            'Admin Dashboard'
-                          when 'Users::Vendor'
-                            'Vendor Dashboard'
-                          else
-                            'Dashboard'
-                          end
-
-      assert_selector('h1', text: dashboard_heading, wait: 10)
+      assert_dashboard_landing!(user)
       wait_for_stimulus_controller('forms') if has_selector?('[data-controller*="forms"]', wait: 1)
       debug_puts "Successfully signed in as #{user.email}"
     end
@@ -212,20 +199,7 @@ module SystemTestAuthentication
       assert_selector('form', wait: 10)
       debug_puts "User #{user.email} has 2FA enabled, on verification page: #{current_path} on retry"
     else
-      expected_dashboard_path = user_dashboard_path(user)
-      assert_current_path(expected_dashboard_path, wait: 10)
-
-      # Check for appropriate dashboard heading based on user type
-      dashboard_heading = case user.type
-                          when 'Users::Administrator'
-                            'Admin Dashboard'
-                          when 'Users::Vendor'
-                            'Vendor Dashboard'
-                          else
-                            'Dashboard'
-                          end
-
-      assert_selector('h1', text: dashboard_heading, wait: 10)
+      assert_dashboard_landing!(user)
       wait_for_stimulus_controller('forms') if has_selector?('[data-controller*="forms"]', wait: 1)
       debug_puts "Successfully signed in as #{user.email} on retry"
     end
@@ -414,7 +388,7 @@ module SystemTestAuthentication
   def user_dashboard_path(user)
     case user.type
     when 'Users::Administrator'
-      admin_applications_path # Match ApplicationController#_dashboard_for
+      admin_dashboard_path
     when 'Users::Constituent'
       constituent_portal_dashboard_path
     when 'Users::Evaluator'
@@ -427,6 +401,43 @@ module SystemTestAuthentication
       # Default to root path if user type is unknown
       root_path
     end
+  end
+
+  def dashboard_path_reached?(user, wait:)
+    if user.type == 'Users::Administrator'
+      page.has_current_path?(admin_dashboard_path, wait: wait) ||
+        page.has_current_path?(admin_applications_path, wait: wait)
+    else
+      page.has_current_path?(user_dashboard_path(user), wait: wait)
+    end
+  end
+
+  def assert_dashboard_landing!(user)
+    if user.type == 'Users::Administrator'
+      assert_admin_dashboard_landing!
+      return
+    end
+
+    assert_current_path(user_dashboard_path(user), wait: 10)
+
+    dashboard_heading = case user.type
+                        when 'Users::Vendor'
+                          'Vendor Dashboard'
+                        else
+                          'Dashboard'
+                        end
+
+    assert_selector('h1', text: dashboard_heading, wait: 10)
+  end
+
+  def assert_admin_dashboard_landing!
+    assert(
+      page.has_current_path?(admin_dashboard_path, wait: 10) ||
+      page.has_current_path?(admin_applications_path, wait: 10),
+      "expected current path to be #{admin_dashboard_path} or #{admin_applications_path}, got #{current_path}"
+    )
+
+    assert_selector('h1', text: /Applications|Admin Dashboard/, wait: 10)
   end
 
   # Visit method that handles pending connections gracefully

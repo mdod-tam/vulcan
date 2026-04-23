@@ -105,6 +105,31 @@ module Applications
       end
     end
 
+    test 'filters by pending training requests using application state' do
+      with_mocked_attachments do
+        pending_request = create(:application, :approved, user: create(:constituent, email: 'pending_training_filter@example.com'))
+        pending_request.update!(training_requested_at: 1.hour.ago)
+
+        fulfilled_request = create(:application, :approved, user: create(:constituent, email: 'fulfilled_training_filter@example.com'))
+        fulfilled_request.update!(training_requested_at: 2.hours.ago)
+        create(:training_session, application: fulfilled_request, trainer: create(:trainer), status: :requested)
+
+        notification_only = create(:application, :approved, user: create(:constituent, email: 'notification_only_filter@example.com'))
+        create(:notification,
+               recipient: create(:admin),
+               actor: notification_only.user,
+               notifiable: notification_only,
+               action: 'training_requested')
+
+        service = FilterService.new(@scope, { filter: 'training_requests' })
+        result_data = service.apply_filters.data
+
+        assert_includes result_data, pending_request
+        assert_not_includes result_data, fulfilled_request
+        assert_not_includes result_data, notification_only
+      end
+    end
+
     test 'filters by proofs needing review' do
       with_mocked_attachments do
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
@@ -134,8 +159,11 @@ module Applications
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
         result_data = service.apply_filters.data
 
-        assert_not_includes result_data, income_off_app,
-                            'App with income_proof_required=false and residency approved should not appear in proofs_needing_review'
+        assert_not_includes(
+          result_data,
+          income_off_app,
+          'App with income_proof_required=false and residency approved should not appear in proofs_needing_review'
+        )
       end
     end
 
@@ -156,8 +184,11 @@ module Applications
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
         result_data = service.apply_filters.data
 
-        assert_includes result_data, residency_pending_app,
-                        'App with income_proof_required=false but residency not_reviewed should appear in proofs_needing_review'
+        assert_includes(
+          result_data,
+          residency_pending_app,
+          'App with income_proof_required=false but residency not_reviewed should appear in proofs_needing_review'
+        )
       end
     end
 

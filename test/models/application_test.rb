@@ -175,6 +175,59 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal 'submission', status_change.metadata['trigger']
   end
 
+  test 'training_request_pending? is true until a newer training session is created' do
+    application = create(:application, :approved)
+
+    travel_to Time.zone.local(2026, 4, 7, 10, 0, 0) do
+      application.update!(training_requested_at: Time.current)
+    end
+
+    assert application.training_request_pending?
+
+    travel_to Time.zone.local(2026, 4, 7, 11, 0, 0) do
+      create(:training_session, application: application, trainer: create(:trainer), status: :requested)
+    end
+
+    assert_not application.reload.training_request_pending?
+  end
+
+  test 'training_request_pending? is true again after a later re-request' do
+    application = create(:application, :approved)
+    trainer = create(:trainer)
+
+    travel_to Time.zone.local(2026, 4, 7, 9, 0, 0) do
+      application.update!(training_requested_at: Time.current)
+    end
+
+    travel_to Time.zone.local(2026, 4, 7, 10, 0, 0) do
+      create(:training_session, application: application, trainer: trainer, status: :completed, notes: 'done', completed_at: Time.current)
+    end
+
+    travel_to Time.zone.local(2026, 4, 7, 11, 0, 0) do
+      application.update!(training_requested_at: Time.current)
+    end
+
+    assert application.reload.training_request_pending?
+  end
+
+  test 'with_pending_training_request returns only approved applications with unresolved requests' do
+    pending_application = create(:application, :approved)
+    pending_application.update!(training_requested_at: 1.hour.ago)
+
+    fulfilled_application = create(:application, :approved)
+    fulfilled_application.update!(training_requested_at: 2.hours.ago)
+    create(:training_session, application: fulfilled_application, trainer: create(:trainer), status: :requested)
+
+    non_approved_application = create(:application, :in_progress)
+    non_approved_application.update!(training_requested_at: 1.hour.ago)
+
+    results = Application.with_pending_training_request
+
+    assert_includes results, pending_application
+    assert_not_includes results, fulfilled_application
+    assert_not_includes results, non_approved_application
+  end
+
   test 'service_window_active? returns true for approved applications inside the service window' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)

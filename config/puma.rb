@@ -26,7 +26,8 @@
 # Any libraries that use a connection pool or another resource pool should
 # be configured to provide at least as many connections as the number of
 # threads. This includes Active Record's `pool` parameter in `database.yml`.
-worker_count = Integer(ENV['WEB_CONCURRENCY'] || (ENV['RAILS_ENV'] == 'development' ? 0 : 2))
+app_env = ENV.fetch('RAILS_ENV') { ENV.fetch('RACK_ENV', 'development') }
+worker_count = Integer(ENV['WEB_CONCURRENCY'] || (%w[development test].include?(app_env) ? 0 : 2))
 workers worker_count
 threads_count = Integer(ENV['RAILS_MAX_THREADS'] || 5)
 threads threads_count, threads_count
@@ -46,7 +47,7 @@ enable_keep_alives(false) if respond_to?(:enable_keep_alives)
 rackup      DefaultRackup if defined?(DefaultRackup)
 
 # fallback to RACK_ENV
-environment ENV.fetch('RAILS_ENV') { ENV.fetch('RACK_ENV', 'development') }
+environment app_env
 
 # Solid Queue needs database connection in worker processes.
 # Skip this hook in single-mode development to avoid Puma 7 startup warnings.

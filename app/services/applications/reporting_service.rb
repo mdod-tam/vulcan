@@ -323,11 +323,7 @@ module Applications
     end
 
     def add_training_requests_count(data)
-      data[:training_requests_count] = Application
-                                       .joins(:training_sessions)
-                                       .where(training_sessions: { status: %i[requested scheduled confirmed] })
-                                       .distinct
-                                       .count
+      data[:training_requests_count] = Application.with_pending_training_request.count
     end
 
     def status_count_helper(counts, status_key)

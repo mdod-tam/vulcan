@@ -162,6 +162,43 @@ module Applications
       # and our mocked rejection service was called
     end
 
+    test 'paper submission requests medical certification once required proofs are approved' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-paper-dcf-#{test_timestamp}@example.com"
+      unique_phone = "202571#{test_timestamp.to_s[-4..]}"
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params,
+        income_proof_action: 'accept',
+        income_proof: @pdf_file,
+        residency_proof_action: 'accept',
+        residency_proof: fixture_file_upload(
+          Rails.root.join('test/fixtures/files/residency_proof.pdf'),
+          'application/pdf'
+        ),
+        medical_certification_action: 'not_requested'
+      }
+
+      AuditEventService.stubs(:recent_duplicate_exists?).returns(false)
+
+      request_mail = mock('request_mail')
+      request_mail.expects(:deliver_later).once
+      MedicalProviderMailer.expects(:request_certification).with(instance_of(Application)).returns(request_mail).once
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+
+      assert result, "Failed to create paper application that should request certification: #{service.errors.inspect}"
+
+      application = Constituent.find_by!(email: unique_email).applications.order(:created_at).last
+      assert_not_nil application, 'Application should be created'
+
+      application.reload
+      assert_equal 'awaiting_dcf', application.status
+      assert_equal 'requested', application.medical_certification_status
+    end
+
     test 'uses Other custom rejection reason text as income rejection reason' do
       test_timestamp = Time.now.to_i
       unique_email = "test-rejected-existing-#{test_timestamp}@example.com"

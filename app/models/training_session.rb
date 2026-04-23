@@ -60,8 +60,7 @@ class TrainingSession < ApplicationRecord
   def trainer_must_be_trainer_type
     return unless trainer
 
-    return if trainer.type == 'Users::Trainer'
-    return if trainer.type == 'Users::Administrator' && trainer.respond_to?(:capability?) && trainer.capability?('can_train')
+    return if trainer.assignable_trainer?
 
     errors.add(:trainer, 'must be a trainer')
   end

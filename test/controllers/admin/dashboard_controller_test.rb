@@ -5,7 +5,6 @@ require 'test_helper'
 module Admin
   class DashboardControllerTest < ActionDispatch::IntegrationTest
     def setup
-      # Use factory and standard helper for authentication
       @admin = create(:admin)
       sign_in_as(@admin)
       Rails.cache.clear
@@ -50,28 +49,23 @@ module Admin
       # @app_with_training.user.update!(training_requested: true, training_completed: false)
     end
 
-    def test_index_calculates_correct_counts
-      setup_initial_training_request
-
-      # First dashboard request: verify proofs and medical certs counts
-      # Dashboard redirects to admin/applications#index, so follow the redirect
+    def test_dashboard_still_reports_proof_and_medical_review_metrics
       get admin_dashboard_path
       assert_response :success
-      verify_dashboard_counts
 
-      setup_training_requests
+      expected_proofs_count = Application.where(income_proof_status: :not_reviewed)
+                                         .or(Application.where(residency_proof_status: :not_reviewed))
+                                         .count
+      expected_medical_certs_count = Application.where(medical_certification_status: 'received').count
 
-      # Second dashboard request: verify training requests count
-      get admin_dashboard_path
-      assert_response :success
-      verify_training_request_counts
+      assert_equal expected_proofs_count, assigns(:metrics)[:proofs_needing_review_count]
+      assert_equal expected_medical_certs_count, assigns(:metrics)[:medical_certs_to_review_count]
     end
 
     def test_filter_by_proofs_needing_review
       get admin_applications_path, params: { filter: 'proofs_needing_review' }
       assert_response :success
 
-      # Verify that only applications with not_reviewed proofs are included
       applications = assigns(:applications)
       assert_not_empty applications, 'Expected applications needing proof review, but found none.'
       applications.each do |app|
@@ -86,7 +80,6 @@ module Admin
       get admin_applications_path, params: { filter: 'medical_certs_to_review' }
       assert_response :success
 
-      # Verify that only applications with received medical certifications are included
       applications = assigns(:applications)
       applications.each do |app|
         assert_equal 'received', app.medical_certification_status,
@@ -94,120 +87,65 @@ module Admin
       end
     end
 
-    def test_filter_by_training_requests
-      # Explicitly create an application with a unique ID and user
-      constituent = create(:constituent, email: "training_user_#{Time.now.to_i}@example.com")
-      application = create(:application, :approved, user: constituent)
-      application.update_columns(training_requested_at: 1.hour.ago)
+    def test_dashboard_count_matches_pending_training_request_filter
+      pending_request = create_reviewed_application(user: create(:constituent, email: 'dashboard_pending_training@example.com'))
+      pending_request.update!(training_requested_at: 1.hour.ago)
 
-      application_id = application.id
+      fulfilled_request = create_reviewed_application(user: create(:constituent, email: 'dashboard_fulfilled_training@example.com'))
+      fulfilled_request.update!(training_requested_at: 2.hours.ago)
+      create(:training_session, application: fulfilled_request, trainer: create(:trainer), status: :requested)
+
+      notification_only = create_reviewed_application(user: create(:constituent, email: 'dashboard_notification_only@example.com'))
+      create(:notification,
+             recipient: @admin,
+             actor: notification_only.user,
+             notifiable: notification_only,
+             action: 'training_requested')
+
+      get admin_dashboard_path
+      assert_response :success
+      dashboard_count = assigns(:metrics)[:training_requests_count]
 
       get admin_applications_path, params: { filter: 'training_requests' }
       assert_response :success
 
       apps = assigns(:applications)
 
-      assert_includes apps.map(&:id), application_id,
-                      "Application #{application_id} should be included in the filtered results"
-    end
-
-    def test_dashboard_training_requests_count_uses_training_requested_at
-      clear_training_request_sources
-
-      requested_app = create(:application, :approved, user: create(:constituent, email: "requested#{@admin.email}"))
-      requested_app.update_columns(training_requested_at: 1.hour.ago)
-
-      get admin_dashboard_path
-      assert_response :success
-
-      assert_equal 1, assigns(:metrics)[:training_requests_count],
-                   'Dashboard should count persisted pending training requests'
-    end
-
-    def test_dashboard_training_requests_count_ignores_notification_only_and_session_only_state
-      clear_training_request_sources
-
-      notification_app = create(:application, :approved, user: create(:constituent, email: "notification_only#{@admin.email}"))
-      session_app = create(:application, :approved, user: create(:constituent, email: "session_ignored#{@admin.email}"))
-      trainer = create(:trainer)
-
-      Notification.create!(
-        action: 'training_requested',
-        notifiable: notification_app,
-        recipient: @admin,
-        actor: notification_app.user,
-        metadata: { application_id: notification_app.id }
-      )
-
-      TrainingSession.create!(
-        application: session_app,
-        trainer: trainer,
-        scheduled_for: 1.day.from_now,
-        status: :requested
-      )
-
-      get admin_dashboard_path
-      assert_response :success
-
-      assert_equal 0, assigns(:metrics)[:training_requests_count],
-                   'Dashboard should only count applications.training_requested_at-backed pending requests'
+      assert_equal 1, dashboard_count
+      assert_includes apps.map(&:id), pending_request.id
+      assert_not_includes apps.map(&:id), fulfilled_request.id
+      assert_not_includes apps.map(&:id), notification_only.id
+      assert_equal dashboard_count, apps.size
     end
 
     def teardown
       Rails.cache.clear
       Current.reset if defined?(Current) && Current.respond_to?(:reset)
+      Rails.cache.clear
     end
 
     private
 
-    def setup_initial_training_request
-      # Create one persisted training request so the dashboard has data for non-training counts.
-      application = create(:application, :approved)
-      application.update_columns(training_requested_at: 1.hour.ago)
-    end
-
-    def verify_dashboard_counts
-      # Verify counts for proofs needing review.
-      expected_proofs_count = Application.where(income_proof_status: :not_reviewed)
-                                         .or(Application.where(residency_proof_status: :not_reviewed))
-                                         .count
-      # Access metrics hash.
-      assert_equal expected_proofs_count, assigns(:metrics)[:proofs_needing_review_count],
-                   'Expected proofs needing review count to match'
-
-      # Verify counts for medical certifications.
-      expected_medical_certs_count = Application.where(medical_certification_status: 'received').count
-      assert_equal expected_medical_certs_count, assigns(:metrics)[:medical_certs_to_review_count],
-                   'Expected medical certificates to review count to match'
-    end
-
-    def setup_training_requests
-      # Clear any existing training request state to start fresh.
-      Application.update_all(training_requested_at: nil)
-      Rails.cache.clear
-
-      # Create exactly 4 persisted training requests with unique applications.
-      4.times do |i|
-        application = create(:application, :approved,
-                             user: create(:constituent, email: "training#{i}@example.com"))
-        application.update_columns(training_requested_at: (i + 1).hours.ago)
-      end
-    end
-
-    def verify_training_request_counts
-      distinct_apps_count = Application.with_pending_training_request.distinct.count
-
-      assert_equal 4, distinct_apps_count,
-                   'Database should have 4 distinct applications with training requests'
-      assert_equal 4, assigns(:metrics)[:training_requests_count],
-                   'Controller should assign 4 training requests'
-    end
-
-    def clear_training_request_sources
-      Notification.where(action: 'training_requested').delete_all
-      TrainingSession.where(status: %i[requested scheduled confirmed]).delete_all
-      Application.update_all(training_requested_at: nil)
-      Rails.cache.clear
+    def create_reviewed_application(user:)
+      application = create(:application, skip_proofs: true, user: user, status: :in_progress)
+      application.income_proof.attach(
+        io: StringIO.new('income proof content'),
+        filename: 'income.pdf',
+        content_type: 'application/pdf'
+      )
+      application.residency_proof.attach(
+        io: StringIO.new('residency proof content'),
+        filename: 'residency.pdf',
+        content_type: 'application/pdf'
+      )
+      application.update_columns(
+        status: Application.statuses[:approved],
+        income_proof_status: Application.income_proof_statuses[:approved],
+        residency_proof_status: Application.residency_proof_statuses[:approved],
+        medical_certification_status: Application.medical_certification_statuses[:approved],
+        updated_at: Time.current
+      )
+      application.reload
     end
   end
 end

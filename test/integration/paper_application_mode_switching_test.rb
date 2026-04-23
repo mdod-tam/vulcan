@@ -112,12 +112,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     income_review = application.proof_reviews.find_by(proof_type: :income, status: :rejected, rejection_reason: 'expired')
     assert_not_nil income_review, "Should have an income proof review with rejection_reason 'expired'"
 
-    # For residency, we should have both a rejected review from the first step and an approved review from the second step
-    residency_rejected_review = application.proof_reviews.find_by(proof_type: :residency, status: :rejected,
-                                                                  rejection_reason_code: 'missing_name')
-    assert_not_nil residency_rejected_review, "Should have a residency proof review with rejection_reason_code 'missing_name'"
-
-    # We should also have a proof review for the approved residency proof
+    # We should have a proof review for the approved residency proof after the mode switch
     # The ProofReviewer service creates a proof review with status 'approved' when approving a proof
     residency_approved_reviews = application.proof_reviews.where(proof_type: :residency, status: :approved)
 

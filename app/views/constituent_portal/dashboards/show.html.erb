@@ -628,7 +628,7 @@
                     <%# Admin set training_requested_at but no session assigned yet %>
                     <div class="mb-4 rounded-md bg-blue-50 p-4">
                       <p class="text-sm text-blue-700">
-                        A training request has been submitted. A trainer will reach out soon to schedule your session.
+                        <%= t('applications.training_requests.messages.duplicate_pending', locale: current_user.effective_locale) %>
                       </p>
                     </div>
                     <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-sm">
@@ -648,8 +648,8 @@
                           No date has been set yet &mdash; your trainer will contact you to schedule.
                         </p>
                       </div>
-                    <% else %>
-                      <%# scheduled or confirmed — a concrete date exists %>
+                    <% elsif @active_training_session.scheduled_for.present? %>
+                      <%# scheduled or confirmed with a concrete date %>
                       <div class="mb-4 rounded-md bg-blue-50 p-4">
                         <p class="text-sm font-medium text-blue-800 mb-1">
                           Session <%= active_session_num %> of <%= @max_training_sessions %> &mdash; Scheduled
@@ -659,6 +659,16 @@
                           <span class="font-medium"><%= @active_training_session.trainer.full_name %></span>
                           on
                           <span class="font-medium"><%= @active_training_session.scheduled_for.strftime("%B %d, %Y at %I:%M %p") %></span>.
+                        </p>
+                      </div>
+                    <% else %>
+                      <div class="mb-4 rounded-md bg-blue-50 p-4">
+                        <p class="text-sm font-medium text-blue-800 mb-1">
+                          Session <%= active_session_num %> of <%= @max_training_sessions %> &mdash; In Progress
+                        </p>
+                        <p class="text-sm text-blue-700">
+                          With
+                          <span class="font-medium"><%= @active_training_session.trainer.full_name %></span>.
                         </p>
                       </div>
                     <% end %>
