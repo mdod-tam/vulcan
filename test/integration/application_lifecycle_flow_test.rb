@@ -27,6 +27,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :awaiting_dcf,
         income_proof_status: :approved,
         residency_proof_status: :approved,
+        id_proof_status: :approved,
         medical_certification_status: :requested
       )
       application.update_columns(
@@ -76,6 +77,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :in_progress,
         income_proof_status: :approved,
         residency_proof_status: :not_reviewed,
+        id_proof_status: :approved,
         medical_certification_status: :not_requested
       )
 
@@ -112,6 +114,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         application,
         status: :in_progress,
         income_proof_status: :approved,
+        id_proof_status: :approved,
         residency_proof_status: :not_reviewed,
         medical_certification_status: :approved
       )
@@ -158,6 +161,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :in_progress,
         income_proof_status: :approved,
         residency_proof_status: :not_reviewed,
+        id_proof_status: :approved,
         medical_certification_status: :approved
       )
 
@@ -192,6 +196,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :in_progress,
         income_proof_status: :approved,
         residency_proof_status: :approved,
+        id_proof_status: :approved,
         medical_certification_status: :not_requested
       )
 
@@ -226,6 +231,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :in_progress,
         income_proof_status: :approved,
         residency_proof_status: :approved,
+        id_proof_status: :approved,
         medical_certification_status: :requested
       )
 
@@ -260,6 +266,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :in_progress,
         income_proof_status: :approved,
         residency_proof_status: :approved,
+        id_proof_status: :approved,
         medical_certification_status: :requested
       )
 
@@ -307,6 +314,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :awaiting_dcf,
         income_proof_status: :approved,
         residency_proof_status: :not_reviewed,
+        id_proof_status: :approved,
         medical_certification_status: :approved
       )
 
@@ -350,6 +358,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :in_progress,
         income_proof_status: :approved,
         residency_proof_status: :approved,
+        id_proof_status: :approved,
         medical_certification_status: :approved
       )
 
@@ -398,6 +407,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         status: :in_progress,
         income_proof_status: :approved,
         residency_proof_status: :approved,
+        id_proof_status: :approved,
         medical_certification_status: :not_requested
       )
 
@@ -439,6 +449,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
   def create_application_with_documents(
     attach_income_proof: true,
     attach_residency_proof: true,
+    attach_id_proof: true,
     attach_medical_certification: false
   )
     application = create(
@@ -447,21 +458,24 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       status: :in_progress,
       income_proof_status: :not_reviewed,
       residency_proof_status: :not_reviewed,
+      id_proof_status: :not_reviewed,
       medical_certification_status: :not_requested
     )
 
     attach_pdf(application.income_proof, 'income.pdf') if attach_income_proof
     attach_pdf(application.residency_proof, 'residency.pdf') if attach_residency_proof
+    attach_pdf(application.id_proof, 'id-proof.pdf') if attach_id_proof
     attach_pdf(application.medical_certification, 'medical-certification.pdf') if attach_medical_certification
 
     application.reload
   end
 
-  def set_application_state(application, status:, income_proof_status:, residency_proof_status:, medical_certification_status:)
+  def set_application_state(application, status:, income_proof_status:, residency_proof_status:, id_proof_status:, medical_certification_status:)
     application.update_columns(
       status: Application.statuses.fetch(status.to_s),
       income_proof_status: Application.income_proof_statuses.fetch(income_proof_status.to_s),
       residency_proof_status: Application.residency_proof_statuses.fetch(residency_proof_status.to_s),
+      id_proof_status: Application.id_proof_statuses.fetch(id_proof_status.to_s),
       medical_certification_status: Application.medical_certification_statuses.fetch(medical_certification_status.to_s),
       updated_at: Time.current
     )
