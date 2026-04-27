@@ -99,9 +99,14 @@ module Applications
           data[:dependent_email] = data[:email]
         end
       when 'dependent'
-        # data[:email] holds the dependent's entered email from form params.
-        # Fall back to the guardian strategy when the field was left blank
-        apply_email_strategy_with('guardian', data) if data[:email].blank?
+        # Paper-app flow passes the dependent's email in :dependent_email; portal flow
+        # passes it in :email.  Normalise both into :email first, then mirror back.
+        data[:email] = data[:dependent_email] if data[:email].blank? && data[:dependent_email].present?
+        if data[:email].present?
+          data[:dependent_email] = data[:email]
+        else
+          apply_email_strategy_with('guardian', data)
+        end
       else
         apply_email_strategy_with('guardian', data)
       end
@@ -118,9 +123,14 @@ module Applications
         data[:dependent_phone] = @guardian_user.phone
         data[:phone] = "000-000-#{rand(1000..9999)}"
       when 'dependent'
-        # data[:phone] holds the dependent's entered phone from form params.
-        # Fall back to the guardian strategy when the field was left blank
-        apply_phone_strategy_with('guardian', data) if data[:phone].blank?
+        # Paper-app flow passes the dependent's phone in :dependent_phone; portal flow
+        # passes it in :phone.  Normalise both into :phone first, then mirror back.
+        data[:phone] = data[:dependent_phone] if data[:phone].blank? && data[:dependent_phone].present?
+        if data[:phone].present?
+          data[:dependent_phone] = data[:phone]
+        else
+          apply_phone_strategy_with('guardian', data)
+        end
       else
         apply_phone_strategy_with('guardian', data)
       end
