@@ -189,9 +189,10 @@ module Trainers
     def prepare_show_context
       @application = @training_session.application
       @constituent = @application.user
-      @max_training_sessions = Policy.get('max_training_sessions').to_i
-      @completed_training_sessions_count = @application.training_sessions.completed_sessions.count
+      @max_training_sessions = @application.max_training_sessions
+      @completed_training_sessions_count = @application.completed_training_sessions_count
       @session_number = calculate_session_number
+      @previous_training_sessions = @training_session.previous_completed_sessions
       @constituent_cancelled_sessions_count = count_constituent_cancelled_sessions
       @activity_logs = TrainingSessions::AuditLogBuilder.new(@training_session).build
     end
@@ -282,14 +283,31 @@ module Trainers
     end
 
     def calculate_session_number
-      @application.training_sessions.order(:created_at).pluck(:id).index(@training_session.id) + 1
+      if @training_session.status_completed?
+        completed_ids = @application.training_sessions.completed_sessions.order(:completed_at, :created_at).pluck(:id)
+        return completed_ids.index(@training_session.id).to_i + 1
+      end
+
+      return @application.completed_training_sessions_count + 1 if @training_session.status_requested? ||
+                                                                   @training_session.status_scheduled? ||
+                                                                   @training_session.status_confirmed?
+
+      nil
     end
 
     def count_constituent_cancelled_sessions
       constituent_training_session_ids = @constituent.applications.joins(:training_sessions).pluck('training_sessions.id')
-      Event.where(action: %w[training_cancelled training_no_show])
-           .where("CAST(metadata->>'training_session_id' AS INTEGER) IN (?)", constituent_training_session_ids)
-           .count
+      @constituent_session_outcome_counts = {
+        constituent_cancellations: TrainingSession.where(id: constituent_training_session_ids,
+                                                         status: :cancelled,
+                                                         cancellation_initiator: :constituent).count,
+        no_shows: TrainingSession.where(id: constituent_training_session_ids, status: :no_show).count,
+        trainer_or_program_cancellations: TrainingSession.where(id: constituent_training_session_ids, status: :cancelled)
+                                          .where.not(cancellation_initiator: :constituent)
+                                          .count
+      }
+
+      @constituent_session_outcome_counts[:constituent_cancellations] + @constituent_session_outcome_counts[:no_shows]
     end
 
     def assigned_trainer?

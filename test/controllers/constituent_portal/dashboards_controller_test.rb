@@ -171,14 +171,11 @@ module ConstituentPortal
       get constituent_portal_dashboard_path
       assert_response :success
 
-      # Should show dependent's application status (since @primary_active_application will be the dependent's app)
-      assert_select '.text-gray-900', text: /#{dependent.full_name}/
+      assert_select 'h3', text: 'My Application'
+      assert_select 'a', text: 'Apply for Myself'
+      assert_select 'a', text: "View #{dependent.full_name}'s Application"
 
-      # Should show "View Application Details" link for the primary (dependent's) application
-      assert_select 'a', text: 'View Application Details'
-
-      # Should show "Add New Dependent" button (updated text)
-      assert_select 'a', text: 'Add New Dependent'
+      assert_select 'a', text: 'Add Another Dependent'
     end
 
     test 'dashboard shows requested training state and disables duplicate request button' do

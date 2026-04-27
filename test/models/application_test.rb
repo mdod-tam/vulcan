@@ -260,6 +260,53 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.training_service_window')
   end
 
+  test 'assign_trainer! fails when completed training session quota is exhausted' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    trainer = create(:trainer)
+    create_list(:training_session, 3, :completed, application: application, trainer: trainer)
+
+    assert_no_difference -> { TrainingSession.count } do
+      assert_not application.assign_trainer!(trainer)
+    end
+
+    assert_includes application.errors[:base],
+                    I18n.t('activerecord.errors.models.application.attributes.base.training_session_quota_exhausted')
+  end
+
+  test 'assign_trainer! fails when an active training session exists' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    trainer = create(:trainer)
+    create(:training_session, application: application, trainer: trainer, status: :requested)
+
+    assert_no_difference -> { TrainingSession.count } do
+      assert_not application.assign_trainer!(trainer)
+    end
+
+    assert_includes application.errors[:base],
+                    I18n.t('activerecord.errors.models.application.attributes.base.training_session_active')
+  end
+
+  test 'unassign_trainer! cancels active training session with admin initiator' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    trainer = create(:trainer)
+    admin = create(:admin)
+    training_session = create(:training_session, :requested, application: application, trainer: trainer)
+
+    assert_difference -> { Event.where(action: 'trainer_unassigned').count }, 1 do
+      assert application.unassign_trainer!(actor: admin)
+    end
+
+    training_session.reload
+    assert training_session.status_cancelled?
+    assert training_session.cancellation_initiator_admin?
+    assert_not application.reload.active_training_session_present?
+  end
+
   test 'assign_evaluator! fails outside the service window' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 4.years.ago.to_date)

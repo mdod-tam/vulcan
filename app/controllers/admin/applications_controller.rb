@@ -89,16 +89,8 @@ module Admin
       certification_service = Applications::CertificationEventsService.new(@application)
       @certification_events = certification_service.certification_events
       @certification_requests = certification_service.request_events
-      @max_training_sessions = Policy.get('max_training_sessions').to_i # Fetch policy limit, ensure integer
-
-      # Handle potential nil case for completed_sessions
-      @completed_training_sessions_count = if @application.respond_to?(:training_sessions) &&
-                                              @application.training_sessions.respond_to?(:completed_sessions) &&
-                                              @application.training_sessions.completed_sessions.present?
-                                             @application.training_sessions.completed_sessions.count
-                                           else
-                                             0 # Default to 0 if there are no completed sessions or the method doesn't exist
-                                           end
+      @max_training_sessions = @application.max_training_sessions
+      @completed_training_sessions_count = @application.completed_training_sessions_count
     end
 
     def edit; end
@@ -260,6 +252,18 @@ module Admin
       else
         redirect_to admin_application_path(@application),
                     alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_assign_fail')
+      end
+    end
+
+    def unassign_trainer
+      @application = Application.find(params[:id])
+
+      if @application.unassign_trainer!(actor: current_user, reason: params[:unassign_reason])
+        redirect_to admin_application_path(@application),
+                    notice: t('.trainer_unassign_pass')
+      else
+        redirect_to admin_application_path(@application),
+                    alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_unassign_fail')
       end
     end
 

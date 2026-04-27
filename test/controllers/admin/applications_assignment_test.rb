@@ -83,6 +83,48 @@ module Admin
       assert_response :success
       assert_select "a[href='#{trainers_training_session_path(training_session)}'][data-turbo-frame='_top']",
                     text: 'View Details'
+      assert_select "form[action='#{unassign_trainer_admin_application_path(@application)}']"
+    end
+
+    test 'admin can unassign active trainer' do
+      training_session = create(:training_session, :requested, application: @application, trainer: create(:trainer))
+
+      assert_difference -> { Event.where(action: 'trainer_unassigned', auditable: @application).count }, 1 do
+        post unassign_trainer_admin_application_path(@application)
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'Trainer assignment removed.', flash[:notice]
+      training_session.reload
+      assert training_session.status_cancelled?
+      assert training_session.cancellation_initiator_admin?
+    end
+
+    test 'trainer assignment post is blocked when completed training quota is exhausted' do
+      Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+      Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
+      trainer = create(:trainer)
+      @application.update!(application_date: 2.years.ago.to_date)
+      create_list(:training_session, 3, :completed, application: @application, trainer: trainer)
+
+      assert_no_difference -> { TrainingSession.count } do
+        post assign_trainer_admin_application_path(@application), params: { trainer_id: trainer.id }
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'This constituent has used all available training sessions.', flash[:alert]
+    end
+
+    test 'trainer assignment form is hidden when completed training quota is exhausted' do
+      Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
+      trainer = create(:trainer)
+      create_list(:training_session, 3, :completed, application: @application, trainer: trainer)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select 'form[data-testid="trainer-assignment-form"]', count: 0
+      assert_select 'strong', text: 'Maximum Reached'
     end
 
     # --- request_evaluation action ---

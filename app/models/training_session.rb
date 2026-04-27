@@ -10,6 +10,13 @@ class TrainingSession < ApplicationRecord
   has_one :constituent, through: :application, source: :user
   belongs_to :product_trained_on, class_name: 'Product', optional: true # Added association
 
+  enum :cancellation_initiator, {
+    constituent: 0,
+    trainer: 1,
+    admin: 2,
+    program: 3
+  }, prefix: true
+
   scope :assigned_or_scheduled, -> { where(status: %i[requested scheduled confirmed]) }
 
   # Validations
@@ -28,7 +35,7 @@ class TrainingSession < ApplicationRecord
   # Add a callback to set cancelled_at if status changes to cancelled
   before_save :set_cancelled_at, if: :status_changed_to_cancelled?
   before_save :ensure_status_schedule_consistency
-  after_save :deliver_notifications, if: :saved_change_to_status?
+  after_save :deliver_notifications, if: :should_deliver_notifications?
 
   # Add a helper method for cancellation status change
   def status_changed_to_cancelled?
@@ -53,6 +60,17 @@ class TrainingSession < ApplicationRecord
     return false unless status_changed?
 
     status_was != 'scheduled' && status == 'scheduled'
+  end
+
+  def previous_completed_sessions
+    return self.class.none unless application && created_at
+
+    application.training_sessions
+               .completed_sessions
+               .where.not(id: id)
+               .where('training_sessions.created_at < ?', created_at)
+               .includes(:trainer, :product_trained_on)
+               .order(completed_at: :desc, created_at: :desc)
   end
 
   private
@@ -91,7 +109,7 @@ class TrainingSession < ApplicationRecord
   end
 
   def should_deliver_notifications?
-    status_changed? || saved_change_to_scheduled_for? || saved_change_to_completed_at?
+    saved_change_to_status? || saved_change_to_scheduled_for? || saved_change_to_completed_at?
   end
 
   def ensure_status_schedule_consistency

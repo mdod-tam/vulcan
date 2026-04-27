@@ -34,11 +34,13 @@ module ConstituentPortal
 
     # POST /constituent_portal/dependents
     def create
+      dependent_attrs = dependent_attributes_with_guardian_contact_fallback
+
       # Using UserServiceIntegration concern for consistent user creation
       # Portal always creates NEW users for dependents (skip_user_lookup: true)
       # Paper applications may find/reuse existing users (skip_user_lookup: false, default)
       # Require disability validation for portal-created dependents
-      result = create_user_with_service(dependent_user_params,
+      result = create_user_with_service(dependent_attrs,
                                         is_managing_adult: false,
                                         skip_user_lookup: true,
                                         require_disability_validation: true)
@@ -136,6 +138,29 @@ module ConstituentPortal
 
     def set_current_user
       Current.user = current_user
+    end
+
+    def dependent_attributes_with_guardian_contact_fallback
+      attrs = dependent_user_params.to_h.with_indifferent_access
+
+      Applications::GuardianDependentManagementService
+        .new(dependent_contact_strategy_params)
+        .apply_contact_strategies_for(current_user, attrs)
+    end
+
+    def dependent_contact_strategy_params
+      {
+        email_strategy: guardian_contact_strategy(:use_guardian_email, dependent_user_params[:email]),
+        phone_strategy: guardian_contact_strategy(:use_guardian_phone, dependent_user_params[:phone]),
+        address_strategy: 'dependent'
+      }
+    end
+
+    def guardian_contact_strategy(param_name, dependent_value)
+      return 'guardian' if ActiveModel::Type::Boolean.new.cast(params[param_name])
+      return 'guardian' if dependent_value.blank?
+
+      'dependent'
     end
 
     # Get recent profile changes for a user

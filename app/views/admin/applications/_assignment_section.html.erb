@@ -6,6 +6,7 @@
     - assign_form_path: URL for the assignment POST (single endpoint; the practitioner id is sent as a form field)
     - assign_param: :trainer_id or :evaluator_id (the param name the controller expects)
     - view_path: path for viewing details
+    - unassign_form_path: optional path for removing the current assignment
     - available_assignees: collection of available people to assign
     - status_badge_method: method to render badge (evaluation_status_badge or training_session_status_badge)
 %>
@@ -31,10 +32,20 @@
         <% end %>
       </div>
       <% if view_path.present? && (!entity.respond_to?(:status_completed?) || !entity.status_completed?) %>
-        <%= link_to("View Details",
-            view_path,
-            class: "inline-flex h-10 items-center justify-center rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
-            data: { turbo_frame: "_top" }) %>
+        <div class="flex flex-col gap-2 sm:flex-row">
+          <%= link_to("View Details",
+              view_path,
+              class: "inline-flex h-10 items-center justify-center rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
+              data: { turbo_frame: "_top" }) %>
+          <% if local_assigns[:unassign_form_path].present? %>
+            <%= button_to("Unassign #{type.titleize}",
+                unassign_form_path,
+                method: :post,
+                class: "inline-flex h-10 items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2",
+                data: { turbo_confirm: "Remove this #{type} assignment?" },
+                aria: { label: "Unassign #{assigned_person&.full_name || type.titleize}" }) %>
+          <% end %>
+        </div>
       <% end %>
     </div>
   <% else %>

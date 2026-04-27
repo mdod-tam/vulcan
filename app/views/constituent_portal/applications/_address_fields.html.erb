@@ -1,0 +1,123 @@
+<% dependent_application = local_assigns.fetch(:dependent_application, false) %>
+<% use_guardian_address = local_assigns.fetch(:use_guardian_address, false) %>
+
+<section aria-labelledby="address-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+  <h2 id="address-section-title" class="text-lg font-medium text-gray-900">Address Information</h2>
+
+  <% if dependent_application && local_assigns[:guardian_address].present? %>
+    <%= tag.input type: "hidden", value: guardian_address[:physical_address_1], data: { dependent_fields_target: "guardianAddress1" } %>
+    <%= tag.input type: "hidden", value: guardian_address[:physical_address_2], data: { dependent_fields_target: "guardianAddress2" } %>
+    <%= tag.input type: "hidden", value: guardian_address[:city], data: { dependent_fields_target: "guardianCity" } %>
+    <%= tag.input type: "hidden", value: guardian_address[:state], data: { dependent_fields_target: "guardianState" } %>
+    <%= tag.input type: "hidden", value: guardian_address[:zip_code], data: { dependent_fields_target: "guardianZip" } %>
+
+    <div class="flex items-start rounded-md border border-gray-200 bg-white p-3">
+      <%= hidden_field_tag "application[use_guardian_address]", "0" %>
+      <%= check_box_tag "application[use_guardian_address]", "1", use_guardian_address,
+          id: "use_guardian_address_checkbox",
+          class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+          data: {
+            dependent_fields_target: "sameAddressCheckbox",
+            action: "change->dependent-fields#toggleContactFields"
+          },
+          "aria-controls": "dependent_address_fields",
+          "aria-describedby": "use_guardian_address_help" %>
+      <label for="use_guardian_address_checkbox" class="ml-2">
+        <span class="block text-sm font-medium text-gray-700">Same address as guardian</span>
+        <span id="use_guardian_address_help" class="block text-xs text-gray-500">Use the guardian home address for this dependent application.</span>
+      </label>
+    </div>
+  <% end %>
+
+  <div id="dependent_address_fields"
+       class="space-y-4 <%= 'hidden' if use_guardian_address %>"
+       data-dependent-fields-target="addressFields"
+       aria-hidden="<%= use_guardian_address %>">
+    <div>
+      <%= form.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
+      <%= form.text_field :physical_address_1,
+          value: address[:physical_address_1],
+          class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
+          required: true,
+          autocomplete: "address-line1",
+          "aria-required": "true",
+          data: {
+            dependent_fields_target: "dependentAddress1",
+            dependent_fields_required_when_visible: true,
+            no_autosave: true
+          } %>
+    </div>
+
+    <div>
+      <%= form.label :physical_address_2, "Apartment/Suite", class: "block text-sm font-medium text-gray-700" %>
+      <%= form.text_field :physical_address_2,
+          value: address[:physical_address_2],
+          class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+          autocomplete: "address-line2",
+          data: { dependent_fields_target: "dependentAddress2", no_autosave: true } %>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="md:col-span-1">
+        <%= form.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.text_field :city,
+            value: address[:city],
+            class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
+            required: true,
+            autocomplete: "address-level2",
+            "aria-required": "true",
+            data: {
+              dependent_fields_target: "dependentCity",
+              dependent_fields_required_when_visible: true,
+              no_autosave: true
+            } %>
+      </div>
+
+      <div>
+        <%= form.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.select :state,
+            options_for_select([
+              ["Alabama", "AL"], ["Alaska", "AK"], ["Arizona", "AZ"], ["Arkansas", "AR"],
+              ["California", "CA"], ["Colorado", "CO"], ["Connecticut", "CT"], ["Delaware", "DE"],
+              ["Florida", "FL"], ["Georgia", "GA"], ["Hawaii", "HI"], ["Idaho", "ID"],
+              ["Illinois", "IL"], ["Indiana", "IN"], ["Iowa", "IA"], ["Kansas", "KS"],
+              ["Kentucky", "KY"], ["Louisiana", "LA"], ["Maine", "ME"], ["Maryland", "MD"],
+              ["Massachusetts", "MA"], ["Michigan", "MI"], ["Minnesota", "MN"], ["Mississippi", "MS"],
+              ["Missouri", "MO"], ["Montana", "MT"], ["Nebraska", "NE"], ["Nevada", "NV"],
+              ["New Hampshire", "NH"], ["New Jersey", "NJ"], ["New Mexico", "NM"], ["New York", "NY"],
+              ["North Carolina", "NC"], ["North Dakota", "ND"], ["Ohio", "OH"], ["Oklahoma", "OK"],
+              ["Oregon", "OR"], ["Pennsylvania", "PA"], ["Rhode Island", "RI"], ["South Carolina", "SC"],
+              ["South Dakota", "SD"], ["Tennessee", "TN"], ["Texas", "TX"], ["Utah", "UT"],
+              ["Vermont", "VT"], ["Virginia", "VA"], ["Washington", "WA"], ["West Virginia", "WV"],
+              ["Wisconsin", "WI"], ["Wyoming", "WY"]
+            ], address[:state] || "MD"),
+            {},
+            class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
+            required: true,
+            autocomplete: "address-level1",
+            "aria-required": "true",
+            data: {
+              dependent_fields_target: "dependentState",
+              dependent_fields_required_when_visible: true,
+              no_autosave: true
+            } %>
+      </div>
+
+      <div>
+        <%= form.label :zip_code, "Zip Code", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.text_field :zip_code,
+            value: address[:zip_code],
+            class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
+            required: true,
+            pattern: "[0-9]{5}(-[0-9]{4})?",
+            autocomplete: "postal-code",
+            "aria-required": "true",
+            data: {
+              dependent_fields_target: "dependentZip",
+              dependent_fields_required_when_visible: true,
+              no_autosave: true
+            } %>
+      </div>
+    </div>
+  </div>
+</section>

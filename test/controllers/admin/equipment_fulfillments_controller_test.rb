@@ -55,6 +55,9 @@ module Admin
               }
       end
 
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'Provide at least one fulfillment date.', flash[:alert]
+
       @application.reload
       assert_equal Date.new(2026, 1, 1), @application.equipment_bids_sent_at.to_date
       assert_equal Date.new(2026, 2, 1), @application.equipment_po_sent_at.to_date

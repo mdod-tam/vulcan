@@ -25,11 +25,10 @@ class TrainingSessionNotifier
   end
 
   def create_consolidated_notification
-    # Send the notification (audit flag is false by default, so it only logs the notification delivery event)
     NotificationService.create_and_deliver!(
       type: notification_action,
       recipient: training_session.constituent,
-      actor: training_session.trainer,
+      actor: Current.user || training_session.trainer,
       notifiable: training_session,
       metadata: notification_metadata,
       channel: :email
@@ -40,6 +39,8 @@ class TrainingSessionNotifier
   end
 
   def notification_action
+    return 'training_rescheduled' if rescheduled_notification?
+
     case training_session.status
     when 'scheduled', 'confirmed' then 'training_scheduled'
     when 'completed' then 'training_completed'
@@ -48,13 +49,22 @@ class TrainingSessionNotifier
     end
   end
 
+  def rescheduled_notification?
+    training_session.saved_change_to_scheduled_for? &&
+      training_session.saved_change_to_scheduled_for.first.present? &&
+      (training_session.status_scheduled? || training_session.status_confirmed?)
+  end
+
   def notification_metadata
     {
       training_session_id: training_session.id,
       application_id: training_session.application.id,
       status: training_session.status,
+      old_scheduled_for: training_session.saved_change_to_scheduled_for&.first&.iso8601,
       scheduled_for: training_session.scheduled_for&.iso8601,
       completed_at: training_session.completed_at&.iso8601,
+      cancellation_initiator: training_session.cancellation_initiator,
+      reschedule_reason: training_session.reschedule_reason,
       trainer_name: training_session.trainer.full_name,
       timestamp: Time.current.iso8601
     }

@@ -52,6 +52,31 @@ module ConstituentPortal
       assert_includes(@guardian.dependents, new_dependent)
     end
 
+    test 'should create dependent with guardian email fallback when dependent email is blank' do
+      dependent_attributes = {
+        first_name: 'Fallback',
+        last_name: 'Dependent',
+        date_of_birth: '2010-05-15',
+        email: '',
+        phone: '',
+        hearing_disability: true
+      }
+
+      assert_difference ['User.count', 'GuardianRelationship.count'], 1 do
+        post constituent_portal_dependents_url, params: {
+          dependent: dependent_attributes,
+          guardian_relationship: { relationship_type: 'Parent' },
+          use_guardian_email: '1',
+          use_guardian_phone: '1'
+        }
+      end
+
+      new_dependent = @guardian.dependents.order(created_at: :desc).first
+      assert_match(/\Adependent-.*@system\.matvulcan\.local\z/, new_dependent.email)
+      assert_equal @guardian.email, new_dependent.dependent_email
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
     test 'should not create dependent if attributes are invalid' do
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/Failed to create dependent user:/)).once

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_21_204057) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_27_143000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -602,6 +602,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_21_204057) do
     t.bigint "application_id", null: false
     t.text "cancellation_reason"
     t.datetime "cancelled_at"
+    t.integer "cancellation_initiator"
     t.datetime "completed_at"
     t.datetime "created_at", null: false
     t.string "location"

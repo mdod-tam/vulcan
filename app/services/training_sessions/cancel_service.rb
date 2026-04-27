@@ -5,11 +5,12 @@ module TrainingSessions
   # This service encapsulates the logic for updating the training session status
   # to cancelled, validating required parameters, and creating the associated event.
   class CancelService < BaseService
-    def initialize(training_session, current_user, params)
+    def initialize(training_session, current_user, params, cancellation_initiator: nil)
       super()
       @training_session = training_session
       @current_user = current_user
       @params = params
+      @cancellation_initiator = cancellation_initiator
     end
 
     def call
@@ -49,6 +50,7 @@ module TrainingSessions
         status: :cancelled,
         cancelled_at: Time.current,
         cancellation_reason: @params[:cancellation_reason],
+        cancellation_initiator: cancellation_initiator,
         notes: nil,
         no_show_notes: nil
       )
@@ -63,9 +65,14 @@ module TrainingSessions
           application_id: @training_session.application_id,
           training_session_id: @training_session.id,
           cancellation_reason: @training_session.cancellation_reason,
+          cancellation_initiator: @training_session.cancellation_initiator,
           timestamp: Time.current.iso8601
         }
       )
+    end
+
+    def cancellation_initiator
+      @cancellation_initiator || (@current_user&.admin? ? :admin : :trainer)
     end
   end
 end

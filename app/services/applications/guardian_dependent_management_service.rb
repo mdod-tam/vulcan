@@ -33,6 +33,13 @@ module Applications
       apply_address_strategy(applicant_data)
     end
 
+    def apply_contact_strategies_for(guardian_user, applicant_data)
+      @guardian_user = guardian_user
+      data = applicant_data.to_h.with_indifferent_access
+      apply_contact_strategies(data)
+      data
+    end
+
     # Public method for creating guardian/dependent relationships
     # Used by controllers when users and relationships need to be created separately
     def create_guardian_relationship(relationship_type)
@@ -92,11 +99,9 @@ module Applications
           data[:dependent_email] = data[:email]
         end
       when 'dependent'
-        if data[:dependent_email].present?
-          data[:email] = data[:dependent_email]
-        else
-          apply_email_strategy_with('guardian', data)
-        end
+        # data[:email] holds the dependent's entered email from form params.
+        # Fall back to the guardian strategy when the field was left blank
+        apply_email_strategy_with('guardian', data) if data[:email].blank?
       else
         apply_email_strategy_with('guardian', data)
       end
@@ -113,11 +118,9 @@ module Applications
         data[:dependent_phone] = @guardian_user.phone
         data[:phone] = "000-000-#{rand(1000..9999)}"
       when 'dependent'
-        if data[:dependent_phone].present?
-          data[:phone] = data[:dependent_phone]
-        else
-          apply_phone_strategy_with('guardian', data)
-        end
+        # data[:phone] holds the dependent's entered phone from form params.
+        # Fall back to the guardian strategy when the field was left blank
+        apply_phone_strategy_with('guardian', data) if data[:phone].blank?
       else
         apply_phone_strategy_with('guardian', data)
       end

@@ -47,8 +47,7 @@ module Applications
     end
 
     def check_session_limit?
-      max_sessions = Policy.get('max_training_sessions') || 3
-      application.training_sessions.completed_sessions.count < max_sessions
+      !application.training_session_quota_exhausted?
     end
 
     def create_notifications

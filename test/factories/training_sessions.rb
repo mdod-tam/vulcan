@@ -36,6 +36,7 @@ FactoryBot.define do
       scheduled_for { 1.day.from_now } # Can be future or past
       cancelled_at { Time.current }
       cancellation_reason { 'Training session cancelled reason.' }
+      cancellation_initiator { :trainer }
     end
 
     trait :no_show do

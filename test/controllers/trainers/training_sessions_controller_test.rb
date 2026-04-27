@@ -151,7 +151,7 @@ module Trainers
       assert_not_nil assigns(:max_training_sessions)
       assert_equal @training_session.application.training_sessions.completed_sessions.count,
                    assigns(:completed_training_sessions_count)
-      assert_equal @training_session.application.training_sessions.order(:created_at).pluck(:id).index(@training_session.id) + 1,
+      assert_equal @training_session.application.completed_training_sessions_count + 1,
                    assigns(:session_number)
       assert_not_nil assigns(:constituent_cancelled_sessions_count)
       assert_includes @response.body, 'Activity History'
@@ -162,21 +162,14 @@ module Trainers
 
     test 'show action should correctly calculate constituent_cancelled_sessions_count' do
       sign_in_for_controller_test @trainer
-      # Create some cancelled/no-show events for the constituent across different applications
-      # @constituent, @app2, @session1_cancelled, and @session2_no_show are created in setup
-
-      Event.create!(user: @trainer, action: 'training_cancelled',
-                    metadata: { training_session_id: @session1_cancelled.id, application_id: @session1_cancelled.application_id,
-                                cancellation_reason: 'Cancelled' })
-      Event.create!(user: @trainer, action: 'training_no_show',
-                    metadata: { training_session_id: @session2_no_show.id, application_id: @session2_no_show.application_id,
-                                no_show_notes: 'No show' })
+      @session1_cancelled.update!(cancellation_initiator: :constituent)
 
       get trainers_training_session_url(@training_session)
       assert_response :success
 
-      # Expecting 2 cancelled/no-show events across the constituent's applications
       assert_equal 2, assigns(:constituent_cancelled_sessions_count)
+      assert_equal 1, assigns(:constituent_session_outcome_counts)[:constituent_cancellations]
+      assert_equal 1, assigns(:constituent_session_outcome_counts)[:no_shows]
     end
 
     test 'show renders activity history with relevant training events' do
@@ -198,6 +191,38 @@ module Trainers
       assert_includes @response.body, 'Activity History'
       assert_includes @response.body, 'Training Scheduled'
       assert_includes @response.body, 'Library'
+    end
+
+    test 'show displays notes from previous completed training sessions on the same application' do
+      sign_in_for_controller_test @trainer
+      application = create(:application, :old_enough_for_new_application, user: create(:constituent))
+      product = create(:product)
+      previous_session = create(
+        :training_session,
+        :completed,
+        application: application,
+        trainer: @trainer,
+        product_trained_on: product,
+        notes: 'Covered shortcuts, setup, and practice tasks.',
+        completed_at: 3.days.ago,
+        created_at: 4.days.ago
+      )
+      current_session = create(
+        :training_session,
+        :requested,
+        application: application,
+        trainer: @trainer,
+        created_at: 1.day.ago
+      )
+
+      get trainers_training_session_url(current_session)
+
+      assert_response :success
+      assert_equal [previous_session], assigns(:previous_training_sessions).to_a
+      assert_includes @response.body, 'Training Session #2 Details'
+      assert_includes @response.body, 'Previous Training Notes'
+      assert_includes @response.body, product.name
+      assert_includes @response.body, 'Covered shortcuts, setup, and practice tasks.'
     end
 
     # --- Status Update Action Tests ---
@@ -396,8 +421,10 @@ module Trainers
       # original_scheduled_for is not used after assignment
 
       assert_difference('Event.count') do
-        post reschedule_trainers_training_session_url(@training_session),
-             params: { scheduled_for: new_scheduled_time, reschedule_reason: reschedule_reason }
+        assert_difference -> { Notification.where(action: 'training_rescheduled').count }, 1 do
+          post reschedule_trainers_training_session_url(@training_session),
+               params: { scheduled_for: new_scheduled_time, reschedule_reason: reschedule_reason }
+        end
       end
 
       @training_session.reload
@@ -463,6 +490,7 @@ module Trainers
       assert_equal 'cancelled', @training_session.status
       assert_not_nil @training_session.cancelled_at
       assert_equal cancellation_reason, @training_session.cancellation_reason
+      assert_equal 'trainer', @training_session.cancellation_initiator
       assert_nil @training_session.notes # Ensure cleared
       assert_nil @training_session.no_show_notes # Ensure cleared
       assert_redirected_to trainers_training_session_url(@training_session)
@@ -473,6 +501,7 @@ module Trainers
       assert_equal @training_session.id, event.metadata['training_session_id']
       assert_equal @training_session.application_id, event.metadata['application_id']
       assert_equal cancellation_reason, event.metadata['cancellation_reason']
+      assert_equal 'trainer', event.metadata['cancellation_initiator']
       assert_equal @trainer, event.user
     end
 

@@ -109,6 +109,7 @@
           scheduled_date: latest_training&.scheduled_for,
           scheduled_time: true,
           view_path: latest_training.present? ? trainers_training_session_path(latest_training) : nil,
+          unassign_form_path: latest_training.present? ? unassign_trainer_admin_application_path(@application) : nil,
           assign_form_path: assign_trainer_admin_application_path(@application),
           assign_param: :trainer_id,
           available_assignees: Users::Trainer.available

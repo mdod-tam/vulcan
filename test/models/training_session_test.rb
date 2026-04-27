@@ -259,6 +259,40 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert_nil training_session_no_product.product_trained_on
   end
 
+  test 'previous_completed_sessions returns earlier completed sessions for the same application newest first' do
+    application = create(:application)
+    trainer = create(:trainer)
+    old_completed_session = create(
+      :training_session,
+      :completed,
+      application: application,
+      trainer: trainer,
+      completed_at: 5.days.ago,
+      created_at: 6.days.ago
+    )
+    recent_completed_session = create(
+      :training_session,
+      :completed,
+      application: application,
+      trainer: trainer,
+      completed_at: 3.days.ago,
+      created_at: 4.days.ago
+    )
+    create(
+      :training_session,
+      :completed,
+      application: application,
+      trainer: trainer,
+      completed_at: 1.hour.ago,
+      created_at: 1.hour.ago
+    )
+    create(:training_session, :requested, application: application, trainer: trainer, created_at: 5.days.ago)
+    current_session = create(:training_session, :requested, application: application, trainer: trainer, created_at: 2.days.ago)
+    create(:training_session, :completed, created_at: 6.days.ago)
+
+    assert_equal [recent_completed_session, old_completed_session], current_session.previous_completed_sessions.to_a
+  end
+
   # Test scopes
   test 'completed_sessions scope should return only completed sessions' do
     # Create sessions with different statuses using traits

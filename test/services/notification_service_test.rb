@@ -205,4 +205,26 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_not_nil notification
     assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
   end
+
+  test 'training_rescheduled routes session and notification metadata to training mailer' do
+    trainer = create(:trainer)
+    training_session = create(:training_session, application: @application, trainer: trainer)
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    TrainingSessionNotificationsMailer.expects(:training_rescheduled)
+                                      .with(training_session, instance_of(Notification))
+                                      .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :training_rescheduled,
+      recipient: @constituent,
+      actor: trainer,
+      notifiable: training_session,
+      metadata: { old_scheduled_for: 1.day.ago.iso8601 },
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+  end
 end

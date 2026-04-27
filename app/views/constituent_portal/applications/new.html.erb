@@ -29,11 +29,14 @@
         autosave_edit_form_url_value: constituent_portal_application_path(':id'),
         autosave_edit_autosave_url_value: autosave_field_constituent_portal_application_path(':id')
       }
-      if FeatureFlag.enabled?(:income_proof_required)
-        new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
-        new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
-        new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
-      end %>
+        if FeatureFlag.enabled?(:income_proof_required)
+          new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
+          new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
+          new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+        end
+        if @applicant_type == "dependent"
+          new_app_form_data[:controller] = "dependent-fields #{new_app_form_data[:controller]}"
+        end %>
       <%= form_with(model: [:constituent_portal, @application],
           local: true,
           class: "space-y-6",
@@ -134,74 +137,12 @@
           </div>
         </section>
 
-        <!-- Address Information Section -->
-        <section aria-labelledby="address-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="address-section-title" class="text-lg font-medium text-gray-900">Address Information</h2>
-          <div class="space-y-4">
-            <div>
-              <%= form.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
-              <%= form.text_field :physical_address_1, 
-                  value: @address[:physical_address_1],
-                  class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
-                  required: true,
-                  data: { no_autosave: true } %>
-            </div>
-            
-            <div>
-              <%= form.label :physical_address_2, "Apartment/Suite", class: "block text-sm font-medium text-gray-700" %>
-              <%= form.text_field :physical_address_2, 
-                  value: @address[:physical_address_2],
-                  class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                  data: { no_autosave: true } %>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="md:col-span-1">
-                <%= form.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.text_field :city, 
-                    value: @address[:city],
-                    class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
-                    required: true,
-                    data: { no_autosave: true } %>
-              </div>
-              
-              <div>
-                <%= form.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.select :state, 
-                    options_for_select([
-                      ["Alabama", "AL"], ["Alaska", "AK"], ["Arizona", "AZ"], ["Arkansas", "AR"], 
-                      ["California", "CA"], ["Colorado", "CO"], ["Connecticut", "CT"], ["Delaware", "DE"], 
-                      ["Florida", "FL"], ["Georgia", "GA"], ["Hawaii", "HI"], ["Idaho", "ID"], 
-                      ["Illinois", "IL"], ["Indiana", "IN"], ["Iowa", "IA"], ["Kansas", "KS"], 
-                      ["Kentucky", "KY"], ["Louisiana", "LA"], ["Maine", "ME"], ["Maryland", "MD"], 
-                      ["Massachusetts", "MA"], ["Michigan", "MI"], ["Minnesota", "MN"], ["Mississippi", "MS"], 
-                      ["Missouri", "MO"], ["Montana", "MT"], ["Nebraska", "NE"], ["Nevada", "NV"], 
-                      ["New Hampshire", "NH"], ["New Jersey", "NJ"], ["New Mexico", "NM"], ["New York", "NY"], 
-                      ["North Carolina", "NC"], ["North Dakota", "ND"], ["Ohio", "OH"], ["Oklahoma", "OK"], 
-                      ["Oregon", "OR"], ["Pennsylvania", "PA"], ["Rhode Island", "RI"], ["South Carolina", "SC"], 
-                      ["South Dakota", "SD"], ["Tennessee", "TN"], ["Texas", "TX"], ["Utah", "UT"], 
-                      ["Vermont", "VT"], ["Virginia", "VA"], ["Washington", "WA"], ["West Virginia", "WV"], 
-                      ["Wisconsin", "WI"], ["Wyoming", "WY"], ["District of Columbia", "DC"]
-                    ], (@address && @address.respond_to?(:[]) ? @address[:state] : nil) || params.dig(:application, :state) || current_user&.state || "MD"),
-                    { include_blank: "Select State" },
-                    { class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
-                      required: true,
-                      data: { no_autosave: true } } %>
-              </div>
-              
-              <div>
-                <%= form.label :zip_code, "Zip Code", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.text_field :zip_code, 
-                    value: @address[:zip_code],
-                    class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                    required: true,
-                    pattern: "\\d{5}(-\\d{4})?",
-                    title: "5-digit zip code (12345) or 9-digit zip code (12345-6789)",
-                    data: { no_autosave: true } %>
-              </div>
-            </div>
-          </div>
-        </section>
+          <%= render "address_fields",
+            form: form,
+            address: @address,
+            guardian_address: @guardian_address,
+            dependent_application: @applicant_type == "dependent",
+            use_guardian_address: @use_guardian_address %>
 
         <!-- Disability Certification Group - Contains Disability Info and Certifying Professional -->
         <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">

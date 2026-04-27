@@ -5,12 +5,38 @@
 module TrainingManagement
   extend ActiveSupport::Concern
 
+  def max_training_sessions
+    Policy.get('max_training_sessions') || 3
+  end
+
+  def completed_training_sessions_count
+    training_sessions.completed_sessions.count
+  end
+
+  def remaining_training_sessions
+    [max_training_sessions - completed_training_sessions_count, 0].max
+  end
+
+  def training_session_quota_exhausted?
+    completed_training_sessions_count >= max_training_sessions
+  end
+
   # Assigns a trainer to this application
   # @param trainer [Trainer] The trainer to assign
   # @return [Boolean] True if the trainer was assigned successfully
   def assign_trainer!(trainer)
     unless service_window_active?
       errors.add(:base, :training_service_window)
+      return false
+    end
+
+    if training_session_quota_exhausted?
+      errors.add(:base, :training_session_quota_exhausted)
+      return false
+    end
+
+    if active_training_session_present?
+      errors.add(:base, :training_session_active)
       return false
     end
 
@@ -49,6 +75,46 @@ module TrainingManagement
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to assign trainer: #{e.message}"
+    errors.add(:base, e.message)
+    false
+  end
+
+  def unassign_trainer!(actor:, reason: nil)
+    training_session = active_training_session
+    unless training_session
+      errors.add(:base, :training_session_not_active)
+      return false
+    end
+
+    cancellation_reason = reason.presence || 'Trainer assignment removed by administrator.'
+
+    with_lock do
+      training_session.update!(
+        status: :cancelled,
+        cancelled_at: Time.current,
+        cancellation_reason: cancellation_reason,
+        cancellation_initiator: :admin,
+        notes: nil,
+        no_show_notes: nil
+      )
+
+      AuditEventService.log(
+        action: 'trainer_unassigned',
+        actor: actor,
+        auditable: self,
+        metadata: {
+          training_session_id: training_session.id,
+          trainer_id: training_session.trainer_id,
+          trainer_name: training_session.trainer.full_name,
+          cancellation_reason: cancellation_reason
+        }
+      )
+
+      Application.expire_training_request_metrics_cache!
+    end
+    true
+  rescue ::ActiveRecord::RecordInvalid => e
+    Rails.logger.error "Failed to unassign trainer: #{e.message}"
     errors.add(:base, e.message)
     false
   end
