@@ -36,6 +36,9 @@ en:
             base:
               training_service_window: "This application is outside the service window for training services."
               evaluation_service_window: "This application is outside the service window for evaluation services."
+              training_session_quota_exhausted: "This constituent has used all available training sessions."
+              training_session_active: "This constituent already has an active training session."
+              training_session_not_active: "This constituent does not have an active training session."
   applications:
     training_requests:
       messages:
@@ -148,6 +151,9 @@ en:
       assign_trainer:
         trainer_assign_pass: "Trainer successfully assigned."
         trainer_assign_fail: "Failed to assign trainer."
+      unassign_trainer:
+        trainer_unassign_pass: "Trainer assignment removed."
+        trainer_unassign_fail: "Failed to remove trainer assignment."
       schedule_training:
         t_schedule_invalid: "Invalid trainer selected."
         t_schedule_fail: "Failed to schedule training session."

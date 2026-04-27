@@ -7,6 +7,9 @@ es:
             base:
               training_service_window: "Esta solicitud está fuera del período de servicio para los servicios de capacitación."
               evaluation_service_window: "Esta solicitud está fuera del período de servicio para los servicios de evaluación."
+              training_session_quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
+              training_session_active: "Esta persona ya tiene una sesión de capacitación activa."
+              training_session_not_active: "Esta persona no tiene una sesión de capacitación activa."
   applications:
     training_requests:
       messages:
