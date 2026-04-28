@@ -10,6 +10,8 @@ class TrainingSession < ApplicationRecord
   has_one :constituent, through: :application, source: :user
   belongs_to :product_trained_on, class_name: 'Product', optional: true # Added association
 
+  attribute :cancellation_initiator, :integer
+
   enum :cancellation_initiator, {
     constituent: 0,
     trainer: 1,
@@ -68,9 +70,15 @@ class TrainingSession < ApplicationRecord
     application.training_sessions
                .completed_sessions
                .where.not(id: id)
-               .where('training_sessions.created_at < ?', created_at)
+               .where(training_sessions: { created_at: ...created_at })
                .includes(:trainer, :product_trained_on)
                .order(completed_at: :desc, created_at: :desc)
+  end
+
+  def self.cancellation_initiator_column?
+    connection.schema_cache.columns_hash(table_name).key?('cancellation_initiator')
+  rescue ActiveRecord::ActiveRecordError
+    false
   end
 
   private

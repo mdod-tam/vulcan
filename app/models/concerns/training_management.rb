@@ -89,14 +89,16 @@ module TrainingManagement
     cancellation_reason = reason.presence || 'Trainer assignment removed by administrator.'
 
     with_lock do
-      training_session.update!(
+      update_attributes = {
         status: :cancelled,
         cancelled_at: Time.current,
         cancellation_reason: cancellation_reason,
-        cancellation_initiator: :admin,
         notes: nil,
         no_show_notes: nil
-      )
+      }
+      update_attributes[:cancellation_initiator] = :admin if TrainingSession.cancellation_initiator_column?
+
+      training_session.update!(update_attributes)
 
       AuditEventService.log(
         action: 'trainer_unassigned',

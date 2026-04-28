@@ -1,4 +1,7 @@
-<div class="container mx-auto px-4 py-8">
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
+<div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
       <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading">
         <% if @session_number.present? %>
@@ -9,9 +12,6 @@
       </h1>
 
     <div class="flex items-center space-x-4">
-      <span class="text-sm text-gray-600" aria-label="Completed sessions progress: <%= @completed_training_sessions_count %> out of <%= @max_training_sessions %> maximum">
-        Completed Sessions: <%= @completed_training_sessions_count %> / <%= @max_training_sessions %>
-      </span>
       <%= link_to "Back to Sessions", trainers_training_sessions_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
     </div>
   </div>
@@ -26,6 +26,8 @@
         <p class="mt-1 max-w-2xl text-sm text-gray-500">
           Application #<%= @application.id %>
         </p>
+        <%= link_to "View Full Application Details", admin_application_path(@application),
+            class: "mt-1 inline-block text-sm text-indigo-600 hover:text-indigo-900" %>
           <% if @constituent_session_outcome_counts.present? %>
             <p class="mt-1 max-w-2xl text-sm text-gray-500">
               Constituent-impacting history:
@@ -174,8 +176,8 @@
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <div>
               <p><%= @constituent.full_name %></p>
-              <p><a href="mailto:<%= @constituent.email %>" class="text-indigo-600 hover:text-indigo-900"><%= @constituent.email %></a></p>
-              <p><a href="tel:<%= @constituent.phone %>" class="text-indigo-600 hover:text-indigo-900"><%= @constituent.phone %></a></p>
+              <p><%= link_to @constituent.email, "mailto:#{@constituent.email}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Email #{@constituent.email}" } %></p>
+              <p><%= link_to @constituent.phone, "tel:#{@constituent.phone}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Call #{@constituent.phone}" } %></p>
               <% if @constituent.physical_address_1.present? %>
                 <div class="mt-2 text-gray-600">
                   <p><%= @constituent.physical_address_1 %></p>
@@ -197,6 +199,13 @@
               <li><strong>Preferred Language:</strong> <%= language_label(@constituent.locale) %></li>
               <li><strong>Communication Modality:</strong> <%= @constituent.preferred_means_of_communication.presence || "Not specified" %></li>
             </ul>
+          </dd>
+        </div>
+
+        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-gray-500">Sessions Progress</dt>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+            <%= @completed_training_sessions_count %> / <%= @max_training_sessions %> completed
           </dd>
         </div>
       </dl>
@@ -245,8 +254,9 @@
     </section>
   <% end %>
 
-  <%# == Actions Section == %>
-  <section aria-label="Training Session Actions" class="mt-8">
+  <%# == Actions Section — not rendered for completed sessions the trainer can manage (nothing to show) == %>
+  <% unless @can_manage_training_session && @training_session.status_completed? %>
+  <section aria-label="<%= @can_manage_training_session ? 'Training Session Actions' : 'Training Session Status' %>" class="mt-8">
     <% if !@can_manage_training_session %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
         This is a read-only oversight view. Only the assigned trainer can update this training session.
@@ -426,17 +436,12 @@
         </div>
       </div>
 
-    <% elsif @training_session.status_completed? %>
-      <%# This block intentionally left blank as the form is handled below %>
     <% end %>
   </section>
+  <% end %>
 
   <div class="mt-8">
     <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Activity History" %>
   </div>
 
-  <!-- Link to view the full application -->
-  <div class="mt-6 text-right">
-    <%= link_to "View Full Application Details for Application ##{@application.id}", admin_application_path(@application), class: "text-indigo-600 hover:text-indigo-900" %>
-  </div>
 </div>

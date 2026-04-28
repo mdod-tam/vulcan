@@ -600,9 +600,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_27_143000) do
 
   create_table "training_sessions", force: :cascade do |t|
     t.bigint "application_id", null: false
+    t.integer "cancellation_initiator"
     t.text "cancellation_reason"
     t.datetime "cancelled_at"
-    t.integer "cancellation_initiator"
     t.datetime "completed_at"
     t.datetime "created_at", null: false
     t.string "location"

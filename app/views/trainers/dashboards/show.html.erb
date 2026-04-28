@@ -1,4 +1,7 @@
-<main id="main-content" class="container mx-auto px-4 py-8" role="main" aria-labelledby="trainer-dashboard-title">
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
+<main id="main-content" class="container mx-auto px-4 py-8" role="main" aria-labelledby="trainer-dashboard-title" tabindex="-1">
   <div class="flex justify-between items-center mb-6">
     <h1 id="trainer-dashboard-title" class="text-2xl font-bold">Training Dashboard</h1>
     <div>
@@ -15,7 +18,7 @@
     <ul class="grid grid-cols-1 md:grid-cols-4 gap-6" role="list">
       <li class="bg-white shadow rounded-lg p-5">
         <h3 id="card-needs-scheduling" class="text-lg font-semibold text-gray-700 mb-3">Needs Scheduling</h3>
-        <p class="text-3xl font-bold text-purple-600" aria-labelledby="card-needs-scheduling"><%= @needs_scheduling_count %></p>
+        <p class="text-3xl font-bold text-purple-600"><%= @needs_scheduling_count %><span class="sr-only"> items needing scheduling</span></p>
         <p class="text-sm text-gray-500 mt-1">
           <% if current_user.admin? %>
             Requests and assigned sessions awaiting scheduling
@@ -32,7 +35,7 @@
 
       <li class="bg-white shadow rounded-lg p-5">
         <h3 id="card-scheduled" class="text-lg font-semibold text-gray-700 mb-3">Scheduled Sessions</h3>
-        <p class="text-3xl font-bold text-blue-600" aria-labelledby="card-scheduled"><%= @scheduled_sessions.count %></p>
+        <p class="text-3xl font-bold text-blue-600"><%= @scheduled_sessions.count %><span class="sr-only"> scheduled sessions</span></p>
         <p class="text-sm text-gray-500 mt-1">Upcoming training sessions</p>
         <div class="mt-3">
           <%= link_to "View All", trainers_dashboard_path(filter: "scheduled"),
@@ -43,7 +46,7 @@
 
       <li class="bg-white shadow rounded-lg p-5">
         <h3 id="card-completed" class="text-lg font-semibold text-gray-700 mb-3">Completed Sessions</h3>
-        <p class="text-3xl font-bold text-green-700" aria-labelledby="card-completed"><%= @completed_sessions.count %></p>
+        <p class="text-3xl font-bold text-green-700"><%= @completed_sessions.count %><span class="sr-only"> completed sessions</span></p>
         <p class="text-sm text-gray-500 mt-1">Training sessions completed</p>
         <div class="mt-3">
           <%= link_to "View All", trainers_dashboard_path(filter: "completed"),
@@ -54,7 +57,7 @@
 
       <li class="bg-white shadow rounded-lg p-5">
         <h3 id="card-followup" class="text-lg font-semibold text-gray-700 mb-3">Needs Follow-up</h3>
-        <p class="text-3xl font-bold text-yellow-700" aria-labelledby="card-followup"><%= @followup_sessions.count %></p>
+        <p class="text-3xl font-bold text-yellow-700"><%= @followup_sessions.count %><span class="sr-only"> sessions needing follow-up</span></p>
         <p class="text-sm text-gray-500 mt-1">Cancellations and no-shows</p>
         <div class="mt-3">
           <%= link_to "View All", trainers_dashboard_path(filter: "needs_followup"),
@@ -68,13 +71,14 @@
   <!-- Assigned Sessions Awaiting Scheduling -->
   <div id="needs-scheduling-section" class="bg-white shadow rounded-lg p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-semibold">Needs Scheduling</h2>
-      <%= link_to "View All", requested_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800" %>
+      <h2 id="needs-scheduling-table-heading" class="text-xl font-semibold">Needs Scheduling</h2>
+      <%= link_to "View All", requested_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800",
+          aria: { label: "View all sessions needing scheduling" } %>
     </div>
 
     <% if @pending_training_requests.any? || @requested_sessions.any? %>
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
+        <table class="min-w-full divide-y divide-gray-200" aria-labelledby="needs-scheduling-table-heading">
           <thead class="bg-gray-50">
             <tr>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
@@ -131,13 +135,14 @@
   <!-- Upcoming Training Sessions -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-semibold">Upcoming Training Sessions</h2>
-      <%= link_to "View All", scheduled_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800" %>
+      <h2 id="upcoming-sessions-table-heading" class="text-xl font-semibold">Upcoming Training Sessions</h2>
+      <%= link_to "View All", scheduled_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800",
+          aria: { label: "View all upcoming scheduled sessions" } %>
     </div>
 
     <% if @upcoming_sessions.any? %>
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
+        <table class="min-w-full divide-y divide-gray-200" aria-labelledby="upcoming-sessions-table-heading">
           <thead class="bg-gray-50">
             <tr>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
@@ -157,11 +162,13 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                    <%= session.status.titleize %>
+                    <span class="sr-only">Status: </span><%= session.status.titleize %>
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <%= link_to "View Details", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                  <%= link_to "View Details", trainers_training_session_path(session),
+                      class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                      aria: { label: "View details for #{session.application.constituent_full_name}" } %>
                 </td>
               </tr>
             <% end %>
@@ -177,13 +184,13 @@
     <!-- Filtered Results -->
     <div class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold"><%= @section_title %></h2>
+        <h2 id="filtered-sessions-table-heading" class="text-xl font-semibold"><%= @section_title %></h2>
         <%= link_to "Clear Filter", trainers_dashboard_path, class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
       </div>
 
       <% if @filtered_sessions.any? %>
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
+          <table class="min-w-full divide-y divide-gray-200" aria-labelledby="filtered-sessions-table-heading">
             <thead class="bg-gray-50">
               <tr>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -218,11 +225,13 @@
                                      else 'bg-gray-100 text-gray-800'
                                      end %>
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= status_color %>">
-                      <%= session.status.titleize %>
+                      <span class="sr-only">Status: </span><%= session.status.titleize %>
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <%= link_to "View Details", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                    <%= link_to "View Details", trainers_training_session_path(session),
+                        class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                        aria: { label: "View details for #{session.application.constituent_full_name}" } %>
                   </td>
                 </tr>
               <% end %>
@@ -239,13 +248,14 @@
   <% unless @current_filter.present? %>
     <div class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-semibold">Recent Training Sessions Needing Follow-up</h2>
-        <%= link_to "View All", trainers_dashboard_path(filter: "needs_followup"), class: "text-blue-600 hover:text-blue-800" %>
+      <h2 id="followup-sessions-table-heading" class="text-xl font-semibold">Recent Training Sessions Needing Follow-up</h2>
+      <%= link_to "View All", trainers_dashboard_path(filter: "needs_followup"), class: "text-blue-600 hover:text-blue-800",
+          aria: { label: "View all sessions needing follow-up" } %>
       </div>
 
       <% if @recent_followup_sessions.any? %>
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
+          <table class="min-w-full divide-y divide-gray-200" aria-labelledby="followup-sessions-table-heading">
             <thead class="bg-gray-50">
               <tr>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
@@ -270,11 +280,13 @@
                                      else 'bg-gray-100 text-gray-800'
                                      end %>
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= status_color %>">
-                      <%= session.status.titleize %>
+                      <span class="sr-only">Status: </span><%= session.status.titleize %>
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <%= link_to "View Details", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                    <%= link_to "View Details", trainers_training_session_path(session),
+                        class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                        aria: { label: "View details for #{session.application.constituent_full_name}" } %>
                   </td>
                 </tr>
               <% end %>
@@ -288,16 +300,17 @@
   <% end %>
 
   <!-- Recent Activity -->
-  <div class="bg-white shadow rounded-lg p-6">
+  <section aria-labelledby="recent-completed-heading" class="bg-white shadow rounded-lg p-6">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-semibold">Recent Completed Sessions</h2>
-      <%= link_to "View All", completed_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800" %>
+      <h2 id="recent-completed-heading" class="text-xl font-semibold">Recent Completed Sessions</h2>
+      <%= link_to "View All", completed_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800",
+          aria: { label: "View all completed sessions" } %>
     </div>
 
     <% if @completed_sessions.any? %>
-      <div class="space-y-4">
+      <ul class="space-y-4" role="list">
         <% @completed_sessions.each do |session| %>
-          <div class="border-b border-gray-200 pb-4 last:border-0 last:pb-0">
+          <li class="border-b border-gray-200 pb-4 last:border-0 last:pb-0">
             <div class="flex justify-between items-start">
               <div>
                 <p class="font-medium"><%= session.application.constituent_full_name %></p>
@@ -305,17 +318,19 @@
                   Completed: <%= session.completed_at&.strftime("%B %d, %Y") || "Unknown" %>
                 </p>
               </div>
-              <%= link_to "View Details", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+              <%= link_to "View Details", trainers_training_session_path(session),
+                  class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                  aria: { label: "View details for #{session.application.constituent_full_name}" } %>
             </div>
-          </div>
+          </li>
         <% end %>
-      </div>
+      </ul>
     <% else %>
       <p class="text-gray-500 text-center py-4">No completed training sessions yet.</p>
     <% end %>
-  </div>
+  </section>
 
   <div class="mt-8">
     <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Recent Activity", show_subject: true %>
   </div>
-</div>
+</main>

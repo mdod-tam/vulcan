@@ -46,14 +46,16 @@ module TrainingSessions
     end
 
     def update_training_session!
-      @training_session.update!(
+      update_attributes = {
         status: :cancelled,
         cancelled_at: Time.current,
         cancellation_reason: @params[:cancellation_reason],
-        cancellation_initiator: cancellation_initiator,
         notes: nil,
         no_show_notes: nil
-      )
+      }
+      update_attributes[:cancellation_initiator] = cancellation_initiator if TrainingSession.cancellation_initiator_column?
+
+      @training_session.update!(update_attributes)
     end
 
     def create_event!

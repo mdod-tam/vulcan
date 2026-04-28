@@ -1,9 +1,12 @@
-<div class="container mx-auto px-4 py-8">
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
+<div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
   <% trainer_filter_params = @trainer_filter.present? ? { trainer_id: @trainer_filter.id } : {} %>
 
   <!-- Header with context-aware title -->
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">
+    <h1 id="sessions-list-heading" class="text-2xl font-bold">
       <% if @current_status == 'requested' %>
         Assigned, Needs Scheduling
       <% elsif @current_status == 'scheduled' %>
@@ -47,30 +50,35 @@
       <span class="text-xs font-semibold text-gray-500 px-2">STATUS:</span>
       <%= link_to "All", 
           current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope }.merge(trainer_filter_params)) : trainers_training_sessions_path,
-          class: "#{@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
+          class: "#{@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status.blank? ? "page" : nil) } %>
           
       <%= link_to "Needs Scheduling",
           current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'requested' }.merge(trainer_filter_params)) : requested_trainers_training_sessions_path,
-          class: "#{@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
+          class: "#{@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status == 'requested' ? "page" : nil) } %>
           
       <%= link_to "Scheduled", 
           current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'scheduled' }.merge(trainer_filter_params)) : scheduled_trainers_training_sessions_path,
-          class: "#{@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
+          class: "#{@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status == 'scheduled' ? "page" : nil) } %>
           
       <%= link_to "Completed", 
           current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'completed' }.merge(trainer_filter_params)) : completed_trainers_training_sessions_path,
-          class: "#{@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
+          class: "#{@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status == 'completed' ? "page" : nil) } %>
           
       <%= link_to "Needs Follow-up", 
           current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'cancelled' }.merge(trainer_filter_params)) : needs_followup_trainers_training_sessions_path,
-          class: "#{@current_status == 'cancelled' || @current_status == 'no_show' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
+          class: "#{@current_status == 'cancelled' || @current_status == 'no_show' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (%w[cancelled no_show].include?(@current_status) ? "page" : nil) } %>
     </div>
   </div>
 
   <!-- Sessions Table -->
   <% if @training_sessions.any? %>
     <div class="bg-white shadow overflow-hidden sm:rounded-lg">
-      <table class="min-w-full divide-y divide-gray-200">
+      <table class="min-w-full divide-y divide-gray-200" aria-labelledby="sessions-list-heading">
         <thead class="bg-gray-50">
           <tr>
             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
@@ -105,6 +113,7 @@
                    end %>
                 
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= status_classes %>">
+                  <span class="sr-only">Status: </span>
                   <% if session.status == 'requested' %>
                     Needs Scheduling
                   <% else %>
@@ -117,12 +126,18 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                 <% if session.status == 'requested' %>
-                  <%= link_to "View/Schedule", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                  <%= link_to "View/Schedule", trainers_training_session_path(session),
+                      class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                      aria: { label: "View/Schedule session for #{session.application.constituent_full_name}" } %>
                 <% elsif session.status == 'scheduled' %>
                   <%# Completion requires required product + notes; drive it from the session show page. %>
-                  <%= link_to "Complete Report", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                  <%= link_to "Complete Report", trainers_training_session_path(session),
+                      class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                      aria: { label: "Complete report for #{session.application.constituent_full_name}" } %>
                 <% else %>
-                  <%= link_to "View Details", trainers_training_session_path(session), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                  <%= link_to "View Details", trainers_training_session_path(session),
+                      class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                      aria: { label: "View details for #{session.application.constituent_full_name}" } %>
                 <% end %>
               </td>
             </tr>

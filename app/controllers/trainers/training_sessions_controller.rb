@@ -297,15 +297,25 @@ module Trainers
 
     def count_constituent_cancelled_sessions
       constituent_training_session_ids = @constituent.applications.joins(:training_sessions).pluck('training_sessions.id')
-      @constituent_session_outcome_counts = {
-        constituent_cancellations: TrainingSession.where(id: constituent_training_session_ids,
-                                                         status: :cancelled,
-                                                         cancellation_initiator: :constituent).count,
-        no_shows: TrainingSession.where(id: constituent_training_session_ids, status: :no_show).count,
-        trainer_or_program_cancellations: TrainingSession.where(id: constituent_training_session_ids, status: :cancelled)
-                                          .where.not(cancellation_initiator: :constituent)
-                                          .count
-      }
+      cancelled_sessions = TrainingSession.where(id: constituent_training_session_ids, status: :cancelled)
+      no_show_count = TrainingSession.where(id: constituent_training_session_ids, status: :no_show).count
+
+      @constituent_session_outcome_counts =
+        if TrainingSession.cancellation_initiator_column?
+          {
+            constituent_cancellations: cancelled_sessions.where(cancellation_initiator: :constituent).count,
+            no_shows: no_show_count,
+            trainer_or_program_cancellations: cancelled_sessions.where.not(cancellation_initiator: :constituent).count
+          }
+        else
+          {
+            # Before the new column exists locally, avoid blaming constituents for historical cancellations
+            # that cannot yet be attributed reliably.
+            constituent_cancellations: 0,
+            no_shows: no_show_count,
+            trainer_or_program_cancellations: cancelled_sessions.count
+          }
+        end
 
       @constituent_session_outcome_counts[:constituent_cancellations] + @constituent_session_outcome_counts[:no_shows]
     end
