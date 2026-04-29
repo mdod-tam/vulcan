@@ -94,6 +94,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.string "alternate_contact_relationship_type"
     t.decimal "annual_income"
     t.datetime "application_date"
+    t.string "application_transfer_id"
     t.integer "application_type"
     t.datetime "created_at", null: false
     t.string "current_step"
