@@ -120,7 +120,10 @@ class NotificationComposer
   def training_session_message(verb_phrase)
     return default_message unless @notifiable.is_a?(TrainingSession)
 
-    trainer_name = @actor&.full_name.presence || @notifiable.trainer&.full_name.presence || 'A trainer'
+    trainer_name = @actor&.full_name.presence ||
+                   @metadata['trainer_name'].presence ||
+                   preloaded_trainer_name ||
+                   'A trainer'
     application = @notifiable.application
     constituent_name = application&.constituent_full_name.presence ||
                        @notifiable.constituent&.full_name.presence ||
@@ -128,6 +131,12 @@ class NotificationComposer
     application_id = @metadata['application_id'].presence || application&.id
 
     "#{trainer_name} #{verb_phrase} for #{constituent_name} for Application ##{application_id}."
+  end
+
+  def preloaded_trainer_name
+    return unless @notifiable.association(:trainer).loaded?
+
+    @notifiable.trainer&.full_name.presence
   end
 
   def find_training_session(application, actor)

@@ -37,7 +37,7 @@ module NotificationPreloading
 
     ActiveRecord::Associations::Preloader.new(
       records: training_sessions,
-      associations: [:trainer, { application: :user }]
+      associations: [{ application: :user }]
     ).call
   end
 end
