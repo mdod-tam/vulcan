@@ -51,6 +51,27 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert_equal "John Doe requested training for Application ##{@application.id}.", message
   end
 
+  test 'generate messages for training session lifecycle notifications' do
+    trainer = create(:trainer, first_name: 'Jane', last_name: 'Trainer')
+    training_session = create(:training_session, :scheduled, application: @application, trainer: trainer)
+
+    {
+      'training_scheduled' => 'scheduled training',
+      'training_rescheduled' => 'rescheduled training',
+      'training_cancelled' => 'cancelled training',
+      'training_completed' => 'completed training'
+    }.each do |action, verb_phrase|
+      message = NotificationComposer.generate(
+        action,
+        training_session,
+        trainer,
+        { 'application_id' => @application.id }
+      )
+
+      assert_equal "Jane Trainer #{verb_phrase} for John Doe for Application ##{@application.id}.", message
+    end
+  end
+
   test 'generate message for medical_certification_rejected with reason' do
     message = NotificationComposer.generate(
       'medical_certification_rejected',

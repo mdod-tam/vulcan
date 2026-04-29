@@ -61,13 +61,17 @@ module Evaluators
     def evaluations_for_filter(filter_type)
       case filter_type
       when 'requested'
-        (current_user.admin? ? Evaluation.requested_sessions : current_user.evaluations.requested_sessions).includes(:constituent)
+        (current_user.admin? ? Evaluation.requested_sessions : current_user.evaluations.requested_sessions)
+          .includes(:constituent, :application)
       when 'scheduled'
-        (current_user.admin? ? Evaluation.active : current_user.evaluations.active).includes(:constituent)
+        (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
+          .includes(:constituent, :application)
       when 'completed'
-        (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions).includes(:constituent)
+        (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
+          .includes(:constituent, :application)
       when 'needs_followup'
-        (current_user.admin? ? Evaluation.needing_followup : current_user.evaluations.needing_followup).includes(:constituent)
+        (current_user.admin? ? Evaluation.needing_followup : current_user.evaluations.needing_followup)
+          .includes(:constituent, :application)
       end
     end
 
@@ -107,7 +111,7 @@ module Evaluators
       @upcoming_evaluations = (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
                               .includes(:constituent).order(evaluation_date: :asc).limit(5)
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
-                            .includes(:constituent).order(evaluation_date: :desc).limit(5)
+                            .includes(:constituent, :application).order(evaluation_date: :desc).limit(5)
     end
 
     def load_recent_activity

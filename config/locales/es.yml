@@ -10,6 +10,31 @@ es:
               training_session_quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
               training_session_active: "Esta persona ya tiene una sesión de capacitación activa."
               training_session_not_active: "Esta persona no tiene una sesión de capacitación activa."
+        training_session:
+          attributes:
+            base:
+              duplicate_open_session: "Esta solicitud ya tiene una sesión de capacitación activa."
+              historical_session_reopen: "Las sesiones de capacitación históricas no se pueden reabrir. Programe una sesión de seguimiento."
+  activity_history:
+    labels:
+      training_scheduled: "Capacitación programada"
+      training_completed: "Capacitación completada"
+      training_cancelled: "Capacitación cancelada"
+      training_rescheduled: "Capacitación reprogramada"
+      training_followup_scheduled: "Capacitación de seguimiento programada"
+      training_no_show: "No asistió"
+      training_missed: "No asistió"
+      training_status_changed: "Estado de capacitación actualizado"
+      evaluation_scheduled: "Evaluación programada"
+      evaluation_completed: "Evaluación completada"
+      evaluation_rescheduled: "Evaluación reprogramada"
+      requested_additional_info: "Información adicional solicitada"
+      evaluator_assigned: "Evaluador asignado"
+      equipment_bids_sent: "Ofertas enviadas al proveedor"
+      equipment_po_sent: "Orden de compra enviada al proveedor"
+    details:
+      followup_scheduled_for: "Seguimiento programado para"
+      reason: "Motivo: %{reason}"
   applications:
     training_requests:
       messages:
@@ -19,6 +44,55 @@ es:
         active_session: "Ya tiene una sesión de capacitación en curso."
         quota_exhausted: "Ya usó todas sus sesiones de capacitación disponibles."
         submitted: "Solicitud de capacitación enviada. Un administrador se comunicará con usted para programar su sesión."
+  admin:
+    applications:
+      training_follow_up_needed:
+        title: "La capacitación necesita seguimiento"
+        summary: "Última sesión: %{status} el %{date}."
+        reason_label: "Motivo:"
+        view_session: "Ver sesión histórica"
+        assign_heading: "Asignar capacitador para seguimiento"
+        assign_select_label: "Seleccionar capacitador para seguimiento"
+        assign_submit: "Asignar capacitador para seguimiento"
+  trainers:
+    training_sessions:
+      flash:
+        assigned_trainer_only: "Solo el capacitador asignado puede actualizar esta sesión de capacitación."
+        update_status_failed: "No se pudo actualizar el estado de la sesión de capacitación: %{message}"
+        complete_failed: "No se pudo completar la sesión de capacitación: %{message}"
+        schedule_failed: "No se pudo programar la sesión de capacitación: %{message}"
+        reschedule_failed: "No se pudo reprogramar la sesión de capacitación: %{message}"
+        cancel_failed: "No se pudo cancelar la sesión de capacitación: %{message}"
+        follow_up_failed: "No se pudo programar la sesión de capacitación de seguimiento: %{message}"
+      follow_up:
+        title: "Programar nueva fecha de capacitación"
+        description: "Esto crea una nueva sesión de capacitación y mantiene esta sesión cancelada o marcada como no asistida bloqueada como historial."
+        scheduled_for_label: "Nueva fecha/hora"
+        location_label: "Ubicación"
+        location_placeholder: "p. ej., hogar del participante, biblioteca, en línea"
+        reason_label: "Motivo del seguimiento"
+        reason_placeholder: "Proporcione un motivo..."
+        reason_hint: "Proporcione un motivo para programar la capacitación de seguimiento."
+        required: "(obligatorio)"
+        submit: "Programar nueva fecha de capacitación"
+      read_only_notice: "Esta es una vista de supervisión de solo lectura. Solo el capacitador asignado puede actualizar esta sesión de capacitación."
+  training_session_notifications:
+    training_cancelled:
+      scheduled_message: "Su sesión de capacitación programada para %{scheduled_for} ha sido cancelada. Lamentamos cualquier inconveniente."
+      assignment_removed_message: "Su asignación de capacitador se eliminó antes de que se programara una fecha de sesión. Estamos trabajando para asignarle un nuevo capacitador."
+  training_sessions:
+    reschedule:
+      wrong_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden reprogramar."
+    schedule_follow_up:
+      success: "La sesión de capacitación de seguimiento se programó correctamente."
+      invalid_source: "Solo las sesiones de capacitación canceladas o marcadas como no asistidas pueden tener seguimiento."
+      missing_required_fields: "scheduled_for y reschedule_reason son obligatorios"
+      service_window_closed: "La capacitación ya no está disponible para esta solicitud."
+      quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
+      active_session: "Esta persona ya tiene una sesión de capacitación activa."
+      invalid_scheduled_for: "scheduled_for debe ser una fecha y hora válidas"
+      scheduled_for_in_future: "scheduled_for debe estar en el futuro"
+      unexpected_error: "Ocurrió un error inesperado: %{message}"
   application_notifications:
     proof_rejected:
       remaining_attempts_message:

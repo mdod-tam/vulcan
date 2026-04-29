@@ -6,7 +6,7 @@ module TrainingManagement
   extend ActiveSupport::Concern
 
   def max_training_sessions
-    Policy.get('max_training_sessions') || 3
+    Policy.max_training_sessions
   end
 
   def completed_training_sessions_count
@@ -19,6 +19,19 @@ module TrainingManagement
 
   def training_session_quota_exhausted?
     completed_training_sessions_count >= max_training_sessions
+  end
+
+  def latest_training_session
+    training_sessions.order(created_at: :desc, id: :desc).first
+  end
+
+  def latest_training_follow_up_session
+    latest_session = latest_training_session
+    return unless latest_session&.needs_followup?
+    return if active_training_session_present?
+    return unless remaining_training_sessions.positive?
+
+    latest_session
   end
 
   # Assigns a trainer to this application
@@ -35,12 +48,12 @@ module TrainingManagement
       return false
     end
 
-    if active_training_session_present?
-      errors.add(:base, :training_session_active)
-      return false
-    end
-
     with_lock do
+      if active_training_session_present?
+        errors.add(:base, :training_session_active)
+        return false
+      end
+
       training_session = training_sessions.create!(
         trainer: trainer,
         status: :requested

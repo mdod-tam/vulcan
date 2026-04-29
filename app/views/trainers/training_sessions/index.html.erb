@@ -13,7 +13,7 @@
         Scheduled Training Sessions
       <% elsif @current_status == 'completed' %>
         Completed Training Sessions
-      <% elsif @current_status == 'no_show' || @current_status == 'cancelled' %>
+      <% elsif %w[needs_followup no_show cancelled].include?(@current_status) %>
         Training Sessions Needing Follow-up
       <% else %>
         Training Sessions
@@ -69,9 +69,9 @@
           aria: { current: (@current_status == 'completed' ? "page" : nil) } %>
           
       <%= link_to "Needs Follow-up", 
-          current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'cancelled' }.merge(trainer_filter_params)) : needs_followup_trainers_training_sessions_path,
-          class: "#{@current_status == 'cancelled' || @current_status == 'no_show' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
-          aria: { current: (%w[cancelled no_show].include?(@current_status) ? "page" : nil) } %>
+          current_user.admin? ? filtered_trainers_training_sessions_path({ scope: @current_scope, status: 'needs_followup' }.merge(trainer_filter_params)) : needs_followup_trainers_training_sessions_path,
+          class: "#{%w[needs_followup cancelled no_show].include?(@current_status) ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (%w[needs_followup cancelled no_show].include?(@current_status) ? "page" : nil) } %>
     </div>
   </div>
 

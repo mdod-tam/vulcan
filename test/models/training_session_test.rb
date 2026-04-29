@@ -127,6 +127,34 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert training_session.valid?
   end
 
+  test 'should reject duplicate open sessions for an application' do
+    application = create(:application, :old_enough_for_new_application)
+    create(:training_session, :scheduled, application: application)
+
+    duplicate_session = build(:training_session, :requested, application: application)
+
+    assert_not duplicate_session.valid?
+    assert_includes duplicate_session.errors[:base], I18n.t('activerecord.errors.models.training_session.attributes.base.duplicate_open_session')
+  end
+
+  test 'should allow updates to an existing open session' do
+    training_session = create(:training_session, :scheduled)
+
+    training_session.notes = 'Updated preparation notes'
+
+    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
+  end
+
+  test 'should not reopen historical sessions' do
+    training_session = create(:training_session, :cancelled)
+
+    training_session.status = :scheduled
+    training_session.scheduled_for = 1.week.from_now
+
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:base], I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
+  end
+
   # Test callbacks
   test 'set_completed_at should set completed_at when status changes to completed' do
     training_session = create(:training_session, :scheduled)
@@ -286,7 +314,7 @@ class TrainingSessionTest < ActiveSupport::TestCase
       completed_at: 1.hour.ago,
       created_at: 1.hour.ago
     )
-    create(:training_session, :requested, application: application, trainer: trainer, created_at: 5.days.ago)
+    create(:training_session, :cancelled, application: application, trainer: trainer, created_at: 5.days.ago)
     current_session = create(:training_session, :requested, application: application, trainer: trainer, created_at: 2.days.ago)
     create(:training_session, :completed, created_at: 6.days.ago)
 

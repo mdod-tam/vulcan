@@ -9,6 +9,9 @@
     - unassign_form_path: optional path for removing the current assignment
     - available_assignees: collection of available people to assign
     - status_badge_method: method to render badge (evaluation_status_badge or training_session_status_badge)
+    - assignment_heading: optional heading for unassigned assignment form
+    - assignment_submit_label: optional submit label for unassigned assignment form
+    - assignment_select_label: optional accessible label for unassigned assignment select
 %>
 
 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" data-testid="<%= type %>-assignment-section">
@@ -50,20 +53,20 @@
     </div>
   <% else %>
     <!-- Dropdown assignment: one select, one submit -->
-    <h3 class="text-sm font-semibold text-gray-900 mb-3">Assign <%= type.titleize %></h3>
+    <h3 class="text-sm font-semibold text-gray-900 mb-3"><%= local_assigns[:assignment_heading].presence || "Assign #{type.titleize}" %></h3>
     <% if available_assignees.blank? %>
       <p class="text-sm text-gray-500">No <%= type.pluralize %> are currently available for assignment.</p>
     <% else %>
       <%= form_with url: assign_form_path, method: :post, local: true, data: { testid: "#{type}-assignment-form" }, class: "flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end" do |f| %>
         <div class="w-full sm:max-w-md">
-          <%= label_tag assign_param, "Select #{type.titleize.downcase}", class: "sr-only" %>
+          <%= label_tag assign_param, local_assigns[:assignment_select_label].presence || "Select #{type.titleize.downcase}", class: "sr-only" %>
           <%= select_tag assign_param,
               options_from_collection_for_select(available_assignees, :id, :full_name),
               include_blank: "Select a #{type}…",
               class: "block h-10 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500",
               required: true %>
         </div>
-        <%= submit_tag "Assign #{type.titleize}",
+        <%= submit_tag local_assigns[:assignment_submit_label].presence || "Assign #{type.titleize}",
             class: "inline-flex h-10 items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" %>
       <% end %>
     <% end %>

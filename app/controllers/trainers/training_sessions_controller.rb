@@ -42,7 +42,8 @@ module Trainers
                                .includes(application: :user)
                                .order(created_at: :desc)
               else
-                TrainingSession.where(trainer_id: current_user.id, status: :requested)
+                TrainingSession.where(trainer_id: current_user.id)
+                               .where(status: :requested)
                                .includes(application: :user)
                                .order(created_at: :desc)
               end
@@ -53,11 +54,12 @@ module Trainers
 
     def scheduled
       scope = if current_user.admin?
-                TrainingSession.where(status: :scheduled)
+                TrainingSession.where(status: %i[scheduled confirmed])
                                .includes(application: :user)
                                .order(scheduled_for: :asc)
               else
-                TrainingSession.where(trainer_id: current_user.id, status: :scheduled)
+                TrainingSession.where(trainer_id: current_user.id)
+                               .where(status: %i[scheduled confirmed])
                                .includes(application: :user)
                                .order(scheduled_for: :asc)
               end
@@ -82,17 +84,9 @@ module Trainers
     end
 
     def needs_followup
-      scope = if current_user.admin?
-                TrainingSession.where(status: %i[no_show cancelled])
-                               .includes(application: :user)
-                               .order(updated_at: :desc)
-              else
-                TrainingSession.where(trainer_id: current_user.id, status: %i[no_show cancelled])
-                               .includes(application: :user)
-                               .order(updated_at: :desc)
-              end
-
-      @pagy, @training_sessions = pagy(scope, items: 20)
+      @current_scope = current_user.admin? ? 'all' : 'mine'
+      @current_status = 'needs_followup'
+      @pagy, @training_sessions = pagy(ordered_followup_sessions, items: 20)
       render :index
     end
 
@@ -104,7 +98,7 @@ module Trainers
       @application = @training_session.application
       @constituent = @application&.user
 
-      result = TrainingSessions::UpdateStatusService.new(@training_session, current_user, params).call
+      result = ::TrainingSessions::UpdateStatusService.new(@training_session, current_user, params).call
 
       if result.success?
         redirect_to trainers_training_session_path(@training_session),
@@ -112,7 +106,7 @@ module Trainers
       else
         @training_session.reload # Reset invalid changes so the view renders correctly
         prepare_show_context
-        flash.now[:alert] = "Failed to update training session status: #{result.message}"
+        flash.now[:alert] = t('trainers.training_sessions.flash.update_status_failed', message: result.message)
         render :show, status: :unprocessable_content
       end
     end
@@ -121,14 +115,14 @@ module Trainers
       @application = @training_session.application
       @constituent = @application&.user
 
-      result = TrainingSessions::CompleteService.new(@training_session, current_user, complete_params).call
+      result = ::TrainingSessions::CompleteService.new(@training_session, current_user, complete_params).call
 
       if result.success?
         redirect_to trainers_training_session_path(@training_session), notice: result.message
       else
         @training_session.reload # Reset invalid changes so the view renders correctly
         prepare_show_context
-        flash.now[:alert] = "Failed to complete training session: #{result.message}"
+        flash.now[:alert] = t('trainers.training_sessions.flash.complete_failed', message: result.message)
         render :show, status: :unprocessable_content
       end
     end
@@ -137,7 +131,7 @@ module Trainers
       @application = @training_session.application
       @constituent = @application&.user
 
-      result = TrainingSessions::ScheduleService.new(@training_session, current_user, schedule_params).call
+      result = ::TrainingSessions::ScheduleService.new(@training_session, current_user, schedule_params).call
 
       if result.success?
         redirect_to trainers_training_session_path(@training_session),
@@ -145,7 +139,7 @@ module Trainers
       else
         @training_session.reload # Reset invalid changes so the view renders correctly
         prepare_show_context
-        flash.now[:alert] = "Failed to schedule training session: #{result.message}"
+        flash.now[:alert] = t('trainers.training_sessions.flash.schedule_failed', message: result.message)
         render :show, status: :unprocessable_content
       end
     end
@@ -154,7 +148,7 @@ module Trainers
       @application = @training_session.application
       @constituent = @application&.user
 
-      result = TrainingSessions::RescheduleService.new(@training_session, current_user, reschedule_params).call
+      result = ::TrainingSessions::RescheduleService.new(@training_session, current_user, reschedule_params).call
 
       if result.success?
         redirect_to trainers_training_session_path(@training_session),
@@ -162,7 +156,7 @@ module Trainers
       else
         @training_session.reload # Reset invalid changes so the view renders correctly
         prepare_show_context
-        flash.now[:alert] = "Failed to reschedule training session: #{result.message}"
+        flash.now[:alert] = t('trainers.training_sessions.flash.reschedule_failed', message: result.message)
         render :show, status: :unprocessable_content
       end
     end
@@ -172,14 +166,14 @@ module Trainers
       @application = @training_session.application
       @constituent = @application&.user
 
-      result = TrainingSessions::CancelService.new(@training_session, current_user, cancel_params).call
+      result = ::TrainingSessions::CancelService.new(@training_session, current_user, cancel_params).call
 
       if result.success?
         redirect_to trainers_training_session_path(@training_session), notice: result.message
       else
         @training_session.reload # Reset invalid changes so the view renders correctly
         prepare_show_context
-        flash.now[:alert] = "Failed to cancel training session: #{result.message}"
+        flash.now[:alert] = t('trainers.training_sessions.flash.cancel_failed', message: result.message)
         render :show, status: :unprocessable_content
       end
     end
@@ -189,22 +183,24 @@ module Trainers
     def prepare_show_context
       @application = @training_session.application
       @constituent = @application.user
-      @max_training_sessions = @application.max_training_sessions
+      @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
       @session_number = calculate_session_number
       @previous_training_sessions = @training_session.previous_completed_sessions
       @constituent_cancelled_sessions_count = count_constituent_cancelled_sessions
-      @activity_logs = TrainingSessions::AuditLogBuilder.new(@training_session).build
+      @activity_logs = ::TrainingSessions::AuditLogBuilder.new(@training_session).build
     end
 
     def filter_sessions(scope, status)
-      query = if scope == 'all' && current_user.admin?
-                TrainingSession.all
-              else
-                TrainingSession.where(trainer_id: current_user.id)
-              end.then do |q|
-                status.present? ? q.where(status: status) : q
-              end
+      return ordered_status_scope(scope, followup_statuses(status)) if followup_status?(status)
+
+      base_query = if scope == 'all' && current_user.admin?
+                     TrainingSession.all
+                   else
+                     TrainingSession.where(trainer_id: current_user.id)
+                   end
+
+      query = status.present? ? base_query.where(status: status) : base_query
       query = query.where(trainer_id: params[:trainer_id]) if current_user.admin? && params[:trainer_id].present?
 
       ordering = {
@@ -214,6 +210,33 @@ module Trainers
       }[status] || { updated_at: :desc }
 
       query.order(ordering).includes(application: :user)
+    end
+
+    def followup_status?(status)
+      %w[cancelled no_show needs_followup].include?(status.to_s)
+    end
+
+    def followup_statuses(status)
+      status.to_s == 'needs_followup' ? %i[no_show cancelled] : status
+    end
+
+    def ordered_status_scope(scope, status)
+      apply_trainer_visibility(TrainingSession.ordered_followup_per_application(status), scope)
+    end
+
+    def ordered_followup_sessions
+      scope = current_user.admin? ? 'all' : 'mine'
+
+      ordered_status_scope(scope, %i[no_show cancelled])
+    end
+
+    def apply_trainer_visibility(query, scope)
+      if current_user.admin?
+        query = query.where(trainer_id: params[:trainer_id]) if params[:trainer_id].present?
+        return query if scope == 'all'
+      end
+
+      query.where(trainer_id: current_user.id)
     end
 
     def set_training_session
@@ -239,7 +262,7 @@ module Trainers
       return if assigned_trainer?
 
       redirect_target = current_user&.admin? ? trainers_training_session_path(@training_session) : trainers_dashboard_path
-      redirect_to redirect_target, alert: 'Only the assigned trainer can update this training session.'
+      redirect_to redirect_target, alert: t('trainers.training_sessions.flash.assigned_trainer_only')
     end
 
     def training_session_params

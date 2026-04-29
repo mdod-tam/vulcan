@@ -141,7 +141,7 @@ module ConstituentPortal
     end
 
     def dependent_attributes_with_guardian_contact_fallback
-      attrs = dependent_user_params.to_h.with_indifferent_access
+      attrs = dependent_user_params.to_h
 
       Applications::GuardianDependentManagementService
         .new(dependent_contact_strategy_params)

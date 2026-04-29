@@ -312,6 +312,8 @@ Rails.application.routes.draw do
     resource :dashboard, only: [:show], controller: :dashboards
 
     resources :training_sessions, only: %i[index show] do
+      resource :follow_up, only: :create, controller: 'training_sessions/follow_ups'
+
       collection do
         get :filter
         get :requested

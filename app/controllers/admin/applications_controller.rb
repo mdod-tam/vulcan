@@ -89,7 +89,7 @@ module Admin
       certification_service = Applications::CertificationEventsService.new(@application)
       @certification_events = certification_service.certification_events
       @certification_requests = certification_service.request_events
-      @max_training_sessions = @application.max_training_sessions
+      @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
     end
 

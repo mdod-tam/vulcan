@@ -37,6 +37,10 @@ module TrainingSessions
     private
 
     def validate_params!
+      unless @training_session.can_reschedule_current_session?
+        raise ArgumentError, I18n.t('training_sessions.reschedule.wrong_status')
+      end
+
       return unless @params[:scheduled_for].blank? || @params[:reschedule_reason].blank?
 
       raise ArgumentError, 'scheduled_for and reschedule_reason are required'

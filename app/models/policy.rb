@@ -61,6 +61,10 @@ class Policy < ApplicationRecord
     find_by(key: key)&.value
   end
 
+  def self.max_training_sessions
+    get('max_training_sessions') || 3
+  end
+
   def self.set(key, value)
     policy = find_or_initialize_by(key: key)
     policy.value = value

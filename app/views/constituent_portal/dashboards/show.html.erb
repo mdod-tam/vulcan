@@ -552,15 +552,25 @@
                     <h4 class="text-sm font-medium text-gray-700 mb-2">Previous Sessions</h4>
                     <% @completed_training_sessions.each do |session| %>
                       <% session_num = @training_session_numbers[session.id] %>
-                      <div class="text-sm text-gray-600 mb-2">
-                        <span class="font-medium text-gray-800">
-                          Session <%= session_num %> of <%= @max_training_sessions %>
-                        </span>
-                        &mdash;
-                        <span class="font-medium"><%= session.trainer.full_name %></span>,
-                        completed <%= session.completed_at.strftime("%B %d, %Y") %>
-                        <% if session.product_trained_on %>
-                          on <span class="italic"><%= session.product_trained_on.name %></span>
+                      <div class="mb-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                        <p>
+                          <span class="font-medium text-gray-900">
+                            Session <%= session_num %> of <%= @max_training_sessions %>
+                          </span>
+                          &mdash;
+                          <span class="font-medium"><%= session.trainer.full_name %></span>,
+                          completed <%= session.completed_at.strftime("%B %d, %Y") %>
+                          <% if session.product_trained_on %>
+                            on <span class="italic"><%= session.product_trained_on.name %></span>
+                          <% end %>
+                        </p>
+                        <% if session.notes.present? %>
+                          <div class="mt-2">
+                            <p class="font-medium text-gray-800">What we covered</p>
+                            <div class="mt-1 text-gray-700">
+                              <%= simple_format(session.notes, {}, wrapper_tag: "p") %>
+                            </div>
+                          </div>
                         <% end %>
                       </div>
                     <% end %>
@@ -570,7 +580,7 @@
                 <% if @active_application.service_window_active? %>
                   <% if service_window_end.present? %>
                     <p class="text-xs text-gray-500 mb-3">
-                      Service window active until <%= service_window_end.strftime("%B %d, %Y") %>.
+                      Training available through <%= service_window_end.strftime("%b %-d, %Y") %> or until all sessions are used.
                     </p>
                   <% end %>
 

@@ -14,7 +14,6 @@ module UserServiceIntegration
   def create_user_with_service(user_params, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false)
     # Convert ActionController::Parameters to hash if needed
     attrs = user_params.respond_to?(:to_h) ? user_params.to_h : user_params
-    attrs = attrs.with_indifferent_access if attrs.respond_to?(:with_indifferent_access)
 
     service = Applications::UserCreationService.new(attrs,
                                                     is_managing_adult: is_managing_adult,

@@ -115,10 +115,12 @@ module ConstituentPortal
     def load_training_sessions_information
       return unless @active_application
 
-      @max_training_sessions = @active_application.max_training_sessions
+      @max_training_sessions = Policy.max_training_sessions
 
       all_sessions = @active_application.training_sessions
-      @completed_training_sessions       = all_sessions.completed_sessions.order(completed_at: :desc)
+      @completed_training_sessions       = all_sessions.completed_sessions
+                                                          .includes(:trainer, :product_trained_on)
+                                                          .order(completed_at: :desc)
       @completed_training_sessions_count = @completed_training_sessions.count
       @active_training_session           = @active_application.active_training_session
 

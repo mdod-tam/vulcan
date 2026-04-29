@@ -43,22 +43,11 @@ module TrainingSessions
     def handle_status_transition
       Rails.logger.debug { "Status transition: #{@old_status} -> #{@new_status}" }
 
-      if %w[cancelled no_show].include?(@old_status) && @new_status == 'scheduled'
-        handle_reschedule_from_cancelled_or_no_show
-      else
-        perform_normal_update
+      if %w[cancelled no_show completed].include?(@old_status) && TrainingSession::OPEN_STATUSES.include?(@new_status&.to_sym)
+        raise ArgumentError, I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
       end
-    end
 
-    def handle_reschedule_from_cancelled_or_no_show
-      scheduled_for = @params[:training_session][:scheduled_for]
-      Rails.logger.debug { "Forced transition with scheduled_for: #{scheduled_for}" }
-
-      raise ArgumentError, "scheduled_for is required when changing from #{@old_status} to scheduled" if scheduled_for.blank?
-
-      @training_session.assign_attributes(status: 'scheduled', scheduled_for: scheduled_for)
-      @training_session.save!(validate: false) # Bypass validations if needed
-      Rails.logger.debug { "Forced save result: true, errors: #{@training_session.errors.full_messages}" }
+      perform_normal_update
     end
 
     def perform_normal_update
@@ -71,8 +60,6 @@ module TrainingSessions
     def determine_permitted_params
       if @new_status == 'no_show'
         @params.expect(training_session: %i[status no_show_notes])
-      elsif @new_status == 'scheduled' && %w[cancelled no_show].include?(@old_status)
-        @params.expect(training_session: %i[status scheduled_for])
       else
         @params.require(:training_session).permit(:status, :notes, :scheduled_for, :reschedule_reason, :cancellation_reason, :product_trained_on_id)
       end

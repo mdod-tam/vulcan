@@ -4,6 +4,8 @@ module StatusManagement
   extend ActiveSupport::Concern
 
   included do
+    # `rescheduled` remains for legacy/display compatibility. Current training
+    # reschedules keep the row in `scheduled` status and log a reschedule event.
     enum :status, {
       requested: 0,
       scheduled: 1,
@@ -34,7 +36,15 @@ module StatusManagement
   end
 
   def can_reschedule?
+    can_schedule_followup?
+  end
+
+  def can_schedule_followup?
     status_cancelled? || status_no_show?
+  end
+
+  def can_reschedule_current_session?
+    status_scheduled? || status_confirmed?
   end
 
   def can_cancel?

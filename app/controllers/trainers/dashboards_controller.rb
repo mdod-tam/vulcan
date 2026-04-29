@@ -7,6 +7,7 @@ module Trainers
       training_completed
       training_cancelled
       training_rescheduled
+      training_followup_scheduled
       training_no_show
       training_missed
       training_status_changed
@@ -31,12 +32,12 @@ module Trainers
     private
 
     def load_training_sessions
-      # Load data
-      @requested_sessions = training_sessions.where(status: :requested)
-                                             .order(created_at: :desc)
-      @scheduled_sessions = training_sessions.where(status: %i[scheduled confirmed])
+      @requested_sessions = latest_training_sessions.where(status: :requested)
+                                                    .includes(application: :user)
+                                                    .order(created_at: :desc)
+      @scheduled_sessions = latest_training_sessions.where(status: %i[scheduled confirmed])
       @completed_sessions = training_sessions.where(status: :completed)
-      @followup_sessions = training_sessions.where(status: %i[no_show cancelled])
+      @followup_sessions = ordered_followup_sessions
       @pending_training_requests = if current_user.admin?
                                      Application.with_pending_training_request
                                                 .includes(:user)
@@ -46,6 +47,7 @@ module Trainers
                                      Application.none
                                    end
       @needs_scheduling_count = @requested_sessions.count + @pending_training_requests.count
+      @followup_sessions_count = @followup_sessions.count
 
       # Get all scheduled training sessions for the upcoming section
       @upcoming_sessions = @scheduled_sessions.order(scheduled_for: :asc)
@@ -70,7 +72,7 @@ module Trainers
         @filtered_sessions = @completed_sessions.order(completed_at: :desc)
         @section_title = 'Completed Training Sessions'
       when 'needs_followup'
-        @filtered_sessions = @followup_sessions.order(updated_at: :desc)
+        @filtered_sessions = @followup_sessions
         @section_title = 'Training Sessions Needing Follow-up'
       end
 
@@ -89,10 +91,18 @@ module Trainers
       return if @current_filter.present?
 
       # Data for dashboard tables - limit to 10 items for each section
-      @requested_sessions_display = @requested_sessions.includes(application: :user).limit(10)
+      @requested_sessions_display = @requested_sessions.limit(10)
       @upcoming_sessions_display = @upcoming_sessions.limit(10)
-      @recent_completed_sessions = @completed_sessions.includes(application: :user).order(completed_at: :desc).limit(5)
-      @recent_followup_sessions = @followup_sessions.includes(application: :user).order(updated_at: :desc).limit(5) # Added for default display
+      @recent_completed_sessions = @completed_sessions
+                                   .includes(application: :user)
+                                   .order(completed_at: :desc)
+                                   .limit(5)
+      @recent_followup_sessions = @followup_sessions.limit(5)
+    end
+
+    def ordered_followup_sessions
+      scope = TrainingSession.ordered_followup_per_application
+      current_user.admin? ? scope : scope.where(trainer_id: current_user.id)
     end
 
     def load_recent_activity
@@ -146,5 +156,13 @@ module Trainers
                                               .includes(application: :user)
                              end
     end
+
+    def latest_training_sessions
+      @latest_training_sessions ||= begin
+        scope = TrainingSession.latest_per_application_records
+        current_user.admin? ? scope : scope.where(trainer_id: current_user.id)
+      end
+    end
+
   end
 end

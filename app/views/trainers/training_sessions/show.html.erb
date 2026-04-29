@@ -259,7 +259,7 @@
   <section aria-label="<%= @can_manage_training_session ? 'Training Session Actions' : 'Training Session Status' %>" class="mt-8">
     <% if !@can_manage_training_session %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
-        This is a read-only oversight view. Only the assigned trainer can update this training session.
+        <%= t('trainers.training_sessions.read_only_notice') %>
       </div>
     <% elsif @training_session.status_requested? && @training_session.scheduled_for.nil? %>
       <!-- Initial Schedule Training Form -->
@@ -403,35 +403,38 @@
       </div>
 
     <% elsif @training_session.status_cancelled? || @training_session.status_no_show? %>
-      <!-- Reschedule Training Form (only if cancelled or no_show) -->
+      <!-- Follow-up scheduling creates a new session and preserves this historical record. -->
       <div class="bg-white shadow rounded-lg mb-6">
         <div class="px-4 py-5 sm:p-6">
           <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="reschedule-cancelled-heading">
-            Reschedule Training
+            <%= t('trainers.training_sessions.follow_up.title') %>
           </h3>
+          <p class="mb-4 text-sm text-gray-600">
+            <%= t('trainers.training_sessions.follow_up.description') %>
+          </p>
 
-          <%= form_with(url: reschedule_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "reschedule-cancelled-heading" }) do |f| %>
+          <%= form_with(url: trainers_training_session_follow_up_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "reschedule-cancelled-heading" }) do |f| %>
             <div>
               <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
-                 New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                <%= t('trainers.training_sessions.follow_up.scheduled_for_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.follow_up.required') %></span>
               <% end %>
               <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
             </div>
 
             <div>
-              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
-              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
+              <%= f.label :location, t('trainers.training_sessions.follow_up.location_label'), class: "block text-sm font-medium text-gray-700" %>
+              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: t('trainers.training_sessions.follow_up.location_placeholder') %>
             </div>
 
             <div>
-               <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
-                Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-               <% end %>
-              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true", describedby: "reschedule_cancelled_reason_hint" } %>
-              <p class="sr-only" id="reschedule_cancelled_reason_hint">Please provide a reason for rescheduling this training session.</p>
+              <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
+                <%= t('trainers.training_sessions.follow_up.reason_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.follow_up.required') %></span>
+              <% end %>
+              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('trainers.training_sessions.follow_up.reason_placeholder'), aria: { required: "true", describedby: "reschedule_cancelled_reason_hint" } %>
+              <p class="sr-only" id="reschedule_cancelled_reason_hint"><%= t('trainers.training_sessions.follow_up.reason_hint') %></p>
             </div>
 
-            <%= f.submit "Reschedule Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
+            <%= f.submit t('trainers.training_sessions.follow_up.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
           <% end %>
         </div>
       </div>

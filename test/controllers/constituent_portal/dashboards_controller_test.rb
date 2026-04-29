@@ -202,6 +202,27 @@ module ConstituentPortal
       assert_select 'form[action=?]', request_training_constituent_portal_application_path(application), count: 0
     end
 
+    test 'dashboard shows completed training session notes as a constituent refresher' do
+      application = create_reviewed_application(user: @user)
+      product = create(:product, name: 'Clarity Alto')
+      create(:training_session,
+             :completed,
+             application: application,
+             trainer: create(:trainer, first_name: 'Trainer', last_name: 'Person'),
+             product_trained_on: product,
+             notes: 'Reviewed volume controls and saving frequent contacts.')
+
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select '[data-testid="training-card"]' do
+        assert_select 'h4', text: 'Previous Sessions'
+        assert_select 'p', text: 'What we covered'
+        assert_select 'p', text: 'Reviewed volume controls and saving frequent contacts.'
+        assert_select 'span', text: 'Clarity Alto'
+      end
+    end
+
     private
 
     def create_reviewed_application(user:)

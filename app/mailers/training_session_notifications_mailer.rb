@@ -408,13 +408,14 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        constituent_name: constituent.full_name || 'Valued Constituent',
-        constituent_full_name: constituent.full_name || 'Valued Constituent',
-        trainer_name: trainer.full_name || 'Your Trainer',
-        scheduled_date: formatted_training_date(training_session.scheduled_for),
-        scheduled_time: formatted_training_time(training_session.scheduled_for),
-        scheduled_date_time_formatted: training_session_schedule_text(training_session),
-        application_id: application.id,
+      constituent_name: constituent.full_name || 'Valued Constituent',
+      constituent_full_name: constituent.full_name || 'Valued Constituent',
+      trainer_name: trainer.full_name || 'Your Trainer',
+      scheduled_date: formatted_training_date(training_session.scheduled_for),
+      scheduled_time: formatted_training_time(training_session.scheduled_for),
+      scheduled_date_time_formatted: training_session_schedule_text(training_session),
+      cancellation_message: cancellation_message(training_session, locale),
+      application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -554,6 +555,17 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     return 'Not scheduled yet' if training_session.scheduled_for.blank?
 
     training_session.scheduled_for.strftime('%B %d, %Y at %I:%M %p')
+  end
+
+  def cancellation_message(training_session, locale)
+    I18n.with_locale(locale) do
+      if training_session.scheduled_for.present?
+        I18n.t('training_session_notifications.training_cancelled.scheduled_message',
+               scheduled_for: training_session_schedule_text(training_session))
+      else
+        I18n.t('training_session_notifications.training_cancelled.assignment_removed_message')
+      end
+    end
   end
 
   def formatted_training_date(value)

@@ -19,6 +19,22 @@ class ActivityHistoryHelperTest < ActionView::TestCase
     assert_includes activity_detail(event), 'Library'
   end
 
+  test 'formats follow-up training scheduled action' do
+    event = Event.new(
+      action: 'training_followup_scheduled',
+      metadata: {
+        scheduled_for: 3.days.from_now.iso8601,
+        reason: 'Follow-up after cancellation',
+        location: 'Library'
+      }
+    )
+
+    assert_equal 'Follow-up Training Scheduled', activity_label(event)
+    assert_includes activity_detail(event), 'Follow-up scheduled for'
+    assert_includes activity_detail(event), 'Reason: Follow-up after cancellation'
+    assert_includes activity_detail(event), 'Library'
+  end
+
   test 'formats known evaluation actions' do
     event = Event.new(
       action: 'evaluation_completed',

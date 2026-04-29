@@ -6,6 +6,7 @@ module ActivityHistoryHelper
     'training_completed' => 'Training Completed',
     'training_cancelled' => 'Training Cancelled',
     'training_rescheduled' => 'Training Rescheduled',
+    'training_followup_scheduled' => 'Follow-up Training Scheduled',
     'training_no_show' => 'No Show',
     'training_missed' => 'No Show',
     'evaluation_scheduled' => 'Evaluation Scheduled',
@@ -21,7 +22,10 @@ module ActivityHistoryHelper
   APPLICATION_FULFILLMENT_ACTIONS = %w[equipment_bids_sent equipment_po_sent].freeze
 
   def activity_label(event)
-    ACTIVITY_LABELS.fetch(event.action, event.action.to_s.titleize)
+    I18n.t(
+      "activity_history.labels.#{event.action}",
+      default: ACTIVITY_LABELS.fetch(event.action, event.action.to_s.titleize)
+    )
   end
 
   def activity_detail(event)
@@ -36,6 +40,8 @@ module ActivityHistoryHelper
                 cancellation_detail(metadata)
               when 'training_rescheduled'
                 rescheduled_detail(metadata, old_key: 'old_scheduled_for', new_key: 'new_scheduled_for')
+              when 'training_followup_scheduled'
+                followup_scheduled_detail(metadata)
               when 'training_no_show', 'training_missed'
                 metadata_value(metadata, 'no_show_notes').presence || 'Marked as no show'
               when 'evaluation_scheduled'
@@ -108,6 +114,13 @@ module ActivityHistoryHelper
     parts << "Location: #{metadata_value(metadata, 'location')}" if metadata_value(metadata, 'location')
     parts << "Notes: #{metadata_value(metadata, 'notes')}" if metadata_value(metadata, 'notes')
     parts.join('. ')
+  end
+
+  def followup_scheduled_detail(metadata)
+    parts = []
+    parts << scheduled_detail(metadata, 'scheduled_for', I18n.t('activity_history.details.followup_scheduled_for'))
+    parts << I18n.t('activity_history.details.reason', reason: metadata_value(metadata, 'reason')) if metadata_value(metadata, 'reason')
+    parts.compact_blank.join('. ')
   end
 
   def completed_training_detail(metadata)

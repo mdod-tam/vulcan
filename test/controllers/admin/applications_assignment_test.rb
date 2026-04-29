@@ -127,6 +127,34 @@ module Admin
       assert_select 'strong', text: 'Maximum Reached'
     end
 
+    test 'admin application show calls out latest cancelled training session that needs follow-up' do
+      trainer = create(:trainer)
+      cancelled_session = create(:training_session, :cancelled, application: @application, trainer: trainer)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select '[data-testid="training-follow-up-needed"]' do
+        assert_select 'p', text: 'Training needs follow-up'
+        assert_select 'a[href=?]', trainers_training_session_path(cancelled_session), text: 'View historical session'
+      end
+      assert_select 'h3', text: 'Assign trainer for follow-up'
+      assert_select 'form[data-testid="trainer-assignment-form"] input[type=submit][value=?]',
+                    'Assign trainer for follow-up'
+    end
+
+    test 'admin application show hides follow-up callout when newer active training exists' do
+      trainer = create(:trainer)
+      create(:training_session, :cancelled, application: @application, trainer: trainer, created_at: 2.days.ago)
+      create(:training_session, :scheduled, application: @application, trainer: trainer, created_at: 1.day.ago)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select '[data-testid="training-follow-up-needed"]', count: 0
+      assert_select 'h3', text: 'Current Trainer'
+    end
+
     # --- request_evaluation action ---
 
     test 'admin can mark an approved application as needing evaluation' do

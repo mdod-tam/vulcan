@@ -592,7 +592,7 @@ class Application < ApplicationRecord
   end
 
   def active_training_session
-    training_sessions.assigned_or_scheduled.order(created_at: :desc).first
+    training_sessions.assigned_or_scheduled.order(created_at: :desc, id: :desc).first
   end
 
   def training_request_pending?

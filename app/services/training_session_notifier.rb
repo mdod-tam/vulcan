@@ -34,8 +34,13 @@ class TrainingSessionNotifier
       channel: :email
     )
   rescue StandardError => e
-    Rails.logger.error "Failed to send training session notification via NotificationService: #{e.message}"
-    # Don't re-raise - notification errors shouldn't fail the training session update
+    Rails.logger.error(
+      "Failed to send training session notification via NotificationService " \
+      "(training_session_id=#{training_session.id}, action=#{notification_action}): #{e.message}"
+    )
+    raise if Rails.env.development? || Rails.env.test?
+
+    # In production, notification errors should not fail the training session update.
   end
 
   def notification_action
