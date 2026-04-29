@@ -246,11 +246,11 @@ module ConstituentPortal
       def can_modify_proof?
         case params[:proof_type]
         when 'income'
-          @application.rejected_income_proof?
+          @application.income_proof_status_rejected?
         when 'residency'
-          @application.rejected_residency_proof?
+          @application.residency_proof_status_rejected?
         when 'id'
-          @application.rejected_id_proof?
+          @application.id_proof_status_rejected?
         end
       end
     end
