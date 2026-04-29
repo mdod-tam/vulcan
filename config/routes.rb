@@ -137,6 +137,8 @@ Rails.application.routes.draw do
     end
 
     resources :applications do
+      resource :equipment_fulfillment, only: [:update]
+
       collection do
         post :batch_approve
         post :batch_reject
@@ -156,6 +158,8 @@ Rails.application.routes.draw do
         patch :reject
         post :assign_evaluator
         post :assign_trainer
+        post :unassign_trainer
+        post :request_evaluation
         patch :update_proof_status
         patch :update_certification_status
         post :resend_medical_certification
@@ -308,6 +312,8 @@ Rails.application.routes.draw do
     resource :dashboard, only: [:show], controller: :dashboards
 
     resources :training_sessions, only: %i[index show] do
+      resource :follow_up, only: :create, controller: 'training_sessions/follow_ups'
+
       collection do
         get :filter
         get :requested

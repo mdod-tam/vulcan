@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_28_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -106,6 +106,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.integer "document_signing_status", default: 0, null: false
     t.string "document_signing_submission_id"
     t.string "document_signing_submitter_id"
+    t.datetime "equipment_bids_sent_at"
+    t.datetime "equipment_po_sent_at"
+    t.datetime "evaluation_requested_at"
     t.integer "fulfillment_type", null: false
     t.integer "household_size"
     t.text "income_details"
@@ -145,6 +148,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
+    t.index ["evaluation_requested_at"], name: "index_applications_on_evaluation_requested_at"
     t.index ["fulfillment_type"], name: "index_applications_on_fulfillment_type"
     t.index ["income_proof_status"], name: "idx_applications_on_income_proof_status"
     t.index ["income_verified_by_id"], name: "index_applications_on_income_verified_by_id"
@@ -202,6 +206,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.string "location"
     t.text "needs"
     t.text "notes"
+    t.text "post_completion_notes"
     t.jsonb "products_tried", default: []
     t.boolean "report_submitted"
     t.text "reschedule_reason"
@@ -595,10 +600,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
 
   create_table "training_sessions", force: :cascade do |t|
     t.bigint "application_id", null: false
+    t.integer "cancellation_initiator"
     t.text "cancellation_reason"
     t.datetime "cancelled_at"
     t.datetime "completed_at"
     t.datetime "created_at", null: false
+    t.string "location"
     t.text "no_show_notes"
     t.text "notes"
     t.bigint "product_trained_on_id"
@@ -608,6 +615,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_14_000000) do
     t.bigint "trainer_id", null: false
     t.datetime "updated_at", null: false
     t.index ["application_id"], name: "index_training_sessions_on_application_id"
+    t.index ["application_id"], name: "index_training_sessions_one_open_per_application", unique: true, where: "(status = ANY (ARRAY[0, 1, 2]))"
     t.index ["product_trained_on_id"], name: "index_training_sessions_on_product_trained_on_id"
     t.index ["trainer_id"], name: "index_training_sessions_on_trainer_id"
   end

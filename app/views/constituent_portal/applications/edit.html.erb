@@ -10,11 +10,14 @@
    autosave_url_value: autosave_field_constituent_portal_application_path(@application),
    autosave_debounce_wait_value: 1000
  }
- if @application.income_collection_enabled?
-   edit_form_data[:controller] = "income-validation #{edit_form_data[:controller]}"
-   edit_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
-   edit_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
- end %>
+   if @application.income_collection_enabled?
+     edit_form_data[:controller] = "income-validation #{edit_form_data[:controller]}"
+     edit_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
+     edit_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+   end
+   if @application.for_dependent?
+     edit_form_data[:controller] = "dependent-fields #{edit_form_data[:controller]}"
+   end %>
  <%= form_with(model: [:constituent_portal, @application], 
               local: true, 
               class: "space-y-8", 
@@ -137,9 +140,16 @@
               </p>
             <% end %>
           </div>
-        </section>
+          </section>
 
-       <!-- Disability Section -->
+          <%= render "address_fields",
+            form: f,
+            address: @address,
+            guardian_address: @guardian_address,
+            dependent_application: @application.for_dependent?,
+            use_guardian_address: @use_guardian_address %>
+
+         <!-- Disability Section -->
        <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
          <h2 id="disability-section-title" class="text-lg font-medium text-gray-900 required-label">Disability Information</h2>
          

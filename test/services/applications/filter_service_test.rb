@@ -395,6 +395,83 @@ module Applications
       end
     end
 
+    # The training_requests filter uses persisted application state
+    # (applications.training_requested_at) so admin queue visibility does not
+    # depend on notification delivery.
+    test 'filters by training_requests using persisted training_requested_at' do
+      with_mocked_attachments do
+        approved_app = create(:application, :completed, user: create(:constituent, speech_disability: true))
+        approved_app.update_columns(training_requested_at: 1.hour.ago)
+
+        service = FilterService.new(@scope, { filter: 'training_requests' })
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        result_data = service_result.data
+        assert_includes result_data, approved_app
+        assert_not_includes result_data, @active_app
+      end
+    end
+
+    test 'training_requests filter excludes applications without training_requested_at even if they have training sessions' do
+      with_mocked_attachments do
+        trainer = create(:trainer)
+
+        # No training_requested_at set — admin assigned directly.
+        TrainingSession.create!(
+          application: @approved_app,
+          trainer: trainer,
+          scheduled_for: 1.day.from_now,
+          status: :requested
+        )
+
+        service = FilterService.new(@scope, { filter: 'training_requests' })
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        assert_not_includes service_result.data, @approved_app
+      end
+    end
+
+    test 'training_requests filter ignores notification-only state' do
+      with_mocked_attachments do
+        admin = create(:admin)
+        approved_app = create(:application, :completed, user: create(:constituent, speech_disability: true))
+
+        Notification.create!(
+          action: 'training_requested',
+          notifiable: approved_app,
+          recipient: admin,
+          actor: approved_app.user,
+          metadata: { application_id: approved_app.id }
+        )
+        # training_requested_at intentionally left nil.
+
+        service = FilterService.new(@scope, { filter: 'training_requests' })
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        assert_not_includes service_result.data, approved_app
+      end
+    end
+
+    test 'evaluation_requests filter uses evaluation_requested_at only' do
+      with_mocked_attachments do
+        pending_app = create(:application, :completed, user: create(:constituent, speech_disability: true))
+        pending_app.update_columns(evaluation_requested_at: 1.hour.ago)
+
+        # Another approved app without an explicit evaluation request — must NOT appear.
+        no_request_app = create(:application, :completed, user: create(:constituent, speech_disability: true))
+
+        service = FilterService.new(@scope, { filter: 'evaluation_requests' })
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        assert_includes service_result.data, pending_app
+        assert_not_includes service_result.data, no_request_app
+      end
+    end
+
     test 'handles errors gracefully' do
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/Error applying filters: Test error/)).once

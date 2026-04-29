@@ -71,7 +71,12 @@
       <%= turbo_frame_tag "applications_list" do %>
         <div class="overflow-x-auto">
           <% if @applications.present? %>
-            <%= render partial: 'applications_table', locals: { applications: @applications } %>
+            <% queue_partial = case params[:filter]
+                               when 'training_requests' then 'training_requests_table'
+                               when 'evaluation_requests' then 'evaluation_requests_table'
+                               else 'applications_table'
+                               end %>
+            <%= render partial: queue_partial, locals: { applications: @applications } %>
           <% else %>
             <div class="p-6 text-center">
               <p class="text-gray-500">No applications found</p>

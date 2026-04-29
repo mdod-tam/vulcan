@@ -82,7 +82,56 @@ module ApplicationHelper
             end
 
     content_tag(:span, label,
-                class: "px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(:document_signing, status)}")
+                class: "px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(:document_signing, status)}") # rubocop:disable Layout/LineLength
+  end
+
+  CONTACT_METHOD_LABELS = {
+    'voice' => 'Call me on the phone',
+    'text' => 'Text me',
+    'videophone' => 'Call me using ASL (videophone)',
+    'email' => 'Email me',
+    'letter' => 'Send me a letter in the mail'
+  }.freeze
+
+  def contact_method_label(phone_type)
+    CONTACT_METHOD_LABELS[phone_type.to_s]
+  end
+
+  LANGUAGE_LABELS = {
+    'es' => 'Spanish'
+  }.freeze
+
+  def language_label(locale)
+    LANGUAGE_LABELS.fetch(locale.to_s, 'English')
+  end
+
+  def admin_fulfillment_badge(application)
+    state = application.admin_fulfillment_responsibility_state
+
+    case state
+    when :voucher_no_equipment
+      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800') do
+        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
+        concat 'Voucher - No Equipment Order'
+      end
+    when :pending_evaluation
+      nil
+    when :po_sent
+      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800') do
+        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
+        concat "PO Sent on #{application.equipment_po_sent_at.strftime('%m/%d/%Y')}"
+      end
+    when :bids_sent
+      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-900') do
+        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
+        concat "Sent for bid on #{application.equipment_bids_sent_at.strftime('%m/%d/%Y')}"
+      end
+    when :needs_action
+      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800') do
+        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
+        concat 'Needs Action'
+      end
+    end
   end
 
   # Determines the appropriate proof review button text based on proof status

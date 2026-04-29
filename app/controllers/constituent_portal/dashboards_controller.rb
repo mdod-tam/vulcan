@@ -113,10 +113,24 @@ module ConstituentPortal
     end
 
     def load_training_sessions_information
-      # Get training sessions information
-      @training_sessions = @active_application&.training_sessions || []
-      @max_training_sessions = Policy.get('max_training_sessions') || 3
-      @remaining_training_sessions = @max_training_sessions - @training_sessions.completed_sessions.count if @active_application
+      return unless @active_application
+
+      @max_training_sessions = Policy.max_training_sessions
+
+      all_sessions = @active_application.training_sessions
+      @completed_training_sessions       = all_sessions.completed_sessions
+                                                          .includes(:trainer, :product_trained_on)
+                                                          .order(completed_at: :desc)
+      @completed_training_sessions_count = @completed_training_sessions.count
+      @active_training_session           = @active_application.active_training_session
+
+      # Completed sessions are the durable count against the training benefit.
+      @training_session_numbers = all_sessions.completed_sessions.order(completed_at: :asc, created_at: :asc)
+                                              .pluck(:id)
+                                              .each_with_index
+                                              .to_h { |id, i| [id, i + 1] }
+
+      @remaining_training_sessions = @active_application.remaining_training_sessions
     end
 
     def load_proof_status_information

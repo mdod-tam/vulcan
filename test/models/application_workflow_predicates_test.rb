@@ -145,7 +145,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   end
 
   test 'voucher_issuable? returns false for equipment fulfillment' do
-    app = create(:application, :completed)
+    app = create(:application, :completed, :with_all_proofs)
     assert app.equipment_fulfillment?
     assert_not app.voucher_issuable?
   end
@@ -193,7 +193,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   # --- VoucherManagement#can_create_voucher? ---
 
   test 'can_create_voucher? requires voucher fulfillment' do
-    app = create(:application, :completed)
+    app = create(:application, :completed, :with_all_proofs)
     assert app.equipment_fulfillment?
     assert_not app.can_create_voucher?
   end
@@ -343,5 +343,144 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app.update_columns(income_proof_status: Application.income_proof_statuses[:not_reviewed])
 
     assert_not app.proof_type_reviewable?(:income)
+  end
+
+  # --- evaluation_request_pending? / with_pending_evaluation_request ---
+
+  test 'evaluation_request_pending? is false when evaluation_requested_at is nil' do
+    app = create(:application, :completed)
+    assert_nil app.evaluation_requested_at
+    assert_not app.evaluation_request_pending?
+  end
+
+  test 'evaluation_request_pending? is true when evaluation_requested_at is set and no evaluation created after' do
+    app = create(:application, :completed)
+    app.update_columns(evaluation_requested_at: 1.hour.ago)
+
+    assert app.evaluation_request_pending?
+  end
+
+  test 'evaluation_request_pending? is false once an evaluator is assigned' do
+    app = create(:application, :completed)
+    app.update_columns(evaluation_requested_at: 2.hours.ago)
+    evaluator = create(:evaluator)
+    app.evaluations.create!(
+      evaluator: evaluator,
+      constituent: app.user,
+      application: app,
+      evaluation_type: :initial,
+      needs: '',
+      location: ''
+    )
+
+    assert_not app.reload.evaluation_request_pending?
+  end
+
+  test 'with_pending_evaluation_request excludes approved apps that never requested evaluation' do
+    requested = create(:application, :completed)
+    requested.update_columns(evaluation_requested_at: 1.hour.ago)
+
+    quiet = create(:application, :completed)
+
+    results = Application.with_pending_evaluation_request.to_a
+
+    assert_includes results, requested
+    assert_not_includes results, quiet
+  end
+
+  test 'request_evaluation! sets timestamp and logs audit event once' do
+    admin = create(:admin)
+    app = create(:application, :completed)
+
+    assert_difference -> { Event.where(action: 'evaluation_requested', auditable: app).count }, 1 do
+      app.request_evaluation!(actor: admin)
+    end
+
+    assert app.reload.evaluation_requested_at.present?
+
+    event = Event.where(action: 'evaluation_requested', auditable: app).last
+    assert_equal admin, event.user
+    assert_equal app.id, event.metadata['application_id']
+  end
+
+  # --- training_request_pending? / with_pending_training_request ---
+
+  test 'training_request_pending? tracks unresolved training requests' do
+    app = create(:application, :completed)
+    app.update_columns(training_requested_at: 2.hours.ago)
+
+    assert app.training_request_pending?
+
+    create(:training_session, application: app, trainer: create(:trainer), status: :requested)
+
+    assert_not app.reload.training_request_pending?
+  end
+
+  test 'training_request_pending? is true again for a later request' do
+    app = create(:application, :completed)
+    trainer = create(:trainer)
+    app.update_columns(training_requested_at: 2.hours.ago)
+    create(:training_session, :cancelled, application: app, trainer: trainer, created_at: 1.hour.ago)
+
+    app.update_columns(training_requested_at: 5.minutes.ago)
+
+    assert app.reload.training_request_pending?
+  end
+
+  test 'with_pending_training_request only returns approved unresolved requests' do
+    requested = create(:application, :completed)
+    requested.update_columns(
+      status: Application.statuses[:approved],
+      training_requested_at: 1.hour.ago
+    )
+    assigned = create(:application, :completed)
+    assigned.update_columns(
+      status: Application.statuses[:approved],
+      training_requested_at: 2.hours.ago
+    )
+    create(:training_session, application: assigned, trainer: create(:trainer), status: :requested)
+    unapproved = create(:application, :in_progress)
+    unapproved.update_columns(training_requested_at: 1.hour.ago)
+
+    results = Application.with_pending_training_request.to_a
+
+    assert_includes results, requested
+    assert_not_includes results, assigned
+    assert_not_includes results, unapproved
+  end
+
+  test 'equipment fulfillment date methods update dates and log one audit event each' do
+    admin = create(:admin)
+    app = create(:application, :completed)
+
+    assert_difference -> { Event.where(action: 'equipment_bids_sent', auditable: app).count }, 1 do
+      app.mark_equipment_bids_sent!(date: '2026-01-01', actor: admin)
+    end
+
+    assert_difference -> { Event.where(action: 'equipment_po_sent', auditable: app).count }, 1 do
+      app.mark_equipment_po_sent!(date: '2026-02-01', actor: admin)
+    end
+
+    app.reload
+    assert_equal Date.new(2026, 1, 1), app.equipment_bids_sent_at.to_date
+    assert_equal Date.new(2026, 2, 1), app.equipment_po_sent_at.to_date
+  end
+
+  # --- service_window_end_date ---
+
+  test 'service_window_end_date returns application_date + waiting_period_years' do
+    app = create(:application, :completed)
+    app.update_columns(application_date: Date.new(2026, 1, 1))
+    waiting = Policy.get('waiting_period_years') || 3
+
+    assert_equal Date.new(2026, 1, 1) + waiting.years, app.service_window_end_date
+  end
+
+  test 'service_window_active? reflects service_window_end_date vs today' do
+    app = create(:application, :completed)
+    app.update_columns(application_date: 10.years.ago)
+
+    assert_not app.service_window_active?
+    assert app.service_window_end_date < Date.current
   end
 end

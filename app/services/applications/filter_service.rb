@@ -74,7 +74,14 @@ module Applications
         # Only include applications that are in progress and have received certs
         scope.where(status: :in_progress, medical_certification_status: :received)
       when 'training_requests'
+        # Queue is driven by persisted application state (training_requested_at)
+        # rather than notification delivery, so staff don't have to rely on
+        # email notifications being noticed to find pending requests.
         scope.with_pending_training_request
+      when 'evaluation_requests'
+        # Explicit admin-initiated evaluation requests only. We do not auto-queue
+        # every approved equipment application as needing evaluation.
+        scope.with_pending_evaluation_request
       when 'dependent_applications'
         # Filter applications that are for dependents (have a managing_guardian)
         scope.where.not(managing_guardian_id: nil)

@@ -1,0 +1,53 @@
+<%# Prominent completion banner %>
+<div class="mt-8 rounded-lg bg-green-50 border-2 border-green-300 px-6 py-5">
+  <div class="flex items-start gap-4">
+    <div class="flex-shrink-0 mt-0.5">
+      <svg class="h-7 w-7 text-green-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-lg font-bold text-green-900">Evaluation Completed</p>
+      <p class="mt-1 text-sm text-green-700">
+        Completed on <strong><%= evaluation.evaluation_date&.strftime("%B %d, %Y") %></strong>.
+        The evaluation report above is locked. Use the form below to add supplemental notes.
+      </p>
+    </div>
+  </div>
+</div>
+
+<%# Post-completion notes %>
+<div class="mt-6 bg-white shadow rounded-lg border border-gray-200">
+  <div class="px-4 py-4 sm:px-6 border-b border-gray-200">
+    <h3 class="text-base font-semibold text-gray-900">Add a Note</h3>
+    <p class="mt-1 text-sm text-gray-500">
+      Add supplemental notes to this completed evaluation record. This does not modify the submitted report above.
+    </p>
+  </div>
+
+  <div class="px-4 py-5 sm:p-6">
+    <% if evaluation.post_completion_notes.present? %>
+      <div class="mb-4 bg-gray-50 rounded-md border border-gray-200 px-4 py-3">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Existing Notes</p>
+        <p class="text-sm text-gray-800 whitespace-pre-wrap"><%= evaluation.post_completion_notes %></p>
+      </div>
+    <% end %>
+
+    <%= form_with(model: evaluation, url: evaluators_evaluation_path(evaluation), method: :patch, local: true, class: "space-y-4") do |f| %>
+      <%= f.hidden_field :status, value: evaluation.status %>
+
+      <div>
+        <%= f.label :post_completion_notes,
+                    evaluation.post_completion_notes.present? ? "Update Note" : "New Note",
+                    class: "block text-sm font-medium text-gray-700" %>
+        <%= f.text_area :post_completion_notes,
+                        rows: 5,
+                        placeholder: "Add any follow-up observations, next steps, or supplemental information...",
+                        class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+      </div>
+
+      <%= f.submit evaluation.post_completion_notes.present? ? "Update Note" : "Add Note",
+                  class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+    <% end %>
+  </div>
+</div>

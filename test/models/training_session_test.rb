@@ -47,6 +47,21 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert training_session.valid?
   end
 
+  test 'allows administrators as trainers through inherent capability' do
+    training_session = build(:training_session, trainer: create(:admin))
+
+    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
+  end
+
+  test 'does not allow evaluators as trainers even with explicit can_train capability' do
+    evaluator = create(:evaluator)
+    create(:role_capability, user: evaluator, capability: 'can_train')
+    training_session = build(:training_session, trainer: evaluator)
+
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:trainer], 'must be a trainer'
+  end
+
   test 'scheduled_for must be in the future on create' do
     skip 'Validation behaves differently in test environment'
 
@@ -110,6 +125,34 @@ class TrainingSessionTest < ActiveSupport::TestCase
 
     training_session.notes = 'Training completed successfully'
     assert training_session.valid?
+  end
+
+  test 'should reject duplicate open sessions for an application' do
+    application = create(:application, :old_enough_for_new_application)
+    create(:training_session, :scheduled, application: application)
+
+    duplicate_session = build(:training_session, :requested, application: application)
+
+    assert_not duplicate_session.valid?
+    assert_includes duplicate_session.errors[:base], I18n.t('activerecord.errors.models.training_session.attributes.base.duplicate_open_session')
+  end
+
+  test 'should allow updates to an existing open session' do
+    training_session = create(:training_session, :scheduled)
+
+    training_session.notes = 'Updated preparation notes'
+
+    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
+  end
+
+  test 'should not reopen historical sessions' do
+    training_session = create(:training_session, :cancelled)
+
+    training_session.status = :scheduled
+    training_session.scheduled_for = 1.week.from_now
+
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:base], I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
   end
 
   # Test callbacks
@@ -242,6 +285,40 @@ class TrainingSessionTest < ActiveSupport::TestCase
     # Test without product
     training_session_no_product = create(:training_session)
     assert_nil training_session_no_product.product_trained_on
+  end
+
+  test 'previous_completed_sessions returns earlier completed sessions for the same application newest first' do
+    application = create(:application)
+    trainer = create(:trainer)
+    old_completed_session = create(
+      :training_session,
+      :completed,
+      application: application,
+      trainer: trainer,
+      completed_at: 5.days.ago,
+      created_at: 6.days.ago
+    )
+    recent_completed_session = create(
+      :training_session,
+      :completed,
+      application: application,
+      trainer: trainer,
+      completed_at: 3.days.ago,
+      created_at: 4.days.ago
+    )
+    create(
+      :training_session,
+      :completed,
+      application: application,
+      trainer: trainer,
+      completed_at: 1.hour.ago,
+      created_at: 1.hour.ago
+    )
+    create(:training_session, :cancelled, application: application, trainer: trainer, created_at: 5.days.ago)
+    current_session = create(:training_session, :requested, application: application, trainer: trainer, created_at: 2.days.ago)
+    create(:training_session, :completed, created_at: 6.days.ago)
+
+    assert_equal [recent_completed_session, old_completed_session], current_session.previous_completed_sessions.to_a
   end
 
   # Test scopes

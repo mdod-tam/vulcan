@@ -5,7 +5,8 @@ require 'application_system_test_case'
 class AssignTrainerTest < ApplicationSystemTestCase
   setup do
     @admin = create(:admin)
-    @application = create(:application, :completed) # Use :completed instead of :approved
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    @application = create(:application, :completed, application_date: 2.years.ago.to_date)
     @trainer = create(:user, :trainer, first_name: 'Jane', last_name: 'Trainer')
 
     # Set up policy to allow training sessions
@@ -16,27 +17,21 @@ class AssignTrainerTest < ApplicationSystemTestCase
   end
 
   test 'admin can assign trainer to an approved application' do
-    # Visit the application show page
     visit admin_application_path(@application)
 
-    # Verify the page has loaded correctly
     assert_text 'Application Details'
     assert_text 'Approved'
-
-    # Verify the "Assign Trainer" section exists
     assert_text 'Assign Trainer'
+    within '[data-testid="trainer-assignment-form"]' do
+      find('select[name="trainer_id"]').find('option', text: @trainer.full_name).select_option
+      click_button 'Assign Trainer'
+    end
 
-    # Verify trainer buttons are displayed
-    assert_button "Assign #{@trainer.first_name}"
+    assert_equal @trainer.id, @application.reload.active_training_session&.trainer_id
 
-    # Click the trainer assignment button
-    click_button "Assign #{@trainer.first_name}"
-
-    # Verify success message
-    assert_text 'Trainer successfully assigned'
-
-    # Verify trainer is now displayed in the application details
-    assert_text 'Current Trainer'
-    assert_text @trainer.full_name
+    within '[data-testid="trainer-assignment-section"]' do
+      assert_text 'Current Trainer'
+      assert_text @trainer.full_name
+    end
   end
 end

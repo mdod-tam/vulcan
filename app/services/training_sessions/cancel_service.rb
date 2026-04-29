@@ -5,11 +5,12 @@ module TrainingSessions
   # This service encapsulates the logic for updating the training session status
   # to cancelled, validating required parameters, and creating the associated event.
   class CancelService < BaseService
-    def initialize(training_session, current_user, params)
+    def initialize(training_session, current_user, params, cancellation_initiator: nil)
       super()
       @training_session = training_session
       @current_user = current_user
       @params = params
+      @cancellation_initiator = cancellation_initiator
     end
 
     def call
@@ -20,16 +21,16 @@ module TrainingSessions
         create_event!
       end
 
-      success(message: 'Training session cancelled successfully.', data: { training_session: @training_session })
+      success('Training session cancelled successfully.', { training_session: @training_session })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error cancelling training session: #{e.message}")
-      failure(message: e.message)
+      failure(e.message)
     rescue ArgumentError => e
       log_validation_failure(e)
-      failure(message: e.message)
+      failure(e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error cancelling training session: #{e.message}")
-      failure(message: "An unexpected error occurred: #{e.message}")
+      failure("An unexpected error occurred: #{e.message}")
     end
 
     private
@@ -41,20 +42,20 @@ module TrainingSessions
     end
 
     def log_validation_failure(error)
-      message = "TrainingSessions::CancelService validation failed: #{error.message}"
-      return Rails.logger.warn("[EXPECTED_TEST_VALIDATION] #{message}") if Rails.env.test?
-
-      Rails.logger.warn(message)
+      Rails.logger.warn("TrainingSessions::CancelService validation failed: #{error.message}")
     end
 
     def update_training_session!
-      @training_session.update!(
+      update_attributes = {
         status: :cancelled,
         cancelled_at: Time.current,
         cancellation_reason: @params[:cancellation_reason],
         notes: nil,
         no_show_notes: nil
-      )
+      }
+      update_attributes[:cancellation_initiator] = cancellation_initiator if TrainingSession.cancellation_initiator_column?
+
+      @training_session.update!(update_attributes)
     end
 
     def create_event!
@@ -66,9 +67,14 @@ module TrainingSessions
           application_id: @training_session.application_id,
           training_session_id: @training_session.id,
           cancellation_reason: @training_session.cancellation_reason,
+          cancellation_initiator: @training_session.cancellation_initiator,
           timestamp: Time.current.iso8601
         }
       )
+    end
+
+    def cancellation_initiator
+      @cancellation_initiator || (@current_user&.admin? ? :admin : :trainer)
     end
   end
 end

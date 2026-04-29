@@ -261,7 +261,8 @@ module Admin
       get admin_application_path(voucher_app)
       assert_response :success
 
-      assert_select "a[href='#{trainers_training_session_path(training_session)}']", text: 'View Session'
+      assert_select "a[href='#{trainers_training_session_path(training_session)}'][data-turbo-frame='_top']",
+                    text: 'View Session'
       assert_no_match(%r{/admin/applications/#{voucher_app.id}/complete_training}, response.body)
       assert_no_match(/>Complete</, response.body)
     end
@@ -446,6 +447,15 @@ module Admin
           }
         }
       end
+
+      assert_redirected_to admin_application_path(@application)
+    end
+
+    test 'request_documents passes the current admin as explicit lifecycle actor' do
+      @application.expects(:request_documents!).with(user: @admin).returns(true)
+      Application.expects(:find).with(@application.id.to_s).returns(@application)
+
+      post request_documents_admin_application_path(@application)
 
       assert_redirected_to admin_application_path(@application)
     end

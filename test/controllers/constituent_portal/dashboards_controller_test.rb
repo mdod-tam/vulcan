@@ -171,14 +171,11 @@ module ConstituentPortal
       get constituent_portal_dashboard_path
       assert_response :success
 
-      # Should show dependent's application status (since @primary_active_application will be the dependent's app)
-      assert_select '.text-gray-900', text: /#{dependent.full_name}/
+      assert_select 'h3', text: 'My Application'
+      assert_select 'a', text: 'Apply for Myself'
+      assert_select 'a', text: "View #{dependent.full_name}'s Application"
 
-      # Should show "View Application Details" link for the primary (dependent's) application
-      assert_select 'a', text: 'View Application Details'
-
-      # Should show "Add New Dependent" button (updated text)
-      assert_select 'a', text: 'Add New Dependent'
+      assert_select 'a', text: 'Add Another Dependent'
     end
 
     test 'dashboard shows requested training state and disables duplicate request button' do
@@ -186,10 +183,11 @@ module ConstituentPortal
       application.update!(training_requested_at: 1.hour.ago)
 
       get constituent_portal_dashboard_path
-      assert_response :success
 
+      assert_response :success
       assert_select 'button[disabled]', text: 'Training Session Requested'
       assert_select 'p', text: /A trainer will reach out soon/
+      assert_select 'form[action=?]', request_training_constituent_portal_application_path(application), count: 0
     end
 
     test 'dashboard shows active training session state and disables duplicate request button' do
@@ -197,10 +195,32 @@ module ConstituentPortal
       create(:training_session, application: application, trainer: create(:trainer), status: :requested)
 
       get constituent_portal_dashboard_path
-      assert_response :success
 
-      assert_select 'button[disabled]', text: 'Training In Progress'
-      assert_select 'p', text: /trainer has been assigned/
+      assert_response :success
+      assert_select 'button[disabled]', text: 'Training Assigned'
+      assert_select 'p', text: /Assigned to/
+      assert_select 'form[action=?]', request_training_constituent_portal_application_path(application), count: 0
+    end
+
+    test 'dashboard shows completed training session notes as a constituent refresher' do
+      application = create_reviewed_application(user: @user)
+      product = create(:product, name: 'Clarity Alto')
+      create(:training_session,
+             :completed,
+             application: application,
+             trainer: create(:trainer, first_name: 'Trainer', last_name: 'Person'),
+             product_trained_on: product,
+             notes: 'Reviewed volume controls and saving frequent contacts.')
+
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select '[data-testid="training-card"]' do
+        assert_select 'h4', text: 'Previous Sessions'
+        assert_select 'p', text: 'What we covered'
+        assert_select 'p', text: 'Reviewed volume controls and saving frequent contacts.'
+        assert_select 'span', text: 'Clarity Alto'
+      end
     end
 
     private
@@ -218,6 +238,7 @@ module ConstituentPortal
         content_type: 'application/pdf'
       )
       application.update_columns(
+        application_date: 1.year.ago.to_date,
         status: Application.statuses[:approved],
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],

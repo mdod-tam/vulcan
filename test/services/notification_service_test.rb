@@ -176,9 +176,55 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_equal MedicalProviderMailer, mailer
     assert_equal :requested, method
 
+    training_requested_notif = Notification.new(action: 'training_requested')
+    mailer, method = NotificationService.send(:resolve_mailer, training_requested_notif)
+    assert_equal ApplicationNotificationsMailer, mailer
+    assert_equal :training_requested, method
+
     unknown_notif = Notification.new(action: 'some_unknown_action')
     mailer, method = NotificationService.send(:resolve_mailer, unknown_notif)
     assert_nil mailer
     assert_nil method
+  end
+
+  test 'training_requested routes application and notification context to application mailer' do
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.expects(:training_requested)
+                                  .with(@application, instance_of(Notification))
+                                  .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :training_requested,
+      recipient: @admin,
+      actor: @constituent,
+      notifiable: @application,
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+  end
+
+  test 'training_rescheduled routes session and notification metadata to training mailer' do
+    trainer = create(:trainer)
+    training_session = create(:training_session, application: @application, trainer: trainer)
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    TrainingSessionNotificationsMailer.expects(:training_rescheduled)
+                                      .with(training_session, instance_of(Notification))
+                                      .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :training_rescheduled,
+      recipient: @constituent,
+      actor: trainer,
+      notifiable: training_session,
+      metadata: { old_scheduled_for: 1.day.ago.iso8601 },
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
   end
 end
