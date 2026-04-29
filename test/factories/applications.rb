@@ -153,6 +153,16 @@ FactoryBot.define do
       end
     end
 
+    trait :with_id_proof do
+      after(:create) do |application|
+        application.id_proof.attach(
+          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          filename: 'id_proof.pdf',
+          content_type: 'application/pdf'
+        )
+      end
+    end
+
     trait :with_medical_certification do
       after(:create) do |application|
         application.medical_certification.attach(
@@ -166,6 +176,7 @@ FactoryBot.define do
     trait :with_all_proofs do
       with_income_proof
       with_residency_proof
+      with_id_proof
       with_medical_certification
     end
 

@@ -60,6 +60,7 @@
        end %>
     <% income_reason_options = reason_options_for.call('income') %>
     <% residency_reason_options = reason_options_for.call('residency') %>
+    <% id_reason_options = reason_options_for.call('id') %>
     <% medical_reason_options = reason_options_for.call('medical_certification') %>
 
     <% paper_form_data = {
@@ -1043,6 +1044,111 @@
             </div>
           </div>
         </fieldset>
+
+        <hr class="border-gray-200">
+
+        <%# ID Proof Section %>
+        <div data-controller="document-proof-handler" data-document-proof-handler-type-value="id">
+          <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v10a2 2 0 002 2h5m0 0h5a2 2 0 002-2V8a2 2 0 00-2-2h-5m0 0V5a2 2 0 012-2h1a2 2 0 012 2v1m0 0h3a2 2 0 012 2v10a2 2 0 01-2 2h-3m-6 0a2 2 0 01-2-2v-1m0 0H7a2 2 0 01-2-2V9m6 0a1 1 0 001-1V5a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 001 1m0 0h3"/>
+            </svg>
+            ID Verification
+          </h3>
+          
+          <%# Proof Action Selection %>
+          <fieldset class="mb-4">
+            <legend class="text-sm font-medium text-gray-700 mb-2">ID Proof Action</legend>
+            <div class="flex flex-wrap gap-4">
+              <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+                <input type="radio" 
+                       id="accept_id_proof" 
+                       name="id_proof_action" 
+                       value="accept" 
+                       class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300" 
+                       checked 
+                       data-action="change->document-proof-handler#toggleProofAction" 
+                       data-document-proof-handler-target="acceptRadio">
+                <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+              </label>
+              <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                <input type="radio" 
+                       id="reject_id_proof" 
+                       name="id_proof_action" 
+                       value="reject" 
+                       class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300" 
+                       data-action="change->document-proof-handler#toggleProofAction" 
+                       data-document-proof-handler-target="rejectRadio">
+                <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+              </label>
+              <button type="button"
+                      id="no_id_proof_provided"
+                      class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                      data-action="click->document-proof-handler#handleNoneProvided"
+                      data-document-proof-handler-target="noneButton">
+                <span class="text-lg">📂</span>
+                <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+              </button>
+            </div>
+          </fieldset>
+          
+          <%# Upload Field %>
+          <div id="id_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
+            <label for="id_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload ID Proof Document</label>
+            <input type="file" 
+                   name="id_proof" 
+                   id="id_proof" 
+                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                   accept=".pdf,.jpg,.jpeg,.png" 
+                   aria-describedby="id_proof_help" 
+                   data-document-proof-handler-target="fileInput">
+            <p id="id_proof_help" class="mt-1 text-xs text-gray-500">
+              Upload documents verifying identity: driver's license, state ID, identification card, passport, 
+              or other government-issued photo ID. Accepted formats: PDF, JPG, PNG.
+            </p>
+          </div>
+          
+          <%# Rejection Fields %>
+          <div id="id_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
+            <div class="space-y-4">
+              <div>
+                <label for="id_proof_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                <select id="id_proof_rejection_reason"
+                        name="id_proof_rejection_reason"
+                        class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                        data-action="change->document-proof-handler#handleReasonSelectionChanged"
+                        data-document-proof-handler-target="rejectionReasonSelect">
+                  <option value="">Select a reason</option>
+                  <option value="none_provided"
+                          data-reason-text="No ID proof was provided with the application.">None Provided</option>
+                  <% id_reason_options.each do |reason| %>
+                    <option value="<%= reason.code %>"
+                            data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
+                  <% end %>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div id="id_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
+              <p class="text-xs text-gray-500">
+                Predefined reasons are read-only in this form. To edit that wording, use
+                <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
+              </p>
+              <div class="hidden" data-document-proof-handler-target="customReasonSection">
+                <label for="id_proof_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
+                <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
+                  Applicant prefers to receive English communications.
+                </div>
+                <textarea id="id_proof_custom_rejection_reason"
+                          name="id_proof_custom_rejection_reason"
+                          rows="3"
+                          disabled
+                          placeholder="Enter the rejection reason that will be sent to the constituent"
+                          class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                          data-document-proof-handler-target="customReasonField"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <%# ============================================================ %>

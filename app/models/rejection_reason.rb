@@ -29,7 +29,7 @@ class RejectionReason < ApplicationRecord
   # Block non-content saves while out of sync; a body change always resolves it.
   validate :counterpart_locales_are_synced, on: :update
 
-  VALID_PROOF_TYPES = %w[income residency medical_certification].freeze
+  VALID_PROOF_TYPES = %w[income residency id medical_certification].freeze
 
   # Returns the best-matching record for (code, proof_type, locale), falling
   # back to English when no locale-specific record exists.

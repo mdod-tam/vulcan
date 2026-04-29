@@ -117,6 +117,10 @@
                   <span class="text-sm text-gray-600">Residency:</span>
                   <%= proof_status_badge('residency', application.residency_proof_status) %>
                 </div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm text-gray-600">ID:</span>
+                  <%= proof_status_badge('id', application.id_proof_status) %>
+                </div>
               </div>
             <% else %>
               <span class="text-sm text-gray-500">No Proofs</span>

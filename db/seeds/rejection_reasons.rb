@@ -180,6 +180,48 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
                'documentación que incluya toda la información requerida para verificar su residencia en Maryland.'
     },
 
+    # ── ID ──────────────────────────────────────────────────────────────────
+    {
+      code: 'none_provided',
+      proof_type: 'id',
+      en_body: 'No ID proof was provided with the application.',
+      es_body: 'No se proporcionó ninguna prueba de identificación con la solicitud.'
+    },
+    {
+      code: 'expired',
+      proof_type: 'id',
+      en_body: 'The ID you provided is expired. Please submit a valid, non-expired government-issued ' \
+               'photo ID such as a driver\'s license, state ID card, or passport.',
+      es_body: 'La identificación que proporcionó está vencida. Por favor, envíe una identificación ' \
+               'válida y no vencida emitida por el gobierno, como una licencia de conducir, tarjeta de identificación estatal o pasaporte.'
+    },
+    {
+      code: 'missing_name',
+      proof_type: 'id',
+      en_body: 'The ID you provided does not show your name. Please submit an ID that clearly ' \
+               'displays your full name as it appears on your application.',
+      es_body: 'La identificación que proporcionó no muestra su nombre. Por favor, envíe una identificación ' \
+               'que muestre claramente su nombre completo tal como aparece en su solicitud.'
+    },
+    {
+      code: 'wrong_document',
+      proof_type: 'id',
+      en_body: 'The document you submitted is not an acceptable type of ID. Please submit a ' \
+               'government-issued photo ID such as a driver\'s license, state ID card, passport, ' \
+               'or other official identification.',
+      es_body: 'El documento que envió no es un tipo aceptable de identificación. Por favor, envíe ' \
+               'una identificación con foto emitida por el gobierno, como una licencia de conducir, tarjeta de identificación estatal, pasaporte ' \
+               'u otra identificación oficial.'
+    },
+    {
+      code: 'illegible',
+      proof_type: 'id',
+      en_body: 'The ID you provided is illegible or unclear. Please submit a clear, readable copy ' \
+               'of your ID that shows all required information.',
+      es_body: 'La identificación que proporcionó es ilegible o poco clara. Por favor, envíe una copia ' \
+               'clara y legible de su identificación que muestre toda la información requerida.'
+    },
+
     # ── Medical Certification ──────────────────────────────────────────────
     {
       code: 'missing_provider_credentials',

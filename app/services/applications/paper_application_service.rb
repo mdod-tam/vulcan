@@ -466,7 +466,7 @@ module Applications
     def process_proof_uploads
       Current.paper_context = true
 
-      proof_types = %i[income residency medical_certification]
+      proof_types = %i[income residency id medical_certification]
       proof_types -= %i[income] unless @application.income_proof_required?
 
       proof_types.each do |proof_type|

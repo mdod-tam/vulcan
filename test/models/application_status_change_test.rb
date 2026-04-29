@@ -58,6 +58,7 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     application.update_columns(
       income_proof_status: Application.income_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:approved],
       medical_certification_status: Application.medical_certification_statuses[:approved]
     )
     application.reload

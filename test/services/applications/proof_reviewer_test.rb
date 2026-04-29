@@ -67,6 +67,7 @@ module Applications
     test 'approved review triggers reconciler auto-approval audit' do
       app = create(:application, :in_progress, :income_not_required)
       app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
+      app.update_columns(id_proof_status: Application.id_proof_statuses[:approved])
       app.residency_proof.attach(
         io: StringIO.new('test residency proof'),
         filename: 'residency-proof.pdf',

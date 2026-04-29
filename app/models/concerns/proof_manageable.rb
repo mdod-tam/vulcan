@@ -63,18 +63,6 @@ module ProofManageable
     required_proofs_approved?
   end
 
-  # Checks if the income proof has been rejected
-  # @return [Boolean] true if income proof status is rejected
-  def rejected_income_proof?
-    income_proof_status_rejected?
-  end
-
-  # Checks if the residency proof has been rejected
-  # @return [Boolean] true if residency proof status is rejected
-  def rejected_residency_proof?
-    residency_proof_status_rejected?
-  end
-
   # Checks if the application can submit proof documents
   # @return [Boolean] true if application is in a valid state for proof submission
   def can_submit_proof?
@@ -117,6 +105,7 @@ module ProofManageable
     transaction do
       income_proof.purge if income_proof.attached?
       residency_proof.purge if residency_proof.attached?
+      id_proof.purge if id_proof.attached?
       update!(income_proof_status: :not_reviewed, residency_proof_status: :not_reviewed,
               last_proof_submitted_at: nil, needs_review_since: nil)
     end
@@ -202,8 +191,9 @@ module ProofManageable
 
     # Check for attachment changes using Rails' built-in detection
     if respond_to?(:attachment_changes) && attachment_changes.present?
-      return attachment_changes['income_proof'].present? ||
-             attachment_changes['residency_proof'].present?
+      return (FeatureFlag.enabled?(:income_proof_required) && attachment_changes['income_proof'].present?) ||
+             attachment_changes['residency_proof'].present? ||
+             attachment_changes['id_proof'].present?
     end
 
     false
@@ -213,7 +203,7 @@ module ProofManageable
   def set_needs_review_timestamp
     return if @setting_review_timestamp
     return if Current.proof_attachment_service_context?
-    return unless income_proof.attached? || residency_proof.attached?
+    return unless (FeatureFlag.enabled?(:income_proof_required) && income_proof.attached?) || residency_proof.attached? || id_proof.attached?
 
     @setting_review_timestamp = true
 
