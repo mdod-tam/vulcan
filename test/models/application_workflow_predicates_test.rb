@@ -111,7 +111,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   # --- required_proofs_approved? ---
 
-  test 'required_proofs_approved? requires both proofs when income is required' do
+  test 'required_proofs_approved? requires all proofs when income is required' do
     app = create(:application, :in_progress)
     assert app.income_proof_required?
     assert_not app.required_proofs_approved?
@@ -122,16 +122,24 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     app.update_columns(income_proof_status: Application.income_proof_statuses[:approved])
     app.reload
+    assert_not app.required_proofs_approved?
+
+    app.update_columns(id_proof_status: Application.id_proof_statuses[:approved])
+    app.reload
     assert app.required_proofs_approved?
   end
 
-  test 'required_proofs_approved? only needs residency when income is not required' do
+  test 'required_proofs_approved? only needs residency and id when income is not required' do
     app = create(:application, :in_progress, :income_not_required)
     app.reload
     assert_not app.income_proof_required?
     assert_not app.required_proofs_approved?
 
     app.update_columns(residency_proof_status: Application.residency_proof_statuses[:approved])
+    app.reload
+    assert_not app.required_proofs_approved?
+
+    app.update_columns(id_proof_status: Application.id_proof_statuses[:approved])
     app.reload
     assert app.required_proofs_approved?
   end
@@ -170,10 +178,12 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     app_with_income.update_columns(
       residency_proof_status: Application.residency_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:approved],
       income_proof_status: Application.income_proof_statuses[:not_reviewed]
     )
     app_without_income.update_columns(
       residency_proof_status: Application.residency_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:approved],
       income_proof_status: Application.income_proof_statuses[:not_reviewed]
     )
 
@@ -210,7 +220,8 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app = create(:application, :in_progress, :income_not_required)
     app.update_columns(
       residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:approved]
+      medical_certification_status: Application.medical_certification_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:approved]
     )
     app.reload
 
@@ -221,7 +232,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   test 'ProofReviewer auto-approves when income not required and residency approved' do
     app = create(:application, :in_progress, :income_not_required)
-    app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
+    app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
     app.residency_proof.attach(
       io: StringIO.new('test residency proof'),
       filename: 'residency.pdf',
@@ -241,7 +252,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   test 'ProofReviewer creates audit event on auto-approval via reconciler' do
     app = create(:application, :in_progress, :income_not_required)
-    app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
+    app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
     app.residency_proof.attach(
       io: StringIO.new('test residency proof'),
       filename: 'residency.pdf',

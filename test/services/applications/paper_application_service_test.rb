@@ -177,6 +177,11 @@ module Applications
           Rails.root.join('test/fixtures/files/residency_proof.pdf'),
           'application/pdf'
         ),
+        id_proof_action: 'accept',
+        id_proof: fixture_file_upload(
+          Rails.root.join('test/fixtures/files/id_proof.pdf'),
+          'application/pdf'
+        ),
         medical_certification_action: 'not_requested'
       }
 

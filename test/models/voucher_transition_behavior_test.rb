@@ -205,6 +205,11 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
       residency_proof: fixture_file_upload(
         Rails.root.join('test/fixtures/files/income_proof.pdf'),
         'application/pdf'
+      ),
+      id_proof_action: 'accept',
+      id_proof: fixture_file_upload(
+        Rails.root.join('test/fixtures/files/income_proof.pdf'),
+        'application/pdf'
       )
     }
 

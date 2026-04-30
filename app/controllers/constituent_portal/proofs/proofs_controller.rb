@@ -179,7 +179,8 @@ module ConstituentPortal
 
       def determine_resubmission_status
         (@application.income_proof_status_rejected? && params[:proof_type] == 'income') ||
-          (@application.residency_proof_status_rejected? && params[:proof_type] == 'residency')
+          (@application.residency_proof_status_rejected? && params[:proof_type] == 'residency') ||
+          (@application.id_proof_status_rejected? && params[:proof_type] == 'id')
       end
 
       def log_resubmission_attempt(is_resubmitting)
@@ -239,15 +240,17 @@ module ConstituentPortal
       end
 
       def valid_proof_type?
-        %w[income residency].include?(params[:proof_type])
+        %w[income residency id].include?(params[:proof_type])
       end
 
       def can_modify_proof?
         case params[:proof_type]
         when 'income'
-          @application.rejected_income_proof?
+          @application.income_proof_status_rejected?
         when 'residency'
-          @application.rejected_residency_proof?
+          @application.residency_proof_status_rejected?
+        when 'id'
+          @application.id_proof_status_rejected?
         end
       end
     end

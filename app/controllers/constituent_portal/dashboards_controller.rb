@@ -139,6 +139,7 @@ module ConstituentPortal
       @max_proof_submissions = Policy.get('max_proof_submissions') || 3
       load_income_proof_information
       load_residency_proof_information
+      load_id_proof_information
     end
 
     def load_income_proof_information
@@ -155,6 +156,14 @@ module ConstituentPortal
       @residency_proof_rejection_date = get_latest_rejection_date(@active_application, 'residency')
       @residency_proof_submission_count = count_proof_submissions(@active_application, 'residency')
       @can_resubmit_residency_proof = can_resubmit_proof?(@active_application, 'residency', @max_proof_submissions)
+    end
+
+    def load_id_proof_information
+      @id_proof_status = @active_application.id_proof_status
+      @id_proof_rejection_reason = get_latest_rejection_reason(@active_application, 'id')
+      @id_proof_rejection_date = get_latest_rejection_date(@active_application, 'id')
+      @id_proof_submission_count = count_proof_submissions(@active_application, 'id')
+      @can_resubmit_id_proof = can_resubmit_proof?(@active_application, 'id', @max_proof_submissions)
     end
 
     def load_recent_activities

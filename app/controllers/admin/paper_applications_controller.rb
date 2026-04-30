@@ -405,6 +405,8 @@ module Admin
         :income_proof_rejection_reason, :income_proof_custom_rejection_reason,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
         :residency_proof_rejection_reason, :residency_proof_custom_rejection_reason,
+        :id_proof_action, :id_proof, :id_proof_signed_id,
+        :id_proof_rejection_reason, :id_proof_custom_rejection_reason,
         :medical_certification_action, :medical_certification, :medical_certification_signed_id,
         :medical_certification_rejection_reason, :medical_certification_custom_rejection_reason,
         :no_medical_provider_information,
@@ -469,7 +471,7 @@ module Admin
     end
 
     def add_proof_params_from!(service_params, permitted)
-      %w[income residency].each do |type|
+      %w[income residency id].each do |type|
         action_key = "#{type}_proof_action"
         file_key   = "#{type}_proof"
         signed_key = "#{type}_proof_signed_id"

@@ -32,8 +32,10 @@
                 <p class="text-sm text-blue-700">
                   <% if @proof_type == 'income' %>
                     Your income proof document should clearly show your name, date, and income details. Acceptable documents include: tax returns, current year SSA award letters, recent bank statements showing SSA deposits, current unexpired SSA/SSI/SSDI documentation, current unexpired Medicaid/SNAP award letters, or current unexpired VA Benefits letters.
-                  <% else %>
+                  <% elsif @proof_type == 'residency' %>
                     Your residency proof document should clearly show your name and current address. Acceptable documents include: driver's license, state ID, identification card, utility bill, lease agreement, or photo ID.
+                  <% elsif @proof_type == 'id' %>
+                    Your ID proof document should clearly show your identity. Acceptable documents include: driver's license, state ID, identification card, passport, or other government-issued photo ID.
                   <% end %>
                 </p>
               </div>

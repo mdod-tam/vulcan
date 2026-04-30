@@ -149,10 +149,16 @@ module Applications
       end
 
       # Attach income proof if provided
-      return if @form.income_proof.blank?
+      if @form.income_proof.present?
+        target_application.income_proof.attach(@form.income_proof)
+        target_application.income_proof_status = 'not_reviewed' if @form.is_submission
+      end
 
-      target_application.income_proof.attach(@form.income_proof)
-      target_application.income_proof_status = 'not_reviewed' if @form.is_submission
+      # Attach ID proof if provided
+      return if @form.id_proof.blank?
+
+      target_application.id_proof.attach(@form.id_proof)
+      target_application.id_proof_status = 'not_reviewed' if @form.is_submission
     end
 
     def save_application_with_audit

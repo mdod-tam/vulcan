@@ -54,6 +54,8 @@ module DocumentUploadHandling
       attach_proof_document(:income, file)
     when 'residency_proof'
       attach_proof_document(:residency, file)
+    when 'id_proof'
+      attach_proof_document(:id, file)
     else
       # Using ApplicationDataStructures::ProofResult to process
       ApplicationDataStructures::ProofResult.new(success: false, type: nil, message: "Unknown document type: #{document_type}")

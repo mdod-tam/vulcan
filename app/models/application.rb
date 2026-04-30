@@ -74,6 +74,12 @@ class Application < ApplicationRecord
     rejected: 2
   }, prefix: true # Use standard boolean prefix
 
+  enum :id_proof_status, {
+    not_reviewed: 0,
+    approved: 1,
+    rejected: 2
+  }, prefix: true # Use standard boolean prefix
+
   enum :medical_certification_status, {
     not_requested: 0,
     requested: 1,
@@ -119,6 +125,7 @@ class Application < ApplicationRecord
   has_and_belongs_to_many :products
   has_one_attached :income_proof
   has_one_attached :residency_proof
+  has_one_attached :id_proof
   has_one_attached :medical_certification
 
   # Validations
@@ -474,7 +481,7 @@ class Application < ApplicationRecord
   end
 
   def proofs_reviewable?
-    %w[income residency].any? { |proof_type| proof_type_reviewable?(proof_type) }
+    %w[income id residency].any? { |proof_type| proof_type_reviewable?(proof_type) }
   end
 
   def proof_review_button_text(proof_type)
@@ -580,7 +587,7 @@ class Application < ApplicationRecord
   end
 
   def required_proofs_approved?
-    residency_proof_status_approved? &&
+    residency_proof_status_approved? && id_proof_status_approved? &&
       (!income_proof_required? || income_proof_status_approved?)
   end
 
@@ -775,6 +782,7 @@ class Application < ApplicationRecord
   def pending_proof_types
     types = []
     types << 'income' if income_proof_required? && income_proof_status_not_reviewed?
+    types << 'id' if id_proof_status_not_reviewed?
     types << 'residency' if residency_proof_status_not_reviewed?
     types
   end

@@ -19,6 +19,7 @@ class ApplicationForm
   # File attachments
   attribute :residency_proof
   attribute :income_proof
+  attribute :id_proof
 
   # User attributes (disability flags and address)
   attribute :hearing_disability, :boolean, default: false
@@ -163,6 +164,7 @@ class ApplicationForm
   def assign_file_attachments(app_params)
     self.residency_proof = app_params[:residency_proof] if app_params[:residency_proof]
     self.income_proof = app_params[:income_proof] if app_params[:income_proof]
+    self.id_proof = app_params[:id_proof] if app_params[:id_proof]
   end
 
   def assign_disability_attributes(app_params)
