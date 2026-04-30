@@ -99,6 +99,43 @@ module Trainers
       assert_includes assigns(:upcoming_sessions), scheduled_session
     end
 
+    test 'trainer dashboard and scheduled filter show only assigned sessions' do
+      sign_in_for_integration_test(@trainer)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_includes assigns(:scheduled_sessions), @session
+      assert_not_includes assigns(:scheduled_sessions), @other_session
+      assert_includes assigns(:upcoming_sessions), @session
+      assert_not_includes assigns(:upcoming_sessions), @other_session
+      assert_includes @response.body, @constituent.full_name
+
+      get trainers_dashboard_path(filter: 'scheduled')
+
+      assert_response :success
+      assert_includes assigns(:filtered_sessions), @session
+      assert_not_includes assigns(:filtered_sessions), @other_session
+    end
+
+    test 'admin dashboard surfaces scheduled sessions assigned to the admin separately' do
+      sign_in_for_integration_test(@admin)
+      admin_constituent = create(:constituent, first_name: 'Admin', last_name: 'Training')
+      admin_application = create(:application, :old_enough_for_new_application, user: admin_constituent)
+      admin_session = create(:training_session, :scheduled, trainer: @admin, application: admin_application)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_includes assigns(:scheduled_sessions), @session
+      assert_includes assigns(:scheduled_sessions), @other_session
+      assert_includes assigns(:my_scheduled_sessions), admin_session
+      assert_not_includes assigns(:my_scheduled_sessions), @session
+      assert_select 'h2', text: 'My Upcoming Training Sessions', count: 1
+      assert_select 'a', text: 'My Scheduled', count: 1
+      assert_select 'a', text: 'View My Scheduled', count: 1
+    end
+
     test 'scheduled filter hides default dashboard tables' do
       sign_in_for_integration_test(@trainer)
 

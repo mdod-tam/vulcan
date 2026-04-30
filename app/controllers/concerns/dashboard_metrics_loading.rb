@@ -7,8 +7,10 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   # Uses Rails caching to reduce database load on frequent page visits
   # Returns a hash of metrics
   def load_dashboard_metrics
-    # Cache all metrics together for 5 minutes to reduce DB queries
-    Rails.cache.fetch('admin_dashboard_metrics', expires_in: 5.minutes) do
+    # Cache all metrics together for 5 minutes to reduce DB queries.
+    # print_queue_pending_count is intentionally excluded from the cache — it is
+    # a fast indexed COUNT on a small table and must always be current.
+    cached = Rails.cache.fetch('admin_dashboard_metrics', expires_in: 5.minutes) do
       metrics = {}
 
       # Load all metrics into the hash
@@ -42,11 +44,10 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       # Load evaluation requests count (admin-initiated)
       metrics[:evaluation_requests_count] = calculate_evaluation_requests_count
 
-      # Load print queue count
-      metrics[:print_queue_pending_count] = PrintQueueItem.pending.count
-
       metrics
     end
+
+    cached.merge(print_queue_pending_count: PrintQueueItem.pending.count)
   rescue StandardError => e
     Rails.logger.error "Dashboard metric error: #{e.message}"
     # Return default values hash on error

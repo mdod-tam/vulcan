@@ -93,7 +93,7 @@ en:
         follow_up_failed: "Failed to schedule follow-up training session: %{message}"
       follow_up:
         title: "Schedule new training date"
-        description: "This creates a new training session and keeps this cancelled or no-show session locked as history."
+        description: "Use this after confirming a new date with the constituent."
         scheduled_for_label: "New Date/Time"
         location_label: "Location"
         location_placeholder: "e.g., Constituent's Home, Library, Online"

@@ -66,7 +66,7 @@ es:
         follow_up_failed: "No se pudo programar la sesión de capacitación de seguimiento: %{message}"
       follow_up:
         title: "Programar nueva fecha de capacitación"
-        description: "Esto crea una nueva sesión de capacitación y mantiene esta sesión cancelada o marcada como no asistida bloqueada como historial."
+        description: "Use esto después de confirmar una nueva fecha con la persona."
         scheduled_for_label: "Nueva fecha/hora"
         location_label: "Ubicación"
         location_placeholder: "p. ej., hogar del participante, biblioteca, en línea"
