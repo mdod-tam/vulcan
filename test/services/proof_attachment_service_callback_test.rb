@@ -237,9 +237,15 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
       filename: 'residency_proof.pdf',
       content_type: 'application/pdf'
     )
+    app.id_proof.attach(
+      io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+      filename: 'id_proof.pdf',
+      content_type: 'application/pdf'
+    )
     app.save!
     app.update_columns(
       income_proof_status: Application.income_proof_statuses[:not_reviewed],
+      id_proof_status: Application.id_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
       medical_certification_status: Application.medical_certification_statuses[:approved],
       status: Application.statuses[:awaiting_dcf]

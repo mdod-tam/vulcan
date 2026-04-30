@@ -19,7 +19,7 @@ class ProofUploadsTest < ApplicationSystemTestCase
 
     # Verify prerequisites
     assert @application.income_proof.attached?, 'Income proof must be attached'
-    assert @application.rejected_income_proof?, 'Income proof status must be rejected'
+    assert @application.income_proof_status_rejected?, 'Income proof status must be rejected'
     assert_equal @application.user_id, @user.id, 'Application should belong to test user'
 
     # Set up rate limit policies required by proof submission

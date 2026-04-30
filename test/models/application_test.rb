@@ -39,13 +39,16 @@ class ApplicationTest < ActiveSupport::TestCase
 
       # Reject proofs without attachments
       application.reject_proof_without_attachment!(:income, admin: @admin, reason: 'other', notes: 'Test rejection')
+      application.reject_proof_without_attachment!(:id, admin: @admin, reason: 'other', notes: 'Test rejection')
       application.reject_proof_without_attachment!(:residency, admin: @admin, reason: 'other', notes: 'Test rejection')
 
       # Verify proofs were rejected
       application.reload
       assert application.income_proof_status_rejected?
+      assert application.id_proof_status_rejected?
       assert application.residency_proof_status_rejected?
       assert_not application.income_proof.attached?
+      assert_not application.id_proof.attached?
       assert_not application.residency_proof.attached?
     ensure
       # Reset Current attributes
@@ -66,7 +69,7 @@ class ApplicationTest < ActiveSupport::TestCase
       fixture_dir = Rails.root.join('test/fixtures/files')
       FileUtils.mkdir_p(fixture_dir)
 
-      ['income_proof.pdf', 'residency_proof.pdf'].each do |filename|
+      ['income_proof.pdf', 'residency_proof.pdf', 'id_proof.pdf'].each do |filename|
         file_path = fixture_dir.join(filename)
         File.write(file_path, "Test content for #{filename}") unless File.exist?(file_path)
       end
@@ -75,7 +78,8 @@ class ApplicationTest < ActiveSupport::TestCase
       ActiveRecord::Base.connection.execute(<<~SQL.squish)
         UPDATE applications
         SET income_proof_status = #{Application.income_proof_statuses[:approved]},
-            residency_proof_status = #{Application.residency_proof_statuses[:approved]}
+            residency_proof_status = #{Application.residency_proof_statuses[:approved]},
+            id_proof_status = #{Application.id_proof_statuses[:approved]}
         WHERE id = #{application.id}
       SQL
 
@@ -85,6 +89,7 @@ class ApplicationTest < ActiveSupport::TestCase
       # Check proof status
       assert_equal 'approved', application.income_proof_status
       assert_equal 'approved', application.residency_proof_status
+      assert_equal 'approved', application.id_proof_status
     ensure
       # Reset Current attributes
       Current.reset if defined?(Current) && Current.respond_to?(:reset)
@@ -445,6 +450,7 @@ class ApplicationTest < ActiveSupport::TestCase
       status: Application.statuses[:in_progress],
       income_proof_status: Application.income_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:approved],
       medical_certification_status: Application.medical_certification_statuses[:not_requested],
       updated_at: Time.current
     )
@@ -490,6 +496,7 @@ class ApplicationTest < ActiveSupport::TestCase
     application.update_columns(
       status: Application.statuses[:awaiting_dcf],
       income_proof_status: Application.income_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
       medical_certification_status: Application.medical_certification_statuses[:not_requested],
       updated_at: Time.current
@@ -563,6 +570,7 @@ class ApplicationTest < ActiveSupport::TestCase
     application.update_columns(
       status: Application.statuses[:in_progress],
       income_proof_status: Application.income_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
       medical_certification_status: Application.medical_certification_statuses[:not_requested],
       updated_at: Time.current

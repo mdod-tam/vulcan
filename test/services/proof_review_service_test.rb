@@ -16,10 +16,15 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
       filename: 'residency-proof.pdf',
       content_type: 'application/pdf'
     )
+    @application.id_proof.attach(
+      io: StringIO.new('id proof'),
+      filename: 'id-proof.pdf',
+      content_type: 'application/pdf'
+    )
   end
 
   test 'uses the reviewable proof type boundary from ProofReview' do
-    assert_equal %w[income residency], ProofReview.reviewable_proof_types
+    assert_equal %w[income id residency], ProofReview.reviewable_proof_types
 
     reviewer = Object.new
     reviewer.define_singleton_method(:review) do |**_kwargs|

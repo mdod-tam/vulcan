@@ -22,6 +22,8 @@ module Admin
                  @application.income_proof
                when 'residency'
                  @application.residency_proof
+               when 'id'
+                 @application.id_proof
                end
 
       return if @proof&.attached?
@@ -38,6 +40,8 @@ module Admin
                  @application.income_proof
                when 'residency'
                  @application.residency_proof
+               when 'id'
+                 @application.id_proof
                end
 
       return if @proof.attached? || @proof.nil?
@@ -62,6 +66,8 @@ module Admin
                    @application.income_proof
                  when 'residency'
                    @application.residency_proof
+                 when 'id'
+                   @application.id_proof
                  end
         render :new, status: :unprocessable_content, alert: 'Proof review failed to save'
       end
@@ -96,6 +102,10 @@ module Admin
       return 'income' if params[:proof_type] == 'residency' &&
                          @application.income_proof.attached? &&
                          @application.income_proof_status_not_reviewed?
+    
+      return 'id' if params[:proof_type] == 'income' &&
+                     @application.id_proof.attached? &&
+                     @application.id_proof_status_not_reviewed?
 
       nil
     end
