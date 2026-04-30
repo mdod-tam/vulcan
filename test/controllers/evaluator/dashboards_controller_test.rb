@@ -20,6 +20,7 @@ module Evaluators
     def test_should_get_show
       get evaluators_dashboard_path
       assert_response :success
+      assert_select 'a[href=?]', admin_applications_path, text: 'Back to Dashboard', count: 0
     end
 
     test 'evaluator sees only scoped evaluation and application fulfillment activity' do

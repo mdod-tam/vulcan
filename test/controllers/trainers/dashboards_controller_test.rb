@@ -31,6 +31,7 @@ module Trainers
       assert_includes @response.body, 'Constituent'
       assert_includes @response.body, @constituent.full_name
       assert_not_includes @response.body, @other_constituent.full_name
+      assert_select 'a[href=?]', admin_applications_path, text: 'Back to Dashboard', count: 0
     end
 
     test 'admin sees broader recent training activity' do
