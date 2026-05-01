@@ -1,0 +1,259 @@
+<section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="evaluation-status-title">
+  <div class="mb-6">
+    <h2 id="evaluation-status-title" class="text-xl font-semibold text-gray-900">
+      Evaluation and Training Status
+    </h2>
+    <p class="mt-1 text-sm text-gray-600">
+      Trainers and evaluators handle scheduling, completion, and notes from their own workflow pages.
+    </p>
+  </div>
+
+  <div class="mb-6 space-y-6">
+    <% latest_evaluation = @application.latest_evaluation %>
+
+    <% if @application.equipment_fulfillment? %>
+      <div>
+        <div class="mb-3">
+          <h3 class="text-base font-semibold text-gray-900">Evaluation</h3>
+          <p class="mt-1 text-sm text-gray-600">
+            Equipment fulfillment starts with an evaluation. Select an evaluator so they can schedule and complete the evaluation report.
+          </p>
+        </div>
+        <%= render "assignment_section",
+          type: "evaluator",
+          entity: latest_evaluation,
+          assigned_person: latest_evaluation&.evaluator,
+          status_badge_method: :evaluation_status_badge,
+          scheduled_date: latest_evaluation&.evaluation_date,
+          scheduled_time: false,
+          view_path: latest_evaluation.present? ? evaluators_evaluation_path(latest_evaluation) : nil,
+          assign_form_path: assign_evaluator_admin_application_path(@application),
+          assign_param: :evaluator_id,
+          available_assignees: Users::Evaluator.available
+        %>
+      </div>
+    <% elsif @application.voucher_fulfillment? %>
+      <div>
+        <div class="mb-3">
+          <h3 class="text-base font-semibold text-gray-900">Evaluation</h3>
+          <p class="mt-1 text-sm text-gray-600">
+            Voucher applications do not require an evaluation by default. Mark one as needed only when staff determine this constituent should receive evaluator support.
+          </p>
+        </div>
+
+        <% if latest_evaluation.blank? && !@application.evaluation_request_pending? %>
+          <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" data-testid="evaluation-request-section">
+            <%= button_to 'Mark Evaluation Needed',
+                request_evaluation_admin_application_path(@application),
+                method: :post,
+                class: "inline-flex h-10 items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
+                data: { confirm: 'Voucher applications do not require evaluation by default. Mark this application as needing evaluator support?' } %>
+          </div>
+        <% elsif latest_evaluation.blank? && @application.evaluation_request_pending? %>
+          <div class="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-4" data-testid="evaluation-request-pending">
+            <p class="text-sm text-blue-800">
+              Evaluation requested on <%= @application.evaluation_requested_at.strftime("%B %d, %Y") %>. Assign an evaluator below.
+            </p>
+          </div>
+          <%= render "assignment_section",
+            type: "evaluator",
+            entity: nil,
+            assigned_person: nil,
+            status_badge_method: :evaluation_status_badge,
+            scheduled_date: nil,
+            scheduled_time: false,
+            view_path: nil,
+            assign_form_path: assign_evaluator_admin_application_path(@application),
+            assign_param: :evaluator_id,
+            available_assignees: Users::Evaluator.available
+          %>
+        <% else %>
+          <%= render "assignment_section",
+            type: "evaluator",
+            entity: latest_evaluation,
+            assigned_person: latest_evaluation&.evaluator,
+            status_badge_method: :evaluation_status_badge,
+            scheduled_date: latest_evaluation&.evaluation_date,
+            scheduled_time: false,
+            view_path: latest_evaluation.present? ? evaluators_evaluation_path(latest_evaluation) : nil,
+            assign_form_path: assign_evaluator_admin_application_path(@application),
+            assign_param: :evaluator_id,
+            available_assignees: Users::Evaluator.available
+          %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if @completed_training_sessions_count < @max_training_sessions %>
+      <% latest_training = @application.active_training_session %>
+      <% follow_up_training = @application.latest_training_follow_up_session %>
+      <div>
+        <div class="mb-3">
+          <h3 class="text-base font-semibold text-gray-900">Training</h3>
+          <p class="mt-1 text-sm text-gray-600">
+            Assign a trainer when training is requested or staff determine training should be offered. The trainer owns scheduling and completion notes.
+          </p>
+        </div>
+        <% if @application.training_request_pending? %>
+          <div class="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-4" data-testid="training-request-pending">
+            <p class="text-sm font-medium text-blue-900">Training requested by constituent</p>
+            <p class="mt-1 text-sm text-blue-800">
+              Requested on <%= @application.training_requested_at.strftime("%B %d, %Y at %I:%M %p") %>. Assign a trainer below.
+            </p>
+          </div>
+        <% end %>
+        <% if follow_up_training.present? %>
+          <div class="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-4" data-testid="training-follow-up-needed">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p class="text-sm font-semibold text-amber-950">
+                  <%= t('admin.applications.training_follow_up_needed.title') %>
+                </p>
+                <p class="mt-1 text-sm text-amber-900">
+                  <%= t(
+                    'admin.applications.training_follow_up_needed.summary',
+                    status: follow_up_training.status.humanize,
+                    date: follow_up_training.follow_up_reference_time.strftime("%B %d, %Y at %I:%M %p")
+                  ) %>
+                </p>
+                <% if follow_up_training.follow_up_reason.present? %>
+                  <p class="mt-1 text-sm text-amber-900">
+                    <span class="font-medium"><%= t('admin.applications.training_follow_up_needed.reason_label') %></span>
+                    <%= follow_up_training.follow_up_reason %>
+                  </p>
+                <% end %>
+              </div>
+              <%= link_to t('admin.applications.training_follow_up_needed.view_session'),
+                  trainers_training_session_path(follow_up_training),
+                  class: "inline-flex h-10 items-center justify-center rounded-md border border-amber-400 bg-white px-4 py-2 text-sm font-medium text-amber-900 shadow-sm hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2",
+                  data: { turbo_frame: "_top" } %>
+            </div>
+          </div>
+        <% end %>
+        <%= render "assignment_section",
+          type: "trainer",
+          entity: latest_training,
+          assigned_person: latest_training&.trainer,
+          status_badge_method: :training_session_status_badge,
+          scheduled_date: latest_training&.scheduled_for,
+          scheduled_time: true,
+          view_path: latest_training.present? ? trainers_training_session_path(latest_training) : nil,
+          unassign_form_path: latest_training.present? ? unassign_trainer_admin_application_path(@application) : nil,
+          assign_form_path: assign_trainer_admin_application_path(@application),
+          assign_param: :trainer_id,
+          available_assignees: Users::Trainer.available,
+          assignment_heading: follow_up_training.present? ? t('admin.applications.training_follow_up_needed.assign_heading') : nil,
+          assignment_select_label: follow_up_training.present? ? t('admin.applications.training_follow_up_needed.assign_select_label') : nil,
+          assignment_submit_label: follow_up_training.present? ? t('admin.applications.training_follow_up_needed.assign_submit') : nil
+        %>
+
+        <p class="mt-3 text-sm text-gray-500">
+          Training provided to date: <%= @completed_training_sessions_count %> / <%= @max_training_sessions %>
+        </p>
+      </div>
+    <% else %>
+      <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <p class="text-sm text-blue-700">
+              This constituent has reached the maximum number of allowed training sessions (<%= @max_training_sessions %>).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-sm text-gray-500 mb-4">
+        Training provided to date: <%= @completed_training_sessions_count %> / <%= @max_training_sessions %> <strong>Maximum Reached</strong>
+      </p>
+    <% end %>
+  </div>
+  <% latest_completed_evaluation = @application.evaluations.where(status: :completed).order(evaluation_date: :desc).first %>
+  <% if latest_completed_evaluation.present? %>
+    <div class="mb-6 border-t border-gray-200 pt-4" data-testid="evaluation-report-summary">
+      <h3 class="text-lg font-semibold text-gray-900 mb-2">Evaluation Report / Recommendations</h3>
+      <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Evaluator</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= latest_completed_evaluation.evaluator&.full_name || 'Unknown' %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Completed</dt>
+          <dd class="mt-1 text-sm text-gray-900">
+            <%= latest_completed_evaluation.evaluation_date&.strftime("%B %d, %Y") || 'Date not recorded' %>
+          </dd>
+        </div>
+      </dl>
+      <% recommended = latest_completed_evaluation.recommended_products %>
+      <div class="mb-3">
+        <dt class="text-sm font-medium text-gray-500">Recommended Products</dt>
+        <dd class="mt-1 text-sm text-gray-900">
+          <% if recommended.any? %>
+            <ul class="list-disc list-inside">
+              <% recommended.each do |product| %>
+                <li><%= product.name %></li>
+              <% end %>
+            </ul>
+          <% else %>
+            <span class="text-gray-500">No specific products recommended.</span>
+          <% end %>
+        </dd>
+      </div>
+      <% if latest_completed_evaluation.needs.present? %>
+        <div class="mb-3">
+          <dt class="text-sm font-medium text-gray-500">Needs Summary</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= simple_format(latest_completed_evaluation.needs) %></dd>
+        </div>
+      <% end %>
+      <% if latest_completed_evaluation.notes.present? %>
+        <div class="mb-3">
+          <dt class="text-sm font-medium text-gray-500">Notes</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= truncate(latest_completed_evaluation.notes, length: 400) %></dd>
+        </div>
+      <% end %>
+      <%= link_to 'View Full Evaluation',
+          evaluators_evaluation_path(latest_completed_evaluation),
+          class: "inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100",
+          data: { turbo_frame: "_top" } %>
+    </div>
+  <% end %>
+
+  <% if @application.voucher_fulfillment? || latest_evaluation&.status_completed? %>
+    <div>
+      <h3 class="text-sm font-medium text-gray-500 mb-2">Training Sessions (<%= @application.training_sessions.count %>)</h3>
+      <% if @application.training_sessions.any? %>
+        <div class="space-y-4">
+          <% @application.training_sessions.order(scheduled_for: :desc).each do |session| %>
+            <div class="bg-gray-50 p-4 rounded-md shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center">
+              <div class="flex items-center space-x-4">
+                <p class="text-sm font-medium text-gray-900"><%= session.trainer.full_name %></p>
+                <%= training_session_status_badge(session) %>
+              </div>
+              <div class="flex space-x-2 mt-2 md:mt-0">
+                <%= link_to "View Session",
+                    trainers_training_session_path(session),
+                    class: "inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                    data: { turbo_frame: "_top" } %>
+                <% if session.status_completed? %>
+                  <span class="text-sm text-gray-600">Completed on <%= session.completed_at&.strftime("%B %d, %Y") %></span>
+                <% end %>
+              </div>
+            </div>
+            <% if session.status_completed? %>
+              <div class="bg-gray-100 p-4 rounded-md mt-2">
+                <p class="text-sm font-medium text-gray-700 mb-1">Product Trained On:</p>
+                <p class="text-sm text-gray-900"><%= session.product_trained_on&.name || "Not specified" %></p>
+                <p class="text-sm font-medium text-gray-700 mt-2 mb-1">Notes:</p>
+                <p class="text-sm text-gray-900"><%= simple_format(session.notes).presence || "No notes provided" %></p>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</section>

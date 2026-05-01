@@ -1,0 +1,69 @@
+<%# Queue-oriented table for pending training requests.
+    Driven by applications.training_requested_at (not notifications) so admins
+    can triage without relying on email notifications being noticed.
+    Locals: applications %>
+<div class="bg-white shadow overflow-x-auto sm:rounded-lg" data-testid="training-requests-queue">
+  <table class="min-w-full divide-y divide-gray-200 applications-table" role="table">
+    <thead class="bg-gray-50" role="rowgroup">
+      <tr role="row">
+        <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicant</th>
+        <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">App ID</th>
+        <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requested</th>
+        <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+        <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+      </tr>
+    </thead>
+    <tbody class="bg-white divide-y divide-gray-200" role="rowgroup">
+      <% applications.each do |application| %>
+        <tr id="training_request_row_<%= application.id %>" role="row" class="h-14">
+          <td class="px-4 py-2 text-sm text-gray-900" role="cell">
+            <% if application.user.present? %>
+              <%= link_to application.user.full_name,
+                  admin_user_path(application.user),
+                  class: "font-semibold text-indigo-600 hover:text-indigo-500",
+                  data: { turbo_frame: "_top" } %>
+            <% else %>
+              Unknown Applicant
+            <% end %>
+          </td>
+          <td class="px-4 py-2 text-sm text-gray-900" role="cell">#<%= application.id %></td>
+          <td class="px-4 py-2 text-sm text-gray-900" role="cell">
+            <% if application.training_requested_at.present? %>
+              <%= application.training_requested_at.strftime("%b %d, %Y") %>
+            <% else %>
+              <span class="text-gray-400">Unknown</span>
+            <% end %>
+          </td>
+          <td class="px-4 py-2 text-sm text-gray-900" role="cell">
+            <% 
+              active = if application.training_sessions.loaded?
+                         application.training_sessions.select { |ts| %w[requested scheduled confirmed].include?(ts.status) }.max_by(&:created_at)
+                       else
+                         application.training_sessions.assigned_or_scheduled.order(created_at: :desc).first
+                       end
+            %>
+            <% if active.nil? %>
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                Awaiting Assignment
+              </span>
+            <% elsif active.status_requested? %>
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                Assigned, Needs Scheduling
+              </span>
+            <% else %>
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                <%= active.status.titleize %>
+              </span>
+            <% end %>
+          </td>
+          <td class="px-4 py-2 text-sm font-medium" role="cell">
+            <%= link_to "View Application",
+                admin_application_path(application),
+                class: "text-indigo-600 hover:text-indigo-900",
+                data: { turbo_frame: "_top" } %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

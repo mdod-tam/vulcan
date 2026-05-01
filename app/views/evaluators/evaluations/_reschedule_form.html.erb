@@ -1,0 +1,30 @@
+<div class="bg-white shadow rounded-lg mb-6">
+  <div class="px-4 py-5 sm:p-6">
+    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+      Reschedule Evaluation
+    </h3>
+
+    <%= form_with(model: evaluation, url: reschedule_evaluators_evaluation_path(evaluation), method: :post, local: true, class: "space-y-4") do |f| %>
+      <div>
+        <%= f.label :evaluation_date, "New Date/Time", class: "block text-sm font-medium text-gray-700" do %>
+          New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+        <% end %>
+        <%= f.datetime_local_field :evaluation_date, value: suggested_date.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true %>
+      </div>
+
+      <div>
+        <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.text_field :location, value: evaluation.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+      </div>
+
+      <div>
+        <%= f.label :reschedule_reason, "Reason for Rescheduling", class: "block text-sm font-medium text-gray-700" do %>
+          Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+        <% end %>
+        <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason for rescheduling this evaluation session..." %>
+      </div>
+
+      <%= f.submit "Reschedule Evaluation", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
+    <% end %>
+  </div>
+</div>

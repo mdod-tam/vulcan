@@ -7,8 +7,10 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   # Uses Rails caching to reduce database load on frequent page visits
   # Returns a hash of metrics
   def load_dashboard_metrics
-    # Cache all metrics together for 5 minutes to reduce DB queries
-    Rails.cache.fetch('admin_dashboard_metrics', expires_in: 5.minutes) do
+    # Cache all metrics together for 5 minutes to reduce DB queries.
+    # print_queue_pending_count is intentionally excluded from the cache — it is
+    # a fast indexed COUNT on a small table and must always be current.
+    cached = Rails.cache.fetch('admin_dashboard_metrics', expires_in: 5.minutes) do
       metrics = {}
 
       # Load all metrics into the hash
@@ -39,11 +41,13 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       # Load training requests count
       metrics[:training_requests_count] = calculate_training_requests_count
 
-      # Load print queue count
-      metrics[:print_queue_pending_count] = PrintQueueItem.pending.count
+      # Load evaluation requests count (admin-initiated)
+      metrics[:evaluation_requests_count] = calculate_evaluation_requests_count
 
       metrics
     end
+
+    cached.merge(print_queue_pending_count: PrintQueueItem.pending.count)
   rescue StandardError => e
     Rails.logger.error "Dashboard metric error: #{e.message}"
     # Return default values hash on error
@@ -360,9 +364,16 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   private
 
-  # Calculate training request count from the application-owned request queue
+  # Count applications with an outstanding training request. Driven by
+  # persisted application state so admin queue visibility doesn't depend on
+  # notification delivery.
   def calculate_training_requests_count
     Application.with_pending_training_request.count
+  end
+
+  # Count applications with an outstanding admin-initiated evaluation request.
+  def calculate_evaluation_requests_count
+    Application.with_pending_evaluation_request.count
   end
 
   # Get the current fiscal year (July 1 - June 30)
@@ -404,6 +415,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       medical_certs_to_review_count: 0,
       digitally_signed_needs_review_count: 0,
       training_requests_count: 0,
+      evaluation_requests_count: 0,
       print_queue_pending_count: 0,
       current_fiscal_year: current_fiscal_year,
       draft_count: 0,

@@ -19,7 +19,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       locale        = resolve_template_locale(recipient: @user)
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_application_submitted_variables(application, template: text_template, locale: locale)
-      mail_options  = { message_stream: 'notifications' }
+      mail_options = { message_stream: 'notifications' }
       mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
 
       if prefers_letter_delivery?(@user)
@@ -40,9 +40,15 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     with_mailer_error_handling("training_requested application=#{application&.id} notification=#{notification&.id}") do
       admin = notification.recipient
       template_name = 'application_notifications_training_requested'
-      locale = resolve_template_locale(recipient: admin)
+      locale        = resolve_template_locale(recipient: admin)
       text_template = find_text_template(template_name, locale: locale)
-      variables = build_training_requested_variables(application, notification, template: text_template, locale: locale)
+      variables     = build_training_requested_variables(
+        application,
+        notification,
+        template: text_template,
+        locale: locale
+      )
+      mail_options = { message_stream: 'notifications' }
 
       if prefers_letter_delivery?(admin)
         queue_letter_delivery(
@@ -54,7 +60,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         return noop_letter_delivery
       end
 
-      send_email(recipient_email_for(admin), text_template, variables)
+      send_email(recipient_email_for(admin), text_template, variables, mail_options)
     end
   end
 
@@ -677,7 +683,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   def build_training_requested_variables(application, notification, template:, locale: nil)
     admin = notification.recipient
     constituent = notification.actor || application.user
-
+    request_date = application.training_requested_at || Time.current
     base_variables = build_base_email_variables(
       template: template,
       locale: locale,
@@ -691,7 +697,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       admin_full_name: admin.full_name,
       constituent_full_name: constituent.full_name,
       application_id: application.id,
-      request_date_formatted: application.training_requested_at&.strftime('%B %d, %Y at %I:%M %p') || Time.current.strftime('%B %d, %Y at %I:%M %p'),
+      request_date_formatted: I18n.l(request_date.to_date, format: :long, locale: locale),
       admin_application_url: admin_application_url(application, host: default_url_options[:host])
     }
 

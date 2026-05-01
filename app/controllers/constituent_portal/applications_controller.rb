@@ -318,7 +318,23 @@ module ConstituentPortal
     def setup_address_for_form
       # AddressHelper concern: Uses standardized address creation from user data
       # Flow: address_from_user(user) -> creates ApplicationDataStructures::Address object
-      @address = address_from_user(current_user)
+      applicant = address_applicant_user
+      @address = address_from_user(applicant)
+      @guardian_address = address_from_user(current_user) if applicant != current_user
+      @use_guardian_address = applicant != current_user && applicant.physical_address_1.blank? && current_user.physical_address_1.present?
+      @address = @guardian_address if @use_guardian_address && @guardian_address.present?
+    end
+
+    def address_applicant_user
+      return @application.user if @application&.for_dependent?
+
+      dependent_id = params[:user_id].presence || params.dig(:application, :user_id).presence
+
+      if dependent_id.present?
+        current_user.dependents.find_by(id: dependent_id) || current_user
+      else
+        current_user
+      end
     end
 
     # Application existence checks (memoized for performance)
@@ -544,6 +560,7 @@ module ConstituentPortal
           annual_income household_size maryland_resident self_certify_disability
           medical_provider_name medical_provider_phone medical_provider_fax medical_provider_email
           physical_address_1 physical_address_2 city state zip_code
+          use_guardian_address
           hearing_disability vision_disability speech_disability mobility_disability cognition_disability
           alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
           medical_provider_attributes
@@ -565,7 +582,11 @@ module ConstituentPortal
       # AddressHelper concern: Uses standardized address creation with fallback logic
       # Flow: address_with_fallback(params, user) -> creates Address object with param values falling back to user values
       application_params = params[:application] || {}
-      @address = address_with_fallback(application_params, current_user)
+      applicant = address_applicant_user
+      @address = address_with_fallback(application_params, applicant)
+      @guardian_address = address_from_user(current_user) if applicant != current_user
+      @use_guardian_address = ActiveModel::Type::Boolean.new.cast(params[:use_guardian_address] || application_params[:use_guardian_address])
+      @address = @guardian_address if @use_guardian_address && @guardian_address.present?
     end
 
     def set_paper_application_context

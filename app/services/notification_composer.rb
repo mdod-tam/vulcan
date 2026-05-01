@@ -56,6 +56,22 @@ class NotificationComposer
     "#{constituent_name} requested training for Application ##{@notifiable&.id}."
   end
 
+  def message_for_training_scheduled
+    training_session_message('scheduled training')
+  end
+
+  def message_for_training_rescheduled
+    training_session_message('rescheduled training')
+  end
+
+  def message_for_training_cancelled
+    training_session_message('cancelled training')
+  end
+
+  def message_for_training_completed
+    training_session_message('completed training')
+  end
+
   def message_for_proof_rejected
     proof_type = @metadata['proof_type']&.titleize || 'Proof'
     reason = @metadata['rejection_reason']
@@ -101,9 +117,35 @@ class NotificationComposer
 
   # --- Helper Methods ---
 
+  def training_session_message(verb_phrase)
+    return default_message unless @notifiable.is_a?(TrainingSession)
+
+    trainer_name = @actor&.full_name.presence ||
+                   @metadata['trainer_name'].presence ||
+                   preloaded_trainer_name ||
+                   'A trainer'
+    application = @notifiable.application
+    constituent_name = application&.constituent_full_name.presence ||
+                       @notifiable.constituent&.full_name.presence ||
+                       'a constituent'
+    application_id = @metadata['application_id'].presence || application&.id
+
+    "#{trainer_name} #{verb_phrase} for #{constituent_name} for Application ##{application_id}."
+  end
+
+  def preloaded_trainer_name
+    return unless @notifiable.association(:trainer).loaded?
+
+    @notifiable.trainer&.full_name.presence
+  end
+
   def find_training_session(application, actor)
     return nil unless application.respond_to?(:training_sessions) && actor
 
-    application.training_sessions.where(trainer_id: actor.id).order(:created_at).last
+    if application.training_sessions.loaded?
+      application.training_sessions.select { |ts| ts.trainer_id == actor.id }.max_by(&:created_at)
+    else
+      application.training_sessions.where(trainer_id: actor.id).order(:created_at).last
+    end
   end
 end

@@ -94,7 +94,7 @@ module Evaluators
 
     def show
       # @evaluation is set by set_evaluation
-      @can_manage_evaluation = assigned_evaluator?
+      prepare_show_context
     end
 
     def new
@@ -122,49 +122,60 @@ module Evaluators
     end
 
     def update
-      process_attendees_param
-      process_products_tried_param
+      if completing_evaluation?
+        result = ::Evaluations::SubmissionService.new(@evaluation, params, actor: current_user).call
+
+        if result.success?
+          redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
+        else
+          prepare_show_context
+          flash.now[:alert] = "Failed to submit evaluation: #{result.message}"
+          render :show, status: :unprocessable_content
+        end
+        return
+      end
 
       if @evaluation.update(evaluation_params)
         redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
       else
-        render :edit, status: :unprocessable_content
+        # If updating from the show page forms, we want to re-render show with errors
+        # rather than the generic edit page
+        prepare_show_context
+        render :show, status: :unprocessable_content
       end
     end
 
     def schedule
-      @evaluation.evaluation_date = params[:evaluation_date]
-      @evaluation.location = params[:location]
-      @evaluation.notes = params[:notes]
-      @evaluation.status = :scheduled
+      result = ::Evaluations::ScheduleService.new(@evaluation, current_user, schedule_params).call
 
-      if @evaluation.save
+      if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation scheduled successfully.'
       else
-        redirect_to evaluators_evaluation_path(@evaluation), alert: @evaluation.errors.full_messages.join(', ')
+        prepare_show_context
+        flash.now[:alert] = "Failed to schedule evaluation: #{result.message}"
+        render :show, status: :unprocessable_content
       end
     end
 
     def reschedule
-      @evaluation.evaluation_date = params[:evaluation_date]
-      @evaluation.location = params[:location] if params[:location].present?
-      @evaluation.reschedule_reason = params[:reschedule_reason]
-      @evaluation.status = :scheduled # Reset to scheduled status
+      result = ::Evaluations::RescheduleService.new(@evaluation, current_user, reschedule_params).call
 
-      if @evaluation.save
+      if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation rescheduled successfully.'
       else
-        redirect_to evaluators_evaluation_path(@evaluation), alert: @evaluation.errors.full_messages.join(', ')
+        prepare_show_context
+        flash.now[:alert] = "Failed to reschedule evaluation: #{result.message}"
+        render :show, status: :unprocessable_content
       end
     end
 
     def submit_report
-      service = Evaluations::SubmissionService.new(@evaluation, params)
+      result = ::Evaluations::SubmissionService.new(@evaluation, params, actor: current_user).call
 
-      if service.submit
-        redirect_to evaluators_evaluation_path(@evaluation),
-                    notice: 'Evaluation submitted successfully.'
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
+        flash.now[:alert] = "Failed to submit evaluation: #{result.message}"
         render :edit, status: :unprocessable_content
       end
     end
@@ -175,6 +186,16 @@ module Evaluators
     end
 
     private
+
+    def prepare_show_context
+      @can_manage_evaluation = assigned_evaluator?
+      @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
+      @available_products = Product.order(:name)
+    end
+
+    def completing_evaluation?
+      params.dig(:evaluation, :status).to_s == 'completed' && !@evaluation.status_completed?
+    end
 
     def set_evaluation
       # If the current user is an admin, find the evaluation directly by ID
@@ -193,17 +214,34 @@ module Evaluators
         evaluation: [:constituent_id,
                      :application_id,
                      :evaluation_date,
-                     :evaluation_date,
                      :evaluation_type,
                      :status,
                      :notes,
+                     :post_completion_notes,
                      :location,
-                     :needs,
                      :reschedule_reason,
+                     :attendees_field,
                      { attendees: %i[name relationship],
                        products_tried: %i[product_id reaction],
+                       products_tried_field: [],
                        recommended_product_ids: [] }]
       )
+    end
+
+    def schedule_params
+      if params[:evaluation].present?
+        params.expect(evaluation: %i[evaluation_date location notes])
+      else
+        params.permit(:evaluation_date, :location, :notes)
+      end
+    end
+
+    def reschedule_params
+      if params[:evaluation].present?
+        params.expect(evaluation: %i[evaluation_date location reschedule_reason])
+      else
+        params.permit(:evaluation_date, :location, :reschedule_reason)
+      end
     end
 
     def require_evaluator!
@@ -255,25 +293,6 @@ module Evaluators
 
       # Include only constituent since that's all we use in the view
       ordered_query.includes(:constituent)
-    end
-
-    def process_attendees_param
-      return if params[:attendees_field].blank?
-
-      attendees = params[:attendees_field].split(',').map do |attendee_str|
-        name, relationship = attendee_str.strip.split('-').map(&:strip)
-        { 'name' => name, 'relationship' => relationship }
-      end
-      params[:attendees] = attendees
-    end
-
-    def process_products_tried_param
-      return if params[:products_tried_field].blank?
-
-      products_tried = params[:products_tried_field].map do |product_id|
-        { 'product_id' => product_id, 'reaction' => 'Recorded during evaluation' }
-      end
-      params[:products_tried] = products_tried
     end
 
     def assigned_evaluator?

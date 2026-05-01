@@ -4,7 +4,7 @@ import { createFormChangeDebounce } from "../../utils/debounce"
 
 /**
  * Controller for managing dependent-related fields
- * 
+ *
  * Responsible for toggling dependent contact information visibility and handling
  * the "Same as Guardian's" functionality for address, email, and phone.
  */
@@ -34,7 +34,7 @@ class DependentFieldsController extends Controller {
     "dependentZip"
   ]
 
-  
+
   static values = {
     copyFromGuardian: Boolean
   }
@@ -103,16 +103,13 @@ class DependentFieldsController extends Controller {
     const useGuardianContact = event.target.checked
     this.copyFromGuardianValue = useGuardianContact
 
-    // Use utility to toggle visibility and required state for the container
-    setVisible(this.addressFieldsTarget, !useGuardianContact)
+    setVisible(this.addressFieldsTarget, !useGuardianContact, { ariaHidden: useGuardianContact })
 
-    // Handle required attributes for individual input fields within the container
-    const inputFields = this.addressFieldsTarget.querySelectorAll('input')
-    inputFields.forEach(field => {
+    const requiredFields = this.addressFieldsTarget.querySelectorAll('[data-dependent-fields-required-when-visible="true"]')
+    requiredFields.forEach(field => {
       setVisible(field, !useGuardianContact, { required: !useGuardianContact })
     })
 
-    // Copy guardian contact info if needed
     if (useGuardianContact) {
       this.copyGuardianAddressInfo()
     }
@@ -123,19 +120,16 @@ class DependentFieldsController extends Controller {
    * @param {Event} event The change event from the checkbox
    */
   toggleEmailField(event) {
-    const useGuardianEmail = event.target.checked;
+    const useGuardianEmail = event.target.checked
 
-    if (!this.hasDependentEmailTarget) return;
+    if (!this.hasDependentEmailTarget) return
 
-    // Use utility to handle email field visibility and required state
-    setVisible(this.dependentEmailTarget, !useGuardianEmail, { required: !useGuardianEmail });
+    setVisible(this.dependentEmailTarget, !useGuardianEmail)
 
-    // Handle email field container visibility if available
     if (this.hasEmailFieldContainerTarget) {
-      setVisible(this.emailFieldContainerTarget, !useGuardianEmail);
+      setVisible(this.emailFieldContainerTarget, !useGuardianEmail, { ariaHidden: useGuardianEmail })
     }
 
-    // Copy guardian's email if needed
     if (useGuardianEmail) {
       this.copyGuardianEmail()
     }
@@ -146,19 +140,16 @@ class DependentFieldsController extends Controller {
    * @param {Event} event The change event from the checkbox
    */
   togglePhoneField(event) {
-    const useGuardianPhone = event.target.checked;
+    const useGuardianPhone = event.target.checked
 
-    if (!this.hasDependentPhoneTarget) return;
+    if (!this.hasDependentPhoneTarget) return
 
-    // Use utility to handle phone field visibility and required state
-    setVisible(this.dependentPhoneTarget, !useGuardianPhone, { required: !useGuardianPhone });
+    setVisible(this.dependentPhoneTarget, !useGuardianPhone)
 
-    // Handle phone field container visibility if available
     if (this.hasPhoneFieldContainerTarget) {
-      setVisible(this.phoneFieldContainerTarget, !useGuardianPhone);
+      setVisible(this.phoneFieldContainerTarget, !useGuardianPhone, { ariaHidden: useGuardianPhone })
     }
 
-    // Copy guardian's phone if needed
     if (useGuardianPhone) {
       this.copyGuardianPhone()
     }

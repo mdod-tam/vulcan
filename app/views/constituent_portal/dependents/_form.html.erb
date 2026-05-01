@@ -1,10 +1,11 @@
-<%= form_with(model: dependent_user, 
+<%= form_with(model: dependent_user,
     url: dependent_user.new_record? ? constituent_portal_dependents_path : constituent_portal_dependent_path(dependent_user),
-    local: true,
-    scope: :dependent,
-    class: "space-y-6",
-    "aria-labelledby": "form-title") do |form| %>
-  
+      local: true,
+      scope: :dependent,
+      class: "space-y-6",
+      "aria-labelledby": "form-title",
+      data: { controller: "dependent-fields" }) do |form| %>
+
   <% if dependent_user.errors.any? %>
     <div class="bg-red-50 p-4 rounded mb-6 text-red-600" role="alert" aria-atomic="true">
       <h2 class="font-medium">
@@ -24,33 +25,85 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <%= form.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.text_field :first_name, 
-            class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-            required: true %>
-      </div>
-      
-      <div>
-        <%= form.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.text_field :last_name, 
+        <%= form.text_field :first_name,
             class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
             required: true %>
       </div>
 
-      <div data-dependent-fields-target="emailFieldContainer">
-        <%= form.label :email, "Email", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.email_field :email, 
-            class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-            required: false %>
-        <p class="mt-1 text-xs text-gray-500">Optional; if left blank, guardian's email will be used</p>
-      </div>
-      
       <div>
-        <%= form.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.telephone_field :phone, 
+        <%= form.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.text_field :last_name,
             class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-            placeholder: "555-555-5555" %>
-        <p class="mt-1 text-xs text-gray-500">Optional; if left blank, guardian's phone will be used</p>
+            required: true %>
       </div>
+
+        <div class="space-y-3 md:col-span-2">
+          <% if dependent_user.new_record? %>
+            <div class="flex items-start">
+              <%= check_box_tag :use_guardian_email, "1", dependent_user.email.blank?,
+                  id: "use_guardian_email_checkbox",
+                  class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                  data: {
+                    dependent_fields_target: "sameEmailCheckbox",
+                    action: "change->dependent-fields#toggleEmailField"
+                  },
+                  "aria-controls": "dependent_email_field",
+                  "aria-describedby": "use_guardian_email_help" %>
+              <label for="use_guardian_email_checkbox" class="ml-2">
+                <span class="block text-sm font-medium text-gray-700">Use my email address</span>
+                <span id="use_guardian_email_help" class="block text-xs text-gray-500">Program communications for this dependent will go to you.</span>
+              </label>
+            </div>
+          <% end %>
+
+          <div id="dependent_email_field"
+               data-dependent-fields-target="emailFieldContainer"
+               class="<%= 'hidden' if dependent_user.new_record? && dependent_user.email.blank? %>"
+               aria-hidden="<%= dependent_user.new_record? && dependent_user.email.blank? %>">
+            <%= form.label :email, "Dependent Email", class: "block text-sm font-medium text-gray-700" %>
+            <%= form.email_field :email,
+                class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                required: false,
+                autocomplete: "email",
+                data: { dependent_fields_target: "dependentEmail" },
+                "aria-describedby": "dependent_email_help" %>
+            <p id="dependent_email_help" class="mt-1 text-xs text-gray-500">Leave blank to use your email address.</p>
+          </div>
+        </div>
+
+        <div class="space-y-3 md:col-span-2">
+          <% if dependent_user.new_record? %>
+            <div class="flex items-start">
+              <%= check_box_tag :use_guardian_phone, "1", dependent_user.phone.blank?,
+                  id: "use_guardian_phone_checkbox",
+                  class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                  data: {
+                    dependent_fields_target: "samePhoneCheckbox",
+                    action: "change->dependent-fields#togglePhoneField"
+                  },
+                  "aria-controls": "dependent_phone_field",
+                  "aria-describedby": "use_guardian_phone_help" %>
+              <label for="use_guardian_phone_checkbox" class="ml-2">
+                <span class="block text-sm font-medium text-gray-700">Use my phone number</span>
+                <span id="use_guardian_phone_help" class="block text-xs text-gray-500">We will call or text you about this dependent.</span>
+              </label>
+            </div>
+          <% end %>
+
+          <div id="dependent_phone_field"
+               data-dependent-fields-target="phoneFieldContainer"
+               class="<%= 'hidden' if dependent_user.new_record? && dependent_user.phone.blank? %>"
+               aria-hidden="<%= dependent_user.new_record? && dependent_user.phone.blank? %>">
+            <%= form.label :phone, "Dependent Phone Number", class: "block text-sm font-medium text-gray-700" %>
+            <%= form.telephone_field :phone,
+                class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                placeholder: "555-555-5555",
+                autocomplete: "tel",
+                data: { dependent_fields_target: "dependentPhone" },
+                "aria-describedby": "dependent_phone_help" %>
+            <p id="dependent_phone_help" class="mt-1 text-xs text-gray-500">Leave blank to use your phone number.</p>
+          </div>
+        </div>
 
       <div>
         <%= form.label :phone_type, "Phone Type", class: "block text-sm font-medium text-gray-700 mb-2" %>
@@ -75,7 +128,7 @@
 
       <div>
         <%= form.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.date_field :date_of_birth, 
+        <%= form.date_field :date_of_birth,
             class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
             required: true %>
       </div>
@@ -85,22 +138,22 @@
   <!-- Disability Information Section -->
   <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
     <h2 id="disability-section-title" class="text-lg font-medium text-gray-900">Disability Information</h2>
-    <fieldset class="space-y-2" 
+    <fieldset class="space-y-2"
               aria-required="true"
               aria-describedby="disability-error"
               aria-invalid="<%= dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>">
       <legend class="text-sm text-gray-700 font-medium">
-        Select at least one disability that applies to your dependent: 
+        Select at least one disability that applies to your dependent:
         <span class="text-red-600" aria-hidden="true">*</span>
         <span class="sr-only">(required)</span>
       </legend>
-      
+
       <% if dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>
         <div id="disability-error" role="alert" class="mt-2 p-3 bg-red-50 border border-red-400 text-red-700 rounded text-sm">
           <%= dependent_user.errors[:base].find { |msg| msg.include?('disability') } %>
         </div>
       <% end %>
-      
+
       <div class="grid sm:grid-cols-2 gap-4">
         <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
         <% disabilities.each do |disability| %>
@@ -149,7 +202,7 @@
         class: "inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
         role: "button",
         "aria-label": "Cancel and return to dashboard" %>
-        
+
     <%= form.submit dependent_user.new_record? ? "Add Dependent" : "Update Dependent",
         class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
         "aria-label": dependent_user.new_record? ? "Add new dependent" : "Update dependent information" %>

@@ -35,6 +35,7 @@ class ApplicationForm
   attribute :city, :string
   attribute :state, :string
   attribute :zip_code, :string
+  attribute :use_guardian_address, :boolean, default: false
 
   # Medical provider attributes
   attribute :medical_provider_name, :string
@@ -128,6 +129,7 @@ class ApplicationForm
     assign_disability_attributes(app_params)
 
     extract_address_attributes(app_params)
+    extract_guardian_address_strategy(params, app_params)
     extract_locale_attribute(params, app_params)
     extract_medical_provider_attributes(params)
     extract_alternate_contact_attributes(app_params)
@@ -177,6 +179,12 @@ class ApplicationForm
     self.city = app_params[:city] if app_params[:city]
     self.state = app_params[:state] if app_params[:state]
     self.zip_code = app_params[:zip_code] if app_params[:zip_code]
+  end
+
+  def extract_guardian_address_strategy(params, app_params)
+    raw_value = params[:use_guardian_address]
+    raw_value = app_params[:use_guardian_address] if raw_value.nil? && app_params.key?(:use_guardian_address)
+    self.use_guardian_address = to_boolean(raw_value) unless raw_value.nil?
   end
 
   def extract_locale_attribute(params, app_params)

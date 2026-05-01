@@ -2,24 +2,26 @@
 
 # Seed File for "training_session_notifications_training_cancelled"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_cancelled', format: :text, locale: 'es') do |template|
-  template.subject = 'Sesión de Entrenamiento Cancelada'
-  template.description = 'Enviado al usuario cuando se ha cancelado su sesión de capacitación programada.'
-  template.body = <<~TEXT
+template = EmailTemplate.find_or_initialize_by(name: 'training_session_notifications_training_cancelled', format: :text, locale: 'es')
+template.assign_attributes(
+  subject: 'Sesión de capacitación cancelada',
+  description: 'Enviado al usuario cuando se cancela su sesión de capacitación programada o asignación de capacitador.',
+  body: <<~TEXT,
     %<header_text>s
 
     Hola %<constituent_full_name>s,
 
-    Su sesión de entrenamiento que estaba programada para el %<scheduled_date_time_formatted>s ha sido cancelada. Pedimos disculpas por cualquier inconveniente.
+    %<cancellation_message>s
 
-    Si tiene preguntas o desea reprogramar, comuníquese con nuestro equipo a %<support_email>s o llame al (410) 767-6960.
+    Si tiene preguntas, comuníquese con nuestro equipo a %<support_email>s o llame al (410) 767-6960.
 
     %<footer_text>s
   TEXT
-  template.variables = {
-    'required' => %w[header_text constituent_full_name scheduled_date_time_formatted support_email footer_text],
-    'optional' => []
-  }
-  template.version = 1
-end
+  variables: {
+    'required' => %w[header_text constituent_full_name cancellation_message support_email footer_text],
+    'optional' => %w[scheduled_date_time_formatted]
+  },
+  version: 2
+)
+template.save!
 Rails.logger.debug 'Seeded training_session_notifications_training_cancelled_es (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

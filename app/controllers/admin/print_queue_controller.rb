@@ -58,7 +58,6 @@ module Admin
         printed_at: Time.current,
         admin_id: current_user.id
       )
-
       redirect_to admin_print_queue_index_path,
                   notice: "#{@letters.count} #{'letter'.pluralize(@letters.count)} marked as printed"
     end

@@ -124,7 +124,7 @@
             <div>
               <dt class="text-sm font-medium text-gray-700">Email</dt>
               <dd class="mt-1 text-sm text-gray-900">
-                <%= mail_to @application.alternate_contact_email, @application.alternate_contact_email, 
+                <%= mail_to @application.alternate_contact_email, @application.alternate_contact_email,
                     class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
               </dd>
             </div>
@@ -183,7 +183,7 @@
       <% else %>
         <p class="text-sm text-gray-700 mb-4">No certifying professional information provided.</p>
       <% end %>
-      
+
       <div>
         <span class="text-sm font-medium text-gray-700">Certification Status:</span>
         <% status = @application.medical_certification_status %>
@@ -198,7 +198,7 @@
     <%# Uploaded Documents Section %>
     <section aria-labelledby="documents-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="documents-heading" class="text-xl font-semibold mb-4 text-gray-900">Uploaded Documents</h2>
-      
+
       <% if @application.income_proof_required? %>
       <%# Income Proof %>
       <div class="mb-6">
@@ -215,15 +215,15 @@
           </div>
           <% if @application.income_proof.content_type.start_with?('image/') %>
             <div class="mt-3">
-              <%= image_tag url_for(@application.income_proof), 
-                  class: "max-w-xs rounded border border-gray-200", 
+              <%= image_tag url_for(@application.income_proof),
+                  class: "max-w-xs rounded border border-gray-200",
                   alt: "Uploaded income proof document: #{@application.income_proof.filename}" %>
             </div>
           <% end %>
         <% else %>
           <p class="text-sm text-gray-700 italic">No income proof document uploaded.</p>
         <% end %>
-        
+
         <% if @application.income_proof_status_rejected? %>
           <div class="mt-3">
             <%= link_to new_proof_constituent_portal_application_path(@application, proof_type: 'income'),
@@ -237,7 +237,7 @@
         <% end %>
       </div>
       <% end %>
-      
+
       <%# Residency Proof %>
       <div>
         <h3 class="text-lg font-medium text-gray-900 mb-3">Residency Proof</h3>
@@ -253,15 +253,15 @@
           </div>
           <% if @application.residency_proof.content_type.start_with?('image/') %>
             <div class="mt-3">
-              <%= image_tag url_for(@application.residency_proof), 
-                  class: "max-w-xs rounded border border-gray-200", 
+              <%= image_tag url_for(@application.residency_proof),
+                  class: "max-w-xs rounded border border-gray-200",
                   alt: "Uploaded residency proof document: #{@application.residency_proof.filename}" %>
             </div>
           <% end %>
         <% else %>
           <p class="text-sm text-gray-700 italic">No residency proof document uploaded.</p>
         <% end %>
-        
+
         <% if @application.residency_proof_status_rejected? %>
           <div class="mt-3">
             <%= link_to new_proof_constituent_portal_application_path(@application, proof_type: 'residency'),
@@ -290,15 +290,15 @@
           </div>
           <% if @application.id_proof.content_type.start_with?('image/') %>
             <div class="mt-3">
-              <%= image_tag url_for(@application.id_proof), 
-                  class: "max-w-xs rounded border border-gray-200", 
+              <%= image_tag url_for(@application.id_proof),
+                  class: "max-w-xs rounded border border-gray-200",
                   alt: "Uploaded ID proof document: #{@application.id_proof.filename}" %>
             </div>
           <% end %>
         <% else %>
           <p class="text-sm text-gray-700 italic">No ID proof document uploaded.</p>
         <% end %>
-        
+
         <% if @application.id_proof_status_rejected? %>
           <div class="mt-3">
             <%= link_to new_proof_constituent_portal_application_path(@application, proof_type: 'id'),
@@ -323,7 +323,7 @@
               <p class="text-sm text-gray-900"><%= note.content %></p>
               <footer class="mt-2">
                 <p class="text-xs text-gray-700">
-                  Added by <%= note.admin.full_name %> on 
+                  Added by <%= note.admin.full_name %> on
                   <time datetime="<%= note.created_at.iso8601 %>">
                     <%= note.created_at.strftime("%B %d, %Y at %I:%M %p") %>
                   </time>
@@ -349,7 +349,7 @@
             Back to Dashboard
           </span>
         <% end %>
-        
+
         <% if @application.editable_by?(current_user) %>
           <%= link_to edit_constituent_portal_application_path(@application),
               class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",

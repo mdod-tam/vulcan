@@ -29,18 +29,21 @@
         autosave_edit_form_url_value: constituent_portal_application_path(':id'),
         autosave_edit_autosave_url_value: autosave_field_constituent_portal_application_path(':id')
       }
-      if FeatureFlag.enabled?(:income_proof_required)
-        new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
-        new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
-        new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
-      end %>
+        if FeatureFlag.enabled?(:income_proof_required)
+          new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
+          new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
+          new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
+        end
+        if @applicant_type == "dependent"
+          new_app_form_data[:controller] = "dependent-fields #{new_app_form_data[:controller]}"
+        end %>
       <%= form_with(model: [:constituent_portal, @application],
           local: true,
           class: "space-y-6",
           html: { "aria-label": "Application form" },
           "aria-labelledby": "form-title",
           data: new_app_form_data) do |form| %>
-          
+
         <!-- Autosave status indicator -->
         <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden" role="status" aria-live="polite"></div>
 
@@ -84,14 +87,14 @@
         <!-- Applicant Information Section -->
         <section aria-labelledby="applicant-info-title" class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="applicant-info-title" class="text-lg font-medium text-gray-900">Applicant</h2>
-          
+
           <% if @applicant_type == 'dependent' && @selected_dependent_name.present? %>
             <%# Dependent application - show dependent name with option to change %>
             <div class="flex items-center justify-between">
               <p class="text-sm text-gray-700">
                 This application is for <span class="font-semibold text-gray-900"><%= @selected_dependent_name %></span>
               </p>
-              <%= link_to constituent_portal_dashboard_path, 
+              <%= link_to constituent_portal_dashboard_path,
                     class: "text-sm text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
                     "aria-label": "Return to dashboard to select a different applicant" do %>
                 <span class="flex items-center">
@@ -134,74 +137,12 @@
           </div>
         </section>
 
-        <!-- Address Information Section -->
-        <section aria-labelledby="address-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="address-section-title" class="text-lg font-medium text-gray-900">Address Information</h2>
-          <div class="space-y-4">
-            <div>
-              <%= form.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
-              <%= form.text_field :physical_address_1, 
-                  value: @address[:physical_address_1],
-                  class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
-                  required: true,
-                  data: { no_autosave: true } %>
-            </div>
-            
-            <div>
-              <%= form.label :physical_address_2, "Apartment/Suite", class: "block text-sm font-medium text-gray-700" %>
-              <%= form.text_field :physical_address_2, 
-                  value: @address[:physical_address_2],
-                  class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                  data: { no_autosave: true } %>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="md:col-span-1">
-                <%= form.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.text_field :city, 
-                    value: @address[:city],
-                    class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
-                    required: true,
-                    data: { no_autosave: true } %>
-              </div>
-              
-              <div>
-                <%= form.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.select :state, 
-                    options_for_select([
-                      ["Alabama", "AL"], ["Alaska", "AK"], ["Arizona", "AZ"], ["Arkansas", "AR"], 
-                      ["California", "CA"], ["Colorado", "CO"], ["Connecticut", "CT"], ["Delaware", "DE"], 
-                      ["Florida", "FL"], ["Georgia", "GA"], ["Hawaii", "HI"], ["Idaho", "ID"], 
-                      ["Illinois", "IL"], ["Indiana", "IN"], ["Iowa", "IA"], ["Kansas", "KS"], 
-                      ["Kentucky", "KY"], ["Louisiana", "LA"], ["Maine", "ME"], ["Maryland", "MD"], 
-                      ["Massachusetts", "MA"], ["Michigan", "MI"], ["Minnesota", "MN"], ["Mississippi", "MS"], 
-                      ["Missouri", "MO"], ["Montana", "MT"], ["Nebraska", "NE"], ["Nevada", "NV"], 
-                      ["New Hampshire", "NH"], ["New Jersey", "NJ"], ["New Mexico", "NM"], ["New York", "NY"], 
-                      ["North Carolina", "NC"], ["North Dakota", "ND"], ["Ohio", "OH"], ["Oklahoma", "OK"], 
-                      ["Oregon", "OR"], ["Pennsylvania", "PA"], ["Rhode Island", "RI"], ["South Carolina", "SC"], 
-                      ["South Dakota", "SD"], ["Tennessee", "TN"], ["Texas", "TX"], ["Utah", "UT"], 
-                      ["Vermont", "VT"], ["Virginia", "VA"], ["Washington", "WA"], ["West Virginia", "WV"], 
-                      ["Wisconsin", "WI"], ["Wyoming", "WY"], ["District of Columbia", "DC"]
-                    ], (@address && @address.respond_to?(:[]) ? @address[:state] : nil) || params.dig(:application, :state) || current_user&.state || "MD"),
-                    { include_blank: "Select State" },
-                    { class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
-                      required: true,
-                      data: { no_autosave: true } } %>
-              </div>
-              
-              <div>
-                <%= form.label :zip_code, "Zip Code", class: "block text-sm font-medium text-gray-700" %>
-                <%= form.text_field :zip_code, 
-                    value: @address[:zip_code],
-                    class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                    required: true,
-                    pattern: "\\d{5}(-\\d{4})?",
-                    title: "5-digit zip code (12345) or 9-digit zip code (12345-6789)",
-                    data: { no_autosave: true } %>
-              </div>
-            </div>
-          </div>
-        </section>
+          <%= render "address_fields",
+            form: form,
+            address: @address,
+            guardian_address: @guardian_address,
+            dependent_application: @applicant_type == "dependent",
+            use_guardian_address: @use_guardian_address %>
 
         <!-- Disability Certification Group - Contains Disability Info and Certifying Professional -->
         <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -212,7 +153,7 @@
             <h3 id="disability-section-title" class="text-base font-medium text-gray-900 required-label">Disability Information</h3>
             <div class="flex items-start">
               <%= form.check_box :self_certify_disability,
-                  { 
+                  {
                     class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                     "aria-describedby": "disability-certification-description",
                     "aria-required": "true"
@@ -255,13 +196,13 @@
         <section aria-labelledby="alternate-contact-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
           <p class="text-sm text-gray-700">You may provide an alternate contact person who can be contacted regarding your application.</p>
-          
+
           <div class="space-y-4">
             <div>
               <%= form.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
               <%= form.text_field :alternate_contact_name, autocomplete: "name", class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
             </div>
-            
+
             <div>
               <%= form.label :alternate_contact_relationship_type, "Relationship", class: "block text-sm font-medium text-gray-700" %>
               <% relationship_options = [
@@ -278,7 +219,7 @@
                   { prompt: "Select a relationship" },
                   class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
             </div>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <%= form.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
@@ -295,14 +236,14 @@
         <!-- Required Documentation Section -->
         <fieldset class="space-y-6 p-4 bg-gray-50 rounded">
           <legend class="text-lg font-medium text-gray-900">Required Documentation</legend>
-          
+
           <% if FeatureFlag.enabled?(:income_proof_required) %>
           <!-- Income Verification Subsection -->
           <div class="space-y-4">
             <h3 class="text-base font-medium text-gray-900">Income Verification</h3>
-            
+
             <%# Income Information - grouped with income proof for logical flow %>
-            <div class="p-4 border-2 border-gray-200 rounded-md bg-white transition-colors duration-200" 
+            <div class="p-4 border-2 border-gray-200 rounded-md bg-white transition-colors duration-200"
                  data-income-validation-target="incomeFieldsContainer">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -314,7 +255,7 @@
                         class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-500 rounded-md",
                         "aria-describedby": "household_size_help",
                         "aria-required": "true",
-                        data: { 
+                        data: {
                           "income-validation-target": "householdSize"
                         } %>
                   </div>
@@ -336,7 +277,7 @@
                         "aria-describedby": "annual_income_help",
                         "aria-required": "true",
                         inputmode: "decimal",
-                        data: { 
+                        data: {
                           "income-validation-target": "annualIncome",
                           currency_formatter_target: "input"
                         } %>
@@ -354,10 +295,10 @@
             <div>
               <label for="application_income_proof" class="block text-sm font-medium text-gray-700">Upload Income Proof Document</label>
               <p id="income-hint" class="text-xs text-gray-700 mb-2">
-                We need proof of your household income. Please provide one of the following acceptable documents: 
-                <strong>Tax return</strong> (preferred), <strong>current year SSA award letter</strong> (less than 2 months old), 
-                <strong>recent bank statement</strong> showing your SSA deposit, <strong>current, unexpired SSA/SSI/SSDI documentation</strong>, 
-                <strong>current, unexpired Medicaid and/or SNAP award letter</strong>, or <strong>current, unexpired VA Benefits letter</strong>. 
+                We need proof of your household income. Please provide one of the following acceptable documents:
+                <strong>Tax return</strong> (preferred), <strong>current year SSA award letter</strong> (less than 2 months old),
+                <strong>recent bank statement</strong> showing your SSA deposit, <strong>current, unexpired SSA/SSI/SSDI documentation</strong>,
+                <strong>current, unexpired Medicaid and/or SNAP award letter</strong>, or <strong>current, unexpired VA Benefits letter</strong>.
                 <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
               </p>
               <%= form.file_field :income_proof,
@@ -375,7 +316,7 @@
           <!-- Residency Verification Subsection -->
           <div class="space-y-4 pt-4 border-t border-gray-200">
             <h3 class="text-base font-medium text-gray-900">Residency Verification</h3>
-            
+
             <%# Maryland residency attestation - grouped with residency proof for logical flow %>
             <div class="p-3 bg-white border border-gray-200 rounded">
               <div class="flex items-start">
@@ -393,8 +334,8 @@
             <div>
               <label for="application_residency_proof" class="block text-sm font-medium text-gray-700 required-label">Upload Residency Proof Document</label>
               <p id="residency-hint" class="text-xs text-gray-700 mb-2">
-                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
-                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>. 
+                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>,
+                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>.
                 <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
               </p>
               <%= form.file_field :residency_proof,
@@ -411,12 +352,12 @@
           <!-- ID Verification Subsection -->
           <div class="space-y-4 pt-4 border-t border-gray-200">
             <h3 class="text-base font-medium text-gray-900">ID Verification</h3>
-            
+
             <div>
               <label for="application_id_proof" class="block text-sm font-medium text-gray-700 required-label">Upload ID Proof Document</label>
               <p id="id-hint" class="text-xs text-gray-700 mb-2">
-                Upload a government-issued photo ID such as a <strong>driver's license</strong>, <strong>state ID card</strong>, 
-                <strong>identification card</strong>, or <strong>passport</strong>. 
+                Upload a government-issued photo ID such as a <strong>driver's license</strong>, <strong>state ID card</strong>,
+                <strong>identification card</strong>, or <strong>passport</strong>.
                 <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
               </p>
               <%= form.file_field :id_proof,
@@ -438,13 +379,13 @@
               class: "px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
               role: "button",
               "aria-label": "Cancel application and return to applications list" %>
-              
+
           <%= form.submit "Save Application",
               name: "save_draft",
               class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
               "aria-label": "Save application draft" %>
 
-          <%= form.submit "Submit Application", 
+          <%= form.submit "Submit Application",
               name: "submit_application",
               class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
               "aria-label": "Submit final application",

@@ -36,15 +36,35 @@ en:
             base:
               training_service_window: "This application is outside the service window for training services."
               evaluation_service_window: "This application is outside the service window for evaluation services."
+              training_session_quota_exhausted: "This constituent has used all available training sessions."
+              training_session_active: "This constituent already has an active training session."
+              training_session_not_active: "This constituent does not have an active training session."
+        training_session:
+          attributes:
+            base:
+              duplicate_open_session: "This application already has an active training session."
+              historical_session_reopen: "Historical training sessions cannot be reopened. Schedule a follow-up session instead."
+  activity_history:
+    labels:
+      training_scheduled: "Training Scheduled"
+      training_completed: "Training Completed"
+      training_cancelled: "Training Cancelled"
+      training_rescheduled: "Training Rescheduled"
+      training_followup_scheduled: "Follow-up Training Scheduled"
+      training_no_show: "No Show"
+      training_missed: "No Show"
+      training_status_changed: "Training Status Changed"
+      evaluation_scheduled: "Evaluation Scheduled"
+      evaluation_completed: "Evaluation Completed"
+      evaluation_rescheduled: "Evaluation Rescheduled"
+      requested_additional_info: "Additional Info Requested"
+      evaluator_assigned: "Evaluator Assigned"
+      equipment_bids_sent: "Equipment Bids Sent"
+      equipment_po_sent: "PO Sent to Vendor"
+    details:
+      followup_scheduled_for: "Follow-up scheduled for"
+      reason: "Reason: %{reason}"
   applications:
-    alternate_contact_relationship_types:
-      parent: "Parent"
-      spouse: "Spouse"
-      child: "Child"
-      sibling: "Sibling"
-      neighbor: "Neighbor"
-      friend: "Friend"
-      other: "Other"
     training_requests:
       messages:
         ineligible: "Only approved applications are eligible for training."
@@ -53,6 +73,53 @@ en:
         active_session: "You already have a training session in progress."
         quota_exhausted: "You have used all of your available training sessions."
         submitted: "Training request submitted. An administrator will contact you to schedule your session."
+    alternate_contact_relationship_types:
+      parent: "Parent"
+      spouse: "Spouse"
+      child: "Child"
+      sibling: "Sibling"
+      neighbor: "Neighbor"
+      friend: "Friend"
+      other: "Other"
+  trainers:
+    training_sessions:
+      flash:
+        assigned_trainer_only: "Only the assigned trainer can update this training session."
+        update_status_failed: "Failed to update training session status: %{message}"
+        complete_failed: "Failed to complete training session: %{message}"
+        schedule_failed: "Failed to schedule training session: %{message}"
+        reschedule_failed: "Failed to reschedule training session: %{message}"
+        cancel_failed: "Failed to cancel training session: %{message}"
+        follow_up_failed: "Failed to schedule follow-up training session: %{message}"
+      follow_up:
+        title: "Schedule new training date"
+        description: "Use this after confirming a new date with the constituent."
+        scheduled_for_label: "New Date/Time"
+        location_label: "Location"
+        location_placeholder: "e.g., Constituent's Home, Library, Online"
+        reason_label: "Reason for Follow-up"
+        reason_placeholder: "Please provide a reason..."
+        reason_hint: "Please provide a reason for scheduling follow-up training."
+        required: "(required)"
+        submit: "Schedule new training date"
+      read_only_notice: "This is a read-only oversight view. Only the assigned trainer can update this training session."
+  training_session_notifications:
+    training_cancelled:
+      scheduled_message: "Your training session that was scheduled for %{scheduled_for} has been cancelled. We apologize for any inconvenience."
+      assignment_removed_message: "Your trainer assignment has been removed before a session date was scheduled. We are working to assign you to a new trainer."
+  training_sessions:
+    reschedule:
+      wrong_status: "Only scheduled or confirmed training sessions can be rescheduled."
+    schedule_follow_up:
+      success: "Follow-up training session scheduled successfully."
+      invalid_source: "Only cancelled or no-show training sessions can have a follow-up scheduled."
+      missing_required_fields: "scheduled_for and reschedule_reason are required"
+      service_window_closed: "Training is no longer available for this application."
+      quota_exhausted: "This constituent has used all available training sessions."
+      active_session: "This constituent already has an active training session."
+      invalid_scheduled_for: "scheduled_for must be a valid date and time"
+      scheduled_for_in_future: "scheduled_for must be in the future"
+      unexpected_error: "An unexpected error occurred: %{message}"
   application_notifications:
     proof_rejected:
       remaining_attempts_message:
@@ -140,6 +207,17 @@ en:
       assign_trainer:
         trainer_assign_pass: "Trainer successfully assigned."
         trainer_assign_fail: "Failed to assign trainer."
+      unassign_trainer:
+        trainer_unassign_pass: "Trainer assignment removed."
+        trainer_unassign_fail: "Failed to remove trainer assignment."
+      training_follow_up_needed:
+        title: "Training needs follow-up"
+        summary: "Last session: %{status} on %{date}."
+        reason_label: "Reason:"
+        view_session: "View historical session"
+        assign_heading: "Assign trainer for follow-up"
+        assign_select_label: "Select trainer for follow-up"
+        assign_submit: "Assign trainer for follow-up"
       schedule_training:
         t_schedule_invalid: "Invalid trainer selected."
         t_schedule_fail: "Failed to schedule training session."

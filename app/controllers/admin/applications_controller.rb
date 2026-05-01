@@ -28,7 +28,7 @@ module Admin
     before_action :set_application, only: %i[
       show edit update
       request_documents review_proof update_proof_status
-      approve reject assign_evaluator assign_trainer
+      approve reject assign_evaluator assign_trainer request_evaluation
       update_certification_status resend_medical_certification assign_voucher
       upload_medical_certification send_document_signing_request
       queue_medical_certification_form
@@ -46,6 +46,15 @@ module Admin
 
       # Skip heavy ActiveStorage eager-loading; we preload attachment existence separately
       scoped = filtered_scope(build_application_base_scope(exclude_statuses: excluded_statuses))
+
+      scoped = if filtered_status == :training_requests
+                 scoped.includes(:user, :training_sessions)
+               elsif filtered_status == :evaluation_requests
+                 scoped.includes(:user)
+               else
+                 scoped.includes(:user, :managing_guardian)
+               end
+
       @pagy, page_of_apps = paginate(scoped)
       # ApplicationDataLoading concern: Efficiently preloads attachments for multiple applications
       # Flow: preload_attachments_for_applications -> groups attachments by application_id to avoid N+1 queries
@@ -63,6 +72,7 @@ module Admin
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
+      preload_notification_message_dependencies(@recent_notifications)
     end
 
     def show
@@ -79,16 +89,8 @@ module Admin
       certification_service = Applications::CertificationEventsService.new(@application)
       @certification_events = certification_service.certification_events
       @certification_requests = certification_service.request_events
-      @max_training_sessions = Policy.get('max_training_sessions').to_i # Fetch policy limit, ensure integer
-
-      # Handle potential nil case for completed_sessions
-      @completed_training_sessions_count = if @application.respond_to?(:training_sessions) &&
-                                              @application.training_sessions.respond_to?(:completed_sessions) &&
-                                              @application.training_sessions.completed_sessions.present?
-                                             @application.training_sessions.completed_sessions.count
-                                           else
-                                             0 # Default to 0 if there are no completed sessions or the method doesn't exist
-                                           end
+      @max_training_sessions = Policy.max_training_sessions
+      @completed_training_sessions_count = @application.completed_training_sessions_count
     end
 
     def edit; end
@@ -146,7 +148,7 @@ module Admin
     end
 
     def request_documents
-      @application.request_documents!
+      @application.request_documents!(user: current_user)
       redirect_to admin_application_path(@application), notice: t('.d_requested')
     end
 
@@ -229,7 +231,7 @@ module Admin
 
     def assign_evaluator
       @application = Application.find(params[:id])
-      evaluator = Users::Evaluator.find(params[:evaluator_id])
+      evaluator = User.find(params[:evaluator_id])
 
       if @application.assign_evaluator!(evaluator)
         redirect_to admin_application_path(@application),
@@ -242,7 +244,7 @@ module Admin
 
     def assign_trainer
       @application = Application.find(params[:id])
-      trainer = Users::Trainer.find(params[:trainer_id])
+      trainer = User.find(params[:trainer_id])
 
       if @application.assign_trainer!(trainer)
         redirect_to admin_application_path(@application),
@@ -251,6 +253,37 @@ module Admin
         redirect_to admin_application_path(@application),
                     alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_assign_fail')
       end
+    end
+
+    def unassign_trainer
+      @application = Application.find(params[:id])
+
+      if @application.unassign_trainer!(actor: current_user, reason: params[:unassign_reason])
+        redirect_to admin_application_path(@application),
+                    notice: t('.trainer_unassign_pass')
+      else
+        redirect_to admin_application_path(@application),
+                    alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_unassign_fail')
+      end
+    end
+
+    # Marks this application as explicitly needing an evaluation. This is the
+    # admin-initiated "this person needs an evaluation" flag that feeds the
+    # evaluation-request queue. It is distinct from assigning an evaluator:
+    # the queue goes away once an evaluator is assigned.
+    def request_evaluation
+      @application.request_evaluation!(actor: current_user)
+      redirect_to admin_application_path(@application),
+                  notice: 'Evaluation requested. Assign an evaluator when ready.'
+    rescue ArgumentError => e
+      redirect_to admin_application_path(@application), alert: e.message
+    rescue ActiveRecord::RecordInvalid => e
+      redirect_to admin_application_path(@application),
+                  alert: e.record.errors.full_messages.to_sentence.presence || e.message
+    rescue StandardError => e
+      Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.message}"
+      redirect_to admin_application_path(@application),
+                  alert: "Failed to request evaluation: #{e.message}"
     end
 
     # Updates medical certification status and handles file uploads
@@ -442,7 +475,7 @@ module Admin
         else
           flash.now[:alert] = result.message || 'Failed to queue DCF for printing.'
           format.turbo_stream do
-            render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash'), status: :unprocessable_entity
+            render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash'), status: :unprocessable_content
           end
           format.html { redirect_to admin_application_path(@application), alert: result.message || 'Failed to queue DCF for printing.' }
         end

@@ -251,6 +251,23 @@ class Application < ApplicationRecord
       SQL
   }
 
+  # Pending evaluation-request queue: applications with an explicit
+  # `evaluation_requested_at` timestamp and no evaluation created after the
+  # request. We intentionally do NOT infer "needs evaluation" from
+  # fulfillment_type or approval status.
+  scope :with_pending_evaluation_request, lambda {
+    where(status: :approved)
+      .where.not(evaluation_requested_at: nil)
+      .where(<<~SQL.squish)
+        NOT EXISTS (
+          SELECT 1
+          FROM evaluations
+          WHERE evaluations.application_id = applications.id
+            AND evaluations.created_at >= applications.evaluation_requested_at
+        )
+      SQL
+  }
+
   scope :with_pending_training, lambda {
     joins(:training_sessions).merge(TrainingSession.where(status: %i[requested scheduled confirmed])).distinct
   }
@@ -514,6 +531,43 @@ class Application < ApplicationRecord
     managing_guardian_id.present?
   end
 
+  # --- Admin Fulfillment Responsibility Tracking ---
+
+  def admin_fulfillment_responsibility_state
+    return :voucher_no_equipment if voucher_fulfillment?
+
+    # Only track fulfillment responsibility AFTER an evaluation is completed
+    return :pending_evaluation unless evaluations.completed_sessions.any?
+
+    if equipment_po_sent_at.present?
+      :po_sent
+    elsif equipment_bids_sent_at.present?
+      :bids_sent
+    else
+      :needs_action
+    end
+  end
+
+  def mark_equipment_bids_sent!(date:, actor:)
+    update!(equipment_bids_sent_at: date)
+    AuditEventService.log(
+      action: 'equipment_bids_sent',
+      actor: actor,
+      auditable: self,
+      metadata: { date: date }
+    )
+  end
+
+  def mark_equipment_po_sent!(date:, actor:)
+    update!(equipment_po_sent_at: date)
+    AuditEventService.log(
+      action: 'equipment_po_sent',
+      actor: actor,
+      auditable: self,
+      metadata: { date: date }
+    )
+  end
+
   # --- Workflow predicates ---
 
   def income_collection_enabled?
@@ -545,7 +599,7 @@ class Application < ApplicationRecord
   end
 
   def active_training_session
-    training_sessions.assigned_or_scheduled.order(created_at: :desc).first
+    training_sessions.assigned_or_scheduled.order(created_at: :desc, id: :desc).first
   end
 
   def training_request_pending?
@@ -554,12 +608,45 @@ class Application < ApplicationRecord
       training_sessions.where(created_at: training_requested_at..).none?
   end
 
+  # True only when an admin-initiated evaluation request is outstanding.
+  # Pending means `evaluation_requested_at` is present and there is no
+  # evaluation created after that request (any status — active assignment,
+  # requested, scheduled, or even completed closes the request).
+  def evaluation_request_pending?
+    evaluation_requested_at.present? &&
+      evaluations.where(created_at: evaluation_requested_at..).none?
+  end
+
+  def request_evaluation!(actor:)
+    raise ArgumentError, 'Evaluation can only be requested on approved applications' unless status_approved?
+    raise ArgumentError, 'An evaluation request is already pending' if evaluation_request_pending?
+
+    update!(evaluation_requested_at: Time.current)
+    AuditEventService.log(
+      action: 'evaluation_requested',
+      actor: actor,
+      auditable: self,
+      metadata: { application_id: id }
+    )
+  end
+
   def service_window_active?
     return false unless status_approved?
     return false if application_date.blank?
 
+    end_date = service_window_end_date
+    end_date.present? && end_date > Date.current
+  end
+
+  # Last eligible date for this application's service window, based on the
+  # current `waiting_period_years` Policy (no new policy key). Returns nil
+  # when `application_date` is blank. Shared between eligibility checks and
+  # constituent-facing copy so the calculation isn't duplicated in views.
+  def service_window_end_date
+    return nil if application_date.blank?
+
     waiting_period = Policy.get('waiting_period_years') || 3
-    application_date.to_date + waiting_period.years > Date.current
+    application_date.to_date + waiting_period.years
   end
 
   # Returns the guardian relationship type for this application
