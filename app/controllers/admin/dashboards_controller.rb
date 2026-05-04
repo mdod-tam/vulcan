@@ -16,7 +16,7 @@ module Admin
                               .includes(:actor, :notifiable)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
-                              .limit(5)
+                              .limit(3)
 
       preload_notification_message_dependencies(@recent_notifications)
 

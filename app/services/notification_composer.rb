@@ -15,6 +15,7 @@
 #
 class NotificationComposer
   include ActionView::Helpers::TextHelper # For helpers like pluralize
+  include ActionView::Helpers::UrlHelper # For link_to
 
   def self.generate(notification_action, notifiable, actor = nil, metadata = {})
     new(notification_action, notifiable, actor, metadata).generate
@@ -38,6 +39,12 @@ class NotificationComposer
 
   private
 
+  def application_reference
+    return "Application missing" unless @notifiable&.id
+
+    link_to("Application ##{@notifiable.id}", "/admin/applications/#{@notifiable.id}", class: "text-indigo-600 hover:text-indigo-500")
+  end
+
   # --- Message Generation Methods ---
 
   def message_for_trainer_assigned
@@ -48,12 +55,12 @@ class NotificationComposer
     training_session = find_training_session(application, @actor)
     status_info = training_session ? " (#{training_session.status.humanize})" : ''
 
-    "#{trainer_name} assigned to train #{constituent_name} for Application ##{@notifiable&.id}#{status_info}."
+    "#{trainer_name} assigned to train #{constituent_name} for #{application_reference}#{status_info}."
   end
 
   def message_for_training_requested
     constituent_name = @actor&.full_name || @notifiable&.constituent_full_name || 'A constituent'
-    "#{constituent_name} requested training for Application ##{@notifiable&.id}."
+    "#{constituent_name} requested training for #{application_reference}."
   end
 
   def message_for_training_scheduled
@@ -77,38 +84,38 @@ class NotificationComposer
     reason = @metadata['rejection_reason']
     reason_text = reason.present? ? " - #{reason}" : ''
 
-    "#{proof_type} rejected for application ##{@notifiable&.id}#{reason_text}."
+    "#{proof_type} rejected for #{application_reference.downcase}#{reason_text}."
   end
 
   def message_for_proof_approved
     proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    "#{proof_type} approved for application ##{@notifiable&.id}."
+    "#{proof_type} approved for #{application_reference.downcase}."
   end
 
   def message_for_medical_certification_requested
-    "Disability certification requested for application ##{@notifiable&.id}"
+    "Disability certification requested for #{application_reference.downcase}"
   end
 
   def message_for_medical_certification_received
-    "Disability certification received for application ##{@notifiable&.id}"
+    "Disability certification received for #{application_reference.downcase}"
   end
 
   def message_for_medical_certification_approved
-    "Disability certification approved for application ##{@notifiable&.id}"
+    "Disability certification approved for #{application_reference.downcase}"
   end
 
   def message_for_medical_certification_rejected
     reason = @metadata['reason']
     reason_text = reason.present? ? " - #{reason}" : ''
-    "Disability certification rejected for application ##{@notifiable&.id}#{reason_text}."
+    "Disability certification rejected for #{application_reference.downcase}#{reason_text}."
   end
 
   def message_for_documents_requested
-    "Documents requested for application ##{@notifiable&.id}"
+    "Documents requested for #{application_reference.downcase}"
   end
 
   def message_for_review_requested
-    "Review requested for application ##{@notifiable&.id}"
+    "Review requested for #{application_reference.downcase}"
   end
 
   def default_message
@@ -130,7 +137,7 @@ class NotificationComposer
                        'a constituent'
     application_id = @metadata['application_id'].presence || application&.id
 
-    "#{trainer_name} #{verb_phrase} for #{constituent_name} for Application ##{application_id}."
+    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference}."
   end
 
   def preloaded_trainer_name
