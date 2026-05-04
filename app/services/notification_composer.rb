@@ -39,10 +39,11 @@ class NotificationComposer
 
   private
 
-  def application_reference
-    return "Application missing" unless @notifiable&.id
+  def application_reference(application=nil)
+    application ||= @notifiable
+    return "Application missing" unless application&.id
 
-    link_to("Application ##{@notifiable.id}", "/admin/applications/#{@notifiable.id}", class: "text-indigo-600 hover:text-indigo-500")
+    link_to("Application ##{application.id}", "/admin/applications/#{application.id}", class: "text-indigo-600 hover:text-indigo-500")
   end
 
   # --- Message Generation Methods ---
@@ -137,7 +138,7 @@ class NotificationComposer
                        'a constituent'
     application_id = @metadata['application_id'].presence || application&.id
 
-    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference}."
+    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference(application)}."
   end
 
   def preloaded_trainer_name
