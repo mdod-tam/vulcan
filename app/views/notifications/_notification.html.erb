@@ -62,7 +62,7 @@
   <div class="flex-1 min-w-0">
     <div class="flex justify-between">
       <p class="text-sm font-medium text-gray-900 <%= notification.read_at.nil? ? 'font-semibold' : '' %>">
-        <%= notification.message %>
+        <%= notification.message.html_safe %>
       </p>
       <% if notification.read_at.nil? %>
         <%= button_to mark_as_read_notification_path(notification), method: :post, 
