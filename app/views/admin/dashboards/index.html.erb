@@ -58,7 +58,7 @@
                 </div>
               </li>
             <% end %>
-          </ul>
+          </ul>          
 
           <% if @pagy_assigned_notes && @pagy_assigned_notes.pages > 1 %>
             <div class="mt-4 pt-4 border-t border-gray-200">
@@ -67,6 +67,32 @@
           <% end %>
         </section>
       <% end %>
+
+    <%# Notifications Section %>
+    <section aria-labelledby="notifications-heading" class="bg-white rounded-lg shadow p-4 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="notifications-heading" class="text-lg font-medium text-gray-900">Recent Notifications</h2>
+        <%= link_to notifications_path(scope: 'all'), 
+            class: "text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center",
+            aria: { label: "View all notifications" } do %>
+          View All
+          <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        <% end %>
+      </div>
+      
+      <% if @recent_notifications.present? %>
+        <ul class="divide-y divide-gray-200">
+          <% @recent_notifications.each do |notification| %>
+            <%= render "notifications/notification", notification: notification %>
+          <% end %>
+        </ul>
+      <% else %>
+        <p class="text-sm text-gray-500">No recent notifications</p>
+      <% end %>
+    </section>
+
       <%# 
         Administrative Action Buttons
       %>
@@ -283,32 +309,13 @@
             aria: { label: "View applications with training requests" } do %>
           <span>Training Requests (<%= @metrics[:training_requests_count] %>)</span>
         <% end %>
-      </div>
-    </section>
 
-    <%# Notifications Section %>
-    <section aria-labelledby="notifications-heading" class="bg-white rounded-lg shadow p-4 mb-6">
-      <div class="flex items-center justify-between mb-4">
-        <h2 id="notifications-heading" class="text-lg font-medium text-gray-900">Recent Notifications</h2>
-        <%= link_to notifications_path(scope: 'all'), 
-            class: "text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center",
-            aria: { label: "View all notifications" } do %>
-          View All
-          <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
+        <%= link_to admin_applications_path(filter: 'evaluation_requests'),
+            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+            aria: { label: "View applications with evaluation requests" } do %>
+          <span>Evaluation Requests (<%= @metrics[:evaluation_requests_count] %>)</span>
         <% end %>
       </div>
-      
-      <% if @recent_notifications.present? %>
-        <ul class="divide-y divide-gray-200">
-          <% @recent_notifications.each do |notification| %>
-            <%= render "notifications/notification", notification: notification %>
-          <% end %>
-        </ul>
-      <% else %>
-        <p class="text-sm text-gray-500">No recent notifications</p>
-      <% end %>
     </section>
 
     <%# Charts Section - Lazy-loaded via Turbo Frame for better performance %>

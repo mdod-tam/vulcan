@@ -71,11 +71,11 @@ module UserProfile
 
   def disabilities
     disability_list = []
-    disability_list << 'Hearing Disability' if hearing_disability
-    disability_list << 'Vision Disability' if vision_disability
-    disability_list << 'Speech Disability' if speech_disability
-    disability_list << 'Mobility Disability' if mobility_disability
-    disability_list << 'Cognition Disability' if cognition_disability
+    disability_list << 'Hearing' if hearing_disability
+    disability_list << 'Vision' if vision_disability
+    disability_list << 'Speech' if speech_disability
+    disability_list << 'Mobility' if mobility_disability
+    disability_list << 'Cognition' if cognition_disability
     disability_list
   end
 

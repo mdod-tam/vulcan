@@ -78,15 +78,32 @@ module Applications
         speech_disability: @form.speech_disability,
         mobility_disability: @form.mobility_disability,
         cognition_disability: @form.cognition_disability,
+        locale: @form.locale
+      }.merge(address_attributes).compact
+
+      applicant_user.update!(user_attrs)
+    end
+
+    def address_attributes
+      return guardian_address_attributes if @form.for_dependent? && @form.use_guardian_address
+
+      {
         physical_address_1: @form.physical_address_1,
         physical_address_2: @form.physical_address_2,
         city: @form.city,
         state: @form.state,
-        zip_code: @form.zip_code,
-        locale: @form.locale
-      }.compact
+        zip_code: @form.zip_code
+      }
+    end
 
-      applicant_user.update!(user_attrs)
+    def guardian_address_attributes
+      {
+        physical_address_1: @form.current_user.physical_address_1,
+        physical_address_2: @form.current_user.physical_address_2,
+        city: @form.current_user.city,
+        state: @form.current_user.state,
+        zip_code: @form.current_user.zip_code
+      }
     end
 
     def create_or_update_application

@@ -26,7 +26,7 @@ export default class extends Controller {
     this.suggestionsContainer.className = "absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden"
     this.suggestionsContainer.style.maxHeight = "300px"
     this.suggestionsContainer.style.overflowY = "auto"
-    
+
     this.addressInputTarget.parentElement.style.position = "relative"
     this.addressInputTarget.parentElement.appendChild(this.suggestionsContainer)
 
@@ -92,7 +92,7 @@ export default class extends Controller {
       const suggestion = document.createElement("div")
       suggestion.className = "px-4 py-2 cursor-pointer hover:bg-indigo-50 border-b border-gray-200 last:border-b-0"
       suggestion.textContent = result.display_name
-      
+
       suggestion.addEventListener("click", () => {
         this.selectAddress(result)
       })

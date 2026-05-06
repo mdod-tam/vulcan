@@ -9,6 +9,7 @@ class TrainingSessionNotifier
 
   def deliver_all
     return unless should_send_notification?
+    return unless notification_action
 
     ActiveRecord::Base.transaction do
       create_consolidated_notification
@@ -18,42 +19,45 @@ class TrainingSessionNotifier
   private
 
   def should_send_notification?
-    training_session.status_changed? ||
+    training_session.saved_change_to_status? ||
       training_session.saved_change_to_scheduled_for? ||
       training_session.saved_change_to_completed_at?
   end
 
   def create_consolidated_notification
-    # Log the audit event first
-    AuditEventService.log(
-      action: notification_action,
-      actor: training_session.trainer,
-      auditable: training_session,
-      metadata: notification_metadata
-    )
-
-    # Then, send the notification without the audit flag
     NotificationService.create_and_deliver!(
       type: notification_action,
       recipient: training_session.constituent,
-      actor: training_session.trainer,
+      actor: Current.user || training_session.trainer,
       notifiable: training_session,
       metadata: notification_metadata,
       channel: :email
     )
   rescue StandardError => e
-    Rails.logger.error "Failed to send training session notification via NotificationService: #{e.message}"
-    # Don't re-raise - notification errors shouldn't fail the training session update
+    Rails.logger.error(
+      "Failed to send training session notification via NotificationService " \
+      "(training_session_id=#{training_session.id}, action=#{notification_action}): #{e.message}"
+    )
+    raise if Rails.env.development? || Rails.env.test?
+
+    # In production, notification errors should not fail the training session update.
   end
 
   def notification_action
+    return 'training_rescheduled' if rescheduled_notification?
+
     case training_session.status
     when 'scheduled', 'confirmed' then 'training_scheduled'
     when 'completed' then 'training_completed'
     when 'cancelled' then 'training_cancelled'
     when 'no_show' then 'training_missed'
-    else 'training_updated'
     end
+  end
+
+  def rescheduled_notification?
+    training_session.saved_change_to_scheduled_for? &&
+      training_session.saved_change_to_scheduled_for.first.present? &&
+      (training_session.status_scheduled? || training_session.status_confirmed?)
   end
 
   def notification_metadata
@@ -61,8 +65,11 @@ class TrainingSessionNotifier
       training_session_id: training_session.id,
       application_id: training_session.application.id,
       status: training_session.status,
+      old_scheduled_for: training_session.saved_change_to_scheduled_for&.first&.iso8601,
       scheduled_for: training_session.scheduled_for&.iso8601,
       completed_at: training_session.completed_at&.iso8601,
+      cancellation_initiator: training_session.cancellation_initiator,
+      reschedule_reason: training_session.reschedule_reason,
       trainer_name: training_session.trainer.full_name,
       timestamp: Time.current.iso8601
     }

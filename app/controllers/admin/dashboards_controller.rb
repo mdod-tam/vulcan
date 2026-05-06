@@ -13,10 +13,12 @@ module Admin
       # Load recent notifications to avoid N+1 queries
       # Preload notifiable for Notification#message, actor for view display
       @recent_notifications = Notification
-                              .includes(:actor, notifiable: :user)
+                              .includes(:actor, :notifiable)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
-                              .limit(5)
+                              .limit(3)
+
+      preload_notification_message_dependencies(@recent_notifications)
 
       # Load incomplete notes assigned to current user with pagination (3 per page)
       @pagy_assigned_notes, @assigned_notes = pagy(

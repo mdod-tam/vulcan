@@ -90,9 +90,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     ApplicationNotificationsMailer.any_instance.stubs(:new_user_session_url).returns('http://example.com/users/sign_in')
     ApplicationNotificationsMailer.any_instance.stubs(:constituent_portal_dashboard_url).returns('http://example.com/dashboard')
     ApplicationNotificationsMailer.any_instance.stubs(:new_constituent_portal_application_url).returns('http://example.com/applications/new')
-    Rails.application.routes.named_routes.path_helpers_module.define_method(:admin_applications_path) do |*_args|
-      '/admin/applications'
-    end
+    # Scope the stub to the mailer instance so Mocha auto-teardowns it and
+    # no other test's admin_applications_path(filter: ...) calls are affected.
+    ApplicationNotificationsMailer.any_instance.stubs(:admin_applications_path).returns('/admin/applications')
     ApplicationNotificationsMailer.any_instance.stubs(:admin_application_url).with(anything, anything).returns('http://example.com/admin/applications/1')
   end
 

@@ -151,8 +151,6 @@ module ApplicationDataLoading
   #   build_application_base_scope(exclude_statuses: [:rejected])
   def build_application_base_scope(exclude_statuses: %i[draft rejected archived])
     scope = Application.includes(
-      :user,
-      :managing_guardian,
       # Preload guardian_relationships to avoid N+1 when checking relationships in views
       user: :guardian_relationships_as_dependent
     )

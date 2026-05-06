@@ -1,4 +1,4 @@
-<% if current_user&.type == "Trainer" || current_user&.has_capability?(:can_train) %>
+<% if current_user&.assignable_trainer? %>
   <li class="nav-item">
     <%= link_to trainers_dashboard_path, class: "px-3 py-2 text-sm font-medium rounded-md #{request.path.start_with?('/trainers') ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}" do %>
       <span class="flex items-center">

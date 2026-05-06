@@ -1,13 +1,17 @@
-<div class="container mx-auto px-4 py-8">
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
+<div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-    <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading">
-      Training Session #<%= @session_number %> Details
-    </h1>
+      <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading">
+        <% if @session_number.present? %>
+          Training Session #<%= @session_number %> Details
+        <% else %>
+          Training Session Details
+        <% end %>
+      </h1>
 
     <div class="flex items-center space-x-4">
-      <span class="text-sm text-gray-600" aria-label="Completed sessions progress: <%= @completed_training_sessions_count %> out of <%= @max_training_sessions %> maximum">
-        Completed Sessions: <%= @completed_training_sessions_count %> / <%= @max_training_sessions %>
-      </span>
       <%= link_to "Back to Sessions", trainers_training_sessions_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
     </div>
   </div>
@@ -22,9 +26,19 @@
         <p class="mt-1 max-w-2xl text-sm text-gray-500">
           Application #<%= @application.id %>
         </p>
-        <p class="mt-1 max-w-2xl text-sm text-gray-500">
-          Constituent has <%= pluralize(@constituent_cancelled_sessions_count, 'cancelled session') %> across all applications.
-        </p>
+        <%= link_to "View Full Application Details", admin_application_path(@application),
+            class: "mt-1 inline-block text-sm text-indigo-600 hover:text-indigo-900" %>
+          <% if @constituent_session_outcome_counts.present? %>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">
+              Constituent-impacting history:
+              <%= pluralize(@constituent_session_outcome_counts[:constituent_cancellations], 'constituent cancellation') %>,
+              <%= pluralize(@constituent_session_outcome_counts[:no_shows], 'no-show') %>.
+            </p>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">
+              Trainer/program cancellations:
+              <%= @constituent_session_outcome_counts[:trainer_or_program_cancellations] %>.
+            </p>
+          <% end %>
       </div>
 
       <!-- Status badge with color coding and screen reader text -->
@@ -56,7 +70,38 @@
               </time>
             </dd>
           </div>
+          <% if @training_session.location.present? %>
+            <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt class="text-sm font-medium text-gray-500">Location</dt>
+              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                <%= @training_session.location %>
+              </dd>
+            </div>
+          <% end %>
+        <% elsif @training_session.status_requested? %>
+          <div class="bg-blue-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-blue-900">Next Step</dt>
+            <dd class="mt-1 text-sm text-blue-900 sm:mt-0 sm:col-span-2">
+              <p class="font-semibold">This training has yet to be scheduled.</p>
+              <p class="mt-1">
+                This session has been assigned to <%= @training_session.trainer.full_name %>, but no date has been set yet.
+                <% if @can_manage_training_session %>
+                  Contact the constituent, agree on a training time, then use the scheduling form below.
+                <% else %>
+                  The assigned trainer should contact the constituent and set the training date.
+                <% end %>
+              </p>
+            </dd>
+          </div>
         <% end %>
+
+        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-gray-500">Assigned Trainer</dt>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+            <% trainer_sessions_path = current_user.admin? ? filtered_trainers_training_sessions_path(scope: "all", trainer_id: @training_session.trainer_id) : filtered_trainers_training_sessions_path(scope: "mine") %>
+            <%= link_to @training_session.trainer.full_name, trainer_sessions_path, class: "text-indigo-600 hover:text-indigo-900" %>
+          </dd>
+        </div>
 
         <%# Display current notes if not completed, cancelled, or no_show %>
         <% if @training_session.notes.present? && !@training_session.status_completed? && !@training_session.status_cancelled? && !@training_session.status_no_show? %>
@@ -131,20 +176,90 @@
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <div>
               <p><%= @constituent.full_name %></p>
-              <p><a href="mailto:<%= @constituent.email %>" class="text-indigo-600 hover:text-indigo-900"><%= @constituent.email %></a></p>
-              <p><a href="tel:<%= @constituent.phone %>" class="text-indigo-600 hover:text-indigo-900"><%= @constituent.phone %></a></p>
+              <p><%= link_to @constituent.email, "mailto:#{@constituent.email}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Email #{@constituent.email}" } %></p>
+              <p><%= link_to @constituent.phone, "tel:#{@constituent.phone}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Call #{@constituent.phone}" } %></p>
+              <% if @constituent.physical_address_1.present? %>
+                <div class="mt-2 text-gray-600">
+                  <p><%= @constituent.physical_address_1 %></p>
+                  <% if @constituent.physical_address_2.present? %>
+                    <p><%= @constituent.physical_address_2 %></p>
+                  <% end %>
+                  <p><%= "#{@constituent.city}, #{@constituent.state} #{@constituent.zip_code}" %></p>
+                </div>
+              <% end %>
             </div>
+          </dd>
+        </div>
+
+        <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-gray-500">Communication Preferences</dt>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+            <ul class="space-y-1">
+              <li><strong>Contact Method:</strong> <%= contact_method_label(@constituent.phone_type) %></li>
+              <li><strong>Preferred Language:</strong> <%= language_label(@constituent.locale) %></li>
+              <li><strong>Communication Modality:</strong> <%= @constituent.preferred_means_of_communication.presence || "Not specified" %></li>
+            </ul>
+          </dd>
+        </div>
+
+        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-gray-500">Sessions Progress</dt>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+            <%= @completed_training_sessions_count %> / <%= @max_training_sessions %> completed
           </dd>
         </div>
       </dl>
     </div>
   </section>
 
-  <%# == Actions Section == %>
-  <section aria-label="Training Session Actions" class="mt-8">
+  <% if @previous_training_sessions.present? %>
+    <section aria-labelledby="previous-training-notes-heading" class="mt-8 bg-white shadow overflow-hidden sm:rounded-lg">
+      <div class="px-4 py-5 sm:px-6">
+        <h2 id="previous-training-notes-heading" class="text-lg leading-6 font-medium text-gray-900">
+          Previous Training Notes
+        </h2>
+        <p class="mt-1 max-w-2xl text-sm text-gray-500">
+          Notes from earlier completed sessions for this application.
+        </p>
+      </div>
+
+      <ol class="border-t border-gray-200 divide-y divide-gray-200">
+        <% @previous_training_sessions.each do |session| %>
+          <li class="px-4 py-5 sm:px-6">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 class="text-sm font-medium text-gray-900">
+                  <%= session.product_trained_on&.name || "Product not recorded" %>
+                </h3>
+                <p class="mt-1 text-sm text-gray-500">
+                  Completed
+                  <% if session.completed_at.present? %>
+                    <time datetime="<%= session.completed_at.iso8601 %>">
+                      <%= session.completed_at.strftime("%B %d, %Y at %I:%M %p") %>
+                    </time>
+                  <% else %>
+                    on an unknown date
+                  <% end %>
+                  by <%= session.trainer.full_name %>
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-3 text-sm text-gray-900">
+              <%= simple_format(session.notes) %>
+            </div>
+          </li>
+        <% end %>
+      </ol>
+    </section>
+  <% end %>
+
+  <%# == Actions Section — not rendered for completed sessions the trainer can manage (nothing to show) == %>
+  <% unless @can_manage_training_session && @training_session.status_completed? %>
+  <section aria-label="<%= @can_manage_training_session ? 'Training Session Actions' : 'Training Session Status' %>" class="mt-8">
     <% if !@can_manage_training_session %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
-        This is a read-only oversight view. Only the assigned trainer can update this training session.
+        <%= t('trainers.training_sessions.read_only_notice') %>
       </div>
     <% elsif @training_session.status_requested? && @training_session.scheduled_for.nil? %>
       <!-- Initial Schedule Training Form -->
@@ -164,6 +279,11 @@
             </div>
 
             <div>
+              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
+              <%= f.text_field :location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
+            </div>
+
+            <div>
               <%= f.label :notes, "Notes", class: "block text-sm font-medium text-gray-700" %>
               <%= f.text_area :notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
             </div>
@@ -175,7 +295,7 @@
 
     <% elsif (@training_session.status_scheduled? || @training_session.status_confirmed?) && @training_session.scheduled_for.present? && @training_session.scheduled_for < Time.current %>
       <!-- Actions for Scheduled/Confirmed Sessions where time has passed -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="space-y-6">
         <!-- Complete Training Form -->
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
@@ -214,8 +334,10 @@
             <%= form_with(model: @training_session, url: update_status_trainers_training_session_path(@training_session), method: :patch, local: true, class: "space-y-4", aria: { labelledby: "no-show-heading" }) do |f| %>
               <%= f.hidden_field :status, value: 'no_show' %>
               <div>
-                <%= f.label :no_show_notes, "No Show Notes (optional)", class: "block text-sm font-medium text-gray-700" %>
-                <%= f.text_area :no_show_notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional notes about the no show...", aria: { describedby: "no_show_desc"} %>
+                  <%= f.label :no_show_notes, class: "block text-sm font-medium text-gray-700" do %>
+                    No Show Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                  <% end %>
+                  <%= f.text_area :no_show_notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Describe the no show...", aria: { required: "true", describedby: "no_show_desc"} %>
               </div>
               <%= f.submit "Mark as No Show", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
             <% end %>
@@ -263,6 +385,11 @@
             </div>
 
             <div>
+              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
+              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
+            </div>
+
+            <div>
               <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
                 Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
@@ -276,41 +403,48 @@
       </div>
 
     <% elsif @training_session.status_cancelled? || @training_session.status_no_show? %>
-      <!-- Reschedule Training Form (only if cancelled or no_show) -->
+      <!-- Follow-up scheduling creates a new session and preserves this historical record. -->
       <div class="bg-white shadow rounded-lg mb-6">
         <div class="px-4 py-5 sm:p-6">
           <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="reschedule-cancelled-heading">
-            Reschedule Training
+            <%= t('trainers.training_sessions.follow_up.title') %>
           </h3>
+          <p class="mb-4 text-sm text-gray-600">
+            <%= t('trainers.training_sessions.follow_up.description') %>
+          </p>
 
-          <%= form_with(url: reschedule_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "reschedule-cancelled-heading" }) do |f| %>
+          <%= form_with(url: trainers_training_session_follow_up_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "reschedule-cancelled-heading" }) do |f| %>
             <div>
               <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
-                 New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                <%= t('trainers.training_sessions.follow_up.scheduled_for_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.follow_up.required') %></span>
               <% end %>
               <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
             </div>
 
             <div>
-               <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
-                Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-               <% end %>
-              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true", describedby: "reschedule_cancelled_reason_hint" } %>
-              <p class="sr-only" id="reschedule_cancelled_reason_hint">Please provide a reason for rescheduling this training session.</p>
+              <%= f.label :location, t('trainers.training_sessions.follow_up.location_label'), class: "block text-sm font-medium text-gray-700" %>
+              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: t('trainers.training_sessions.follow_up.location_placeholder') %>
             </div>
 
-            <%= f.submit "Reschedule Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
+            <div>
+              <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
+                <%= t('trainers.training_sessions.follow_up.reason_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.follow_up.required') %></span>
+              <% end %>
+              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('trainers.training_sessions.follow_up.reason_placeholder'), aria: { required: "true", describedby: "reschedule_cancelled_reason_hint" } %>
+              <p class="sr-only" id="reschedule_cancelled_reason_hint"><%= t('trainers.training_sessions.follow_up.reason_hint') %></p>
+            </div>
+
+            <%= f.submit t('trainers.training_sessions.follow_up.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
           <% end %>
         </div>
       </div>
 
-    <% elsif @training_session.status_completed? %>
-      <%# This block intentionally left blank as the form is handled below %>
     <% end %>
   </section>
+  <% end %>
 
-  <!-- Link to view the full application -->
-  <div class="mt-6 text-right">
-    <%= link_to "View Full Application Details for Application ##{@application.id}", admin_application_path(@application), class: "text-indigo-600 hover:text-indigo-900" %>
+  <div class="mt-8">
+    <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Activity History" %>
   </div>
+
 </div>

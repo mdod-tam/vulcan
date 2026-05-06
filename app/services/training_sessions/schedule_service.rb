@@ -20,16 +20,16 @@ module TrainingSessions
         create_event!
       end
 
-      success(message: 'Training session scheduled successfully.', data: { training_session: @training_session })
+      success('Training session scheduled successfully.', { training_session: @training_session })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error scheduling training session: #{e.message}")
-      failure(message: e.message)
+      failure(e.message)
     rescue ArgumentError => e
       log_validation_failure(e)
-      failure(message: e.message)
+      failure(e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error scheduling training session: #{e.message}")
-      failure(message: "An unexpected error occurred: #{e.message}")
+      failure("An unexpected error occurred: #{e.message}")
     end
 
     private
@@ -39,10 +39,7 @@ module TrainingSessions
     end
 
     def log_validation_failure(error)
-      message = "TrainingSessions::ScheduleService validation failed: #{error.message}"
-      return Rails.logger.warn("[EXPECTED_TEST_VALIDATION] #{message}") if Rails.env.test?
-
-      Rails.logger.warn(message)
+      Rails.logger.warn("TrainingSessions::ScheduleService validation failed: #{error.message}")
     end
 
     def update_training_session!
@@ -50,6 +47,7 @@ module TrainingSessions
         status: :scheduled,
         scheduled_for: @params[:scheduled_for],
         notes: @params[:notes],
+        location: @params[:location],
         cancellation_reason: nil,
         no_show_notes: nil
       )
@@ -65,6 +63,7 @@ module TrainingSessions
           training_session_id: @training_session.id,
           scheduled_for: @training_session.scheduled_for&.iso8601,
           notes: @training_session.notes,
+          location: @training_session.location,
           timestamp: Time.current.iso8601
         }
       )

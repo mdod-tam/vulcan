@@ -15,6 +15,7 @@
 #
 class NotificationComposer
   include ActionView::Helpers::TextHelper # For helpers like pluralize
+  include ActionView::Helpers::UrlHelper # For link_to
 
   def self.generate(notification_action, notifiable, actor = nil, metadata = {})
     new(notification_action, notifiable, actor, metadata).generate
@@ -38,6 +39,13 @@ class NotificationComposer
 
   private
 
+  def application_reference(application=nil)
+    application ||= @notifiable
+    return "Application missing" unless application&.id
+
+    link_to("Application ##{application.id}", "/admin/applications/#{application.id}", class: "text-indigo-600 hover:text-indigo-500")
+  end
+
   # --- Message Generation Methods ---
 
   def message_for_trainer_assigned
@@ -48,12 +56,28 @@ class NotificationComposer
     training_session = find_training_session(application, @actor)
     status_info = training_session ? " (#{training_session.status.humanize})" : ''
 
-    "#{trainer_name} assigned to train #{constituent_name} for Application ##{@notifiable&.id}#{status_info}."
+    "#{trainer_name} assigned to train #{constituent_name} for #{application_reference}#{status_info}."
   end
 
   def message_for_training_requested
     constituent_name = @actor&.full_name || @notifiable&.constituent_full_name || 'A constituent'
-    "#{constituent_name} requested training for Application ##{@notifiable&.id}."
+    "#{constituent_name} requested training for #{application_reference}."
+  end
+
+  def message_for_training_scheduled
+    training_session_message('scheduled training')
+  end
+
+  def message_for_training_rescheduled
+    training_session_message('rescheduled training')
+  end
+
+  def message_for_training_cancelled
+    training_session_message('cancelled training')
+  end
+
+  def message_for_training_completed
+    training_session_message('completed training')
   end
 
   def message_for_proof_rejected
@@ -61,38 +85,38 @@ class NotificationComposer
     reason = @metadata['rejection_reason']
     reason_text = reason.present? ? " - #{reason}" : ''
 
-    "#{proof_type} rejected for application ##{@notifiable&.id}#{reason_text}."
+    "#{proof_type} rejected for #{application_reference.downcase}#{reason_text}."
   end
 
   def message_for_proof_approved
     proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    "#{proof_type} approved for application ##{@notifiable&.id}."
+    "#{proof_type} approved for #{application_reference.downcase}."
   end
 
   def message_for_medical_certification_requested
-    "Disability certification requested for application ##{@notifiable&.id}"
+    "Disability certification requested for #{application_reference.downcase}"
   end
 
   def message_for_medical_certification_received
-    "Disability certification received for application ##{@notifiable&.id}"
+    "Disability certification received for #{application_reference.downcase}"
   end
 
   def message_for_medical_certification_approved
-    "Disability certification approved for application ##{@notifiable&.id}"
+    "Disability certification approved for #{application_reference.downcase}"
   end
 
   def message_for_medical_certification_rejected
     reason = @metadata['reason']
     reason_text = reason.present? ? " - #{reason}" : ''
-    "Disability certification rejected for application ##{@notifiable&.id}#{reason_text}."
+    "Disability certification rejected for #{application_reference.downcase}#{reason_text}."
   end
 
   def message_for_documents_requested
-    "Documents requested for application ##{@notifiable&.id}"
+    "Documents requested for #{application_reference.downcase}"
   end
 
   def message_for_review_requested
-    "Review requested for application ##{@notifiable&.id}"
+    "Review requested for #{application_reference.downcase}"
   end
 
   def default_message
@@ -101,9 +125,35 @@ class NotificationComposer
 
   # --- Helper Methods ---
 
+  def training_session_message(verb_phrase)
+    return default_message unless @notifiable.is_a?(TrainingSession)
+
+    trainer_name = @actor&.full_name.presence ||
+                   @metadata['trainer_name'].presence ||
+                   preloaded_trainer_name ||
+                   'A trainer'
+    application = @notifiable.application
+    constituent_name = application&.constituent_full_name.presence ||
+                       @notifiable.constituent&.full_name.presence ||
+                       'a constituent'
+    application_id = @metadata['application_id'].presence || application&.id
+
+    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference(application)}."
+  end
+
+  def preloaded_trainer_name
+    return unless @notifiable.association(:trainer).loaded?
+
+    @notifiable.trainer&.full_name.presence
+  end
+
   def find_training_session(application, actor)
     return nil unless application.respond_to?(:training_sessions) && actor
 
-    application.training_sessions.where(trainer_id: actor.id).order(:created_at).last
+    if application.training_sessions.loaded?
+      application.training_sessions.select { |ts| ts.trainer_id == actor.id }.max_by(&:created_at)
+    else
+      application.training_sessions.where(trainer_id: actor.id).order(:created_at).last
+    end
   end
 end

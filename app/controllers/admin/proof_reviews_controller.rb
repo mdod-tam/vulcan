@@ -102,7 +102,7 @@ module Admin
       return 'income' if params[:proof_type] == 'residency' &&
                          @application.income_proof.attached? &&
                          @application.income_proof_status_not_reviewed?
-    
+
       return 'id' if params[:proof_type] == 'income' &&
                      @application.id_proof.attached? &&
                      @application.id_proof_status_not_reviewed?

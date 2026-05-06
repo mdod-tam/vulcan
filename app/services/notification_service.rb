@@ -160,13 +160,26 @@ class NotificationService
     'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
     'training_requested' => [ApplicationNotificationsMailer, :training_requested],
     'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
+    'training_scheduled' => [TrainingSessionNotificationsMailer, :training_scheduled],
+    'training_rescheduled' => [TrainingSessionNotificationsMailer, :training_rescheduled],
+    'training_completed' => [TrainingSessionNotificationsMailer, :training_completed],
+    'training_cancelled' => [TrainingSessionNotificationsMailer, :training_cancelled],
+    'training_missed' => [TrainingSessionNotificationsMailer, :no_show_notification],
     'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created],
     'medical_certification_approved' => [MedicalProviderMailer, :approved],
     'medical_certification_requested' => [MedicalProviderMailer, :requested],
-    'medical_certification_not_provided' => [ApplicationNotificationsMailer, :medical_certification_not_provided]
+    'medical_certification_not_provided' => [ApplicationNotificationsMailer, :medical_certification_not_provided],
+    'max_rejections_warning' => [ApplicationNotificationsMailer, :max_rejections_reached]
     # medical_certification_received: no email — constituent sees status in dashboard
-    # medical_certification_requested: request email delivered through MedicalProviderMailer.requested proxy
+    # documents_requested: no email mailer yet — notification record created for audit trail only
   }.freeze
+
+  # Actions where a Notification record is created for audit/in-app purposes but
+  # no email is sent. Prevents ERROR log noise for intentionally no-email actions.
+  NOOP_DELIVERY_ACTIONS = %w[
+    medical_certification_received
+    documents_requested
+  ].freeze
 
   PREFERENCE_ROUTED_ACTIONS = %w[
     proof_rejected
@@ -178,6 +191,11 @@ class NotificationService
     residency_proof_attached
     training_requested
     trainer_assigned
+    training_scheduled
+    training_rescheduled
+    training_completed
+    training_cancelled
+    training_missed
     security_key_recovery_approved
     medical_certification_not_provided
   ].freeze
@@ -358,6 +376,12 @@ class NotificationService
     # Recipient-facing mailers resolve the final route to honor communication preference.
     return false unless VALID_CHANNELS.include?(channel)
 
+    if NOOP_DELIVERY_ACTIONS.include?(notification.action)
+      Rails.logger.info "NotificationService: No email for '#{notification.action}' (audit-only action) — Notification ##{notification.id}"
+      persist_delivery_routing_metadata(notification, actual_delivery_channel: 'none', delivery_route_reason: 'no_email_action')
+      return true
+    end
+
     enforce_delivery_contracts!(notification)
 
     mailer_class, method_name = resolve_mailer(notification)
@@ -456,11 +480,16 @@ class NotificationService
       temp_password = notification.metadata&.dig('temp_password') # Already validated to be present
       mailer_class.public_send(method_name, notification.recipient, temp_password)
     when 'proof_rejected', 'proof_approved'
-      # These mailers expect (application, proof_review) - find the most recent proof review
       application = notification.notifiable
       proof_type = notification.metadata&.dig('proof_type')
       proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
       mailer_class.public_send(method_name, application, proof_review)
+    when 'training_rescheduled'
+      mailer_class.public_send(method_name, notification.notifiable, notification)
+    when 'trainer_assigned', 'training_scheduled',
+         'training_completed', 'training_cancelled', 'training_missed',
+         'max_rejections_warning'
+      mailer_class.public_send(method_name, notification.notifiable)
     else
       mailer_class.public_send(method_name, notification.notifiable, notification)
     end

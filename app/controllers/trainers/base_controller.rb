@@ -10,7 +10,7 @@ module Trainers
     private
 
     def require_trainer
-      return if current_user.admin? || current_user.capability?('can_train')
+      return if current_user&.assignable_trainer?
 
       redirect_to root_path, alert: 'You are not authorized to perform this action.'
     end

@@ -86,6 +86,27 @@ module UserRolesAndCapabilities
     role_capabilities.exists?(capability: capability)
   end
 
+  def effective_capability?(capability)
+    self.class.inherent_capabilities_for_type(type).include?(capability.to_s) ||
+      capability?(capability)
+  end
+
+  def can_evaluate?
+    effective_capability?('can_evaluate')
+  end
+
+  def can_train?
+    effective_capability?('can_train')
+  end
+
+  def assignable_evaluator?
+    (evaluator? || admin?) && can_evaluate?
+  end
+
+  def assignable_trainer?
+    (trainer? || admin?) && can_train?
+  end
+
   def prevent_self_role_update?(current_user, new_role)
     !(self == current_user && type != new_role)
   end
