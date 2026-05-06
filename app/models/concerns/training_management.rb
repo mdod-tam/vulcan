@@ -82,9 +82,9 @@ module TrainingManagement
         },
         channel: :email
       )
-
-      Application.expire_training_request_metrics_cache!
     end
+
+    Application.expire_training_request_metrics_cache!
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to assign trainer: #{e.message}"
@@ -124,9 +124,9 @@ module TrainingManagement
           cancellation_reason: cancellation_reason
         }
       )
-
-      Application.expire_training_request_metrics_cache!
     end
+
+    Application.expire_training_request_metrics_cache!
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to unassign trainer: #{e.message}"
