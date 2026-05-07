@@ -92,5 +92,24 @@ module Admin
       assert_response :see_other
       assert_redirected_to admin_application_path(@application)
     end
+
+    test 'failed proof review turbo response refreshes flash and modals with unprocessable status' do
+      attach_income_proof!
+      stub_reviewable_proofs!
+
+      ProofReviewService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'Proof review failed: Income proof must be attached.')
+      )
+
+      patch update_proof_status_admin_application_path(@application),
+            params: { proof_type: 'income', status: 'rejected', rejection_reason: 'invalid_document' },
+            as: :turbo_stream
+
+      assert_response :unprocessable_content
+      assert_equal 'text/vnd.turbo-stream.html', response.media_type
+      assert_includes response.body, '<turbo-stream action="update" target="flash">'
+      assert_includes response.body, '<turbo-stream action="update" target="modals">'
+      assert_no_match(/target="attachments-section"/, response.body)
+    end
   end
 end

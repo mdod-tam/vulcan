@@ -237,6 +237,12 @@
       <%= render "medical_certification_section" %>
     </section>
 
+    <% if @application.missing_required_provider_info? %>
+      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="secure-request-forms-title" id="secure-request-forms-section">
+        <%= render "secure_request_forms" %>
+      </section>
+    <% end %>
+
     <!-- Attachments Section (Proofs) -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="attachments-title" id="attachments-section">
       <h2 id="attachments-title" class="text-xl font-semibold text-gray-900 mb-4">Attachments</h2>

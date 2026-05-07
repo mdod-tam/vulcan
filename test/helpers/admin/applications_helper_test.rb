@@ -1,0 +1,63 @@
+# frozen_string_literal: true
+
+require 'test_helper'
+
+module Admin
+  class ApplicationsHelperTest < ActionView::TestCase
+    include ApplicationsHelper
+
+    setup do
+      @application = create(
+        :application,
+        :in_progress,
+        medical_provider_name: 'Dr. Provider',
+        medical_provider_email: 'provider@example.test'
+      )
+    end
+
+    test 'medical certification action state derives requested after rejection from notifications' do
+      reject = create(
+        :notification,
+        notifiable: @application,
+        recipient: @application.user,
+        action: 'medical_certification_rejected',
+        created_at: 2.hours.ago
+      )
+      request = create(
+        :notification,
+        notifiable: @application,
+        recipient: @application.user,
+        action: 'medical_certification_requested',
+        created_at: 1.hour.ago
+      )
+
+      state = medical_certification_action_state(@application, secure_request_forms: [])
+
+      assert_equal request, state.latest_certification_request
+      assert_equal reject, state.latest_certification_reject
+      assert_predicate state, :requested_after_rejection
+    end
+
+    test 'medical certification action state counts active secure upload forms' do
+      active_form = create(:medical_provider_secure_request_form, application: @application)
+      create(:medical_provider_secure_request_form, :submitted, application: @application)
+
+      state = medical_certification_action_state(@application, secure_request_forms: @application.medical_provider_secure_request_forms)
+
+      assert_equal 1, state.active_secure_cert_upload_forms
+      assert_includes state.docuseal_confirm, 'the current secure upload link'
+      assert_predicate active_form.reload, :active?
+    end
+
+    test 'medical certification action state reflects provider readiness and DocuSeal collision copy' do
+      @application.update!(document_signing_status: :sent)
+
+      state = medical_certification_action_state(@application, secure_request_forms: [])
+
+      assert_predicate state, :provider_ready_for_docuseal
+      assert_includes state.secure_cert_upload_confirm, 'DocuSeal request is already sent'
+      assert_equal I18n.t('admin.applications.certification_upload_requests.create.provider_email_required'),
+                   state.secure_cert_upload_message
+    end
+  end
+end

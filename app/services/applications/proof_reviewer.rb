@@ -8,12 +8,12 @@ module Applications
     end
 
     def review(proof_type:, status:, rejection_reason: nil, rejection_reason_code: nil, notes: nil)
-      Rails.logger.info "Starting review with proof_type: #{proof_type.inspect}, status: #{status.inspect}"
+      Rails.logger.debug { "Starting review with proof_type: #{proof_type.inspect}, status: #{status.inspect}" }
 
       @proof_type_key = proof_type.to_s
       @status_key = status.to_s
 
-      Rails.logger.info "Converted values - proof_type: #{@proof_type_key.inspect}, status: #{@status_key.inspect}"
+      Rails.logger.debug { "Converted values - proof_type: #{@proof_type_key.inspect}, status: #{@status_key.inspect}" }
 
       with_single_proof_review_context do
         ApplicationRecord.transaction do
@@ -23,6 +23,8 @@ module Applications
           reconcile_if_approved
         end
       end
+
+      process_re_rejection_side_effects
 
       true
     rescue StandardError => e
@@ -43,12 +45,13 @@ module Applications
     end
 
     def create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
-      Rails.logger.info 'Finding or initializing proof review record'
+      Rails.logger.debug 'Finding or initializing proof review record'
 
       rejection_reason_text = RejectionReason.resolve_text(
         code: rejection_reason_code,
         proof_type: @proof_type_key,
-        fallback: rejection_reason
+        fallback: rejection_reason,
+        interpolations: rejection_reason_interpolations
       )
       find_attributes      = build_find_attributes
       @proof_review        = @application.proof_reviews.find_or_initialize_by(find_attributes)
@@ -67,11 +70,32 @@ module Applications
       end
 
       @proof_review.assign_attributes(assign)
+      apply_submission_method_from_latest_submission_event
       set_reviewed_at_if_needed
       @proof_review.save!
 
-      Rails.logger.info "Saved ProofReview ID: #{@proof_review.id}, status: #{@proof_review.status},
-      proof_type: #{@proof_review.proof_type}, new_record: #{@proof_review.previously_new_record?}"
+      Rails.logger.debug do
+        "Saved ProofReview ID: #{@proof_review.id}, status: #{@proof_review.status}, " \
+          "proof_type: #{@proof_review.proof_type}, new_record: #{@proof_review.previously_new_record?}"
+      end
+    end
+
+    def process_re_rejection_side_effects
+      return unless repeat_rejection?
+
+      @proof_review.apply_repeat_rejection_side_effects!
+    rescue StandardError => e
+      Rails.logger.warn(
+        "Proof re-rejection side effects failed for #{@proof_type_key} " \
+        "on application #{@application.id}: #{e.message}"
+      )
+    end
+
+    def repeat_rejection?
+      return false if @proof_review.previously_new_record?
+      return false unless @status_key == 'rejected'
+
+      true
     end
 
     def build_find_attributes
@@ -86,8 +110,34 @@ module Applications
       @proof_review.reviewed_at = Time.current unless @proof_review.new_record?
     end
 
+    def apply_submission_method_from_latest_submission_event
+      submission_method = latest_submission_method_from_event
+      return if submission_method.blank?
+      return unless ProofReview.submission_methods.key?(submission_method)
+
+      @proof_review.submission_method = submission_method
+    end
+
+    def latest_submission_method_from_event
+      event = @application.latest_proof_submission_event(@proof_type_key)
+      event&.metadata&.fetch('submission_method', nil).presence ||
+        event&.metadata&.fetch(:submission_method, nil).presence
+    end
+
+    def rejection_reason_interpolations
+      { address: application_address_text }
+    end
+
+    def application_address_text
+      [
+        @application.user&.physical_address_1,
+        @application.user&.physical_address_2,
+        [@application.user&.city, @application.user&.state, @application.user&.zip_code].compact.join(' ')
+      ].compact_blank.join(' ').squish
+    end
+
     def update_application_status
-      Rails.logger.info "Updating application status for proof_type: #{@proof_type_key}, status: #{@status_key}"
+      Rails.logger.debug { "Updating application status for proof_type: #{@proof_type_key}, status: #{@status_key}" }
 
       validate_proof_attachment_if_approved
       update_proof_status_column
@@ -113,7 +163,7 @@ module Applications
     def purge_if_rejected
       return unless @status_key == 'rejected'
 
-      Rails.logger.info "[ProofReviewer] Status is rejected for #{@proof_type_key}, attempting purge."
+      Rails.logger.debug { "[ProofReviewer] Status is rejected for #{@proof_type_key}, attempting purge." }
       # Call a method on the application model to handle the purge
       @application.purge_rejected_proof(@proof_type_key)
     end

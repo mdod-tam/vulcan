@@ -79,7 +79,7 @@ class AuditEventService < BaseService
   end
 
   # Create a fingerprint that distinguishes between meaningfully different events
-  def self.create_event_fingerprint(action, metadata) # rubocop:disable Metrics/CyclomaticComplexity
+  def self.create_event_fingerprint(action, metadata) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     base = action.to_s
 
     # For proof submission events, include proof_type and submission_method
@@ -117,6 +117,22 @@ class AuditEventService < BaseService
       new_val   = metadata.key?('new_value') ? metadata['new_value'] : metadata[:new_value]
       actor_id  = metadata.key?('admin_id')  ? metadata['admin_id']  : metadata[:admin_id]
       return "#{base}_#{flag_name}_#{old_val}_#{new_val}_#{actor_id}"
+    end
+
+    if %w[
+      provider_info_request_revoked
+      proof_resubmission_request_revoked
+      cert_upload_request_revoked
+      proof_resubmission_request_expired
+      cert_upload_request_expired
+      w9_upload_request_revoked
+      w9_upload_request_expired
+    ].include?(action.to_s)
+      form_id = metadata['secure_request_form_id'] || metadata[:secure_request_form_id] ||
+                metadata['medical_provider_secure_request_form_id'] || metadata[:medical_provider_secure_request_form_id] ||
+                metadata['vendor_secure_request_form_id'] || metadata[:vendor_secure_request_form_id]
+      request_batch_id = metadata['request_batch_id'] || metadata[:request_batch_id]
+      return "#{base}_#{form_id || request_batch_id}" if form_id.present? || request_batch_id.present?
     end
 
     # For other events, use just the base action

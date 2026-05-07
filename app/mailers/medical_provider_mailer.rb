@@ -34,7 +34,8 @@ class MedicalProviderMailer < ApplicationMailer
     self.class.with(
       application: notifiable,
       rejection_reason: notification.metadata['reason'] || notifiable.medical_certification_rejection_reason || 'Not specified',
-      admin: notification.actor
+      admin: notification.actor,
+      secure_upload_url: notification.metadata['secure_upload_url']
     ).certification_rejected
   end
 
@@ -94,30 +95,7 @@ class MedicalProviderMailer < ApplicationMailer
     raise e
   end
 
-  # Notify a medical provider about an error during certification submission
-  # @param medical_provider [User] The medical provider who sent the email
-  # @param application [Application, nil] The associated application, if found
-  # @param error_type [Symbol] The type of error (:provider_not_found, :invalid_certification_request, etc.)
-  # @param message [String] The error message
-  def certification_submission_error
-    medical_provider, application, message = extract_submission_error_params
-    process_submission_error_email(medical_provider, application, message)
-  rescue StandardError => e
-    log_certification_error('certification_submission_error', params[:medical_provider]&.email, e)
-    raise e
-  end
-
   private
-
-  def build_submission_error_variables(medical_provider, application, message)
-    {
-      medical_provider_email: medical_provider.email,
-      error_message: message,
-      constituent_full_name: application&.user&.full_name,
-      application_id: application&.id,
-      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
-    }.compact
-  end
 
   def build_approval_variables
     application = params[:application]
@@ -139,6 +117,7 @@ class MedicalProviderMailer < ApplicationMailer
       constituent_full_name: constituent.full_name,
       application_id: application.id,
       rejection_reason: rejection_reason,
+      secure_upload_url: params[:secure_upload_url].to_s,
       download_form_url: build_download_form_url,
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
@@ -184,8 +163,48 @@ class MedicalProviderMailer < ApplicationMailer
       constituent_address_formatted: format_constituent_address(constituent),
       application_id: application.id,
       download_form_url: build_download_form_url,
+      secure_upload_url: params[:secure_upload_url].to_s,
+      certification_submission_instructions: certification_submission_instructions,
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
+  end
+
+  def certification_submission_instructions
+    return spanish_certification_submission_instructions if provider_email_locale.to_s == 'es'
+
+    english_certification_submission_instructions
+  end
+
+  def english_certification_submission_instructions
+    return <<~TEXT.chomp if params[:secure_upload_url].present?
+      1. Download the form at: #{build_download_form_url}
+      2. Complete all required fields and sign the form
+      3. Upload the completed form securely: #{params[:secure_upload_url]}
+    TEXT
+
+    <<~TEXT.chomp
+      1. Download the form at: #{build_download_form_url}
+      2. Complete all required fields
+      3. Sign the form
+      4. Return the completed form by fax to (410) 767-4276
+      5. If fax is not available, contact #{support_email} to request a secure upload link
+    TEXT
+  end
+
+  def spanish_certification_submission_instructions
+    return <<~TEXT.chomp if params[:secure_upload_url].present?
+      1. Descargue el formulario en: #{build_download_form_url}
+      2. Complete todos los campos obligatorios y firme el formulario
+      3. Suba el formulario completado de forma segura: #{params[:secure_upload_url]}
+    TEXT
+
+    <<~TEXT.chomp
+      1. Descargue el formulario en: #{build_download_form_url}
+      2. Complete todos los campos obligatorios
+      3. Firme el formulario
+      4. Devuelva el formulario completado por fax al (410) 767-4276
+      5. Si no puede enviar fax, comuníquese con #{support_email} para solicitar un enlace de carga seguro
+    TEXT
   end
 
   def format_request_count_message(application)
@@ -230,7 +249,7 @@ class MedicalProviderMailer < ApplicationMailer
     mail(
       to: application.medical_provider_email,
       from: 'no_reply@mdmat.org',
-      reply_to: 'disability_cert@mdmat.org',
+      reply_to: support_email,
       subject: subject,
       message_stream: 'outbound'
     ) do |format|
@@ -244,7 +263,7 @@ class MedicalProviderMailer < ApplicationMailer
     mail(
       to: application.medical_provider_email,
       from: 'no_reply@mdmat.org',
-      reply_to: 'disability_cert@mdmat.org',
+      reply_to: support_email,
       subject: subject,
       message_stream: 'outbound'
     ) do |format|
@@ -268,7 +287,7 @@ class MedicalProviderMailer < ApplicationMailer
     {
       to: application.medical_provider_email,
       from: 'no_reply@mdmat.org',
-      reply_to: 'disability_cert@mdmat.org',
+      reply_to: support_email,
       subject: subject,
       message_stream: 'outbound'
     }
@@ -282,48 +301,37 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   def log_debug_variables(context, variables)
-    Rails.logger.debug { "DEBUG: #{context} - Variables: #{variables.inspect}" } unless Rails.env.production?
+    Rails.logger.debug { "DEBUG: #{context} - Variables: #{sanitized_mail_variables(variables).inspect}" } unless Rails.env.production?
   end
 
   def log_rendered_output(context, subject, body)
     Rails.logger.debug { "DEBUG: #{context} - Rendered Subject: #{subject.inspect}" } unless Rails.env.production?
-    Rails.logger.debug { "DEBUG: #{context} - Rendered Body: #{body.inspect}" } unless Rails.env.production?
+    Rails.logger.debug { "DEBUG: #{context} - Rendered Body: [REDACTED_SECURE_LINK_BODY]" } if log_body_redacted?(body)
+    Rails.logger.debug { "DEBUG: #{context} - Rendered Body: #{body.inspect}" } if log_body_plain?(body)
   end
 
-  def send_submission_error_email(medical_provider, subject, body)
-    mail(
-      to: medical_provider.email,
-      from: 'no_reply@mdmat.org',
-      reply_to: 'disability_cert@mdmat.org',
-      subject: subject,
-      message_stream: 'outbound'
-    ) do |format|
-      format.text { render plain: body.to_s }
-    end
+  def sanitized_mail_variables(variables)
+    redact_sensitive_mail_value(variables.to_h.deep_dup)
+  end
+
+  def redact_sensitive_mail_value(value, key = nil)
+    sanitize_secure_value(value, key)
+  end
+
+  def log_body_redacted?(body)
+    !Rails.env.production? && body.to_s.match?(%r{https?://\S+})
+  end
+
+  def log_body_plain?(body)
+    !Rails.env.production? && !log_body_redacted?(body)
+  end
+
+  def support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
   end
 
   def log_certification_error(context, recipient, error)
-    Rails.logger.error("Failed to send #{context} email to #{recipient}: #{error.message}")
-    Rails.logger.error(error.backtrace.join("\n"))
-  end
-
-  def extract_submission_error_params
-    [
-      params[:medical_provider],
-      params[:application],
-      params[:message]
-    ]
-  end
-
-  def process_submission_error_email(medical_provider, application, message)
-    locale = resolve_template_locale(recipient: application&.user)
-    template = find_text_template('medical_provider_certification_submission_error', locale: locale)
-    variables = build_submission_error_variables(medical_provider, application, message)
-    log_debug_variables('certification_submission_error', variables)
-
-    subject, body = template.render(**variables)
-    log_rendered_output('certification_submission_error', subject, body)
-
-    send_submission_error_email(medical_provider, subject, body)
+    Rails.logger.error("Failed to send #{context} email to #{recipient}: #{sanitize_secure_error_message(error.message)}")
+    Rails.logger.error(sanitize_secure_error_message(error.backtrace&.join("\n")))
   end
 end

@@ -135,11 +135,29 @@ module Webhooks
       assert_equal 'approved', @application.medical_certification_status
       # Should NOT attach file when already approved
       assert_not @application.medical_certification.attached?
+      assert_equal 'https://example.com/signed_doc.pdf', @application.document_signing_document_url
+      assert_equal 'https://example.com/audit_log', @application.document_signing_audit_url
 
       # Verify audit event was created
       event = Event.where(action: 'document_signing_completed').last
       assert_not_nil event
       assert_equal @application, event.auditable
+    end
+
+    test 'approved completion remains idempotent after first webhook stores document url' do
+      @application.update!(medical_certification_status: :approved)
+      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+
+      @application.reload
+      assert_equal 'https://example.com/signed_doc.pdf', @application.document_signing_document_url
+
+      assert_no_difference 'Event.count' do
+        make_signed_webhook_request(@completed_payload)
+        assert_response :ok
+      end
     end
 
     test 'handles form.completed event with rejected medical cert status' do
@@ -186,6 +204,99 @@ module Webhooks
       assert_equal 'signed', @application.document_signing_status
       assert_equal 'received', @application.medical_certification_status
       assert @application.medical_certification.attached?
+    end
+
+    test 'late DocuSeal completion does not overwrite certification received through secure upload' do
+      @application.update!(medical_certification_status: :received)
+      @application.medical_certification.attach(
+        io: StringIO.new('secure upload content'),
+        filename: 'secure_upload.pdf',
+        content_type: 'application/pdf'
+      )
+      Event.create!(
+        user: @system_user,
+        auditable: @application,
+        action: 'cert_submitted_via_secure_form'
+      )
+      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+      mock_response = mock('http_response')
+      mock_response.stubs(:status).returns(mock('status'))
+      mock_response.status.stubs(:success?).returns(true)
+      mock_response.stubs(:body).returns('docuseal pdf content')
+      HTTP.stubs(:timeout).returns(HTTP)
+      HTTP.stubs(:get).returns(mock_response)
+
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+
+      @application.reload
+      assert_equal 'signed', @application.document_signing_status
+      assert_equal 'received', @application.medical_certification_status
+      assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_medical_certifications.count
+      assert_match(/\Amedical_cert_docuseal_additional_/, @application.additional_medical_certifications.first.filename.to_s)
+
+      event = Event.where(action: 'document_signing_completed', auditable: @application).last
+      assert_equal 'additional_medical_certification', event.metadata['retained_as']
+      assert event.metadata['additional_medical_certification_blob_id'].present?
+    end
+
+    test 'late DocuSeal completion after rejected secure upload is retained for deliberate review' do
+      @application.update!(medical_certification_status: :rejected)
+      @application.medical_certification.attach(
+        io: StringIO.new('secure upload content'),
+        filename: 'secure_upload.pdf',
+        content_type: 'application/pdf'
+      )
+      Event.create!(
+        user: @system_user,
+        auditable: @application,
+        action: 'cert_submitted_via_secure_form'
+      )
+      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+      mock_successful_docuseal_download
+
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+
+      @application.reload
+      assert_equal 'signed', @application.document_signing_status
+      assert_equal 'rejected', @application.medical_certification_status
+      assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_medical_certifications.count
+      assert_match(/\Amedical_cert_docuseal_additional_/, @application.additional_medical_certifications.first.filename.to_s)
+
+      event = Event.where(action: 'document_signing_completed', auditable: @application).last
+      assert_equal 'additional_medical_certification', event.metadata['retained_as']
+      assert event.metadata['additional_medical_certification_blob_id'].present?
+    end
+
+    test 'late DocuSeal completion retains approved secure-uploaded certification for comparison' do
+      @application.update!(medical_certification_status: :approved)
+      @application.medical_certification.attach(
+        io: StringIO.new('secure upload content'),
+        filename: 'secure_upload.pdf',
+        content_type: 'application/pdf'
+      )
+      Event.create!(
+        user: @system_user,
+        auditable: @application,
+        action: 'cert_submitted_via_secure_form'
+      )
+      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+      mock_successful_docuseal_download
+
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+
+      @application.reload
+      assert_equal 'signed', @application.document_signing_status
+      assert_equal 'approved', @application.medical_certification_status
+      assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_medical_certifications.count
+
+      event = Event.where(action: 'document_signing_completed', auditable: @application).last
+      assert_equal 'additional_medical_certification', event.metadata['retained_as']
     end
 
     test 'handles form.declined event' do
@@ -360,6 +471,17 @@ module Webhooks
       event = Event.where(action: 'document_signing_attachment_failed').last
       assert_not_nil event
       assert_equal 'missing_document_url', event.metadata['failure_reason']
+    end
+
+    private
+
+    def mock_successful_docuseal_download
+      mock_response = mock('http_response')
+      mock_response.stubs(:status).returns(mock('status'))
+      mock_response.status.stubs(:success?).returns(true)
+      mock_response.stubs(:body).returns('docuseal pdf content')
+      HTTP.stubs(:timeout).returns(HTTP)
+      HTTP.stubs(:get).returns(mock_response)
     end
   end
 end

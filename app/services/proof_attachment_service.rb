@@ -324,7 +324,9 @@ class ProofAttachmentService
     end
 
     def determine_submission_method(application, submission_method)
-      method = application.submission_method.presence || submission_method.presence
+      return submission_method.to_sym if submission_method.present?
+
+      method = application.submission_method.presence
       method ? method.to_sym : SubmissionMethodValidator.validate(submission_method)
     end
 
@@ -449,7 +451,16 @@ class ProofAttachmentService
       notes      = rejection_details.fetch(:notes, nil)
 
       resolved = RejectionReason.resolve_for_persistence(
-        code: raw_reason, proof_type: proof_type.to_s, fallback: raw_reason
+        code: raw_reason,
+        proof_type: proof_type.to_s,
+        fallback: raw_reason,
+        interpolations: {
+          address: [
+            application.user&.physical_address_1,
+            application.user&.physical_address_2,
+            [application.user&.city, application.user&.state, application.user&.zip_code].compact.join(' ')
+          ].compact_blank.join(' ').squish
+        }
       )
       reason_text = resolved[:text]
       reason_code = resolved[:code]

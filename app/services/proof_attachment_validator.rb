@@ -19,37 +19,46 @@ class ProofAttachmentValidator
     end
   end
 
-  def self.validate!(attachment)
-    new.validate!(attachment)
+  def self.validate!(attachment, **)
+    new(**).validate!(attachment)
+  end
+
+  def initialize(allowed_mime_types: ALLOWED_MIME_TYPES, max_file_size: MAX_FILE_SIZE, min_file_size: MIN_FILE_SIZE)
+    @allowed_mime_types = allowed_mime_types
+    @max_file_size = max_file_size
+    @min_file_size = min_file_size
   end
 
   def validate!(attachment)
+    @attachment_content = nil
+    @detected_mime_type = nil
+
     validate(attachment)
-  rescue ValidationError => e
-    raise e
   rescue StandardError => e
+    raise e if e.is_a?(ValidationError)
+
     Rails.logger.error("Unexpected error in proof validation: #{e.message}")
     raise ValidationError.new(:unknown_error, 'An unexpected error occurred during validation')
   end
 
   def validate(attachment)
-    return validation_error(:no_attachment, 'No attachment provided') if attachment.nil?
+    validation_error(:no_attachment, 'No attachment provided') if attachment.nil?
 
-    attachment_size = get_attachment_size(attachment)
+    attachment_size = attachment_size(attachment)
 
-    if attachment_size < MIN_FILE_SIZE
-      return validation_error(:file_too_small,
-                              "File is too small (minimum #{MIN_FILE_SIZE} bytes)")
+    if attachment_size < @min_file_size
+      validation_error(:file_too_small,
+                       "File is too small (minimum #{@min_file_size} bytes)")
     end
-    if attachment_size > MAX_FILE_SIZE
-      return validation_error(:file_too_large,
-                              "File is too large (maximum #{MAX_FILE_SIZE} bytes)")
+    if attachment_size > @max_file_size
+      validation_error(:file_too_large,
+                       "File is too large (maximum #{@max_file_size} bytes)")
     end
-    return validation_error(:invalid_type, 'File type not allowed') unless valid_mime_type?(attachment)
+    validation_error(:invalid_type, 'File type not allowed') unless valid_mime_type?(attachment)
 
     if potentially_malicious?(attachment)
-      return validation_error(:suspicious_content,
-                              'File contains suspicious content')
+      validation_error(:suspicious_content,
+                       'File contains suspicious content')
     end
 
     true
@@ -57,22 +66,13 @@ class ProofAttachmentValidator
 
   private
 
-  def get_attachment_size(attachment)
-    # Handle different attachment types (Mail::Part vs ActiveStorage::Blob)
-    if attachment.respond_to?(:byte_size)
-      # ActiveStorage::Blob or similar
-      attachment.byte_size
-    elsif attachment.respond_to?(:decoded)
-      # Mail::Part - use decoded content size
-      attachment.decoded.bytesize
-    elsif attachment.respond_to?(:body) && attachment.body.respond_to?(:decoded)
-      # Mail::Part with body.decoded
-      attachment.body.decoded.bytesize
-    else
-      # Fallback - try to get size from content
-      content = attachment.respond_to?(:read) ? attachment.read : attachment.to_s
-      content.bytesize
-    end
+  def attachment_size(attachment)
+    return attachment.byte_size if attachment.respond_to?(:byte_size)
+    return attachment.size if attachment.respond_to?(:size)
+    return attachment.decoded.bytesize if attachment.respond_to?(:decoded)
+    return attachment.body.decoded.bytesize if attachment.respond_to?(:body) && attachment.body.respond_to?(:decoded)
+
+    attachment_content(attachment).bytesize
   end
 
   def validation_error(type, message)
@@ -80,13 +80,13 @@ class ProofAttachmentValidator
   end
 
   def valid_mime_type?(attachment)
-    ALLOWED_MIME_TYPES.include?(attachment.content_type)
+    @allowed_mime_types.include?(detected_mime_type(attachment))
   end
 
   def potentially_malicious?(attachment)
-    filename = attachment.filename.to_s.downcase
+    filename = attachment_filename(attachment).downcase
     return true if suspicious_filename?(filename)
-    return true if attachment.content_type == 'application/pdf' && pdf_malicious?(attachment)
+    return true if detected_mime_type(attachment) == 'application/pdf' && pdf_malicious?(attachment)
 
     false
   end
@@ -99,19 +99,7 @@ class ProofAttachmentValidator
   end
 
   def pdf_malicious?(attachment)
-    # Handle different attachment types when getting content for PDF analysis
-    content = if attachment.respond_to?(:download)
-                # ActiveStorage::Blob
-                attachment.download.to_s
-              elsif attachment.respond_to?(:decoded)
-                # Mail::Part
-                attachment.decoded.to_s
-              elsif attachment.respond_to?(:body) && attachment.body.respond_to?(:decoded)
-                # Mail::Part with body.decoded
-                attachment.body.decoded.to_s
-              else
-                attachment.to_s
-              end
+    content = attachment_content(attachment)
 
     content.include?('/JS') ||
       content.include?('/JavaScript') ||
@@ -120,11 +108,53 @@ class ProofAttachmentValidator
       content.include?('/RichMedia')
   end
 
-  def extract_content_type(attachment)
-    Marcel::MimeType.for(
-      attachment,
-      name: attachment.filename.to_s,
-      declared_type: attachment.content_type
-    )
+  def detected_mime_type(attachment)
+    @detected_mime_type ||= begin
+      content = attachment_content(attachment)
+      Marcel::MimeType.for(
+        StringIO.new(content),
+        name: attachment_filename(attachment),
+        declared_type: declared_content_type(attachment)
+      )
+    end
+  end
+
+  def attachment_content(attachment)
+    @attachment_content ||= if attachment.respond_to?(:download)
+                              attachment.download.to_s
+                            elsif attachment.respond_to?(:tempfile)
+                              read_io(attachment.tempfile)
+                            elsif attachment.respond_to?(:decoded)
+                              attachment.decoded.to_s
+                            elsif attachment.respond_to?(:body) && attachment.body.respond_to?(:decoded)
+                              attachment.body.decoded.to_s
+                            elsif attachment.respond_to?(:read)
+                              read_io(attachment)
+                            else
+                              attachment.to_s
+                            end
+  end
+
+  def read_io(io)
+    io.rewind if io.respond_to?(:rewind)
+    io.read.to_s
+  ensure
+    io.rewind if io.respond_to?(:rewind)
+  end
+
+  def attachment_filename(attachment)
+    if attachment.respond_to?(:original_filename)
+      attachment.original_filename.to_s
+    elsif attachment.respond_to?(:filename)
+      attachment.filename.to_s
+    else
+      ''
+    end
+  end
+
+  def declared_content_type(attachment)
+    return unless attachment.respond_to?(:content_type)
+
+    attachment.content_type.to_s.split(';').first
   end
 end

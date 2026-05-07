@@ -195,6 +195,65 @@ module Applications
       assert_equal 'in_progress', result.application.status
     end
 
+    test 'submitted online opt-in skips provider validation and requests provider info' do
+      form = create_valid_form(@user)
+      form.is_submission = true
+      form.no_provider_info_provided = true
+      form.medical_provider_name = nil
+      form.medical_provider_phone = nil
+      form.medical_provider_email = nil
+
+      request_service = mock('request-provider-info-service')
+      request_service.expects(:call).returns(BaseService::Result.new(success: true))
+      Applications::RequestProviderInfo
+        .expects(:new)
+        .with(application: kind_of(Application), actor: @user)
+        .returns(request_service)
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?
+      assert_equal 'in_progress', result.application.status
+      assert_predicate result.application, :no_provider_info_provided?
+      assert_nil result.application.medical_provider_name
+      assert_nil result.application.medical_provider_phone
+      assert_nil result.application.medical_provider_email
+    end
+
+    test 'submitted online opt-in clears stale provider info on existing application before requesting follow-up' do
+      application = create(
+        :application,
+        :draft,
+        user: @user,
+        medical_provider_name: 'Stale Provider',
+        medical_provider_phone: '555-9999',
+        medical_provider_email: 'stale@example.com'
+      )
+      form = create_form_with_application(@user, application)
+      form.is_submission = true
+      form.no_provider_info_provided = true
+      form.medical_provider_name = nil
+      form.medical_provider_phone = nil
+      form.medical_provider_fax = nil
+      form.medical_provider_email = nil
+
+      request_service = mock('request-provider-info-service')
+      request_service.expects(:call).returns(BaseService::Result.new(success: true))
+      Applications::RequestProviderInfo
+        .expects(:new)
+        .with(application: application, actor: @user)
+        .returns(request_service)
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?
+      application.reload
+      assert_nil application.medical_provider_name
+      assert_nil application.medical_provider_phone
+      assert_nil application.medical_provider_fax
+      assert_nil application.medical_provider_email
+    end
+
     test 'sets draft status for non-submissions' do
       form = create_valid_form(@user)
       form.is_submission = false

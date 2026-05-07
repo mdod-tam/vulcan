@@ -149,9 +149,10 @@ module ConstituentPortal
         @application.save!
         @application.submit!(actor: current_user)
       end
+      provider_info_notice = request_provider_info_after_submit
       ApplicationNotificationsMailer.application_submitted(@application).deliver_later
       redirect_with_notice(constituent_portal_application_path(@application),
-                           'Application submitted successfully!')
+                           ['Application submitted successfully!', provider_info_notice].compact.join(' '))
     rescue ActiveRecord::RecordInvalid
       render :verify, status: :unprocessable_content
     end
@@ -507,8 +508,29 @@ module ConstituentPortal
       params.expect(
         application: %i[terms_accepted
                         information_verified
-                        medical_release_authorized]
+                        medical_release_authorized
+                        no_provider_info_provided]
       )
+    end
+
+    def request_provider_info_after_submit
+      return unless @application.no_provider_info_provided?
+      return unless missing_required_provider_info?
+
+      result = Applications::RequestProviderInfo.new(application: @application, actor: current_user).call
+      return if result.success?
+
+      Rails.logger.warn("Provider info request not sent after online submission for application #{@application.id}: #{result.message}")
+      t('applications.provider_info.messages.request_after_submission_failed',
+        default: 'We could not send the provider information form automatically. Program staff will follow up.')
+    rescue StandardError => e
+      Rails.logger.warn("Provider info request not sent after online submission for application #{@application.id}: #{e.message}")
+      t('applications.provider_info.messages.request_after_submission_failed',
+        default: 'We could not send the provider information form automatically. Program staff will follow up.')
+    end
+
+    def missing_required_provider_info?
+      @application.missing_required_provider_info?
     end
 
     def set_application
@@ -559,6 +581,7 @@ module ConstituentPortal
         application: %i[
           annual_income household_size maryland_resident self_certify_disability
           medical_provider_name medical_provider_phone medical_provider_fax medical_provider_email
+          no_provider_info_provided
           physical_address_1 physical_address_2 city state zip_code
           use_guardian_address
           hearing_disability vision_disability speech_disability mobility_disability cognition_disability

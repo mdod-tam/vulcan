@@ -10,7 +10,8 @@ module Letters
       'application_notifications_income_threshold_exceeded' => :income_threshold_exceeded,
       'application_notifications_proof_approved' => :proof_approved,
       'application_notifications_max_rejections_reached' => :max_rejections_reached,
-      'application_notifications_proof_submission_error' => :proof_submission_error,
+      'application_notifications_id_proof_rejected' => :id_proof_rejected,
+      'application_notifications_provider_info_requested' => :provider_info_requested,
       'evaluator_mailer_evaluation_submission_confirmation' => :evaluation_submitted
     }.freeze
 
@@ -18,11 +19,12 @@ module Letters
       'application_notifications_account_created' => 'Your Maryland Accessible Telecommunications Account',
       'application_notifications_registration_confirmation' => 'Welcome to the Maryland Accessible Telecommunications Program',
       'application_notifications_proof_rejected' => 'Document Verification Follow-up Required',
+      'application_notifications_id_proof_rejected' => 'Identification Document Follow-up Required',
       'application_notifications_income_threshold_exceeded' => 'Income Eligibility Review',
       'application_notifications_proof_approved' => 'Document Verification Approved',
       'application_notifications_proof_received' => 'Document Verification Received',
       'application_notifications_max_rejections_reached' => 'Important Application Status Update',
-      'application_notifications_proof_submission_error' => 'Document Submission Error',
+      'application_notifications_provider_info_requested' => 'Certifying Professional Information Requested',
       'medical_provider_request_certification' => 'Request for Medical Certification',
       'voucher_notifications_voucher_assigned' => 'Your Accessibility Equipment Voucher',
       'voucher_notifications_voucher_redeemed' => 'Voucher Redemption Confirmation',
@@ -242,6 +244,8 @@ module Letters
         :income_proof_rejected
       when 'residency'
         :residency_proof_rejected
+      when 'id'
+        :id_proof_rejected
       else
         :other_notification
       end

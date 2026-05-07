@@ -99,6 +99,7 @@ module Applications
       case operation
       when :create
         log_application_creation
+        request_provider_info_if_missing
       when :update
         log_application_update
       end
@@ -714,6 +715,31 @@ module Applications
     def send_notifications
       send_proof_rejection_notifications
       send_account_creation_notifications
+    end
+
+    # Automatically sends a provider info secure form to the constituent/guardian
+    # when an admin creates a paper application without certifying professional info.
+    # Failure is non-blocking: the application is already saved; the admin can send
+    # the form manually from the application show page if delivery fails.
+    def request_provider_info_if_missing
+      return unless params[:no_medical_provider_information]
+
+      result = Applications::RequestProviderInfo.new(
+        application: @application,
+        actor: @admin
+      ).call
+
+      return if result.success?
+
+      note = "Certifying professional info form could not be automatically sent: #{result.message} " \
+             'You can send it from the application page.'
+      @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
+    rescue StandardError => e
+      log_error(e, "Failed to auto-send provider info secure form after paper app #{@application&.id}")
+      @reconciliation_note = [
+        @reconciliation_note,
+        'Certifying professional info form delivery failed. You can send it manually from the application page.'
+      ].compact.join(' ')
     end
 
     def send_proof_rejection_notifications

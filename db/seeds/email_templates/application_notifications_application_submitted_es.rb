@@ -17,15 +17,13 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_application_su
 
     Le notificaremos de cualquier actualización de estado o si necesitamos documentación adicional.
 
-    Para enviar documentación adicional o consultar el estado de su solicitud, inicie sesión en su cuenta aquí: %<sign_in_url>s
-
     Si tiene alguna pregunta sobre su solicitud, comuníquese con nuestro equipo a %<support_email>s o llame al (410) 767-6960.
 
     %<footer_text>s
   TEXT
   template.variables = {
     'required' => %w[header_text user_first_name application_id submission_date_formatted footer_text support_email],
-    'optional' => %w[sign_in_url]
+    'optional' => []
   }
   template.version = 1
 end

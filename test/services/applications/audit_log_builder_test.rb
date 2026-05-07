@@ -239,5 +239,177 @@ module Applications
         assert_includes logs, profile_event
       end
     end
+
+    test 'includes secure request issuance notifications in audit logs' do
+      provider_info_notification = create(
+        :notification,
+        recipient: @application.user,
+        actor: @admin,
+        notifiable: @application,
+        action: 'provider_info_requested',
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 101,
+          'request_batch_id' => 'provider-batch',
+          'recipient_channel' => 'email',
+          'expires_at' => 2.days.from_now.iso8601
+        }
+      )
+      proof_notification = create(
+        :notification,
+        recipient: @application.user,
+        actor: @admin,
+        notifiable: @application,
+        action: 'proof_resubmission_requested',
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 102,
+          'request_batch_id' => 'proof-batch',
+          'recipient_channel' => 'email',
+          'proof_type' => 'income',
+          'expires_at' => 2.days.from_now.iso8601
+        }
+      )
+      cert_notification = create(
+        :notification,
+        recipient: @application.user,
+        actor: @admin,
+        notifiable: @application,
+        action: 'cert_upload_requested',
+        metadata: {
+          'application_id' => @application.id,
+          'medical_provider_secure_request_form_id' => 103,
+          'provider_name' => 'Dr. Provider',
+          'provider_email' => 'provider@example.test',
+          'requested_channel' => 'email',
+          'expires_at' => 2.days.from_now.iso8601
+        }
+      )
+
+      with_mocked_attachments do
+        builder = AuditLogBuilder.new(@application)
+        logs = builder.build_audit_logs
+
+        assert_includes logs, provider_info_notification
+        assert_includes logs, proof_notification
+        assert_includes logs, cert_notification
+      end
+    end
+
+    test 'includes secure request revocation events in audit logs' do
+      provider_info_event = Event.create!(
+        user: @admin,
+        auditable: @application,
+        action: 'provider_info_request_revoked',
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 201,
+          'request_batch_id' => 'provider-batch',
+          'recipient_name' => @application.user.full_name,
+          'recipient_channel' => 'email'
+        }
+      )
+      proof_event = Event.create!(
+        user: @admin,
+        auditable: @application,
+        action: 'proof_resubmission_request_revoked',
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 202,
+          'request_batch_id' => 'proof-batch',
+          'recipient_name' => @application.user.full_name,
+          'recipient_channel' => 'email',
+          'proof_type' => 'income'
+        }
+      )
+      cert_event = Event.create!(
+        user: @admin,
+        auditable: @application,
+        action: 'cert_upload_request_revoked',
+        metadata: {
+          'application_id' => @application.id,
+          'medical_provider_secure_request_form_id' => 203,
+          'provider_name' => 'Dr. Provider',
+          'provider_email' => 'provider@example.test'
+        }
+      )
+
+      with_mocked_attachments do
+        builder = AuditLogBuilder.new(@application)
+        logs = builder.build_audit_logs
+
+        assert_includes logs, provider_info_event
+        assert_includes logs, proof_event
+        assert_includes logs, cert_event
+      end
+    end
+
+    test 'includes secure request expiration events in audit logs' do
+      proof_event = Event.create!(
+        user: @admin,
+        auditable: @application,
+        action: 'proof_resubmission_request_expired',
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 302,
+          'request_batch_id' => 'proof-batch',
+          'recipient_name' => @application.user.full_name,
+          'recipient_channel' => 'email',
+          'proof_type' => 'income'
+        }
+      )
+      cert_event = Event.create!(
+        user: @admin,
+        auditable: @application,
+        action: 'cert_upload_request_expired',
+        metadata: {
+          'application_id' => @application.id,
+          'medical_provider_secure_request_form_id' => 303,
+          'provider_name' => 'Dr. Provider',
+          'provider_email' => 'provider@example.test'
+        }
+      )
+
+      with_mocked_attachments do
+        builder = AuditLogBuilder.new(@application)
+        logs = builder.build_audit_logs
+
+        assert_includes logs, proof_event
+        assert_includes logs, cert_event
+      end
+    end
+
+    test 'includes secure form submission events in audit logs' do
+      proof_event = Event.create!(
+        user: @application.user,
+        auditable: @application,
+        action: 'proof_submitted_via_secure_form',
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 402,
+          'request_batch_id' => 'proof-submit-batch',
+          'proof_type' => 'income'
+        }
+      )
+      cert_event = Event.create!(
+        user: User.system_user,
+        auditable: @application,
+        action: 'cert_submitted_via_secure_form',
+        metadata: {
+          'application_id' => @application.id,
+          'medical_provider_secure_request_form_id' => 403,
+          'provider_name' => 'Dr. Provider',
+          'provider_email' => 'provider@example.test'
+        }
+      )
+
+      with_mocked_attachments do
+        builder = AuditLogBuilder.new(@application)
+        logs = builder.build_audit_logs
+
+        assert_includes logs, proof_event
+        assert_includes logs, cert_event
+      end
+    end
   end
 end

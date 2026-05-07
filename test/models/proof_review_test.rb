@@ -124,23 +124,42 @@ class ProofReviewTest < ActiveSupport::TestCase
                     'cannot be reviewed when archived'
   end
 
-  def test_sends_notification_on_proof_rejection
-    # Skip the email sending for this test to avoid the strftime error
-    mail_mock = mock
-    mail_mock.expects(:deliver_now).never # Explicitly state we don't expect this to be called
-    ApplicationNotificationsMailer.stubs(:proof_rejected).returns(mail_mock)
-
-    # Create a notification manually since we're skipping callbacks
-    notification = Notification.new(
-      recipient: @application.user,
+  def test_rejection_requests_secure_proof_resubmission_instead_of_legacy_notification_delivery
+    result = BaseService::Result.new(success: true, message: 'sent', data: {})
+    service = mock('request-proof-resubmission')
+    service.expects(:call).returns(result)
+    Applications::RequestProofResubmission.expects(:new).with(
+      application: @application,
       actor: @admin,
-      action: 'proof_rejected',
-      notifiable: @application,
-      metadata: { proof_type: 'income', rejection_reason: 'Invalid documentation' }
-    )
+      proof_type: :income
+    ).returns(service)
+    NotificationService.expects(:create_and_deliver!).never
 
-    assert_difference 'Notification.count' do
-      notification.save!
+    assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
+      create(:proof_review,
+             application: @application,
+             admin: @admin,
+             proof_type: :income,
+             status: :rejected,
+             rejection_reason: 'Invalid documentation')
     end
+  end
+
+  def test_paper_rejection_does_not_request_secure_proof_resubmission
+    Applications::RequestProofResubmission.expects(:new).never
+
+    Current.paper_context = true
+
+    assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
+      create(:proof_review,
+             application: @application,
+             admin: @admin,
+             proof_type: :income,
+             status: :rejected,
+             rejection_reason: 'Invalid documentation',
+             submission_method: :paper)
+    end
+  ensure
+    Current.reset
   end
 end

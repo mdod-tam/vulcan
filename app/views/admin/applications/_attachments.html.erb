@@ -34,7 +34,7 @@
             </p>
             <% if latest_rejection.details.present? %>
               <p class="text-sm text-gray-600 ml-4 mb-1">
-                <span class="text-gray-500">Reason:</span> "<%= sanitize latest_rejection.details %>"
+                <span class="text-gray-500">Reason:</span> <%= sanitize format_proof_history_detail(latest_rejection.details, @application) %>
               </p>
             <% end %>
             <% if latest_rejection.source.respond_to?(:notes) && latest_rejection.source.notes.present? %>
@@ -117,11 +117,11 @@
 
                 <% if activity.activity_type == :rejection && activity.details.present? %>
                   <p class="text-sm text-gray-600 ml-4 mb-1">
-                    <span class="text-gray-500">Reason:</span> "<%= sanitize activity.details %>"
+                    <span class="text-gray-500">Reason:</span> <%= sanitize format_proof_history_detail(activity.details, @application) %>
                   </p>
                 <% elsif activity.activity_type == :approval && activity.details.present? %>
                   <p class="text-sm text-gray-600 ml-4 mb-1">
-                    <span class="text-gray-500">Note:</span> "<%= sanitize activity.details %>"
+                    <span class="text-gray-500">Note:</span> <%= sanitize format_proof_history_detail(activity.details, @application) %>
                   </p>
                 <% elsif activity.source.respond_to?(:notes) && activity.source.notes.present? %>
                   <p class="text-sm text-gray-600 ml-4">
@@ -132,7 +132,7 @@
             <% end %>
           </div>
         </div>
-      <% elsif @application.created_at.present? %>
+      <% elsif show_proof_history_submission_fallback?(@application, :income) %>
         <!-- Fallback when no audit records exist -->
         <div class="mt-4">
           <h3 class="text-sm font-medium text-gray-700 mb-2">Proof History</h3>
@@ -158,6 +158,10 @@
           </div>
         </div>
       <% end %>
+
+      <%= render "proof_secure_request_forms",
+                 proof_type: :income,
+                 secure_request_forms: proof_secure_request_forms(@application, :income) %>
 
       <!-- Action Buttons -->
       <div class="mt-4 flex space-x-2">
@@ -185,7 +189,15 @@
              </button>
            <% end %>
         <% else %>
-          <span class="text-sm text-gray-500">Not Attached</span>
+          <% if show_secure_proof_resubmission_button?(@application, :income) %>
+            <%= button_to secure_proof_resubmission_button_text(:income),
+                          admin_application_proof_resubmission_request_path(@application),
+                          method: :post,
+                          params: { proof_type: :income },
+                          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          <% else %>
+            <span class="text-sm text-gray-500">Not Attached</span>
+          <% end %>
         <% end %>
       </div>
     </div>
@@ -225,7 +237,7 @@
             </p>
             <% if latest_rejection.details.present? %>
               <p class="text-sm text-gray-600 ml-4 mb-1">
-                <span class="text-gray-500">Reason:</span> "<%= sanitize latest_rejection.details %>"
+                <span class="text-gray-500">Reason:</span> <%= sanitize format_proof_history_detail(latest_rejection.details, @application) %>
               </p>
             <% end %>
             <% if latest_rejection.source.respond_to?(:notes) && latest_rejection.source.notes.present? %>
@@ -308,11 +320,11 @@
 
                 <% if activity.activity_type == :rejection && activity.details.present? %>
                   <p class="text-sm text-gray-600 ml-4 mb-1">
-                    <span class="text-gray-500">Reason:</span> "<%= sanitize activity.details %>"
+                    <span class="text-gray-500">Reason:</span> <%= sanitize format_proof_history_detail(activity.details, @application) %>
                   </p>
                 <% elsif activity.activity_type == :approval && activity.details.present? %>
                   <p class="text-sm text-gray-600 ml-4 mb-1">
-                    <span class="text-gray-500">Note:</span> "<%= sanitize activity.details %>"
+                    <span class="text-gray-500">Note:</span> <%= sanitize format_proof_history_detail(activity.details, @application) %>
                   </p>
                 <% elsif activity.source.respond_to?(:notes) && activity.source.notes.present? %>
                   <p class="text-sm text-gray-600 ml-4">
@@ -323,7 +335,7 @@
             <% end %>
           </div>
         </div>
-      <% elsif @application.created_at.present? %>
+      <% elsif show_proof_history_submission_fallback?(@application, :residency) %>
         <!-- Fallback when no audit records exist -->
         <div class="mt-4">
           <h3 class="text-sm font-medium text-gray-700 mb-2">Proof History</h3>
@@ -350,6 +362,10 @@
         </div>
       <% end %>
 
+      <%= render "proof_secure_request_forms",
+                 proof_type: :residency,
+                 secure_request_forms: proof_secure_request_forms(@application, :residency) %>
+
       <!-- Action Buttons -->
       <div class="mt-4 flex space-x-2">
         <% if @application.residency_proof.attached? %>
@@ -375,7 +391,15 @@
              </button>
            <% end %>
         <% else %>
-          <span class="text-sm text-gray-500">Not Attached</span>
+          <% if show_secure_proof_resubmission_button?(@application, :residency) %>
+            <%= button_to secure_proof_resubmission_button_text(:residency),
+                          admin_application_proof_resubmission_request_path(@application),
+                          method: :post,
+                          params: { proof_type: :residency },
+                          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          <% else %>
+            <span class="text-sm text-gray-500">Not Attached</span>
+          <% end %>
         <% end %>
       </div>
     </div>
@@ -414,7 +438,7 @@
             </p>
             <% if latest_rejection.details.present? %>
               <p class="text-sm text-gray-600 ml-4 mb-1">
-                <span class="text-gray-500">Reason:</span> "<%= sanitize latest_rejection.details %>"
+                <span class="text-gray-500">Reason:</span> <%= sanitize format_proof_history_detail(latest_rejection.details, @application) %>
               </p>
             <% end %>
             <% if latest_rejection.source.respond_to?(:notes) && latest_rejection.source.notes.present? %>
@@ -497,11 +521,11 @@
 
                 <% if activity.activity_type == :rejection && activity.details.present? %>
                   <p class="text-sm text-gray-600 ml-4 mb-1">
-                    <span class="text-gray-500">Reason:</span> "<%= sanitize activity.details %>"
+                    <span class="text-gray-500">Reason:</span> <%= sanitize format_proof_history_detail(activity.details, @application) %>
                   </p>
                 <% elsif activity.activity_type == :approval && activity.details.present? %>
                   <p class="text-sm text-gray-600 ml-4 mb-1">
-                    <span class="text-gray-500">Note:</span> "<%= sanitize activity.details %>"
+                    <span class="text-gray-500">Note:</span> <%= sanitize format_proof_history_detail(activity.details, @application) %>
                   </p>
                 <% elsif activity.source.respond_to?(:notes) && activity.source.notes.present? %>
                   <p class="text-sm text-gray-600 ml-4">
@@ -512,7 +536,7 @@
             <% end %>
           </div>
         </div>
-      <% elsif @application.created_at.present? %>
+      <% elsif show_proof_history_submission_fallback?(@application, :id) %>
         <!-- Fallback when no audit records exist -->
         <div class="mt-4">
           <h3 class="text-sm font-medium text-gray-700 mb-2">Proof History</h3>
@@ -539,6 +563,10 @@
         </div>
       <% end %>
 
+      <%= render "proof_secure_request_forms",
+                 proof_type: :id,
+                 secure_request_forms: proof_secure_request_forms(@application, :id) %>
+
       <!-- Action Buttons -->
       <div class="mt-4 flex space-x-2">
         <% if @application.id_proof.attached? %>
@@ -564,7 +592,15 @@
              </button>
            <% end %>
         <% else %>
-          <span class="text-sm text-gray-500">Not Attached</span>
+          <% if show_secure_proof_resubmission_button?(@application, :id) %>
+            <%= button_to secure_proof_resubmission_button_text(:id),
+                          admin_application_proof_resubmission_request_path(@application),
+                          method: :post,
+                          params: { proof_type: :id },
+                          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          <% else %>
+            <span class="text-sm text-gray-500">Not Attached</span>
+          <% end %>
         <% end %>
       </div>
     </div>

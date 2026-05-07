@@ -29,7 +29,14 @@
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
 
     <% if @application.errors.any? %>
-      <div id="error-summary" class="bg-red-50 p-4 rounded-t-lg" role="alert" aria-live="assertive" aria-labelledby="error_messages" aria-atomic="true" tabindex="-1" autofocus>
+      <div id="error-summary"
+           class="bg-red-50 p-4 rounded-t-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+           role="alert"
+           aria-live="assertive"
+           aria-labelledby="error_messages"
+           aria-atomic="true"
+           tabindex="-1"
+           data-controller="error-summary">
         <h3 id="error_messages" class="text-red-800 font-medium">
           <%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:
         </h3>
@@ -39,15 +46,6 @@
           <% end %>
         </ul>
       </div>
-      <script>
-        // Focus the error summary for screen reader users
-        document.addEventListener('DOMContentLoaded', function() {
-          var errorSummary = document.getElementById('error-summary');
-          if (errorSummary) {
-            errorSummary.focus();
-          }
-        });
-      </script>
     <% end %>
 
      <div class="p-6 space-y-6">
@@ -195,6 +193,19 @@
        <%= f.fields_for :medical_provider_attributes do |mp| %>
          <%= render "medical_provider_form", form: mp %>
        <% end %>
+       <div class="flex items-start rounded-md border border-gray-200 bg-white p-4">
+         <%= f.check_box :no_provider_info_provided,
+             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+             "aria-describedby": "no_provider_info_provided_help" %>
+         <div class="ml-3">
+           <%= f.label :no_provider_info_provided,
+               "I don't have my certifying professional's information yet.",
+               class: "block text-sm font-medium text-gray-900" %>
+           <p id="no_provider_info_provided_help" class="mt-1 text-sm text-gray-700">
+             We will send you a secure form after submission to collect this information.
+           </p>
+         </div>
+       </div>
 
        <!-- Alternate Contact Section (optional) -->
        <section aria-labelledby="alternate-contact-section-title" class="space-y-4 p-4 bg-gray-50 rounded">

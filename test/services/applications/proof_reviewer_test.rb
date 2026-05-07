@@ -64,6 +64,33 @@ module Applications
       assert_nil review.rejection_reason
     end
 
+    test 'rejected review persists interpolated address-based rejection text' do
+      @application.user.update!(
+        physical_address_1: '123 Main St',
+        physical_address_2: 'Apt 4B',
+        city: 'Baltimore',
+        state: 'MD',
+        zip_code: '21201'
+      )
+      create(
+        :rejection_reason,
+        code: 'address_mismatch_test',
+        proof_type: 'income',
+        locale: 'en',
+        body: 'The address must match %{address}.'
+      )
+
+      @reviewer.review(
+        proof_type: :income,
+        status: :rejected,
+        rejection_reason_code: 'address_mismatch_test',
+        rejection_reason: 'Address mismatch'
+      )
+
+      review = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected)
+      assert_equal 'The address must match 123 Main St Apt 4B Baltimore MD 21201.', review.rejection_reason
+    end
+
     test 'approved review triggers reconciler auto-approval audit' do
       app = create(:application, :in_progress, :income_not_required)
       app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
@@ -96,6 +123,88 @@ module Applications
       status_event = Event.where(action: 'application_status_changed', auditable: app).order(:created_at).last
       assert_equal 'auto_approval', status_event.metadata['trigger']
       assert_equal 'approved', status_event.metadata['new_status']
+    end
+
+    test 're-rejection requests secure proof resubmission when not in paper context' do
+      Current.paper_context = true
+      @reviewer.review(
+        proof_type: :income,
+        status: :rejected,
+        rejection_reason_code: 'missing_name',
+        rejection_reason: 'First rejected reason text'
+      )
+
+      Current.paper_context = false
+      travel AuditEventService::DEDUP_WINDOW + 1.second
+
+      result = BaseService::Result.new(success: true, message: 'sent', data: {})
+      service = mock('request-proof-resubmission')
+      service.expects(:call).returns(result)
+      Applications::RequestProofResubmission.expects(:new).with(
+        application: @application,
+        actor: @admin,
+        proof_type: :income
+      ).returns(service)
+
+      assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
+        assert_difference -> { @application.reload.total_rejections }, 1 do
+          @reviewer.review(
+            proof_type: :income,
+            status: :rejected,
+            rejection_reason_code: 'wrong_document',
+            rejection_reason: 'Second rejected reason text'
+          )
+        end
+      end
+    end
+
+    test 'review submission method comes from latest proof submission event metadata' do
+      Current.paper_context = true
+      Event.create!(
+        auditable: @application,
+        user: @application.user,
+        action: 'income_proof_attached',
+        metadata: { 'proof_type' => 'income', 'submission_method' => 'secure_form' }
+      )
+      @application.income_proof.attach(
+        io: StringIO.new('test income proof'),
+        filename: 'income-proof.pdf',
+        content_type: 'application/pdf'
+      )
+
+      @reviewer.review(proof_type: :income, status: :approved)
+
+      review = @application.proof_reviews.find_by!(proof_type: :income, status: :approved)
+      assert_predicate review, :submission_method_secure_form?
+    end
+
+    test 'paper-origin review still requests secure proof resubmission outside paper intake context' do
+      Current.paper_context = false
+      Event.create!(
+        auditable: @application,
+        user: @application.user,
+        action: 'income_proof_submitted',
+        metadata: { 'proof_type' => 'income', 'submission_method' => 'paper' }
+      )
+
+      result = BaseService::Result.new(success: true, message: 'sent', data: {})
+      service = mock('request-proof-resubmission')
+      service.expects(:call).returns(result)
+      Applications::RequestProofResubmission.expects(:new).with(
+        application: @application,
+        actor: @admin,
+        proof_type: :income
+      ).returns(service)
+
+      @reviewer.review(
+        proof_type: :income,
+        status: :rejected,
+        rejection_reason_code: 'missing_name',
+        rejection_reason: 'Rejected after paper submission'
+      )
+
+      review = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected)
+      assert_predicate review, :submission_method_paper?
     end
   end
 end

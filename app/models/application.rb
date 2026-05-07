@@ -39,6 +39,7 @@ class Application < ApplicationRecord
   include NotificationDelivery
   include ProofManageable
   include ProofConsistencyValidation
+  include ApplicationProviderInfoRequests
   include CertificationManagement
   include VoucherManagement
   include TrainingManagement
@@ -46,7 +47,7 @@ class Application < ApplicationRecord
 
   # Attribute accessors
   # Virtual attribute to hold nested medical provider params for the form
-  attr_accessor :medical_provider_attributes
+  attr_accessor :medical_provider_attributes, :no_provider_info_provided
 
   # Enums
   enum :status, {
@@ -122,11 +123,17 @@ class Application < ApplicationRecord
   has_many :events, as: :auditable, dependent: :destroy # Added for audit trail
   has_many :vouchers, dependent: :restrict_with_error
   has_many :application_notes, dependent: :destroy
+  has_many :medical_provider_secure_request_forms, dependent: :destroy
   has_and_belongs_to_many :products
   has_one_attached :income_proof
   has_one_attached :residency_proof
   has_one_attached :id_proof
   has_one_attached :medical_certification
+  # Stores late-arriving DocuSeal completions that arrive after a cert has already been received
+  # through the secure upload path. Webhooks::DocusealController currently writes directly to
+  # :medical_certification. Routing duplicate submissions here requires the DocuSeal coexistence
+  # guardrails described in cert_cross_channel_guardrails (Phase 3, deferred).
+  has_many_attached :additional_medical_certifications
 
   # Validations
   validates :application_date, presence: true
@@ -363,10 +370,28 @@ class Application < ApplicationRecord
   cattr_accessor :skip_wait_period_validation, default: false
 
   # Instance Methods
-  # Determines if medical provider validation should be skipped
-  # Skip validation if: status is draft, awaiting_proof
   def skip_medical_provider_validation?
-    status_draft? || status_awaiting_proof?
+    status_draft? || status_awaiting_proof? || no_provider_info_provided?
+  end
+
+  def no_provider_info_provided?
+    ActiveModel::Type::Boolean.new.cast(no_provider_info_provided)
+  end
+
+  def missing_required_provider_info?
+    %i[medical_provider_name medical_provider_phone medical_provider_email].any? do |attribute|
+      public_send(attribute).blank?
+    end
+  end
+
+  def medical_provider_info_present?
+    %i[medical_provider_name medical_provider_phone medical_provider_fax medical_provider_email].any? do |attribute|
+      public_send(attribute).present?
+    end
+  end
+
+  def ready_for_docuseal?
+    medical_provider_name.present? && medical_provider_email.present?
   end
 
   # Status methods- Delegate approval logic to the Applications::Approver service object

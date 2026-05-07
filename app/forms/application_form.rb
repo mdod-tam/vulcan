@@ -42,6 +42,7 @@ class ApplicationForm
   attribute :medical_provider_phone, :string
   attribute :medical_provider_fax, :string
   attribute :medical_provider_email, :string
+  attribute :no_provider_info_provided, :boolean, default: false
 
   # Guardian/dependent management
   attribute :user_id, :integer # For dependent applications
@@ -127,6 +128,7 @@ class ApplicationForm
     assign_core_attributes(app_params)
     assign_file_attachments(app_params)
     assign_disability_attributes(app_params)
+    assign_simple_attributes(app_params, %i[no_provider_info_provided])
 
     extract_address_attributes(app_params)
     extract_guardian_address_strategy(params, app_params)
@@ -256,6 +258,7 @@ class ApplicationForm
 
   def validate_medical_provider
     return unless is_submission
+    return if no_provider_info_provided
 
     return unless medical_provider_name.blank? || medical_provider_phone.blank? || medical_provider_email.blank?
 

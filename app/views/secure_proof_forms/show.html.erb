@@ -1,0 +1,65 @@
+<% content_for :title, t('.title') %>
+<% errors = @form_errors %>
+
+<section aria-labelledby="secure-proof-form-title" class="rounded-md border border-gray-200 bg-white p-6 shadow-sm">
+  <h1 id="secure-proof-form-title" class="text-2xl font-semibold text-gray-900"><%= t('.heading', proof_type: @proof_type_label) %></h1>
+  <p class="mt-3 text-sm text-gray-700"><%= t('.intro', proof_type: @proof_type_label) %></p>
+
+  <% if errors&.any? %>
+    <div class="mt-6 rounded-md border border-red-300 bg-red-50 p-4 focus:outline-none focus:ring-2 focus:ring-red-700"
+         role="alert"
+         aria-labelledby="error-summary-title"
+         tabindex="-1"
+         data-controller="error-summary">
+      <h2 id="error-summary-title" class="text-base font-semibold text-red-900"><%= t('.error_summary') %></h2>
+      <ul class="mt-2 list-disc pl-5 text-sm text-red-800">
+        <% errors.each do |error| %>
+          <li>
+            <a class="underline focus:outline-none focus:ring-2 focus:ring-red-700"
+               href="#file"
+               data-action="click->error-summary#focus">
+              <strong class="font-semibold"><%= t('.file_label') %>:</strong> <%= error.message %>
+            </a>
+          </li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <% if @form_error_message.present? %>
+    <div class="mt-6 rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800" role="alert">
+      <%= @form_error_message %>
+    </div>
+  <% end %>
+
+  <%= form_with url: secure_proof_form_path(token: @token), method: :patch, local: true, multipart: true, class: "mt-6 space-y-5" do |form| %>
+    <%= hidden_field_tag :token, @token %>
+    <% file_errors = Array(errors&.[](:file)) %>
+
+    <div>
+      <%= form.label :file, class: "block text-sm font-medium text-gray-900" do %>
+        <%= t('.file_label') %> <abbr title="<%= t('.required') %>" class="text-red-700 no-underline" aria-hidden="true">*</abbr>
+      <% end %>
+      <p id="file_help" class="mt-1 text-sm text-gray-600"><%= t('.file_help') %></p>
+      <%= form.file_field :file,
+                          id: "file",
+                          required: true,
+                          accept: "application/pdf,image/jpeg,image/png",
+                          aria: {
+                            describedby: ["file_help", ("file_error" if file_errors.any?)].compact.join(" "),
+                            invalid: file_errors.any? ? "true" : nil
+                          },
+                          class: "mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 #{'border-red-500' if file_errors.any?}" %>
+      <% if file_errors.any? %>
+        <p id="file_error" class="mt-2 text-sm text-red-700"><%= file_errors.to_sentence %></p>
+      <% end %>
+    </div>
+
+    <div class="pt-2">
+      <%= form.button t('.submit'),
+                      type: :submit,
+                      data: { turbo_submits_with: t('.submitting') },
+                      class: "inline-flex w-full justify-center rounded-md bg-indigo-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 sm:w-auto" %>
+    </div>
+  <% end %>
+</section>

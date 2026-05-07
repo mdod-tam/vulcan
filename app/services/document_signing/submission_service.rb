@@ -39,6 +39,8 @@ module DocumentSigning
           medical_certification_requested_at: Time.current
         )
 
+        revoke_open_secure_cert_upload_requests
+
         # Use increment! for atomic counter updates
         @application.increment!(:document_signing_request_count)
         @application.increment!(:medical_certification_request_count)
@@ -88,6 +90,17 @@ module DocumentSigning
       # Note: This assumes template-based submission. If using HTML, the implementation
       # would call ::Docuseal.create_submission_from_html instead
       ::Docuseal.create_submission(data)
+    end
+
+    def revoke_open_secure_cert_upload_requests
+      @application
+        .medical_provider_secure_request_forms
+        .certification_upload
+        .status_sent
+        .where(submitted_at: nil, revoked_at: nil)
+        .find_each do |request_form|
+          request_form.revoke!(actor: @actor, reason: :document_signing_request_sent)
+        end
     end
 
     def request_message_subject

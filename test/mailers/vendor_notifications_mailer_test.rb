@@ -143,22 +143,18 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'w9_rejected' do
+    Vendors::RequestW9Resubmission.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, message: 'ok', data: {}))
     review = create(:w9_review, :rejected, vendor: @vendor)
-
-    # Create a specific stub for this test
-    expected_text = "Mock W9 Rejected Body #{review.rejection_reason}"
-    rejected_template = mock('rejected_template_specific')
-    rejected_template.stubs(:subject).returns('W9 rejected')
-    rejected_template.stubs(:render).returns(['W9 rejected', expected_text])
-
-    # Update the stub for this test
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'en')
-                 .returns(rejected_template)
+    secure_upload_url = 'https://example.test/secure_w9_form?token=abc'
+    EmailTemplate.unstub(:find_by!)
 
     # Using Rails 7.1.0+ capture_emails helper
     emails = capture_emails do
-      VendorNotificationsMailer.with(vendor: @vendor, w9_review: review).w9_rejected.deliver_now
+      VendorNotificationsMailer.with(
+        vendor: @vendor,
+        w9_review: review,
+        secure_upload_url: secure_upload_url
+      ).w9_rejected.deliver_now
     end
 
     # Verify we captured an email
@@ -167,14 +163,65 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@vendor.email], email.to
-    assert_equal 'W9 rejected', email.subject
+    assert_equal 'W9 Form Requires Correction', email.subject
 
     # For non-multipart emails, we check the body directly
     assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
     assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
 
-    # Check that the email body contains expected text
-    assert_includes email.body.to_s, expected_text
+    # Check that the email body contains the secure-link instructions from the stored template
+    assert_includes email.body.to_s, review.rejection_reason
+    assert_includes email.body.to_s, secure_upload_url
+    assert_includes email.body.to_s, 'Upload your corrected W9 securely here'
+  end
+
+  test 'w9_upload_requested' do
+    secure_upload_url = 'https://example.test/secure_w9_form?token=abc'
+
+    emails = capture_emails do
+      VendorNotificationsMailer.with(
+        vendor: @vendor,
+        secure_upload_url: secure_upload_url
+      ).w9_upload_requested.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+
+    assert_equal ['no_reply@mdmat.org'], email.from
+    assert_equal [@vendor.email], email.to
+    assert_equal "Secure W9 upload requested for #{@vendor.business_name}", email.subject
+    assert_includes email.content_type, 'text/plain'
+    assert_includes email.body.to_s, secure_upload_url
+    assert_includes email.body.to_s, 'has requested a W9 form from you'
+  end
+
+  test 'mailer error audit metadata redacts secure upload URLs' do
+    raw_url = 'https://example.test/secure_w9_form?token=secret-token'
+
+    assert_difference -> { Event.where(action: 'email_delivery_error', auditable: @vendor).count }, 1 do
+      VendorNotificationsMailer.new.send(
+        :log_mail_error,
+        StandardError.new("boom #{raw_url}"),
+        @vendor,
+        'vendor_notifications_w9_rejected',
+        {
+          secure_upload_url: raw_url,
+          w9_resubmission_instructions: "Upload securely here: #{raw_url}",
+          nested: { secure_url: raw_url }
+        }
+      )
+    end
+
+    event = Event.where(action: 'email_delivery_error', auditable: @vendor).last
+    variables_json = event.metadata.fetch('variables').to_json
+
+    assert_includes event.metadata.fetch('error_message'), '[REDACTED_URL]'
+    assert_not_includes event.metadata.fetch('error_message'), raw_url
+    assert_not_includes variables_json, raw_url
+    assert_not_includes variables_json, 'secret-token'
+    assert_includes variables_json, '[REDACTED]'
+    assert_includes variables_json, '[REDACTED_URL]'
   end
 
   # Skip this test for now as it requires w9_expiration_date attribute

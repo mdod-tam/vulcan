@@ -70,10 +70,11 @@ class VendorNotificationsMailer < ApplicationMailer
     locale     = resolve_template_locale(recipient: vendor)
     w9_review  = params[:w9_review]
     reason     = w9_review&.rejection_reason || 'No reason provided.'
+    secure_upload_url = params[:secure_upload_url].presence
     template_name = 'vendor_notifications_w9_rejected'
     text_template = find_text_template(template_name, locale: locale)
 
-    message = "Your W9 form requires attention. Reason: #{reason}. Please visit the vendor portal to upload a corrected form."
+    message = "Your W9 form requires attention. Reason: #{reason}."
     variables = build_w9_variables(
       vendor,
       status: :error,
@@ -84,7 +85,16 @@ class VendorNotificationsMailer < ApplicationMailer
       subject_variables: { rejection_reason: reason, vendor_business_name: vendor.business_name },
       locale: locale
     )
-                .merge(rejection_reason: reason, vendor_portal_url: resolve_vendor_portal_url)
+                .merge(
+                  rejection_reason: reason,
+                  secure_upload_url: secure_upload_url,
+                  vendor_portal_url: resolve_vendor_portal_url,
+                  w9_resubmission_instructions: w9_resubmission_instructions(
+                    secure_upload_url: secure_upload_url,
+                    vendor_portal_url: resolve_vendor_portal_url,
+                    locale: locale
+                  )
+                )
 
     subject, body = text_template.render(**variables)
     send_mail(vendor.email, subject, body, content_type: 'text/plain')
@@ -93,10 +103,41 @@ class VendorNotificationsMailer < ApplicationMailer
     raise e
   end
 
+  def w9_upload_requested
+    vendor = params[:vendor]
+    locale = resolve_template_locale(recipient: vendor)
+    secure_upload_url = params[:secure_upload_url]
+    template_name = 'vendor_notifications_w9_upload_requested'
+
+    subject = I18n.t(
+      'vendor_notifications.w9_upload_requested.subject',
+      vendor_business_name: vendor.business_name,
+      locale: locale
+    )
+    body = I18n.t(
+      'vendor_notifications.w9_upload_requested.body',
+      vendor_business_name: vendor.business_name,
+      secure_upload_url: secure_upload_url,
+      support_email: support_email,
+      organization_name: org_name,
+      locale: locale
+    )
+
+    send_mail(vendor.email, subject, body, content_type: 'text/plain')
+  rescue StandardError => e
+    log_mail_error(e, vendor, template_name, {
+      vendor_business_name: vendor&.business_name,
+      secure_upload_url: secure_upload_url,
+      support_email: support_email
+    }.compact)
+    raise e
+  end
+
   def w9_expiring_soon
     vendor = params[:vendor]
     locale = resolve_template_locale(recipient: vendor)
     return if vendor.w9_expiration_date.blank?
+
     template_name = 'vendor_notifications_w9_expiring_soon'
     text_template = find_text_template(template_name, locale: locale)
 
@@ -137,6 +178,7 @@ class VendorNotificationsMailer < ApplicationMailer
     vendor = params[:vendor]
     locale = resolve_template_locale(recipient: vendor)
     return if vendor.w9_expiration_date.blank?
+
     template_name = 'vendor_notifications_w9_expired'
     text_template = find_text_template(template_name, locale: locale)
 
@@ -196,6 +238,7 @@ class VendorNotificationsMailer < ApplicationMailer
     }.compact
   end
 
+  # rubocop:disable Metrics/ParameterLists
   def build_w9_variables(vendor, status:, template:, fallback_header_title:, status_box_title:, status_box_message:,
                          subject_variables: {}, locale: nil)
     header_title = header_title_from_template_subject(
@@ -216,10 +259,23 @@ class VendorNotificationsMailer < ApplicationMailer
       support_email: support_email
     }.compact
   end
+  # rubocop:enable Metrics/ParameterLists
 
   def render_template(template_name, variables, locale: nil)
     template = find_text_template(template_name, locale: locale)
     template.render(**variables)
+  end
+
+  def w9_resubmission_instructions(secure_upload_url:, vendor_portal_url:, locale:)
+    if secure_upload_url.present?
+      I18n.t('vendor_notifications.w9_rejected.secure_upload_instructions',
+             secure_upload_url: secure_upload_url,
+             locale: locale)
+    else
+      I18n.t('vendor_notifications.w9_rejected.vendor_portal_instructions',
+             vendor_portal_url: vendor_portal_url,
+             locale: locale)
+    end
   end
 
   def send_mail(to, subject, body, content_type: 'text/plain')
@@ -240,13 +296,21 @@ class VendorNotificationsMailer < ApplicationMailer
       metadata: {
         user_agent: Current.user_agent,
         ip_address: Current.ip_address,
-        error_message: error.message,
+        error_message: sanitize_secure_error_message(error.message),
         error_class: error.class.name,
         template_name: template_name,
-        variables: variables,
-        backtrace: error.backtrace&.first(5)
+        variables: sanitized_mail_variables(variables),
+        backtrace: sanitize_secure_value(error.backtrace&.first(5))
       }
     )
+  end
+
+  def sanitized_mail_variables(variables)
+    redact_sensitive_mail_value(variables.to_h.deep_dup)
+  end
+
+  def redact_sensitive_mail_value(value, key = nil)
+    sanitize_secure_value(value, key)
   end
 
   def render_transactions_html(transactions)
