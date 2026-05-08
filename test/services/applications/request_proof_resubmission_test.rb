@@ -101,6 +101,7 @@ module Applications
       result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
 
       assert_not result.success?
+      assert_predicate result.data.fetch(:secure_request_forms).first.reload, :revoked?
     end
 
     test 'delivers proof rejection email to resolved guardian recipient' do

@@ -3,12 +3,12 @@
 require 'test_helper'
 
 module Applications
-  class ProviderInfoRecipientResolverTest < ActiveSupport::TestCase
+  class SecureRequestRecipientResolverTest < ActiveSupport::TestCase
     test 'uses letter by default for a letter-preferring recipient with mailing address' do
       constituent = create(:constituent, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = ProviderInfoRecipientResolver.new(application: application).resolve.first
+      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
 
       assert_equal constituent, candidate.recipient
       assert_equal :letter, candidate.channel
@@ -18,7 +18,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = ProviderInfoRecipientResolver
+      candidate = SecureRequestRecipientResolver
                   .new(application: application, channel_overrides: { constituent.id => 'email' })
                   .resolve
                   .first
@@ -31,7 +31,7 @@ module Applications
       application = create(:application)
       stranger = create(:constituent)
 
-      candidates = ProviderInfoRecipientResolver.new(application: application, recipient_ids: [stranger.id]).resolve
+      candidates = SecureRequestRecipientResolver.new(application: application, recipient_ids: [stranger.id]).resolve
 
       assert_empty candidates
     end
@@ -40,7 +40,7 @@ module Applications
       application = create(:application)
       known_recipients = [application.user]
 
-      candidates = ProviderInfoRecipientResolver
+      candidates = SecureRequestRecipientResolver
                    .new(application: application, recipient_ids: [application.user_id],
                         known_recipients: known_recipients)
                    .resolve
@@ -57,7 +57,7 @@ module Applications
 
       GuardianRelationship.expects(:where).never
 
-      candidate = ProviderInfoRecipientResolver
+      candidate = SecureRequestRecipientResolver
                   .new(application: application,
                        recipient_ids: [guardian.id],
                        known_recipients: [guardian],

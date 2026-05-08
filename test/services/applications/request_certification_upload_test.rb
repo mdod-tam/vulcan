@@ -193,6 +193,23 @@ module Applications
       ).count
     end
 
+    test 'manually revoked certification upload request does not block immediate replacement' do
+      first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
+      original = first_result.data.fetch(:medical_provider_secure_request_form)
+      original.revoke!(actor: @actor, reason: :manual_revocation)
+
+      result = assert_difference('MedicalProviderSecureRequestForm.count', 1) do
+        RequestCertificationUpload.new(application: @application, actor: @actor).call
+      end
+
+      assert_predicate result, :success?
+      assert_predicate original.reload, :revoked?
+      assert_equal 1, MedicalProviderSecureRequestForm.open_certification_upload_for_provider(
+        application_id: @application.id,
+        provider_email: @application.medical_provider_email
+      ).count
+    end
+
     test 'resend targets original provider email snapshot' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
       original = first_result.data.fetch(:medical_provider_secure_request_form)
@@ -271,7 +288,7 @@ module Applications
       assert_equal 'Missing signature', delivered_params[:rejection_reason]
     end
 
-    test 'delivery failure preserves new secure request and records non-secret failure metadata' do
+    test 'delivery failure revokes new secure request and records non-secret failure metadata' do
       mail = mock('failed-request-certification-mail')
       mail.expects(:deliver_now).raises(StandardError, 'smtp timeout https://example.test/secure_certification_form?token=secret')
       mailer = mock('failed-request-certification-mailer')
@@ -297,6 +314,11 @@ module Applications
       notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
       delivery_error = notification.metadata.fetch('delivery_error')
 
+      assert_predicate form.reload, :revoked?
+      assert_equal 0, MedicalProviderSecureRequestForm.open_certification_upload_for_provider(
+        application_id: @application.id,
+        provider_email: @application.medical_provider_email
+      ).count
       assert_equal 'error', notification.delivery_status
       assert_equal form.id, delivery_error.fetch('medical_provider_secure_request_form_id')
       assert_equal form.request_batch_id, delivery_error.fetch('request_batch_id')

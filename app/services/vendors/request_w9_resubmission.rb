@@ -124,7 +124,22 @@ module Vendors
 
     def delivery_failure(request_form, error)
       persist_delivery_failure(request_form, error)
+      revoke_failed_request(request_form, error)
       failure(message(:delivery_failed), delivery_failure_data(request_form, error))
+    end
+
+    def revoke_failed_request(request_form, error)
+      return unless request_form&.active?
+
+      request_form.revoke!(
+        actor: actor,
+        reason: :delivery_failure,
+        metadata: { delivery_failure: delivery_failure_context(request_form, error) }
+      )
+    rescue StandardError => e
+      Rails.logger.error(
+        "W9 resubmission delivery failure revocation failed: #{sanitize_secure_error_message(e.message)}"
+      )
     end
 
     def persist_delivery_failure(request_form, error)

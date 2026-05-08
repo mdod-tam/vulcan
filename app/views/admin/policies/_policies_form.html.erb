@@ -103,7 +103,7 @@
     <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
       <p class="text-sm text-blue-700">
         Configure how many proof submissions are allowed within a time period.
-        Portal submissions are through the web interface, while email submissions are through email attachments.
+        Portal and secure-form submissions are rate limited through the web interface.
       </p>
     </div>
 
@@ -118,20 +118,13 @@
       </div>
 
       <!-- Submission Limits -->
-      <div class="grid grid-cols-2 gap-6">
+      <div class="grid grid-cols-1 gap-6">
         <div>
           <% web_policy = @policies.find_by(key: 'proof_submission_rate_limit_web') %>
           <%= render "create_missing_policy", policy: web_policy, key: 'proof_submission_rate_limit_web', default_value: 5 %>
           <%= render "rate_limit_input", 
               policy: web_policy,
               label: "Portal Submissions" %>
-        </div>
-        <div>
-          <% email_policy = @policies.find_by(key: 'proof_submission_rate_limit_email') %>
-          <%= render "create_missing_policy", policy: email_policy, key: 'proof_submission_rate_limit_email', default_value: 10 %>
-          <%= render "rate_limit_input", 
-              policy: email_policy,
-              label: "Email Submissions" %>
         </div>
       </div>
     </div>

@@ -88,7 +88,7 @@ module Applications
       assert_equal @application.user_id, print_item.constituent_id
     end
 
-    test 'delivery failure returns a clean result after preserving the issued request' do
+    test 'delivery failure returns a clean result after revoking the undeliverable request' do
       @mailer_delivery.stubs(:deliver_now).raises(StandardError, 'smtp down')
       Rails.error.stubs(:report) if Rails.respond_to?(:error)
 
@@ -97,10 +97,11 @@ module Applications
       assert_not result.success?
       assert_equal I18n.t('applications.provider_info.messages.delivery_failed', locale: @actor.effective_locale),
                    result.message
-      assert_equal 1, SecureRequestForm.open_provider_info_for_recipient(
+      assert_equal 0, SecureRequestForm.open_provider_info_for_recipient(
         application_id: @application.id,
         recipient_id: @application.user_id
       ).count
+      assert_predicate result.data.fetch(:secure_request_forms).first.reload, :revoked?
       assert_equal true, result.data.fetch(:delivery_error)
       assert_equal [@application.user_id], result.data.fetch(:failed_recipient_ids)
       assert_equal ['email'], result.data.fetch(:failed_recipient_channels)
@@ -152,6 +153,10 @@ module Applications
       assert_equal 2, delivery.delivery_attempts
       assert_equal [@application.user_id], result.data.fetch(:failed_recipient_ids)
       assert_equal 2, result.data.fetch(:secure_request_forms).size
+      failed_form = result.data.fetch(:secure_request_forms).find { |form| form.recipient_id == @application.user_id }
+      delivered_form = result.data.fetch(:secure_request_forms).find { |form| form.recipient_id == guardian.id }
+      assert_predicate failed_form.reload, :revoked?
+      assert_predicate delivered_form.reload, :active?
     end
 
     test 'multi-recipient issuance rolls back entirely when one candidate hits cooldown' do
@@ -221,6 +226,23 @@ module Applications
       end
 
       assert_predicate resend_result, :success?
+      assert_predicate original_request.reload, :revoked?
+      assert_equal 1, SecureRequestForm.open_provider_info_for_recipient(
+        application_id: @application.id,
+        recipient_id: @application.user_id
+      ).count
+    end
+
+    test 'manually revoked request does not block immediate replacement' do
+      original_result = RequestProviderInfo.new(application: @application, actor: @actor).call
+      original_request = original_result.data.fetch(:secure_request_forms).first
+      original_request.revoke!(actor: @actor, reason: :manual_revocation)
+
+      result = assert_difference('SecureRequestForm.count', 1) do
+        RequestProviderInfo.new(application: @application, actor: @actor).call
+      end
+
+      assert_predicate result, :success?
       assert_predicate original_request.reload, :revoked?
       assert_equal 1, SecureRequestForm.open_provider_info_for_recipient(
         application_id: @application.id,

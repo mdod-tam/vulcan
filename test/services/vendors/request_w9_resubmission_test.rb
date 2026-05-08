@@ -186,7 +186,7 @@ module Vendors
       end
     end
 
-    test 'delivery failure preserves new secure request and records non-secret failure metadata' do
+    test 'delivery failure revokes new secure request and records non-secret failure metadata' do
       @mailer_delivery.expects(:deliver_now).raises(StandardError, 'smtp timeout https://example.test/secure_w9_form?token=secret')
 
       result = assert_difference('VendorSecureRequestForm.count', 1) do
@@ -203,6 +203,8 @@ module Vendors
       notification = Notification.find_by!(notifiable: @vendor, action: 'w9_resubmission_requested')
       delivery_error = notification.metadata.fetch('delivery_error')
 
+      assert_predicate form.reload, :revoked?
+      assert_equal 0, VendorSecureRequestForm.open_w9_upload_for_vendor(vendor_id: @vendor.id).count
       assert_equal 'error', notification.delivery_status
       assert_equal form.id, delivery_error.fetch('vendor_secure_request_form_id')
       assert_equal form.request_batch_id, delivery_error.fetch('request_batch_id')

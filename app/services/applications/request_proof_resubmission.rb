@@ -127,9 +127,7 @@ module Applications
     end
 
     def resolver
-      # Despite the class name, this resolver owns the shared constituent/guardian
-      # contact-path rules used by provider-info and proof secure forms.
-      Applications::ProviderInfoRecipientResolver.new(
+      Applications::SecureRequestRecipientResolver.new(
         application: application,
         recipient_ids: recipient_ids,
         channel_overrides: channel_overrides
@@ -137,7 +135,7 @@ module Applications
     end
 
     def resolver_for_resend
-      Applications::ProviderInfoRecipientResolver.new(
+      Applications::SecureRequestRecipientResolver.new(
         application: application,
         recipient_ids: [resend_of.recipient_id],
         channel_overrides: { resend_of.recipient_id => resend_of.recipient_channel }
@@ -282,6 +280,7 @@ module Applications
       rescue StandardError => e
         report_delivery_failure(e, [delivery])
         delivery_failures << delivery_failure_context(e, [delivery])
+        revoke_failed_deliveries([delivery], e)
       end
 
       return failure(message(:delivery_failed), delivery_failure_data(delivery_failures, deliveries)) if delivery_failures.any?
@@ -329,6 +328,23 @@ module Applications
     def reportable_delivery_error(error)
       StandardError.new(sanitize_secure_error_message(error.message)).tap do |reportable_error|
         reportable_error.set_backtrace(Array(error.backtrace).map { |line| sanitize_secure_error_message(line) })
+      end
+    end
+
+    def revoke_failed_deliveries(deliveries, error)
+      Array(deliveries).each do |delivery|
+        request_form = delivery.secure_request_form
+        next unless request_form&.active?
+
+        request_form.revoke!(
+          actor: actor,
+          reason: :delivery_failure,
+          metadata: { delivery_failure: delivery_failure_context(error, [delivery]) }
+        )
+      rescue StandardError => e
+        Rails.logger.error(
+          "Proof resubmission delivery failure revocation failed: #{sanitize_secure_error_message(e.message)}"
+        )
       end
     end
 

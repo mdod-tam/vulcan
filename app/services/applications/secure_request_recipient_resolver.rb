@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Applications
-  class ProviderInfoRecipientResolver
+  class SecureRequestRecipientResolver
     Candidate = Struct.new(
       :recipient,
       :recipient_role,
@@ -78,7 +78,7 @@ module Applications
       role = relationship.present? ? :guardian : :constituent
       email = email_for(recipient, role)
       phone = phone_for(recipient, role)
-      channel = preferred_provider_info_delivery_channel(recipient, email: email, phone: phone)
+      channel = preferred_secure_request_delivery_channel(recipient, email: email, phone: phone)
 
       if channel.blank?
         return Candidate.new(
@@ -143,7 +143,7 @@ module Applications
       end
     end
 
-    def preferred_provider_info_delivery_channel(recipient, email:, phone:)
+    def preferred_secure_request_delivery_channel(recipient, email:, phone:)
       return :email if letter_to_email_override_allowed?(recipient, email)
 
       phone_type = recipient.phone_type.to_s

@@ -55,12 +55,12 @@ module Admin
     end
 
     def provider_info_recipient_options(application, guardian_relationships)
-      resolver = Applications::ProviderInfoRecipientResolver.new(
+      resolver = Applications::SecureRequestRecipientResolver.new(
         application: application,
         guardian_relationships: guardian_relationships
       )
       known_recipients = resolver.known_recipients
-      default_candidates = Applications::ProviderInfoRecipientResolver
+      default_candidates = Applications::SecureRequestRecipientResolver
                            .new(
                              application: application,
                              recipient_ids: known_recipients.map(&:id),

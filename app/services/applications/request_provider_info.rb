@@ -81,7 +81,7 @@ module Applications
     end
 
     def resolver
-      Applications::ProviderInfoRecipientResolver.new(
+      Applications::SecureRequestRecipientResolver.new(
         application: application,
         recipient_ids: recipient_ids,
         channel_overrides: channel_overrides
@@ -89,7 +89,7 @@ module Applications
     end
 
     def resolver_for_resend
-      Applications::ProviderInfoRecipientResolver.new(
+      Applications::SecureRequestRecipientResolver.new(
         application: application,
         recipient_ids: [resend_of.recipient_id],
         channel_overrides: { resend_of.recipient_id => resend_of.recipient_channel }
@@ -124,7 +124,9 @@ module Applications
     def ensure_cooldown_allows!(candidate)
       latest_request = SecureRequestForm
                        .provider_info
+                       .status_sent
                        .where(application: application, recipient: candidate.recipient)
+                       .where(submitted_at: nil, revoked_at: nil)
                        .order(sent_at: :desc)
                        .first
       return if latest_request.blank?
@@ -225,6 +227,7 @@ module Applications
       rescue StandardError => e
         report_delivery_failure(e, [delivery])
         delivery_failures << delivery_failure_context(e, [delivery])
+        revoke_failed_deliveries([delivery], e)
       end
 
       return failure(message(:delivery_failed), delivery_failure_data(delivery_failures, deliveries)) if delivery_failures.any?
@@ -275,6 +278,23 @@ module Applications
     def reportable_delivery_error(error)
       StandardError.new(sanitize_secure_error_message(error.message)).tap do |reportable_error|
         reportable_error.set_backtrace(Array(error.backtrace).map { |line| sanitize_secure_error_message(line) })
+      end
+    end
+
+    def revoke_failed_deliveries(deliveries, error)
+      Array(deliveries).each do |delivery|
+        request_form = delivery.secure_request_form
+        next unless request_form&.active?
+
+        request_form.revoke!(
+          actor: actor,
+          reason: :delivery_failure,
+          metadata: { delivery_failure: delivery_failure_context(error, [delivery]) }
+        )
+      rescue StandardError => e
+        Rails.logger.error(
+          "Provider-info delivery failure revocation failed: #{sanitize_secure_error_message(e.message)}"
+        )
       end
     end
 
