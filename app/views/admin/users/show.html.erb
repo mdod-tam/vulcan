@@ -87,6 +87,7 @@
               <li><strong>Contact Method:</strong> <%= contact_method_label(@user.phone_type) %></li>
               <li><strong>Preferred Language:</strong> <%= language_label(@user.locale) %></li>
               <li><strong>Communication Modality:</strong> <%= @user.preferred_means_of_communication.presence || "Not specified" %></li>
+              <li><strong>Newsletter Signup:</strong> <%= @user.newsletter_signup ? "Yes" : "No" %></li>
             </ul>
           </dd>
         </div>
