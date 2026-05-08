@@ -102,7 +102,7 @@ class RegistrationsController < ApplicationController
              :date_of_birth, :phone, :phone_type, :timezone, :locale,
              :hearing_disability, :vision_disability,
              :speech_disability, :mobility_disability, :cognition_disability,
-             :communication_preference,
+             :communication_preference, :newsletter_signup,
              # Address fields for letter notifications
              :physical_address_1, :physical_address_2,
              :city, :state, :zip_code,

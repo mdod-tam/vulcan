@@ -123,7 +123,8 @@ module ConstituentPortal
       # Handle password creation strategy for dependents (e.g., generate random, or no login)
       params.expect(dependent: %i[first_name last_name email phone phone_type date_of_birth
                                   hearing_disability vision_disability
-                                  speech_disability mobility_disability cognition_disability])
+                                  speech_disability mobility_disability cognition_disability
+                                  newsletter_signup])
     end
 
     def guardian_relationship_params
