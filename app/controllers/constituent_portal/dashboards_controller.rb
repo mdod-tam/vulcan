@@ -72,7 +72,6 @@ module ConstituentPortal
 
       # Query for managed drafts separately (for "Continue [Dependent]'s Draft" buttons)
       @managed_drafts = Application.where(managing_guardian_id: current_user.id, status: :draft)
-                                   .includes(:user)
                                    .order(created_at: :desc)
 
       # Log for debugging
