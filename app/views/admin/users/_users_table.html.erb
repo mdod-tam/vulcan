@@ -14,6 +14,9 @@
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Relationships
           </th>
+           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Dependent Status
+          </th>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             Email
           </th>
@@ -93,6 +96,14 @@
               <% end %>
             </td>
 
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-500 truncate max-w-xs">
+                <%if is_dependent%>
+                  <span class="ml-1 text-l text-gray-500">(<%= "Dependent" %>)</span>
+                <% end %>
+              </div>
+            </td>
+            
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm text-gray-500 truncate max-w-xs">
                 <%= mail_to user.effective_email, class: "hover:text-indigo-600 block", title: user.effective_email %>
