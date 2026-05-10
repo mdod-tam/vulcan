@@ -283,6 +283,18 @@
           </div>
         </fieldset>
 
+        <!-- Newsletter Signup -->
+        <div class="mb-4">
+          <div class="flex items-start">
+            <%= form.check_box :newsletter_signup,
+                id: "newsletter_signup",
+                class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+            <%= form.label :newsletter_signup,
+                "Sign up for our newsletter to receive updates about MAT programs and services",
+                class: "ml-2 block text-sm text-gray-700" %>
+          </div>
+        </div>
+
         <!-- Submit -->
         <div class="mb-4">
           <%= form.submit "Create Account",

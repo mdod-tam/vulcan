@@ -68,6 +68,18 @@
                 data: { dependent_fields_target: "dependentEmail" },
                 "aria-describedby": "dependent_email_help" %>
             <p id="dependent_email_help" class="mt-1 text-xs text-gray-500">Leave blank to use your email address.</p>
+
+            <%# Newsletter signup - only shown when dependent has their own email %>
+            <div class="mt-3">
+              <div class="flex items-start">
+                <%= form.check_box :newsletter_signup,
+                    id: "dependent_newsletter_signup",
+                    class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+                <%= form.label :newsletter_signup,
+                    "Sign up for our newsletter to receive updates about MAT programs and services",
+                    class: "ml-2 block text-sm text-gray-700" %>
+              </div>
+            </div>
           </div>
         </div>
 

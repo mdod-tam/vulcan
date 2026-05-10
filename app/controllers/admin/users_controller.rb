@@ -713,7 +713,7 @@ module Admin
       params.expect(
         user: %i[first_name last_name email phone phone_type
                  physical_address_1 physical_address_2 city state zip_code
-                 communication_preference]
+                 communication_preference newsletter_signup]
       )
     end
 
