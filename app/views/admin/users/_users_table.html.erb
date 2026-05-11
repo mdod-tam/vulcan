@@ -72,7 +72,7 @@
                   <% user.guardian_relationships_as_guardian.each do |gr| %>
                     <% relation = gr.relationship_type %>
                     <li>
-                      <%= link_to gr.dependent_user.full_name, admin_user_path(gr.dependent_user), class: "hover:text-indigo-600", data: { turbo_frame: "_top" } %>
+                      Guardian of <%= link_to gr.dependent_user.full_name, admin_user_path(gr.dependent_user), class: "hover:text-indigo-600", data: { turbo_frame: "_top" } %>
                       <span class="text-xs text-gray-500">(<%= inverse_relationship_label(relation) %>)</span>
                     </li>
                   <% end %>
@@ -83,7 +83,7 @@
                     <% relation = gr.relationship_type.to_s.downcase %>
                     <% label = relation.presence || 'guardian' %>
                     <li>
-                      <%= link_to gr.guardian_user.full_name, admin_user_path(gr.guardian_user), class: "hover:text-indigo-600", data: { turbo_frame: "_top" } %>
+                     Dependent of <%= link_to gr.guardian_user.full_name, admin_user_path(gr.guardian_user), class: "hover:text-indigo-600", data: { turbo_frame: "_top" } %>
                       <span class="text-xs text-gray-500">(<%= label %>)</span>
                     </li>
                   <% end %>
