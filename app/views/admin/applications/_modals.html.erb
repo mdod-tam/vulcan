@@ -6,7 +6,19 @@
                      medical: @application.medical_certification } %>
 <% proof_urls    = proof_files.transform_values { |f| f.attached? ? rails_blob_path(f, disposition: :inline) : nil } %>
 
+<%# Address components for rejection message interpolation %>
+<% address_1 = @application.user&.physical_address_1.to_s %>
+<% address_2 = @application.user&.physical_address_2.presence || '' %>
+<% city      = @application.user&.city.to_s %>
+<% state     = @application.user&.state.to_s %>
+<% zip       = @application.user&.zip_code.to_s %>
+<% full_address = "#{address_1} #{address_2} #{city}, #{state} #{zip}".squish %>
 <% preferred_locale = @application.user&.effective_locale.to_s.presence || @application.user&.locale.to_s.presence || 'en' %>
+
+<%# Helper to interpolate address placeholders in rejection reason bodies %>
+<% interpolate_address = lambda do |body|
+     body.gsub('%<address>s', full_address) if body
+   end %>
 <% proof_custom_language_notice = if preferred_locale == 'es'
                                     'Applicant prefers to receive Spanish communications. Please ensure any custom rejection reason is translated.'
                                   else
@@ -205,28 +217,29 @@ end
         <p class="sr-only" data-rejection-form-target="liveRegion" aria-live="polite" aria-atomic="true"></p>
         <div class="mb-4">
           <p class="text-sm font-medium text-gray-700 mb-1">Predefined Rejection Reasons:</p>
-          <%# Group rejection reasons by code and collect proof types %>
+          <%# Group rejection reasons by code and proof_type %>
           <% rejection_reasons_by_code = RejectionReason.where(locale: [preferred_locale, 'en'])
                                                         .where.not(code: %w[none_provided other])
-                                                        .group_by(&:code)
+                                                        .group_by { |r| [r.code, r.proof_type] }
                                                         .transform_values do |reasons|
                                                           preferred_reason = reasons.find { |r| r.locale == preferred_locale } || reasons.first
                                                           {
                                                             reason: preferred_reason,
-                                                            proof_types: reasons.map(&:proof_type).map { |pt| pt == 'medical_certification' ? 'medical' : pt }
+                                                            proof_type: preferred_reason.proof_type
                                                           }
                                                         end %>
           <div class="flex flex-wrap gap-2 mb-2 general-reasons" data-rejection-form-target="generalReasons">
-            <% rejection_reasons_by_code.each do |code, data| %>
+            <% rejection_reasons_by_code.each do |(code, proof_type), data| %>
               <% reason = data[:reason] %>
-              <% proof_types = data[:proof_types].join(',') %>
+              <% display_proof_type = proof_type == 'medical_certification' ? 'medical' : proof_type %>
+              <% interpolated_body = interpolate_address.call(reason.body) %>
               <% label = code.humanize %>
               <button type="button"
                       class="<%= reason_button_classes %>"
                       data-action="click->rejection-form#selectPredefinedReason"
                       data-reason-code="<%= code %>"
-                      data-reason-text="<%= reason.body %>"
-                      data-proof-types="<%= proof_types %>"
+                      data-reason-text="<%= interpolated_body %>"
+                      data-proof-types="<%= display_proof_type %>"
                       data-rejection-form-target="reasonButton"
                       aria-label="Select <%= label %> rejection reason"
                       aria-pressed="false">
@@ -309,12 +322,13 @@ end
                                                end %>
           <div class="flex flex-wrap gap-2 mb-2 medical-only-reasons" data-rejection-form-target="medicalOnlyReasons">
             <% medical_reasons.each do |code, reason| %>
-              <% label = reason.body.truncate(50) %>
+              <% interpolated_body = interpolate_address.call(reason.body) %>
+              <% label = interpolated_body.truncate(50) %>
               <button type="button"
                       class="<%= reason_button_classes %>"
                       data-action="click->rejection-form#selectPredefinedReason"
                       data-reason-code="<%= code %>"
-                      data-reason-text="<%= reason.body %>"
+                      data-reason-text="<%= interpolated_body %>"
                       data-rejection-form-target="reasonButton"
                       aria-label="Select <%= label %> rejection reason"
                       aria-pressed="false">

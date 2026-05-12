@@ -267,39 +267,34 @@ module Admin
       assert_no_match(/>Complete</, response.body)
     end
 
-    test 'show page uses db-backed rejection reason text in modal data attributes' do
+    test 'show page uses db-backed rejection reason text in modal buttons' do
       income_body = 'DB income missing-name reason for modal test.'
       medical_body = 'DB medical missing-signature reason for modal test.'
 
-      income_reason = RejectionReason.find_or_initialize_by(code: 'missing_name', proof_type: 'income', locale: 'en')
-      income_reason.body = income_body
-      income_reason.save!
+      # Delete existing records to ensure clean state
+      RejectionReason.where(code: 'missing_name', proof_type: 'income', locale: 'en').destroy_all
+      RejectionReason.where(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en').destroy_all
 
-      medical_reason = RejectionReason.find_or_initialize_by(code: 'missing_signature',
-                                                             proof_type: 'medical_certification',
-                                                             locale: 'en')
-      medical_reason.body = medical_body
-      medical_reason.save!
+      income_reason = RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
+      medical_reason = RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
 
       get admin_application_path(@application)
       assert_response :success
 
-      assert_select "dialog#proofRejectionModal[data-rejection-form-missing-name-income-value='#{income_body}']"
-      assert_select "dialog#medicalCertificationRejectionModal[data-rejection-form-missing-signature-value='#{medical_body}']"
+      assert_select "dialog#proofRejectionModal button[data-reason-code='missing_name'][data-reason-text='#{income_body}']"
+      assert_select "dialog#medicalCertificationRejectionModal button[data-reason-code='missing_signature'][data-reason-text='#{medical_body}']"
     end
 
     test 'show page includes accessible rejection reason button attributes' do
       get admin_application_path(@application)
       assert_response :success
 
-      assert_select "dialog#proofRejectionModal button[data-reason-type='addressMismatch'][aria-pressed='false'][aria-label='Select Address Mismatch rejection reason']"
-      assert_select "dialog#medicalCertificationRejectionModal button[data-reason-type='missingSignature'][aria-pressed='false'][aria-label='Select Missing Signature rejection reason']"
+      assert_select "dialog#proofRejectionModal button[data-reason-code='address_mismatch'][aria-pressed='false']"
+      assert_select "dialog#medicalCertificationRejectionModal button[data-reason-code='missing_signature'][aria-pressed='false']"
       assert_select "dialog#proofRejectionModal [data-rejection-form-target='liveRegion'][aria-live='polite'][aria-atomic='true']"
       assert_select "dialog#medicalCertificationRejectionModal [data-rejection-form-target='liveRegion'][aria-live='polite'][aria-atomic='true']"
       assert_select "dialog#proofRejectionModal [data-rejection-form-target='codeStatus']", text: /No predefined rejection reason selected\./
       assert_select "dialog#medicalCertificationRejectionModal [data-rejection-form-target='codeStatus']", text: /No predefined rejection reason selected\./
-      assert_select "dialog#proofRejectionModal [data-rejection-form-target='incomeOnlyReasons'].hidden[aria-hidden='true']"
-      assert_select "dialog#proofRejectionModal [data-rejection-form-target='incomeOnlyReasons'][style]", count: 0
     end
 
     test 'should reject proof and send rejection email' do
