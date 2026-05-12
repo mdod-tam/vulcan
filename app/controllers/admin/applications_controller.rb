@@ -177,11 +177,7 @@ module Admin
       else
         handle_error_response(
           error_message: result.message,
-          html_render_action: :show,
-          turbo_updates: {
-            'modals' => 'modals'
-          },
-          turbo_status: :unprocessable_content
+          html_render_action: :show
         )
       end
     end

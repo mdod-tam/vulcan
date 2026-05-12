@@ -16,23 +16,9 @@ module TurboStreamResponseHandling
 
   # Handles failed turbo stream responses with error messaging
   # @param message [String] The error message to display
-  def handle_turbo_stream_error(message:, updates: {}, modals_to_remove: [], status: nil)
+  def handle_turbo_stream_error(message:)
     flash.now[:error] = message
-    streams = [turbo_stream.update('flash', partial: 'shared/flash')]
-
-    updates.each do |element_id, partial_name|
-      streams << turbo_stream.update(element_id, partial: partial_name)
-    end
-
-    unless updates.key?('modals')
-      modals_to_remove.each do |modal_id|
-        streams << turbo_stream.remove(modal_id)
-      end
-    end
-
-    render_args = { turbo_stream: streams }
-    render_args[:status] = status if status.present?
-    render(**render_args)
+    render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
   end
 
   # Builds turbo stream responses for successful operations
@@ -104,8 +90,7 @@ module TurboStreamResponseHandling
   # @param html_render_action [Symbol] Action to render for HTML requests (optional)
   # @param error_message [String] Error message to display
   # @param status [Symbol] HTTP status for render (optional, defaults to :unprocessable_content)
-  def handle_error_response(error_message:, html_redirect_path: nil, html_render_action: nil, status: :unprocessable_content,
-                            turbo_updates: {}, turbo_modals_to_remove: [], turbo_status: nil)
+  def handle_error_response(error_message:, html_redirect_path: nil, html_render_action: nil, status: :unprocessable_content)
     respond_to do |format|
       if html_redirect_path
         format.html { redirect_to html_redirect_path, alert: error_message }
@@ -115,17 +100,10 @@ module TurboStreamResponseHandling
           render html_render_action, status: status
         end
       else
-        format.html { redirect_back(fallback_location: root_path, alert: error_message) }
+        format.html { redirect_back_or_to root_path, alert: error_message }
       end
 
-      format.turbo_stream do
-        handle_turbo_stream_error(
-          message: error_message,
-          updates: turbo_updates,
-          modals_to_remove: turbo_modals_to_remove,
-          status: turbo_status
-        )
-      end
+      format.turbo_stream { handle_turbo_stream_error(message: error_message) }
     end
   end
 end

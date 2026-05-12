@@ -93,7 +93,7 @@ module Admin
       assert_redirected_to admin_application_path(@application)
     end
 
-    test 'failed proof review turbo response refreshes flash and modals with unprocessable status' do
+    test 'failed proof review turbo response refreshes flash only' do
       attach_income_proof!
       stub_reviewable_proofs!
 
@@ -105,10 +105,10 @@ module Admin
             params: { proof_type: 'income', status: 'rejected', rejection_reason: 'invalid_document' },
             as: :turbo_stream
 
-      assert_response :unprocessable_content
+      assert_response :success
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
       assert_includes response.body, '<turbo-stream action="update" target="flash">'
-      assert_includes response.body, '<turbo-stream action="update" target="modals">'
+      assert_no_match(/target="modals"/, response.body)
       assert_no_match(/target="attachments-section"/, response.body)
     end
   end

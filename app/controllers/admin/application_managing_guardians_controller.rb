@@ -6,6 +6,8 @@ module Admin
 
     before_action :load_nested_application
 
+    # Secure provider-info requests need one authoritative guardian recipient
+    # before issuing links for dependents with multiple guardian relationships.
     def update
       guardian_id = managing_guardian_params[:managing_guardian_id].presence
       unless guardian_id

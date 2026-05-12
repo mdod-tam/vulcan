@@ -29,6 +29,24 @@ module Admin
                     text: I18n.t('admin.applications.secure_request_forms.managing_guardian.prompt')
     end
 
+    test 'managing guardian update resolves ambiguous provider info recipient ownership' do
+      dependent = create(:constituent)
+      application = create(:application, user: dependent, status: :awaiting_proof,
+                                         medical_provider_name: nil, medical_provider_phone: nil,
+                                         medical_provider_email: nil)
+      first_guardian = create(:constituent)
+      selected_guardian = create(:constituent)
+      create(:guardian_relationship, dependent_user: dependent, guardian_user: first_guardian)
+      create(:guardian_relationship, dependent_user: dependent, guardian_user: selected_guardian)
+
+      patch admin_application_managing_guardian_path(application),
+            params: { managing_guardian_id: selected_guardian.id }
+
+      assert_redirected_to admin_application_path(application)
+      assert_equal I18n.t('admin.applications.managing_guardians.update.success'), flash[:notice]
+      assert_equal selected_guardian.id, application.reload.managing_guardian_id
+    end
+
     test 'show page renders localized secure link channel and status labels' do
       application = create(:application, status: :awaiting_proof,
                                          medical_provider_name: nil, medical_provider_phone: nil,
