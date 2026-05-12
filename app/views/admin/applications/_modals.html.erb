@@ -323,7 +323,7 @@ end
           <div class="flex flex-wrap gap-2 mb-2 medical-only-reasons" data-rejection-form-target="medicalOnlyReasons">
             <% medical_reasons.each do |code, reason| %>
               <% interpolated_body = interpolate_address.call(reason.body) %>
-              <% label = interpolated_body.truncate(50) %>
+              <% label = code.humanize %>
               <button type="button"
                       class="<%= reason_button_classes %>"
                       data-action="click->rejection-form#selectPredefinedReason"
