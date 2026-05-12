@@ -28,7 +28,7 @@ class SecureW9FormResendsController < SecurePublicFormController
       end
     end
 
-    render :create, status: :ok
+    render_html_response :create
   end
 
   private
@@ -70,12 +70,8 @@ class SecureW9FormResendsController < SecurePublicFormController
   end
 
   def set_secure_request_form
-    @token = resend_params[:token]
+    @token = params[:token]
     @secure_request_form = VendorSecureRequestForm.from_public_token(@token)
-  end
-
-  def resend_params
-    params.permit(:token)
   end
 
   def locale_recipient_for_request

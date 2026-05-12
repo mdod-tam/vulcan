@@ -15,7 +15,7 @@
       <%= t('admin.applications.secure_request_forms.managing_guardian.description') %>
     </p>
 
-    <%= form_with url: admin_application_managing_guardian_path(@application), method: :patch, local: true, class: "mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" do |form| %>
+    <%= form_with url: admin_application_managing_guardian_path(@application), method: :patch, local: true, data: { turbo: false }, class: "mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" do |form| %>
       <div class="sm:min-w-80">
         <%= label_tag :managing_guardian_id,
                       t('admin.applications.secure_request_forms.managing_guardian.label'),
@@ -33,7 +33,7 @@
     <% end %>
   </div>
 <% elsif @provider_info_recipient_options.present? %>
-  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, class: "mb-6 space-y-4" do |form| %>
+  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "mb-6 space-y-4" do |form| %>
     <fieldset>
       <legend class="text-sm font-medium text-gray-900 mb-2">
         <%= t('admin.applications.secure_request_forms.panel.recipients') %>
@@ -118,8 +118,9 @@
                                 admin_application_secure_request_form_revocation_path(@application, secure_request_form),
                                 method: :post,
                                 form: { class: "inline",
+                                        onsubmit: "return confirm(#{t('admin.applications.secure_request_forms.table.revoke_confirm').to_json})",
                                         data: {
-                                          turbo_confirm: t('admin.applications.secure_request_forms.table.revoke_confirm')
+                                          turbo: false
                                         } },
                                 class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
                   <% if active_batch_count > 1 %>
@@ -128,12 +129,13 @@
                                   method: :post,
                                   params: { request_batch_id: secure_request_form.request_batch_id },
                                   form: { class: "inline",
+                                          onsubmit: "return confirm(#{t('admin.applications.secure_request_forms.table.revoke_batch_confirm').to_json})",
                                           data: {
-                                            turbo_confirm: t('admin.applications.secure_request_forms.table.revoke_batch_confirm')
+                                            turbo: false
                                           } },
                                   class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
                   <% end %>
-                  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, class: "inline" do %>
+                  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
                     <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
                     <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
                     <% if secure_request_form.recipient_channel_email? %>
@@ -143,7 +145,7 @@
                                    class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
                   <% end %>
                 <% elsif secure_request_form.status_sent? && secure_request_form.expired? %>
-                  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, class: "inline" do %>
+                  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
                     <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
                     <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
                     <% if secure_request_form.recipient_channel_email? %>

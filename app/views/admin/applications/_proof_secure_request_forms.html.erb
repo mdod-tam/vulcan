@@ -52,9 +52,10 @@
                         method: :post,
                         form: {
                           class: 'inline',
+                          onsubmit: "return confirm(#{t('admin.applications.proof_secure_request_forms.table.revoke_confirm',
+                                                        proof_type: proof_label).to_json})",
                           data: {
-                            turbo_confirm: t('admin.applications.proof_secure_request_forms.table.revoke_confirm',
-                                             proof_type: proof_label)
+                            turbo: false
                           }
                         },
                         class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2'

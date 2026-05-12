@@ -59,5 +59,30 @@ module Admin
       assert_equal I18n.t('admin.applications.certification_upload_requests.create.provider_email_required'),
                    state.secure_cert_upload_message
     end
+
+    test 'secure cert upload button is hidden while an uploaded certification is pending review' do
+      @application.update!(medical_certification_status: :received)
+      @application.medical_certification.attach(
+        io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+        filename: 'medical_certification.pdf',
+        content_type: 'application/pdf'
+      )
+
+      assert_predicate @application, :medical_certification_status_received?
+      assert medical_certification_pending_review?(@application)
+      assert_not show_secure_cert_upload_button?(@application)
+    end
+
+    test 'secure cert upload button returns after rejection even when the rejected file remains attached' do
+      @application.update!(medical_certification_status: :rejected)
+      @application.medical_certification.attach(
+        io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+        filename: 'medical_certification.pdf',
+        content_type: 'application/pdf'
+      )
+
+      assert_not medical_certification_pending_review?(@application)
+      assert show_secure_cert_upload_button?(@application)
+    end
   end
 end

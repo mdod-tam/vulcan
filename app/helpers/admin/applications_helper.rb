@@ -211,6 +211,16 @@ module Admin
         (application.medical_certification_status == 'requested' && !application.medical_certification.attached?)
     end
 
+    def medical_certification_pending_review?(application)
+      application.medical_certification.attached? &&
+        (application.medical_certification_status_received? || application.medical_certification_status_requested?)
+    end
+
+    def show_secure_cert_upload_button?(application)
+      !application.medical_certification_status_approved? &&
+        !medical_certification_pending_review?(application)
+    end
+
     def medical_certification_action_state(application, secure_request_forms: nil)
       latest_request = latest_medical_certification_notification(application, 'medical_certification_requested')
       latest_reject = latest_medical_certification_notification(application, 'medical_certification_rejected')

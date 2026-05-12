@@ -18,6 +18,13 @@ class SecurePublicFormController < ApplicationController
     render :submitted, status: :ok
   end
 
+  def render_html_response(template_name, status: :ok)
+    render template_name,
+           formats: :html,
+           content_type: Mime[:html].to_s,
+           status: status
+  end
+
   def set_secure_headers
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'

@@ -215,6 +215,17 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to secure_provider_info_form_path(token: token)
   end
 
+  test 'resend page form opts out of turbo submission' do
+    application = create(:application)
+    token = SecureRequestForm.generate_public_token
+    create(:secure_request_form, :expired, application: application, recipient: application.user, raw_token: token)
+
+    get new_secure_provider_info_form_resend_path(token: token)
+
+    assert_response :success
+    assert_select 'form[data-turbo=?]', 'false'
+  end
+
   test 'resend confirmation uses recipient locale without leaking it to later requests' do
     I18n.with_locale(:en) do
       constituent = create(:constituent, locale: 'es')
@@ -239,6 +250,21 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     post secure_provider_info_form_resend_path, params: { token: token }
 
     assert_response :success
+  end
+
+  test 'resend create returns html even when requested as turbo stream' do
+    application = create(:application)
+    token = SecureRequestForm.generate_public_token
+    create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
+    Applications::RequestProviderInfo.expects(:new).never
+
+    post secure_provider_info_form_resend_path,
+         params: { token: token },
+         headers: { 'Accept' => Mime[:turbo_stream].to_s }
+
+    assert_response :success
+    assert_equal Mime[:html].to_s, response.media_type
+    assert_select 'h1', I18n.t!('secure_provider_info_form_resends.create.heading')
   end
 
   test 'resend create logs service failures while preserving neutral response' do

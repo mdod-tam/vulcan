@@ -159,9 +159,11 @@
         </div>
       <% end %>
 
+      <% income_secure_request_forms = proof_secure_request_forms(@application, :income) %>
+      <% show_income_secure_proof_button = show_secure_proof_resubmission_button?(@application, :income, secure_request_forms: income_secure_request_forms) %>
       <%= render "proof_secure_request_forms",
                  proof_type: :income,
-                 secure_request_forms: proof_secure_request_forms(@application, :income) %>
+                 secure_request_forms: income_secure_request_forms %>
 
       <!-- Action Buttons -->
       <div class="mt-4 flex space-x-2">
@@ -188,16 +190,16 @@
                <%= proof_review_button_text(@application, "income") %>
              </button>
            <% end %>
-        <% else %>
-          <% if show_secure_proof_resubmission_button?(@application, :income) %>
-            <%= button_to secure_proof_resubmission_button_text(:income),
-                          admin_application_proof_resubmission_request_path(@application),
-                          method: :post,
-                          params: { proof_type: :income },
-                          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-          <% else %>
-            <span class="text-sm text-gray-500">Not Attached</span>
-          <% end %>
+        <% elsif !show_income_secure_proof_button %>
+          <span class="text-sm text-gray-500">Not Attached</span>
+        <% end %>
+        <% if show_income_secure_proof_button %>
+          <%= button_to secure_proof_resubmission_button_text(:income),
+                        admin_application_proof_resubmission_request_path(@application),
+                        method: :post,
+                        params: { proof_type: :income },
+                        form: { data: { turbo: false } },
+                        class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
         <% end %>
       </div>
     </div>
@@ -362,9 +364,11 @@
         </div>
       <% end %>
 
+      <% residency_secure_request_forms = proof_secure_request_forms(@application, :residency) %>
+      <% show_residency_secure_proof_button = show_secure_proof_resubmission_button?(@application, :residency, secure_request_forms: residency_secure_request_forms) %>
       <%= render "proof_secure_request_forms",
                  proof_type: :residency,
-                 secure_request_forms: proof_secure_request_forms(@application, :residency) %>
+                 secure_request_forms: residency_secure_request_forms %>
 
       <!-- Action Buttons -->
       <div class="mt-4 flex space-x-2">
@@ -390,16 +394,16 @@
                <%= proof_review_button_text(@application, "residency") %>
              </button>
            <% end %>
-        <% else %>
-          <% if show_secure_proof_resubmission_button?(@application, :residency) %>
-            <%= button_to secure_proof_resubmission_button_text(:residency),
-                          admin_application_proof_resubmission_request_path(@application),
-                          method: :post,
-                          params: { proof_type: :residency },
-                          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-          <% else %>
-            <span class="text-sm text-gray-500">Not Attached</span>
-          <% end %>
+        <% elsif !show_residency_secure_proof_button %>
+          <span class="text-sm text-gray-500">Not Attached</span>
+        <% end %>
+        <% if show_residency_secure_proof_button %>
+          <%= button_to secure_proof_resubmission_button_text(:residency),
+                        admin_application_proof_resubmission_request_path(@application),
+                        method: :post,
+                        params: { proof_type: :residency },
+                        form: { data: { turbo: false } },
+                        class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
         <% end %>
       </div>
     </div>
@@ -563,9 +567,11 @@
         </div>
       <% end %>
 
+      <% id_secure_request_forms = proof_secure_request_forms(@application, :id) %>
+      <% show_id_secure_proof_button = show_secure_proof_resubmission_button?(@application, :id, secure_request_forms: id_secure_request_forms) %>
       <%= render "proof_secure_request_forms",
                  proof_type: :id,
-                 secure_request_forms: proof_secure_request_forms(@application, :id) %>
+                 secure_request_forms: id_secure_request_forms %>
 
       <!-- Action Buttons -->
       <div class="mt-4 flex space-x-2">
@@ -591,16 +597,16 @@
                <%= proof_review_button_text(@application, "id") %>
              </button>
            <% end %>
-        <% else %>
-          <% if show_secure_proof_resubmission_button?(@application, :id) %>
-            <%= button_to secure_proof_resubmission_button_text(:id),
-                          admin_application_proof_resubmission_request_path(@application),
-                          method: :post,
-                          params: { proof_type: :id },
-                          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-          <% else %>
-            <span class="text-sm text-gray-500">Not Attached</span>
-          <% end %>
+        <% elsif !show_id_secure_proof_button %>
+          <span class="text-sm text-gray-500">Not Attached</span>
+        <% end %>
+        <% if show_id_secure_proof_button %>
+          <%= button_to secure_proof_resubmission_button_text(:id),
+                        admin_application_proof_resubmission_request_path(@application),
+                        method: :post,
+                        params: { proof_type: :id },
+                        form: { data: { turbo: false } },
+                        class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
         <% end %>
       </div>
     </div>

@@ -23,7 +23,7 @@ module Admin
 
       assert_response :success
       assert_select 'h3', text: I18n.t('admin.applications.secure_request_forms.managing_guardian.title')
-      assert_select "form[action='#{admin_application_managing_guardian_path(application)}']"
+      assert_select "form[action='#{admin_application_managing_guardian_path(application)}'][data-turbo='false']"
       assert_select 'select[name=?]', 'managing_guardian_id'
       assert_select 'select[name=?] option[value=""]', 'managing_guardian_id',
                     text: I18n.t('admin.applications.secure_request_forms.managing_guardian.prompt')
@@ -63,6 +63,7 @@ module Admin
 
       assert_response :success
       assert_includes response.body, I18n.t('admin.applications.secure_request_forms.panel.title')
+      assert_select "form[action='#{admin_application_secure_request_forms_path(application)}'][data-turbo='false']"
     end
 
     test 'show page defaults provider info recipient checkbox from resolver for separate dependent email' do
@@ -161,10 +162,24 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_certification_upload_request_path(application)}']"
+      assert_select "form[action='#{admin_application_certification_upload_request_path(application)}'][data-turbo='false']"
       assert_includes response.body, 'Send Secure Cert Upload Link'
       assert_includes response.body, 'Print DCF'
       assert_not_includes response.body, 'Send Email'
+    end
+
+    test 'show page hides secure certification upload link when certification is pending review' do
+      application = create(:application,
+                           :with_medical_certification,
+                           medical_provider_name: 'Dr. Secure',
+                           medical_provider_email: 'secure@example.test',
+                           medical_certification_status: :received)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, 'Review Disability Certification'
+      assert_not_includes response.body, 'Send Secure Cert Upload Link'
     end
 
     test 'show page warns before secure certification upload when DocuSeal is active' do
@@ -177,7 +192,7 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select 'form[data-turbo-confirm*=?]', 'DocuSeal request is already opened'
+      assert_select 'form[data-turbo="false"][onsubmit*=?]', 'DocuSeal request is already opened'
     end
 
     test 'show page warns before DocuSeal when active secure certification links will be revoked' do
@@ -205,25 +220,36 @@ module Admin
 
     test 'show page offers secure proof upload link for rejected unattached income proof' do
       application = create(:application, :in_progress, income_proof_status: :rejected)
-      create(:proof_review, application: application, admin: @admin, proof_type: :income, status: :rejected, rejection_reason: 'Missing income details')
+      create_rejected_proof_review_without_auto_request(application: application, proof_type: :income, reason: 'Missing income details')
       application.income_proof.purge if application.income_proof.attached?
 
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}']"
+      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}'][data-turbo='false']"
+      assert_includes response.body, 'Send Secure Income Upload Link'
+    end
+
+    test 'show page offers secure proof upload link for rejected attached income proof' do
+      application = create(:application, :in_progress, :with_income_proof, income_proof_status: :rejected)
+      create_rejected_proof_review_without_auto_request(application: application, proof_type: :income, reason: 'Missing income details')
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}'][data-turbo='false']"
       assert_includes response.body, 'Send Secure Income Upload Link'
     end
 
     test 'show page offers secure proof upload link for rejected unattached residency proof' do
       application = create(:application, :in_progress, residency_proof_status: :rejected)
-      create(:proof_review, application: application, admin: @admin, proof_type: :residency, status: :rejected, rejection_reason: 'Missing residency details')
+      create_rejected_proof_review_without_auto_request(application: application, proof_type: :residency, reason: 'Missing residency details')
       application.residency_proof.purge if application.residency_proof.attached?
 
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}']"
+      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}'][data-turbo='false']"
       assert_includes response.body, 'Send Secure Residency Upload Link'
     end
 
@@ -233,7 +259,7 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}']"
+      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}'][data-turbo='false']"
       assert_includes response.body, 'Send Secure Id Upload Link'
     end
 
@@ -243,7 +269,7 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}']"
+      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}'][data-turbo='false']"
       assert_includes response.body, 'Send Secure Income Upload Link'
     end
 
@@ -274,6 +300,23 @@ module Admin
       assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, income_request)}']"
       assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, residency_request)}']"
       assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, id_request)}']"
+      assert_not_includes response.body, 'Send Secure Income Upload Link'
+      assert_not_includes response.body, 'Send Secure Residency Upload Link'
+      assert_not_includes response.body, 'Send Secure Id Upload Link'
+    end
+
+    test 'show page offers secure proof upload link again after issued link expires' do
+      application = create(:application, :in_progress, income_proof_status: :not_reviewed)
+      application.income_proof.purge if application.income_proof.attached?
+      create(:secure_request_form, :expired, application: application,
+                                             recipient: application.user,
+                                             kind: :income_proof_resubmission)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select "form[action='#{admin_application_proof_resubmission_request_path(application)}'][data-turbo='false']"
+      assert_includes response.body, 'Send Secure Income Upload Link'
     end
 
     test 'show page does not invent proof submission history for unattached proofs' do
@@ -342,7 +385,18 @@ module Admin
     test 'secure proof resubmission request redirects with service success message' do
       application = create(:application, :in_progress, income_proof_status: :rejected)
       result = BaseService::Result.new(success: true, message: 'Secure proof upload request sent.', data: {})
-      Applications::RequestProofResubmission.any_instance.expects(:call).returns(result)
+      service = mock('request-proof-resubmission-service')
+      service.expects(:call).returns(result)
+
+      Applications::RequestProofResubmission
+        .expects(:new)
+        .with do |params|
+          params[:application] == application &&
+            params[:actor] == @admin &&
+            params[:proof_type] == 'income' &&
+            params[:recipient_ids].nil?
+        end
+        .returns(service)
 
       post admin_application_proof_resubmission_request_path(application), params: { proof_type: :income }
 
@@ -411,9 +465,9 @@ module Admin
 
       assert_response :success
       assert_includes response.body, I18n.t('admin.applications.secure_request_forms.table.revoke_batch')
-      assert_select 'form[data-turbo-confirm=?]',
+      assert_select 'form[data-turbo="false"][onsubmit*=?]',
                     I18n.t('admin.applications.secure_request_forms.table.revoke_confirm')
-      assert_select 'form[data-turbo-confirm=?]',
+      assert_select 'form[data-turbo="false"][onsubmit*=?]',
                     I18n.t('admin.applications.secure_request_forms.table.revoke_batch_confirm')
     end
 
@@ -560,6 +614,22 @@ module Admin
       assert_response :success
       assert_select 'select[name=?]', 'managing_guardian_id'
       assert_select 'select[name=?] option', 'managing_guardian_id', minimum: 2
+    end
+
+    private
+
+    def create_rejected_proof_review_without_auto_request(application:, proof_type:, reason:)
+      original_paper_context = Current.paper_context
+      Current.paper_context = true
+
+      create(:proof_review,
+             application: application,
+             admin: @admin,
+             proof_type: proof_type,
+             status: :rejected,
+             rejection_reason: reason)
+    ensure
+      Current.paper_context = original_paper_context
     end
   end
 end

@@ -10,8 +10,8 @@ module Admin
       result = Applications::RequestProviderInfo.new(
         application: @application,
         actor: current_user,
-        recipient_ids: secure_request_form_params.fetch(:recipient_ids, []),
-        channel_overrides: secure_request_form_params[:channel_overrides] || {},
+        recipient_ids: recipient_ids_param,
+        channel_overrides: channel_overrides_param,
         resend_of: resend_secure_request_form
       ).call
 
@@ -26,19 +26,26 @@ module Admin
 
     private
 
-    def secure_request_form_params
+    def recipient_ids_param
+      Array(params[:recipient_ids])
+    end
+
+    def channel_overrides_param
+      raw_overrides = params[:channel_overrides]
+      return {} if raw_overrides.blank?
+
       # channel_overrides is an open hash; the resolver ignores keys that
       # don't match a known recipient id, so extra keys are inert.
-      params.permit(:resend_of_id, recipient_ids: [], channel_overrides: {})
+      raw_overrides.respond_to?(:to_unsafe_h) ? raw_overrides.to_unsafe_h : raw_overrides.to_h
     end
 
     def resend_secure_request_form
-      return if secure_request_form_params[:resend_of_id].blank?
+      return if params[:resend_of_id].blank?
 
       @resend_secure_request_form ||= @application
                                       .secure_request_forms
                                       .provider_info
-                                      .find(secure_request_form_params[:resend_of_id])
+                                      .find(params[:resend_of_id])
     end
   end
 end

@@ -11,6 +11,7 @@
           <%= button_to t('admin.vendors.vendor_secure_request_forms.panel.submit'),
                         admin_vendor_vendor_secure_request_forms_path(@vendor),
                         method: :post,
+                        form: { data: { turbo: false } },
                         form_class: 'inline',
                         class: "inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" %>
         <% else %>
@@ -47,8 +48,9 @@
                                   method: :post,
                                   form: {
                                     class: 'inline',
+                                    onsubmit: "return confirm(#{t('admin.vendors.vendor_secure_request_forms.table.revoke_confirm').to_json})",
                                     data: {
-                                      turbo_confirm: t('admin.vendors.vendor_secure_request_forms.table.revoke_confirm')
+                                      turbo: false
                                     }
                                   },
                                   class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2' %>
@@ -56,6 +58,7 @@
                     <%= button_to t('admin.vendors.vendor_secure_request_forms.table.send_new_link'),
                                   admin_vendor_vendor_secure_request_forms_path(@vendor, resend_of_id: form.id),
                                   method: :post,
+                                  form: { data: { turbo: false } },
                                   form_class: 'inline',
                                   class: 'inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2' %>
                   <% else %>

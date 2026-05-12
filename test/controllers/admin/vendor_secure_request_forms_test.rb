@@ -17,7 +17,7 @@ module Admin
       get admin_vendor_path(@vendor)
 
       assert_response :success
-      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(@vendor)}']"
+      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(@vendor)}'][data-turbo='false']"
       assert_includes response.body, I18n.t('admin.vendors.vendor_secure_request_forms.panel.submit')
     end
 
@@ -27,7 +27,7 @@ module Admin
       get admin_vendor_path(vendor)
 
       assert_response :success
-      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(vendor)}']"
+      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(vendor)}'][data-turbo='false']"
       assert_includes response.body, I18n.t('admin.vendors.vendor_secure_request_forms.panel.submit')
     end
 
@@ -58,7 +58,7 @@ module Admin
 
       assert_response :success
       assert_includes response.body, "#{form.recipient_email.first}***@#{form.recipient_email.split('@', 2).last}"
-      assert_select "form[action='#{admin_vendor_vendor_secure_request_form_revocation_path(@vendor, form)}']"
+      assert_select "form[action='#{admin_vendor_vendor_secure_request_form_revocation_path(@vendor, form)}'][data-turbo='false']"
     end
 
     test 'show page offers a new secure W9 upload link after revocation' do
@@ -67,7 +67,7 @@ module Admin
       get admin_vendor_path(@vendor)
 
       assert_response :success
-      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(@vendor, resend_of_id: form.id)}']"
+      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(@vendor, resend_of_id: form.id)}'][data-turbo='false']"
       assert_includes response.body, I18n.t('admin.vendors.vendor_secure_request_forms.table.send_new_link')
     end
 
@@ -78,7 +78,7 @@ module Admin
       get admin_vendor_path(vendor)
 
       assert_response :success
-      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(vendor, resend_of_id: form.id)}']"
+      assert_select "form[action='#{admin_vendor_vendor_secure_request_forms_path(vendor, resend_of_id: form.id)}'][data-turbo='false']"
       assert_includes response.body, I18n.t('admin.vendors.vendor_secure_request_forms.table.send_new_link')
     end
 

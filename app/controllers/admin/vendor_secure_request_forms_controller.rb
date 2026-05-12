@@ -26,14 +26,10 @@ module Admin
       @vendor = Users::Vendor.find(params[:vendor_id])
     end
 
-    def request_params
-      params.permit(:resend_of_id)
-    end
-
     def resend_vendor_secure_request_form
-      return if request_params[:resend_of_id].blank?
+      return if params[:resend_of_id].blank?
 
-      @resend_vendor_secure_request_form ||= @vendor.vendor_secure_request_forms.find(request_params[:resend_of_id])
+      @resend_vendor_secure_request_form ||= @vendor.vendor_secure_request_forms.find(params[:resend_of_id])
     end
   end
 end

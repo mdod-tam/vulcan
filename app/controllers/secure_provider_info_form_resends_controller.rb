@@ -29,7 +29,7 @@ class SecureProviderInfoFormResendsController < SecurePublicFormController
       end
     end
 
-    render :create, status: :ok
+    render_html_response :create
   end
 
   private
@@ -62,11 +62,7 @@ class SecureProviderInfoFormResendsController < SecurePublicFormController
   end
 
   def set_secure_request_form
-    @token = resend_params[:token]
+    @token = params[:token]
     @secure_request_form = SecureRequestForm.from_public_token(@token)
-  end
-
-  def resend_params
-    params.permit(:token)
   end
 end
