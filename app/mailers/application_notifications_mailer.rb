@@ -20,7 +20,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_application_submitted_variables(application, template: text_template, locale: locale)
       mail_options = { message_stream: 'notifications' }
-      mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
 
       if prefers_letter_delivery?(@user)
         queue_letter_delivery(
@@ -66,16 +65,17 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   helper Mailers::ApplicationNotificationsHelper
 
-  def proof_approved(application, proof_review)
+  def proof_approved(application, proof_review, recipient: nil)
     with_mailer_error_handling("proof_approved application=#{application&.id} proof_review=#{proof_review&.id}") do
+      recipient ||= application.user
       template_name = 'application_notifications_proof_approved'
-      locale = resolve_template_locale(recipient: application.user)
+      locale = resolve_template_locale(recipient: recipient)
       text_template = find_text_template(template_name, locale: locale)
       variables = build_proof_approved_variables(application, proof_review, template: text_template, locale: locale)
 
-      if prefers_letter_delivery?(application.user)
+      if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
-          recipient: application.user,
+          recipient: recipient,
           template_name: template_name,
           variables: variables.merge(proof_type: proof_review.proof_type),
           letter_type: :proof_approved,
@@ -84,7 +84,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         return noop_letter_delivery
       end
 
-      send_email(recipient_email_for(application.user), text_template, variables)
+      send_email(recipient_email_for(recipient), text_template, variables)
     end
   end
 

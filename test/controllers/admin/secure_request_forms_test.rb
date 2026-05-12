@@ -65,6 +65,42 @@ module Admin
       assert_includes response.body, I18n.t('admin.applications.secure_request_forms.panel.title')
     end
 
+    test 'show page defaults provider info recipient checkbox from resolver for separate dependent email' do
+      guardian = create(:constituent, email: "guardian.ui.#{SecureRandom.hex(3)}@example.com")
+      dependent_email = "dependent.ui.#{SecureRandom.hex(3)}@example.com"
+      dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian, status: :awaiting_proof,
+                                         medical_provider_name: nil, medical_provider_phone: nil,
+                                         medical_provider_email: nil)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select "input[name='recipient_ids[]'][value='#{dependent.id}'][checked]"
+      assert_select "input[name='recipient_ids[]'][value='#{guardian.id}'][checked]", count: 0
+      assert_match(/authorized application relationships/, response.body)
+    end
+
+    test 'show page defaults provider info recipient checkbox from resolver for guardian email path' do
+      guardian = create(:constituent, email: "guardian.ui.#{SecureRandom.hex(3)}@example.com")
+      dependent = create(
+        :constituent,
+        email: "dependent.ui.#{SecureRandom.hex(3)}@system.matvulcan.local",
+        dependent_email: guardian.email
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian, status: :awaiting_proof,
+                                         medical_provider_name: nil, medical_provider_phone: nil,
+                                         medical_provider_email: nil)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select "input[name='recipient_ids[]'][value='#{guardian.id}'][checked]"
+      assert_select "input[name='recipient_ids[]'][value='#{dependent.id}'][checked]", count: 0
+    end
+
     test 'show page activity history includes secure certification upload requests' do
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',
@@ -309,6 +345,35 @@ module Admin
       Applications::RequestProofResubmission.any_instance.expects(:call).returns(result)
 
       post admin_application_proof_resubmission_request_path(application), params: { proof_type: :income }
+
+      assert_redirected_to admin_application_path(application)
+      assert_equal 'Secure proof upload request sent.', flash[:notice]
+    end
+
+    test 'secure proof resubmission request passes selected recipients and channel overrides to service' do
+      application = create(:application, :in_progress, income_proof_status: :rejected)
+      guardian = create(:constituent)
+      result = BaseService::Result.new(success: true, message: 'Secure proof upload request sent.', data: {})
+      service = mock('request-proof-resubmission-service')
+      service.expects(:call).returns(result)
+
+      Applications::RequestProofResubmission
+        .expects(:new)
+        .with do |params|
+          params[:application] == application &&
+            params[:actor] == @admin &&
+            params[:proof_type] == 'income' &&
+            params[:recipient_ids] == [application.user_id.to_s, guardian.id.to_s] &&
+            params[:channel_overrides] == { guardian.id.to_s => 'email' }
+        end
+        .returns(service)
+
+      post admin_application_proof_resubmission_request_path(application),
+           params: {
+             proof_type: 'income',
+             recipient_ids: [application.user_id, guardian.id],
+             channel_overrides: { guardian.id => 'email' }
+           }
 
       assert_redirected_to admin_application_path(application)
       assert_equal 'Secure proof upload request sent.', flash[:notice]

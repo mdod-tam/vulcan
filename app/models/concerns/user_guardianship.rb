@@ -96,12 +96,20 @@ module UserGuardianship
 
   def effective_phone_type
     if dependent? && dependent_phone.present?
-      phone_type # Use dependent's preferred phone type
+      if guardian_for_contact && normalized_phone_for_guardianship(dependent_phone) == normalized_phone_for_guardianship(guardian_for_contact.phone)
+        guardian_for_contact.phone_type
+      else
+        phone_type # Use dependent's preferred phone type
+      end
     elsif dependent? && guardian_for_contact
       guardian_for_contact.phone_type
+    else
+      phone_type
     end
+  end
 
-    phone_type
+  def normalized_phone_for_guardianship(phone)
+    phone.to_s.gsub(/\D/, '')
   end
 
   def effective_communication_preference

@@ -138,6 +138,62 @@ module Applications
       assert_equal guardian, Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested').recipient
     end
 
+    test 'default proof resubmission follows separate dependent effective email path' do
+      guardian = create(:constituent, email: "guardian.proof.#{SecureRandom.hex(3)}@example.com")
+      dependent_email = "dependent.proof.#{SecureRandom.hex(3)}@example.com"
+      dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, :in_progress,
+                           user: dependent,
+                           managing_guardian: guardian,
+                           income_proof_status: :rejected)
+      Current.paper_context = true
+      create(:proof_review, application: application, admin: @actor, proof_type: :income, status: :rejected,
+                            rejection_reason: 'Missing income details')
+      Current.paper_context = false
+      application.income_proof.purge if application.income_proof.attached?
+
+      result = RequestProofResubmission.new(application: application, actor: @actor, proof_type: :income).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_equal dependent, form.recipient
+      assert_equal dependent_email, form.recipient_email
+      assert_equal dependent, Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested').recipient
+    end
+
+    test 'explicit multi-recipient proof resubmission creates one request per selected recipient' do
+      guardian = create(:constituent)
+      dependent = create(:constituent, dependent_email: guardian.email)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, :in_progress,
+                           user: dependent,
+                           managing_guardian: guardian,
+                           income_proof_status: :rejected)
+      Current.paper_context = true
+      create(:proof_review, application: application, admin: @actor, proof_type: :income, status: :rejected,
+                            rejection_reason: 'Missing income details')
+      Current.paper_context = false
+      application.income_proof.purge if application.income_proof.attached?
+
+      result = assert_difference('SecureRequestForm.count', 2) do
+        RequestProofResubmission.new(
+          application: application,
+          actor: @actor,
+          proof_type: :income,
+          recipient_ids: [dependent.id, guardian.id],
+          deliver_request: false
+        ).call
+      end
+
+      assert_predicate result, :success?
+      forms = result.data.fetch(:secure_request_forms)
+      assert_equal [dependent.id, guardian.id], forms.map(&:recipient_id)
+      assert_equal 1, forms.map(&:request_batch_id).uniq.size
+      assert_equal [dependent.id, guardian.id],
+                   Notification.where(notifiable: application, action: 'proof_resubmission_requested').order(:id).pluck(:recipient_id)
+    end
+
     test 'sms request sends token-safe SMS and records requested channel' do
       @application.user.update!(phone: '410-555-0100', phone_type: 'text')
       SmsService.expects(:send_message).with(

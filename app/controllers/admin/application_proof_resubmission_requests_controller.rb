@@ -10,7 +10,9 @@ module Admin
       result = Applications::RequestProofResubmission.new(
         application: @application,
         actor: current_user,
-        proof_type: params.fetch(:proof_type)
+        proof_type: proof_resubmission_params.fetch(:proof_type),
+        recipient_ids: proof_resubmission_params[:recipient_ids],
+        channel_overrides: (proof_resubmission_params[:channel_overrides] || {}).to_h
       ).call
 
       if result.success?
@@ -27,6 +29,10 @@ module Admin
 
     def failure_message
       I18n.t('admin.applications.proof_resubmission_requests.create.failure')
+    end
+
+    def proof_resubmission_params
+      params.permit(:proof_type, recipient_ids: [], channel_overrides: {})
     end
   end
 end

@@ -51,6 +51,65 @@ module Applications
       end
     end
 
+    test 'default dependent provider info request follows guardian effective email path' do
+      guardian = create(:constituent, email: "guardian.provider.#{SecureRandom.hex(3)}@example.com")
+      dependent = create(
+        :constituent,
+        email: "dependent.provider.#{SecureRandom.hex(3)}@system.matvulcan.local",
+        dependent_email: guardian.email
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      result = RequestProviderInfo.new(application: application, actor: @actor).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_equal guardian, form.recipient
+      assert_equal 'guardian', form.recipient_role
+      assert_equal guardian.email, form.recipient_email
+      assert_equal guardian, Notification.find_by!(notifiable: application, action: 'provider_info_requested').recipient
+    end
+
+    test 'default dependent provider info request follows separate dependent effective email path' do
+      guardian = create(:constituent, email: "guardian.provider.#{SecureRandom.hex(3)}@example.com")
+      dependent_email = "dependent.provider.#{SecureRandom.hex(3)}@example.com"
+      dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      result = RequestProviderInfo.new(application: application, actor: @actor).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_equal dependent, form.recipient
+      assert_equal 'constituent', form.recipient_role
+      assert_equal dependent_email, form.recipient_email
+      assert_equal dependent, Notification.find_by!(notifiable: application, action: 'provider_info_requested').recipient
+    end
+
+    test 'alternate contact is not a provider info recipient' do
+      application = create(
+        :application,
+        alternate_contact_name: 'Helpful Person',
+        alternate_contact_email: 'alternate.provider@example.com',
+        alternate_contact_phone: '410-555-0199'
+      )
+
+      result = RequestProviderInfo.new(application: application, actor: @actor).call
+
+      assert_predicate result, :success?
+      assert_equal [application.user], result.data.fetch(:secure_request_forms).map(&:recipient)
+      assert_no_difference('SecureRequestForm.count') do
+        failure_result = RequestProviderInfo.new(
+          application: application,
+          actor: @actor,
+          recipient_ids: [0]
+        ).call
+        assert_not failure_result.success?
+      end
+    end
+
     test 'sms request keeps NotificationService channel compatible while recording requested channel' do
       @application.user.update!(phone_type: 'text')
       SmsService.stubs(:send_message).returns(true)

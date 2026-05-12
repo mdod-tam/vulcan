@@ -193,7 +193,7 @@ class ProofReview < ApplicationRecord
     # with existing queries that filter by notifiable_type: 'Application'
     NotificationService.create_and_deliver!(
       type: 'proof_approved',
-      recipient: application.user,
+      recipient: proof_approval_recipient,
       actor: admin,
       notifiable: application,
       metadata: { proof_type: proof_type },
@@ -202,6 +202,13 @@ class ProofReview < ApplicationRecord
   rescue StandardError => e
     Rails.logger.error "Failed to send proof_approved notification via NotificationService: #{e.message}"
     # Don't re-raise - notification errors shouldn't fail the whole operation
+  end
+
+  def proof_approval_recipient
+    resolver = Applications::SecureRequestRecipientResolver.new(application: application)
+    default_recipient_id = resolver.default_recipient_ids.first
+
+    resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
   end
 
   def increment_rejections_if_rejected

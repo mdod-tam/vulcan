@@ -114,7 +114,7 @@ module Applications
     def create_tracking_notification(request_form)
       NotificationService.create_and_deliver!(
         type: 'cert_upload_requested',
-        recipient: application.user,
+        recipient: tracking_notification_recipient,
         actor: actor,
         notifiable: application,
         metadata: {
@@ -130,6 +130,13 @@ module Applications
         audit: true,
         deliver: false
       )
+    end
+
+    def tracking_notification_recipient
+      resolver = Applications::SecureRequestRecipientResolver.new(application: application)
+      default_recipient_id = resolver.default_recipient_ids.first
+
+      resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
     end
 
     def delivery_failure(request_form, error)

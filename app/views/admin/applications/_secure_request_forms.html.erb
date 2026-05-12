@@ -38,6 +38,9 @@
       <legend class="text-sm font-medium text-gray-900 mb-2">
         <%= t('admin.applications.secure_request_forms.panel.recipients') %>
       </legend>
+      <p class="text-xs text-gray-600 mb-3">
+        <%= t('admin.applications.secure_request_forms.panel.recipient_help') %>
+      </p>
 
       <div class="space-y-3">
         <% @provider_info_recipient_options.each do |option| %>
@@ -48,7 +51,7 @@
             <div class="flex items-start gap-3">
               <%= check_box_tag "recipient_ids[]",
                                 recipient.id,
-                                @application.managing_guardian_id.present? ? recipient.id == @application.managing_guardian_id : recipient.id == @application.user_id,
+                                @provider_info_default_recipient_ids.include?(recipient.id),
                                 id: checkbox_id,
                                 class: "mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" %>
               <div>

@@ -64,6 +64,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                             'No authorized vendors found at this time.')
     @mock_training_requested_text = mock_template('Training Requested for Application #%<application_id>s',
                                                   'Training requested by %<constituent_full_name>s for application %<application_id>s.')
+    @mock_application_submitted_text = mock_template('Application Submitted',
+                                                     'Application submitted for %<constituent_first_name>s.')
   end
 
   def setup_email_template_stubs
@@ -75,6 +77,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(@mock_income_exceeded_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(@mock_registration_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_training_requested', format: :text, locale: 'en').returns(@mock_training_requested_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_application_submitted', format: :text, locale: 'en').returns(@mock_application_submitted_text)
   end
 
   def create_test_data
@@ -170,6 +173,16 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [admin.email], email.to
     assert_equal "Training Requested for Application ##{@application.id}", email.subject
     assert_match(@application.user.full_name, email.body.to_s)
+  end
+
+  test 'application_submitted does not cc alternate contact' do
+    @application.update_column(:alternate_contact_email, 'alternate.mailer@example.com')
+
+    email = ApplicationNotificationsMailer.application_submitted(@application)
+    email.deliver_now
+
+    assert_equal [@application.user.email], email.to
+    assert_nil email.cc
   end
 
   test 'proof_approved uses guardian locale and email when communications route to guardian' do

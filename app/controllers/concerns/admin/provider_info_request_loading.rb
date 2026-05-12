@@ -10,6 +10,7 @@ module Admin
       unless application.missing_required_provider_info?
         @provider_info_guardian_relationships = []
         @provider_info_recipient_options = []
+        @provider_info_default_recipient_ids = []
         @secure_request_forms = []
         @active_secure_request_form_batch_counts = {}
         @provider_info_needs_managing_guardian = false
@@ -18,6 +19,7 @@ module Admin
 
       @provider_info_guardian_relationships = provider_info_guardian_relationships(application)
       @provider_info_recipient_options = provider_info_recipient_options(application, @provider_info_guardian_relationships)
+      @provider_info_default_recipient_ids = provider_info_default_recipient_ids(application, @provider_info_guardian_relationships)
       @secure_request_forms = application
                               .secure_request_forms
                               .provider_info
@@ -78,6 +80,12 @@ module Admin
           email_override_available: default_candidate&.email_override_available? || false
         }
       end
+    end
+
+    def provider_info_default_recipient_ids(application, guardian_relationships)
+      Applications::SecureRequestRecipientResolver
+        .new(application: application, guardian_relationships: guardian_relationships)
+        .default_recipient_ids
     end
 
     def provider_info_latest_batch_forms(application_ids)

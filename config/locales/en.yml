@@ -157,6 +157,16 @@ en:
       neighbor: "Neighbor"
       friend: "Friend"
       other: "Other"
+    alternate_contact:
+      portal_help: "You may provide an alternate contact person who can help with your application. Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
+      admin_help: "Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
+      admin_authorization_help: "Alternate contacts are informational only. They are not authorized application recipients and do not receive secure workflow links or workflow notifications."
+      paper_help: "A trusted person who can help with the application. Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
+    dependent_contact:
+      strategy_help: "Use guardian contact information when secure workflow communications for this dependent should default to the guardian. Provide separate dependent contact information when secure workflow communications may go to the dependent/applicant."
+      guardian_email_help: "Secure workflow communications for the dependent will default to the guardian email path."
+      dependent_email_help: "This email will be used for communications about the dependent's benefits. Secure workflow communications may default to the dependent/applicant when this email is separate from the guardian email."
+      guardian_phone_help: "Calls or texts for the dependent will use the guardian phone path."
   trainers:
     training_sessions:
       flash:
@@ -351,6 +361,7 @@ en:
           title: "Secure provider information requests"
           description: "Send a secure link for entering certifying professional contact information."
           recipients: "Recipients"
+          recipient_help: "Managing guardian, dependent/applicant, and recorded guardians are authorized application relationships. The default follows the dependent's effective email path; other recorded guardians receive secure links only when explicitly selected. Alternate contacts are informational only and do not receive secure links."
           default_channel: "Default channel: %{channel}"
           email_override: "Send secure online link by email instead"
           submit: "Send secure request"

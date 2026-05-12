@@ -483,9 +483,7 @@ class NotificationService
       application = notification.notifiable
       proof_type = notification.metadata&.dig('proof_type')
       proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
-      mailer_class.public_send(method_name, application, proof_review)
-    when 'training_rescheduled'
-      mailer_class.public_send(method_name, notification.notifiable, notification)
+      mailer_class.public_send(method_name, application, proof_review, recipient: notification.recipient)
     when 'trainer_assigned', 'training_scheduled',
          'training_completed', 'training_cancelled', 'training_missed',
          'max_rejections_warning'

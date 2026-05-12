@@ -120,6 +120,16 @@ es:
         file_too_small: "Suba un documento de certificación que no esté vacío."
         file_suspicious: "Suba otro archivo. Este archivo no se puede aceptar."
         file_invalid: "Suba un documento de certificación válido."
+    alternate_contact:
+      portal_help: "Puede proporcionar una persona de contacto alternativa que pueda ayudar con su solicitud. Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+      admin_help: "Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+      admin_authorization_help: "Los contactos alternativos son solo informativos. No son destinatarios autorizados de la solicitud y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+      paper_help: "Una persona de confianza que puede ayudar con la solicitud. Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+    dependent_contact:
+      strategy_help: "Use la información de contacto del tutor cuando las comunicaciones seguras de flujo de trabajo para esta persona dependiente deban enviarse por defecto al tutor. Proporcione información de contacto separada de la persona dependiente cuando las comunicaciones seguras de flujo de trabajo puedan enviarse a la persona dependiente/solicitante."
+      guardian_email_help: "Las comunicaciones seguras de flujo de trabajo para la persona dependiente se enviarán por defecto a la ruta de correo electrónico del tutor."
+      dependent_email_help: "Este correo electrónico se usará para comunicaciones sobre los beneficios de la persona dependiente. Las comunicaciones seguras de flujo de trabajo pueden enviarse por defecto a la persona dependiente/solicitante cuando este correo electrónico sea distinto del correo electrónico del tutor."
+      guardian_phone_help: "Las llamadas o mensajes de texto para la persona dependiente usarán la ruta telefónica del tutor."
   admin:
     applications:
       filters:
@@ -145,6 +155,7 @@ es:
           title: "Solicitudes seguras de información del proveedor"
           description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
           recipients: "Destinatarios"
+          recipient_help: "El tutor principal, la persona dependiente/solicitante y los tutores registrados son relaciones autorizadas de la solicitud. El valor predeterminado sigue la ruta de correo efectiva de la persona dependiente; otros tutores registrados reciben enlaces seguros solo cuando se seleccionan explícitamente. Los contactos alternativos son solo informativos y no reciben enlaces seguros."
           default_channel: "Canal predeterminado: %{channel}"
           email_override: "Enviar enlace seguro en línea por correo electrónico"
           submit: "Enviar solicitud segura"

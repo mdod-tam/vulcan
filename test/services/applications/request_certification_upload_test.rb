@@ -48,6 +48,51 @@ module Applications
       assert_not notification.metadata.key?('raw_token')
     end
 
+    test 'cert upload tracking notification follows guardian effective email path while provider receives secure link' do
+      guardian = create(:constituent, email: "guardian.cert.#{SecureRandom.hex(3)}@example.com")
+      dependent = create(
+        :constituent,
+        email: "dependent.cert.#{SecureRandom.hex(3)}@system.matvulcan.local",
+        dependent_email: guardian.email
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, :in_progress,
+                           user: dependent,
+                           managing_guardian: guardian,
+                           medical_provider_name: 'Dr. Provider',
+                           medical_provider_email: 'provider-tracking@example.com')
+
+      result = RequestCertificationUpload.new(application: application, actor: @actor).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:medical_provider_secure_request_form)
+      notification = Notification.find_by!(notifiable: application, action: 'cert_upload_requested')
+
+      assert_equal 'provider-tracking@example.com', form.provider_email
+      assert_equal guardian, notification.recipient
+    end
+
+    test 'cert upload tracking notification follows separate dependent effective email path while provider receives secure link' do
+      guardian = create(:constituent, email: "guardian.cert.#{SecureRandom.hex(3)}@example.com")
+      dependent_email = "dependent.cert.#{SecureRandom.hex(3)}@example.com"
+      dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, :in_progress,
+                           user: dependent,
+                           managing_guardian: guardian,
+                           medical_provider_name: 'Dr. Provider',
+                           medical_provider_email: 'provider-dependent@example.com')
+
+      result = RequestCertificationUpload.new(application: application, actor: @actor).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:medical_provider_secure_request_form)
+      notification = Notification.find_by!(notifiable: application, action: 'cert_upload_requested')
+
+      assert_equal 'provider-dependent@example.com', form.provider_email
+      assert_equal dependent, notification.recipient
+    end
+
     test 'issued certification upload request appears in application audit logs' do
       result = RequestCertificationUpload.new(application: @application, actor: @actor).call
 

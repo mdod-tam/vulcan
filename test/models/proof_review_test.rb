@@ -145,6 +145,36 @@ class ProofReviewTest < ActiveSupport::TestCase
     end
   end
 
+  def test_approval_notification_defaults_to_managing_guardian_contact_path
+    guardian = create(:constituent, email: "guardian.proof.approval.#{SecureRandom.hex(3)}@example.com")
+    dependent = create(
+      :constituent,
+      email: "dependent.proof.approval.#{SecureRandom.hex(3)}@system.matvulcan.local",
+      dependent_email: guardian.email
+    )
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+    application = create(:application, :in_progress, user: dependent, managing_guardian: guardian, skip_proofs: true)
+    application.income_proof.attach(
+      io: StringIO.new('income proof content'),
+      filename: 'income.pdf',
+      content_type: 'application/pdf'
+    )
+
+    NotificationService.expects(:create_and_deliver!).with do |params|
+      params[:type] == 'proof_approved' &&
+        params[:recipient] == guardian &&
+        params[:actor] == @admin &&
+        params[:notifiable] == application &&
+        params[:metadata] == { proof_type: 'income' }
+    end
+
+    create(:proof_review,
+           application: application,
+           admin: @admin,
+           proof_type: :income,
+           status: :approved)
+  end
+
   def test_paper_rejection_does_not_request_secure_proof_resubmission
     Applications::RequestProofResubmission.expects(:new).never
 
