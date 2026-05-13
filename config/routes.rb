@@ -372,7 +372,6 @@ Rails.application.routes.draw do
         patch :autosave_field
         patch :upload_documents
         post :request_review
-        get :verify
         patch :submit
         post :resubmit_proof
         post :update # Handle form submissions that POST to update path
