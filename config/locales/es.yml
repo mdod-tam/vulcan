@@ -49,7 +49,7 @@ es:
         submitted: "Solicitud de capacitación enviada. Un administrador se comunicará con usted para programar su sesión."
     provider_info:
       messages:
-        needs_managing_guardian: "Seleccione un tutor principal antes de enviar este enlace seguro."
+        needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
         cooldown_active: "Se envió recientemente un enlace seguro para información del proveedor. Espere %{minutes} minutos antes de enviar otro."
         no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
         no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
@@ -73,7 +73,7 @@ es:
         request_after_submission_failed: "No pudimos enviar automáticamente el formulario de información del proveedor. El personal del programa dará seguimiento."
     proof_resubmission:
       messages:
-        needs_managing_guardian: "Seleccione un tutor principal antes de enviar este enlace seguro."
+        needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
         cooldown_active: "Se envió recientemente un enlace seguro para subir documentos. Espere %{minutes} minutos antes de enviar otro."
         no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
         no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
@@ -161,11 +161,8 @@ es:
           submit: "Enviar solicitud segura"
           no_recipients: "No hay destinatarios elegibles disponibles para esta solicitud."
         managing_guardian:
-          title: "Necesita tutor principal"
-          description: "Seleccione el tutor que debe recibir las comunicaciones de la solicitud antes de enviar una solicitud segura de información del proveedor."
-          label: "Tutor principal"
-          prompt: "Seleccione tutor principal"
-          submit: "Seleccionar Tutor Principal"
+          title: "Falta tutor principal"
+          description: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
         table:
           recipient: "Destinatario"
           contact: "Contacto"
@@ -229,10 +226,6 @@ es:
         create:
           success: "%{count} enlaces seguros de información del proveedor revocados."
           failure: "No se pudieron revocar los enlaces seguros de información del proveedor."
-      managing_guardians:
-        update:
-          success: "Tutor principal actualizado."
-          failure: "No se pudo actualizar el tutor principal."
       certification_upload_requests:
         create:
           success: "Enlace seguro para subir la certificación enviado correctamente."

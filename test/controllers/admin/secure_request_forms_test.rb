@@ -9,44 +9,6 @@ module Admin
       sign_in_for_integration_test(@admin)
     end
 
-    test 'show page offers managing guardian selection when guardian ownership is ambiguous' do
-      dependent = create(:constituent)
-      application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
-      first_guardian = create(:constituent, first_name: 'First', last_name: 'Guardian')
-      second_guardian = create(:constituent, first_name: 'Second', last_name: 'Guardian')
-      create(:guardian_relationship, dependent_user: dependent, guardian_user: first_guardian)
-      create(:guardian_relationship, dependent_user: dependent, guardian_user: second_guardian)
-
-      get admin_application_path(application)
-
-      assert_response :success
-      assert_select 'h3', text: I18n.t('admin.applications.secure_request_forms.managing_guardian.title')
-      assert_select "form[action='#{admin_application_managing_guardian_path(application)}'][data-turbo='false']"
-      assert_select 'select[name=?]', 'managing_guardian_id'
-      assert_select 'select[name=?] option[value=""]', 'managing_guardian_id',
-                    text: I18n.t('admin.applications.secure_request_forms.managing_guardian.prompt')
-    end
-
-    test 'managing guardian update resolves ambiguous provider info recipient ownership' do
-      dependent = create(:constituent)
-      application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
-      first_guardian = create(:constituent)
-      selected_guardian = create(:constituent)
-      create(:guardian_relationship, dependent_user: dependent, guardian_user: first_guardian)
-      create(:guardian_relationship, dependent_user: dependent, guardian_user: selected_guardian)
-
-      patch admin_application_managing_guardian_path(application),
-            params: { managing_guardian_id: selected_guardian.id }
-
-      assert_redirected_to admin_application_path(application)
-      assert_equal I18n.t('admin.applications.managing_guardians.update.success'), flash[:notice]
-      assert_equal selected_guardian.id, application.reload.managing_guardian_id
-    end
-
     test 'show page renders localized secure link channel and status labels' do
       application = create(:application, status: :awaiting_proof,
                                          medical_provider_name: nil, medical_provider_phone: nil,
@@ -82,6 +44,23 @@ module Admin
       assert_response :success
       assert_includes response.body, I18n.t('admin.applications.secure_request_forms.panel.title')
       assert_select "form[action='#{admin_application_secure_request_forms_path(application)}'][data-turbo='false']"
+    end
+
+    test 'show page blocks secure provider information request form when managing guardian is ambiguous' do
+      dependent = create(:constituent)
+      application = create(:application, user: dependent, status: :awaiting_proof,
+                                         medical_provider_name: nil,
+                                         medical_provider_phone: nil,
+                                         medical_provider_email: nil)
+      create(:guardian_relationship, dependent_user: dependent, guardian_user: create(:constituent))
+      create(:guardian_relationship, dependent_user: dependent, guardian_user: create(:constituent))
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select 'h3', text: I18n.t('admin.applications.secure_request_forms.managing_guardian.title')
+      assert_select 'p', text: I18n.t('admin.applications.secure_request_forms.managing_guardian.description')
+      assert_select "form[action='#{admin_application_secure_request_forms_path(application)}']", count: 0
     end
 
     test 'show page defaults provider info recipient checkbox from resolver for separate dependent email' do
@@ -489,20 +468,6 @@ module Admin
                     I18n.t('admin.applications.secure_request_forms.table.revoke_batch_confirm')
     end
 
-    test 'managing guardian update redirects with alert when persistence fails' do
-      dependent = create(:constituent)
-      application = create(:application, user: dependent)
-      guardian = create(:constituent)
-      create(:guardian_relationship, dependent_user: dependent, guardian_user: guardian)
-      Application.any_instance.stubs(:update!).raises(ActiveRecord::RecordNotSaved, 'boom')
-
-      patch admin_application_managing_guardian_path(application),
-            params: { managing_guardian_id: guardian.id }
-
-      assert_redirected_to admin_application_path(application)
-      assert_equal I18n.t('admin.applications.managing_guardians.update.failure'), flash[:alert]
-    end
-
     test 'batch revoke marks all active sibling links revoked' do
       application = create(:application)
       guardian = create(:constituent)
@@ -611,27 +576,6 @@ module Admin
       assert_predicate target_form.reload, :status_revoked?
       assert_not_predicate sibling_form.reload, :status_revoked?,
                            'Revoking one recipient link must not revoke sibling links in the same batch'
-    end
-
-    # -----------------------------------------------------------------------
-    # Managing guardian section: section content and select options
-    # -----------------------------------------------------------------------
-
-    test 'show page managing guardian select lists all known guardians as options' do
-      dependent = create(:constituent)
-      application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
-      guardian_a = create(:constituent, first_name: 'Alice', last_name: 'Alpha')
-      guardian_b = create(:constituent, first_name: 'Bob', last_name: 'Beta')
-      create(:guardian_relationship, dependent_user: dependent, guardian_user: guardian_a)
-      create(:guardian_relationship, dependent_user: dependent, guardian_user: guardian_b)
-
-      get admin_application_path(application)
-
-      assert_response :success
-      assert_select 'select[name=?]', 'managing_guardian_id'
-      assert_select 'select[name=?] option', 'managing_guardian_id', minimum: 2
     end
 
     private

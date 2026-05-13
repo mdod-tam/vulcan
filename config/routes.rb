@@ -204,9 +204,6 @@ Rails.application.routes.draw do
                  only: [:create],
                  controller: 'application_medical_provider_secure_request_form_revocations'
       end
-      resource :managing_guardian,
-               only: [:update],
-               controller: 'application_managing_guardians'
     end
 
     # Application Analytics

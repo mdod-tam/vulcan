@@ -78,7 +78,7 @@ en:
         submitted: "Training request submitted. An administrator will contact you to schedule your session."
     provider_info:
       messages:
-        needs_managing_guardian: "Choose a managing guardian before sending this secure link."
+        needs_managing_guardian: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
         cooldown_active: "A secure provider information link was sent recently. Please wait %{minutes} minutes before sending another one."
         no_contact_path: "No usable contact path is available for this recipient."
         no_recipient: "Choose at least one recipient for this secure link."
@@ -102,7 +102,7 @@ en:
         request_after_submission_failed: "We could not send the provider information form automatically. Program staff will follow up."
     proof_resubmission:
       messages:
-        needs_managing_guardian: "Choose a managing guardian before sending this secure link."
+        needs_managing_guardian: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
         cooldown_active: "A secure proof upload link was sent recently. Please wait %{minutes} minutes before sending another one."
         no_contact_path: "No usable contact path is available for this recipient."
         no_recipient: "Choose at least one recipient for this secure link."
@@ -367,11 +367,8 @@ en:
           submit: "Send secure request"
           no_recipients: "No eligible recipients are available for this request."
         managing_guardian:
-          title: "Needs managing guardian"
-          description: "Select the guardian who should receive application communications before sending a secure provider information request."
-          label: "Managing guardian"
-          prompt: "Select managing guardian"
-          submit: "Select Managing Guardian"
+          title: "Missing managing guardian"
+          description: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
         table:
           recipient: "Recipient"
           contact: "Contact"
@@ -435,10 +432,6 @@ en:
         create:
           success: "%{count} secure provider information links revoked."
           failure: "Unable to revoke secure provider information links."
-      managing_guardians:
-        update:
-          success: "Managing guardian updated."
-          failure: "Unable to update managing guardian."
       update:
         updated: "Application updated."
       batch_approve:
