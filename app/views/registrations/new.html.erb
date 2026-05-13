@@ -25,6 +25,44 @@
       </div>
     <% end %>
 
+    <% if @account_access_conflict %>
+      <div role="alert" aria-live="assertive"
+           class="bg-yellow-50 border border-yellow-400 text-yellow-900 px-4 py-3 rounded mb-6">
+        <h2 class="font-semibold mb-2">We found conflicting account information.</h2>
+        <p class="text-sm">
+          Please contact the MAT Team at <%= mail_to @support_email %> for help accessing your account.
+        </p>
+      </div>
+    <% elsif @account_access_user.present? %>
+      <section aria-labelledby="account-access-heading"
+               class="bg-blue-50 border border-blue-300 text-blue-900 px-4 py-4 rounded mb-6">
+        <h2 id="account-access-heading" class="font-semibold mb-2">
+          An account already exists with that <%= @account_access_match_type %>.
+        </h2>
+        <% if @account_access_available %>
+          <p class="text-sm mb-4">
+            You can log in with your email and password, or we can send an account access link to the contact information already on record.
+          </p>
+        <% else %>
+          <p class="text-sm mb-4">
+            You can log in with your email and password. To receive an account access link, please contact the MAT Team at <%= mail_to @support_email %>.
+          </p>
+        <% end %>
+        <div class="space-y-3">
+          <%= link_to "Log in with your email and password",
+                      sign_in_path(email_hint: (@account_access_match_type == 'email' ? @account_access_contact : nil)),
+                      class: "block w-full text-center bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" %>
+          <% if @account_access_available %>
+            <%= form_with url: password_path, method: :post, local: true do |access_form| %>
+              <%= access_form.hidden_field :contact, value: @account_access_contact %>
+              <%= access_form.submit "Send account access link",
+                  class: "w-full bg-white text-indigo-700 border border-indigo-500 px-4 py-2 rounded-md hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" %>
+            <% end %>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
     <!-- Main Form -->
     <main role="main" aria-labelledby="signup-heading">
       <%= form_with model: @user,
@@ -311,4 +349,3 @@
     </main>
   </div>
 </div>
-

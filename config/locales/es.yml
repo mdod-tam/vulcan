@@ -104,16 +104,14 @@ es:
           1. Responda a este correo electrónico: Simplemente responda a este correo y adjunte su documentación actualizada.
           2. Envíela por correo postal: Puede enviar copias de sus documentos a nuestra oficina, y nosotros las escanearemos y subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           CÓMO VOLVER A ENVIAR SU DOCUMENTACIÓN:
           1. Responda a este correo electrónico: Simplemente responda a este correo y adjunte su documentación actualizada.
           2. Súbala en línea: Inicie sesión en el panel de su cuenta en %{sign_in_url} y suba sus documentos nuevos de forma segura.
           3. Envíela por correo postal: Puede enviar copias de sus documentos a nuestra oficina, y nosotros las escanearemos y subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
       archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío. Su solicitud ha sido archivada. Puede volver a presentar una solicitud después del %{reapply_date}."
   document_signing:
     medical_certification_request:
@@ -177,11 +175,11 @@ es:
         organization: "Telecomunicaciones Accesibles de Maryland"
         team: "Equipo de Servicio al Cliente"
       footer:
-        address: "Telecomunicaciones Accesibles de Maryland | 123 Main Street, Baltimore, MD 21201"
-        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: mdmat.org"
+        address: "Telecomunicaciones Accesibles de Maryland | %{office_address}"
+        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: %{program_website_url}"
       page_number: "Página %{page} de %{total}"
       titles:
-        application_notifications_account_created: "Su cuenta de Telecomunicaciones Accesibles de Maryland"
+        application_notifications_account_created: "Recibimos su solicitud de Telecomunicaciones Accesibles de Maryland"
         application_notifications_registration_confirmation: "Bienvenido al Programa de Telecomunicaciones Accesibles de Maryland"
         application_notifications_proof_rejected: "Se requiere seguimiento para la verificación de documentos"
         application_notifications_income_threshold_exceeded: "Revisión de elegibilidad de ingresos"

@@ -757,8 +757,7 @@ module Applications
           actor: @admin,
           notifiable: @application,
           metadata: {
-            temp_password: temp_password,
-            template_variables: account_creation_template_variables(user, temp_password)
+            template_variables: account_creation_template_variables(user)
           },
           channel: user.communication_preference.to_sym
         )
@@ -777,12 +776,11 @@ module Applications
       user.update(password: temp_password, password_confirmation: temp_password)
     end
 
-    def account_creation_template_variables(user, temp_password)
+    def account_creation_template_variables(user)
       {
         constituent_first_name: user.first_name,
-        constituent_email: user.email,
-        temp_password: temp_password,
-        sign_in_url: sign_in_url(host: Rails.application.config.action_mailer.default_url_options[:host])
+        support_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
+        program_website_url: ProgramContact.website_url
       }
     end
 

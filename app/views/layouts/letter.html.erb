@@ -76,7 +76,7 @@
     <div class="header">
       <div class="letterhead">
         <h1>Maryland Accessible Telecommunications</h1>
-        <p>123 Main Street, Baltimore, MD 21201</p>
+        <p><%= ProgramContact.office_address %></p>
         <p>Phone: 555-123-4567 | Email: <%= Policy.get('support_email') || 'mat.program1@maryland.gov' %></p>
       </div>
     </div>
@@ -107,8 +107,8 @@
     </div>
     
     <div class="footer">
-      <p>Maryland Accessible Telecommunications | 123 Main Street, Baltimore, MD 21201</p>
-      <p>Phone: 555-123-4567 | Email: <%= Policy.get('support_email') || 'mat.program1@maryland.gov' %> | Website: mdmat.org</p>
+      <p>Maryland Accessible Telecommunications | <%= ProgramContact.office_address %></p>
+      <p>Phone: 555-123-4567 | Email: <%= Policy.get('support_email') || 'mat.program1@maryland.gov' %> | Website: <%= ProgramContact.website_url %></p>
     </div>
   </div>
 </body>

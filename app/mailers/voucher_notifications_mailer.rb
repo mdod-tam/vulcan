@@ -32,7 +32,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       fallback: 'Your MAT Voucher is Ready!'
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
@@ -113,7 +113,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       fallback: 'Important: Your voucher is expiring soon.'
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
@@ -193,7 +193,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       fallback: 'Important: Your Voucher Has Expired'
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
@@ -287,7 +287,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     )
     remaining_balance_formatted = number_to_currency(voucher.remaining_value) # After transaction
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin

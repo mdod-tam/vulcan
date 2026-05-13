@@ -9,30 +9,34 @@
     <% end %>
 
     <%= form_with(url: password_path, method: :patch, html: { class: "space-y-6" }) do |form| %>
-      <div>
-        <%= form.label :password_challenge, "Current Password", class: "block text-sm font-medium text-gray-700" %>
-        <div class="relative" data-controller="visibility" data-visibility-timeout-value="5000">
-          <%= form.password_field :password_challenge, { :class => "mt-1 block w-full px-4 py-2 pr-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500", :required => true, "aria-required" => true, "aria-invalid" => "false", :autocomplete => 'current-password', :autofocus => true, :"data-visibility-target" => "field", "aria-describedby" => "password-visibility-status-1" } %>
-          <button type="button"
-                  data-action="visibility#togglePassword"
-                  class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  aria-label="Show password"
-                  aria-pressed="false">
-            <svg class="h-5 w-5"
-                 data-visibility-target="icon"
-                 fill="none"
-                 viewBox="0 0 24 24"
-                 stroke="currentColor"
-                 aria-hidden="true">
-              <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </button>
-          <div id="password-visibility-status-1" aria-live="polite" class="sr-only" data-visibility-target="status">
-            Password is hidden
+      <% if params[:token].present? %>
+        <%= form.hidden_field :token, value: params[:token] %>
+      <% else %>
+        <div>
+          <%= form.label :password_challenge, "Current Password", class: "block text-sm font-medium text-gray-700" %>
+          <div class="relative" data-controller="visibility" data-visibility-timeout-value="5000">
+            <%= form.password_field :password_challenge, { :class => "mt-1 block w-full px-4 py-2 pr-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500", :required => true, "aria-required" => true, "aria-invalid" => "false", :autocomplete => 'current-password', :autofocus => true, :"data-visibility-target" => "field", "aria-describedby" => "password-visibility-status-1" } %>
+            <button type="button"
+                    data-action="visibility#togglePassword"
+                    class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Show password"
+                    aria-pressed="false">
+              <svg class="h-5 w-5"
+                   data-visibility-target="icon"
+                   fill="none"
+                   viewBox="0 0 24 24"
+                   stroke="currentColor"
+                   aria-hidden="true">
+                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+            <div id="password-visibility-status-1" aria-live="polite" class="sr-only" data-visibility-target="status">
+              Password is hidden
+            </div>
           </div>
         </div>
-      </div>
+      <% end %>
 
       <div>
         <%= form.label :password, "New Password", class: "block text-sm font-medium text-gray-700" %>

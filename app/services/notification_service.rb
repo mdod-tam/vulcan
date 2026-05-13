@@ -104,7 +104,6 @@ class NotificationService
     def validate_all_requirements!
       validate_required_params!
       validate_channel!
-      handle_account_created_temp_password!
     end
 
     def validate_required_params!
@@ -123,24 +122,6 @@ class NotificationService
       return if @service.class::VALID_CHANNELS.include?(channel)
 
       raise ArgumentError, "Unsupported channel: #{channel}"
-    end
-
-    def handle_account_created_temp_password!
-      return unless @params[:type] == 'account_created'
-
-      metadata = @params[:metadata] || {}
-      temp_password = metadata['temp_password'] || metadata[:temp_password]
-      return if temp_password.present?
-
-      if Rails.env.test?
-        @params[:metadata] = metadata.merge('temp_password' => 'test_password_123')
-        Rails.logger.warn 'NotificationService: account_created missing temp_password in test environment - using fallback'
-        Rails.logger.debug { "NotificationService: Updated metadata in builder: #{@params[:metadata].inspect}" }
-      else
-        msg = 'NotificationService: account_created requires temp_password in metadata'
-        Rails.logger.error msg
-        raise ArgumentError, msg
-      end
     end
   end
 
@@ -165,7 +146,7 @@ class NotificationService
     'training_completed' => [TrainingSessionNotificationsMailer, :training_completed],
     'training_cancelled' => [TrainingSessionNotificationsMailer, :training_cancelled],
     'training_missed' => [TrainingSessionNotificationsMailer, :no_show_notification],
-    'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created],
+    'security_key_recovery_approved' => [ApplicationNotificationsMailer, :security_key_recovery_approved],
     'medical_certification_approved' => [MedicalProviderMailer, :approved],
     'medical_certification_requested' => [MedicalProviderMailer, :requested],
     'medical_certification_not_provided' => [ApplicationNotificationsMailer, :medical_certification_not_provided],
@@ -421,8 +402,7 @@ class NotificationService
                     # Accept both Application and ProofReview as valid notifiable types
                     ensure_action_contract?(notification, notifiable_class: [Application, ProofReview], actor_presence: true)
                   when 'account_created'
-                    ensure_action_contract?(notification, recipient_class: User) &&
-                    validate_account_created_temp_password?(notification)
+                    ensure_action_contract?(notification, recipient_class: User)
                   when 'medical_certification_not_provided'
                     ensure_action_contract?(notification, notifiable_class: Application, actor_presence: true)
                   else
@@ -434,27 +414,6 @@ class NotificationService
     error_message = "NotificationService: Contract violation for action '#{notification.action}' for Notification ##{notification.id}"
     Rails.logger.error error_message
     raise ArgumentError, error_message
-  end
-
-  def validate_account_created_temp_password?(notification)
-    temp_password = notification.metadata&.dig('temp_password')
-    return true if temp_password.present?
-
-    # More descriptive error logging
-    metadata_keys = notification.metadata&.keys || []
-    error_message = "NotificationService: account_created missing temp_password for Notification ##{notification.id}.
-    Available metadata keys: #{metadata_keys.join(', ')}"
-    Rails.logger.error error_message
-
-    # In test environment, add fallback temp_password to the notification
-    if Rails.env.test?
-      Rails.logger.warn 'NotificationService: Adding fallback temp_password for test environment'
-      # Update the notification's metadata directly
-      updated_metadata = (notification.metadata || {}).merge('temp_password' => 'test_password_123')
-      notification.update_column(:metadata, updated_metadata) # rubocop:disable Rails/SkipsModelValidations
-      return true
-    end
-    false
   end
 
   def send_notification_email(notification, mailer_class, method_name, requested_channel:)
@@ -469,7 +428,7 @@ class NotificationService
     raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
 
     mail_delivery.deliver_later
-    redact_temp_password(notification) if notification.action == 'account_created'
+    redact_temp_password(notification) if notification.metadata&.dig('temp_password').present?
 
     [actual_delivery_channel, delivery_route_reason]
   end
@@ -477,15 +436,12 @@ class NotificationService
   def build_mail_delivery(notification, mailer_class, method_name)
     case notification.action
     when 'account_created'
-      temp_password = notification.metadata&.dig('temp_password') # Already validated to be present
-      mailer_class.public_send(method_name, notification.recipient, temp_password)
+      mailer_class.public_send(method_name, notification.recipient)
     when 'proof_rejected', 'proof_approved'
       application = notification.notifiable
       proof_type = notification.metadata&.dig('proof_type')
       proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
       mailer_class.public_send(method_name, application, proof_review)
-    when 'training_rescheduled'
-      mailer_class.public_send(method_name, notification.notifiable, notification)
     when 'trainer_assigned', 'training_scheduled',
          'training_completed', 'training_cancelled', 'training_missed',
          'max_rejections_warning'
@@ -792,7 +748,7 @@ class NotificationService
     errors << "Recipient must be a #{recipient_class.name} for action '#{notification.action}' (was #{notification.recipient.class.name})"
   end
   private :ensure_action_contract?, :validate_notifiable_class, :validate_actor_presence, :validate_recipient_class,
-          :enforce_delivery_contracts!, :validate_account_created_temp_password?, :send_notification_email, :redact_temp_password,
+          :enforce_delivery_contracts!, :send_notification_email, :redact_temp_password,
           :find_proof_review_for_notification
 
   # ---- Class helpers ---------------------------------------------------------

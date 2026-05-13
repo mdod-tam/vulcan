@@ -131,16 +131,14 @@ en:
           1. Reply to this email: Simply reply to this email and attach your updated documentation.
           2. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
              Maryland Accessible Telecommunications
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           HOW TO RESUBMIT YOUR DOCUMENTATION:
           1. Reply to this email: Simply reply to this email and attach your updated documentation.
           2. Upload Online: Sign in to your account dashboard at %{sign_in_url} and upload your new documents securely.
           3. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
              Maryland Accessible Telecommunications
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
       archived_message: "Unfortunately, you have reached the maximum number of submission attempts. Your application has been archived. You may reapply after %{reapply_date}."
   date:
     formats:
@@ -332,11 +330,11 @@ en:
         organization: "Maryland Accessible Telecommunications"
         team: "Customer Service Team"
       footer:
-        address: "Maryland Accessible Telecommunications | 123 Main Street, Baltimore, MD 21201"
-        contact_line: "Phone: 555-123-4567 | Email: %{support_email} | Website: mdmat.org"
+        address: "Maryland Accessible Telecommunications | %{office_address}"
+        contact_line: "Phone: 555-123-4567 | Email: %{support_email} | Website: %{program_website_url}"
       page_number: "Page %{page} of %{total}"
       titles:
-        application_notifications_account_created: "Your Maryland Accessible Telecommunications Account"
+        application_notifications_account_created: "We Received Your Maryland Accessible Telecommunications Application"
         application_notifications_registration_confirmation: "Welcome to the Maryland Accessible Telecommunications Program"
         application_notifications_proof_rejected: "Document Verification Follow-up Required"
         application_notifications_income_threshold_exceeded: "Income Eligibility Review"

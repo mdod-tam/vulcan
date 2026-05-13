@@ -1,11 +1,8 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_account_created"
-# Took out the login details as they are not needed for the account creation notification for the internal release.
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_account_created', format: :text, locale: 'es') do |template|
-  template.subject = 'Su Cuenta de Telecomunicaciones Accesibles de Maryland'
-  template.description = 'Enviado cuando se recibe una solicitud y se crea una cuenta de constituyente, proporcionando los detalles iniciales de inicio de sesión.'
+  template.subject = 'Recibimos su solicitud de Telecomunicaciones Accesibles de Maryland'
+  template.description = 'Enviado cuando se recibe una solicitud y se crea una cuenta de constituyente.'
   template.body = <<~TEXT
     %<header_text>s
 
@@ -17,11 +14,13 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_account_create
 
     Si tiene alguna pregunta o necesita ayuda, comuníquese con nuestro equipo a %<support_email>s o llame al (410) 767-6960.
 
+    Sitio web del programa: %<program_website_url>s
+
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text constituent_first_name footer_text support_email],
-    'optional' => %w[constituent_email temp_password sign_in_url]
+    'required' => %w[header_text constituent_first_name support_email program_website_url footer_text],
+    'optional' => []
   }
   template.version = 1
 end

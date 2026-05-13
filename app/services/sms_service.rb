@@ -2,8 +2,10 @@
 
 class SmsService
   def self.send_message(phone_number, message)
+    delivery_phone_number = format_phone_to_e164(phone_number)
+
     # Log the SMS attempt
-    Rails.logger.info("SMS to #{phone_number}: #{message}")
+    Rails.logger.info("SMS to #{delivery_phone_number}: #{message}")
 
     # In test/development without Twilio credentials, just log and return success
     return true unless twilio_configured?
@@ -17,11 +19,11 @@ class SmsService
 
       client.messages.create(
         from: Rails.application.config.twilio[:sms_from_number],
-        to: phone_number,
+        to: delivery_phone_number,
         body: message
       )
 
-      Rails.logger.info("SMS sent successfully to #{phone_number} via Twilio")
+      Rails.logger.info("SMS sent successfully to #{delivery_phone_number} via Twilio")
       true
     rescue Twilio::REST::RestError => e
       Rails.logger.error("Twilio SMS delivery failed: #{e.message}")
@@ -39,5 +41,13 @@ class SmsService
     config[:account_sid].present? &&
       config[:auth_token].present? &&
       config[:sms_from_number].present?
+  end
+
+  def self.format_phone_to_e164(phone_number)
+    return phone_number if phone_number.to_s.start_with?('+')
+
+    digits = phone_number.to_s.gsub(/\D/, '')
+    digits = "1#{digits}" if digits.length == 10
+    "+#{digits}"
   end
 end

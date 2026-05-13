@@ -24,9 +24,8 @@ class MessageStreamTest < ActionMailer::TestCase
     # Create a constituent user and application using FactoryBot
     application = create(:application, :completed)
     constituent = application.user
-    temp_password = 'tempPassword123'
 
-    email = ApplicationNotificationsMailer.account_created(constituent, temp_password)
+    email = ApplicationNotificationsMailer.account_created(constituent)
 
     assert_equal 'notifications', email.message_stream
   end

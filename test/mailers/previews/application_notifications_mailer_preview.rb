@@ -26,8 +26,7 @@ class ApplicationNotificationsMailerPreview < ActionMailer::Preview
 
   def account_created
     constituent = Constituent.first
-    temp_password = 'temporary123'
-    ApplicationNotificationsMailer.account_created(constituent, temp_password)
+    ApplicationNotificationsMailer.account_created(constituent)
   end
 
   def income_threshold_exceeded

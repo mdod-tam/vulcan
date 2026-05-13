@@ -140,7 +140,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
-        phone: '555-555-5555',
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -148,8 +148,9 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    # Check errors directly on the instance variable assigned by the controller
-    assert_includes assigns(:user).errors[:email], 'has already been taken'
+    assert_select 'h2', /An account already exists with that email/
+    assert_select 'a', 'Log in with your email and password'
+    assert_select 'input[value=?]', 'Send account access link'
   end
 
   def test_should_not_create_user_with_existing_phone
@@ -157,7 +158,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}" # Generate a unique phone number
     create(:constituent,
            email: "phone-test-#{SecureRandom.hex(4)}@example.com",
-           phone: test_phone)
+           phone: test_phone,
+           phone_type: 'text')
 
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
@@ -175,8 +177,64 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    # Check errors directly on the instance variable assigned by the controller
-    assert_includes assigns(:user).errors[:phone], 'has already been taken'
+    assert_select 'h2', /An account already exists with that phone/
+    assert_select 'a', 'Log in with your email and password'
+    assert_select 'input[value=?]', 'Send account access link'
+  end
+
+  def test_should_not_offer_account_access_link_for_non_sms_phone_match
+    test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
+    create(:constituent,
+           email: "voice-phone-test-#{SecureRandom.hex(4)}@example.com",
+           phone: test_phone,
+           phone_type: 'voice')
+
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "unique-email-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'User',
+        date_of_birth: '1990-01-01',
+        phone: test_phone,
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_select 'h2', /An account already exists with that phone/
+    assert_select 'a', 'Log in with your email and password'
+    assert_select 'a[href^=?]', 'mailto:'
+    assert_select 'input[value=?]', 'Send account access link', count: 0
+  end
+
+  def test_should_show_support_message_when_email_and_phone_match_different_accounts
+    email_user = create(:constituent, email: "email-match-#{SecureRandom.hex(4)}@example.com")
+    phone_user = create(:constituent, email: "phone-match-#{SecureRandom.hex(4)}@example.com",
+                                      phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
+
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: email_user.email,
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'User',
+        date_of_birth: '1990-01-01',
+        phone: phone_user.phone,
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_select 'h2', /We found conflicting account information/
+    assert_select 'a[href^=?]', 'mailto:'
+    assert_select 'input[value=?]', 'Send account access link', count: 0
   end
 
   def test_should_create_user_but_flag_for_review_on_name_dob_match
