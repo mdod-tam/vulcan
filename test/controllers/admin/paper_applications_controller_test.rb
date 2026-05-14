@@ -871,7 +871,7 @@ module Admin
           params: { email: recipient.email.upcase }
 
       assert_response :success
-      payload = JSON.parse(response.body)
+      payload = response.parsed_body
       assert_equal true, payload['found']
       assert_equal recipient.id, payload['recipient_id']
     end
@@ -885,7 +885,7 @@ module Admin
           params: { email: recipient.dependent_email.upcase }
 
       assert_response :success
-      payload = JSON.parse(response.body)
+      payload = response.parsed_body
       assert_equal true, payload['found']
       assert_equal recipient.id, payload['recipient_id']
     end
@@ -1015,7 +1015,7 @@ module Admin
         'ApplicationNotificationsMailer',
         'account_created',
         'deliver_now',
-        args: [Constituent.find_by(id: 999_999), 'password']
+        args: [Constituent.find_by(id: 999_999)]
       )
 
       # The job should handle nil constituent gracefully and not crash the worker
