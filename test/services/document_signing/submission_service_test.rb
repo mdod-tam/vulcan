@@ -164,7 +164,7 @@ module DocumentSigning
       assert_equal 'sub_123456', event.metadata['document_signing_submission_id']
     end
 
-    test 'revokes open secure certification upload forms when sending DocuSeal request' do
+    test 'preserves open secure certification upload forms when sending DocuSeal request' do
       secure_request_form = create(:medical_provider_secure_request_form, application: @application)
       DocumentSigning::SubmissionService.any_instance.stubs(:create_submission!).returns(@mock_submission)
 
@@ -174,7 +174,9 @@ module DocumentSigning
       ).call
 
       assert result.success?
-      assert_predicate secure_request_form.reload, :status_revoked?
+      assert_predicate secure_request_form.reload, :active?
+      assert_predicate secure_request_form, :status_sent?
+      assert_nil secure_request_form.revoked_at
     end
 
     test 'supports different service types' do

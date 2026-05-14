@@ -190,9 +190,10 @@ module Admin
 
       assert_response :success
       assert_select 'form[data-turbo="false"][onsubmit*=?]', 'DocuSeal request is already opened'
+      assert_select 'form[data-turbo="false"][onsubmit*=?]', 'additional option'
     end
 
-    test 'show page warns before DocuSeal when active secure certification links will be revoked' do
+    test 'show page confirms DocuSeal as an additional option when secure certification links are active' do
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
@@ -202,7 +203,8 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select 'form[data-turbo-confirm*=?]', 'will revoke the current secure upload link'
+      assert_select 'form[data-turbo-confirm*=?]', 'A secure upload link is already active'
+      assert_select 'form[data-turbo-confirm*=?]', 'additional option'
     end
 
     test 'show page surfaces provider email remediation for secure certification upload' do

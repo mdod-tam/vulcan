@@ -257,8 +257,11 @@ module Admin
 
     def docuseal_confirmation(application, active_secure_cert_upload_forms)
       if active_secure_cert_upload_forms.positive?
-        current_links = active_secure_cert_upload_forms == 1 ? 'the current secure upload link' : "the #{active_secure_cert_upload_forms} current secure upload links"
-        "Sending DocuSeal will revoke #{current_links}. Continue?"
+        if active_secure_cert_upload_forms == 1
+          'A secure upload link is already active. Send DocuSeal as an additional option?'
+        else
+          "#{active_secure_cert_upload_forms} secure upload links are already active. Send DocuSeal as an additional option?"
+        end
       else
         [
           "Send digital signing request to #{application.medical_provider_name}",
@@ -269,7 +272,7 @@ module Admin
 
     def secure_cert_upload_confirmation(application)
       if application.document_signing_status_sent? || application.document_signing_status_opened?
-        "A DocuSeal request is already #{application.document_signing_status}. Send a secure upload link instead?"
+        "A DocuSeal request is already #{application.document_signing_status}. Send a secure upload link as an additional option?"
       else
         "Send secure certification upload link to #{application.medical_provider_email}?"
       end

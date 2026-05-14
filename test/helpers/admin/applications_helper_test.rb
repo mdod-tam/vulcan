@@ -45,17 +45,30 @@ module Admin
       state = medical_certification_action_state(@application, secure_request_forms: @application.medical_provider_secure_request_forms)
 
       assert_equal 1, state.active_secure_cert_upload_forms
-      assert_includes state.docuseal_confirm, 'the current secure upload link'
+      assert_equal 'A secure upload link is already active. Send DocuSeal as an additional option?',
+                   state.docuseal_confirm
       assert_predicate active_form.reload, :active?
     end
 
-    test 'medical certification action state reflects provider readiness and DocuSeal collision copy' do
+    test 'medical certification action state describes multiple active secure upload forms as additional DocuSeal options' do
+      create(:medical_provider_secure_request_form, application: @application, provider_email: 'primary@example.test')
+      create(:medical_provider_secure_request_form, application: @application, provider_email: 'backup@example.test')
+
+      state = medical_certification_action_state(@application, secure_request_forms: @application.medical_provider_secure_request_forms)
+
+      assert_equal 2, state.active_secure_cert_upload_forms
+      assert_equal '2 secure upload links are already active. Send DocuSeal as an additional option?',
+                   state.docuseal_confirm
+    end
+
+    test 'medical certification action state reflects provider readiness and DocuSeal additional option copy' do
       @application.update!(document_signing_status: :sent)
 
       state = medical_certification_action_state(@application, secure_request_forms: [])
 
       assert_predicate state, :provider_ready_for_docuseal
-      assert_includes state.secure_cert_upload_confirm, 'DocuSeal request is already sent'
+      assert_equal 'A DocuSeal request is already sent. Send a secure upload link as an additional option?',
+                   state.secure_cert_upload_confirm
       assert_equal I18n.t('admin.applications.certification_upload_requests.create.provider_email_required'),
                    state.secure_cert_upload_message
     end
