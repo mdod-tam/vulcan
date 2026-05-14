@@ -51,16 +51,16 @@
       <div class="space-y-2 pl-4 border-l-2 border-gray-200">
         <% @application.additional_medical_certifications.each do |certification| %>
           <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium text-gray-900">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-900 break-all">
                 <%= certification.blob.filename %>
               </p>
               <p class="text-xs text-gray-500">
-                DocuSeal signed form · <%= number_to_human_size(certification.blob.byte_size) %>
+                <%= additional_medical_certification_source_label(certification) %> · <%= number_to_human_size(certification.blob.byte_size) %>
               </p>
             </div>
             <a href="<%= rails_blob_path(certification, disposition: "attachment") %>"
-               class="inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+               class="shrink-0 ml-3 inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                download>
               Download
             </a>

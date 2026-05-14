@@ -81,6 +81,17 @@ module Admin
       'portal'
     end
 
+    def additional_medical_certification_source_label(certification)
+      case certification.blob.metadata['source']
+      when 'docuseal'
+        'DocuSeal signed form'
+      when 'secure_form'
+        'Secure upload'
+      else
+        'Additional certification'
+      end
+    end
+
     def format_rejection_reason(proof_type, application)
       proof_status_method = "#{proof_type}_proof_status"
       return nil unless application.respond_to?(proof_status_method)

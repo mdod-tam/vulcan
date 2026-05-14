@@ -44,11 +44,11 @@ module Applications
             next
           end
 
-          attach_result = attach_certification
+          attach_result = attach_certification_for_current_primary
           raise AttachmentFailure, attach_result[:error]&.message || message(:attachment_failed) unless attach_result[:success]
 
           medical_provider_secure_request_form.mark_submitted!
-          log_submission
+          log_submission(additional_blob_id: attach_result[:additional_blob_id])
           result = success(message(:submitted))
         end
       end
@@ -129,19 +129,108 @@ module Applications
       )
     end
 
-    def log_submission
+    def attach_certification_for_current_primary
+      if retain_secure_upload_as_additional?
+        attach_additional_certification
+      else
+        attach_certification
+      end
+    end
+
+    def retain_secure_upload_as_additional?
+      application.medical_certification.attached? &&
+        docuseal_primary_certification?
+    end
+
+    def docuseal_primary_certification?
+      return true if application.medical_certification.blob.metadata['source'] == 'docuseal'
+      return true if docuseal_certification_status_change?
+
+      document_signing_completed? && !secure_certification_upload_previously_received?
+    end
+
+    def docuseal_certification_status_change?
+      ApplicationStatusChange
+        .where(application: application, change_type: 'medical_certification')
+        .exists?(["metadata->>'submission_method' = ?", 'docuseal'])
+    end
+
+    def document_signing_completed?
+      application.document_signing_status_signed? ||
+        Event.exists?(auditable: application, action: 'document_signing_completed')
+    end
+
+    def secure_certification_upload_previously_received?
+      Event.exists?(auditable: application, action: 'cert_submitted_via_secure_form')
+    end
+
+    def attach_additional_certification
+      blob = create_secure_upload_blob
+      application.additional_medical_certifications.attach(blob)
+
+      {
+        success: application.additional_medical_certifications.attachments.any? { |attachment| attachment.blob_id == blob.id },
+        additional_blob_id: blob.id
+      }
+    end
+
+    def create_secure_upload_blob
+      io = upload_io
+      io.rewind if io.respond_to?(:rewind)
+
+      ActiveStorage::Blob.create_and_upload!(
+        io: io,
+        filename: upload_filename,
+        content_type: upload_content_type,
+        metadata: secure_upload_metadata
+      )
+    end
+
+    def upload_io
+      file.respond_to?(:tempfile) ? file.tempfile : file
+    end
+
+    def upload_filename
+      if file.respond_to?(:original_filename)
+        file.original_filename
+      elsif file.respond_to?(:filename)
+        file.filename
+      else
+        'medical_certification_upload'
+      end
+    end
+
+    def upload_content_type
+      file.content_type if file.respond_to?(:content_type)
+    end
+
+    def secure_upload_metadata
+      {
+        source: 'secure_form',
+        medical_provider_secure_request_form_id: medical_provider_secure_request_form.id,
+        request_batch_id: medical_provider_secure_request_form.request_batch_id,
+        provider_email: medical_provider_secure_request_form.provider_email
+      }
+    end
+
+    def log_submission(additional_blob_id: nil)
       actor = User.system_user
 
       AuditEventService.log(
         action: 'cert_submitted_via_secure_form',
         actor: actor,
         auditable: application,
-        metadata: {
-          medical_provider_secure_request_form_id: medical_provider_secure_request_form.id,
-          provider_email: medical_provider_secure_request_form.provider_email,
-          request_batch_id: medical_provider_secure_request_form.request_batch_id
-        }
+        metadata: secure_upload_metadata.merge(additional_certification_metadata(additional_blob_id))
       )
+    end
+
+    def additional_certification_metadata(additional_blob_id)
+      return {} if additional_blob_id.blank?
+
+      {
+        retained_as: 'additional_medical_certification',
+        additional_medical_certification_blob_id: additional_blob_id
+      }
     end
 
     # The provider is not a User record; the controller sets I18n.locale via

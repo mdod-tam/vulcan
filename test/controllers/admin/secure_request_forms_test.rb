@@ -357,6 +357,29 @@ module Admin
       assert_select '[data-testid="additional-medical-certifications"]', text: /DocuSeal signed form/
     end
 
+    test 'show page labels additional secure upload certification submissions' do
+      application = create(:application, medical_certification_status: :received)
+      application.medical_certification.attach(
+        io: StringIO.new('docuseal content'),
+        filename: 'medical_cert_docuseal_123.pdf',
+        content_type: 'application/pdf',
+        metadata: { source: 'docuseal' }
+      )
+      application.additional_medical_certifications.attach(
+        io: StringIO.new('secure upload content'),
+        filename: 'secure_upload_additional.pdf',
+        content_type: 'application/pdf',
+        metadata: { source: 'secure_form' }
+      )
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select '[data-testid="medical-certification"]', text: /medical_cert_docuseal_123\.pdf/
+      assert_select '[data-testid="additional-medical-certifications"]', text: /secure_upload_additional\.pdf/
+      assert_select '[data-testid="additional-medical-certifications"]', text: /Secure upload/
+    end
+
     test 'secure certification upload request sends mail and redirects with notice' do
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',

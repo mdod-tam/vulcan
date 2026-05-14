@@ -129,10 +129,8 @@ class Application < ApplicationRecord
   has_one_attached :residency_proof
   has_one_attached :id_proof
   has_one_attached :medical_certification
-  # Stores late-arriving DocuSeal completions that arrive after a cert has already been received
-  # through the secure upload path. Webhooks::DocusealController currently writes directly to
-  # :medical_certification. Routing duplicate submissions here requires the DocuSeal coexistence
-  # guardrails described in cert_cross_channel_guardrails (Phase 3, deferred).
+  # Stores duplicate medical certification submissions from the second completed channel:
+  # late DocuSeal PDFs after secure upload, or late secure uploads after DocuSeal.
   has_many_attached :additional_medical_certifications
 
   # Validations
