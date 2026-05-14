@@ -86,6 +86,10 @@ module Applications
       city state zip_code communication_preference locale
       preferred_means_of_communication referral_source
     ].freeze
+    APPLICANT_DISABILITY_FIELDS = %i[
+      hearing_disability vision_disability speech_disability
+      mobility_disability cognition_disability
+    ].freeze
 
     private
 
@@ -173,6 +177,8 @@ module Applications
 
       @constituent = user
 
+      return false unless update_existing_applicant_disability_info(user)
+
       if params[:constituent].present? && attributes_present?(params[:constituent]) &&
          existing_adult_contact_updates_allowed? && !update_existing_adult_contact_info(user)
         return false
@@ -230,6 +236,8 @@ module Applications
     end
 
     def update_dependent_and_validate_eligibility(dependent)
+      return false unless update_existing_applicant_disability_info(dependent)
+
       # Update dependent information if provided (contact info may have changed)
       return false if params[:constituent].present? && attributes_present?(params[:constituent]) && !update_dependent_contact_info(dependent)
 
@@ -323,6 +331,27 @@ module Applications
     rescue ActiveRecord::RecordInvalid => e
       add_error("Failed to update dependent information: #{e.record.errors.full_messages.join(', ')}")
       false
+    end
+
+    def update_existing_applicant_disability_info(user)
+      attrs = params[:constituent]
+      return true if attrs.blank?
+
+      updates = build_disability_updates(attrs)
+      return true if updates.empty?
+
+      if user.update(updates)
+        true
+      else
+        add_error("Failed to update applicant disability information: #{user.errors.full_messages.join(', ')}")
+        false
+      end
+    end
+
+    def build_disability_updates(attrs)
+      APPLICANT_DISABILITY_FIELDS.each_with_object({}) do |field, updates|
+        updates[field] = attrs[field] if attrs.key?(field)
+      end
     end
 
     def build_dependent_contact_updates(attrs)
