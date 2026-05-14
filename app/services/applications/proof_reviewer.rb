@@ -15,11 +15,13 @@ module Applications
 
       Rails.logger.info "Converted values - proof_type: #{@proof_type_key.inspect}, status: #{@status_key.inspect}"
 
-      ApplicationRecord.transaction do
-        create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
-        update_application_status
-        purge_if_rejected
-        reconcile_if_approved
+      with_single_proof_review_context do
+        ApplicationRecord.transaction do
+          create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
+          update_application_status
+          purge_if_rejected
+          reconcile_if_approved
+        end
       end
 
       true
@@ -114,6 +116,14 @@ module Applications
       Rails.logger.info "[ProofReviewer] Status is rejected for #{@proof_type_key}, attempting purge."
       # Call a method on the application model to handle the purge
       @application.purge_rejected_proof(@proof_type_key)
+    end
+
+    def with_single_proof_review_context
+      previous_value = Current.reviewing_single_proof
+      Current.reviewing_single_proof = true
+      yield
+    ensure
+      Current.reviewing_single_proof = previous_value
     end
   end
 end

@@ -23,6 +23,9 @@ module ProofConsistencyValidation
     # Skip during administrative actions like purging proofs
     return true if Current.skip_proof_validation?
 
+    # Skip during single-proof admin review; the reviewer validates the selected proof.
+    return true if Current.reviewing_single_proof?
+
     # Skip for new records (attachments handled during creation)
     return true if new_record?
 
