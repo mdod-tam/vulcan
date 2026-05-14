@@ -52,7 +52,6 @@ module Applications
         save_application_with_audit
         log_events
       end
-      request_provider_info_if_needed
 
       success_result
     rescue ActiveRecord::RecordInvalid, StandardError => e
@@ -133,18 +132,9 @@ module Applications
       attributes[:user] = applicant_user if target_application.new_record? || @form.user_id.present?
 
       target_application.assign_attributes(attributes)
-      target_application.no_provider_info_provided = @form.no_provider_info_provided
     end
 
     def set_medical_provider_details
-      if @form.no_provider_info_provided
-        target_application.medical_provider_name = nil
-        target_application.medical_provider_phone = nil
-        target_application.medical_provider_fax = nil
-        target_application.medical_provider_email = nil
-        return
-      end
-
       target_application.medical_provider_name = @form.medical_provider_name if @form.medical_provider_name.present?
       target_application.medical_provider_phone = @form.medical_provider_phone if @form.medical_provider_phone.present?
       target_application.medical_provider_fax = @form.medical_provider_fax if @form.medical_provider_fax.present?
@@ -183,28 +173,6 @@ module Applications
       end
 
       target_application.submit!(actor: actor) if @form.is_submission
-    end
-
-    def request_provider_info_if_needed
-      return unless @form.is_submission
-      return unless @form.no_provider_info_provided
-      return unless missing_required_provider_info?
-
-      actor = determine_audit_actor
-      result = Applications::RequestProviderInfo.new(application: target_application, actor: actor).call
-      return if result.success?
-
-      Rails.logger.warn(
-        "Provider info request not sent after online submission for application #{target_application.id}: #{result.message}"
-      )
-    rescue StandardError => e
-      Rails.logger.warn(
-        "Provider info request not sent after online submission for application #{target_application.id}: #{e.message}"
-      )
-    end
-
-    def missing_required_provider_info?
-      target_application.missing_required_provider_info?
     end
 
     def determine_audit_actor

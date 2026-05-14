@@ -47,7 +47,7 @@ class Application < ApplicationRecord
 
   # Attribute accessors
   # Virtual attribute to hold nested medical provider params for the form
-  attr_accessor :medical_provider_attributes, :no_provider_info_provided
+  attr_accessor :medical_provider_attributes
 
   # Enums
   enum :status, {
@@ -369,11 +369,7 @@ class Application < ApplicationRecord
 
   # Instance Methods
   def skip_medical_provider_validation?
-    status_draft? || status_awaiting_proof? || no_provider_info_provided?
-  end
-
-  def no_provider_info_provided?
-    ActiveModel::Type::Boolean.new.cast(no_provider_info_provided)
+    status_draft? || status_awaiting_proof?
   end
 
   def missing_required_provider_info?

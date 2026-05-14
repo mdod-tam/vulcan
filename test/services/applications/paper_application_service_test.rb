@@ -283,6 +283,35 @@ module Applications
       assert result, "Failed to create application with medical certification marked none provided: #{service.errors.inspect}"
     end
 
+    test 'paper intake without provider info creates application and sends provider info request' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-paper-missing-provider-#{test_timestamp}@example.com"
+      unique_phone = "202570#{test_timestamp.to_s[-4..]}"
+
+      service_params = {
+        no_medical_provider_information: true,
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email)
+      }
+
+      request_service = mock('request-provider-info-service')
+      request_service.expects(:call).returns(BaseService::Result.new(success: true))
+      Applications::RequestProviderInfo
+        .expects(:new)
+        .with(application: kind_of(Application), actor: @admin)
+        .returns(request_service)
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+
+      assert result, "Failed to create paper application without provider info: #{service.errors.inspect}"
+      assert_predicate service.application, :persisted?
+      assert_equal 'awaiting_proof', service.application.status
+      assert_nil service.application.medical_provider_name
+      assert_nil service.application.medical_provider_phone
+      assert_nil service.application.medical_provider_email
+    end
+
     test 'routes medical certification rejection directly when provider contact information is missing' do
       custom_reason = "No provider contact details were available. [#{Time.now.to_i}]"
       application = create(:application, user: create(:constituent, :with_disabilities))

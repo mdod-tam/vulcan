@@ -15,12 +15,6 @@
       </h1>
       <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
 
-      <% if flash[:alert] %>
-        <div class="bg-red-100 border border-red-400 text-red-700 p-4 rounded mb-4" role="alert" aria-live="polite">
-          <span><%= flash[:alert] %></span>
-        </div>
-      <% end %>
-
       <% new_app_form_data = {
         controller: "currency-formatter accessibility-announcer autosave",
         autosave_target: "form",
@@ -187,19 +181,6 @@
           <%= form.fields_for :medical_provider_attributes do |mp| %>
             <%= render "medical_provider_form", form: mp %>
           <% end %>
-          <div class="flex items-start rounded-md border border-gray-200 bg-white p-4">
-            <%= form.check_box :no_provider_info_provided,
-                class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                "aria-describedby": "no_provider_info_provided_help" %>
-            <div class="ml-3">
-              <%= form.label :no_provider_info_provided,
-                  "I don't have my certifying professional's information yet.",
-                  class: "block text-sm font-medium text-gray-900" %>
-              <p id="no_provider_info_provided_help" class="mt-1 text-sm text-gray-700">
-                We will send you a secure form after submission to collect this information.
-              </p>
-            </div>
-          </div>
         </div>
 
         <!-- Alternate Contact Section (optional) -->

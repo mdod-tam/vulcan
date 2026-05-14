@@ -27,7 +27,6 @@ module ParamCasting
     information_verified
     medical_release_authorized
     self_certify_disability
-    no_provider_info_provided
   ].freeze
 
   # User disability fields (found in various nested structures)
