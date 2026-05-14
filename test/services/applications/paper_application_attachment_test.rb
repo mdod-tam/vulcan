@@ -172,6 +172,7 @@ module Applications
       # Allow both string and symbol variations since the code might use either
       Policy.stubs(:get).with(any_of(:fpl_1_person, 'fpl_1_person')).returns('20000')
       Policy.stubs(:get).with(any_of(:fpl_modifier_percentage, 'fpl_modifier_percentage')).returns('200')
+      Policy.stubs(:get).with('support_email').returns('mat.program1@maryland.gov')
     end
 
     teardown do
