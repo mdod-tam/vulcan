@@ -37,6 +37,11 @@ class ApplicationForm
   attribute :zip_code, :string
   attribute :use_guardian_address, :boolean, default: false
 
+  # Terms and verification attributes
+  attribute :terms_accepted, :boolean, default: false
+  attribute :information_verified, :boolean, default: false
+  attribute :medical_release_authorized, :boolean, default: false
+
   # Medical provider attributes
   attribute :medical_provider_name, :string
   attribute :medical_provider_phone, :string
@@ -127,6 +132,11 @@ class ApplicationForm
     assign_core_attributes(app_params)
     assign_file_attachments(app_params)
     assign_disability_attributes(app_params)
+
+    # Assign terms and verification attributes
+    self.terms_accepted = app_params[:terms_accepted] if app_params.key?(:terms_accepted)
+    self.information_verified = app_params[:information_verified] if app_params.key?(:information_verified)
+    self.medical_release_authorized = app_params[:medical_release_authorized] if app_params.key?(:medical_release_authorized)
 
     extract_address_attributes(app_params)
     extract_guardian_address_strategy(params, app_params)

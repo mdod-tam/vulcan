@@ -284,14 +284,44 @@
        </section>
      </div>
 
+     <%# Terms and Conditions %>
+     <div class="px-6 py-4 bg-gray-50">
+       <h3 class="font-semibold mb-2 text-gray-900">MAT Statement of Terms and Conditions Agreement</h3>
+       <div class="max-h-60 overflow-y-auto mb-4 p-4 bg-white rounded border border-gray-200">
+         <%= render "terms_and_conditions" %>
+       </div>
+       <div class="flex items-start">
+         <%= f.check_box :terms_accepted,
+             id: "terms_accepted",
+             required: true,
+             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+         <%= f.label :terms_accepted,
+             "I have read and accept the terms and conditions",
+             class: "ml-2 block text-sm text-gray-700" %>
+       </div>
+     </div>
+
+     <%# Information Verification %>
+     <div class="px-6 py-4 bg-gray-50">
+       <div class="flex items-start">
+         <%= f.check_box :information_verified,
+             id: "information_verified",
+             required: true,
+             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+         <%= f.label :information_verified,
+             "I verify that all information provided above is accurate and complete",
+             class: "ml-2 block text-sm text-gray-700" %>
+       </div>
+     </div>
+
      <!-- Form Actions -->
-     <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
-       <%= link_to "Cancel",
-           constituent_portal_application_path(@application),
-           class: "px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-           role: "button" %>
-           
-       <%= f.submit "Save Application",
+    <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
+      <%= link_to "Cancel",
+          constituent_portal_application_path(@application),
+          class: "px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+          role: "button" %>
+
+      <%= f.submit "Save Application",
            name: "save_draft",
            class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
            "aria-label": "Save application draft" %>
