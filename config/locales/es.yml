@@ -333,6 +333,11 @@ es:
              123 Main Street
              Baltimore, MD 21201
     proof_rejected:
+      none_provided:
+        default: "No se proporcionó la prueba requerida con la solicitud."
+        id: "No se proporcionó ninguna prueba de identidad con la solicitud."
+        residency: "No se proporcionó ninguna prueba de residencia en Maryland con la solicitud."
+        income: "No se proporcionó ninguna prueba de ingresos con la solicitud."
       remaining_attempts_message:
         one: "Le queda %{count} intento para presentar la documentación requerida antes del %{reapply_date}."
         other: "Le quedan %{count} intentos para presentar la documentación requerida antes del %{reapply_date}."

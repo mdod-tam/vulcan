@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_07_174500) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_18_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -94,6 +94,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_07_174500) do
     t.string "alternate_contact_relationship_type"
     t.decimal "annual_income"
     t.datetime "application_date"
+    t.string "application_transfer_id"
     t.integer "application_type"
     t.datetime "created_at", null: false
     t.string "current_step"
@@ -518,6 +519,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_07_174500) do
     t.string "phone_number", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.index ["user_id", "phone_number"], name: "index_sms_credentials_on_user_id_and_phone_number", unique: true
     t.index ["user_id"], name: "index_sms_credentials_on_user_id"
   end
 

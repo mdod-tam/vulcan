@@ -469,16 +469,32 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   end
 
   def resolve_rejection_reason(proof_review, locale)
-    return proof_review.rejection_reason if proof_review.rejection_reason_code.blank?
+    raw_reason = proof_review.rejection_reason.to_s
+    reason_code = proof_review.rejection_reason_code.presence || raw_reason
 
-    reason = RejectionReason.resolve(
-      code: proof_review.rejection_reason_code,
+    reason = rejection_reason_for_code(
+      reason_code,
       proof_type: proof_review.proof_type,
       locale: locale
     )
-    return proof_review.rejection_reason unless reason&.body
+    return interpolate_address_placeholder(reason.body, proof_review.application) if reason&.body
+    return none_provided_rejection_reason(proof_review.proof_type, locale) if reason_code == 'none_provided'
 
-    interpolate_address_placeholder(reason.body, proof_review.application)
+    proof_review.rejection_reason
+  end
+
+  def rejection_reason_for_code(code, proof_type:, locale:)
+    return nil if code.blank?
+
+    RejectionReason.resolve(code: code, proof_type: proof_type, locale: locale)
+  end
+
+  def none_provided_rejection_reason(proof_type, locale)
+    I18n.t(
+      "application_notifications.proof_rejected.none_provided.#{proof_type}",
+      locale: locale,
+      default: I18n.t('application_notifications.proof_rejected.none_provided.default', locale: locale)
+    )
   end
 
   def interpolate_address_placeholder(body, application)

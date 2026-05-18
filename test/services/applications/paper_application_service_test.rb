@@ -123,8 +123,7 @@ module Applications
       applicant = create(
         :constituent,
         :without_disabilities,
-        email: "existing-paper-self-#{Time.now.to_i}@example.com",
-        phone: "202571#{Time.now.to_i.to_s[-4..]}"
+        email: "existing-paper-self-#{Time.now.to_i}@example.com"
       )
 
       service_params = {
@@ -155,8 +154,7 @@ module Applications
       dependent = create(
         :constituent,
         :without_disabilities,
-        email: "existing-paper-dependent-#{Time.now.to_i}@example.com",
-        phone: "202572#{Time.now.to_i.to_s[-4..]}"
+        email: "existing-paper-dependent-#{Time.now.to_i}@example.com"
       )
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
 

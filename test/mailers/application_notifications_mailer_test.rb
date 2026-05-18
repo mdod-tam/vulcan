@@ -293,6 +293,41 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, "Reason: #{@proof_review.rejection_reason}"
   end
 
+  test 'proof_rejected renders none_provided id reason as friendly text without seed row' do
+    RejectionReason.where(code: 'none_provided', proof_type: 'id', locale: %w[en es]).delete_all
+    proof_review = create(
+      :proof_review,
+      :rejected,
+      application: @application,
+      proof_type: :id,
+      rejection_reason: 'none_provided',
+      rejection_reason_code: nil
+    )
+
+    email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
+    email.deliver_now
+
+    assert_includes email.body.to_s, 'No proof of identity was provided with the application.'
+    assert_not_includes email.body.to_s, 'none_provided'
+  end
+
+  test 'proof_rejected preserves custom rejection text when it is not a known reason code' do
+    custom_reason = 'The uploaded photo is too blurry to read.'
+    proof_review = create(
+      :proof_review,
+      :rejected,
+      application: @application,
+      proof_type: :id,
+      rejection_reason: custom_reason,
+      rejection_reason_code: nil
+    )
+
+    email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
+    email.deliver_now
+
+    assert_includes email.body.to_s, custom_reason
+  end
+
   test 'proof_rejected sends to guardian email when dependent communications route to guardian' do
     guardian = create(:constituent,
                       email: "guardian.rejected.locale.#{SecureRandom.hex(3)}@example.com",

@@ -230,6 +230,11 @@ en:
              123 Main Street
              Baltimore, MD 21201
     proof_rejected:
+      none_provided:
+        default: "No required proof was provided with the application."
+        id: "No proof of identity was provided with the application."
+        residency: "No proof of Maryland residency was provided with the application."
+        income: "No income proof was provided with the application."
       remaining_attempts_message:
         one: "You have %{count} attempt remaining to submit the required documentation before %{reapply_date}."
         other: "You have %{count} attempts remaining to submit the required documentation before %{reapply_date}."
