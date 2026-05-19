@@ -285,9 +285,8 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
 
   test 'voucher redemption handles validation errors appropriately' do
     # When trying to redeem without verification, we get redirected to verify with appropriate message
-
-    # Clear the session to test identity verification requirement
-    session.delete(:verified_vouchers)
+    reset!
+    sign_in_for_integration_test(@vendor)
 
     # Try to redeem voucher without verification
     post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {

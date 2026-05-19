@@ -15,18 +15,19 @@ module AuthenticationTestHelper
   # Explicit methods for different test contexts --------------------------------
 
   # Controller-level cookie sign-in.
-  def sign_in_for_controller_test(user)
-    session = create_test_session(user)
+  # Set bypass_mfa_enrollment: false when testing required-role MFA enforcement
+  def sign_in_for_controller_test(user, bypass_mfa_enrollment: true)
+    user_session = create_test_session(user)
 
     # Mirror what Rails would do from the cookie, so authenticate! sees it
     if defined?(request) && request.respond_to?(:session)
-      request.session[:session_token] = session.session_token
+      request.session[:session_token] = user_session.session_token
     end
 
     if respond_to?(:cookies) && cookies.respond_to?(:signed)
-      cookies.signed[:session_token] = { value: session.session_token, httponly: true }
+      cookies.signed[:session_token] = { value: user_session.session_token, httponly: true }
     elsif respond_to?(:cookies)
-      cookies[:session_token] = session.session_token
+      cookies[:session_token] = user_session.session_token
     end
 
     # Make Current.user available immediately for any before_action
@@ -35,22 +36,25 @@ module AuthenticationTestHelper
     # Store test user ID in thread local variable
     store_test_user_id(user.id)
 
+    bypass_mfa_enrollment_in_test_session(bypass: bypass_mfa_enrollment)
+
     debug_auth "CONTROLLER AUTH: cookie & request.session set for #{user.email}"
     user
   end
 
   # Integration-level header sign-in.
-  def sign_in_for_integration_test(user)
-    session = create_test_session(user)
-    @session_token = session.session_token
+  # Set bypass_mfa_enrollment: false when testing required-role MFA enforcement
+  def sign_in_for_integration_test(user, bypass_mfa_enrollment: true)
+    user_session = create_test_session(user)
+    @session_token = user_session.session_token
     @test_user_id = user.id # Store in instance variable
-    store_test_user_id(user.id) # Set test-user context for post-request restore logic
+    store_test_user_id(user.id) # Set test-user-context for post-request restore logic
 
     # Set up cookies so find_test_session can find the session
     if respond_to?(:cookies) && cookies.respond_to?(:signed)
-      cookies.signed[:session_token] = { value: session.session_token, httponly: true }
+      cookies.signed[:session_token] = { value: user_session.session_token, httponly: true }
     elsif respond_to?(:cookies)
-      cookies[:session_token] = session.session_token
+      cookies[:session_token] = user_session.session_token
     end
 
     # Set up headers for subsequent requests - this is what find_test_session checks first
@@ -59,6 +63,8 @@ module AuthenticationTestHelper
 
     # Make Current.user available immediately
     update_current_user(user)
+
+    bypass_mfa_enrollment_in_test_session(bypass: bypass_mfa_enrollment)
 
     debug_auth "INTEGRATION AUTH: cookies, headers, and test user ID set for #{user.email}"
 
@@ -102,6 +108,8 @@ module AuthenticationTestHelper
     @test_user_id = nil
     @authenticated_user = nil
 
+    clear_mfa_enrollment_bypass_in_test_session
+
     # Use the shared cookie deletion logic that handles all driver types
     delete_session_cookie
 
@@ -129,6 +137,31 @@ module AuthenticationTestHelper
     assert_response :redirect
     assert_redirected_to root_path
     assert_match(/not authorized/i, flash[:alert])
+  end
+
+  # Mirrors ApplicationController#enforce_required_mfa_enrollment test bypass
+  def bypass_mfa_enrollment_in_test_session(bypass: true)
+    if is_a?(ActionDispatch::IntegrationTest)
+      # SessionTestHelper#session is not available until after the first request
+      post '/test/set_session', params: { skip_2fa: bypass ? 'true' : 'false' }
+    elsif defined?(request) && request.respond_to?(:session)
+      if bypass
+        request.session[:skip_2fa] = true
+      else
+        request.session.delete(:skip_2fa)
+      end
+    end
+  end
+
+  def clear_mfa_enrollment_bypass_in_test_session
+    return unless is_a?(ActionDispatch::IntegrationTest)
+
+    integration_session = begin
+      send(:session)
+    rescue NoMethodError
+      nil
+    end
+    integration_session&.delete(:skip_2fa)
   end
 
   # Skip spec if auth system clearly broken, to avoid cascading failures.
