@@ -8,8 +8,6 @@ class ApplicationForm
   include ActiveModel::Validations
   include ParamCasting
 
-  MEDICAL_PROVIDER_REQUIRED_MESSAGE = 'Medical provider information is required for submission.'
-
   # Application attributes
   attribute :annual_income, :string
   attribute :status, :string, default: 'draft'
@@ -95,6 +93,13 @@ class ApplicationForm
   # Get or create the application
   def target_application
     @target_application ||= application || Application.new
+  end
+
+  def message_locale
+    locale.presence ||
+      applicant_user&.effective_locale ||
+      current_user&.effective_locale ||
+      I18n.default_locale
   end
 
   private
@@ -260,7 +265,9 @@ class ApplicationForm
 
     return unless medical_provider_name.blank? || medical_provider_phone.blank? || medical_provider_email.blank?
 
-    errors.add(:base, MEDICAL_PROVIDER_REQUIRED_MESSAGE)
+    I18n.with_locale(message_locale) do
+      errors.add(:base, :medical_provider_required)
+    end
   end
 
   def income_collection_required?

@@ -44,6 +44,13 @@ en:
             base:
               duplicate_open_session: "This application already has an active training session."
               historical_session_reopen: "Historical training sessions cannot be reopened. Schedule a follow-up session instead."
+  activemodel:
+    errors:
+      models:
+        application_form:
+          attributes:
+            base:
+              medical_provider_required: "Medical provider information is required for submission."
   activity_history:
     labels:
       training_scheduled: "Training Scheduled"
@@ -161,7 +168,6 @@ en:
       portal_help: "You may provide an alternate contact person who can help with your application. Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
       admin_help: "Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
       admin_authorization_help: "Alternate contacts are informational only. They are not authorized application recipients and do not receive secure workflow links or workflow notifications."
-      paper_help: "A trusted person who can help with the application. Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
     dependent_contact:
       strategy_help: "Use guardian contact information when secure workflow communications for this dependent should default to the guardian. Provide separate dependent contact information when secure workflow communications may go to the dependent/applicant."
       guardian_email_help: "Secure workflow communications for the dependent will default to the guardian email path."

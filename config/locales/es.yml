@@ -15,6 +15,13 @@ es:
             base:
               duplicate_open_session: "Esta solicitud ya tiene una sesión de capacitación activa."
               historical_session_reopen: "Las sesiones de capacitación históricas no se pueden reabrir. Programe una sesión de seguimiento."
+  activemodel:
+    errors:
+      models:
+        application_form:
+          attributes:
+            base:
+              medical_provider_required: "Se requiere información del profesional certificante para enviar la solicitud."
   activity_history:
     labels:
       training_scheduled: "Capacitación programada"
@@ -124,7 +131,6 @@ es:
       portal_help: "Puede proporcionar una persona de contacto alternativa que pueda ayudar con su solicitud. Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
       admin_help: "Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
       admin_authorization_help: "Los contactos alternativos son solo informativos. No son destinatarios autorizados de la solicitud y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
-      paper_help: "Una persona de confianza que puede ayudar con la solicitud. Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
     dependent_contact:
       strategy_help: "Use la información de contacto del tutor cuando las comunicaciones seguras de flujo de trabajo para esta persona dependiente deban enviarse por defecto al tutor. Proporcione información de contacto separada de la persona dependiente cuando las comunicaciones seguras de flujo de trabajo puedan enviarse a la persona dependiente/solicitante."
       guardian_email_help: "Las comunicaciones seguras de flujo de trabajo para la persona dependiente se enviarán por defecto a la ruta de correo electrónico del tutor."

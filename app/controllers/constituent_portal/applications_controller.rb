@@ -421,9 +421,12 @@ module ConstituentPortal
     end
 
     def show_missing_provider_info_flash(form)
-      return unless form.errors[:base].include?(ApplicationForm::MEDICAL_PROVIDER_REQUIRED_MESSAGE)
+      return unless form.errors.added?(:base, :medical_provider_required)
 
-      flash.now[:alert] = ApplicationForm::MEDICAL_PROVIDER_REQUIRED_MESSAGE
+      flash.now[:alert] = I18n.t(
+        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        locale: form.message_locale
+      )
     end
 
     def determine_update_notice(original_status, application)
