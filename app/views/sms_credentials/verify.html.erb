@@ -28,12 +28,12 @@
     <div class="max-w-md mx-auto">
       <div class="bg-blue-50 p-4 rounded-lg mb-6">
         <p class="text-sm text-blue-800">
-          We've sent a 6-digit code by text to <strong><%= @credential.phone_number %></strong>.
+          We've sent a 6-digit code by text to <strong><%= @sms_phone_number %></strong>.
           Enter the code below to complete the setup.
         </p>
       </div>
 
-      <%= form_with url: confirm_sms_credential_two_factor_authentication_path(id: @credential.id), method: :post, class: "space-y-4" do |form| %>
+      <%= form_with url: @sms_confirm_path, method: :post, class: "space-y-4" do |form| %>
         <div>
           <label for="code" class="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
           <div class="mt-1 relative rounded-md shadow-sm">
@@ -53,7 +53,7 @@
         <div class="flex items-center justify-between pt-4">
           <div>
             <%= render 'shared/sms_resend',
-                resend_path: resend_sms_verification_two_factor_authentication_path,
+                resend_path: @sms_resend_path,
                 message: nil,
                 message_type: :success %>
           </div>

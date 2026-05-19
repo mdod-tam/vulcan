@@ -51,26 +51,27 @@ class TwilioVerifyService
     # @param phone_number [String] Phone number that received the code
     # @param code [String] The verification code to check
     # @return [Hash] Result with :success, :status, :valid, and :error keys
-    def check_verification(phone_number, code)
+    def check_verification(phone_number, code, verification_sid:)
       return test_mode_check(code) if test_mode?
 
       unless verify_configured?
         Rails.logger.warn('[TwilioVerify] Verify not configured, skipping verification check')
         return { success: false, error: 'Twilio Verify not configured' }
       end
+      if verification_sid.blank?
+        Rails.logger.warn('[TwilioVerify] Verification SID is required for verification checks')
+        return { success: true, status: 'invalid_input', valid: false, error: 'Verification SID is required' }
+      end
 
       phone_e164 = format_phone_to_e164(phone_number)
-      Rails.logger.info("[TwilioVerify] Checking verification for #{phone_e164}")
+      Rails.logger.info("[TwilioVerify] Checking verification for SID #{verification_sid} and phone #{phone_e164}")
 
       verification_check = client
                            .verify
                            .v2
                            .services(verify_service_sid)
                            .verification_checks
-                           .create(
-                             to: phone_e164,
-                             code: code
-                           )
+                           .create(verification_check_params(code, verification_sid: verification_sid))
 
       is_valid = verification_check.status == 'approved'
       Rails.logger.info("[TwilioVerify] Verification check result: #{verification_check.status}, Valid: #{is_valid}")
@@ -85,10 +86,11 @@ class TwilioVerifyService
       Rails.logger.error("[TwilioVerify] Verification check error: #{e.message}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
 
-      # Error 60200 means "No pending verifications found"
+      # Error 60200 is returned for invalid Verify check inputs.
       # Error 60202 means "Max check attempts reached"
-      return { success: true, status: 'expired', valid: false, error: e.message } if e.code == 60_200
+      return { success: true, status: 'invalid_input', valid: false, error: e.message } if e.code == 60_200
       return { success: true, status: 'max_attempts_reached', valid: false, error: e.message } if e.code == 60_202
+      return { success: true, status: 'not_found', valid: false, error: e.message } if read_twilio_attribute(e, :status_code) == 404
 
       { success: false, error: e.message, error_code: e.code }
     rescue StandardError => e
@@ -135,6 +137,22 @@ class TwilioVerifyService
       digits = "1#{digits}" if digits.length == 10
 
       "+#{digits}"
+    end
+
+    def verification_check_params(code, verification_sid:)
+      { verification_sid: verification_sid, code: code }
+    end
+
+    def read_twilio_attribute(object, *names)
+      names.each do |name|
+        return object.public_send(name) if object.respond_to?(name)
+        return object[name] if object.respond_to?(:key?) && object.key?(name)
+
+        string_name = name.to_s
+        return object[string_name] if object.respond_to?(:key?) && object.key?(string_name)
+      end
+
+      nil
     end
 
     # Test mode methods - used when Verify is not configured or in test environment

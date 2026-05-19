@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_19_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -297,6 +297,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
     t.index ["vendor_id"], name: "index_invoices_on_vendor_id"
   end
 
+  create_table "medical_provider_secure_request_forms", force: :cascade do |t|
+    t.bigint "application_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "expires_at", null: false
+    t.integer "kind", default: 0, null: false
+    t.string "provider_email", null: false
+    t.string "provider_name"
+    t.string "public_token_digest", null: false
+    t.string "request_batch_id", null: false
+    t.bigint "requested_by_id"
+    t.datetime "revoked_at"
+    t.datetime "sent_at", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "submitted_at"
+    t.datetime "updated_at", null: false
+    t.index ["application_id", "kind", "provider_email", "sent_at"], name: "idx_med_provider_secure_forms_on_app_kind_email_sent"
+    t.index ["application_id", "kind", "provider_email"], name: "idx_med_provider_secure_forms_one_active_provider", unique: true, where: "((status = 0) AND (kind = 0))"
+    t.index ["application_id"], name: "index_medical_provider_secure_request_forms_on_application_id"
+    t.index ["expires_at"], name: "index_med_provider_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL))"
+    t.index ["public_token_digest"], name: "idx_med_provider_secure_forms_on_public_token_digest", unique: true
+    t.index ["requested_by_id"], name: "index_medical_provider_secure_request_forms_on_requested_by_id"
+    t.check_constraint "kind = 0", name: "medical_provider_secure_request_forms_kind_check"
+    t.check_constraint "status = ANY (ARRAY[0, 1, 2])", name: "medical_provider_secure_request_forms_status_check"
+  end
+
   create_table "notifications", force: :cascade do |t|
     t.string "action"
     t.bigint "actor_id"
@@ -350,7 +375,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
     t.index ["admin_id"], name: "index_print_queue_items_on_admin_id"
     t.index ["application_id"], name: "index_print_queue_items_on_application_id"
     t.index ["constituent_id"], name: "index_print_queue_items_on_constituent_id"
-    t.check_constraint "letter_type >= 0 AND letter_type <= 11", name: "check_print_queue_items_on_letter_type"
+    t.check_constraint "letter_type >= 0 AND letter_type <= 13", name: "check_print_queue_items_on_letter_type"
   end
 
   create_table "products", force: :cascade do |t|
@@ -396,6 +421,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
     t.index ["rejection_reason_code"], name: "index_proof_reviews_on_rejection_reason_code"
     t.index ["reviewed_at"], name: "index_proof_reviews_on_reviewed_at"
     t.index ["status"], name: "index_proof_reviews_on_status"
+    t.check_constraint "submission_method IS NULL OR (submission_method = ANY (ARRAY[0, 1, 2, 3, 4]))", name: "proof_reviews_submission_method_check"
   end
 
   create_table "recovery_requests", force: :cascade do |t|
@@ -435,15 +461,40 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
     t.index ["user_id"], name: "index_role_capabilities_on_user_id"
   end
 
-  create_table "solid_cache_entries", force: :cascade do |t|
-    t.binary "key", limit: 1024, null: false
-    t.binary "value", limit: 536_870_912, null: false
+  create_table "secure_request_forms", force: :cascade do |t|
+    t.bigint "application_id", null: false
     t.datetime "created_at", null: false
-    t.integer "key_hash", limit: 8, null: false
-    t.integer "byte_size", limit: 4, null: false
-    t.index ["byte_size"], name: "index_solid_cache_entries_on_byte_size"
-    t.index ["key_hash"], name: "index_solid_cache_entries_on_key_hash", unique: true
-    t.index %w[key_hash byte_size], name: "index_solid_cache_entries_on_key_hash_and_byte_size"
+    t.datetime "expires_at", null: false
+    t.integer "kind", default: 0, null: false
+    t.string "public_token_digest", null: false
+    t.integer "recipient_channel", null: false
+    t.string "recipient_email"
+    t.bigint "recipient_id", null: false
+    t.string "recipient_phone"
+    t.string "recipient_relationship_type"
+    t.integer "recipient_role", null: false
+    t.string "request_batch_id", null: false
+    t.bigint "requested_by_id"
+    t.datetime "revoked_at"
+    t.datetime "sent_at", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "submitted_at"
+    t.datetime "updated_at", null: false
+    t.index ["application_id", "kind", "recipient_id", "sent_at"], name: "idx_secure_request_forms_on_app_kind_recipient_sent_at"
+    t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_id_proof_recipient", unique: true, where: "((status = 0) AND (kind = 1))"
+    t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_income_proof_recipient", unique: true, where: "((status = 0) AND (kind = 3))"
+    t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_provider_recipient", unique: true, where: "((status = 0) AND (kind = 0))"
+    t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_residency_proof_recipient", unique: true, where: "((status = 0) AND (kind = 2))"
+    t.index ["application_id", "kind", "request_batch_id"], name: "idx_secure_request_forms_on_app_kind_batch"
+    t.index ["application_id"], name: "index_secure_request_forms_on_application_id"
+    t.index ["expires_at"], name: "index_secure_request_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL))"
+    t.index ["public_token_digest"], name: "idx_secure_request_forms_on_public_token_digest", unique: true
+    t.index ["recipient_id"], name: "index_secure_request_forms_on_recipient_id"
+    t.index ["requested_by_id"], name: "index_secure_request_forms_on_requested_by_id"
+    t.check_constraint "kind = ANY (ARRAY[0, 1, 2, 3])", name: "secure_request_forms_kind_check"
+    t.check_constraint "recipient_channel = ANY (ARRAY[0, 1, 2])", name: "secure_request_forms_recipient_channel_check"
+    t.check_constraint "recipient_role = ANY (ARRAY[0, 1])", name: "secure_request_forms_recipient_role_check"
+    t.check_constraint "status = ANY (ARRAY[0, 1, 2])", name: "secure_request_forms_status_check"
   end
 
   create_table "sessions", force: :cascade do |t|
@@ -461,14 +512,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
   end
 
   create_table "sms_credentials", force: :cascade do |t|
-    t.text "code_digest"
-    t.datetime "code_expires_at"
     t.datetime "created_at", null: false
     t.datetime "last_sent_at", null: false
     t.string "phone_number", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.datetime "verified_at"
+    t.index ["user_id", "phone_number"], name: "index_sms_credentials_on_user_id_and_phone_number", unique: true
     t.index ["user_id"], name: "index_sms_credentials_on_user_id"
+    t.index ["verified_at"], name: "index_sms_credentials_on_verified_at"
+  end
+
+  create_table "solid_cache_entries", force: :cascade do |t|
+    t.integer "byte_size", null: false
+    t.datetime "created_at", null: false
+    t.binary "key", null: false
+    t.bigint "key_hash", null: false
+    t.binary "value", null: false
+    t.index ["byte_size"], name: "index_solid_cache_entries_on_byte_size"
+    t.index ["key_hash", "byte_size"], name: "index_solid_cache_entries_on_key_hash_and_byte_size"
+    t.index ["key_hash"], name: "index_solid_cache_entries_on_key_hash", unique: true
   end
 
   create_table "solid_queue_blocked_executions", force: :cascade do |t|
@@ -716,6 +779,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
     t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
   end
 
+  create_table "vendor_secure_request_forms", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "expires_at", null: false
+    t.integer "kind", default: 0, null: false
+    t.string "public_token_digest", null: false
+    t.string "recipient_email", null: false
+    t.string "request_batch_id", null: false
+    t.bigint "requested_by_id"
+    t.datetime "revoked_at"
+    t.datetime "sent_at", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "submitted_at"
+    t.datetime "updated_at", null: false
+    t.bigint "vendor_id", null: false
+    t.index ["expires_at"], name: "index_vendor_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL))"
+    t.index ["public_token_digest"], name: "idx_vendor_secure_forms_on_public_token_digest", unique: true
+    t.index ["requested_by_id"], name: "index_vendor_secure_request_forms_on_requested_by_id"
+    t.index ["vendor_id", "kind", "sent_at"], name: "idx_vendor_secure_forms_on_vendor_kind_sent_at"
+    t.index ["vendor_id", "kind"], name: "idx_vendor_secure_forms_one_active_w9_vendor", unique: true, where: "((status = 0) AND (kind = 0))"
+    t.index ["vendor_id"], name: "index_vendor_secure_request_forms_on_vendor_id"
+    t.check_constraint "kind = 0", name: "vendor_secure_request_forms_kind_check"
+    t.check_constraint "status = ANY (ARRAY[0, 1, 2])", name: "vendor_secure_request_forms_status_check"
+  end
+
   create_table "voucher_transaction_products", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "product_id", null: false
@@ -818,6 +905,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
   add_foreign_key "guardian_relationships", "users", column: "dependent_id"
   add_foreign_key "guardian_relationships", "users", column: "guardian_id"
   add_foreign_key "invoices", "users", column: "vendor_id"
+  add_foreign_key "medical_provider_secure_request_forms", "applications", on_delete: :cascade
+  add_foreign_key "medical_provider_secure_request_forms", "users", column: "requested_by_id"
   add_foreign_key "notifications", "users", column: "actor_id"
   add_foreign_key "notifications", "users", column: "recipient_id"
   add_foreign_key "policy_changes", "policies"
@@ -829,6 +918,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
   add_foreign_key "proof_reviews", "users", column: "admin_id"
   add_foreign_key "recovery_requests", "users"
   add_foreign_key "role_capabilities", "users"
+  add_foreign_key "secure_request_forms", "applications"
+  add_foreign_key "secure_request_forms", "users", column: "recipient_id"
+  add_foreign_key "secure_request_forms", "users", column: "requested_by_id"
   add_foreign_key "sessions", "users"
   add_foreign_key "sms_credentials", "users"
   add_foreign_key "solid_queue_blocked_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
@@ -846,6 +938,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_183855) do
   add_foreign_key "users", "users", column: "income_verified_by_id"
   add_foreign_key "users", "users", column: "medical_provider_id"
   add_foreign_key "users", "users", column: "recipient_id"
+  add_foreign_key "vendor_secure_request_forms", "users", column: "requested_by_id"
+  add_foreign_key "vendor_secure_request_forms", "users", column: "vendor_id", on_delete: :restrict
   add_foreign_key "voucher_transaction_products", "products"
   add_foreign_key "voucher_transaction_products", "voucher_transactions"
   add_foreign_key "voucher_transactions", "invoices"

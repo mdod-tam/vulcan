@@ -2,7 +2,11 @@
   <div class="bg-white rounded-lg shadow-md p-8">
     <div class="text-center mb-8">
       <h1 class="text-2xl font-bold text-gray-800">Text Message Verification</h1>
-      <p class="mt-3 text-gray-600">Enter the code sent to your phone to complete sign-in.</p>
+      <% if @sms_code_sent %>
+        <p class="mt-3 text-gray-600">Enter the code sent to your phone to complete sign-in.</p>
+      <% else %>
+        <p class="mt-3 text-gray-600">Send a text message code to complete sign-in.</p>
+      <% end %>
       <p class="mt-2 text-sm text-gray-600">You can choose another method below if you prefer.</p>
     </div>
 
@@ -15,8 +19,12 @@
         </div>
         <div class="ml-3">
           <p class="text-sm text-blue-700">
-            We've sent a 6-digit code by text to your phone number (<%= @user.sms_credentials.first.phone_number %>).
-            Enter it below to verify your identity.
+            <% if @sms_code_sent %>
+              We've sent a 6-digit code by text to your phone number (<%= @sms_credential.phone_number %>).
+              Enter it below to verify your identity.
+            <% else %>
+              Send a 6-digit code by text to your phone number (<%= @sms_credential.phone_number %>) to verify your identity.
+            <% end %>
           </p>
         </div>
       </div>
@@ -40,10 +48,20 @@
       </div>
 
     <div class="flex justify-between items-center pt-4">
-      <%= render 'shared/sms_resend',
-          resend_path: resend_sms_verification_two_factor_authentication_path,
-          message: nil,
-          message_type: :success %>
+      <% if @sms_code_sent %>
+        <%= render 'shared/sms_resend',
+            resend_path: resend_sms_verification_two_factor_authentication_path,
+            message: nil,
+            message_type: :success %>
+      <% else %>
+        <div id="sms_resend" class="flex flex-col items-start">
+          <%= link_to "Send verification code",
+              select_sms_verification_two_factor_authentication_path,
+              class: "text-indigo-600 hover:text-indigo-900 text-sm font-medium",
+              data: { turbo_method: :post } %>
+          <p class="mt-2 text-xs text-gray-500">We will send a 6-digit code to your saved phone number.</p>
+        </div>
+      <% end %>
 
       <%= form.submit "Verify", class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
     </div>
@@ -79,4 +97,3 @@
     </div>
   </div>
 </div>
-

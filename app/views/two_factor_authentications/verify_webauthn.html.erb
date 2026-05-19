@@ -104,7 +104,11 @@
       </div>
       <div>
         <% if @sms_enabled %>
-          <%= link_to "Use Text Message Instead", verify_method_two_factor_authentication_path(type: 'sms'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
+          <%= button_to "Use Text Message Instead",
+              select_sms_verification_two_factor_authentication_path,
+              method: :post,
+              form: { class: "inline" },
+              class: "text-sm text-indigo-600 hover:text-indigo-900 bg-transparent border-0 p-0 cursor-pointer" %>
         <% end %>
       </div>
     </div>

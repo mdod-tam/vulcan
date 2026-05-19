@@ -12,14 +12,14 @@ class TwoFactorCredentialsController < ApplicationController
   include TurboStreamResponseHandling
 
   before_action :authenticate_user!
+  skip_before_action :enforce_required_mfa_enrollment
 
   # GET /two_factor_authentication/credentials/webauthn/options
   def webauthn_creation_options
     # Get authenticator type from params (platform for biometric, cross-platform for security keys)
     authenticator_type = params[:authenticator_type]
 
-    # Generate WebAuthn options - using update_column to bypass validations
-    current_user.update_column(:webauthn_id, WebAuthn.generate_user_id) if current_user.webauthn_id.blank?
+    ensure_webauthn_id!
 
     # Create options based on authenticator type
     create_options = if authenticator_type == 'platform'
@@ -107,50 +107,48 @@ class TwoFactorCredentialsController < ApplicationController
     end
   end
 
-  # GET /two_factor_authentication/credentials/sms/:id/verify
-  def verify_sms_credential
-    @credential = current_user.sms_credentials.find_by(id: params[:id])
+  # GET /two_factor_authentication/credentials/sms/verify
+  def verify_pending_sms_credential
+    return redirect_to_sms_setup unless pending_sms_phone_number
 
-    unless @credential
-      handle_error_response(
-        html_redirect_path: new_credential_two_factor_authentication_path(type: 'sms'),
-        error_message: 'SMS credential not found'
-      )
-      return
-    end
-
+    set_pending_sms_view_context
     render 'sms_credentials/verify'
   end
 
-  # POST /two_factor_authentication/credentials/sms/:id/confirm
-  def confirm_sms_credential
-    @credential = find_sms_credential_for_confirmation
-    return unless @credential
+  # POST /two_factor_authentication/credentials/sms/confirm
+  def confirm_pending_sms_credential
+    phone_number = pending_sms_phone_number
+    return redirect_to_sms_setup unless phone_number
 
-    handle_sms_confirmation_result
+    if pending_sms_code_approved?(phone_number)
+      create_confirmed_sms_credential
+      redirect_to_sms_confirmation_success
+    elsif @pending_sms_challenge_cleared
+      redirect_to_sms_setup_with_message(pending_sms_error_message)
+    else
+      set_pending_sms_view_context(phone_number)
+      handle_sms_confirmation_failure(pending_sms_error_message)
+    end
   end
 
-  # POST /two_factor_authentication/credentials/sms/:id/resend
-  def resend_sms_code
-    @credential = current_user.sms_credentials.find_by(id: params[:id])
+  # POST /two_factor_authentication/credentials/sms/resend
+  def resend_pending_sms_code
+    challenge = pending_sms_setup_challenge
+    return redirect_to_sms_setup unless challenge
 
-    unless @credential
-      handle_error_response(
-        html_redirect_path: new_credential_two_factor_authentication_path(type: 'sms'),
-        error_message: 'SMS credential not found'
-      )
-      return
-    end
-
-    if send_sms_verification_code(@credential)
+    resend_result = challenge.resend!
+    if resend_result == :waiting
+      handle_pending_sms_resend_wait(challenge.resend_wait_seconds)
+    elsif resend_result == :sent
       handle_success_response(
-        html_redirect_path: verify_sms_credential_two_factor_authentication_path(id: @credential.id),
+        html_redirect_path: verify_pending_sms_credential_two_factor_authentication_path,
         html_message: 'A new verification code has been sent',
-        turbo_message: 'A new verification code has been sent'
+        turbo_message: 'A new verification code has been sent',
+        turbo_redirect_path: verify_pending_sms_credential_two_factor_authentication_path
       )
     else
       handle_error_response(
-        html_redirect_path: verify_sms_credential_two_factor_authentication_path(id: @credential.id),
+        html_redirect_path: verify_pending_sms_credential_two_factor_authentication_path,
         error_message: 'Could not send verification code'
       )
     end
@@ -167,6 +165,17 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   private
+
+  def ensure_webauthn_id!
+    return if current_user.webauthn_id.present?
+
+    # This is a server-generated WebAuthn handle, not user-entered profile data.
+    # Use a narrow column update so unrelated legacy profile validations do not
+    # block MFA enrollment before the user can secure their account.
+    # rubocop:disable Rails/SkipsModelValidations
+    current_user.update_column(:webauthn_id, WebAuthn.generate_user_id)
+    # rubocop:enable Rails/SkipsModelValidations
+  end
 
   # Find credential and name for destruction
   def find_credential_for_destruction
@@ -269,17 +278,14 @@ class TwoFactorCredentialsController < ApplicationController
 
     return render_invalid_phone_error unless valid_phone_number?(phone)
 
-    @credential = build_sms_credential(phone)
+    existing_credential = existing_sms_credential_for(phone)
+    return handle_existing_verified_sms_credential(existing_credential) if existing_credential&.verified?
 
-    if @credential.save
-      unless @credential.errors.empty?
-        Rails.logger.error("[2FA_CREDENTIAL] SMS credential save failed due to validation errors: #{@credential.errors.full_messages.join(', ')}")
-      end
+    @pending_credential = build_sms_credential(phone)
+    @pending_credential = existing_credential if existing_credential.present?
+    return handle_sms_credential_failure(@pending_credential) unless @pending_credential.valid?
 
-      handle_sms_credential_success
-    else
-      handle_sms_credential_failure
-    end
+    send_pending_sms_setup_verification(@pending_credential.phone_number)
   end
 
   def handle_totp_verification_failure
@@ -322,39 +328,52 @@ class TwoFactorCredentialsController < ApplicationController
     )
   end
 
-  def handle_sms_credential_success
-    log_sms_credential_created
-    Rails.logger.info("[2FA_CREDENTIAL] redirecting to url: #{verify_sms_credential_two_factor_authentication_path(id: @credential.id)}")
-    send_verification_or_handle_failure
+  def existing_sms_credential_for(phone)
+    normalized_phone = SmsCredential.normalize_phone_number(phone)
+    current_user.sms_credentials.find_by(phone_number: normalized_phone)
   end
 
-  def handle_sms_credential_failure
-    log_sms_credential_save_failure
+  def handle_sms_credential_failure(credential)
+    log_sms_credential_save_failure(credential)
     handle_error_response(
       html_render_action: 'sms_credentials/new',
-      error_message: "Could not set up SMS authentication: #{@credential.errors.full_messages.join(', ')}"
+      error_message: "Could not set up SMS authentication: #{credential.errors.full_messages.join(', ')}"
     )
   end
 
-  def log_sms_credential_created
-    Rails.logger.info("[2FA_CREDENTIAL] SMS credential created (pending verification) for user #{current_user.id}, credential ID: #{@credential.id}")
+  def handle_existing_verified_sms_credential(_credential)
+    handle_error_response(
+      html_render_action: 'sms_credentials/new',
+      error_message: 'Could not set up SMS authentication: Phone number is already registered'
+    )
   end
 
-  def send_verification_or_handle_failure
-    Rails.logger.info("[SMS_DEBUG] About to send SMS for credential #{@credential.id}")
-    sms_result = send_sms_verification_code(@credential)
-    Rails.logger.info("[SMS_DEBUG] SMS send result: #{sms_result}")
+  def send_pending_sms_setup_verification(phone_number)
+    Rails.logger.info("[2FA_CREDENTIAL] SMS credential setup pending verification for user #{current_user.id}")
 
-    if sms_result
-      Rails.logger.info('[SMS_DEBUG] SMS sent successfully, redirecting to verification')
+    challenge = pending_sms_setup_challenge(phone_number)
+    case challenge.prepare!
+    when :active
       handle_success_response(
-        html_redirect_path: verify_sms_credential_two_factor_authentication_path(id: @credential.id),
+        html_redirect_path: verify_pending_sms_credential_two_factor_authentication_path,
+        html_message: 'Enter the verification code we sent.',
+        turbo_message: 'Enter the verification code we sent.',
+        turbo_redirect_path: verify_pending_sms_credential_two_factor_authentication_path
+      )
+    when :sent
+      handle_success_response(
+        html_redirect_path: verify_pending_sms_credential_two_factor_authentication_path,
         html_message: 'Verification code sent.',
         turbo_message: 'Verification code sent.',
-        turbo_redirect_path: verify_sms_credential_two_factor_authentication_path(id: @credential.id)
+        turbo_redirect_path: verify_pending_sms_credential_two_factor_authentication_path
+      )
+    when :sending
+      handle_success_response(
+        html_redirect_path: new_credential_two_factor_authentication_path(type: 'sms'),
+        html_message: TwoFactor::PendingSmsSetupChallenge::DUPLICATE_SEND_MESSAGE,
+        turbo_message: TwoFactor::PendingSmsSetupChallenge::DUPLICATE_SEND_MESSAGE
       )
     else
-      Rails.logger.error('[SMS_DEBUG] SMS sending failed, staying on form')
       log_sms_send_failure
       handle_error_response(
         html_render_action: 'sms_credentials/new',
@@ -364,11 +383,11 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def log_sms_send_failure
-    Rails.logger.error("[2FA_CREDENTIAL] Failed to send SMS verification code during setup for user #{current_user.id}, credential ID: #{@credential.id}")
+    Rails.logger.error("[2FA_CREDENTIAL] Failed to send SMS verification code during setup for user #{current_user.id}")
   end
 
-  def log_sms_credential_save_failure
-    Rails.logger.warn("[2FA_CREDENTIAL] Failed to save SMS credential for user #{current_user.id}: #{@credential.errors.full_messages.join(', ')}")
+  def log_sms_credential_save_failure(credential)
+    Rails.logger.warn("[2FA_CREDENTIAL] Failed to build SMS credential for user #{current_user.id}: #{credential.errors.full_messages.join(', ')}")
   end
 
   # TOTP verification failure helper methods
@@ -437,39 +456,6 @@ class TwoFactorCredentialsController < ApplicationController
     Rails.logger.info("[2FA_CREDENTIAL] TOTP credential created for user #{current_user.id}, credential ID: #{credential.id}")
   end
 
-  # SMS confirmation helper methods
-  def find_sms_credential_for_confirmation
-    credential = current_user.sms_credentials.find_by(id: params[:id])
-    unless credential
-      handle_error_response(
-        html_redirect_path: new_credential_two_factor_authentication_path(type: 'sms'),
-        error_message: 'SMS credential not found'
-      )
-      return nil
-    end
-    credential
-  end
-
-  def handle_sms_confirmation_result
-    code = params[:code]
-
-    # SMS setup verification uses the credential's own verify_code method
-    # This differs from login verification which uses the TwoFactorVerification concern
-    # During setup, the user is already authenticated, so we verify directly against the credential
-    if @credential.verify_code(code)
-      respond_to do |format|
-        format.html { redirect_to_sms_confirmation_success }
-        format.turbo_stream { redirect_to_sms_confirmation_success }
-      end
-    else
-      message = TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
-      respond_to do |format|
-        format.html { handle_sms_confirmation_failure(message) }
-        format.turbo_stream { handle_sms_confirmation_failure(message) }
-      end
-    end
-  end
-
   def redirect_to_sms_confirmation_success
     handle_success_response(
       html_redirect_path: credential_success_two_factor_authentication_path(type: 'sms'),
@@ -482,6 +468,85 @@ class TwoFactorCredentialsController < ApplicationController
     handle_error_response(
       html_render_action: 'sms_credentials/verify',
       error_message: message
+    )
+  end
+
+  def pending_sms_code_approved?(phone_number)
+    challenge = pending_sms_setup_challenge(phone_number)
+    result = challenge.check(params[:code])
+    @pending_sms_error_message = sms_setup_error_message(result)
+    clear_pending_sms_challenge_if_terminal(challenge, result)
+    result[:success] && result[:status] == 'approved'
+  end
+
+  def sms_setup_error_message(result)
+    return sms_verification_error_message(result[:status]) if result[:success]
+
+    TwoFactorAuth::ERROR_MESSAGES[:verification_service_unavailable]
+  end
+
+  def pending_sms_error_message
+    @pending_sms_error_message || TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
+  end
+
+  def clear_pending_sms_challenge_if_terminal(challenge, result)
+    return unless result[:success]
+    return if result[:status] == 'approved'
+    return unless challenge.terminal_status?(result[:status])
+
+    challenge.clear!
+    @pending_sms_challenge_cleared = true
+  end
+
+  def create_confirmed_sms_credential
+    phone_number = pending_sms_phone_number
+    credential = current_user.with_lock do
+      current_user.sms_credentials.find_or_initialize_by(phone_number: phone_number).tap do |sms_credential|
+        sms_credential.last_sent_at ||= Time.current
+        sms_credential.verified_at ||= Time.current
+        sms_credential.save! if sms_credential.new_record? || sms_credential.changed?
+      end
+    end
+
+    Rails.logger.info("[2FA_CREDENTIAL] SMS credential confirmed for user #{current_user.id}, credential ID: #{credential.id}")
+    pending_sms_setup_challenge(phone_number)&.clear!
+    credential
+  end
+
+  def pending_sms_phone_number
+    TwoFactor::PendingSmsSetupChallenge.session_phone_number(session)
+  end
+
+  def pending_sms_setup_challenge(phone_number = pending_sms_phone_number)
+    return if phone_number.blank?
+
+    TwoFactor::PendingSmsSetupChallenge.new(
+      session: session,
+      user: current_user,
+      phone_number: phone_number
+    )
+  end
+
+  def set_pending_sms_view_context(phone_number = pending_sms_phone_number)
+    @sms_phone_number = phone_number
+    @sms_confirm_path = confirm_pending_sms_credential_two_factor_authentication_path
+    @sms_resend_path = resend_pending_sms_code_two_factor_authentication_path
+  end
+
+  def redirect_to_sms_setup
+    redirect_to new_credential_two_factor_authentication_path(type: 'sms'),
+                alert: 'Please enter your phone number to continue.'
+  end
+
+  def redirect_to_sms_setup_with_message(message)
+    redirect_to new_credential_two_factor_authentication_path(type: 'sms'),
+                alert: message
+  end
+
+  def handle_pending_sms_resend_wait(wait_seconds)
+    handle_error_response(
+      html_redirect_path: verify_pending_sms_credential_two_factor_authentication_path,
+      error_message: sms_resend_wait_message(wait_seconds)
     )
   end
 

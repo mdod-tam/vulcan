@@ -39,13 +39,53 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       password_confirmation: 'NewValid*Password123'
     }
 
-    assert_redirected_to sign_in_path
+    assert_redirected_to constituent_portal_dashboard_path
     follow_redirect!
     assert_equal 'Password successfully updated.', flash[:notice]
 
     # Verify password was actually changed
     @user.reload
     assert_not_equal @original_password_digest, @user.password_digest
+  end
+
+  def test_should_redirect_turbo_stream_password_update_to_dashboard
+    patch password_path,
+          params: {
+            password_challenge: 'password123',
+            password: 'NewValid*Password123',
+            password_confirmation: 'NewValid*Password123'
+          },
+          headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
+
+    assert_redirected_to constituent_portal_dashboard_path
+    assert_response :see_other
+  end
+
+  def test_should_redirect_forced_password_change_without_mfa_to_welcome
+    @user.update!(force_password_change: true)
+
+    patch password_path, params: {
+      password_challenge: 'password123',
+      password: 'NewValid*Password123',
+      password_confirmation: 'NewValid*Password123'
+    }
+
+    assert_redirected_to welcome_path
+    assert_not @user.reload.force_password_change?
+  end
+
+  def test_should_redirect_required_role_without_mfa_to_setup_after_password_update
+    sign_out
+    admin = create(:admin, password: 'password123', password_confirmation: 'password123')
+    sign_in_for_integration_test(admin)
+
+    patch password_path, params: {
+      password_challenge: 'password123',
+      password: 'NewValid*Password123',
+      password_confirmation: 'NewValid*Password123'
+    }
+
+    assert_redirected_to setup_two_factor_authentication_path
   end
 
   def test_should_not_update_password_with_wrong_current_password

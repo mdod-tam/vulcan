@@ -30,7 +30,7 @@ class RegistrationsController < ApplicationController
       send_registration_confirmation
 
       @user.reload
-      redirect_to _dashboard_for(@user), notice: 'Account created successfully. Welcome!'
+      redirect_to welcome_path, notice: 'Account created successfully. Welcome!'
     else
       render :new, status: :unprocessable_content
     end

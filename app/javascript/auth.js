@@ -14,9 +14,9 @@ const ENDPOINTS = {
   create: type => `/two_factor_authentication/credentials/${type}`,
   success: type => `/two_factor_authentication/credentials/${type}/success`,
   destroy: (type, id) => `/two_factor_authentication/credentials/${type}/${id}`,
-  smsVerify: id => `/two_factor_authentication/credentials/sms/${id}/verify`,
-  smsConfirm: id => `/two_factor_authentication/credentials/sms/${id}/confirm`,
-  smsResend: id => `/two_factor_authentication/credentials/sms/${id}/resend`
+  smsVerify: () => "/two_factor_authentication/credentials/sms/verify",
+  smsConfirm: () => "/two_factor_authentication/credentials/sms/confirm",
+  smsResend: () => "/two_factor_authentication/credentials/sms/resend"
 };
 
 // Simple centralized logger

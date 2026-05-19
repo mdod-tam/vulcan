@@ -16,7 +16,8 @@ class TwoFactorAuthenticationsController < ApplicationController
   before_action :ensure_two_factor_initiated_unless_skipped, except: %i[setup resend_sms_verification]
   before_action :authenticate_user!, only: %i[setup]
   skip_before_action :authenticate_user!,
-                     only: %i[verify verify_method process_verification verification_options setup resend_sms_verification]
+                     only: %i[verify verify_method process_verification verification_options setup select_sms_verification resend_sms_verification]
+  skip_before_action :enforce_required_mfa_enrollment
 
   # GET /two_factor_authentication/setup
   def setup
@@ -46,7 +47,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     # Set available methods
     @webauthn_enabled = @user.webauthn_credentials.exists?
     @totp_enabled = @user.totp_credentials.exists?
-    @sms_enabled = @user.sms_credentials.exists?
+    @sms_enabled = @user.sms_credentials.verified.exists?
 
     # If only one method is available, redirect directly to it
     available_methods = [@webauthn_enabled, @totp_enabled, @sms_enabled].count(true)
@@ -65,34 +66,7 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   # POST /two_factor_authentication/verify_code
   def verify_code
-    # Get the method and code from params
-    method = params[:method]
-    code = params[:code]
-    result = false
-
-    # Find the user in the 2FA flow
-    @user = find_user_for_two_factor
-    unless @user
-      redirect_to sign_in_path, alert: 'Session expired. Please sign in again.'
-      return
-    end
-
-    # Verify based on method type
-    if method == 'totp'
-      result, = verify_totp_credential(code)
-    elsif method == 'sms'
-      result, = verify_sms_credential(code, nil)
-    end
-
-    if result
-      # Call the method from ApplicationController to finalize the session
-      complete_two_factor_authentication(@user)
-    else
-      handle_error_response(
-        html_render_action: :verify,
-        error_message: TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
-      )
-    end
+    process_verification_attempt(params[:method], params)
   end
 
   # Unified methods
@@ -107,7 +81,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     # Set instance variables needed by the views
     @webauthn_enabled = @user.webauthn_credentials.exists?
     @totp_enabled = @user.totp_credentials.exists?
-    @sms_enabled = @user.sms_credentials.exists?
+    @sms_enabled = @user.sms_credentials.verified.exists?
     # Determine if platform authenticator is available (example logic, adjust as needed)
     @platform_key_available = @user.webauthn_credentials.exists?(authenticator_type: 'platform')
 
@@ -164,9 +138,9 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   # Handle SMS verification specifically
   def handle_sms_verification
-    if @user.sms_credentials.exists?
-      credential = @user.sms_credentials.first
-      send_sms_verification_code_for_user(credential, @user)
+    if @user.sms_credentials.verified.exists?
+      @sms_credential = @user.sms_credentials.verified.first
+      @sms_code_sent = active_sms_challenge_for?(@sms_credential)
       render 'verify_sms', layout: 'application'
     else
       handle_error_response(
@@ -178,11 +152,16 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   # POST /two_factor_authentication/verify/:type
   def process_verification
-    @type = params[:type]
+    process_verification_attempt(params[:type], get_verification_params(params[:type]))
+  end
 
-    verification_params = get_verification_params(@type)
-
-    success, message = verify_credential(@type, verification_params)
+  def process_verification_attempt(type, verification_params)
+    @type = type
+    success, message = if @type.present?
+                         verify_credential(@type, verification_params)
+                       else
+                         [false, 'Invalid credential type']
+                       end
 
     respond_to do |format|
       if success
@@ -193,15 +172,47 @@ class TwoFactorAuthenticationsController < ApplicationController
     end
   end
 
+  # POST /two_factor_authentication/verify/sms/select
+  def select_sms_verification
+    @user = find_user_for_two_factor
+    return redirect_to sign_in_path, status: :see_other unless @user
+
+    credential = resolve_sms_credential_for_resend(@user)
+    return redirect_to verify_two_factor_authentication_path, alert: 'SMS verification not available', status: :see_other unless credential
+
+    sms_challenge_result = ensure_sms_challenge_for_user(credential, @user)
+    case sms_challenge_result
+    when :active
+      redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
+                  notice: 'Enter the verification code we sent.',
+                  status: :see_other
+    when :sent
+      redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
+                  notice: 'A verification code has been sent.',
+                  status: :see_other
+    when :sending
+      redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
+                  notice: TwoFactor::SmsLoginChallenge::DUPLICATE_SEND_MESSAGE,
+                  status: :see_other
+    else
+      redirect_to verify_two_factor_authentication_path,
+                  alert: 'Could not send verification code.',
+                  status: :see_other
+    end
+  end
+
   # POST /two_factor_authentication/verify/sms/resend
   def resend_sms_verification
-    @user = current_user || find_user_for_two_factor
+    @user = find_user_for_two_factor
     return redirect_to sign_in_path unless @user
 
     credential = resolve_sms_credential_for_resend(@user)
     return handle_error_response(error_message: 'SMS verification not available') unless credential
 
-    if send_sms_verification_code_for_user(credential, @user)
+    sms_challenge_result = resend_sms_challenge_for_user(credential, @user)
+    if sms_challenge_result == :waiting
+      render_resend_wait(credential, sms_resend_wait_seconds_for(credential))
+    elsif sms_challenge_result == :sent
       render_resend_success(credential)
     else
       render_resend_failure(credential)
@@ -243,7 +254,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   def set_credential_availability
     @has_webauthn = @user.webauthn_credentials.exists?
     @has_totp = @user.totp_credentials.exists?
-    @has_sms = @user.sms_credentials.exists?
+    @has_sms = @user.sms_credentials.verified.exists?
   end
 
   # Check if user has any existing 2FA credentials
@@ -354,7 +365,11 @@ class TwoFactorAuthenticationsController < ApplicationController
     @user = find_user_for_two_factor
     @webauthn_enabled = @user.webauthn_credentials.exists?
     @totp_enabled = @user.totp_credentials.exists?
-    @sms_enabled = @user.sms_credentials.exists?
+    @sms_enabled = @user.sms_credentials.verified.exists?
+    return unless @type == 'sms' && @sms_enabled
+
+    @sms_credential = resolve_sms_credential_for_resend(@user)
+    @sms_code_sent = @sms_credential.present? && active_sms_challenge_for?(@sms_credential)
   end
 
   # Determine appropriate HTTP status code based on error message
@@ -410,14 +425,30 @@ class TwoFactorAuthenticationsController < ApplicationController
   def resolve_sms_credential_for_resend(user)
     challenge_data = retrieve_challenge
     credential_id = challenge_data[:metadata]&.dig(:credential_id)
-    return user.sms_credentials.find_by(id: credential_id) if credential_id.present?
+    return user.sms_credentials.verified.find_by(id: credential_id) if credential_id.present?
 
-    user.sms_credentials.first
+    user.sms_credentials.verified.first
   end
 
-  def resend_sms_redirect_path(credential)
-    return verify_sms_credential_two_factor_authentication_path(id: credential.id) if current_user
+  def render_resend_wait(credential, wait_seconds)
+    message = sms_resend_wait_message(wait_seconds)
+    respond_to do |format|
+      format.html { redirect_to resend_sms_redirect_path(credential), alert: message }
+      format.turbo_stream do
+        render turbo_stream: turbo_stream.replace(
+          'sms_resend',
+          partial: 'shared/sms_resend',
+          locals: {
+            resend_path: resend_sms_verification_two_factor_authentication_path,
+            message: message,
+            message_type: :error
+          }
+        )
+      end
+    end
+  end
 
+  def resend_sms_redirect_path(_credential)
     verify_method_two_factor_authentication_path(type: 'sms')
   end
 

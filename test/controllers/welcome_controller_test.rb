@@ -41,6 +41,18 @@ class WelcomeControllerTest < ActionDispatch::IntegrationTest
     assert_select 'h1', text: /Welcome to Maryland Accessible Telecommunications/
   end
 
+  test 'should redirect to dashboard if user already has totp credentials' do
+    @user.totp_credentials.create!(
+      secret: ROTP::Base32.random_base32,
+      nickname: 'Authenticator App',
+      last_used_at: Time.current
+    )
+
+    get welcome_path
+
+    assert_redirected_to constituent_portal_dashboard_path
+  end
+
   test 'redirects to sign in when not authenticated' do
     sign_out
     get welcome_path

@@ -75,13 +75,11 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   def verify_sms_credential(code, credential_id)
     return [false, 'No code provided'] if code.blank?
 
-    # SMS login verification resolves the credential from 2FA session context
-    # This method is used during login when current_user is nil and user data comes from session
-    credential_id = resolve_sms_credential_id(credential_id)
-    return [false, 'No credential found'] if credential_id.blank?
+    user = find_user_for_two_factor
+    return [false, 'User session not found'] unless user
 
-    credential = find_sms_credential(credential_id)
-    return [false, 'Credential not found'] if credential.nil?
+    credential = sms_credential_from_active_challenge(user, credential_id)
+    return [false, TwoFactorAuth::ERROR_MESSAGES[:expired_code]] unless credential
 
     verify_sms_code(code, credential)
   end
@@ -136,39 +134,32 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     [false, TwoFactorAuth::ERROR_MESSAGES[:invalid_code]]
   end
 
-  # SMS specific verification helpers
-  def resolve_sms_credential_id(credential_id)
-    # SMS login flow stores credential_id in challenge metadata during code generation
-    # When no challenge data exists (e.g., in tests), fall back to the user's first SMS credential
-    return credential_id if credential_id.present?
-
+  def sms_credential_from_active_challenge(user, submitted_credential_id)
     challenge_data = retrieve_challenge
-    credential_id_from_challenge = challenge_data[:metadata]&.dig(:credential_id)
-    return credential_id_from_challenge if credential_id_from_challenge.present?
+    metadata = (challenge_data[:metadata] || {}).with_indifferent_access
+    return unless challenge_data[:type].to_s == 'sms'
+    return if submitted_credential_id.present? && metadata[:credential_id].to_s != submitted_credential_id.to_s
 
-    # If no challenge data (e.g., in tests), use the user's first SMS credential
-    user_for_2fa = find_user_for_two_factor
-    sms_credentials = user_for_2fa&.sms_credentials
-    sms_credentials&.first&.id
-  end
+    credential = user.sms_credentials.verified.find_by(id: metadata[:credential_id])
+    return unless credential
+    return unless sms_login_challenge(credential).active?
 
-  def find_sms_credential(credential_id)
-    user_for_2fa = find_user_for_two_factor
-    return nil unless user_for_2fa
-
-    user_for_2fa.sms_credentials.find_by(id: credential_id)
+    credential
   end
 
   def verify_sms_code(code, credential)
-    # Use Twilio Verify API to check the code
-    result = TwilioVerifyService.check_verification(credential.phone_number, code)
+    challenge = sms_login_challenge(credential)
+    result = challenge.check(code)
+    return [false, TwoFactorAuth::ERROR_MESSAGES[:expired_code]] unless result
+
     user_for_2fa = find_user_for_two_factor
 
     if result[:success] && result[:status] == 'approved'
-      clear_challenge
+      challenge.clear!
       log_verification_success(user_for_2fa.id, :sms, credential_id: credential.id)
       [true, 'Verification successful'] # Let the controller handle completion
     elsif result[:success]
+      challenge.clear! if challenge.terminal_status?(result[:status])
       error_msg = result[:error] || 'Invalid code'
       log_verification_failure(user_for_2fa.id, :sms, error_msg, credential_id: credential.id)
       [false, sms_verification_error_message(result[:status])]
@@ -181,7 +172,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
 
   def sms_verification_error_message(status)
     case status
-    when 'expired'
+    when 'expired', 'not_found'
       TwoFactorAuth::ERROR_MESSAGES[:expired_code]
     when 'max_attempts_reached'
       TwoFactorAuth::ERROR_MESSAGES[:max_attempts_reached]
@@ -271,77 +262,28 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     )
   end
 
-  # Send an SMS verification code using Twilio Verify API
-  def send_sms_verification_code(credential = nil)
-    # If no credential is provided, use current user's first SMS credential
-    credential ||= current_user&.sms_credentials&.first
-    return false unless credential
-
-    # Use Twilio Verify API to send verification code
-    result = TwilioVerifyService.send_verification(credential.phone_number)
-
-    if result[:success]
-      # Update credential with timestamp
-      credential.update!(
-        last_sent_at: Time.current,
-        code_expires_at: 10.minutes.from_now
-      )
-
-      # Store challenge data with verification SID
-      store_challenge(
-        :sms,
-        result[:verification_sid],
-        { credential_id: credential.id, phone_number: credential.phone_number }
-      )
-
-      user_id = credential.user_id
-      Rails.logger.info("[SMS] Sent verification code to user #{user_id} via Twilio Verify")
-      true
-    else
-      Rails.logger.error("[SMS] Failed to send verification: #{result[:error]}")
-      flash.now[:alert] = 'Could not send verification code'
-      false
-    end
-  rescue StandardError => e
-    Rails.logger.error("[SMS] Error: #{e.message}")
-    Rails.logger.error("[SMS] Error backtrace: #{e.backtrace.first(5).join("\n")}")
-    flash.now[:alert] = 'Could not send verification code'
-    false
+  def active_sms_challenge_for?(credential)
+    sms_login_challenge(credential).active?
   end
-  # rubocop:enable Metrics/AbcSize
 
-  # Send SMS verification code for a specific user (used in 2FA flow)
-  def send_sms_verification_code_for_user(credential, user)
-    return false unless credential && user
+  def ensure_sms_challenge_for_user(credential, user)
+    sms_login_challenge(credential).ensure_for!(user)
+  end
 
-    # Use Twilio Verify API to send verification code
-    result = TwilioVerifyService.send_verification(credential.phone_number)
+  def resend_sms_challenge_for_user(credential, user)
+    sms_login_challenge(credential).resend_for!(user)
+  end
 
-    if result[:success]
-      # Update credential with timestamp
-      credential.update!(
-        last_sent_at: Time.current,
-        code_expires_at: 10.minutes.from_now
-      )
+  def sms_resend_wait_seconds_for(credential)
+    sms_login_challenge(credential).resend_wait_seconds
+  end
 
-      # Store challenge data with verification SID
-      store_challenge(
-        :sms,
-        result[:verification_sid],
-        { credential_id: credential.id, phone_number: credential.phone_number }
-      )
+  def sms_resend_wait_message(wait_seconds)
+    "Please wait #{wait_seconds} seconds before requesting another code."
+  end
 
-      Rails.logger.info("[SMS] Sent verification code to user #{user.id} via Twilio Verify")
-      true
-    else
-      Rails.logger.error("[SMS] Failed to send verification: #{result[:error]}")
-      flash.now[:alert] = 'Could not send verification code'
-      false
-    end
-  rescue StandardError => e
-    Rails.logger.error("[SMS] Error: #{e.message}")
-    flash.now[:alert] = 'Could not send verification code'
-    false
+  def sms_login_challenge(credential)
+    TwoFactor::SmsLoginChallenge.new(session: session, credential: credential)
   end
 
   # WebAuthn credential creation options for platform authenticators (biometrics)

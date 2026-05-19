@@ -17,10 +17,10 @@
           <div aria-hidden="true" class="w-12 sm:w-16 h-1 bg-indigo-600"></div>
           <li class="flex flex-col items-center" aria-current="step">
             <span class="sr-only">Current step: Security Setup</span>
-            <div aria-hidden="true" class="w-8 h-8 rounded-full <%= @has_webauthn ? 'bg-indigo-600' : 'bg-gray-200' %> flex items-center justify-center <%= @has_webauthn ? 'text-white' : 'text-gray-600' %> font-semibold">2</div>
-            <span class="mt-2 text-sm <%= @has_webauthn ? 'text-indigo-600' : 'text-gray-600' %> font-medium">Security Setup</span>
+            <div aria-hidden="true" class="w-8 h-8 rounded-full <%= @has_second_factor ? 'bg-indigo-600' : 'bg-gray-200' %> flex items-center justify-center <%= @has_second_factor ? 'text-white' : 'text-gray-600' %> font-semibold">2</div>
+            <span class="mt-2 text-sm <%= @has_second_factor ? 'text-indigo-600' : 'text-gray-600' %> font-medium">Security Setup</span>
           </li>
-          <div aria-hidden="true" class="w-12 sm:w-16 h-1 <%= @has_webauthn ? 'bg-indigo-600' : 'bg-gray-200' %>"></div>
+          <div aria-hidden="true" class="w-12 sm:w-16 h-1 <%= @has_second_factor ? 'bg-indigo-600' : 'bg-gray-200' %>"></div>
           <li class="flex flex-col items-center">
             <span class="sr-only">Step 3 of 3: Start Application</span>
             <div aria-hidden="true" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">3</div>
@@ -33,7 +33,7 @@
         <h2 id="secure-account-heading" class="text-xl font-semibold text-gray-800 mb-4">Secure Your Account</h2>
         <div class="flex items-start">
           <div class="flex-shrink-0 mt-1" aria-hidden="true">
-            <% if @has_webauthn || @has_totp || @has_sms %>
+            <% if @has_second_factor %>
               <svg aria-hidden="true" class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <title>Success icon</title>
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
@@ -46,7 +46,7 @@
             <% end %>
           </div>
           <div class="ml-3 flex-grow">
-            <% if @has_webauthn || @has_totp || @has_sms %>
+            <% if @has_second_factor %>
               <h3 class="text-lg font-medium text-gray-800">Two-Factor Authentication Enabled</h3>
               <p class="mt-1 text-gray-600">Your account is protected with two-factor authentication. This provides an extra layer of security to keep your account safe.</p>
               <div class="mt-4">
@@ -80,12 +80,12 @@
 
       <nav aria-label="Actions" class="flex justify-between items-center">
         <div>
-          <% unless @has_webauthn %>
+          <% unless @has_second_factor %>
             <p class="mt-1 text-xs text-gray-500">You can add a security key later in your account settings.</p>
           <% end %>
         </div>
         <div>
-          <% if @has_webauthn %>
+          <% if @has_second_factor %>
             <a href="<%= root_path %>" class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">Continue to Dashboard</a>
           <% else %>
             <a href="<%= root_path %>" class="inline-block bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition">Skip and Continue to Dashboard</a>

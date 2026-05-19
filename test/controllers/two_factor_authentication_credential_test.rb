@@ -21,10 +21,14 @@ require 'support/webauthn_test_helper'
 # Note: These tests use FactoryBot instead of fixtures to create test users and credentials,
 # ensuring test consistency and better reflecting real application usage patterns.
 class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
+  include ActiveSupport::Testing::TimeHelpers
   include WebauthnTestHelper
   include AuthenticationTestHelper
 
   setup do
+    @original_cache_store = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
     # Create a constituent user with FactoryBot
     @user = create(:constituent, email: 'credential_test_user@example.com')
 
@@ -38,6 +42,10 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     # Authenticate user using standardized method from AuthenticationTestHelper
     # This replaces the custom sign_in_user method in the original test
     sign_in_for_integration_test(@user)
+  end
+
+  teardown do
+    Rails.cache = @original_cache_store if @original_cache_store
   end
 
   test 'should get new credential form' do
@@ -94,6 +102,99 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     # Step 3: Verify the challenge is properly stored in the session for verification
     assert session[TwoFactorAuth::SESSION_KEYS[:challenge]].present?,
            'Creation challenge should be stored in session'
+  end
+
+  test 'sending SMS setup code does not create credential' do
+    assert_no_difference('SmsCredential.count') do
+      post create_credential_two_factor_authentication_path(type: 'sms'), params: {
+        phone_number: '555-123-4567'
+      }
+    end
+
+    assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    assert_equal :sms_setup, session[TwoFactorAuth::SESSION_KEYS[:type]]
+    metadata = session[TwoFactorAuth::SESSION_KEYS[:metadata]]
+    assert_equal '555-123-4567', metadata[:phone_number] || metadata['phone_number']
+  end
+
+  test 'sending SMS setup code for existing phone does not create duplicate' do
+    @user.sms_credentials.create!(
+      phone_number: '555-123-4567',
+      last_sent_at: Time.current,
+      verified_at: Time.current
+    )
+    TwilioVerifyService.expects(:send_verification).never
+
+    assert_no_difference('SmsCredential.count') do
+      post create_credential_two_factor_authentication_path(type: 'sms'), params: {
+        phone_number: '(555) 123-4567'
+      }
+    end
+
+    assert_response :unprocessable_content
+    assert_select 'h1', text: 'Set up Text Message Verification'
+  end
+
+  test 'successful SMS setup confirmation persists credential only after approval' do
+    assert_no_difference('SmsCredential.count') do
+      post create_credential_two_factor_authentication_path(type: 'sms'), params: {
+        phone_number: '555-123-4567'
+      }
+    end
+
+    assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    @session_token = nil
+
+    assert_difference('SmsCredential.count', 1) do
+      post confirm_pending_sms_credential_two_factor_authentication_path, params: {
+        code: '123456'
+      }
+    end
+
+    assert_redirected_to credential_success_two_factor_authentication_path(type: 'sms')
+    credential = @user.reload.sms_credentials.first
+    assert_equal '555-123-4567', credential.phone_number
+    assert credential.verified_at.present?
+  end
+
+  test 'invalid SMS setup confirmation does not create credential' do
+    post create_credential_two_factor_authentication_path(type: 'sms'), params: {
+      phone_number: '555-123-4567'
+    }
+    assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    @session_token = nil
+
+    assert_no_difference('SmsCredential.count') do
+      post confirm_pending_sms_credential_two_factor_authentication_path, params: {
+        code: '000000'
+      }
+    end
+
+    assert_response :unprocessable_content
+    assert_select 'h1', text: 'Text Message Verification'
+  end
+
+  test 'successful SMS setup confirmation marks an existing unverified row verified' do
+    @user.sms_credentials.create!(
+      phone_number: '555-123-4567',
+      last_sent_at: 1.day.ago,
+      verified_at: nil
+    )
+
+    post create_credential_two_factor_authentication_path(type: 'sms'), params: {
+      phone_number: '555-123-4567'
+    }
+    assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    @session_token = nil
+
+    assert_no_difference('SmsCredential.count') do
+      post confirm_pending_sms_credential_two_factor_authentication_path, params: {
+        code: '123456'
+      }
+    end
+
+    credential = @user.reload.sms_credentials.find_by!(phone_number: '555-123-4567')
+    assert credential.verified_at.present?
   end
 
   test 'should handle invalid attestation' do
