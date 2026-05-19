@@ -199,6 +199,9 @@ module ConstituentPortal
             cognition_disability: checkbox_params(false),
             residency_proof: @valid_image,
             income_proof: @valid_pdf,
+            terms_accepted: checkbox_params(true),
+            information_verified: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true),
             medical_provider_attributes: {
               name: 'Dr. Smith',
               phone: '2025551234',
@@ -331,6 +334,9 @@ module ConstituentPortal
             cognition_disability: checkbox_params(false),
             residency_proof: @valid_image, # Assuming proofs are needed for submission
             income_proof: @valid_pdf,
+            terms_accepted: checkbox_params(true),
+            information_verified: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true),
             medical_provider_attributes: {
               name: 'Dr. Child',
               phone: '2025551212',
@@ -379,7 +385,10 @@ module ConstituentPortal
             vision_disability: checkbox_params(false),
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
-            cognition_disability: checkbox_params(false)
+            cognition_disability: checkbox_params(false),
+            terms_accepted: checkbox_params(true),
+            information_verified: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true),
           },
           medical_provider: {
             name: 'Dr. Portal Locale',
@@ -757,7 +766,10 @@ module ConstituentPortal
             physical_address_2: 'Apt 2B',
             city: 'baltimore',
             state: 'MD',
-            zip_code: '21201'
+            zip_code: '21201',
+            terms_accepted: checkbox_params(true),
+            information_verified: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true),
           },
           medical_provider_attributes: {
             name: 'Dr. Smith',
@@ -818,6 +830,9 @@ module ConstituentPortal
             zip_code: '20901',
             residency_proof: @valid_image,
             income_proof: @valid_pdf,
+            terms_accepted: checkbox_params(true),
+            information_verified: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true),
             medical_provider_attributes: {
               name: 'Dr. Johnson',
               phone: '3015551234',
@@ -888,6 +903,9 @@ module ConstituentPortal
             zip_code: '20850',
             residency_proof: @valid_image,
             income_proof: @valid_pdf,
+            terms_accepted: checkbox_params(true),
+            information_verified: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true),
             medical_provider_attributes: {
               name: 'Dr. Child',
               phone: '2025551212',
