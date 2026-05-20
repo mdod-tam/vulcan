@@ -1,24 +1,134 @@
-<div class="container mx-auto px-4 py-8">
-  <h1 class="text-2xl font-bold mb-6">
-    <%= params[:action].capitalize %> Evaluations
-  </h1>
-
-  <% if @evaluations.any? %>
-    <ul class="space-y-4">
-      <% @evaluations.each do |evaluation| %>
-        <li class="bg-white shadow rounded-lg p-4">
-          <h2 class="text-xl font-semibold">
-            <%= link_to evaluation.constituent.full_name, evaluators_evaluation_path(evaluation) %>
-          </h2>
-          <p>Status: <%= evaluation.status.capitalize %></p>
-          <p>Type: <%= evaluation.evaluation_type.capitalize %></p>
-          <p> Evaluation Date: <%= evaluation.evaluation_date&.strftime("%B %d, %Y") || "No evaluation date" %> </p>
-
-          <!-- Add more fields as necessary -->
-        </li>
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
+<div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
+  <!-- Header with context-aware title -->
+  <div class="flex justify-between items-center mb-6">
+    <h1 id="evaluations-list-heading" class="text-2xl font-bold">
+      <% if @current_status == 'requested' %>
+        Needs Scheduling
+      <% elsif @current_status == 'scheduled' %>
+        Scheduled Evaluations
+      <% elsif @current_status == 'completed' %>
+        Completed Evaluations
+      <% elsif %w[needs_followup no_show cancelled].include?(@current_status) %>
+        Evaluations Needing Follow-up
+      <% else %>
+        Evaluations
       <% end %>
-    </ul>
+    </h1>
+    
+    <div>
+      <%= link_to "Back to Dashboard", evaluators_dashboard_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
+    </div>
+  </div>
+
+  <!-- Status filter pills -->
+  <div class="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg mb-6">
+    <span class="text-xs font-semibold text-gray-500 px-2">STATUS:</span>
+    <%= link_to "All", 
+        evaluators_evaluations_path,
+        class: "#{@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+        aria: { current: (@current_status.blank? ? "page" : nil) } %>
+        
+    <%= link_to "Needs Scheduling",
+        evaluators_evaluations_path(status: 'requested'),
+        class: "#{@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+        aria: { current: (@current_status == 'requested' ? "page" : nil) } %>
+        
+    <%= link_to "Scheduled", 
+        evaluators_evaluations_path(status: 'scheduled'),
+        class: "#{@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+        aria: { current: (@current_status == 'scheduled' ? "page" : nil) } %>
+        
+    <%= link_to "Completed", 
+        evaluators_evaluations_path(status: 'completed'),
+        class: "#{@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+        aria: { current: (@current_status == 'completed' ? "page" : nil) } %>
+        
+    <%= link_to "Needs Follow-up", 
+        evaluators_evaluations_path(status: 'needs_followup'),
+        class: "#{%w[needs_followup cancelled no_show].include?(@current_status) ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+        aria: { current: (%w[needs_followup cancelled no_show].include?(@current_status) ? "page" : nil) } %>
+  </div>
+
+  <!-- Evaluations Table -->
+  <% if @evaluations.any? %>
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+      <table class="min-w-full divide-y divide-gray-200" aria-labelledby="evaluations-list-heading">
+        <thead class="bg-gray-50">
+          <tr>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Constituent</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Application ID</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <% @evaluations.each do |evaluation| %>
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <% if evaluation.status == 'completed' && evaluation.evaluation_date.present? %>
+                  Completed: <%= evaluation.evaluation_date.strftime("%B %d, %Y") %>
+                <% else %>
+                  <%= evaluation.evaluation_date&.strftime("%B %d, %Y at %I:%M %p") || "Not scheduled" %>
+                <% end %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= evaluation.constituent.full_name %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <!-- Status badge with color coding -->
+                <% status_classes = case evaluation.status 
+                   when 'scheduled' then 'bg-blue-100 text-blue-800'
+                   when 'confirmed' then 'bg-green-100 text-green-800'
+                   when 'completed' then 'bg-purple-100 text-purple-800'
+                   when 'cancelled' then 'bg-yellow-100 text-yellow-800'
+                   when 'no_show' then 'bg-red-100 text-red-800'
+                   else 'bg-gray-100 text-gray-800'
+                   end %>
+                
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= status_classes %>">
+                  <span class="sr-only">Status: </span>
+                  <% if evaluation.status == 'requested' %>
+                    Needs Scheduling
+                  <% else %>
+                    <%= evaluation.status.titleize %>
+                  <% end %>
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <%= evaluation.application.id %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <% if evaluation.status == 'requested' %>
+                  <%= link_to "View/Schedule", evaluators_evaluation_path(evaluation),
+                      class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                      aria: { label: "View/Schedule evaluation for #{evaluation.constituent.full_name}" } %>
+                <% elsif evaluation.status == 'scheduled' %>
+                  <%= link_to "Complete Report", evaluators_evaluation_path(evaluation),
+                      class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                      aria: { label: "Complete report for #{evaluation.constituent.full_name}" } %>
+                <% else %>
+                  <%= link_to "View Details", evaluators_evaluation_path(evaluation),
+                      class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                      aria: { label: "View details for #{evaluation.constituent.full_name}" } %>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="py-4">
+      <%== pagy_nav(@pagy) if defined?(@pagy) %>
+    </div>
   <% else %>
-    <p class="text-gray-600">No evaluations found.</p>
+    <div class="bg-white shadow sm:rounded-lg p-6 text-center">
+      <p class="text-gray-500">No evaluations found.</p>
+    </div>
   <% end %>
 </div>

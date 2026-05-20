@@ -10,11 +10,7 @@
       <p class="text-3xl font-bold text-purple-600"><%= @requested_evaluations.count %></p>
       <p class="text-sm text-gray-500 mt-1">New evaluation requests</p>
       <div class="mt-3">
-        <% if current_user.admin? %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "requested"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% else %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "requested"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% end %>
+        <%= link_to "View requested", evaluators_dashboard_path(anchor: "needs-scheduling-section"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
       </div>
     </div>
 
@@ -23,11 +19,7 @@
       <p class="text-3xl font-bold text-blue-600"><%= @scheduled_evaluations.count %></p>
       <p class="text-sm text-gray-500 mt-1">Upcoming evaluations</p>
       <div class="mt-3">
-        <% if current_user.admin? %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "scheduled"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% else %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "scheduled"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% end %>
+        <%= link_to "View scheduled", evaluators_dashboard_path(anchor: "upcoming-evaluations-section"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
       </div>
     </div>
 
@@ -36,11 +28,7 @@
       <p class="text-3xl font-bold text-green-600"><%= @completed_evaluations.count %></p>
       <p class="text-sm text-gray-500 mt-1">Evaluations completed</p>
       <div class="mt-3">
-        <% if current_user.admin? %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "completed"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% else %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "completed"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% end %>
+        <%= link_to "View completed", evaluators_dashboard_path(anchor: "recent-completed-heading"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
       </div>
     </div>
 
@@ -49,20 +37,16 @@
       <p class="text-3xl font-bold text-yellow-600"><%= @followup_evaluations.count %></p>
       <p class="text-sm text-gray-500 mt-1">Cancellations and no-shows</p>
       <div class="mt-3">
-        <% if current_user.admin? %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "needs_followup"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% else %>
-          <%= link_to "View All", evaluators_dashboard_path(filter: "needs_followup"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
-        <% end %>
+        <%= link_to "View follow up", evaluators_dashboard_path(anchor: "followup-evaluations-section"), class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm" %>
       </div>
     </div>
   </div>
 
   <!-- Requested Evaluations (Needs Scheduling) -->
-  <div class="bg-white shadow rounded-lg p-6 mb-8">
+  <div id="needs-scheduling-section" class="bg-white shadow rounded-lg p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-xl font-semibold">Needs Scheduling</h2>
-      <%= link_to "View All", evaluators_dashboard_path(filter: "requested"), class: "text-blue-600 hover:text-blue-800" %>
+      <%= link_to "View All", evaluators_evaluations_path(status: "requested"), class: "text-blue-600 hover:text-blue-800" %>
     </div>
 
     <% if @requested_evaluations_display.any? %>
@@ -104,14 +88,10 @@
   </div>
 
   <!-- Upcoming Evaluations -->
-  <div class="bg-white shadow rounded-lg p-6 mb-8">
+  <div id="upcoming-evaluations-section" class="bg-white shadow rounded-lg p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-xl font-semibold">Upcoming Evaluations</h2>
-      <% if current_user.admin? %>
-        <%= link_to "View All", evaluators_dashboard_path(filter: "scheduled"), class: "text-blue-600 hover:text-blue-800" %>
-      <% else %>
-        <%= link_to "View All", evaluators_dashboard_path(filter: "scheduled"), class: "text-blue-600 hover:text-blue-800" %>
-      <% end %>
+      <%= link_to "View All", evaluators_evaluations_path(status: "scheduled"), class: "text-blue-600 hover:text-blue-800" %>
     </div>
 
     <% if @upcoming_evaluations.any? %>
@@ -154,7 +134,7 @@
 
   <% if @current_filter.present? && @filtered_evaluations.present? %>
     <!-- Filtered Results -->
-    <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <div id="followup-evaluations-section" class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-semibold"><%= @section_title %></h2>
         <%= link_to "Clear Filter", evaluators_dashboard_path, class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
@@ -221,12 +201,8 @@
   <!-- Recent Activity -->
   <div class="bg-white shadow rounded-lg p-6">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-semibold">Recent Completed Evaluations</h2>
-      <% if current_user.admin? %>
-        <%= link_to "View All", evaluators_dashboard_path(filter: "completed"), class: "text-blue-600 hover:text-blue-800" %>
-      <% else %>
-        <%= link_to "View All", evaluators_dashboard_path(filter: "completed"), class: "text-blue-600 hover:text-blue-800" %>
-      <% end %>
+      <h2 id="recent-completed-heading" class="text-xl font-semibold">Recent Completed Evaluations</h2>
+      <%= link_to "View All", evaluators_evaluations_path(status: "completed"), class: "text-blue-600 hover:text-blue-800" %>
     </div>
 
     <% if @recent_evaluations.any? %>
