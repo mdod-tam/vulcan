@@ -20,9 +20,9 @@
           <% end %>
         </p>
         <div class="mt-3">
-          <%= link_to "View All", trainers_dashboard_path(anchor: "needs-scheduling-section"),
-              class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
-              aria: { label: "View all training items needing scheduling" } %>
+          <%= link_to "View requested", trainers_dashboard_path(anchor: "needs-scheduling-section"),
+              class: "inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
+              aria: { label: "View training items needing scheduling" } %>
         </div>
       </li>
 
@@ -38,18 +38,18 @@
         </p>
         <% if current_user.admin? %>
           <div class="mt-3 flex flex-wrap gap-2">
-            <%= link_to "All Scheduled", trainers_dashboard_path(filter: "scheduled"),
-                class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
-                aria: { label: "View all scheduled sessions" } %>
-            <%= link_to "My Scheduled", filtered_trainers_training_sessions_path(scope: "mine", status: "scheduled"),
+            <%= link_to "My scheduled", trainers_dashboard_path(anchor: "my-upcoming-sessions-section"),
                 class: "inline-flex items-center px-4 py-2 border border-blue-300 bg-white hover:bg-blue-50 text-blue-700 rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
                 aria: { label: "View scheduled sessions assigned to me" } %>
+            <%= link_to "View scheduled", trainers_dashboard_path(anchor: "upcoming-sessions-section"),
+                class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
+                aria: { label: "View scheduled sessions assigned to all trainers" } %>
           </div>
         <% else %>
           <div class="mt-3">
-            <%= link_to "View All", trainers_dashboard_path(filter: "scheduled"),
+            <%= link_to "View sessions", trainers_dashboard_path(anchor: "upcoming-sessions-section"),
                 class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
-                aria: { label: "View all scheduled sessions" } %>
+                aria: { label: "View scheduled sessions" } %>
           </div>
         <% end %>
       </li>
@@ -59,9 +59,9 @@
         <p class="text-3xl font-bold text-green-700"><%= @completed_sessions.count %><span class="sr-only"> completed sessions</span></p>
         <p class="text-sm text-gray-500 mt-1">Training sessions completed</p>
         <div class="mt-3">
-          <%= link_to "View All", trainers_dashboard_path(filter: "completed"),
+          <%= link_to "View completed", trainers_dashboard_path(anchor: "recent-completed-heading"),
               class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
-              aria: { label: "View all completed sessions" } %>
+              aria: { label: "View completed sessions" } %>
         </div>
       </li>
 
@@ -70,9 +70,9 @@
         <p class="text-3xl font-bold text-yellow-700"><%= @followup_sessions_count %><span class="sr-only"> sessions needing follow-up</span></p>
         <p class="text-sm text-gray-500 mt-1">Cancellations and no-shows</p>
         <div class="mt-3">
-          <%= link_to "View All", trainers_dashboard_path(filter: "needs_followup"),
+          <%= link_to "View follow up", trainers_dashboard_path(anchor: "followup-sessions-table-heading"),
               class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
-              aria: { label: "View all sessions needing follow-up" } %>
+              aria: { label: "View sessions needing follow-up" } %>
         </div>
       </li>
     </ul>
@@ -83,7 +83,7 @@
     <div id="needs-scheduling-section" class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
         <h2 id="needs-scheduling-table-heading" class="text-xl font-semibold">Needs Scheduling</h2>
-        <%= link_to "View All", requested_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800",
+        <%= link_to "View All", trainers_training_sessions_path(status: "requested"), class: "text-blue-600 hover:text-blue-800",
             aria: { label: "View all sessions needing scheduling" } %>
       </div>
 
@@ -145,10 +145,10 @@
 
     <% if current_user.admin? %>
       <!-- Admin's own scheduled training sessions -->
-      <div class="bg-white shadow rounded-lg p-6 mb-8">
+      <div id="my-upcoming-sessions-section" class="bg-white shadow rounded-lg p-6 mb-8">
         <div class="flex justify-between items-center mb-4">
           <h2 id="my-upcoming-sessions-table-heading" class="text-xl font-semibold">My Upcoming Training Sessions</h2>
-          <%= link_to "View My Scheduled", filtered_trainers_training_sessions_path(scope: "mine", status: "scheduled"), class: "text-blue-600 hover:text-blue-800",
+          <%= link_to "View My Scheduled", trainers_training_sessions_path(scope: "mine", status: "scheduled"), class: "text-blue-600 hover:text-blue-800",
               aria: { label: "View all scheduled sessions assigned to me" } %>
         </div>
 
@@ -194,10 +194,10 @@
     <% end %>
 
     <!-- Upcoming Training Sessions -->
-    <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <div id="upcoming-sessions-section" class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
         <h2 id="upcoming-sessions-table-heading" class="text-xl font-semibold">Upcoming Training Sessions</h2>
-        <%= link_to "View All", scheduled_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800",
+        <%= link_to "View All", trainers_training_sessions_path(status: "scheduled"), class: "text-blue-600 hover:text-blue-800",
             aria: { label: "View all upcoming scheduled sessions" } %>
       </div>
 
@@ -311,7 +311,7 @@
     <div class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
       <h2 id="followup-sessions-table-heading" class="text-xl font-semibold">Recent Training Sessions Needing Follow-up</h2>
-      <%= link_to "View All", trainers_dashboard_path(filter: "needs_followup"), class: "text-blue-600 hover:text-blue-800",
+      <%= link_to "View All", trainers_training_sessions_path(status: "needs_followup"), class: "text-blue-600 hover:text-blue-800",
           aria: { label: "View all sessions needing follow-up" } %>
       </div>
 
@@ -365,8 +365,8 @@
   <section aria-labelledby="recent-completed-heading" class="bg-white shadow rounded-lg p-6">
     <div class="flex justify-between items-center mb-4">
       <h2 id="recent-completed-heading" class="text-xl font-semibold">Recent Completed Sessions</h2>
-      <%= link_to "View All", completed_trainers_training_sessions_path, class: "text-blue-600 hover:text-blue-800",
-          aria: { label: "View all completed sessions" } %>
+        <%= link_to "View All", trainers_training_sessions_path(status: "completed"), class: "text-blue-600 hover:text-blue-800",
+            aria: { label: "View all completed sessions" } %>
     </div>
 
     <% if @recent_completed_sessions.any? %>

@@ -12,13 +12,15 @@ module Evaluators
       # Redirect to dashboard for main entry point
       # If specific filters are applied, still show the filtered list
       if params[:status].present? || params[:scope].present? || params[:filter].present?
-        @evaluations = if current_user.evaluator?
-                         # For evaluators, show only their evaluations
-                         current_user.evaluations.includes(:constituent).order(created_at: :desc)
-                       else
-                         # For admins, show all evaluations
-                         Evaluation.includes(:constituent).order(created_at: :desc)
-                       end
+        scope_param = params[:scope] || (current_user.admin? ? 'all' : 'mine')
+        status_param = params[:status]
+
+        # Apply filters
+        @evaluations = filter_evaluations(scope_param, status_param)
+
+        # Set current selections for UI state
+        @current_scope = scope_param
+        @current_status = status_param
       else
         redirect_to evaluators_dashboard_path
       end
@@ -270,7 +272,7 @@ module Evaluators
 
       # Apply status filter if provided
       filtered_query = if status.present?
-                         base_query.where(status: status)
+                         base_query.where(status: status.to_sym)
                        else
                          base_query
                        end
