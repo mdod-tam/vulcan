@@ -102,6 +102,7 @@ module Evaluators
       @requested_evaluations_display = []
       @upcoming_evaluations = []
       @recent_evaluations = []
+      @my_scheduled_evaluations_display = []
 
       # If we're filtering, don't load all the display data
       return if @current_filter.present?
@@ -112,6 +113,12 @@ module Evaluators
                               .includes(:constituent).order(evaluation_date: :asc).limit(5)
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
                             .includes(:constituent, :application).order(evaluation_date: :desc).limit(5)
+
+      # For admins, also load their own scheduled evaluations
+      if current_user.admin?
+        @my_scheduled_evaluations_display = Evaluation.where(evaluator_id: current_user.id).active
+                                            .includes(:constituent).order(evaluation_date: :asc).limit(5)
+      end
     end
 
     def load_recent_activity

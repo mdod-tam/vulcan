@@ -16,6 +16,12 @@
       <% else %>
         Evaluations
       <% end %>
+      
+      <% if current_user.admin? && @current_scope.present? %>
+        <span class="text-lg font-normal ml-2 text-gray-600">
+          (<%= @current_scope == 'mine' ? 'Assigned to Me' : 'All Evaluators' %>)
+        </span>
+      <% end %>
     </h1>
     
     <div>
@@ -23,33 +29,50 @@
     </div>
   </div>
 
-  <!-- Status filter pills -->
-  <div class="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg mb-6">
-    <span class="text-xs font-semibold text-gray-500 px-2">STATUS:</span>
-    <%= link_to "All", 
-        evaluators_evaluations_path,
-        class: "#{@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
-        aria: { current: (@current_status.blank? ? "page" : nil) } %>
+  <!-- Unified filter bar -->
+  <div class="mb-6 flex flex-wrap gap-4">
+    <!-- Scope selection (for admins only) -->
+    <% if current_user.admin? %>
+      <div class="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
+        <span class="text-xs font-semibold text-gray-500 px-2">VIEW:</span>
+        <%= link_to "All Evaluators", 
+            evaluators_evaluations_path(scope: "all", status: @current_status),
+            class: "#{@current_scope == 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
         
-    <%= link_to "Needs Scheduling",
-        evaluators_evaluations_path(status: 'requested'),
-        class: "#{@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
-        aria: { current: (@current_status == 'requested' ? "page" : nil) } %>
-        
-    <%= link_to "Scheduled", 
-        evaluators_evaluations_path(status: 'scheduled'),
-        class: "#{@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
-        aria: { current: (@current_status == 'scheduled' ? "page" : nil) } %>
-        
-    <%= link_to "Completed", 
-        evaluators_evaluations_path(status: 'completed'),
-        class: "#{@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
-        aria: { current: (@current_status == 'completed' ? "page" : nil) } %>
-        
-    <%= link_to "Needs Follow-up", 
-        evaluators_evaluations_path(status: 'needs_followup'),
-        class: "#{%w[needs_followup cancelled no_show].include?(@current_status) ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
-        aria: { current: (%w[needs_followup cancelled no_show].include?(@current_status) ? "page" : nil) } %>
+        <%= link_to "My Evaluations", 
+            evaluators_evaluations_path(scope: "mine", status: @current_status),
+            class: "#{@current_scope == 'mine' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200" %>
+      </div>
+    <% end %>
+    
+    <!-- Status filter pills -->
+    <div class="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg">
+      <span class="text-xs font-semibold text-gray-500 px-2">STATUS:</span>
+      <%= link_to "All", 
+          evaluators_evaluations_path(scope: @current_scope),
+          class: "#{@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status.blank? ? "page" : nil) } %>
+          
+      <%= link_to "Needs Scheduling",
+          evaluators_evaluations_path(scope: @current_scope, status: 'requested'),
+          class: "#{@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status == 'requested' ? "page" : nil) } %>
+          
+      <%= link_to "Scheduled", 
+          evaluators_evaluations_path(scope: @current_scope, status: 'scheduled'),
+          class: "#{@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status == 'scheduled' ? "page" : nil) } %>
+          
+      <%= link_to "Completed", 
+          evaluators_evaluations_path(scope: @current_scope, status: 'completed'),
+          class: "#{@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (@current_status == 'completed' ? "page" : nil) } %>
+          
+      <%= link_to "Needs Follow-up", 
+          evaluators_evaluations_path(scope: @current_scope, status: 'needs_followup'),
+          class: "#{%w[needs_followup cancelled no_show].include?(@current_status) ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200'} px-4 py-2 rounded-md font-medium transition-colors duration-200",
+          aria: { current: (%w[needs_followup cancelled no_show].include?(@current_status) ? "page" : nil) } %>
+    </div>
   </div>
 
   <!-- Evaluations Table -->
