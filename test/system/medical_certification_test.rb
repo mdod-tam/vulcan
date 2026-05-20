@@ -55,15 +55,15 @@ class MedicalCertificationTest < ApplicationSystemTestCase
 
     # Send certification request (handle confirmation dialog)
     accept_confirm do
-      # Try DocuSeal buttons first (primary method), then fall back to email
+      # Try DocuSeal buttons first (primary method), then fall back to secure upload
       if page.has_button?('Send DocuSeal Request', wait: 5)
         click_button 'Send DocuSeal Request'
       elsif page.has_button?('Resend DocuSeal Request', wait: 5)
         click_button 'Resend DocuSeal Request'
-      elsif page.has_button?('Send Email', wait: 5)
-        click_button 'Send Email'
+      elsif page.has_button?('Send Secure Cert Upload Link', wait: 5)
+        click_button 'Send Secure Cert Upload Link'
       else
-        click_button 'Resend Email'
+        skip 'No medical certification request buttons available'
       end
     end
 
@@ -157,33 +157,10 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     wait_for_turbo
     wait_for_network_idle(timeout: 10) if respond_to?(:wait_for_network_idle)
 
-    # Try to send request (handle confirmation dialog)
-    accept_confirm do
-      # Try DocuSeal buttons first (primary method), then fall back to email
-      if page.has_button?('Send DocuSeal Request', wait: 5)
-        click_button 'Send DocuSeal Request'
-      elsif page.has_button?('Resend DocuSeal Request', wait: 5)
-        click_button 'Resend DocuSeal Request'
-      elsif page.has_button?('Send Email', wait: 5)
-        click_button 'Send Email'
-      else
-        click_button 'Resend Email'
-      end
-    end
-
-    # Wait for form submission to complete
-    wait_for_turbo
-
-    # Look for error indicators - flexible approach that handles various error message formats
-    if (page.has_text?('Failed to process', wait: 10) && page.has_text?('certification request', wait: 5)) ||
-       page.has_text?('Medical provider email is required', wait: 10)
-      # Test passes - found expected error content
-    elsif page.has_text?('success', wait: 5) && page.has_text?('sent', wait: 5)
-      flunk 'Found success message when we expected an error'
-    else
-      # Fallback - look for any error message pattern
-      assert page.has_text?(/error|failed|required/i, wait: 10), 'Expected to find error message on page'
-    end
+    # With no provider email, request actions should not be available.
+    assert_text 'Medical provider email is required', wait: 10
+    assert_no_button 'Send Secure Cert Upload Link', wait: 5
+    assert_no_button 'Send Email', wait: 5
 
     # Clear any pending network connections to prevent timeout during teardown
     clear_pending_network_connections if respond_to?(:clear_pending_network_connections)

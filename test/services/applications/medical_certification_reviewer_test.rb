@@ -36,12 +36,37 @@ module Applications
       mock_notifier.expects(:send_certification_rejection_notice).with(
         rejection_reason: 'Invalid documentation',
         admin: @admin,
-        notification_id: 1234
+        notification_id: 1234,
+        secure_upload_url: 'https://example.test/secure_certification_form?token=abc'
       ).returns(true)
+      request_result = BaseService::Result.new(
+        success: true,
+        message: 'sent',
+        data: { secure_upload_url: 'https://example.test/secure_certification_form?token=abc' }
+      )
+      RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
 
       MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
         result = @service.reject(rejection_reason: 'Invalid documentation')
         assert(result.success?, 'Expected reviewer service to pass through success when notifier succeeds')
+      end
+    end
+
+    test 'continues rejection notification when secure cert upload request fails for a non-remediation reason' do
+      mock_notifier = mock('medical_provider_notifier')
+      MedicalProviderNotifier.expects(:new).with(@application).returns(mock_notifier)
+      mock_notifier.expects(:send_certification_rejection_notice).with(
+        rejection_reason: 'Invalid documentation',
+        admin: @admin,
+        notification_id: 1234,
+        secure_upload_url: nil
+      ).returns(true)
+      request_result = BaseService::Result.new(success: false, message: 'temporary failure', data: {})
+      RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
+
+      MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
+        result = @service.reject(rejection_reason: 'Invalid documentation')
+        assert(result.success?, 'Expected rejection to succeed even when secure cert form cannot be issued')
       end
     end
 
@@ -51,12 +76,23 @@ module Applications
       assert_match(/Rejection reason is required/, result.message)
     end
 
-    test 'fails when medical provider has no contact methods' do
-      @application.update(medical_provider_email: nil, medical_provider_fax: nil)
+    test 'continues rejection notification over fax when provider email is missing' do
+      @application.update(medical_provider_email: nil, medical_provider_fax: '555-123-4567')
+      mock_notifier = mock('medical_provider_notifier')
+      MedicalProviderNotifier.expects(:new).with(@application).returns(mock_notifier)
+      mock_notifier.expects(:send_certification_rejection_notice).with(
+        rejection_reason: 'Invalid documentation',
+        admin: @admin,
+        notification_id: 1234,
+        secure_upload_url: nil
+      ).returns(true)
+      request_result = BaseService::Result.new(success: false, message: 'Provider email required', data: {})
+      RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
 
-      result = @service.reject(rejection_reason: 'Invalid documentation')
-      assert_not(result.success?, 'Expected rejection to fail without contact methods')
-      assert_match(/No contact method available/, result.message)
+      MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
+        result = @service.reject(rejection_reason: 'Invalid documentation')
+        assert(result.success?, 'Expected fax-capable rejection to succeed when secure upload link cannot be issued')
+      end
     end
 
     test 'creates an application note when notes are provided' do

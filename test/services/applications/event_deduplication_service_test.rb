@@ -97,5 +97,45 @@ module Applications
       assert_includes result, event3
       assert(result.include?(event1) || result.include?(event2))
     end
+
+    test 'keeps distinct secure request notifications for different recipients in the same minute' do
+      service = EventDeduplicationService.new
+      time = Time.current.beginning_of_minute
+      first_recipient = create(:user, email: "first_secure_request_#{Time.current.to_f}@example.com")
+      second_recipient = create(:user, email: "second_secure_request_#{Time.current.to_f}@example.com")
+
+      first_notification = create(
+        :notification,
+        recipient: first_recipient,
+        actor: @admin,
+        notifiable: @application,
+        action: 'provider_info_requested',
+        created_at: time,
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 201,
+          'request_batch_id' => 'shared-batch'
+        }
+      )
+      second_notification = create(
+        :notification,
+        recipient: second_recipient,
+        actor: @admin,
+        notifiable: @application,
+        action: 'provider_info_requested',
+        created_at: time + 20.seconds,
+        metadata: {
+          'application_id' => @application.id,
+          'secure_request_form_id' => 202,
+          'request_batch_id' => 'shared-batch'
+        }
+      )
+
+      result = service.deduplicate([first_notification, second_notification])
+
+      assert_equal 2, result.size
+      assert_includes result, first_notification
+      assert_includes result, second_notification
+    end
   end
 end

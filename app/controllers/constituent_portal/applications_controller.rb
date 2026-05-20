@@ -28,7 +28,7 @@ module ConstituentPortal
 
     before_action :authenticate_user!
     before_action :require_constituent!
-    before_action :set_application, only: %i[show edit update verify submit]
+    before_action :set_application, only: %i[show edit update submit]
     before_action :ensure_editable, only: %i[edit update]
     before_action :setup_address_for_form, only: %i[new edit]
     # ParamCasting concern: Automatically converts checkbox values to proper boolean types
@@ -81,7 +81,10 @@ module ConstituentPortal
     def create
       @form = build_application_form
 
-      return render_form_errors(@form) unless @form.valid?
+      unless @form.valid?
+        show_missing_provider_info_flash(@form)
+        return render_form_errors(@form)
+      end
 
       result = Applications::ApplicationCreator.call(@form)
 
@@ -106,7 +109,10 @@ module ConstituentPortal
         params: params
       )
 
-      return render_form_errors(@form, @application) unless @form.valid?
+      unless @form.valid?
+        show_missing_provider_info_flash(@form)
+        return render_form_errors(@form, @application)
+      end
 
       result = Applications::ApplicationCreator.call(@form)
 
@@ -137,11 +143,6 @@ module ConstituentPortal
       end
     end
 
-    def verify
-      @application = current_user.applications.find(params[:id])
-      render :verify
-    end
-
     def submit
       @application = current_user.applications.find(params[:id])
       ApplicationRecord.transaction do
@@ -153,7 +154,7 @@ module ConstituentPortal
       redirect_with_notice(constituent_portal_application_path(@application),
                            'Application submitted successfully!')
     rescue ActiveRecord::RecordInvalid
-      render :verify, status: :unprocessable_content
+      render :edit, status: :unprocessable_content
     end
 
     def resubmit_proof
@@ -414,6 +415,15 @@ module ConstituentPortal
       render :edit, status: :unprocessable_content
     end
 
+    def show_missing_provider_info_flash(form)
+      return unless form.errors.added?(:base, :medical_provider_required)
+
+      flash.now[:alert] = I18n.t(
+        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        locale: form.message_locale
+      )
+    end
+
     def determine_update_notice(original_status, application)
       # ApplicationFormHandling concern: Standardizes success message determination
       # Flow: determine_success_message(application, is_submission) -> returns appropriate message
@@ -557,7 +567,7 @@ module ConstituentPortal
     def application_params
       params.expect(
         application: %i[
-          annual_income household_size maryland_resident self_certify_disability
+          annual_income household_size maryland_resident self_certify_disability terms_accepted information_verified medical_release_authorized
           medical_provider_name medical_provider_phone medical_provider_fax medical_provider_email
           physical_address_1 physical_address_2 city state zip_code
           use_guardian_address
@@ -566,10 +576,6 @@ module ConstituentPortal
           medical_provider_attributes
         ]
       )
-    end
-
-    def verification_params
-      params.expect(application: %i[terms_accepted information_verified medical_release_authorized])
     end
 
     def require_constituent!

@@ -200,6 +200,7 @@
     <!-- Alternate Contact Information Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="alternate-contact-info-title">
       <h2 id="alternate-contact-info-title" class="text-xl font-semibold text-gray-900 mb-4">Alternate Contact Information</h2>
+      <p class="text-sm text-gray-600 mb-4"><%= t("applications.alternate_contact.admin_authorization_help") %></p>
       <% if @application.alternate_contact_name.present? || @application.alternate_contact_phone.present? || @application.alternate_contact_email.present? || @application.alternate_contact_relationship_type.present? %>
         <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <% if @application.alternate_contact_name.present? %>
@@ -236,6 +237,12 @@
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="certification-title" id="medical-certification-section" data-testid="medical-certification-section">
       <%= render "medical_certification_section" %>
     </section>
+
+    <% if @application.missing_required_provider_info? %>
+      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="secure-request-forms-title" id="secure-request-forms-section">
+        <%= render "secure_request_forms" %>
+      </section>
+    <% end %>
 
     <!-- Attachments Section (Proofs) -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="attachments-title" id="attachments-section">

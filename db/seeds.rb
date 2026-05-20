@@ -149,7 +149,6 @@ def create_policies
   # If a policy is missing from this list, Policy.get('key') will return nil
   # This causes unexpected behavior in mailboxes, controllers, and other logic
   # Common missing policies that cause test failures:
-  # - max_proof_rejections (used by ProofSubmissionMailbox)
   # - proof_submission_rate_limit_* (used by rate limiting)
   # - support_email (NOTE: Cannot be stored here - integers only!)
   policies = {
@@ -168,6 +167,8 @@ def create_policies
     'proof_submission_rate_limit_email' => 5,
     'proof_submission_rate_period' => 24,
     'max_proof_rejections' => 3,
+    'secure_form_link_expiration_hours' => 48,
+    'secure_form_resend_cooldown_hours' => 1,
     # Voucher policies
     'voucher_value_hearing_disability' => 500,
     'voucher_value_vision_disability' => 500,

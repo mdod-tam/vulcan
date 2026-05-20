@@ -97,6 +97,19 @@ class NotificationComposer
     "Disability certification requested for #{application_reference.downcase}"
   end
 
+  def message_for_cert_upload_requested
+    "Secure disability certification upload requested for application ##{@notifiable&.id}"
+  end
+
+  def message_for_proof_resubmission_requested
+    proof_type = @metadata['proof_type']&.titleize || 'Proof'
+    "Secure #{proof_type.downcase} upload requested for application ##{@notifiable&.id}"
+  end
+
+  def message_for_provider_info_requested
+    "Certifying professional information requested for application ##{@notifiable&.id}"
+  end
+
   def message_for_medical_certification_received
     "Disability certification received for #{application_reference.downcase}"
   end

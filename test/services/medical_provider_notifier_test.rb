@@ -87,7 +87,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     assert_nil newer_notification.metadata['fax_sid']
   end
 
-  test 'prefers document signing when application previously used that channel' do
+  test 'uses email for rejection notice when application previously used document signing' do
     @application.update!(
       document_signing_request_count: 1,
       document_signing_status: :sent,
@@ -102,51 +102,9 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                           metadata: { 'reason' => 'Missing signature' })
 
     notifier = MedicalProviderNotifier.new(@application)
-    notifier.stubs(:notify_by_document_signing).returns(
-      {
-        success: true,
-        method: 'document_signing',
-        document_signing_submission_id: 'sub_123',
-        document_signing_service: 'docuseal'
-      }
-    )
-    notifier.expects(:notify_by_email).never
-    notifier.expects(:notify_by_fax).never
-
-    result = notifier.send_certification_rejection_notice(
-      rejection_reason: 'Missing signature',
-      admin: @admin,
-      notification_id: notification.id
-    )
-
-    assert_equal true, result
-    notification.reload
-    assert_equal 'document_signing', notification.metadata['delivery_method']
-    assert_equal 'sub_123', notification.metadata['document_signing_submission_id']
-    assert_equal 'docuseal', notification.metadata['document_signing_service']
-    assert_equal %w[document_signing email fax], notification.metadata['notification_methods']
-  end
-
-  test 'falls back to email when document signing fails' do
-    @application.update!(
-      document_signing_request_count: 1,
-      document_signing_status: :sent,
-      document_signing_service: 'docuseal'
-    )
-
-    notification = create(:notification,
-                          recipient: @application.user,
-                          actor: @admin,
-                          notifiable: @application,
-                          action: 'medical_certification_rejected',
-                          metadata: { 'reason' => 'Missing signature' })
-
-    notifier = MedicalProviderNotifier.new(@application)
-    notifier.stubs(:notify_by_document_signing).returns(
-      { success: false, method: 'document_signing', error: 'provider unavailable' }
-    )
+    DocumentSigning::SubmissionService.expects(:new).never
     notifier.stubs(:notify_by_email).returns(
-      { success: true, method: 'email', message_id: 'MSG-987' }
+      { success: true, method: 'email', message_id: 'MSG-456' }
     )
     notifier.expects(:notify_by_fax).never
 
@@ -159,8 +117,116 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     assert_equal true, result
     notification.reload
     assert_equal 'email', notification.metadata['delivery_method']
-    assert_equal 'MSG-987', notification.metadata['message_id']
-    assert_equal 'document_signing', notification.metadata['email_fallback_from']
+    assert_equal 'MSG-456', notification.metadata['message_id']
+    assert_equal %w[email fax], notification.metadata['notification_methods']
+  end
+
+  test 'passes secure upload url to rejection email and delivers synchronously' do
+    notifier = MedicalProviderNotifier.new(@application)
+    mail = mock('certification_rejected_mail')
+    mail.expects(:deliver_now).returns(true)
+    mail.expects(:message_id).returns('MSG-SECURE')
+    mail.expects(:deliver_later).never
+    mailer_proxy = mock('medical_provider_mailer_proxy')
+    mailer_proxy.expects(:certification_rejected).returns(mail)
+
+    MedicalProviderMailer.expects(:with).with(
+      application: @application,
+      rejection_reason: 'Missing signature',
+      admin: @admin,
+      secure_upload_url: 'https://example.test/secure_certification_form?token=abc'
+    ).returns(mailer_proxy)
+
+    result = notifier.send(:notify_by_email,
+                           'Missing signature',
+                           @admin,
+                           secure_upload_url: 'https://example.test/secure_certification_form?token=abc')
+
+    assert_equal true, result[:success]
+    assert_equal 'email', result[:method]
+    assert_equal 'MSG-SECURE', result[:message_id]
+  end
+
+  test 'redacts secure upload urls from email errors and notification metadata' do
+    @application.update!(medical_provider_fax: nil)
+    notification = create(:notification,
+                          recipient: @application.user,
+                          actor: @admin,
+                          notifiable: @application,
+                          action: 'medical_certification_rejected',
+                          metadata: { 'reason' => 'Missing signature' })
+    secure_upload_url = 'https://example.test/secure_certification_form?token=raw-secret-token'
+    raw_error = "SMTP rejected message containing #{secure_upload_url}"
+    mail = mock('certification_rejected_mail')
+    mail.expects(:deliver_now).raises(StandardError, raw_error)
+    mailer_proxy = mock('medical_provider_mailer_proxy')
+    mailer_proxy.expects(:certification_rejected).returns(mail)
+    MedicalProviderMailer.expects(:with).with(
+      application: @application,
+      rejection_reason: 'Missing signature',
+      admin: @admin,
+      secure_upload_url: secure_upload_url
+    ).returns(mailer_proxy)
+
+    original_logger = Rails.logger
+    log_output = StringIO.new
+
+    begin
+      Rails.logger = ActiveSupport::Logger.new(log_output)
+      result = MedicalProviderNotifier.new(@application).send_certification_rejection_notice(
+        rejection_reason: 'Missing signature',
+        admin: @admin,
+        notification_id: notification.id,
+        secure_upload_url: secure_upload_url
+      )
+    ensure
+      Rails.logger = original_logger
+    end
+
+    assert_equal false, result
+    notification.reload
+    assert_equal 'SMTP rejected message containing [REDACTED_URL]',
+                 notification.metadata.fetch('provider_notification_error')
+    assert_includes log_output.string, '[REDACTED_URL]'
+    assert_not_includes log_output.string, secure_upload_url
+    assert_not_includes log_output.string, 'raw-secret-token'
+  end
+
+  test 'falls back to fax when email fails even if document signing was active' do
+    @application.update!(
+      document_signing_request_count: 1,
+      document_signing_status: :sent,
+      document_signing_service: 'docuseal'
+    )
+
+    notification = create(:notification,
+                          recipient: @application.user,
+                          actor: @admin,
+                          notifiable: @application,
+                          action: 'medical_certification_rejected',
+                          metadata: { 'reason' => 'Missing signature' })
+
+    notifier = MedicalProviderNotifier.new(@application)
+    DocumentSigning::SubmissionService.expects(:new).never
+    notifier.stubs(:notify_by_email).returns(
+      { success: false, method: 'email', error: 'smtp timeout' }
+    )
+    notifier.stubs(:notify_by_fax).returns(
+      { success: true, method: 'fax', fax_sid: 'FX987', blob_id: 77 }
+    )
+
+    result = notifier.send_certification_rejection_notice(
+      rejection_reason: 'Missing signature',
+      admin: @admin,
+      notification_id: notification.id
+    )
+
+    assert_equal true, result
+    notification.reload
+    assert_equal 'fax', notification.metadata['delivery_method']
+    assert_equal 'FX987', notification.metadata['fax_sid']
+    assert_equal 77, notification.metadata['blob_id']
+    assert_equal %w[email fax], notification.metadata['notification_methods']
   end
 
   test 'builds fax status callback URL using webhooks helper' do

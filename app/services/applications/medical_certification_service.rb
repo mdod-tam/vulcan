@@ -93,8 +93,9 @@ module Applications
     def create_notification(_timestamp)
       # Check for existing notification with this request count
       request_count = application.medical_certification_request_count
+      recipient = tracking_notification_recipient
       existing_notification = Notification.find_by(
-        recipient: application.user,
+        recipient: recipient,
         action: 'medical_certification_requested',
         notifiable: application,
         metadata: { 'request_count' => request_count }
@@ -111,7 +112,7 @@ module Applications
       # Use NotificationService for centralized notification creation
       NotificationService.create_and_deliver!(
         type: 'medical_certification_requested',
-        recipient: application.user,
+        recipient: recipient,
         actor: actor,
         notifiable: application,
         metadata: {
@@ -126,6 +127,13 @@ module Applications
       # Log but don't fail the process
       log_error(e, 'Failed to create notification')
       nil
+    end
+
+    def tracking_notification_recipient
+      resolver = Applications::SecureRequestRecipientResolver.new(application: application)
+      default_recipient_id = resolver.default_recipient_ids.first
+
+      resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
     end
 
     def send_email(notification)

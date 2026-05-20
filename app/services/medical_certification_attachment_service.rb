@@ -126,9 +126,12 @@ class MedicalCertificationAttachmentService
 
       Rails.logger.info "[MedicalCertService] Updating status from #{old_status} to #{status} for app #{application.id}"
 
-      # Update certification status using update_columns to bypass validations
-      # This is necessary because validations may require proofs to be attached,
-      # but in paper application context we're still processing proofs
+      # This still uses update_columns as explicit debt. It skips Application
+      # validations and callback-driven side effects, so this service must own
+      # the corresponding ApplicationStatusChange, audit event, notification,
+      # and approved-workflow reconciliation behavior below. Do not add new
+      # callback-dependent medical-cert semantics without first removing this
+      # bypass or extending this manual bookkeeping.
       update_result = application.update_columns( # rubocop:disable Rails/SkipsModelValidations
         medical_certification_status: status.to_s,
         medical_certification_verified_at: Time.current,
@@ -287,7 +290,8 @@ class MedicalCertificationAttachmentService
     old_status = params[:application].medical_certification_status || 'requested'
     params[:old_status] = old_status
 
-    # Use update_columns to bypass validations
+    # Explicit legacy bypass: see update_certification_status_only for why this
+    # branch still owns its own audit trail instead of relying on callbacks.
     update_attrs = {
       medical_certification_status: 'rejected',
       medical_certification_verified_at: Time.current,

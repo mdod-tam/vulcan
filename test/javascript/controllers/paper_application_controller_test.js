@@ -119,4 +119,57 @@ describe("PaperApplicationController", () => {
 
     expect(submitButton.disabled).toBe(false)
   })
+
+  test("medical provider toggle does not make the no-provider checkbox required", () => {
+    document.body.innerHTML = `
+      <form data-controller="paper-application">
+        <fieldset>
+          <input
+            type="checkbox"
+            name="no_medical_provider_information"
+            data-action="change->paper-application#toggleMedicalProvider"
+          >
+          <p class="text-sm">Provider description</p>
+          <div class="grid">
+            <input type="text" name="application[medical_provider_name]" required>
+            <input type="tel" name="application[medical_provider_phone]" required>
+            <input type="email" name="application[medical_provider_email]" required>
+            <input type="text" name="application[medical_provider_fax]">
+          </div>
+        </fieldset>
+      </form>
+    `
+
+    const form = document.querySelector("[data-controller='paper-application']")
+    const directController = new PaperApplicationController()
+    const checkbox = document.querySelector("input[name='no_medical_provider_information']")
+    const providerName = document.querySelector("input[name='application[medical_provider_name]']")
+    const providerPhone = document.querySelector("input[name='application[medical_provider_phone]']")
+    const providerEmail = document.querySelector("input[name='application[medical_provider_email]']")
+    const providerFax = document.querySelector("input[name='application[medical_provider_fax]']")
+
+    Object.defineProperty(directController, "element", {
+      value: form,
+      writable: false,
+      configurable: true
+    })
+
+    checkbox.checked = true
+    directController.toggleMedicalProvider({ target: checkbox })
+
+    expect(providerName.hasAttribute("required")).toBe(false)
+    expect(providerPhone.hasAttribute("required")).toBe(false)
+    expect(providerEmail.hasAttribute("required")).toBe(false)
+    expect(providerFax.hasAttribute("required")).toBe(false)
+    expect(checkbox.hasAttribute("required")).toBe(false)
+
+    checkbox.checked = false
+    directController.toggleMedicalProvider({ target: checkbox })
+
+    expect(providerName.hasAttribute("required")).toBe(true)
+    expect(providerPhone.hasAttribute("required")).toBe(true)
+    expect(providerEmail.hasAttribute("required")).toBe(true)
+    expect(providerFax.hasAttribute("required")).toBe(false)
+    expect(checkbox.hasAttribute("required")).toBe(false)
+  })
 })

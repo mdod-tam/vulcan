@@ -47,6 +47,10 @@ module Applications
       case event
       when ApplicationStatusChange
         fingerprint_for_status_change(event)
+      when Notification
+        fingerprint_for_notification(event)
+      when Event
+        fingerprint_for_event(event)
       when ->(e) { e.respond_to?(:action) && e.action&.include?('proof_submitted') }
         fingerprint_for_proof_submission(event)
       when ProofReview
@@ -69,6 +73,28 @@ module Applications
 
     def fingerprint_for_proof_review(event)
       "#{event.proof_type}-#{event.status}"
+    end
+
+    def fingerprint_for_notification(event)
+      metadata = event.metadata.is_a?(Hash) ? event.metadata.stringify_keys : {}
+
+      case event.action
+      when 'provider_info_requested', 'proof_resubmission_requested'
+        [event.recipient_id, metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
+      when 'cert_upload_requested'
+        metadata['medical_provider_secure_request_form_id'].to_s
+      end
+    end
+
+    def fingerprint_for_event(event)
+      metadata = event.metadata.is_a?(Hash) ? event.metadata.stringify_keys : {}
+
+      case event.action
+      when 'provider_info_request_revoked', 'proof_resubmission_request_revoked'
+        [metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
+      when 'cert_upload_request_revoked'
+        metadata['medical_provider_secure_request_form_id'].to_s
+      end
     end
 
     # Normalizes the action name across different event types.

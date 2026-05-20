@@ -130,10 +130,8 @@ module Admin
           click_button(/Send DocuSeal Request/i)
         elsif page.has_button?(/Resend DocuSeal/i, wait: 5)
           click_button(/Resend DocuSeal/i)
-        elsif page.has_button?('Send Email', wait: 5)
-          click_button 'Send Email'
-        elsif page.has_button?('Resend Email', wait: 5)
-          click_button 'Resend Email'
+        elsif page.has_button?('Send Secure Cert Upload Link', wait: 5)
+          click_button 'Send Secure Cert Upload Link'
         else
           # If no request buttons visible, skip this test
           skip 'No medical certification request buttons available'

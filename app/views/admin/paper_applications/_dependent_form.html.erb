@@ -100,7 +100,7 @@
         Contact Information
       </h3>
       <p class="text-sm text-gray-600 mb-4">
-        You can use the guardian's contact information or provide separate contact details for the dependent.
+        <%= t("applications.dependent_contact.strategy_help") %>
       </p>
       
       <%# Email Section %>
@@ -116,7 +116,7 @@
           } %>
           <label for="use_guardian_email_checkbox" class="ml-2">
             <span class="block text-sm font-medium text-gray-700">Use guardian's email address</span>
-            <span class="block text-xs text-gray-500">Program communications will go to the guardian</span>
+            <span class="block text-xs text-gray-500"><%= t("applications.dependent_contact.guardian_email_help") %></span>
           </label>
         </div>
         
@@ -130,7 +130,7 @@
                 dependent_fields_target: "dependentEmail",
                 "contact-feedback-target": "email"
               } %>
-          <p class="mt-1 text-xs text-gray-500">This email will be used for communications about the dependent's benefits</p>
+          <p class="mt-1 text-xs text-gray-500"><%= t("applications.dependent_contact.dependent_email_help") %></p>
         </div>
       </div>
       
@@ -147,7 +147,7 @@
           } %>
           <label for="use_guardian_phone_checkbox" class="ml-2">
             <span class="block text-sm font-medium text-gray-700">Use guardian's phone number</span>
-            <span class="block text-xs text-gray-500">We'll call or text the guardian instead</span>
+            <span class="block text-xs text-gray-500"><%= t("applications.dependent_contact.guardian_phone_help") %></span>
           </label>
         </div>
         

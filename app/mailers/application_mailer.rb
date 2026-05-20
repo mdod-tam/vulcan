@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ApplicationMailer < ActionMailer::Base
+  include SecureErrorSanitizer
+
   class NoopDelivery
     attr_reader :channel, :reason
 

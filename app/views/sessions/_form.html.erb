@@ -1,18 +1,19 @@
 <div id="sign_in_form">
   <%# Error Summary Block - from main page for better accessibility %>
   <% if @errors&.any? %>
-    <div id="signin-error-summary" role="alert" aria-labelledby="signin-error-heading" tabindex="-1" class="bg-red-50 border border-red-400 text-red-700 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
+    <div id="signin-error-summary"
+         role="alert"
+         aria-labelledby="signin-error-heading"
+         tabindex="-1"
+         data-controller="error-summary"
+         class="bg-red-50 border border-red-400 text-red-700 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
       <h2 id="signin-error-heading" class="sr-only">Please address the following errors:</h2>
       <ul class="list-disc list-inside">
         <% @errors.each do |field, msg| %>
-            <li><a href="#<%= field %>-input" class="underline"><%= msg %></a></li>
+            <li><a href="#<%= field %>-input" class="underline" data-action="click->error-summary#focus"><%= msg %></a></li>
         <% end %>
       </ul>
     </div>
-    <script>
-      // Optional: Focus the error summary when it appears
-      document.getElementById('signin-error-summary')?.focus();
-    </script>
   <% end %>
 
   <%= form_with url: sign_in_path,
