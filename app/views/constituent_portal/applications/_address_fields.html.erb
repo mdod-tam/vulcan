@@ -34,7 +34,7 @@
        data-dependent-fields-target="addressFields"
        aria-hidden="<%= use_guardian_address %>">
     <div>
-      <%= form.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
+      <%= form.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700 required-label" %>
       <%= form.text_field :physical_address_1,
           value: address[:physical_address_1],
           class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
@@ -59,7 +59,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="md:col-span-1">
-        <%= form.label :city, "City", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.label :city, "City", class: "block text-sm font-medium text-gray-700 required-label" %>
         <%= form.text_field :city,
             value: address[:city],
             class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",
@@ -74,7 +74,7 @@
       </div>
 
       <div>
-        <%= form.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.label :state, "State", class: "block text-sm font-medium text-gray-700 required-label" %>
         <%= form.select :state,
             options_for_select([
               ["Alabama", "AL"], ["Alaska", "AK"], ["Arizona", "AZ"], ["Arkansas", "AR"],
@@ -104,7 +104,7 @@
       </div>
 
       <div>
-        <%= form.label :zip_code, "Zip Code", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.label :zip_code, "Zip Code", class: "block text-sm font-medium text-gray-700 required-label" %>
         <%= form.text_field :zip_code,
             value: address[:zip_code],
             class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm required-label",

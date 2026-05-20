@@ -238,7 +238,7 @@
                  data-income-validation-target="incomeFieldsContainer">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <%= form.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
+                  <%= form.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700 required-label" %>
                   <div class="mt-1">
                     <%= form.number_field :household_size,
                         min: 1,
@@ -250,7 +250,7 @@
                           "income-validation-target": "householdSize"
                         } %>
                   </div>
-                  <p class="mt-1 text-xs text-gray-700 required-label" id="household_size_help">
+                  <p class="mt-1 text-xs text-gray-700" id="household_size_help">
                     Total number of people living in your household
                   </p>
                 </div>
@@ -273,7 +273,7 @@
                           currency_formatter_target: "input"
                         } %>
                   </div>
-                  <p class="mt-1 text-xs text-gray-700 required-label" id="annual_income_help">
+                  <p class="mt-1 text-xs text-gray-700" id="annual_income_help">
                     Total yearly household income before taxes
                   </p>
                 </div>
@@ -317,7 +317,7 @@
                     "aria-required": "true",
                     "aria-describedby": "maryland_resident_help" %>
                 <%= form.label :maryland_resident, "I certify that I am a resident of Maryland",
-                    class: "ml-2 block text-sm text-gray-700" %>
+                    class: "ml-2 block text-sm text-gray-700 required-label" %>
               </div>
               <p id="maryland_resident_help" class="ml-6 text-xs text-gray-700 mt-1">Note: This will be verified through the residency proof upload/review process</p>
             </div>
@@ -376,7 +376,7 @@
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
         <%= form.label :terms_accepted,
             "I have read and accept the terms and conditions",
-            class: "ml-2 block text-sm text-gray-700" %>
+            class: "ml-2 block text-sm text-gray-700 required-label" %>
       </div>
     </div>
 
@@ -389,7 +389,7 @@
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
         <%= form.label :information_verified,
             "I verify that all information provided above is accurate and complete",
-            class: "ml-2 block text-sm text-gray-700" %>
+            class: "ml-2 block text-sm text-gray-700 required-label" %>
       </div>
     </div>
 
