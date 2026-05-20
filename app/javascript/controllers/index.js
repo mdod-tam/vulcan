@@ -39,6 +39,7 @@ import W9ReviewController from "./reviews/w9_review_controller"
 import AccessibilityAnnouncerController from "./ui/accessibility_announcer_controller"
 import ApplicationModalController from "./ui/application_modal_controller"
 import CheckboxSelectAllController from "./ui/checkbox_select_all_controller"
+import ErrorSummaryController from "./ui/error_summary_controller"
 import MobileMenuController from "./ui/mobile_menu_controller"
 import ModalController from "./ui/modal_controller"
 import PdfLoaderController from "./ui/pdf_loader_controller"
@@ -99,6 +100,7 @@ application.register("w9-review", W9ReviewController)
 application.register("accessibility-announcer", AccessibilityAnnouncerController)
 application.register("application-modal", ApplicationModalController)
 application.register("checkbox-select-all", CheckboxSelectAllController)
+application.register("error-summary", ErrorSummaryController)
 application.register("mobile-menu", MobileMenuController)
 application.register("modal", ModalController)
 application.register("pdf-loader", PdfLoaderController)

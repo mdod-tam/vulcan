@@ -55,6 +55,12 @@
                       case log.action
                       when "proof_approved", "proof_rejected"
                         "Notification Sent"
+                      when "provider_info_requested"
+                        "Provider Info Request Sent"
+                      when "proof_resubmission_requested"
+                        "Proof Resubmission Request Sent"
+                      when "cert_upload_requested"
+                        "Certification Upload Request Sent"
                       else
                         log.action.titleize.gsub('_', ' ')
                       end
@@ -73,6 +79,20 @@
                         "Voucher Cancelled"
                       when "profile_updated", "profile_updated_by_guardian"
                         "Profile Updated"
+                      when "provider_info_request_revoked"
+                        "Provider Info Request Revoked"
+                      when "proof_resubmission_request_revoked"
+                        "Proof Resubmission Request Revoked"
+                      when "proof_resubmission_request_expired"
+                        "Proof Resubmission Request Expired"
+                      when "cert_upload_request_revoked"
+                        "Certification Upload Request Revoked"
+                      when "cert_upload_request_expired"
+                        "Certification Upload Request Expired"
+                      when "proof_submitted_via_secure_form"
+                        "Proof Submitted Via Secure Form"
+                      when "cert_submitted_via_secure_form"
+                        "Certification Submitted Via Secure Form"
                       else
                         log.action.titleize.gsub('_', ' ')
                       end
@@ -176,6 +196,8 @@
                       proof_type = log.metadata.try(:[], 'proof_type') || 'Unknown'
                       rejection_text = log.metadata.try(:[], 'rejection_reason').present? ? " - #{log.metadata['rejection_reason']}" : ""
                       "Constituent notified: #{proof_type.titleize} proof rejected#{rejection_text}"
+                    when "provider_info_requested", "proof_resubmission_requested", "cert_upload_requested"
+                      secure_request_notification_detail(log, application: @application)
                     else
                       log.action.titleize.gsub('_', ' ')
                     end
@@ -216,6 +238,10 @@
                       guardian_name = log.user&.full_name || "Guardian"
                       changes_summary = log.metadata['changes']&.keys&.map(&:humanize)&.join(', ') || 'profile fields'
                       "#{guardian_name} updated #{user_name}'s profile (#{changes_summary})"
+                    when "provider_info_request_revoked", "proof_resubmission_request_revoked", "proof_resubmission_request_expired",
+                         "cert_upload_request_revoked", "cert_upload_request_expired",
+                         "proof_submitted_via_secure_form", "cert_submitted_via_secure_form"
+                      secure_request_lifecycle_event_detail(log, application: @application)
                     else
                       log.action.titleize.gsub('_', ' ')
                     end

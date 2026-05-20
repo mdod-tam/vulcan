@@ -121,6 +121,38 @@ class W9ReviewTest < ActiveSupport::TestCase
     DatabaseCleaner.strategy = :transaction
   end
 
+  test 'rejected review records audit notification without direct mail delivery' do
+    review = W9Review.new(
+      vendor: @vendor,
+      admin: @admin,
+      status: :rejected,
+      rejection_reason_code: :address_mismatch,
+      rejection_reason: "Address doesn't match records",
+      reviewed_at: Time.current
+    )
+
+    Vendors::RequestW9Resubmission.any_instance.expects(:call).returns(BaseService::Result.new(success: true, message: 'ok', data: {}))
+    NotificationService
+      .expects(:create_and_deliver!)
+      .with(
+        has_entries(
+          type: 'w9_rejected',
+          recipient: @vendor,
+          actor: @admin,
+          notifiable: @vendor,
+          channel: :email,
+          audit: true,
+          deliver: false,
+          metadata: has_entries(
+            rejection_reason: "Address doesn't match records",
+            rejection_reason_code: 'address_mismatch'
+          )
+        )
+      )
+
+    review.send(:handle_post_review_actions)
+  end
+
   test 'admin must be an admin type' do
     non_admin = create(:vendor)
     review = W9Review.new(

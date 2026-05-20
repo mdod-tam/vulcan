@@ -39,22 +39,32 @@ class RejectionReason < ApplicationRecord
   end
 
   # Returns { text:, code: } for persisting to ProofReview
-  def self.resolve_for_persistence(code:, proof_type:, fallback:, locale: 'en')
+  def self.resolve_for_persistence(code:, proof_type:, fallback:, locale: 'en', interpolations: {})
     return { text: fallback.to_s.presence, code: nil } if code.blank?
 
     rr = resolve(code: code, proof_type: proof_type, locale: locale)
+    resolved_text = interpolate_body(rr&.body || fallback, interpolations)
     {
-      text: rr&.body || fallback,
+      text: resolved_text,
       code: rr ? code : nil
     }
   end
 
   # Returns the human-readable body for the given code and proof type,
   # or the fallback when code is blank or no record exists.
-  def self.resolve_text(code:, proof_type:, fallback:, locale: 'en')
+  def self.resolve_text(code:, proof_type:, fallback:, locale: 'en', interpolations: {})
     resolve_for_persistence(
-      code: code, proof_type: proof_type, fallback: fallback, locale: locale
+      code: code, proof_type: proof_type, fallback: fallback, locale: locale, interpolations: interpolations
     )[:text]
+  end
+
+  def self.interpolate_body(body, interpolations = {})
+    return body if interpolations.blank?
+    return body unless body.to_s.include?('%{') || body.to_s.include?('%<')
+
+    body % interpolations.transform_keys(&:to_sym)
+  rescue KeyError, ArgumentError
+    body
   end
 
   private

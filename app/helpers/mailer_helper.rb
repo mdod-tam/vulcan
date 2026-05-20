@@ -123,14 +123,21 @@ module MailerHelper
                  end
 
     # Convert to string and handle both symbol and integer cases
-    case type_value.to_s
-    when '0', 'income'
-      'income'
-    when '1', 'residency'
-      'residency'
-    else
-      type_value.to_s
-    end.humanize.downcase
+    normalized_type = case type_value.to_s
+                      when '0', 'income'
+                        'income'
+                      when '1', 'residency'
+                        'residency'
+                      when '3', 'id'
+                        'id'
+                      else
+                        type_value.to_s
+                      end
+
+    I18n.t(
+      "secure_proof_forms.proof_types.#{normalized_type}",
+      default: normalized_type.humanize.downcase
+    )
   end
 
   # Returns the appropriate text for training session scheduling information

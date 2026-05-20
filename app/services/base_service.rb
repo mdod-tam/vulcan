@@ -3,10 +3,12 @@
 # Base class for all service objects in the application
 # Provides common functionality and structure
 class BaseService
+  include SecureErrorSanitizer
+
   attr_reader :errors
 
   # Default result object returned by services
-  Result = Struct.new(:success, :message, :data, keyword_init: true) do
+  Result = Struct.new(:success, :message, :data) do
     def success?
       success == true
     end
@@ -34,9 +36,14 @@ class BaseService
   protected
 
   # Add an error message to the errors array
-  def add_error?(message)
+  def add_error(message)
     @errors << message
     false
+  end
+
+  # Backward-compatible boolean-style helper used by some older services.
+  def add_error?(message)
+    add_error(message)
   end
 
   # Log an error with optional context and add to errors array
@@ -52,6 +59,6 @@ class BaseService
     Rails.logger.error error_message
     Rails.logger.error exception.backtrace.join("\n") if exception.backtrace
 
-    add_error?(exception.message)
+    add_error(exception.message)
   end
 end

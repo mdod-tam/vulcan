@@ -66,6 +66,19 @@ module Applications
                    'Dependent effective_email should return guardian email'
     end
 
+    test 'dependent effective_phone_type returns guardian phone type when using guardian phone' do
+      @guardian.update!(phone: '410-555-0199', phone_type: 'text')
+      dependent = create(
+        :constituent,
+        phone: '000-000-1234',
+        dependent_phone: @guardian.phone,
+        phone_type: 'voice'
+      )
+      create(:guardian_relationship, guardian_user: @guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      assert_equal 'text', dependent.effective_phone_type
+    end
+
     test 'creates dependent with their own email when email_strategy is dependent' do
       dependent_email = "dependent_#{Time.now.to_i}@example.com"
 

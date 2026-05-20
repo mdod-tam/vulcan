@@ -35,8 +35,23 @@ module Applications
 
       # Conditionally preload associations used by the view to avoid N+1
       # without over-eager loading when those records are not displayed.
-      notifications = deduped.select { |e| e.is_a?(Notification) }
-      ActiveRecord::Associations::Preloader.new.preload(notifications, :actor) if notifications.any?
+      notifications = deduped.grep(Notification)
+      if notifications.any?
+        ActiveRecord::Associations::Preloader.new(
+          records: notifications,
+          associations: :actor
+        ).call
+
+        recipient_notifications = notifications.select do |notification|
+          notification.action.in?(%w[provider_info_requested proof_resubmission_requested])
+        end
+        if recipient_notifications.any?
+          ActiveRecord::Associations::Preloader.new(
+            records: recipient_notifications,
+            associations: :recipient
+          ).call
+        end
+      end
 
       deduped
     rescue StandardError => e
@@ -126,6 +141,9 @@ module Applications
                  medical_certification_received
                  medical_certification_approved
                  medical_certification_rejected
+                 provider_info_requested
+                 proof_resubmission_requested
+                 cert_upload_requested
                  review_requested
                  documents_requested
                ])
@@ -145,6 +163,10 @@ module Applications
             application_created evaluator_assigned trainer_assigned
             medical_certification_requested medical_certification_status_changed
             alternate_contact_updated
+            provider_info_request_revoked proof_resubmission_request_revoked
+            proof_resubmission_request_expired
+            cert_upload_request_revoked cert_upload_request_expired
+            proof_submitted_via_secure_form cert_submitted_via_secure_form
           ],
           application.id.to_s,
           { application_id: application.id }.to_json,

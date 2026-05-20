@@ -133,6 +133,8 @@ export default class extends Controller {
       
       // Remove required attribute from all medical provider fields
       medicalProviderFields.forEach(field => {
+        if (!this._isApplicationMedicalProviderField(field)) return;
+
         field.removeAttribute('required');
         field.removeAttribute('aria-required');
       });
@@ -143,15 +145,16 @@ export default class extends Controller {
       
       // Add required attribute back to all medical provider fields
       medicalProviderFields.forEach(field => {
-        if (field.name.includes('medical_provider')) {
-          // Only set required for the main fields, not the optional fax field
-          if (!field.name.includes('fax')) {
-            field.setAttribute('required', 'required');
-            field.setAttribute('aria-required', 'true');
-          }
+        if (this._isApplicationMedicalProviderField(field)) {
+          field.setAttribute('required', 'required');
+          field.setAttribute('aria-required', 'true');
         }
       });
     }
+  }
+
+  _isApplicationMedicalProviderField(field) {
+    return field.name.startsWith("application[medical_provider_") && !field.name.includes("fax");
   }
 
   /**

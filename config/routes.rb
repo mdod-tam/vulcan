@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# rubocop:disable Metrics/BlockLength
 Rails.application.routes.draw do
   # Handle favicon requests silently to prevent routing errors in tests
   get '/favicon.ico', to: proc { [204, {}, []] }
@@ -21,6 +20,9 @@ Rails.application.routes.draw do
   get 'apply', to: 'pages#apply', as: :apply
   get 'contact', to: 'pages#contact', as: :contact
   get 'medical_certification_form', to: 'medical_certification_forms#show', as: :medical_certification_form
+  get 'secure_certification_form/success', to: 'secure_certification_forms#success', as: :secure_certification_form_success
+  resource :secure_certification_form, only: %i[show update]
+  resource :secure_certification_form_resend, only: %i[new create], controller: 'secure_certification_form_resends'
 
   # Welcome/Onboarding
   get 'welcome', to: 'welcome#index', as: :welcome
@@ -86,18 +88,27 @@ Rails.application.routes.draw do
     end
   end
 
-  # Action Mailbox routes
-  # First, mount the engine to provide all standard ActionMailbox functionality
-  mount ActionMailbox::Engine => '/rails/action_mailbox'
-
-  # Our custom namespace for specific functionality
-  namespace :rails do
-    namespace :action_mailbox do
-      namespace :postmark do
-        resources :inbound_emails, only: [:create]
-      end
-    end
-  end
+  get 'secure_provider_info_form/success',
+      to: 'secure_provider_info_forms#success',
+      as: :secure_provider_info_form_success
+  resource :secure_provider_info_form, only: %i[show update]
+  resource :secure_provider_info_form_resend,
+           only: %i[new create],
+           controller: 'secure_provider_info_form_resends'
+  get 'secure_w9_form/success',
+      to: 'secure_w9_forms#success',
+      as: :secure_w9_form_success
+  resource :secure_w9_form, only: %i[show update]
+  resource :secure_w9_form_resend,
+           only: %i[new create],
+           controller: 'secure_w9_form_resends'
+  get 'secure_proof_form/success',
+      to: 'secure_proof_forms#success',
+      as: :secure_proof_form_success
+  resource :secure_proof_form, only: %i[show update]
+  resource :secure_proof_form_resend,
+           only: %i[new create],
+           controller: 'secure_proof_form_resends'
 
   namespace :admin do
     get 'dashboard', to: 'dashboards#index', as: :dashboard
@@ -170,6 +181,29 @@ Rails.application.routes.draw do
 
       resources :notes, only: %i[create update], controller: 'application_notes'
       resources :scanned_proofs, only: %i[new create] # Added missing routes
+      resources :secure_request_forms,
+                only: [:create],
+                controller: 'application_secure_request_forms' do
+        resource :revocation,
+                 only: [:create],
+                 controller: 'application_secure_request_form_revocations'
+      end
+      resources :secure_request_form_batch_revocations,
+                only: [:create],
+                controller: 'application_secure_request_form_batch_revocations'
+      resource :proof_resubmission_request,
+               only: [:create],
+               controller: 'application_proof_resubmission_requests'
+      resource :certification_upload_request,
+               only: [:create],
+               controller: 'application_certification_upload_requests'
+      resources :medical_provider_secure_request_forms,
+                only: [],
+                controller: 'application_medical_provider_secure_request_forms' do
+        resource :revocation,
+                 only: [:create],
+                 controller: 'application_medical_provider_secure_request_form_revocations'
+      end
     end
 
     # Application Analytics
@@ -239,6 +273,13 @@ Rails.application.routes.draw do
 
     resources :vendors do
       resources :w9_reviews, only: %i[index show new create]
+      resources :vendor_secure_request_forms,
+                only: [:create],
+                controller: 'vendor_secure_request_forms' do
+        resource :revocation,
+                 only: [:create],
+                 controller: 'vendor_secure_request_form_revocations'
+      end
     end
 
     resources :products do
@@ -281,8 +322,6 @@ Rails.application.routes.draw do
       end
     end
   end
-  # rubocop:enable Metrics/BlockLength
-
   namespace :evaluators do
     resource :dashboard, only: [:show], controller: :dashboards
     resources :evaluations do
@@ -372,7 +411,6 @@ Rails.application.routes.draw do
         patch :autosave_field
         patch :upload_documents
         post :request_review
-        get :verify
         patch :submit
         post :resubmit_proof
         post :update # Handle form submissions that POST to update path
@@ -396,7 +434,6 @@ Rails.application.routes.draw do
 
   namespace :webhooks do
     resources :email_events, only: [:create]
-    resources :medical_certifications, only: [:create]
     post 'twilio/fax_status', to: 'twilio#fax_status', as: :twilio_fax_status
     post 'docuseal/medical_certification', to: 'docuseal#medical_certification'
   end

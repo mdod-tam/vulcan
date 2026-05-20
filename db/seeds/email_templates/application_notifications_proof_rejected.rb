@@ -3,31 +3,32 @@
 # Seed File for "application_notifications_proof_rejected"
 # (Suggest saving as db/seeds/email_templates/application_notifications_proof_rejected.rb)
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_rejected', format: :text, locale: 'en') do |template|
-  template.subject = 'Document Review Update'
-  template.description = 'Sent when a specific piece of documentation submitted by the applicant has been rejected.'
-  template.body = <<~TEXT
-    %<header_text>s
+template = EmailTemplate.find_or_initialize_by(name: 'application_notifications_proof_rejected', format: :text, locale: 'en')
+template.subject = 'Action Needed: Please Submit a Corrected Document'
+template.description = 'Sent when a specific piece of documentation submitted by the applicant has been rejected.'
+template.body = <<~TEXT
+  %<header_text>s
 
-    Dear %<constituent_full_name>s,
+  Dear %<constituent_full_name>s,
 
-    We have reviewed your %<proof_type_formatted>s documentation and it has been rejected.
+  Thank you for submitting your %<proof_type_formatted>s for your MAT application. We reviewed it and need a corrected copy before we can continue processing your application.
 
-    REASON FOR REJECTION: %<rejection_reason>s
-    %<additional_instructions>s
+  Reason we could not accept this document:
+  %<rejection_reason>s
+  %<additional_instructions>s
 
-    %<remaining_attempts_message_text>s
+  %<remaining_attempts_message_text>s
 
-    %<default_options_text>s
+  %<default_options_text>s
 
-    %<archived_message_text>s
+  %<archived_message_text>s
 
-    %<footer_text>s
-  TEXT
-  template.variables = {
-    'required' => %w[header_text constituent_full_name proof_type_formatted rejection_reason footer_text],
-    'optional' => %w[organization_name remaining_attempts_message_text additional_instructions default_options_text archived_message_text]
-  }
-  template.version = 1
-end
+  %<footer_text>s
+TEXT
+template.variables = {
+  'required' => %w[header_text constituent_full_name proof_type_formatted rejection_reason footer_text],
+  'optional' => %w[organization_name secure_upload_url remaining_attempts_message_text additional_instructions default_options_text archived_message_text]
+}
+template.version = 3
+template.save! if template.new_record? || template.changed?
 Rails.logger.debug 'Seeded application_notifications_proof_rejected (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

@@ -100,7 +100,7 @@ module TurboStreamResponseHandling
           render html_render_action, status: status
         end
       else
-        format.html { redirect_back(fallback_location: root_path, alert: error_message) }
+        format.html { redirect_back_or_to root_path, alert: error_message }
       end
 
       format.turbo_stream { handle_turbo_stream_error(message: error_message) }

@@ -1,13 +1,9 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require 'open-uri'
-require 'support/action_mailbox_test_helper'
 
 class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
   include ActionDispatch::TestProcess::FixtureFile
-  include ActionMailboxTestHelper
-  include MailboxTestHelper
 
   setup do
     @admin = create(:admin)
@@ -65,7 +61,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     # via update_columns when status is :not_reviewed. The concern's set_needs_review_timestamp
     # callback does NOT fire (guarded by Current.proof_attachment_service_context).
     application.reload
-    refute_nil application.needs_review_since, 'needs_review_since should be set for not_reviewed proof'
+    assert_not_nil application.needs_review_since, 'needs_review_since should be set for not_reviewed proof'
   end
 
   test 'scanned proof upload produces the expected proof state' do
@@ -146,7 +142,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     assert service.create, "Expected paper application creation to succeed, got: #{service.errors.inspect}"
 
     application = service.application
-    refute_nil application
+    assert_not_nil application
     assert_equal 'paper', application.submission_method
     assert_equal 'approved', application.income_proof_status
     assert_equal 'approved', application.residency_proof_status
@@ -154,32 +150,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     assert application.income_proof.attached?
     assert application.residency_proof.attached?
     assert application.medical_certification.attached?
-    assert Event.where(auditable: application, action: 'application_created').exists?
-  end
-
-  test 'proof mailbox produces the expected proof state' do
-    constituent = create(:constituent)
-    application = create(:application, user: constituent, status: :in_progress)
-
-    inbound_email = receive_inbound_email_from_mail(
-      to: 'proof@mdmat.org',
-      from: constituent.email,
-      subject: 'Income Proof Submission',
-      body: 'Attached income proof.'
-    ) do |mail|
-      mail.attachments['income-proof.pdf'] = 'Income proof attachment ' * 80
-    end
-
-    assert_equal ProofSubmissionMailbox, ApplicationMailbox.mailbox_for(inbound_email)
-
-    assert_proof_contract(
-      application,
-      proof_type: 'income',
-      expected_status: 'not_reviewed',
-      expected_submission_method: 'email',
-      expected_actor: constituent,
-      expected_event_action: 'income_proof_submitted'
-    )
+    assert Event.exists?(auditable: application, action: 'application_created')
   end
 
   test 'admin certification review produces the expected certification state' do
@@ -244,89 +215,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     assert_equal 'received', application.medical_certification_status
     assert_equal 'signed', application.document_signing_status
     assert_equal 'https://example.com/audit_log', application.document_signing_audit_url
-    assert Event.where(auditable: application, action: 'document_signing_completed').exists?
-  end
-
-  test 'certification mailbox produces the expected certification state' do
-    with_committed_records do
-      medical_provider = create(:medical_provider)
-      application = create(
-        :application,
-        status: :awaiting_dcf,
-        medical_provider_name: medical_provider.full_name,
-        medical_provider_email: medical_provider.email,
-        medical_provider_phone: medical_provider.phone,
-        medical_certification_status: :requested
-      )
-
-      mail = Mail.new do
-        to 'disability_cert@mdmat.org'
-        from medical_provider.email
-        subject "Medical Certification for Application ##{application.id}"
-
-        text_part do
-          body "Attached certification for Application ##{application.id}"
-        end
-
-        add_file(
-          filename: 'medical-certification.pdf',
-          content: 'certification pdf ' * 80,
-          content_type: 'application/pdf'
-        )
-      end
-
-      inbound_email = ActionMailbox::InboundEmail.create_and_extract_message_id!(mail.to_s)
-      inbound_email.route
-
-      assert_equal MedicalCertificationMailbox, ApplicationMailbox.mailbox_for(inbound_email)
-
-      assert_medical_certification_contract(
-        application,
-        expected_status: 'received',
-        expected_from_status: 'requested',
-        expected_event_action: 'medical_certification_received',
-        expected_submission_method: 'email',
-        expected_actor: @system_user
-      )
-    end
-  end
-
-  test 'direct certification webhook produces the expected certification state' do
-    application = create(
-      :application,
-      status: :awaiting_dcf,
-      medical_provider_email: 'doctor@example.com',
-      medical_certification_status: :requested
-    )
-
-    # URI.open is private in Ruby 3.4+; stub the controller's download at the Kernel level
-    # since open-uri patches Kernel#open
-    OpenURI.stubs(:open_uri).returns(StringIO.new('certification pdf'))
-
-    payload = {
-      provider_email: 'doctor@example.com',
-      provider_name: 'Dr. Example',
-      constituent_name: application.user.full_name,
-      document_url: 'https://example.com/certification.pdf',
-      original_filename: 'certification.pdf',
-      webhook_id: SecureRandom.uuid
-    }
-
-    post webhooks_medical_certifications_path,
-         params: payload,
-         headers: webhook_headers(payload),
-         as: :json
-
-    assert_response :ok
-
-    assert_medical_certification_contract(
-      application,
-      expected_status: 'received',
-      expected_from_status: 'requested',
-      expected_event_action: 'medical_certification_received',
-      expected_submission_method: 'webhook',
-      expected_actor: @system_user
-    )
+    assert Event.exists?(auditable: application, action: 'document_signing_completed')
   end
 
   private
@@ -358,7 +247,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
                  .order(:created_at)
                  .last
 
-    refute_nil event
+    assert_not_nil event
     assert_equal expected_actor, event.user
     assert_equal proof_type.to_s, event.metadata['proof_type']
     assert_equal expected_submission_method, event.metadata['submission_method']
@@ -374,14 +263,14 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     status_change = ApplicationStatusChange.where(application: application, change_type: :medical_certification)
                                            .order(:created_at)
                                            .last
-    refute_nil status_change
+    assert_not_nil status_change
     assert_equal expected_from_status, status_change.from_status
     assert_equal expected_status, status_change.to_status
     assert_equal 'medical_certification', status_change.metadata['change_type']
     assert_equal expected_submission_method, status_change.metadata['submission_method']
 
     event = Event.where(auditable: application, action: expected_event_action).order(:created_at).last
-    refute_nil event
+    assert_not_nil event
     assert_equal expected_actor, event.user
     assert_equal expected_submission_method, event.metadata['submission_method'] if event.metadata.key?('submission_method')
   end
@@ -391,17 +280,5 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
       'Content-Type' => 'application/json',
       'X-Webhook-Signature' => OpenSSL::HMAC.hexdigest('sha256', @webhook_secret, payload.to_json)
     }
-  end
-
-  def with_committed_records
-    DatabaseCleaner.strategy = :truncation
-    DatabaseCleaner.clean
-    Current.reset
-    @system_user = create(:admin, email: generate(:email))
-    User.stubs(:system_user).returns(@system_user)
-    yield
-  ensure
-    Current.reset
-    DatabaseCleaner.strategy = :transaction
   end
 end

@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
 class SmsService
-  def self.send_message(phone_number, message)
+  def self.send_message(phone_number, message, sensitive: false, context: {})
     delivery_phone_number = format_phone_to_e164(phone_number)
 
     # Log the SMS attempt
-    Rails.logger.info("SMS to #{delivery_phone_number}: #{message}")
+    if sensitive
+      Rails.logger.info("SMS delivery requested: #{safe_context(context).merge(phone: masked_phone(phone_number)).inspect}")
+    else
+      Rails.logger.info("SMS to #{delivery_phone_number}: #{message}")
+    end
 
     # In test/development without Twilio credentials, just log and return success
     return true unless twilio_configured?
@@ -23,7 +27,11 @@ class SmsService
         body: message
       )
 
-      Rails.logger.info("SMS sent successfully to #{delivery_phone_number} via Twilio")
+      if sensitive
+        Rails.logger.info("SMS sent successfully via Twilio: #{safe_context(context).merge(phone: masked_phone(phone_number)).inspect}")
+      else
+        Rails.logger.info("SMS sent successfully to #{delivery_phone_number} via Twilio")
+      end
       true
     rescue Twilio::REST::RestError => e
       Rails.logger.error("Twilio SMS delivery failed: #{e.message}")
@@ -50,4 +58,18 @@ class SmsService
     digits = "1#{digits}" if digits.length == 10
     "+#{digits}"
   end
+
+  def self.masked_phone(phone_number)
+    digits = phone_number.to_s.gsub(/\D/, '')
+    last_four = digits.last(4)
+    return '[FILTERED]' if last_four.blank?
+
+    "***-***-#{last_four}"
+  end
+  private_class_method :masked_phone
+
+  def self.safe_context(context)
+    (context || {}).slice(:secure_request_form_id, :application_id, :recipient_id, :recipient_channel)
+  end
+  private_class_method :safe_context
 end

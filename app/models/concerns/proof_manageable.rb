@@ -154,11 +154,11 @@ module ProofManageable
   def require_proof_attachments
     return if new_record? || status_draft?
 
-    if income_proof_required? && !income_proof.attached?
+    if income_proof_required? && !income_proof_status_rejected? && !income_proof.attached?
       errors.add(:income_proof, 'must be attached. Please upload your income documentation.')
     end
 
-    return if residency_proof.attached?
+    return if residency_proof_status_rejected? || residency_proof.attached?
 
     errors.add(:residency_proof, 'must be attached. Please upload your proof of Maryland residency.')
   end
@@ -175,6 +175,7 @@ module ProofManageable
   def skip_validation_contexts?
     (Rails.env.test? && ENV['REQUIRE_PROOF_VALIDATIONS'] != 'true') ||
       Current.skip_proof_validation ||
+      Current.reviewing_single_proof? ||
       Current.paper_context? ||
       Current.proof_attachment_service_context? ||
       submission_method_paper?

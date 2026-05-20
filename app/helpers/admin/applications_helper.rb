@@ -4,6 +4,21 @@ module Admin
   module ApplicationsHelper
     include RejectionReasonsHelper
 
+    MedicalCertificationActionState = Struct.new(
+      :latest_certification_request,
+      :latest_certification_reject,
+      :requested_after_rejection,
+      :provider_ready_for_docuseal,
+      :docuseal_text,
+      :secure_cert_upload_message,
+      :active_secure_cert_upload_forms,
+      :docuseal_confirm,
+      :secure_cert_upload_confirm
+    ) do
+      alias_method :requested_after_rejection?, :requested_after_rejection
+      alias_method :provider_ready_for_docuseal?, :provider_ready_for_docuseal
+    end
+
     def medical_certification_link(application, style = :link)
       return nil unless application.medical_certification.attached?
 
@@ -64,6 +79,17 @@ module Admin
 
       # Default fallback
       'portal'
+    end
+
+    def additional_medical_certification_source_label(certification)
+      case certification.blob.metadata['source']
+      when 'docuseal'
+        'DocuSeal signed form'
+      when 'secure_form'
+        'Secure upload'
+      else
+        'Additional certification'
+      end
     end
 
     def format_rejection_reason(proof_type, application)
@@ -145,6 +171,19 @@ module Admin
         .select { |activity| activity.proof_type.to_s == proof_type.to_s }
     end
 
+    def show_proof_history_submission_fallback?(application, proof_type)
+      application.public_send("#{proof_type}_proof").attached? && application.created_at.present?
+    end
+
+    def format_proof_history_detail(detail, application)
+      text = RejectionReason.interpolate_body(
+        detail.to_s,
+        address: application_proof_history_address(application)
+      ).to_s.strip
+
+      text.gsub(/\A"(.*)"\z/m, '\1')
+    end
+
     def calculate_percentage(count, total)
       return 0 unless total.positive?
 
@@ -181,6 +220,81 @@ module Admin
       application.medical_certification_status == 'not_requested' ||
         application.medical_certification_status == 'rejected' ||
         (application.medical_certification_status == 'requested' && !application.medical_certification.attached?)
+    end
+
+    def medical_certification_pending_review?(application)
+      application.medical_certification.attached? &&
+        (application.medical_certification_status_received? || application.medical_certification_status_requested?)
+    end
+
+    def show_secure_cert_upload_button?(application)
+      !application.medical_certification_status_approved? &&
+        !medical_certification_pending_review?(application)
+    end
+
+    def medical_certification_action_state(application, secure_request_forms: nil)
+      latest_request = latest_medical_certification_notification(application, 'medical_certification_requested')
+      latest_reject = latest_medical_certification_notification(application, 'medical_certification_rejected')
+      active_secure_forms = Array(secure_request_forms || application.medical_provider_secure_request_forms).count(&:active?)
+
+      MedicalCertificationActionState.new(
+        latest_certification_request: latest_request,
+        latest_certification_reject: latest_reject,
+        requested_after_rejection: requested_after_rejection?(latest_request, latest_reject),
+        provider_ready_for_docuseal: application.ready_for_docuseal?,
+        docuseal_text: docuseal_button_text(application),
+        secure_cert_upload_message: t('admin.applications.certification_upload_requests.create.provider_email_required'),
+        active_secure_cert_upload_forms: active_secure_forms,
+        docuseal_confirm: docuseal_confirmation(application, active_secure_forms),
+        secure_cert_upload_confirm: secure_cert_upload_confirmation(application)
+      )
+    end
+
+    private
+
+    def latest_medical_certification_notification(application, action)
+      Notification
+        .where(notifiable: application, action: action)
+        .order(created_at: :desc)
+        .limit(1)
+        .first
+    end
+
+    def requested_after_rejection?(latest_request, latest_reject)
+      latest_request.present? &&
+        latest_reject.present? &&
+        latest_request.created_at > latest_reject.created_at
+    end
+
+    def docuseal_confirmation(application, active_secure_cert_upload_forms)
+      if active_secure_cert_upload_forms.positive?
+        if active_secure_cert_upload_forms == 1
+          'A secure upload link is already active. Send DocuSeal as an additional option?'
+        else
+          "#{active_secure_cert_upload_forms} secure upload links are already active. Send DocuSeal as an additional option?"
+        end
+      else
+        [
+          "Send digital signing request to #{application.medical_provider_name}",
+          "(#{application.medical_provider_email}) for #{application.constituent_full_name}'s disability certification?"
+        ].join(' ')
+      end
+    end
+
+    def secure_cert_upload_confirmation(application)
+      if application.document_signing_status_sent? || application.document_signing_status_opened?
+        "A DocuSeal request is already #{application.document_signing_status}. Send a secure upload link as an additional option?"
+      else
+        "Send secure certification upload link to #{application.medical_provider_email}?"
+      end
+    end
+
+    def application_proof_history_address(application)
+      [
+        application.user&.physical_address_1,
+        application.user&.physical_address_2,
+        [application.user&.city, application.user&.state, application.user&.zip_code].compact.join(' ')
+      ].compact_blank.join(' ').squish
     end
   end
 end

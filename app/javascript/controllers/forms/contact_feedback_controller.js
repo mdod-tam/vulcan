@@ -229,6 +229,15 @@ export default class ContactFeedbackController extends Controller {
     const checkIcon = `<svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
     </svg>`
+    const guardianPhoneFeedback = () => {
+      if (!this._usesGuardianPhonePath()) return null
+
+      return {
+        html: `${checkIcon}<span>We will use the guardian phone path.</span>`,
+        className: successClassName
+      }
+    }
+    const guardianPhoneFallback = guardianPhoneFeedback()
     
     switch (method) {
       case 'voice':
@@ -238,6 +247,7 @@ export default class ContactFeedbackController extends Controller {
             className: successClassName
           }
         }
+        if (guardianPhoneFallback) return guardianPhoneFallback
         return {
           html: `<span>Please enter a phone number above</span>`,
           className: warningClassName
@@ -250,6 +260,7 @@ export default class ContactFeedbackController extends Controller {
             className: successClassName
           }
         }
+        if (guardianPhoneFallback) return guardianPhoneFallback
         return {
           html: `<span>Please enter a phone number above</span>`,
           className: warningClassName
@@ -262,6 +273,7 @@ export default class ContactFeedbackController extends Controller {
             className: successClassName
           }
         }
+        if (guardianPhoneFallback) return guardianPhoneFallback
         return {
           html: `<span>Please enter your videophone number above</span>`,
           className: warningClassName
@@ -288,6 +300,10 @@ export default class ContactFeedbackController extends Controller {
       default:
         return null
     }
+  }
+
+  _usesGuardianPhonePath() {
+    return this.element.querySelector('#use_guardian_phone_checkbox')?.checked === true
   }
 
   /**

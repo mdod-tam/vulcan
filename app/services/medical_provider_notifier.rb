@@ -2,10 +2,11 @@
 
 # Service for notifying medical providers through different communication channels
 class MedicalProviderNotifier
+  include SecureErrorSanitizer
+
   class NotificationError < StandardError; end
 
   REJECTION_ACTION = 'medical_certification_rejected'
-  DOCUMENT_SIGNING_METHOD = 'document_signing'
   FAX_METHOD = 'fax'
   EMAIL_METHOD = 'email'
 
@@ -18,44 +19,31 @@ class MedicalProviderNotifier
   end
 
   # Notify the medical provider about a rejected certification.
-  # Uses channel continuity (document signing/email/fax) with fallback on failure.
+  # Uses email/fax fallback only; DocuSeal is a separate explicit admin action.
   # @param rejection_reason [String] The reason for rejection
   # @param admin [User] The admin who rejected the certification
   # @param notification_id [Integer, nil] Existing rejection notification id to enrich with delivery metadata
+  # @param secure_upload_url [String, nil] Tokenized upload URL for email delivery only
   # @return [Boolean] Whether the notification was sent successfully
-  def send_certification_rejection_notice(rejection_reason:, admin:, notification_id: nil)
+  def send_certification_rejection_notice(rejection_reason:, admin:, notification_id: nil, secure_upload_url: nil)
     Rails.logger.info "Notifying medical provider about certification rejection for Application ID: #{application.id}"
 
-    log_audit_event(rejection_reason, admin)
-    delivery_result = attempt_notification_delivery(rejection_reason, admin)
+    delivery_result = attempt_notification_delivery(rejection_reason, admin, secure_upload_url: secure_upload_url)
 
     handle_delivery_result(delivery_result, notification_id: notification_id)
   end
 
   private
 
-  # Log the audit event for the rejection
-  def log_audit_event(rejection_reason, admin)
-    AuditEventService.log(
-      action: 'medical_certification_rejected',
-      actor: admin,
-      auditable: application,
-      metadata: {
-        rejection_reason: rejection_reason,
-        medical_provider_name: application.medical_provider_name
-      }
-    )
-  end
-
   # Attempt to deliver notification via available channels
-  def attempt_notification_delivery(rejection_reason, admin)
+  def attempt_notification_delivery(rejection_reason, admin, secure_upload_url: nil)
     methods = prioritized_delivery_methods(admin)
     return failure_result(error: 'No contact method available for medical provider') if methods.empty?
 
     last_failure = nil
 
     methods.each_with_index do |method, index|
-      result = deliver_via_method(method, rejection_reason, admin)
+      result = deliver_via_method(method, rejection_reason, admin, secure_upload_url: secure_upload_url)
       if result[:success]
         result[:fallback_from] = methods[index - 1] if index.positive?
         return result
@@ -67,22 +55,19 @@ class MedicalProviderNotifier
     last_failure || failure_result(error: 'All provider delivery methods failed')
   end
 
-  def prioritized_delivery_methods(admin)
-    methods = [preferred_delivery_method(admin), EMAIL_METHOD, FAX_METHOD].uniq
-    methods.select { |method| delivery_method_available?(method, admin) }
+  def prioritized_delivery_methods(_admin)
+    methods = [preferred_delivery_method, EMAIL_METHOD, FAX_METHOD].uniq
+    methods.select { |method| delivery_method_available?(method) }
   end
 
-  def preferred_delivery_method(admin)
-    return DOCUMENT_SIGNING_METHOD if document_signing_preferred? && document_signing_available?(admin)
+  def preferred_delivery_method
     return EMAIL_METHOD if email_available?
 
     FAX_METHOD
   end
 
-  def delivery_method_available?(method, admin)
+  def delivery_method_available?(method)
     case method
-    when DOCUMENT_SIGNING_METHOD
-      document_signing_available?(admin)
     when EMAIL_METHOD
       email_available?
     when FAX_METHOD
@@ -92,28 +77,15 @@ class MedicalProviderNotifier
     end
   end
 
-  def deliver_via_method(method, rejection_reason, admin)
+  def deliver_via_method(method, rejection_reason, admin, secure_upload_url: nil)
     case method
-    when DOCUMENT_SIGNING_METHOD
-      notify_by_document_signing(admin)
     when EMAIL_METHOD
-      notify_by_email(rejection_reason, admin)
+      notify_by_email(rejection_reason, admin, secure_upload_url: secure_upload_url)
     when FAX_METHOD
       notify_by_fax(rejection_reason)
     else
       failure_result(method: method, error: 'Unsupported delivery method')
     end
-  end
-
-  def document_signing_preferred?
-    application.document_signing_request_count.to_i.positive? ||
-      application.document_signing_requested_at.present? ||
-      application.document_signing_submission_id.present? ||
-      application.document_signing_status.to_s.in?(%w[sent opened signed declined])
-  end
-
-  def document_signing_available?(admin)
-    admin.present? && application.medical_provider_email.present?
   end
 
   def fax_available?
@@ -129,7 +101,7 @@ class MedicalProviderNotifier
     update_notification_metadata(delivery_result, notification_id: notification_id)
     delivery_result[:success]
   rescue StandardError => e
-    Rails.logger.error "Failed to handle delivery result for Application ID: #{application.id} - #{e.message}"
+    Rails.logger.error "Failed to handle delivery result for Application ID: #{application.id} - #{sanitize_secure_error_message(e.message)}"
     false
   end
 
@@ -148,7 +120,7 @@ class MedicalProviderNotifier
       updated_metadata['delivery_method'] = delivery_result[:method]
       apply_success_metadata(updated_metadata, delivery_result)
     elsif delivery_result[:error].present?
-      updated_metadata['provider_notification_error'] = delivery_result[:error]
+      updated_metadata['provider_notification_error'] = sanitize_secure_error_message(delivery_result[:error])
     end
 
     notification.update!(metadata: updated_metadata)
@@ -176,9 +148,6 @@ class MedicalProviderNotifier
 
   def apply_success_metadata(metadata, delivery_result)
     case delivery_result[:method]
-    when DOCUMENT_SIGNING_METHOD
-      metadata['document_signing_submission_id'] = delivery_result[:document_signing_submission_id] if delivery_result[:document_signing_submission_id].present?
-      metadata['document_signing_service'] = delivery_result[:document_signing_service] if delivery_result[:document_signing_service].present?
     when FAX_METHOD
       metadata['fax_sid'] = delivery_result[:fax_sid] if delivery_result[:fax_sid].present?
       metadata['blob_id'] = delivery_result[:blob_id] if delivery_result[:blob_id].present?
@@ -190,38 +159,12 @@ class MedicalProviderNotifier
 
   # Return a standard failure result
   def failure_result(error: nil, method: nil)
+    sanitized_error = error.present? ? sanitize_secure_error_message(error) : nil
     {
       success: false,
       method: method,
-      error: error
+      error: sanitized_error
     }.compact
-  end
-
-  # Notify provider through the same digital-signing channel previously used.
-  # @param admin [User] The admin triggering the rejection notification
-  # @return [Hash] Delivery result hash
-  def notify_by_document_signing(admin)
-    service_name = application.document_signing_service.presence || 'docuseal'
-
-    result = DocumentSigning::SubmissionService.new(
-      application: application,
-      actor: admin,
-      service: service_name
-    ).call
-
-    if result.success?
-      return {
-        success: true,
-        method: DOCUMENT_SIGNING_METHOD,
-        document_signing_submission_id: result.data&.dig('id').to_s,
-        document_signing_service: service_name
-      }
-    end
-
-    failure_result(method: DOCUMENT_SIGNING_METHOD, error: result.message)
-  rescue StandardError => e
-    Rails.logger.error "Document signing notification error for Application ID: #{application.id} - #{e.message}"
-    failure_result(method: DOCUMENT_SIGNING_METHOD, error: e.message)
   end
 
   # Notify the medical provider using fax
@@ -260,21 +203,29 @@ class MedicalProviderNotifier
   # Notify the medical provider by email
   # @param rejection_reason [String] The reason for rejection
   # @param admin [User] The admin who rejected the certification
+  # @param secure_upload_url [String, nil] Tokenized upload URL for corrected certification upload
   # @return [Hash] Delivery result hash
-  def notify_by_email(rejection_reason, admin)
+  def notify_by_email(rejection_reason, admin, secure_upload_url: nil)
     mail = MedicalProviderMailer.with(
       application: application,
       rejection_reason: rejection_reason,
-      admin: admin
+      admin: admin,
+      secure_upload_url: secure_upload_url
     ).certification_rejected
 
-    mail.deliver_later
+    if secure_upload_url.present?
+      # The message contains a raw bearer URL, so deliver synchronously rather
+      # than serializing it into Active Job arguments via deliver_later.
+      mail.deliver_now
+    else
+      mail.deliver_later
+    end
     message_id = mail.message_id
 
     Rails.logger.info "Email successfully queued for medical provider for Application ID: #{application.id} with message ID: #{message_id}"
     { success: true, method: EMAIL_METHOD, message_id: message_id }
   rescue StandardError => e
-    Rails.logger.error "Email sending error for Application ID: #{application.id} - #{e.message}"
+    Rails.logger.error "Email sending error for Application ID: #{application.id} - #{sanitize_secure_error_message(e.message)}"
     failure_result(method: EMAIL_METHOD, error: e.message)
   end
 
@@ -359,6 +310,10 @@ class MedicalProviderNotifier
     Rails.application.config.action_mailer.default_url_options || {}
   end
 
+  def support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
+  end
+
   # Clean up temporary PDF file
   def cleanup_temp_file(pdf_path)
     FileUtils.rm_f(pdf_path) if pdf_path && File.exist?(pdf_path)
@@ -422,22 +377,21 @@ class MedicalProviderNotifier
   def add_submission_instructions(pdf)
     pdf.text 'Instructions for Submitting Revised Documentation:', size: 14, style: :bold
     pdf.move_down 5
-    pdf.text '1. Fax the revised certification to: 410-767-4276', size: 12
-    pdf.text '2. Or reply to this communication with the revised certification attached', size: 12
+    pdf.text "1. Email the revised certification to: #{support_email}", size: 12
+    pdf.text "2. If email is not available, contact #{support_email} for mailing instructions", size: 12
     pdf.move_down 20
   end
 
   # Add footer section to PDF
   def add_pdf_footer(pdf)
     pdf.text 'Thank you for your assistance in helping this applicant access needed telecommunications services.', size: 12
-    pdf.text 'For questions, please contact: mat.program1@maryland.gov', size: 12
+    pdf.text "For questions, please contact: #{support_email}", size: 12
   end
 
   # Get the contact methods that were available for the medical provider
   # @return [Array<String>] The available notification methods
   def notification_methods
     methods = []
-    methods << DOCUMENT_SIGNING_METHOD if document_signing_preferred?
     methods << EMAIL_METHOD if email_available?
     methods << FAX_METHOD if fax_available?
     methods

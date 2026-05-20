@@ -149,6 +149,9 @@ module Applications
         medical_provider_name: application.medical_provider_name,
         medical_provider_phone: application.medical_provider_phone,
         medical_provider_email: application.medical_provider_email,
+        terms_accepted: true,
+        information_verified: true,
+        medical_release_authorized: true,
         is_submission: true
       )
 
@@ -193,6 +196,22 @@ module Applications
       result = ApplicationCreator.call(form)
 
       assert_equal 'in_progress', result.application.status
+    end
+
+    test 'submitted online application requires provider info' do
+      form = create_valid_form(@user)
+      form.is_submission = true
+      form.medical_provider_name = nil
+      form.medical_provider_phone = nil
+      form.medical_provider_email = nil
+
+      Applications::RequestProviderInfo.expects(:new).never
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert_includes result.error_messages, 'Form is invalid'
+      assert_includes form.errors[:base], 'Medical provider information is required for submission.'
     end
 
     test 'sets draft status for non-submissions' do
@@ -285,7 +304,10 @@ module Applications
         cognition_disability: false,
         medical_provider_name: 'Test Provider',
         medical_provider_phone: '555-1234',
-        medical_provider_email: 'provider@test.com'
+        medical_provider_email: 'provider@test.com',
+        terms_accepted: true,
+        information_verified: true,
+        medical_release_authorized: true
       )
     end
 
@@ -303,7 +325,10 @@ module Applications
         cognition_disability: false,
         medical_provider_name: 'Test Provider',
         medical_provider_phone: '555-1234',
-        medical_provider_email: 'provider@test.com'
+        medical_provider_email: 'provider@test.com',
+        terms_accepted: true,
+        information_verified: true,
+        medical_release_authorized: true
       )
     end
 
@@ -321,7 +346,10 @@ module Applications
         cognition_disability: false,
         medical_provider_name: 'Updated Provider',
         medical_provider_phone: '555-5678',
-        medical_provider_email: 'updated@test.com'
+        medical_provider_email: 'updated@test.com',
+        terms_accepted: true,
+        information_verified: true,
+        medical_release_authorized: true
       )
     end
   end

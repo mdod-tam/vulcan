@@ -76,7 +76,11 @@
                                when 'evaluation_requests' then 'evaluation_requests_table'
                                else 'applications_table'
                                end %>
-            <%= render partial: queue_partial, locals: { applications: @applications } %>
+            <%= render partial: queue_partial,
+                       locals: {
+                         applications: @applications,
+                         provider_info_request_summaries: @provider_info_request_summaries
+                       } %>
           <% else %>
             <div class="p-6 text-center">
               <p class="text-gray-500">No applications found</p>

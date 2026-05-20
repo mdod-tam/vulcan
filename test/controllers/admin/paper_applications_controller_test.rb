@@ -633,7 +633,7 @@ module Admin
     #
     def stub_mailers
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
-      ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_later: true))
+      ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_now: true, deliver_later: true))
     end
 
     def stub_proof_services
@@ -644,7 +644,7 @@ module Admin
       NotificationService.stubs(:create_and_deliver!).returns(true)
 
       # Stub any mailer calls that might happen
-      ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_later: true))
+      ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_now: true, deliver_later: true))
     end
 
     test 'should send proof_rejected email when proof is rejected' do

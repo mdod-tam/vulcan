@@ -42,18 +42,7 @@ module Applications
       return failure('Rejection reason is required') if rejection_reason.blank?
       return failure('Admin user is required') if admin.blank?
 
-      validate_medical_provider_info
-    end
-
-    def validate_medical_provider_info
-      return failure('Application does not have medical provider information') if application.medical_provider_name.blank?
-      return failure('No contact method available for medical provider') if no_contact_methods_available?
-
       success
-    end
-
-    def no_contact_methods_available?
-      application.medical_provider_email.blank? && application.medical_provider_fax.blank?
     end
 
     def process_rejection(rejection_reason, notes, rejection_reason_code)
@@ -67,22 +56,49 @@ module Applications
 
       return failure(service_result[:error]&.message || 'Disability certification service failed') unless service_result[:success]
 
+      secure_upload_request = request_secure_certification_upload
+
       # Notify provider via fax/email channel and attach delivery metadata to the same notification record
-      notify_medical_provider(rejection_reason, service_result[:notification_id])
+      notify_medical_provider(
+        rejection_reason,
+        service_result[:notification_id],
+        secure_upload_url: secure_upload_request.data[:secure_upload_url]
+      )
 
       success
     end
 
-    def notify_medical_provider(rejection_reason, notification_id)
+    def request_secure_certification_upload
+      result = Applications::RequestCertificationUpload.new(
+        application: application,
+        actor: admin,
+        deliver_email: false
+      ).call
+
+      return result if result.success?
+
+      Rails.logger.warn(
+        "Secure cert upload form not sent for rejected certification on application #{application.id}: #{result.message}"
+      )
+      success(nil, { secure_upload_url: nil })
+    rescue StandardError => e
+      Rails.logger.warn(
+        "Secure cert upload form not sent for rejected certification on application #{application.id}: #{e.message}"
+      )
+      success(nil, { secure_upload_url: nil })
+    end
+
+    def notify_medical_provider(rejection_reason, notification_id, secure_upload_url: nil)
       MedicalProviderNotifier.new(application).send_certification_rejection_notice(
         rejection_reason: rejection_reason,
         admin: admin,
-        notification_id: notification_id
+        notification_id: notification_id,
+        secure_upload_url: secure_upload_url
       )
     rescue StandardError => e
       # Log but don't fail the reviewer - the rejection already succeeded (DB updated, notification created)
-      Rails.logger.error("Provider notification failed for application #{application.id}: #{e.message}")
-      Rails.logger.error(e.backtrace.join("\n"))
+      Rails.logger.error("Provider notification failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
+      Rails.logger.error(sanitize_secure_error_message(e.backtrace.join("\n")))
 
       # Optional: Report to error tracking service if available
       # Sentry.capture_exception(e) if defined?(Sentry)

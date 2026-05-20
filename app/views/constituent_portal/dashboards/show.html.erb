@@ -304,7 +304,7 @@
             <div class="px-4 py-5 sm:p-6 space-y-6">
               <% if @active_application&.income_proof_required? %>
               <!-- Income Proof Status -->
-              <div class="pb-5">
+              <div>
                 <div class="flex items-center justify-between">
                   <div>
                     <h4 class="text-md font-medium text-gray-900">Income Proof</h4>
@@ -391,10 +391,8 @@
                   <% end %>
                 </div>
               </div>
-            </div>
 
-            <!-- ID Proof Status -->
-            <div class="border-t border-gray-200 pt-6">
+              <!-- ID Proof Status -->
               <div>
                 <div class="flex items-center justify-between">
                   <div>
@@ -456,7 +454,7 @@
               <div class="px-4 py-5 sm:p-6 space-y-6">
                 <% if managed_app.income_proof_required? %>
                 <!-- Income Proof Status -->
-                <div class="pb-5">
+                <div>
                   <div class="flex items-center justify-between">
                     <div>
                       <h4 class="text-md font-medium text-gray-900">Income Proof</h4>
@@ -544,6 +542,52 @@
                     <% if can_resubmit_proof?(managed_app, 'residency', max_submissions) %>
                       <%= link_to "Upload New Residency Proof",
                           new_proof_constituent_portal_application_path(managed_app, proof_type: "residency"),
+                          class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                    <% end %>
+                  </div>
+                </div>
+
+                <!-- ID Proof Status -->
+                <div>
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h4 class="text-md font-medium text-gray-900">ID Proof</h4>
+                      <% if managed_app.id_proof_status == "approved" %>
+                        <div class="flex items-center mt-2">
+                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            Approved
+                          </div>
+                        </div>
+                      <% elsif managed_app.id_proof_status == "rejected" %>
+                        <div class="flex items-center mt-2">
+                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                            Rejected
+                          </div>
+                          <% id_rejection_reason = get_latest_rejection_reason(managed_app, 'id') %>
+                          <% if id_rejection_reason.present? %>
+                            <span class="ml-2 text-sm text-gray-600">
+                              Reason: <%= id_rejection_reason %>
+                            </span>
+                          <% end %>
+                        </div>
+                        <% id_rejection_date = get_latest_rejection_date(managed_app, 'id') %>
+                        <% if id_rejection_date.present? %>
+                          <div class="mt-1 text-sm text-gray-600">
+                            Rejected on: <%= id_rejection_date.strftime("%B %d, %Y") %>
+                          </div>
+                        <% end %>
+                      <% else %>
+                        <div class="flex items-center mt-2">
+                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            Pending Review
+                          </div>
+                        </div>
+                      <% end %>
+                    </div>
+
+                    <% if can_resubmit_proof?(managed_app, 'id', max_submissions) %>
+                      <%= link_to "Upload New ID Proof",
+                          new_proof_constituent_portal_application_path(managed_app, proof_type: "id"),
                           class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
                     <% end %>
                   </div>

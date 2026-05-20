@@ -9,6 +9,7 @@ module Users
     has_many :voucher_transactions
     has_many :invoices
     has_many :w9_reviews
+    has_many :vendor_secure_request_forms, foreign_key: :vendor_id, dependent: :destroy
 
     has_one_attached :w9_form
 

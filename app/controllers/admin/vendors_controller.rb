@@ -9,7 +9,7 @@ module Admin
     before_action :set_vendor, only: %i[show edit update]
 
     def index
-      # Use Users::Vendor to match the STI type column
+      # Attachment presence controls whether the W9 review action is actionable.
       @vendors = Users::Vendor.with_attached_w9_form.order(:business_name)
 
       # Filter by W9 status if provided
@@ -20,6 +20,21 @@ module Admin
 
     def show
       @w9_reviews = @vendor.w9_reviews.includes(:admin).order(created_at: :desc)
+      @vendor_secure_request_forms = @vendor.vendor_secure_request_forms.order(sent_at: :desc)
+      @w9_secure_request_notifications = Notification
+                                         .where(notifiable: @vendor,
+                                                action: 'w9_resubmission_requested')
+                                         .includes(:actor)
+                                         .order(created_at: :desc)
+      @w9_secure_request_events = Event
+                                  .where(auditable: @vendor,
+                                         action: %w[
+                                           w9_submitted_via_secure_form
+                                           w9_upload_request_revoked
+                                           w9_upload_request_expired
+                                         ])
+                                  .includes(:user)
+                                  .order(created_at: :desc)
     end
 
     def edit; end

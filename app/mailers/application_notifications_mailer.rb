@@ -20,7 +20,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_application_submitted_variables(application, template: text_template, locale: locale)
       mail_options = { message_stream: 'notifications' }
-      mail_options[:cc] = @application.alternate_contact_email if @application.alternate_contact_email.present?
 
       if prefers_letter_delivery?(@user)
         queue_letter_delivery(
@@ -66,16 +65,17 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   helper Mailers::ApplicationNotificationsHelper
 
-  def proof_approved(application, proof_review)
+  def proof_approved(application, proof_review, recipient: nil)
     with_mailer_error_handling("proof_approved application=#{application&.id} proof_review=#{proof_review&.id}") do
+      recipient ||= application.user
       template_name = 'application_notifications_proof_approved'
-      locale = resolve_template_locale(recipient: application.user)
+      locale = resolve_template_locale(recipient: recipient)
       text_template = find_text_template(template_name, locale: locale)
       variables = build_proof_approved_variables(application, proof_review, template: text_template, locale: locale)
 
-      if prefers_letter_delivery?(application.user)
+      if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
-          recipient: application.user,
+          recipient: recipient,
           template_name: template_name,
           variables: variables.merge(proof_type: proof_review.proof_type),
           letter_type: :proof_approved,
@@ -84,29 +84,32 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         return noop_letter_delivery
       end
 
-      send_email(recipient_email_for(application.user), text_template, variables)
+      send_email(recipient_email_for(recipient), text_template, variables)
     end
   end
 
-  def proof_rejected(application, proof_review)
+  def proof_rejected(application, proof_review, secure_upload_url: nil, recipient: nil)
     with_mailer_error_handling("proof_rejected application=#{application&.id} proof_review=#{proof_review&.id}") do
+      recipient ||= application.user
       remaining_attempts   = 8 - application.total_rejections
       reapply_date         = 3.years.from_now.to_date
       template_name        = 'application_notifications_proof_rejected'
-      locale               = resolve_template_locale(recipient: application.user)
+      locale               = resolve_template_locale(recipient: recipient)
       text_template        = find_text_template(template_name, locale: locale)
       variables            = build_proof_rejected_variables(
         application,
         proof_review,
         remaining_attempts,
         reapply_date,
+        secure_upload_url,
+        recipient,
         template: text_template,
         locale: locale
       )
 
-      if prefers_letter_delivery?(application.user)
+      if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
-          recipient: application.user,
+          recipient: recipient,
           template_name: template_name,
           variables: variables.merge(proof_type: proof_review.proof_type),
           letter_type: proof_rejection_letter_type(proof_review.proof_type),
@@ -115,7 +118,36 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         return noop_letter_delivery
       end
 
-      send_proof_rejected_email(application.user, text_template, variables)
+      send_proof_rejected_email(recipient, text_template, variables)
+    end
+  end
+
+  def proof_requested(application, proof_type, secure_upload_url: nil, recipient: nil)
+    with_mailer_error_handling("proof_requested application=#{application&.id} proof_type=#{proof_type}") do
+      recipient ||= application.user
+      template_name = 'application_notifications_proof_requested'
+      locale = resolve_template_locale(recipient: recipient)
+      text_template = find_text_template(template_name, locale: locale)
+      variables = build_proof_requested_variables(
+        application,
+        proof_type,
+        secure_upload_url,
+        recipient,
+        template: text_template,
+        locale: locale
+      )
+
+      if prefers_letter_delivery?(recipient)
+        queue_letter_delivery(
+          recipient: recipient,
+          template_name: template_name,
+          variables: variables.merge(proof_type: proof_type),
+          application: application
+        )
+        return noop_letter_delivery
+      end
+
+      send_email(recipient_email_for(recipient), text_template, variables)
     end
   end
 
@@ -220,29 +252,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
-  def proof_submission_error(constituent, application, _error_type, message)
-    with_mailer_error_handling("proof_submission_error constituent=#{constituent&.id} application=#{application&.id}") do
-      recipient_info = determine_proof_error_recipient(constituent, message)
-      template_name  = 'application_notifications_proof_submission_error'
-      locale         = resolve_template_locale(recipient: constituent)
-      text_template  = find_text_template(template_name, locale: locale)
-      variables      = build_proof_error_variables(recipient_info[:full_name], message, template: text_template, locale: locale)
-
-      if constituent.present? && prefers_letter_delivery?(constituent)
-        queue_letter_delivery(
-          recipient: constituent,
-          template_name: template_name,
-          variables: variables,
-          letter_type: :proof_submission_error,
-          application: application
-        )
-        return noop_letter_delivery
-      end
-
-      send_email(recipient_info[:email], text_template, variables)
-    end
-  end
-
   def registration_confirmation(user)
     with_mailer_error_handling("registration_confirmation user=#{user&.id}") do
       active_vendors_text_list = build_active_vendors_list
@@ -308,12 +317,48 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
+  def provider_info_requested(application, secure_request_form, secure_url: nil)
+    with_mailer_error_handling("provider_info_requested application=#{application&.id} secure_request_form=#{secure_request_form&.id}") do
+      template_name = 'application_notifications_provider_info_requested'
+      recipient = secure_request_form.recipient
+      locale = resolve_template_locale(recipient: recipient)
+      text_template = find_text_template(template_name, locale: locale)
+      variables = build_provider_info_requested_variables(
+        application,
+        secure_request_form,
+        secure_url,
+        template: text_template,
+        locale: locale
+      )
+
+      if secure_request_form.recipient_channel_letter?
+        queue_letter_delivery(
+          recipient: recipient,
+          template_name: template_name,
+          variables: variables,
+          letter_type: :provider_info_requested,
+          application: application
+        )
+        return noop_letter_delivery
+      end
+
+      send_email(
+        secure_request_form.recipient_email,
+        text_template,
+        variables,
+        reply_to: [support_email]
+      )
+    end
+  end
+
   private
 
   def with_mailer_error_handling(context, raise_in_test_only: false)
     yield
   rescue StandardError => e
-    Rails.logger.error("Mailer error (#{context}): #{e.message}\n#{e.backtrace.join("\n")}")
+    error_message = sanitize_secure_error_message(e.message)
+    backtrace = sanitize_secure_error_message(e.backtrace&.join("\n"))
+    Rails.logger.error("Mailer error (#{context}): #{error_message}\n#{backtrace}")
     raise if !raise_in_test_only || Rails.env.test?
 
     noop_delivery
@@ -372,10 +417,10 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                          }).compact
   end
 
-  def build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date, template:, locale: nil)
+  def build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date, secure_upload_url, recipient, template:, locale: nil) # rubocop:disable Metrics/ParameterLists
     user                 = application.user
     proof_type_formatted = format_proof_type(proof_review.proof_type)
-    sign_in_url          = sign_in_url(host: default_url_options[:host])
+    recipient ||= user
 
     base_variables = build_base_email_variables(
       template: template,
@@ -386,33 +431,84 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
     rejection_reason = resolve_rejection_reason(proof_review, locale)
     remaining_attempts_message = build_remaining_attempts_message(remaining_attempts, reapply_date, locale: locale)
-    default_options_text = build_resubmission_options(application, sign_in_url, locale: locale)
+    default_options_text = build_resubmission_options(
+      application,
+      secure_upload_url,
+      proof_type_formatted: proof_type_formatted,
+      locale: locale
+    )
     archived_message = build_archived_message(reapply_date, locale: locale)
 
     base_variables.merge({
-                           user_first_name: user.first_name,
+                           user_first_name: recipient.first_name,
                            constituent_full_name: user.full_name,
                            organization_name: 'MAT Program',
                            proof_type_formatted: proof_type_formatted,
                            rejection_reason: rejection_reason,
-                           sign_in_url: sign_in_url,
+                           secure_upload_url: secure_upload_url,
                            remaining_attempts_message_text: remaining_attempts.positive? ? remaining_attempts_message : '',
                            default_options_text: remaining_attempts.positive? ? default_options_text : '',
                            archived_message_text: remaining_attempts.positive? ? '' : archived_message
                          }).compact
   end
 
-  def resolve_rejection_reason(proof_review, locale)
-    return proof_review.rejection_reason if proof_review.rejection_reason_code.blank?
+  def build_proof_requested_variables(application, proof_type, secure_upload_url, recipient, template:, locale: nil)
+    user = application.user
+    proof_type_formatted = format_proof_type(proof_type)
+    recipient ||= user
 
-    reason = RejectionReason.resolve(
-      code: proof_review.rejection_reason_code,
+    base_variables = build_base_email_variables(
+      template: template,
+      organization_name: 'MAT Program',
+      locale: locale,
+      subject_variables: { proof_type_formatted: proof_type_formatted }
+    )
+
+    default_options_text = build_proof_submission_options(
+      'application_notifications.proof_requested.submission_options',
+      application,
+      secure_upload_url,
+      proof_type_formatted: proof_type_formatted,
+      locale: locale
+    )
+
+    base_variables.merge({
+                           user_first_name: recipient.first_name,
+                           constituent_full_name: user.full_name,
+                           organization_name: 'MAT Program',
+                           proof_type_formatted: proof_type_formatted,
+                           secure_upload_url: secure_upload_url,
+                           default_options_text: default_options_text
+                         }).compact
+  end
+
+  def resolve_rejection_reason(proof_review, locale)
+    raw_reason = proof_review.rejection_reason.to_s
+    reason_code = proof_review.rejection_reason_code.presence || raw_reason
+
+    reason = rejection_reason_for_code(
+      reason_code,
       proof_type: proof_review.proof_type,
       locale: locale
     )
-    return proof_review.rejection_reason unless reason&.body
+    return interpolate_address_placeholder(reason.body, proof_review.application) if reason&.body
+    return none_provided_rejection_reason(proof_review.proof_type, locale) if reason_code == 'none_provided'
 
-    interpolate_address_placeholder(reason.body, proof_review.application)
+    proof_review.rejection_reason
+  end
+
+  def rejection_reason_for_code(code, proof_type:, locale:)
+    return nil if code.blank?
+
+    RejectionReason.resolve(code: code, proof_type: proof_type, locale: locale)
+  end
+
+  def none_provided_rejection_reason(proof_type, locale)
+    I18n.t(
+      "application_notifications.proof_rejected.none_provided.#{proof_type}",
+      locale: locale,
+      default: I18n.t('application_notifications.proof_rejected.none_provided.default', locale: locale)
+    )
   end
 
   def interpolate_address_placeholder(body, application)
@@ -445,14 +541,25 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     )
   end
 
-  def build_resubmission_options(application, sign_in_url, locale: nil)
+  def build_resubmission_options(application, secure_upload_url, proof_type_formatted:, locale: nil)
+    build_proof_submission_options(
+      'application_notifications.proof_rejected.resubmission_options',
+      application,
+      secure_upload_url,
+      proof_type_formatted: proof_type_formatted,
+      locale: locale
+    )
+  end
+
+  def build_proof_submission_options(scope, application, secure_upload_url, proof_type_formatted:, locale: nil)
     locale = locale.presence || I18n.default_locale
-    option_type = application.submission_method_paper? ? 'paper' : 'online'
+    option_type = secure_upload_url.present? && !application.submission_method_paper? ? 'online' : 'paper'
 
     I18n.t(
-      "application_notifications.proof_rejected.resubmission_options.#{option_type}",
+      "#{scope}.#{option_type}",
       locale: locale,
-      sign_in_url: sign_in_url,
+      secure_upload_url: secure_upload_url,
+      proof_type_formatted: proof_type_formatted,
       office_address: ProgramContact.office_address
     ).strip
   end
@@ -470,8 +577,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     send_email(
       recipient_email_for(user),
       text_template,
-      variables,
-      reply_to: ["proof@#{default_url_options[:host]}"]
+      variables
     )
   end
 
@@ -619,35 +725,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                          }).compact
   end
 
-  # --- Proof submission error ---
-
-  def determine_proof_error_recipient(constituent, message)
-    if constituent
-      {
-        email: recipient_email_for(constituent),
-        full_name: constituent.full_name
-      }
-    else
-      {
-        email: message.match(/from: ([^\s]+@[^\s]+)/)&.captures&.first || 'system@mdmat.org',
-        full_name: 'System User'
-      }
-    end
-  end
-
-  def build_proof_error_variables(constituent_full_name, message, template:, locale: nil)
-    base_variables = build_base_email_variables(
-      template: template,
-      locale: locale,
-      subject_variables: { constituent_full_name: constituent_full_name, message: message }
-    )
-
-    base_variables.merge({
-                           constituent_full_name: constituent_full_name,
-                           message: message
-                         }).compact
-  end
-
   # --- Registration confirmation ---
 
   def build_active_vendors_list
@@ -692,8 +769,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     variables = {
       user_first_name: application.user.first_name,
       application_id: application.id,
-      submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y'),
-      sign_in_url: sign_in_url(host: default_url_options[:host])
+      submission_date_formatted: application.application_date&.strftime('%B %d, %Y') || Time.current.strftime('%B %d, %Y')
     }
 
     base_variables.merge(variables).compact
@@ -766,14 +842,56 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     base_variables.merge(cert_variables).compact
   end
 
+  def build_provider_info_requested_variables(application, secure_request_form, secure_url, template:, locale: nil)
+    recipient = secure_request_form.recipient
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: {
+        user_first_name: recipient.first_name,
+        application_id: application.id
+      }
+    )
+    instructions_key = secure_url.present? ? :email_instructions : :letter_instructions
+
+    base_variables.merge({
+                           user_first_name: recipient.first_name,
+                           constituent_first_name: application.user.first_name,
+                           constituent_name: application.constituent_full_name,
+                           application_id: application.id,
+                           secure_url: secure_url,
+                           expiration_hours: Policy.get('secure_form_link_expiration_hours') || 48,
+                           support_email: support_email,
+                           support_phone: support_phone,
+                           provider_info_instructions: I18n.t(
+                             "application_notifications.provider_info_requested.#{instructions_key}",
+                             locale: locale,
+                             secure_url: secure_url,
+                             support_email: support_email,
+                             support_phone: support_phone,
+                             hours: Policy.get('secure_form_link_expiration_hours') || 48
+                           )
+                         }).compact
+  end
+
   def proof_rejection_letter_type(proof_type)
     case proof_type.to_s
     when 'income'
       :income_proof_rejected
     when 'residency'
       :residency_proof_rejected
+    when 'id'
+      :id_proof_rejected
     else
       :other_notification
     end
+  end
+
+  def support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
+  end
+
+  def support_phone
+    '410-767-6960'
   end
 end

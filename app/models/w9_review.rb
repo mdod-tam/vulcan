@@ -52,6 +52,7 @@ class W9Review < ApplicationRecord
     begin
       process_review_transaction
       send_review_notification
+      request_secure_w9_resubmission if status_rejected?
     rescue StandardError => e
       Rails.logger.error "Failed to process W9 review actions: #{e.message}\n#{e.backtrace.join("\n")}"
       raise
@@ -79,8 +80,11 @@ class W9Review < ApplicationRecord
   end
 
   def send_review_notification
-    notification_type = status_rejected? ? 'w9_rejected' : 'w9_approved'
-    send_notification(notification_type)
+    if status_rejected?
+      create_rejection_audit_notification
+    else
+      send_notification('w9_approved')
+    end
   end
 
   def update_vendor_status(new_status)
@@ -125,6 +129,39 @@ class W9Review < ApplicationRecord
   rescue StandardError => e
     Rails.logger.error "Failed to send #{action} notification via NotificationService: #{e.message}"
     # Don't re-raise - notification errors shouldn't fail the whole W9 review process
+  end
+
+  def create_rejection_audit_notification
+    metadata = {
+      w9_review_id: id,
+      rejection_reason: rejection_reason,
+      rejection_reason_code: rejection_reason_code,
+      timestamp: Time.current.iso8601
+    }
+
+    NotificationService.create_and_deliver!(
+      type: 'w9_rejected',
+      recipient: vendor,
+      actor: admin,
+      notifiable: vendor,
+      metadata: metadata,
+      channel: :email,
+      audit: true,
+      deliver: false
+    )
+  rescue StandardError => e
+    Rails.logger.error "Failed to send w9_rejected notification: #{e.message}"
+  end
+
+  def request_secure_w9_resubmission
+    result = Vendors::RequestW9Resubmission.new(vendor: vendor, actor: admin).call
+    return if result.success?
+
+    Rails.logger.warn(
+      "W9 secure resubmission request failed for vendor #{vendor.id}: #{result.message}"
+    )
+  rescue StandardError => e
+    Rails.logger.error "Failed to request secure W9 resubmission: #{e.message}"
   end
 
   def increment_rejections_if_rejected

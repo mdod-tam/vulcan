@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class ProofReviewServiceTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @application = create(:application, :in_progress, skip_proofs: true)
     @admin = create(:admin)
@@ -94,5 +96,105 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
 
     assert_not result.success?
     assert_equal 'Proof is not reviewable for this application', result.message
+  end
+
+  test 'rejecting one proof is not blocked by unrelated missing required proofs' do
+    application = create(:application, :in_progress)
+    application.residency_proof.attach(
+      io: StringIO.new('residency proof'),
+      filename: 'residency-proof.pdf',
+      content_type: 'application/pdf'
+    )
+    NotificationService.stubs(:create_and_deliver!).returns(true)
+
+    with_required_proof_validations do
+      result = ProofReviewService.new(
+        application,
+        @admin,
+        {
+          proof_type: 'residency',
+          status: 'rejected',
+          rejection_reason: 'Address mismatch'
+        }
+      ).call
+
+      assert result.success?, result.message
+    end
+
+    assert_equal 'rejected', application.reload.residency_proof_status
+    assert_not application.income_proof.attached?
+    assert_not Current.reviewing_single_proof?
+  end
+
+  test 'rejecting income then residency and id succeeds after previous rejected proof attachments are purged' do
+    NotificationService.stubs(:create_and_deliver!).returns(true)
+
+    with_required_proof_validations do
+      assert_difference -> { @application.reload.total_rejections }, 3 do
+        perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
+          income_result = ProofReviewService.new(
+            @application,
+            @admin,
+            {
+              proof_type: 'income',
+              status: 'rejected',
+              rejection_reason: 'Income documentation is not acceptable.'
+            }
+          ).call
+          assert income_result.success?, income_result.message
+        end
+        assert_not @application.reload.income_proof.attached?
+
+        perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
+          residency_result = ProofReviewService.new(
+            @application,
+            @admin,
+            {
+              proof_type: 'residency',
+              status: 'rejected',
+              rejection_reason: 'Residency documentation is not acceptable.'
+            }
+          ).call
+          assert residency_result.success?, residency_result.message
+        end
+        assert_not @application.reload.residency_proof.attached?
+
+        perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
+          id_result = ProofReviewService.new(
+            @application,
+            @admin,
+            {
+              proof_type: 'id',
+              status: 'rejected',
+              rejection_reason: 'ID documentation is not acceptable.'
+            }
+          ).call
+          assert id_result.success?, id_result.message
+        end
+        assert_not @application.reload.id_proof.attached?
+      end
+    end
+
+    assert_equal 'rejected', @application.income_proof_status
+    assert_equal 'rejected', @application.residency_proof_status
+    assert_equal 'rejected', @application.id_proof_status
+    assert_not Current.reviewing_single_proof?
+  end
+
+  private
+
+  def with_required_proof_validations
+    previous_value = ENV.fetch('REQUIRE_PROOF_VALIDATIONS', nil)
+    ENV['REQUIRE_PROOF_VALIDATIONS'] = 'true'
+    Current.reset
+
+    yield
+  ensure
+    if previous_value.nil?
+      ENV.delete('REQUIRE_PROOF_VALIDATIONS')
+    else
+      ENV['REQUIRE_PROOF_VALIDATIONS'] = previous_value
+    end
+    Current.reset
   end
 end

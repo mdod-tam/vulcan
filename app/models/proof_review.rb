@@ -10,7 +10,7 @@ class ProofReview < ApplicationRecord
   # Enums (using the original syntax to avoid argument errors)
   enum :proof_type, { income: 0, residency: 1, medical_certification: 2, id: 3 }, prefix: true
   enum :status, { approved: 0, rejected: 1 }, prefix: true
-  enum :submission_method, { web: 0, email: 1, scanned: 2, paper: 3 }, prefix: true
+  enum :submission_method, { web: 0, email: 1, scanned: 2, paper: 3, secure_form: 4 }, prefix: true
 
   REVIEWABLE_PROOF_TYPES = %w[income id residency].freeze
 
@@ -40,6 +40,21 @@ class ProofReview < ApplicationRecord
   scope :by_admin, ->(admin_id) { where(admin_id: admin_id) }
   scope :rejections, -> { where(status: :rejected) }
   scope :last_3_days, -> { where('created_at > ?', 3.days.ago) }
+
+  def apply_repeat_rejection_side_effects!
+    return if proof_type_medical_certification?
+    return unless status_rejected?
+
+    ActiveRecord::Base.transaction do
+      increment_rejections_if_rejected
+      check_max_rejections
+    end
+
+    log_rejection_audit_event
+    return if Current.paper_context
+
+    issue_proof_resubmission_form
+  end
 
   private
 
@@ -99,12 +114,14 @@ class ProofReview < ApplicationRecord
   end
 
   def log_initial_status
-    Rails.logger.info "Starting handle_post_review_actions for ProofReview ID: #{id}"
-    Rails.logger.info "Initial status check - status: #{status.inspect}, blank?: #{status.blank?}"
+    Rails.logger.debug { "Starting handle_post_review_actions for ProofReview ID: #{id}" }
+    Rails.logger.debug { "Initial status check - status: #{status.inspect}, blank?: #{status.blank?}" }
     return if status.blank?
 
-    Rails.logger.info "Processing proof review for Application ID: #{application.id}"
-    Rails.logger.info "Status details: raw: #{status.inspect}, before type cast: #{status_before_type_cast.inspect}, rejected?: #{status_rejected?}"
+    Rails.logger.debug { "Processing proof review for Application ID: #{application.id}" }
+    Rails.logger.debug do
+      "Status details: raw: #{status.inspect}, before type cast: #{status_before_type_cast.inspect}, rejected?: #{status_rejected?}"
+    end
   end
 
   def process_rejection_flow
@@ -112,11 +129,11 @@ class ProofReview < ApplicationRecord
 
     ActiveRecord::Base.transaction do
       if status_rejected?
-        Rails.logger.info 'Status is rejected, handling rejection flow'
+        Rails.logger.debug 'Status is rejected, handling rejection flow'
         increment_rejections_if_rejected
         check_max_rejections
       else
-        Rails.logger.info 'Status is approved, skipping rejection flow'
+        Rails.logger.debug 'Status is approved, skipping rejection flow'
       end
     end
   end
@@ -125,45 +142,73 @@ class ProofReview < ApplicationRecord
     # Medical certification reviews have their own provider notification flow.
     return if proof_type_medical_certification?
 
-    # Skip notifications if this is a paper application context
-    # Paper applications handle their own notifications in PaperApplicationService
-    return if Current.paper_context
-
     # Skip if associations aren't loaded properly
     return unless application&.user.present? && admin.present?
 
-    if status_rejected?
-      send_notification('proof_rejected', :proof_rejected,
-                        { proof_type: proof_type, rejection_reason: rejection_reason })
-    else
-      send_notification('proof_approved', :proof_approved, { proof_type: proof_type })
+    if Current.paper_context
+      log_rejection_audit_event if status_rejected?
+      return
     end
+
+    status_rejected? ? request_proof_resubmission : send_approval_notification
   end
 
-  # Creates a notification record and sends the email using the new NotificationService
-  # Notification failures don't interrupt the proof review process
-  def send_notification(action_name, _mail_method, metadata)
-    # Log the audit event - EventDeduplicationService will handle preventing duplicates in audit log display
+  def request_proof_resubmission
+    log_rejection_audit_event
+    issue_proof_resubmission_form
+  end
+
+  def issue_proof_resubmission_form
+    result = Applications::RequestProofResubmission.new(
+      application: application,
+      actor: admin,
+      proof_type: proof_type.to_sym
+    ).call
+
+    Rails.logger.warn("Proof resubmission request failed for ProofReview #{id}: #{result.message}") if result.failure?
+  rescue StandardError => e
+    Rails.logger.error "Failed to request proof resubmission: #{e.message}"
+  end
+
+  def log_rejection_audit_event
     AuditEventService.log(
-      action: action_name,
+      action: 'proof_rejected',
       actor: admin,
       auditable: application,
-      metadata: metadata
+      metadata: { proof_type: proof_type, rejection_reason: rejection_reason }
+    )
+  end
+
+  # Creates a notification record and sends the email using the new NotificationService.
+  # Notification failures don't interrupt the proof review process.
+  def send_approval_notification
+    AuditEventService.log(
+      action: 'proof_approved',
+      actor: admin,
+      auditable: application,
+      metadata: { proof_type: proof_type }
     )
 
     # Send the notification with Application as notifiable to maintain consistency
     # with existing queries that filter by notifiable_type: 'Application'
     NotificationService.create_and_deliver!(
-      type: action_name,
-      recipient: application.user,
+      type: 'proof_approved',
+      recipient: proof_approval_recipient,
       actor: admin,
       notifiable: application,
-      metadata: metadata,
+      metadata: { proof_type: proof_type },
       channel: :email
     )
   rescue StandardError => e
-    Rails.logger.error "Failed to send #{action_name} notification via NotificationService: #{e.message}"
+    Rails.logger.error "Failed to send proof_approved notification via NotificationService: #{e.message}"
     # Don't re-raise - notification errors shouldn't fail the whole operation
+  end
+
+  def proof_approval_recipient
+    resolver = Applications::SecureRequestRecipientResolver.new(application: application)
+    default_recipient_id = resolver.default_recipient_ids.first
+
+    resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
   end
 
   def increment_rejections_if_rejected

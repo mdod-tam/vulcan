@@ -40,8 +40,10 @@ module DocumentSigning
         )
 
         # Use increment! for atomic counter updates
+        # rubocop:disable Rails/SkipsModelValidations -- Preserve existing atomic counter behavior.
         @application.increment!(:document_signing_request_count)
         @application.increment!(:medical_certification_request_count)
+        # rubocop:enable Rails/SkipsModelValidations
       end
 
       AuditEventService.log(

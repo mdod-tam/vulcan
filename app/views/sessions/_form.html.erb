@@ -1,18 +1,19 @@
 <div id="sign_in_form">
   <%# Error Summary Block - from main page for better accessibility %>
   <% if @errors&.any? %>
-    <div id="signin-error-summary" role="alert" aria-labelledby="signin-error-heading" tabindex="-1" class="bg-red-50 border border-red-400 text-red-700 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
+    <div id="signin-error-summary"
+         role="alert"
+         aria-labelledby="signin-error-heading"
+         tabindex="-1"
+         data-controller="error-summary"
+         class="bg-red-50 border border-red-400 text-red-700 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
       <h2 id="signin-error-heading" class="sr-only">Please address the following errors:</h2>
       <ul class="list-disc list-inside">
         <% @errors.each do |field, msg| %>
-            <li><a href="#<%= field %>-input" class="underline"><%= msg %></a></li>
+            <li><a href="#<%= field %>-input" class="underline" data-action="click->error-summary#focus"><%= msg %></a></li>
         <% end %>
       </ul>
     </div>
-    <script>
-      // Optional: Focus the error summary when it appears
-      document.getElementById('signin-error-summary')?.focus();
-    </script>
   <% end %>
 
   <%= form_with url: sign_in_path,
@@ -49,7 +50,7 @@
         for: "password-input",
         id: "password-input-label",
         class: "block text-sm font-medium text-gray-700" %>
-    <div class="relative" data-controller="visibility">
+    <div class="relative" <%= tag.attributes(data: password_visibility_data(timeout: 5000)) %>>
       <%= form.password_field :password,
           id: "password-input",
           class: "mt-1 block w-full px-4 py-2 pr-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
@@ -62,7 +63,7 @@
       <button type="button"
               data-action="visibility#togglePassword"
               class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              aria-label="Show password"
+              aria-label="<%= t('password_visibility.toggle.show') %>"
               aria-pressed="false">
         <svg class="h-5 w-5"
               data-visibility-target="icon"
@@ -75,7 +76,7 @@
         </svg>
       </button>
       <div id="password-visibility-status" aria-live="polite" class="sr-only" data-visibility-target="status">
-        Password is hidden
+        <%= t('password_visibility.status.hidden') %>
       </div>
     </div>
     <div class="flex items-center justify-between mt-2">
