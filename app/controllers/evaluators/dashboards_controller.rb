@@ -13,19 +13,12 @@ module Evaluators
     before_action :require_evaluator!
 
     def show
-      # Set current filter from params or default to nil
-      @current_filter = params[:filter]
-      @current_status = params[:status]
-
       # Load data based on user type
       if current_user.admin?
         load_admin_data
       else
         load_evaluator_data
       end
-
-      # Apply filter status if provided
-      apply_filter if @current_filter.present?
 
       # Load display data (always needed)
       load_display_data
@@ -52,60 +45,12 @@ module Evaluators
       @assigned_constituents = current_user.assigned_constituents.to_a.uniq(&:id)
     end
 
-    def apply_filter
-      evaluations = evaluations_for_filter(@current_filter)
-      @filtered_evaluations = order_evaluations(evaluations, @current_filter)
-      @section_title = section_title_for_filter(@current_filter)
-    end
-
-    def evaluations_for_filter(filter_type)
-      case filter_type
-      when 'requested'
-        (current_user.admin? ? Evaluation.requested_sessions : current_user.evaluations.requested_sessions)
-          .includes(:constituent, :application)
-      when 'scheduled'
-        (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
-          .includes(:constituent, :application)
-      when 'completed'
-        (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
-          .includes(:constituent, :application)
-      when 'needs_followup'
-        (current_user.admin? ? Evaluation.needing_followup : current_user.evaluations.needing_followup)
-          .includes(:constituent, :application)
-      end
-    end
-
-    def order_evaluations(evaluations, filter_type)
-      case filter_type
-      when 'requested'
-        evaluations.order(created_at: :desc)
-      when 'scheduled'
-        evaluations.order(evaluation_date: :asc)
-      when 'completed'
-        evaluations.order(evaluation_date: :desc)
-      when 'needs_followup'
-        evaluations.order(updated_at: :desc)
-      end
-    end
-
-    def section_title_for_filter(filter_type)
-      {
-        'requested' => 'Requested Evaluations',
-        'scheduled' => 'Scheduled Evaluations',
-        'completed' => 'Completed Evaluations',
-        'needs_followup' => 'Evaluations Needing Follow-up'
-      }[filter_type]
-    end
-
     def load_display_data
       # Always initialize these variables to empty arrays
       @requested_evaluations_display = []
       @upcoming_evaluations = []
       @recent_evaluations = []
       @my_scheduled_evaluations_display = []
-
-      # If we're filtering, don't load all the display data
-      return if @current_filter.present?
 
       # Data for dashboard tables - limit to 5 items for each section
       @requested_evaluations_display = @requested_evaluations.includes(:constituent).order(created_at: :desc).limit(5)

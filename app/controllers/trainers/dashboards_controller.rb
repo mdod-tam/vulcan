@@ -14,15 +14,8 @@ module Trainers
     ].freeze
 
     def show
-      # Set current filter from params or default to nil
-      @current_filter = params[:filter]
-      @current_status = params[:status]
-
       # Load base training sessions first
       load_training_sessions
-
-      # Apply filter if provided
-      apply_filter if @current_filter.present?
 
       # Load display data (always needed)
       load_display_data
@@ -72,26 +65,6 @@ module Trainers
                                               .order(scheduled_for: :asc)
     end
 
-    def apply_filter
-      case @current_filter
-      when 'requested'
-        @filtered_sessions = @requested_sessions.order(created_at: :desc)
-        @section_title = 'Requested Training Sessions'
-      when 'scheduled'
-        @filtered_sessions = @scheduled_sessions.order(scheduled_for: :asc)
-        @section_title = 'Scheduled Training Sessions'
-      when 'completed'
-        @filtered_sessions = @completed_sessions.order(completed_at: :desc)
-        @section_title = 'Completed Training Sessions'
-      when 'needs_followup'
-        @filtered_sessions = @followup_sessions
-        @section_title = 'Training Sessions Needing Follow-up'
-      end
-
-      # Always include applications for display
-      @filtered_sessions = @filtered_sessions.includes(application: :user) if @filtered_sessions.present?
-    end
-
     def load_display_data
       # Always initialize these to empty arrays to prevent nil errors
       @requested_sessions_display = []
@@ -99,9 +72,6 @@ module Trainers
       @my_scheduled_sessions_display = []
       @recent_completed_sessions = []
       @recent_followup_sessions = [] # Added for default display
-
-      # If we're filtering, don't load all the display data
-      return if @current_filter.present?
 
       # Data for dashboard tables - limit to 10 items for each section
       @requested_sessions_display = @requested_sessions.limit(10)
