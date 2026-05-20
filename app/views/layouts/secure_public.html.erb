@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="<%= I18n.locale %>">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= content_for?(:title) ? yield(:title) : "Maryland Accessible Telecommunications Program" %></title>
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= favicon_link_tag 'TAM.ico' %>
+    <%= stylesheet_link_tag "application", media: "all", "data-turbo-track": "reload" %>
+    <%= javascript_include_tag "application", "data-turbo-track" => "reload" %>
+  </head>
+  <body class="min-h-screen bg-gray-50 text-gray-900">
+    <header class="border-b border-gray-200 bg-white">
+      <div class="mx-auto max-w-3xl px-4 py-4">
+        <p class="text-sm font-semibold text-gray-900">Maryland Accessible Telecommunications Program</p>
+      </div>
+    </header>
+    <main class="mx-auto max-w-3xl px-4 py-8">
+      <%= yield %>
+    </main>
+  </body>
+</html>

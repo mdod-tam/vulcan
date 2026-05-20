@@ -8,6 +8,14 @@ Rails.application.configure do
     Bullet.console       = true
     Bullet.rails_logger  = true
     Bullet.add_footer    = true
+
+    # Replacing an existing has_one_attached file causes Rails internals to
+    # eager-load attachment.record before swapping the blob. Bullet reports
+    # this as unused eager loading even though the query shape is framework-
+    # driven rather than app-level.
+    Bullet.add_safelist type: :unused_eager_loading,
+                        class_name: 'ActiveStorage::Attachment',
+                        association: :record
   end
 
   config.eager_load = false

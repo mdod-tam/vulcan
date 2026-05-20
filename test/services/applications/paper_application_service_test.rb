@@ -119,6 +119,69 @@ module Applications
       assert_equal 2, application.household_size, 'Household size should match'
     end
 
+    test 'existing self applicant disability flags are saved before application validation' do
+      applicant = create(
+        :constituent,
+        :without_disabilities,
+        email: "existing-paper-self-#{Time.now.to_i}@example.com"
+      )
+
+      service_params = {
+        applicant_type: 'self',
+        existing_constituent_id: applicant.id,
+        contact_info_mode: 'on_file',
+        contact_info_verified: true,
+        constituent: {
+          hearing_disability: true,
+          vision_disability: false,
+          speech_disability: false,
+          mobility_disability: false,
+          cognition_disability: false
+        },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+
+      assert result, "Failed to create application for existing self applicant: #{service.errors.inspect}"
+      assert_predicate applicant.reload, :hearing_disability
+      assert_equal applicant, service.application.user
+    end
+
+    test 'existing dependent disability flags are saved before application validation' do
+      guardian = create(:constituent, email: "existing-paper-guardian-#{Time.now.to_i}@example.com")
+      dependent = create(
+        :constituent,
+        :without_disabilities,
+        email: "existing-paper-dependent-#{Time.now.to_i}@example.com"
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        constituent: {
+          hearing_disability: true,
+          vision_disability: false,
+          speech_disability: false,
+          mobility_disability: false,
+          cognition_disability: false
+        },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+
+      assert result, "Failed to create application for existing dependent: #{service.errors.inspect}"
+      assert_predicate dependent.reload, :hearing_disability
+      assert_equal dependent, service.application.user
+      assert_equal guardian, service.application.managing_guardian
+    end
+
     test 'creates application with rejected income proof' do
       # Test the rejection functionality
       test_timestamp = Time.now.to_i
@@ -281,6 +344,35 @@ module Applications
       service = PaperApplicationService.new(params: service_params, admin: @admin)
       result = service.create
       assert result, "Failed to create application with medical certification marked none provided: #{service.errors.inspect}"
+    end
+
+    test 'paper intake without provider info creates application and sends provider info request' do
+      test_timestamp = Time.now.to_i
+      unique_email = "test-paper-missing-provider-#{test_timestamp}@example.com"
+      unique_phone = "202570#{test_timestamp.to_s[-4..]}"
+
+      service_params = {
+        no_medical_provider_information: true,
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
+        application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email)
+      }
+
+      request_service = mock('request-provider-info-service')
+      request_service.expects(:call).returns(BaseService::Result.new(success: true))
+      Applications::RequestProviderInfo
+        .expects(:new)
+        .with(application: kind_of(Application), actor: @admin)
+        .returns(request_service)
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+
+      assert result, "Failed to create paper application without provider info: #{service.errors.inspect}"
+      assert_predicate service.application, :persisted?
+      assert_equal 'awaiting_proof', service.application.status
+      assert_nil service.application.medical_provider_name
+      assert_nil service.application.medical_provider_phone
+      assert_nil service.application.medical_provider_email
     end
 
     test 'routes medical certification rejection directly when provider contact information is missing' do

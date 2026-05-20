@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 class UpdateMedicalProviderRequestTemplatesForStaticForm < ActiveRecord::Migration[8.0]
-  ENGLISH_BODY = <<~TEXT.freeze
+  ENGLISH_BODY = <<~TEXT
     DISABILITY CERTIFICATION FORM REQUEST
 
     Hello,
 
-    We are writing to request your completion of a disability certification form for this appplicant, %<constituent_full_name>s, who is applying for the Maryland Accessible Telecommunications Program to receive accessible telecommunications equipment to support independent telephone usage.
+    %<constituent_full_name>s recently applied to the Maryland Accessible Telecommunications Program for equipment that supports independent telephone use. They listed you as a professional who can certify that they have a disability.
 
-    %<request_count_message>s and was sent on %<timestamp_formatted>s.
+    %<request_count_message>s
 
      INFORMATION:
     - Name: %<constituent_full_name>s
@@ -38,14 +38,14 @@ class UpdateMedicalProviderRequestTemplatesForStaticForm < ActiveRecord::Migrati
     CONFIDENTIALITY NOTICE: This email may contain confidential health information protected by state and federal privacy laws.
   TEXT
 
-  SPANISH_BODY = <<~TEXT.freeze
+  SPANISH_BODY = <<~TEXT
     SOLICITUD DE FORMULARIO DE CERTIFICACIÓN DE DISCAPACIDAD
 
     Hola,
 
     Le escribimos para solicitarle que complete un formulario de certificación de discapacidad para este solicitante, %<constituent_full_name>s, quien está solicitando al Programa de Telecomunicaciones Accesibles de Maryland recibir equipos de telecomunicaciones accesibles para apoyar el uso independiente del teléfono.
 
-    %<request_count_message>s y fue enviado el %<timestamp_formatted>s.
+    %<request_count_message>s
 
      INFORMACIÓN:
     - Nombre: %<constituent_full_name>s
@@ -78,7 +78,6 @@ class UpdateMedicalProviderRequestTemplatesForStaticForm < ActiveRecord::Migrati
   REQUIRED_VARIABLES = %w[
     constituent_full_name
     request_count_message
-    timestamp_formatted
     constituent_dob_formatted
     constituent_phone_formatted
     constituent_email

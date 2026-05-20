@@ -100,6 +100,13 @@ class ApplicationForm
     @target_application ||= application || Application.new
   end
 
+  def message_locale
+    locale.presence ||
+      applicant_user&.effective_locale ||
+      current_user&.effective_locale ||
+      I18n.default_locale
+  end
+
   private
 
   # Cast boolean parameters for the given params hash
@@ -167,7 +174,7 @@ class ApplicationForm
   def assign_integer_attributes(app_params, fields)
     fields.each do |field|
       value = app_params[field]
-      send("#{field}=", value.present? ? value.to_i : nil) if app_params.key?(field)
+      send("#{field}=", value.presence&.to_i) if app_params.key?(field)
     end
   end
 
@@ -269,7 +276,9 @@ class ApplicationForm
 
     return unless medical_provider_name.blank? || medical_provider_phone.blank? || medical_provider_email.blank?
 
-    errors.add(:base, 'Medical provider information is required for submission.')
+    I18n.with_locale(message_locale) do
+      errors.add(:base, :medical_provider_required)
+    end
   end
 
   def income_collection_required?

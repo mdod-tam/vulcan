@@ -1,0 +1,75 @@
+<% proof_type = local_assigns.fetch(:proof_type).to_s %>
+<% secure_request_forms = local_assigns.fetch(:secure_request_forms) %>
+
+<% if secure_request_forms.present? %>
+  <% proof_label = proof_secure_request_forms_label(proof_type) %>
+
+  <div class="mt-4" data-testid="<%= proof_type %>-proof-secure-request-forms-panel">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">
+      <%= t('admin.applications.proof_secure_request_forms.panel.title', proof_type: proof_label) %>
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead>
+          <tr>
+            <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
+              <%= t('admin.applications.secure_request_forms.table.recipient') %>
+            </th>
+            <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
+              <%= t('admin.applications.secure_request_forms.table.contact') %>
+            </th>
+            <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
+              <%= t('admin.applications.secure_request_forms.table.channel') %>
+            </th>
+            <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
+              <%= t('admin.applications.secure_request_forms.table.status') %>
+            </th>
+            <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
+              <%= t('admin.applications.secure_request_forms.table.sent') %>
+            </th>
+            <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
+              <%= t('admin.applications.secure_request_forms.table.expires') %>
+            </th>
+            <th scope="col" class="px-3 py-2 text-right font-semibold text-gray-900">
+              <%= t('admin.applications.secure_request_forms.table.actions') %>
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% secure_request_forms.each do |form| %>
+            <tr>
+              <td class="px-3 py-3 text-gray-700"><%= form.recipient&.full_name || t('admin.applications.secure_request_forms.contact.unknown') %></td>
+              <td class="px-3 py-3 text-gray-700"><%= secure_request_masked_contact(form) %></td>
+              <td class="px-3 py-3 text-gray-700"><%= secure_request_channel_label(form) %></td>
+              <td class="px-3 py-3 text-gray-700"><%= secure_request_status_label(form) %></td>
+              <td class="px-3 py-3 text-gray-700"><%= l(form.sent_at, format: :short) %></td>
+              <td class="px-3 py-3 text-gray-700"><%= l(form.expires_at, format: :short) %></td>
+              <td class="px-3 py-3 text-right">
+                <% if form.active? %>
+                  <%= button_to(
+                        t('admin.applications.proof_secure_request_forms.table.revoke'),
+                        admin_application_secure_request_form_revocation_path(@application, form),
+                        method: :post,
+                        form: {
+                          class: 'inline',
+                          onsubmit: "return confirm(#{t('admin.applications.proof_secure_request_forms.table.revoke_confirm',
+                                                        proof_type: proof_label).to_json})",
+                          data: {
+                            turbo: false
+                          }
+                        },
+                        class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2'
+                      ) %>
+                <% else %>
+                  <span class="text-gray-500">
+                    <%= t('admin.applications.proof_secure_request_forms.table.no_actions') %>
+                  </span>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% end %>

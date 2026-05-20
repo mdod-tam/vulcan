@@ -93,26 +93,31 @@
     </div>
   </div>
 
+  <%= render "secure_request_forms" %>
+
   <!-- W9 Review History Section -->
   <div class="bg-white shadow overflow-hidden rounded-lg">
     <div class="px-4 py-5 sm:px-6 bg-gray-50">
       <h3 class="text-lg leading-6 font-medium text-gray-900">W9 Review History</h3>
     </div>
     <div class="border-t border-gray-200 p-4">
-      <% if @w9_reviews.any? %>
+      <% w9_history_items = vendor_w9_history_items(w9_reviews: @w9_reviews,
+                                                     secure_request_notifications: @w9_secure_request_notifications,
+                                                     secure_request_events: @w9_secure_request_events) %>
+      <% if w9_history_items.any? %>
         <div class="flow-root">
           <ul role="list" class="-mb-8">
-            <% @w9_reviews.each_with_index do |review, index| %>
+            <% w9_history_items.each_with_index do |item, index| %>
               <li>
                 <div class="relative pb-8">
-                  <% if index < @w9_reviews.size - 1 %>
+                  <% if index < w9_history_items.size - 1 %>
                     <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
                   <% end %>
                   <div class="relative flex space-x-3">
                     <div>
                       <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white 
-                        <%= review.status_approved? ? 'bg-green-500' : 'bg-red-500' %>">
-                        <% if review.status_approved? %>
+                        <%= vendor_w9_history_item_icon_class(item) %>">
+                        <% if item.type == :review && item.record.status_approved? %>
                           <svg class="h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                           </svg>
@@ -127,18 +132,18 @@
                       <div>
                         <p class="text-sm text-gray-500">
                           <span class="font-medium text-gray-900">
-                            <%= review.status.titleize %>
+                            <%= vendor_w9_history_item_title(item) %>
                           </span>
-                          by <%= review.admin.email %>
+                          by <%= vendor_w9_history_item_actor(item) %>
                         </p>
-                        <% if review.status_rejected? && review.rejection_reason.present? %>
+                        <% if vendor_w9_history_item_detail(item).present? %>
                           <p class="mt-1 text-sm text-gray-700">
-                            <strong><%= review.rejection_reason_code.to_s.titleize %>:</strong> <%= review.rejection_reason %>
+                            <%= vendor_w9_history_item_detail(item) %>
                           </p>
                         <% end %>
                       </div>
                       <div class="text-right text-sm whitespace-nowrap text-gray-500">
-                        <%= review.reviewed_at.strftime("%b %d, %Y") %>
+                        <%= item.occurred_at.strftime("%b %d, %Y") %>
                       </div>
                     </div>
                   </div>

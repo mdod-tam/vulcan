@@ -3,7 +3,9 @@
 # This service validates if a submission method is valid and provides a fallback
 # mechanism for when nil or invalid values are provided.
 class SubmissionMethodValidator
-  VALID_METHODS = %i[paper web email unknown].freeze
+  # :secure_form was added alongside the Phase 2/3 secure temp form feature to
+  # record proof and cert submissions that arrive through tokenized public forms.
+  VALID_METHODS = %i[paper web email secure_form unknown].freeze
 
   # Returns a valid submission method or :unknown as a fallback
   # @param submission_method [Symbol, String, nil] The submission method to validate

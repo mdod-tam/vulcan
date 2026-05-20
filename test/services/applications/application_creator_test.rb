@@ -198,6 +198,22 @@ module Applications
       assert_equal 'in_progress', result.application.status
     end
 
+    test 'submitted online application requires provider info' do
+      form = create_valid_form(@user)
+      form.is_submission = true
+      form.medical_provider_name = nil
+      form.medical_provider_phone = nil
+      form.medical_provider_email = nil
+
+      Applications::RequestProviderInfo.expects(:new).never
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert_includes result.error_messages, 'Form is invalid'
+      assert_includes form.errors[:base], 'Medical provider information is required for submission.'
+    end
+
     test 'sets draft status for non-submissions' do
       form = create_valid_form(@user)
       form.is_submission = false

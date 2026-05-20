@@ -44,6 +44,13 @@ en:
             base:
               duplicate_open_session: "This application already has an active training session."
               historical_session_reopen: "Historical training sessions cannot be reopened. Schedule a follow-up session instead."
+  activemodel:
+    errors:
+      models:
+        application_form:
+          attributes:
+            base:
+              medical_provider_required: "Medical provider information is required for submission."
   activity_history:
     labels:
       training_scheduled: "Training Scheduled"
@@ -65,6 +72,9 @@ en:
       followup_scheduled_for: "Follow-up scheduled for"
       reason: "Reason: %{reason}"
   applications:
+    proof_resubmission_requests:
+      create:
+        failure: "Secure proof upload request could not be sent."
     training_requests:
       messages:
         ineligible: "Only approved applications are eligible for training."
@@ -73,6 +83,79 @@ en:
         active_session: "You already have a training session in progress."
         quota_exhausted: "You have used all of your available training sessions."
         submitted: "Training request submitted. An administrator will contact you to schedule your session."
+    provider_info:
+      messages:
+        needs_managing_guardian: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
+        cooldown_active: "A secure provider information link was sent recently. Please wait %{minutes} minutes before sending another one."
+        no_contact_path: "No usable contact path is available for this recipient."
+        no_recipient: "Choose at least one recipient for this secure link."
+        unknown_recipient: "One or more selected recipients are not associated with this application."
+        request_created: "Secure provider information request sent."
+        request_conflict: "A secure provider information request is already active for this recipient. Please refresh and try again."
+        delivery_failed: "Secure provider information request was created, but delivery failed. Please review the secure link status and try resending."
+        submitted: "Provider information submitted."
+        validation_failed: "Please correct the highlighted fields."
+        already_submitted: "This secure form has already been submitted."
+        revoked: "This secure link is no longer active."
+        expired: "This secure link has expired."
+        resent: "If this request can be resent, a new secure link will be sent to the original recipient."
+        invalid_request: "This secure link is no longer available."
+        medical_provider_name_blank: "Enter the certifying professional's name."
+        medical_provider_phone_blank: "Enter the certifying professional's phone number."
+        medical_provider_email_blank: "Enter the certifying professional's email address."
+        medical_provider_phone_invalid: "Enter a 10-digit phone number, using 4105550100 or 410-555-0100."
+        medical_provider_fax_invalid: "Enter a 10-digit fax number, using 4105550100 or 410-555-0100."
+        medical_provider_email_invalid: "Enter a valid email address."
+        request_after_submission_failed: "We could not send the provider information form automatically. Program staff will follow up."
+    proof_resubmission:
+      messages:
+        needs_managing_guardian: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
+        cooldown_active: "A secure proof upload link was sent recently. Please wait %{minutes} minutes before sending another one."
+        no_contact_path: "No usable contact path is available for this recipient."
+        no_recipient: "Choose at least one recipient for this secure link."
+        unknown_recipient: "One or more selected recipients are not associated with this application."
+        request_created: "Secure proof upload request sent."
+        request_not_needed: "A secure proof upload link can only be sent when this proof is still missing or needs to be replaced."
+        request_conflict: "A secure proof upload request is already active for this recipient. Please refresh and try again."
+        delivery_failed: "Secure proof upload request was created, but delivery failed. Please review the secure link status and try resending."
+        missing_rejection_review: "A rejected proof review is required before sending a secure proof upload link."
+        invalid_proof_type: "This proof type does not support secure upload links."
+        submitted: "Proof submitted."
+        validation_failed: "Please correct the highlighted fields."
+        already_submitted: "This secure form has already been submitted."
+        revoked: "This secure link is no longer active."
+        expired: "This secure link has expired."
+        resent: "If this request can be resent, a new secure link will be sent to the original recipient."
+        invalid_request: "This secure link is no longer available."
+        file_blank: "Choose a proof document to upload."
+        file_type_invalid: "Upload a PDF, JPEG, or PNG file."
+        file_too_large: "Upload a file smaller than %{max_size} MB."
+        file_too_small: "Upload a non-empty proof document."
+        file_suspicious: "Upload a different file. This file cannot be accepted."
+        file_invalid: "Upload a valid proof document."
+        attachment_failed: "The proof could not be attached. Please try again."
+    certification_upload:
+      messages:
+        provider_email_required: "Secure cert upload form cannot be sent - provider email is missing. Send a provider info form to the constituent/guardian to collect updated certifying professional contact information."
+        unsupported_channel: "Secure certification upload links can only be sent by email."
+        cooldown_active: "A secure certification upload link was sent recently. Please wait %{minutes} minutes before sending another one."
+        request_created: "Secure certification upload request created."
+        request_conflict: "A secure certification upload request is already active for this provider. Please refresh and try again."
+        delivery_failed: "We could not send the secure certification upload email. Please try again."
+        resent: "If this request can be resent, a new secure link will be sent to the provider."
+        submitted: "Certification uploaded successfully."
+        validation_failed: "Please correct the highlighted fields."
+        already_submitted: "This secure form has already been submitted."
+        revoked: "This secure link is no longer active."
+        expired: "This secure link has expired."
+        invalid_request: "This secure link is no longer available."
+        attachment_failed: "The certification document could not be attached. Please try again."
+        file_blank: "Choose a certification document to upload."
+        file_type_invalid: "Upload a PDF, JPEG, or PNG file."
+        file_too_large: "Upload a file smaller than %{max_size} MB."
+        file_too_small: "Upload a non-empty certification document."
+        file_suspicious: "Upload a different file. This file cannot be accepted."
+        file_invalid: "Upload a valid certification document."
     alternate_contact_relationship_types:
       parent: "Parent"
       spouse: "Spouse"
@@ -81,6 +164,15 @@ en:
       neighbor: "Neighbor"
       friend: "Friend"
       other: "Other"
+    alternate_contact:
+      portal_help: "You may provide an alternate contact person who can help with your application. Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
+      admin_help: "Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
+      admin_authorization_help: "Alternate contacts are informational only. They are not authorized application recipients and do not receive secure workflow links or workflow notifications."
+    dependent_contact:
+      strategy_help: "Use guardian contact information when secure workflow communications for this dependent should default to the guardian. Provide separate dependent contact information when secure workflow communications may go to the dependent/applicant."
+      guardian_email_help: "Secure workflow communications for the dependent will default to the guardian email path."
+      dependent_email_help: "This email will be used for communications about the dependent's benefits. Secure workflow communications may default to the dependent/applicant when this email is separate from the guardian email."
+      guardian_phone_help: "Calls or texts for the dependent will use the guardian phone path."
   trainers:
     training_sessions:
       flash:
@@ -121,27 +213,91 @@ en:
       scheduled_for_in_future: "scheduled_for must be in the future"
       unexpected_error: "An unexpected error occurred: %{message}"
   application_notifications:
+    provider_info_requested:
+      email_instructions: |-
+        Please use this secure link to provide the certifying professional's contact information: %{secure_url}
+
+        This secure link expires in %{hours} hours.
+      letter_instructions: |-
+        Please contact our team by phone at %{support_phone} or by email at %{support_email} and provide the certifying professional's name, phone number, email address, and fax number if available.
+    proof_requested:
+      submission_options:
+        paper: |-
+          HOW TO SUBMIT THIS DOCUMENT:
+          If it is easier, you may mail a copy of your document to our office, and we will scan and upload it for you:
+             Maryland Accessible Telecommunications
+             123 Main Street
+             Baltimore, MD 21201
+        online: |-
+          HOW TO SUBMIT THIS DOCUMENT:
+          1. Use this secure link to upload your %{proof_type_formatted}: %{secure_upload_url}
+          2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
+             Maryland Accessible Telecommunications
+             123 Main Street
+             Baltimore, MD 21201
     proof_rejected:
+      none_provided:
+        default: "No required proof was provided with the application."
+        id: "No proof of identity was provided with the application."
+        residency: "No proof of Maryland residency was provided with the application."
+        income: "No income proof was provided with the application."
       remaining_attempts_message:
         one: "You have %{count} attempt remaining to submit the required documentation before %{reapply_date}."
         other: "You have %{count} attempts remaining to submit the required documentation before %{reapply_date}."
       resubmission_options:
         paper: |-
-          HOW TO RESUBMIT YOUR DOCUMENTATION:
-          1. Reply to this email: Simply reply to this email and attach your updated documentation.
-          2. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
+          HOW TO SUBMIT A CORRECTED DOCUMENT:
+          If it is easier, you may mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
              123 Main Street
              Baltimore, MD 21201
         online: |-
-          HOW TO RESUBMIT YOUR DOCUMENTATION:
-          1. Reply to this email: Simply reply to this email and attach your updated documentation.
-          2. Upload Online: Sign in to your account dashboard at %{sign_in_url} and upload your new documents securely.
-          3. Mail it to us: You can mail copies of your documents to our office, and we will scan and upload them for you:
+          HOW TO SUBMIT A CORRECTED DOCUMENT:
+          1. Use this secure link to upload a corrected copy of your %{proof_type_formatted}: %{secure_upload_url}
+          2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
              123 Main Street
              Baltimore, MD 21201
-      archived_message: "Unfortunately, you have reached the maximum number of submission attempts. Your application has been archived. You may reapply after %{reapply_date}."
+      archived_message: "Unfortunately, you have reached the maximum number of submission attempts for this application. Your application has been archived. You may apply again after %{reapply_date}."
+  vendor_notifications:
+    w9_rejected:
+      secure_upload_instructions: |-
+        1. Upload your corrected W9 securely here: %{secure_upload_url}
+        2. Submit the corrected PDF before this secure link expires.
+      vendor_portal_instructions: |-
+        1. Please log in to your vendor account: %{vendor_portal_url}
+        2. Navigate to your profile settings.
+        3. Upload a corrected W9 form.
+    w9_upload_requested:
+      subject: "Secure W9 upload requested for %{vendor_business_name}"
+      body: |-
+        Hello %{vendor_business_name},
+
+        The %{organization_name} team has requested a W9 form from you.
+
+        Upload your W9 securely here: %{secure_upload_url}
+
+        This secure link is time-limited. If you have questions, contact %{support_email}.
+  vendors:
+    w9_resubmission:
+      messages:
+        recipient_email_required: "A vendor email address is required before sending a secure W9 upload link."
+        missing_rejection_review: "A rejected W9 review is required before sending a secure W9 upload link."
+        request_not_needed: "A secure W9 upload link can only be sent when the W9 has not been submitted or needs to be replaced."
+        request_created: "Secure W9 upload link sent."
+        request_conflict: "We could not create a secure W9 upload link right now. Please try again."
+        delivery_failed: "We created the secure W9 upload link, but could not deliver the email. Please try again."
+        cooldown_active: "A secure W9 upload link was sent recently. Please wait %{minutes} minute(s) before sending another."
+        resent: "If this secure upload request can be resent, a new link will be sent to the original recipient."
+        invalid_request: "This secure W9 upload link is invalid."
+        already_submitted: "This secure W9 upload link has already been used."
+        revoked: "This secure W9 upload link has been revoked."
+        expired: "This secure W9 upload link has expired."
+        validation_failed: "Please correct the highlighted file errors and try again."
+        file_blank: "Please choose a PDF W9 file to upload."
+        file_type_invalid: "Only PDF files can be uploaded for W9 review."
+        file_too_large: "The file must be %{max_size} MB or smaller."
+        submitted: "Thank you. Your W9 form has been submitted for review."
   date:
     formats:
       long: "%B %d, %Y"
@@ -193,6 +349,100 @@ en:
       create:
         note_added: "Note added successfully."
     applications:
+      filters:
+        pending_provider_info: "Pending Provider Info"
+        pending_provider_info_aria: "Show applications pending provider information"
+      secure_request_forms:
+        create:
+          success: "Secure provider information request sent."
+          failure: "Unable to send secure provider information request."
+        contact:
+          letter: "Postal mail"
+          unknown: "Unknown"
+        channels:
+          email: "Email"
+          sms: "SMS"
+          letter: "Postal mail"
+        statuses:
+          active: "Active"
+          submitted: "Submitted"
+          revoked: "Revoked"
+          expired: "Expired"
+        panel:
+          title: "Secure provider information requests"
+          description: "Send a secure link for entering certifying professional contact information."
+          recipients: "Recipients"
+          recipient_help: "Managing guardian, dependent/applicant, and recorded guardians are authorized application relationships. The default follows the dependent's effective email path; other recorded guardians receive secure links only when explicitly selected. Alternate contacts are informational only and do not receive secure links."
+          default_channel: "Default channel: %{channel}"
+          email_override: "Send secure online link by email instead"
+          submit: "Send secure request"
+          no_recipients: "No eligible recipients are available for this request."
+        managing_guardian:
+          title: "Missing managing guardian"
+          description: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
+        table:
+          recipient: "Recipient"
+          contact: "Contact"
+          channel: "Channel"
+          status: "Status"
+          sent: "Sent"
+          expires: "Expires"
+          actions: "Actions"
+          revoke: "Revoke"
+          revoke_confirm: "Revoke this secure provider information link?"
+          revoke_batch: "Revoke All Links In This Request"
+          revoke_batch_confirm: "Revoke all active secure provider information links in this request?"
+          resend: "Resend"
+          send_new_link: "Send New Link"
+          no_actions: "No actions"
+          empty: "No secure provider information requests have been sent."
+        summary:
+          label: "Pending provider info"
+          none: "No secure request sent"
+          recipients:
+            one: "1 recipient"
+            other: "%{count} recipients"
+          status_counts: "%{active} active, %{submitted} submitted, %{expired} expired, %{revoked} revoked"
+          last_sent: "Sent %{time}"
+          nearest_expiration: "Expires %{time}"
+      secure_request_form_revocations:
+        create:
+          success: "Secure link revoked."
+          failure: "Unable to revoke secure link."
+          not_active: "This secure link is not active."
+      proof_secure_request_forms:
+        panel:
+          title: "Secure %{proof_type} upload links"
+        table:
+          revoke: "Revoke"
+          revoke_confirm: "Revoke this secure %{proof_type} upload link? The recipient will no longer be able to use it."
+          no_actions: "No actions"
+      medical_provider_secure_request_forms:
+        panel:
+          title: "Secure Certification Upload Links"
+        table:
+          provider: "Provider Email"
+          status: "Status"
+          sent: "Sent"
+          expires: "Expires"
+          actions: "Actions"
+          revoke: "Revoke"
+          revoke_confirm: "Revoke this secure certification upload link? The provider will no longer be able to use it."
+          no_actions: "No actions"
+        statuses:
+          active: "Active"
+          expired: "Expired"
+          revoked: "Revoked"
+          submitted: "Submitted"
+      medical_provider_secure_request_form_revocations:
+        create:
+          success: "Secure certification upload link revoked."
+          failure: "Unable to revoke secure certification upload link."
+          not_active: "This secure certification upload link is not active."
+      secure_request_form_batch_revocations:
+        create:
+          success: "%{count} secure provider information links revoked."
+          failure: "Unable to revoke secure provider information links."
       update:
         updated: "Application updated."
       batch_approve:
@@ -225,6 +475,11 @@ en:
         t_completed: "Training session marked as completed"
       resend_medical_certification:
         c_request_pass: "Certification request sent successfully."
+      certification_upload_requests:
+        create:
+          success: "Secure certification upload link sent successfully."
+          failure: "Failed to send secure certification upload link."
+          provider_email_required: "Secure cert upload form cannot be sent - provider email is missing. Send a provider info form to the constituent/guardian to collect updated certifying professional contact information."
       send_document_signing_request:
         d_sign_request_pass: "Document signing request sent successfully."
       assign_voucher:
@@ -315,6 +570,37 @@ en:
         w9_save_fail: "W9 review faled to save"
       set_vendor:
         vendor_not_found: "Vendor not found"
+    vendors:
+      vendor_secure_request_forms:
+        create:
+          success: "Secure W9 upload link sent."
+          failure: "Unable to send secure W9 upload link."
+        panel:
+          title: "Secure W9 Upload Links"
+          description: "Send a time-limited secure link so the vendor can upload a W9 without signing in."
+          submit: "Request New W9 Upload"
+          no_email: "A vendor email address is required before sending a secure W9 upload link."
+        table:
+          email: "Vendor Email"
+          status: "Status"
+          sent: "Sent"
+          expires: "Expires"
+          actions: "Actions"
+          revoke: "Revoke"
+          revoke_confirm: "Revoke this secure W9 upload link? The vendor will no longer be able to use it."
+          send_new_link: "Send New Link"
+          no_actions: "No actions"
+          empty: "No secure W9 upload links have been sent."
+        statuses:
+          active: "Active"
+          expired: "Expired"
+          revoked: "Revoked"
+          submitted: "Submitted"
+      vendor_secure_request_form_revocations:
+        create:
+          success: "Secure W9 upload link revoked."
+          failure: "Unable to revoke secure W9 upload link."
+          not_active: "This secure W9 upload link is not active."
   controllers:
     application:
       check_passsword_change_required:
@@ -339,14 +625,189 @@ en:
         application_notifications_account_created: "Your Maryland Accessible Telecommunications Account"
         application_notifications_registration_confirmation: "Welcome to the Maryland Accessible Telecommunications Program"
         application_notifications_proof_rejected: "Document Verification Follow-up Required"
+        application_notifications_id_proof_rejected: "Identification Document Follow-up Required"
         application_notifications_income_threshold_exceeded: "Income Eligibility Review"
         application_notifications_proof_approved: "Document Verification Approved"
         application_notifications_proof_received: "Document Verification Received"
         application_notifications_max_rejections_reached: "Important Application Status Update"
-        application_notifications_proof_submission_error: "Document Submission Error"
+        application_notifications_provider_info_requested: "Certifying Professional Information Requested"
         medical_provider_request_certification: "Request for Medical Certification"
         voucher_notifications_voucher_assigned: "Your Accessibility Equipment Voucher"
         voucher_notifications_voucher_redeemed: "Voucher Redemption Confirmation"
+        evaluator_mailer_evaluation_submission_confirmation: "Evaluation Submission Confirmation"
+  secure_provider_info_forms:
+    sms:
+      message: "MAT needs certifying professional contact information. Submit it securely here: %{secure_url} This link expires in %{hours} hours."
+    show:
+      title: "Certifying Professional Information"
+      heading: "Provide certifying professional information"
+      intro: "The MAT program needs contact information for the professional who can certify disability information for %{constituent_name}."
+      intro_without_name: "The MAT program needs contact information for the professional who can certify disability information for the applicant on this request."
+      required: "Required"
+      required_legend: "Fields marked with * are required."
+      provider_name: "Certifying professional name"
+      provider_email: "Email"
+      provider_phone: "Phone"
+      provider_fax: "Fax"
+      submit: "Submit Information"
+      submitting: "Submitting…"
+      error_summary: "Please correct the following fields:"
+    success:
+      title: "Information Received"
+      heading: "Information received"
+      body: "Thank you. The MAT team has received the certifying professional information and will continue reviewing the application."
+    submitted:
+      title: "Information Already Submitted"
+      heading: "Information already submitted"
+      body: "This secure form has already been submitted. The MAT team has the information needed for this request."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+      contact_info: "Email %{email} or call %{phone}."
+  secure_provider_info_form_resends:
+    new:
+      title: "Request New Secure Link"
+      heading: "This secure link has expired"
+      body: "You can request a new secure link. For privacy, it will only be sent to the original recipient."
+      submit: "Request New Secure Link"
+      submitting: "Requesting…"
+    create:
+      title: "Request Received"
+      heading: "Request received"
+      body: "If this request can be resent, a new secure link will be sent to the original recipient."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+      contact_info: "Email %{email} or call %{phone}."
+  secure_proof_forms:
+    proof_types:
+      income: "income proof"
+      residency: "proof of Maryland residency"
+      id: "proof of identity"
+    sms:
+      message: "MAT needs your %{proof_type}. Upload it securely here: %{secure_url} This link expires in %{hours} hours."
+    show:
+      title: "Secure Proof Upload"
+      heading: "Upload %{proof_type}"
+      intro: "Use this secure form to upload the document requested by the MAT team."
+      required: "Required"
+      file_label: "Proof document"
+      file_help: "Accepted file types: PDF, JPEG, or PNG. Maximum size: 10 MB."
+      submit: "Upload Document"
+      submitting: "Uploading..."
+      error_summary: "Please correct the following fields:"
+    success:
+      title: "Document Received"
+      heading: "Document received"
+      body: "Thank you. The MAT team has received the document and will continue reviewing the application."
+    submitted:
+      title: "Document Already Submitted"
+      heading: "Document already submitted"
+      body: "This document has already been submitted. The MAT team will continue reviewing the application."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+      contact_info: "Email %{email} or call %{phone}."
+  secure_proof_form_resends:
+    new:
+      title: "Request New Secure Link"
+      heading: "This secure link has expired"
+      body: "You can request a new secure link. For privacy, it will only be sent to the original recipient."
+      submit: "Request New Secure Link"
+      submitting: "Requesting..."
+    create:
+      title: "Request Received"
+      heading: "Request received"
+      body: "If this request can be resent, a new secure link will be sent to the original recipient."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+  secure_certification_forms:
+    show:
+      title: "Secure Certification Upload"
+      heading: "Upload disability certification"
+      intro: "You have been asked to upload a signed disability certification for %{constituent_name}, application #%{application_id}."
+      constituent_unknown: "the applicant"
+      required: "Required"
+      file_label: "Certification document"
+      file_help: "Accepted file types: PDF, JPEG, or PNG. Maximum size: 10 MB."
+      submit: "Upload Certification"
+      submitting: "Uploading..."
+      error_summary: "Please correct the following fields:"
+    success:
+      title: "Certification Received"
+      heading: "Certification received"
+      body: "Thank you. The MAT team has received the certification and will continue reviewing the application."
+    submitted:
+      title: "Certification Already Submitted"
+      heading: "Certification already submitted"
+      body: "This certification has already been submitted. The MAT team will continue reviewing the application."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+      contact_info: "Email %{email} or call %{phone}."
+  secure_certification_form_resends:
+    new:
+      title: "Request New Secure Link"
+      heading: "This secure link has expired"
+      body: "You can request a new secure link. For privacy, it will only be sent to the original provider email address."
+      submit: "Request New Secure Link"
+      submitting: "Requesting..."
+    create:
+      title: "Request Received"
+      heading: "Request received"
+      body: "If this request can be resent, a new secure link will be sent to the original provider email address."
+      default_rejection_reason: "The submitted certification needs to be corrected."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+  secure_w9_forms:
+    show:
+      title: "W9 Upload"
+      heading: "Upload your W9 form"
+      intro: "You have been asked to upload a W9 form. Please upload a PDF copy using this secure link."
+      required: "Required"
+      file_label: "W9 form"
+      file_help: "PDF only, up to 10 MB."
+      submit_help: "After choosing your file, click Submit W9 to finish sending it."
+      submit: "Submit W9"
+      submitting: "Submitting…"
+      error_summary: "Please correct the following file errors:"
+    success:
+      title: "W9 Received"
+      heading: "W9 form received"
+      body: "Thank you. The W9 form was received and is now pending review."
+    submitted:
+      title: "W9 Already Submitted"
+      heading: "W9 form already submitted"
+      body: "This W9 form has already been submitted. The MAT team will review it and follow up if needed."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure W9 upload link is no longer available. Contact the MAT support team if you still need help with this request."
+      contact_info: "Email %{email} or call %{phone}."
+  secure_w9_form_resends:
+    new:
+      title: "Request New Secure W9 Link"
+      heading: "This secure W9 upload link has expired"
+      body: "You can request a new secure W9 upload link. For privacy, it will only be sent to the original recipient."
+      submit: "Request New Secure Link"
+      submitting: "Requesting…"
+    create:
+      title: "Request Received"
+      heading: "Request received"
+      body: "If this secure W9 request can be resent, a new link will be sent to the original recipient."
+    unavailable:
+      title: "Secure Link Unavailable"
+      heading: "Secure link unavailable"
+      body: "This secure W9 upload link is no longer available. Contact the MAT support team if you still need help with this request."
+      contact_info: "Email %{email} or call %{phone}."
   terms_and_conditions:
     title: "Maryland Accessible Telecommunications Program Agreement for Acceptance of State Property for Personal Use"
     intro: "I understand and agree to the following:"
@@ -371,4 +832,3 @@ en:
     item_10_title: "10. Approval and Training"
     item_10: "Upon approval of an application form, I understand I will be notified of acceptance in writing. If necessary, I will request training specific to the device I will receive. If I am a minor, a parent/guardian will accompany me to the required training to sign this statement. If I am physically unable to attend training, I can call 800-552-7724 (Voice/TTY) 443-453-5970 (Video Phone) to arrange for alternative site training."
     conclusion: "Having read the above conditions or having them read and explained to me, I agree to comply with all of the terms and conditions that I, or the minor for whom I am signing, is eligible to receive the requested equipment having (1) the required medical certification of disability; (2) met the income guidelines by currently receiving SSI, SSDI, TDAP or TANF; (3) signed the statement of terms and conditions for acceptance of State property; and (4) am not receiving similar equipment through other State or Federal agencies, or departments."
-    evaluator_mailer_evaluation_submission_confirmation: "Evaluation Submission Confirmation"

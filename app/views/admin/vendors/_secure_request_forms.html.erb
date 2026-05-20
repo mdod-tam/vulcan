@@ -1,0 +1,77 @@
+<div class="bg-white shadow overflow-hidden rounded-lg mb-6">
+  <div class="px-4 py-5 sm:px-6 bg-gray-50">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 class="text-lg leading-6 font-medium text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.panel.title') %></h3>
+        <p class="mt-1 text-sm text-gray-600"><%= t('admin.vendors.vendor_secure_request_forms.panel.description') %></p>
+      </div>
+
+      <% if @vendor.w9_status_not_submitted? || @vendor.w9_status_rejected? %>
+        <% if @vendor.email.present? %>
+          <%= button_to t('admin.vendors.vendor_secure_request_forms.panel.submit'),
+                        admin_vendor_vendor_secure_request_forms_path(@vendor),
+                        method: :post,
+                        form: { data: { turbo: false } },
+                        form_class: 'inline',
+                        class: "inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" %>
+        <% else %>
+          <p class="text-sm text-red-700"><%= t('admin.vendors.vendor_secure_request_forms.panel.no_email') %></p>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="border-t border-gray-200 p-4">
+    <% if @vendor_secure_request_forms.any? %>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 text-sm">
+          <thead>
+            <tr>
+              <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.email') %></th>
+              <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.status') %></th>
+              <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.sent') %></th>
+              <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.expires') %></th>
+              <th scope="col" class="px-3 py-2 text-right font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.actions') %></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <% @vendor_secure_request_forms.each do |form| %>
+              <tr>
+                <td class="px-3 py-3 text-gray-700"><%= secure_request_masked_email(form.recipient_email) %></td>
+                <td class="px-3 py-3 text-gray-700"><%= t("admin.vendors.vendor_secure_request_forms.statuses.#{form.display_status}") %></td>
+                <td class="px-3 py-3 text-gray-700"><%= l(form.sent_at, format: :short) %></td>
+                <td class="px-3 py-3 text-gray-700"><%= l(form.expires_at, format: :short) %></td>
+                <td class="px-3 py-3 text-right">
+                  <% if form.active? %>
+                    <%= button_to t('admin.vendors.vendor_secure_request_forms.table.revoke'),
+                                  admin_vendor_vendor_secure_request_form_revocation_path(@vendor, form),
+                                  method: :post,
+                                  form: {
+                                    class: 'inline',
+                                    onsubmit: "return confirm(#{t('admin.vendors.vendor_secure_request_forms.table.revoke_confirm').to_json})",
+                                    data: {
+                                      turbo: false
+                                    }
+                                  },
+                                  class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2' %>
+                  <% elsif vendor_secure_w9_upload_requestable?(@vendor) && (form.revoked? || (form.status_sent? && form.expired?)) %>
+                    <%= button_to t('admin.vendors.vendor_secure_request_forms.table.send_new_link'),
+                                  admin_vendor_vendor_secure_request_forms_path(@vendor, resend_of_id: form.id),
+                                  method: :post,
+                                  form: { data: { turbo: false } },
+                                  form_class: 'inline',
+                                  class: 'inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2' %>
+                  <% else %>
+                    <span class="text-gray-500"><%= t('admin.vendors.vendor_secure_request_forms.table.no_actions') %></span>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <p class="text-sm text-gray-500"><%= t('admin.vendors.vendor_secure_request_forms.table.empty') %></p>
+    <% end %>
+  </div>
+</div>

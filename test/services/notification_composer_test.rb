@@ -89,6 +89,17 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert message.include?('Missing signature')
   end
 
+  test 'generate message for proof_resubmission_requested' do
+    message = NotificationComposer.generate(
+      'proof_resubmission_requested',
+      @application,
+      @admin,
+      { 'proof_type' => 'id' }
+    )
+
+    assert_equal "Secure id upload requested for application ##{@application.id}", message
+  end
+
   test 'generate default message for unknown action' do
     message = NotificationComposer.generate(
       'some_new_action',

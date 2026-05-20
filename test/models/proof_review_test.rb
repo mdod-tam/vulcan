@@ -124,23 +124,72 @@ class ProofReviewTest < ActiveSupport::TestCase
                     'cannot be reviewed when archived'
   end
 
-  def test_sends_notification_on_proof_rejection
-    # Skip the email sending for this test to avoid the strftime error
-    mail_mock = mock
-    mail_mock.expects(:deliver_now).never # Explicitly state we don't expect this to be called
-    ApplicationNotificationsMailer.stubs(:proof_rejected).returns(mail_mock)
-
-    # Create a notification manually since we're skipping callbacks
-    notification = Notification.new(
-      recipient: @application.user,
+  def test_rejection_requests_secure_proof_resubmission_instead_of_legacy_notification_delivery
+    result = BaseService::Result.new(success: true, message: 'sent', data: {})
+    service = mock('request-proof-resubmission')
+    service.expects(:call).returns(result)
+    Applications::RequestProofResubmission.expects(:new).with(
+      application: @application,
       actor: @admin,
-      action: 'proof_rejected',
-      notifiable: @application,
-      metadata: { proof_type: 'income', rejection_reason: 'Invalid documentation' }
+      proof_type: :income
+    ).returns(service)
+    NotificationService.expects(:create_and_deliver!).never
+
+    assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
+      create(:proof_review,
+             application: @application,
+             admin: @admin,
+             proof_type: :income,
+             status: :rejected,
+             rejection_reason: 'Invalid documentation')
+    end
+  end
+
+  def test_approval_notification_defaults_to_managing_guardian_contact_path
+    guardian = create(:constituent, email: "guardian.proof.approval.#{SecureRandom.hex(3)}@example.com")
+    dependent = create(
+      :constituent,
+      email: "dependent.proof.approval.#{SecureRandom.hex(3)}@system.matvulcan.local",
+      dependent_email: guardian.email
+    )
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+    application = create(:application, :in_progress, user: dependent, managing_guardian: guardian, skip_proofs: true)
+    application.income_proof.attach(
+      io: StringIO.new('income proof content'),
+      filename: 'income.pdf',
+      content_type: 'application/pdf'
     )
 
-    assert_difference 'Notification.count' do
-      notification.save!
+    NotificationService.expects(:create_and_deliver!).with do |params|
+      params[:type] == 'proof_approved' &&
+        params[:recipient] == guardian &&
+        params[:actor] == @admin &&
+        params[:notifiable] == application &&
+        params[:metadata] == { proof_type: 'income' }
     end
+
+    create(:proof_review,
+           application: application,
+           admin: @admin,
+           proof_type: :income,
+           status: :approved)
+  end
+
+  def test_paper_rejection_does_not_request_secure_proof_resubmission
+    Applications::RequestProofResubmission.expects(:new).never
+
+    Current.paper_context = true
+
+    assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
+      create(:proof_review,
+             application: @application,
+             admin: @admin,
+             proof_type: :income,
+             status: :rejected,
+             rejection_reason: 'Invalid documentation',
+             submission_method: :paper)
+    end
+  ensure
+    Current.reset
   end
 end

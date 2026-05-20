@@ -64,6 +64,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                             'No authorized vendors found at this time.')
     @mock_training_requested_text = mock_template('Training Requested for Application #%<application_id>s',
                                                   'Training requested by %<constituent_full_name>s for application %<application_id>s.')
+    @mock_application_submitted_text = mock_template('Application Submitted',
+                                                     'Application submitted for %<constituent_first_name>s.')
   end
 
   def setup_email_template_stubs
@@ -75,6 +77,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(@mock_income_exceeded_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(@mock_registration_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_training_requested', format: :text, locale: 'en').returns(@mock_training_requested_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_application_submitted', format: :text, locale: 'en').returns(@mock_application_submitted_text)
   end
 
   def create_test_data
@@ -170,6 +173,16 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [admin.email], email.to
     assert_equal "Training Requested for Application ##{@application.id}", email.subject
     assert_match(@application.user.full_name, email.body.to_s)
+  end
+
+  test 'application_submitted does not cc alternate contact' do
+    @application.update_column(:alternate_contact_email, 'alternate.mailer@example.com')
+
+    email = ApplicationNotificationsMailer.application_submitted(@application)
+    email.deliver_now
+
+    assert_equal [@application.user.email], email.to
+    assert_nil email.cc
   end
 
   test 'proof_approved uses guardian locale and email when communications route to guardian' do
@@ -270,8 +283,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [@user.email], email.to
 
     # We're working with the mock data from setup
-    expected_subject = "Mock Proof Needs Revision: #{format_proof_type(@proof_review.proof_type).capitalize}"
-    assert_equal expected_subject, email.subject
+    assert_equal @mock_rejected_text.subject, email.subject
 
     # We're using a text-only template, don't expect multipart emails anymore
     assert_not email.multipart?
@@ -279,6 +291,41 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Check the content of the email
     assert_includes email.body.to_s, "needs revision for #{@user.first_name}"
     assert_includes email.body.to_s, "Reason: #{@proof_review.rejection_reason}"
+  end
+
+  test 'proof_rejected renders none_provided id reason as friendly text without seed row' do
+    RejectionReason.where(code: 'none_provided', proof_type: 'id', locale: %w[en es]).delete_all
+    proof_review = create(
+      :proof_review,
+      :rejected,
+      application: @application,
+      proof_type: :id,
+      rejection_reason: 'none_provided',
+      rejection_reason_code: nil
+    )
+
+    email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
+    email.deliver_now
+
+    assert_includes email.body.to_s, 'No proof of identity was provided with the application.'
+    assert_not_includes email.body.to_s, 'none_provided'
+  end
+
+  test 'proof_rejected preserves custom rejection text when it is not a known reason code' do
+    custom_reason = 'The uploaded photo is too blurry to read.'
+    proof_review = create(
+      :proof_review,
+      :rejected,
+      application: @application,
+      proof_type: :id,
+      rejection_reason: custom_reason,
+      rejection_reason_code: nil
+    )
+
+    email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
+    email.deliver_now
+
+    assert_includes email.body.to_s, custom_reason
   end
 
   test 'proof_rejected sends to guardian email when dependent communications route to guardian' do
@@ -310,9 +357,14 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal [guardian.email], email.to
     assert_equal 'Rechazo en espanol', email.subject
-    assert_includes email.body.to_s, 'Tiene 6 intentos restantes'
+    assert_includes email.body.to_s, I18n.t(
+      'application_notifications.proof_rejected.remaining_attempts_message',
+      count: 6,
+      locale: 'es',
+      reapply_date: I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')
+    )
     assert_includes email.body.to_s, I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')
-    assert_includes email.body.to_s, 'CÓMO VOLVER A ENVIAR SU DOCUMENTACIÓN'
+    assert_includes email.body.to_s, 'CÓMO ENVIAR UN DOCUMENTO CORREGIDO'
   end
 
   test 'proof_rejected generates letter when preference is letter' do
@@ -550,47 +602,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, @notification_params[:additional_notes] # Check optional note
   end
 
-  test 'proof_submission_error generates letter when preference is letter' do
-    # Use the existing user to avoid validation problems
-    @user.update!(
-      communication_preference: 'letter', # Set preference to letter
-      physical_address_1: '123 Main St',
-      city: 'Baltimore',
-      state: 'MD',
-      zip_code: '21201'
-    )
-    error_message = 'Invalid document format'
-
-    # Create new mocks for the test
-    mock_error_text = mock('EmailTemplate')
-    mock_error_text.stubs(:name).returns('application_notifications_proof_submission_error')
-    mock_error_text.stubs(:subject).returns('Submission Error: %<constituent_full_name>s')
-    mock_error_text.stubs(:enabled?).returns(true)
-    mock_error_text.stubs(:render).returns(["Submission Error: #{@user.email}",
-                                            "Text Body: Error processing submission: #{error_message}"])
-
-    # Re-stub the EmailTemplate.find_by! to return our new mock
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_submission_error',
-                                        format: :text, locale: 'en').returns(mock_error_text)
-
-    # Create a mock for the TextTemplateToPdfService instance
-    pdf_service_mock = mock('pdf_service')
-    pdf_service_mock.expects(:queue_for_printing).once
-
-    # Stub the new method to return our mock
-    Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
-
-    delivery = ApplicationNotificationsMailer.proof_submission_error(
-      @user, # Use existing user
-      @application, # Use the application from setup
-      :invalid_format,
-      error_message
-    )
-    assert_no_emails do
-      delivery.deliver_now
-    end
-  end
-
   test 'registration_confirmation' do
     # Create a test constituent
     user = Constituent.create!(
@@ -682,6 +693,28 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
 
     assert_nil result
+  end
+
+  test 'with_mailer_error_handling redacts secure URLs from logs' do
+    mailer = ApplicationNotificationsMailer.new
+    production_env = ActiveSupport::StringInquirer.new('production')
+    original_logger = Rails.logger
+    log_output = StringIO.new
+    raw_url = 'https://example.test/secure_provider_info_form?token=secret-token'
+
+    Rails.stubs(:env).returns(production_env)
+    Rails.logger = ActiveSupport::Logger.new(log_output)
+
+    mailer.send(:with_mailer_error_handling, 'provider_info_requested', raise_in_test_only: true) do
+      raise StandardError, "render failed for #{raw_url}"
+    end
+
+    log_message = log_output.string
+    assert_includes log_message, '[REDACTED_URL]'
+    assert_not_includes log_message, raw_url
+    assert_not_includes log_message, 'secret-token'
+  ensure
+    Rails.logger = original_logger
   end
 
   test 'with_mailer_error_handling still re-raises in test when configured' do

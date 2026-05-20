@@ -22,6 +22,13 @@ production:
     description: "Generate daily metrics on proof attachment success/failure rates"
     queue: "low"
     args: []
+
+  record_secure_form_expirations:
+    class: RecordSecureFormExpirationsJob
+    schedule: "0 * * * *"
+    description: "Record audit events for expired secure upload links"
+    queue: "low"
+    args: []
   
   proof_consistency_check:
     class: ProofConsistencyCheckJob

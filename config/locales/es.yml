@@ -15,6 +15,13 @@ es:
             base:
               duplicate_open_session: "Esta solicitud ya tiene una sesión de capacitación activa."
               historical_session_reopen: "Las sesiones de capacitación históricas no se pueden reabrir. Programe una sesión de seguimiento."
+  activemodel:
+    errors:
+      models:
+        application_form:
+          attributes:
+            base:
+              medical_provider_required: "Se requiere información del profesional certificante para enviar la solicitud."
   activity_history:
     labels:
       training_scheduled: "Capacitación programada"
@@ -36,6 +43,9 @@ es:
       followup_scheduled_for: "Seguimiento programado para"
       reason: "Motivo: %{reason}"
   applications:
+    proof_resubmission_requests:
+      create:
+        failure: "No se pudo enviar la solicitud segura para subir el documento."
     training_requests:
       messages:
         ineligible: "Solo las solicitudes aprobadas son elegibles para capacitación."
@@ -44,8 +54,220 @@ es:
         active_session: "Ya tiene una sesión de capacitación en curso."
         quota_exhausted: "Ya usó todas sus sesiones de capacitación disponibles."
         submitted: "Solicitud de capacitación enviada. Un administrador se comunicará con usted para programar su sesión."
+    provider_info:
+      messages:
+        needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
+        cooldown_active: "Se envió recientemente un enlace seguro para información del proveedor. Espere %{minutes} minutos antes de enviar otro."
+        no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
+        no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
+        unknown_recipient: "Uno o más destinatarios seleccionados no están asociados con esta solicitud."
+        request_created: "Solicitud segura de información del proveedor enviada."
+        request_conflict: "Ya hay una solicitud segura activa para este destinatario. Actualice la página e inténtelo de nuevo."
+        delivery_failed: "Se creó la solicitud segura de información del proveedor, pero falló la entrega. Revise el estado del enlace seguro e intente reenviarlo."
+        submitted: "Información del proveedor enviada."
+        validation_failed: "Corrija los campos resaltados."
+        already_submitted: "Este formulario seguro ya fue enviado."
+        revoked: "Este enlace seguro ya no está activo."
+        expired: "Este enlace seguro ha vencido."
+        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+        invalid_request: "Este enlace seguro ya no está disponible."
+        medical_provider_name_blank: "Ingrese el nombre del profesional certificador."
+        medical_provider_phone_blank: "Ingrese el número de teléfono del profesional certificador."
+        medical_provider_email_blank: "Ingrese el correo electrónico del profesional certificador."
+        medical_provider_phone_invalid: "Ingrese un número de teléfono de 10 dígitos, usando 4105550100 o 410-555-0100."
+        medical_provider_fax_invalid: "Ingrese un número de fax de 10 dígitos, usando 4105550100 o 410-555-0100."
+        medical_provider_email_invalid: "Ingrese un correo electrónico válido."
+        request_after_submission_failed: "No pudimos enviar automáticamente el formulario de información del proveedor. El personal del programa dará seguimiento."
+    proof_resubmission:
+      messages:
+        needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
+        cooldown_active: "Se envió recientemente un enlace seguro para subir documentos. Espere %{minutes} minutos antes de enviar otro."
+        no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
+        no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
+        unknown_recipient: "Uno o más destinatarios seleccionados no están asociados con esta solicitud."
+        request_created: "Solicitud segura para subir documentos enviada."
+        request_not_needed: "Solo se puede enviar un enlace seguro para subir documentos cuando este documento aún falta o debe reemplazarse."
+        request_conflict: "Ya hay una solicitud segura activa para este destinatario. Actualice la página e inténtelo de nuevo."
+        delivery_failed: "Se creó la solicitud segura para subir documentos, pero falló la entrega. Revise el estado del enlace seguro e intente reenviarlo."
+        missing_rejection_review: "Se requiere una revisión de documento rechazada antes de enviar un enlace seguro para subir documentos."
+        invalid_proof_type: "Este tipo de documento no permite enlaces seguros de carga."
+        submitted: "Documento enviado."
+        validation_failed: "Corrija los campos resaltados."
+        already_submitted: "Este formulario seguro ya fue enviado."
+        revoked: "Este enlace seguro ya no está activo."
+        expired: "Este enlace seguro ha vencido."
+        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+        invalid_request: "Este enlace seguro ya no está disponible."
+        file_blank: "Seleccione un documento para subir."
+        file_type_invalid: "Suba un archivo PDF, JPEG o PNG."
+        file_too_large: "Suba un archivo menor de %{max_size} MB."
+        file_too_small: "Suba un documento que no esté vacío."
+        file_suspicious: "Suba otro archivo. Este archivo no se puede aceptar."
+        file_invalid: "Suba un documento válido."
+        attachment_failed: "No se pudo adjuntar el documento. Inténtelo de nuevo."
+    certification_upload:
+      messages:
+        provider_email_required: "Se requiere el correo electrónico del proveedor. Envíe primero un formulario de información del proveedor para recopilar información de contacto actualizada."
+        unsupported_channel: "Los enlaces seguros para subir certificaciones solo se pueden enviar por correo electrónico."
+        cooldown_active: "Se envió recientemente un enlace seguro para subir la certificación. Espere %{minutes} minutos antes de enviar otro."
+        request_created: "Solicitud segura para subir la certificación creada."
+        request_conflict: "Ya hay una solicitud segura activa para este proveedor. Actualice la página e inténtelo de nuevo."
+        delivery_failed: "No pudimos enviar el correo del enlace seguro para subir la certificación. Inténtelo de nuevo."
+        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al proveedor."
+        submitted: "Certificación subida correctamente."
+        validation_failed: "Corrija los campos resaltados."
+        already_submitted: "Este formulario seguro ya fue enviado."
+        revoked: "Este enlace seguro ya no está activo."
+        expired: "Este enlace seguro ha vencido."
+        invalid_request: "Este enlace seguro ya no está disponible."
+        attachment_failed: "No se pudo adjuntar el documento de certificación. Inténtelo de nuevo."
+        file_blank: "Seleccione un documento de certificación para subir."
+        file_type_invalid: "Suba un archivo PDF, JPEG o PNG."
+        file_too_large: "Suba un archivo menor de %{max_size} MB."
+        file_too_small: "Suba un documento de certificación que no esté vacío."
+        file_suspicious: "Suba otro archivo. Este archivo no se puede aceptar."
+        file_invalid: "Suba un documento de certificación válido."
+    alternate_contact:
+      portal_help: "Puede proporcionar una persona de contacto alternativa que pueda ayudar con su solicitud. Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+      admin_help: "Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+      admin_authorization_help: "Los contactos alternativos son solo informativos. No son destinatarios autorizados de la solicitud y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+    dependent_contact:
+      strategy_help: "Use la información de contacto del tutor cuando las comunicaciones seguras de flujo de trabajo para esta persona dependiente deban enviarse por defecto al tutor. Proporcione información de contacto separada de la persona dependiente cuando las comunicaciones seguras de flujo de trabajo puedan enviarse a la persona dependiente/solicitante."
+      guardian_email_help: "Las comunicaciones seguras de flujo de trabajo para la persona dependiente se enviarán por defecto a la ruta de correo electrónico del tutor."
+      dependent_email_help: "Este correo electrónico se usará para comunicaciones sobre los beneficios de la persona dependiente. Las comunicaciones seguras de flujo de trabajo pueden enviarse por defecto a la persona dependiente/solicitante cuando este correo electrónico sea distinto del correo electrónico del tutor."
+      guardian_phone_help: "Las llamadas o mensajes de texto para la persona dependiente usarán la ruta telefónica del tutor."
   admin:
     applications:
+      filters:
+        pending_provider_info: "Información del Proveedor Pendiente"
+        pending_provider_info_aria: "Mostrar solicitudes pendientes de información del proveedor"
+      secure_request_forms:
+        create:
+          success: "Solicitud segura de información del proveedor enviada."
+          failure: "No se pudo enviar la solicitud segura de información del proveedor."
+        contact:
+          letter: "Correo postal"
+          unknown: "Desconocido"
+        channels:
+          email: "Correo electrónico"
+          sms: "SMS"
+          letter: "Correo postal"
+        statuses:
+          active: "Activo"
+          submitted: "Enviado"
+          revoked: "Revocado"
+          expired: "Vencido"
+        panel:
+          title: "Solicitudes seguras de información del proveedor"
+          description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
+          recipients: "Destinatarios"
+          recipient_help: "El tutor principal, la persona dependiente/solicitante y los tutores registrados son relaciones autorizadas de la solicitud. El valor predeterminado sigue la ruta de correo efectiva de la persona dependiente; otros tutores registrados reciben enlaces seguros solo cuando se seleccionan explícitamente. Los contactos alternativos son solo informativos y no reciben enlaces seguros."
+          default_channel: "Canal predeterminado: %{channel}"
+          email_override: "Enviar enlace seguro en línea por correo electrónico"
+          submit: "Enviar solicitud segura"
+          no_recipients: "No hay destinatarios elegibles disponibles para esta solicitud."
+        managing_guardian:
+          title: "Falta tutor principal"
+          description: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
+        table:
+          recipient: "Destinatario"
+          contact: "Contacto"
+          channel: "Canal"
+          status: "Estado"
+          sent: "Enviado"
+          expires: "Vence"
+          actions: "Acciones"
+          revoke: "Revocar"
+          revoke_confirm: "¿Revocar este enlace seguro de información del proveedor?"
+          revoke_batch: "Revocar Todos Los Enlaces De Esta Solicitud"
+          revoke_batch_confirm: "¿Revocar todos los enlaces seguros activos de información del proveedor en esta solicitud?"
+          resend: "Reenviar"
+          send_new_link: "Enviar nuevo enlace"
+          no_actions: "Sin acciones"
+          empty: "No se han enviado solicitudes seguras de información del proveedor."
+        summary:
+          label: "Información del proveedor pendiente"
+          none: "No se ha enviado ninguna solicitud segura"
+          recipients:
+            one: "1 destinatario"
+            other: "%{count} destinatarios"
+          status_counts: "%{active} activos, %{submitted} enviados, %{expired} vencidos, %{revoked} revocados"
+          last_sent: "Enviado %{time}"
+          nearest_expiration: "Vence %{time}"
+      secure_request_form_revocations:
+        create:
+          success: "Enlace seguro revocado."
+          failure: "No se pudo revocar el enlace seguro."
+          not_active: "Este enlace seguro no está activo."
+      proof_secure_request_forms:
+        panel:
+          title: "Enlaces seguros para subir %{proof_type}"
+        table:
+          revoke: "Revocar"
+          revoke_confirm: "¿Revocar este enlace seguro para subir %{proof_type}? El destinatario ya no podrá usarlo."
+          no_actions: "Sin acciones"
+      medical_provider_secure_request_forms:
+        panel:
+          title: "Enlaces de carga de certificación segura"
+        table:
+          provider: "Correo del proveedor"
+          status: "Estado"
+          sent: "Enviado"
+          expires: "Vence"
+          actions: "Acciones"
+          revoke: "Revocar"
+          revoke_confirm: "¿Revocar este enlace de carga de certificación segura? El proveedor ya no podrá usarlo."
+          no_actions: "Sin acciones"
+        statuses:
+          active: "Activo"
+          expired: "Vencido"
+          revoked: "Revocado"
+          submitted: "Enviado"
+      medical_provider_secure_request_form_revocations:
+        create:
+          success: "Enlace de carga de certificación segura revocado."
+          failure: "No se pudo revocar el enlace de carga de certificación segura."
+          not_active: "Este enlace de carga de certificación segura no está activo."
+      secure_request_form_batch_revocations:
+        create:
+          success: "%{count} enlaces seguros de información del proveedor revocados."
+          failure: "No se pudieron revocar los enlaces seguros de información del proveedor."
+      certification_upload_requests:
+        create:
+          success: "Enlace seguro para subir la certificación enviado correctamente."
+          failure: "No se pudo enviar el enlace seguro para subir la certificación."
+          provider_email_required: "No se puede enviar el formulario seguro para subir la certificación: falta el correo electrónico del proveedor. Envíe un formulario de información del proveedor a la persona solicitante o tutor para recopilar información de contacto actualizada."
+    vendors:
+      vendor_secure_request_forms:
+        create:
+          success: "Se envió el enlace seguro para cargar el W9."
+          failure: "No se pudo enviar el enlace seguro para cargar el W9."
+        panel:
+          title: "Enlaces Seguros para Cargar W9"
+          description: "Envíe un enlace seguro con vencimiento para que el proveedor pueda cargar un W9 sin iniciar sesión."
+          submit: "Solicitar Nueva Carga de W9"
+          no_email: "Se requiere un correo electrónico del proveedor antes de enviar un enlace seguro para cargar el W9."
+        table:
+          email: "Correo del Proveedor"
+          status: "Estado"
+          sent: "Enviado"
+          expires: "Vence"
+          actions: "Acciones"
+          revoke: "Revocar"
+          revoke_confirm: "¿Revocar este enlace seguro para cargar el W9? El proveedor ya no podrá usarlo."
+          send_new_link: "Enviar Nuevo Enlace"
+          no_actions: "Sin acciones"
+          empty: "No se han enviado enlaces seguros para cargar el W9."
+        statuses:
+          active: "Activo"
+          expired: "Vencido"
+          revoked: "Revocado"
+          submitted: "Enviado"
+      vendor_secure_request_form_revocations:
+        create:
+          success: "Se revocó el enlace seguro para cargar el W9."
+          failure: "No se pudo revocar el enlace seguro para cargar el W9."
+          not_active: "Este enlace seguro para cargar el W9 no está activo."
       training_follow_up_needed:
         title: "La capacitación necesita seguimiento"
         summary: "Última sesión: %{status} el %{date}."
@@ -94,27 +316,91 @@ es:
       scheduled_for_in_future: "scheduled_for debe estar en el futuro"
       unexpected_error: "Ocurrió un error inesperado: %{message}"
   application_notifications:
-    proof_rejected:
-      remaining_attempts_message:
-        one: "Tiene %{count} intento restante para presentar la documentación requerida antes del %{reapply_date}."
-        other: "Tiene %{count} intentos restantes para presentar la documentación requerida antes del %{reapply_date}."
-      resubmission_options:
+    provider_info_requested:
+      email_instructions: |-
+        Use este enlace seguro para proporcionar la información de contacto del profesional certificador: %{secure_url}
+
+        Este enlace seguro vence en %{hours} horas.
+      letter_instructions: |-
+        Comuníquese con nuestro equipo por teléfono al %{support_phone} o por correo electrónico en %{support_email} y proporcione el nombre, número de teléfono, correo electrónico y número de fax del profesional certificador, si está disponible.
+    proof_requested:
+      submission_options:
         paper: |-
-          CÓMO VOLVER A ENVIAR SU DOCUMENTACIÓN:
-          1. Responda a este correo electrónico: Simplemente responda a este correo y adjunte su documentación actualizada.
-          2. Envíela por correo postal: Puede enviar copias de sus documentos a nuestra oficina, y nosotros las escanearemos y subiremos por usted:
+          CÓMO ENVIAR ESTE DOCUMENTO:
+          Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
              123 Main Street
              Baltimore, MD 21201
         online: |-
-          CÓMO VOLVER A ENVIAR SU DOCUMENTACIÓN:
-          1. Responda a este correo electrónico: Simplemente responda a este correo y adjunte su documentación actualizada.
-          2. Súbala en línea: Inicie sesión en el panel de su cuenta en %{sign_in_url} y suba sus documentos nuevos de forma segura.
-          3. Envíela por correo postal: Puede enviar copias de sus documentos a nuestra oficina, y nosotros las escanearemos y subiremos por usted:
+          CÓMO ENVIAR ESTE DOCUMENTO:
+          1. Use este enlace seguro para subir su %{proof_type_formatted}: %{secure_upload_url}
+          2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
              123 Main Street
              Baltimore, MD 21201
-      archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío. Su solicitud ha sido archivada. Puede volver a presentar una solicitud después del %{reapply_date}."
+    proof_rejected:
+      none_provided:
+        default: "No se proporcionó la prueba requerida con la solicitud."
+        id: "No se proporcionó ninguna prueba de identidad con la solicitud."
+        residency: "No se proporcionó ninguna prueba de residencia en Maryland con la solicitud."
+        income: "No se proporcionó ninguna prueba de ingresos con la solicitud."
+      remaining_attempts_message:
+        one: "Le queda %{count} intento para presentar la documentación requerida antes del %{reapply_date}."
+        other: "Le quedan %{count} intentos para presentar la documentación requerida antes del %{reapply_date}."
+      resubmission_options:
+        paper: |-
+          CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
+          Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
+             Telecomunicaciones Accesibles de Maryland
+             123 Main Street
+             Baltimore, MD 21201
+        online: |-
+          CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
+          1. Use este enlace seguro para subir una copia corregida de su %{proof_type_formatted}: %{secure_upload_url}
+          2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
+             Telecomunicaciones Accesibles de Maryland
+             123 Main Street
+             Baltimore, MD 21201
+      archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada. Puede volver a solicitar después del %{reapply_date}."
+  vendor_notifications:
+    w9_rejected:
+      secure_upload_instructions: |-
+        1. Suba aquí su formulario W9 corregido de forma segura: %{secure_upload_url}
+        2. Envíe el PDF corregido antes de que venza este enlace seguro.
+      vendor_portal_instructions: |-
+        1. Inicie sesión en su cuenta de proveedor: %{vendor_portal_url}
+        2. Vaya a la configuración de su perfil.
+        3. Suba un formulario W9 corregido.
+    w9_upload_requested:
+      subject: "Se solicitó una carga segura de W9 para %{vendor_business_name}"
+      body: |-
+        Hola %{vendor_business_name},
+
+        El equipo de %{organization_name} le ha solicitado un formulario W9.
+
+        Suba su W9 de forma segura aquí: %{secure_upload_url}
+
+        Este enlace seguro tiene vencimiento. Si tiene preguntas, comuníquese con %{support_email}.
+  vendors:
+    w9_resubmission:
+      messages:
+        recipient_email_required: "Se requiere un correo electrónico del proveedor antes de enviar un enlace seguro para cargar el W9."
+        missing_rejection_review: "Se requiere una revisión rechazada del W9 antes de enviar un enlace seguro para cargar el W9."
+        request_not_needed: "Solo se puede enviar un enlace seguro para cargar el W9 cuando el W9 no se ha enviado o debe reemplazarse."
+        request_created: "Se envió el enlace seguro para cargar el W9."
+        request_conflict: "No pudimos crear un enlace seguro para cargar el W9 en este momento. Inténtelo de nuevo."
+        delivery_failed: "Creamos el enlace seguro para cargar el W9, pero no pudimos entregar el correo electrónico. Inténtelo de nuevo."
+        cooldown_active: "Se envió recientemente un enlace seguro para cargar el W9. Espere %{minutes} minuto(s) antes de enviar otro."
+        resent: "Si esta solicitud segura de W9 se puede reenviar, se enviará un nuevo enlace al destinatario original."
+        invalid_request: "Este enlace seguro para cargar el W9 no es válido."
+        already_submitted: "Este enlace seguro para cargar el W9 ya fue utilizado."
+        revoked: "Este enlace seguro para cargar el W9 fue revocado."
+        expired: "Este enlace seguro para cargar el W9 ha vencido."
+        validation_failed: "Corrija los errores del archivo y vuelva a intentarlo."
+        file_blank: "Seleccione un archivo PDF del W9 para cargar."
+        file_type_invalid: "Solo se pueden cargar archivos PDF para la revisión del W9."
+        file_too_large: "El archivo debe ser de %{max_size} MB o menos."
+        submitted: "Gracias. Su formulario W9 fue enviado para revisión."
   document_signing:
     medical_certification_request:
       submission_name: "Certificacion medica - %{constituent_full_name} (Solicitud %{application_id})"
@@ -184,14 +470,189 @@ es:
         application_notifications_account_created: "Su cuenta de Telecomunicaciones Accesibles de Maryland"
         application_notifications_registration_confirmation: "Bienvenido al Programa de Telecomunicaciones Accesibles de Maryland"
         application_notifications_proof_rejected: "Se requiere seguimiento para la verificación de documentos"
+        application_notifications_id_proof_rejected: "Se requiere seguimiento para el documento de identificación"
         application_notifications_income_threshold_exceeded: "Revisión de elegibilidad de ingresos"
         application_notifications_proof_approved: "Verificación de documentos aprobada"
         application_notifications_proof_received: "Verificación de documentos recibida"
         application_notifications_max_rejections_reached: "Actualización importante del estado de la solicitud"
-        application_notifications_proof_submission_error: "Error en el envío de documentos"
+        application_notifications_provider_info_requested: "Solicitud de información del profesional certificador"
         medical_provider_request_certification: "Solicitud de certificación médica"
         voucher_notifications_voucher_assigned: "Su vale para equipo de accesibilidad"
         voucher_notifications_voucher_redeemed: "Confirmación de canje del vale"
+        evaluator_mailer_evaluation_submission_confirmation: "Confirmación de envío de evaluación"
+  secure_provider_info_forms:
+    sms:
+      message: "MAT necesita información de contacto del profesional certificador. Envíela de forma segura aquí: %{secure_url} Este enlace vence en %{hours} horas."
+    show:
+      title: "Información del Profesional Certificador"
+      heading: "Proporcione información del profesional certificador"
+      intro: "El programa MAT necesita información de contacto del profesional que puede certificar la información de discapacidad de %{constituent_name}."
+      intro_without_name: "El programa MAT necesita información de contacto del profesional que puede certificar la información de discapacidad del solicitante de esta solicitud."
+      required: "Requerido"
+      required_legend: "Los campos marcados con * son obligatorios."
+      provider_name: "Nombre del profesional certificador"
+      provider_email: "Correo electrónico"
+      provider_phone: "Teléfono"
+      provider_fax: "Fax"
+      submit: "Enviar Información"
+      submitting: "Enviando…"
+      error_summary: "Corrija los siguientes campos:"
+    success:
+      title: "Información Recibida"
+      heading: "Información recibida"
+      body: "Gracias. El equipo de MAT recibió la información del profesional certificador y continuará revisando la solicitud."
+    submitted:
+      title: "Información Ya Enviada"
+      heading: "Información ya enviada"
+      body: "Este formulario seguro ya fue enviado. El equipo de MAT tiene la información necesaria para esta solicitud."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+  secure_provider_info_form_resends:
+    new:
+      title: "Solicitar Nuevo Enlace Seguro"
+      heading: "Este enlace seguro ha vencido"
+      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará al destinatario original."
+      submit: "Solicitar Nuevo Enlace Seguro"
+      submitting: "Solicitando…"
+    create:
+      title: "Solicitud Recibida"
+      heading: "Solicitud recibida"
+      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+  secure_proof_forms:
+    proof_types:
+      income: "comprobante de ingresos"
+      residency: "comprobante de residencia en Maryland"
+      id: "comprobante de identidad"
+    sms:
+      message: "MAT necesita su %{proof_type}. Súbalo de forma segura aquí: %{secure_url} Este enlace vence en %{hours} horas."
+    show:
+      title: "Carga Segura de Documentos"
+      heading: "Suba %{proof_type}"
+      intro: "Use este formulario seguro para subir el documento solicitado por el equipo de MAT."
+      required: "Requerido"
+      file_label: "Documento"
+      file_help: "Tipos de archivo aceptados: PDF, JPEG o PNG. Tamaño máximo: 10 MB."
+      submit: "Subir Documento"
+      submitting: "Subiendo..."
+      error_summary: "Corrija los siguientes campos:"
+    success:
+      title: "Documento Recibido"
+      heading: "Documento recibido"
+      body: "Gracias. El equipo de MAT recibió el documento y continuará revisando la solicitud."
+    submitted:
+      title: "Documento Ya Enviado"
+      heading: "Documento ya enviado"
+      body: "Este documento ya fue enviado. El equipo de MAT continuará revisando la solicitud."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+  secure_proof_form_resends:
+    new:
+      title: "Solicitar Nuevo Enlace Seguro"
+      heading: "Este enlace seguro ha vencido"
+      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará al destinatario original."
+      submit: "Solicitar Nuevo Enlace Seguro"
+      submitting: "Solicitando..."
+    create:
+      title: "Solicitud Recibida"
+      heading: "Solicitud recibida"
+      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+  secure_certification_forms:
+    show:
+      title: "Carga Segura de Certificación"
+      heading: "Suba la certificación de discapacidad"
+      intro: "Se le ha pedido que suba una certificación de discapacidad firmada para %{constituent_name}, solicitud #%{application_id}."
+      constituent_unknown: "el solicitante"
+      required: "Requerido"
+      file_label: "Documento de certificación"
+      file_help: "Tipos de archivo aceptados: PDF, JPEG o PNG. Tamaño máximo: 10 MB."
+      submit: "Subir Certificación"
+      submitting: "Subiendo..."
+      error_summary: "Corrija los siguientes campos:"
+    success:
+      title: "Certificación Recibida"
+      heading: "Certificación recibida"
+      body: "Gracias. El equipo de MAT recibió la certificación y continuará revisando la solicitud."
+    submitted:
+      title: "Certificación Ya Enviada"
+      heading: "Certificación ya enviada"
+      body: "Esta certificación ya fue enviada. El equipo de MAT continuará revisando la solicitud."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+  secure_certification_form_resends:
+    new:
+      title: "Solicitar Nuevo Enlace Seguro"
+      heading: "Este enlace seguro ha vencido"
+      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará al correo electrónico original del proveedor."
+      submit: "Solicitar Nuevo Enlace Seguro"
+      submitting: "Solicitando..."
+    create:
+      title: "Solicitud Recibida"
+      heading: "Solicitud recibida"
+      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al correo electrónico original del proveedor."
+      default_rejection_reason: "La certificación enviada debe corregirse."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+  secure_w9_forms:
+    show:
+      title: "Carga de W9"
+      heading: "Suba su formulario W9"
+      intro: "Se le ha solicitado que suba un formulario W9. Cargue una copia en PDF usando este enlace seguro."
+      required: "Requerido"
+      file_label: "Formulario W9"
+      file_help: "Solo PDF, hasta 10 MB."
+      submit_help: "Después de elegir su archivo, haga clic en Enviar W9 para terminar de enviarlo."
+      submit: "Enviar W9"
+      submitting: "Enviando…"
+      error_summary: "Corrija los siguientes errores del archivo:"
+    success:
+      title: "W9 Recibido"
+      heading: "Formulario W9 recibido"
+      body: "Gracias. El formulario W9 fue recibido y ahora está pendiente de revisión."
+    submitted:
+      title: "W9 Ya Enviado"
+      heading: "Formulario W9 ya enviado"
+      body: "Este formulario W9 ya fue enviado. El equipo de MAT lo revisará y se comunicará si es necesario."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro para cargar el W9 ya no está disponible. Comuníquese con el equipo de soporte de MAT si todavía necesita ayuda con esta solicitud."
+      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+  secure_w9_form_resends:
+    new:
+      title: "Solicitar Nuevo Enlace Seguro para W9"
+      heading: "Este enlace seguro para cargar el W9 ha vencido"
+      body: "Puede solicitar un nuevo enlace seguro para cargar el W9. Por privacidad, solo se enviará al destinatario original."
+      submit: "Solicitar Nuevo Enlace Seguro"
+      submitting: "Solicitando…"
+    create:
+      title: "Solicitud Recibida"
+      heading: "Solicitud recibida"
+      body: "Si esta solicitud segura de W9 se puede reenviar, se enviará un nuevo enlace al destinatario original."
+    unavailable:
+      title: "Enlace Seguro No Disponible"
+      heading: "Enlace seguro no disponible"
+      body: "Este enlace seguro para cargar el W9 ya no está disponible. Comuníquese con el equipo de soporte de MAT si todavía necesita ayuda con esta solicitud."
+      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
   terms_and_conditions:
     title: "Acuerdo del Programa de Telecomunicaciones Accesibles de Maryland para la Aceptación de Propiedad Estatal para Uso Personal"
     intro: "Entiendo y acepto lo siguiente:"
@@ -216,4 +677,3 @@ es:
     item_10_title: "10. Aprobación y Capacitación"
     item_10: "Tras la aprobación de un formulario de solicitud, entiendo que se me notificará por escrito la aceptación. Si es necesario, solicitaré capacitación específica para el dispositivo que recibiré. Si soy menor, un padre/tutor me acompañará a la capacitación requerida para firmar esta declaración. Si estoy físicamente incapacitado para asistir a la capacitación, puedo llamar al 800-552-7724 (Voz/TTY) 443-453-5970 (Teléfono de Video) para organizar capacitación en un sitio alternativo."
     conclusion: "Habiendo leído las condiciones anteriores o habiéndolas leído y explicado, acepto cumplir con todos los términos y condiciones que yo, o el menor por quien firmo, es elegible para recibir el equipo solicitado teniendo (1) la certificación médica requerida de discapacidad; (2) cumplido las directrices de ingresos recibiendo actualmente SSI, SSDI, TDAP o TANF; (3) firmado la declaración de términos y condiciones para la aceptación de propiedad estatal; y (4) no recibiendo equipo similar a través de otras agencias estatales o federales, o departamentos."
-    evaluator_mailer_evaluation_submission_confirmation: "Confirmación de envío de evaluación"

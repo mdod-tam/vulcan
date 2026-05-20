@@ -75,6 +75,27 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_not_nil event.metadata['blob_id'], 'Expected blob_id in metadata to not be nil'
   end
 
+  test 'attach_proof records passed proof submission method instead of application submission channel' do
+    Event.delete_all
+    @application.update!(submission_method: :online)
+
+    result = ProofAttachmentService.attach_proof({
+                                                   application: @application,
+                                                   proof_type: 'income',
+                                                   blob_or_file: @test_file_upload,
+                                                   status: :not_reviewed,
+                                                   admin: nil,
+                                                   submission_method: :secure_form,
+                                                   metadata: {}
+                                                 })
+
+    assert result[:success], 'Expected attach_proof to succeed'
+
+    event = Event.where(action: 'income_proof_attached').order(:created_at).last
+    assert_not_nil event, 'Expected an income_proof_attached event'
+    assert_equal 'secure_form', event.metadata['submission_method']
+  end
+
   test 'attach_proof handles errors gracefully' do
     # Clear events before the test
     Event.delete_all

@@ -21,6 +21,7 @@ module Admin
     # DashboardMetricsLoading: Provides methods for loading dashboard metrics and counts
     # Key methods: load_dashboard_metrics, safe_assign, load_fiscal_year_data
     include DashboardMetricsLoading
+    include Admin::ProviderInfoRequestLoading
     # RequestMetadataHelper: Provides standardized request metadata methods
     # Key methods: basic_request_metadata, audit_metadata, proof_submission_metadata
     include RequestMetadataHelper
@@ -56,14 +57,16 @@ module Admin
                end
 
       @pagy, page_of_apps = paginate(scoped)
+      page_applications = page_of_apps.to_a
       # ApplicationDataLoading concern: Efficiently preloads attachments for multiple applications
       # Flow: preload_attachments_for_applications -> groups attachments by application_id to avoid N+1 queries
       # Force to array to avoid PostgreSQL JSON distinct issues when relation has joins
-      attachments_index   = preload_attachments_for_applications(page_of_apps.to_a)
+      attachments_index = preload_attachments_for_applications(page_applications)
+      @provider_info_request_summaries = provider_info_request_summaries_for(page_applications)
 
       # ApplicationDataLoading concern: Decorates applications with storage information
       # Flow: decorate_applications_with_storage -> wraps each app with ApplicationStorageDecorator
-      @applications = decorate_applications_with_storage(page_of_apps, attachments_index)
+      @applications = decorate_applications_with_storage(page_applications, attachments_index)
 
       # Load recent notifications to avoid N+1 queries
       # Preload notifiable for Notification#message, actor for view display
@@ -91,6 +94,9 @@ module Admin
       @certification_requests = certification_service.request_events
       @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
+      load_provider_info_request_data(@application)
+      @medical_provider_secure_request_forms = @application.medical_provider_secure_request_forms
+                                                           .order(created_at: :desc)
     end
 
     def edit; end

@@ -81,7 +81,10 @@ module ConstituentPortal
     def create
       @form = build_application_form
 
-      return render_form_errors(@form) unless @form.valid?
+      unless @form.valid?
+        show_missing_provider_info_flash(@form)
+        return render_form_errors(@form)
+      end
 
       result = Applications::ApplicationCreator.call(@form)
 
@@ -106,7 +109,10 @@ module ConstituentPortal
         params: params
       )
 
-      return render_form_errors(@form, @application) unless @form.valid?
+      unless @form.valid?
+        show_missing_provider_info_flash(@form)
+        return render_form_errors(@form, @application)
+      end
 
       result = Applications::ApplicationCreator.call(@form)
 
@@ -407,6 +413,15 @@ module ConstituentPortal
 
       prepare_medical_provider_for_edit
       render :edit, status: :unprocessable_content
+    end
+
+    def show_missing_provider_info_flash(form)
+      return unless form.errors.added?(:base, :medical_provider_required)
+
+      flash.now[:alert] = I18n.t(
+        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        locale: form.message_locale
+      )
     end
 
     def determine_update_notice(original_status, application)

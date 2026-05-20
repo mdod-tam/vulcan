@@ -29,6 +29,16 @@ module Admin
                     'Should have at least one form for policies'
     end
 
+    def test_index_hides_retired_email_submission_rate_limit
+      Policy.find_or_create_by!(key: 'proof_submission_rate_limit_email') { |p| p.value = 5 }
+
+      get admin_policies_path
+
+      assert_response :success
+      assert_select 'label', text: 'Email Submissions', count: 0
+      assert_no_match(/email submissions are through email attachments/i, response.body)
+    end
+
     def test_should_get_edit
       get edit_admin_policy_path(@policy)
       assert_response :success

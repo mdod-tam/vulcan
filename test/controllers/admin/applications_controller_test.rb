@@ -29,9 +29,68 @@ module Admin
       assert_response :success
     end
 
+    test 'index shows compact provider info request summary for pending applications' do
+      pending_application = create(:application, :with_residency_proof, :with_id_proof)
+      pending_application.update!(
+        residency_proof_status: :approved,
+        id_proof_status: :approved,
+        income_proof_required: false,
+        status: :awaiting_proof,
+        medical_provider_name: nil
+      )
+      batch_id = SecureRandom.uuid
+      create(:secure_request_form, application: pending_application, recipient: pending_application.user,
+                                   request_batch_id: batch_id)
+      create(:secure_request_form, :submitted, application: pending_application, recipient: create(:constituent),
+                                               request_batch_id: batch_id)
+
+      get admin_applications_path(filter: 'pending_provider_info')
+
+      assert_response :success
+      assert_select "tr#application_#{pending_application.id}" do
+        assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label')
+        assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.recipients', count: 2)
+        assert_select 'div',
+                      text: I18n.t('admin.applications.secure_request_forms.summary.status_counts',
+                                   active: 1, submitted: 1, expired: 0, revoked: 0)
+      end
+    end
+
     test 'should show application' do
       get admin_application_path(@application)
       assert_response :success
+    end
+
+    test 'show page displays secure proof and certification submissions in activity history' do
+      Event.create!(
+        user: @application.user,
+        auditable: @application,
+        action: 'proof_submitted_via_secure_form',
+        metadata: {
+          'application_id' => @application.id,
+          'proof_type' => 'income',
+          'secure_request_form_id' => 701
+        }
+      )
+      Event.create!(
+        user: User.system_user,
+        auditable: @application,
+        action: 'cert_submitted_via_secure_form',
+        metadata: {
+          'application_id' => @application.id,
+          'provider_name' => 'Dr. Secure Cert',
+          'provider_email' => 'provider@example.test',
+          'medical_provider_secure_request_form_id' => 702
+        }
+      )
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_includes response.body, 'Proof Submitted Via Secure Form'
+      assert_includes response.body, 'Secure income proof uploaded for review'
+      assert_includes response.body, 'Certification Submitted Via Secure Form'
+      assert_includes response.body, 'Secure certification uploaded for Dr. Secure Cert'
     end
 
     test 'should upload medical certification document' do

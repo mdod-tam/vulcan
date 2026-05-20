@@ -7,7 +7,7 @@
 
   <%= form_with(model: @user, url: profile_path, method: :patch, html: { class: "space-y-6", 'aria-describedby': (@user.errors.any? ? 'error_explanation' : nil) }) do |f| %>
     <% if @user.errors.any? %>
-      <div id="error_explanation" role="alert" aria-labelledby="error-heading" tabindex="-1" class="bg-red-50 p-4 rounded mb-6">
+      <div id="error_explanation" role="alert" aria-labelledby="error-heading" tabindex="-1" data-controller="error-summary" class="bg-red-50 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
         <h2 id="error-heading" class="text-red-700 font-medium"><%= pluralize(@user.errors.count, "error") %> prohibited this profile from being saved:</h2>
         <ul class="list-disc list-inside text-red-700">
           <% @user.errors.full_messages.each do |message| %>

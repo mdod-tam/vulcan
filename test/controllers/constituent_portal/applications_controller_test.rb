@@ -226,6 +226,86 @@ module ConstituentPortal
       assert_equal 'not_reviewed', application.residency_proof_status
     end
 
+    test 'should not submit application without provider info when no provider flag is posted' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "missing_provider_submit_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      Applications::RequestProviderInfo.expects(:new).never
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: {
+          application: {
+            maryland_resident: true,
+            household_size: 3,
+            annual_income: 50_000,
+            self_certify_disability: checkbox_params(true),
+            hearing_disability: checkbox_params(true),
+            vision_disability: checkbox_params(false),
+            speech_disability: checkbox_params(false),
+            mobility_disability: checkbox_params(false),
+            cognition_disability: checkbox_params(false),
+            residency_proof: @valid_image,
+            income_proof: @valid_pdf,
+            no_provider_info_provided: '1',
+            medical_provider_attributes: {
+              name: '',
+              phone: '',
+              email: ''
+            }
+          },
+          submit_application: 'Submit Application'
+        }
+      end
+
+      assert_response :unprocessable_content
+      expected = I18n.t(
+        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        locale: 'en'
+      )
+      assert_equal expected, flash[:alert]
+      assert_match expected, response.body
+    end
+
+    test 'should not submit application without provider info when preferred language is Spanish' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "missing_provider_submit_es_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: {
+          constituent: { locale: 'es' },
+          application: {
+            maryland_resident: true,
+            household_size: 3,
+            annual_income: 50_000,
+            self_certify_disability: checkbox_params(true),
+            hearing_disability: checkbox_params(true),
+            vision_disability: checkbox_params(false),
+            speech_disability: checkbox_params(false),
+            mobility_disability: checkbox_params(false),
+            cognition_disability: checkbox_params(false),
+            residency_proof: @valid_image,
+            income_proof: @valid_pdf,
+            no_provider_info_provided: '1',
+            medical_provider_attributes: {
+              name: '',
+              phone: '',
+              email: ''
+            }
+          },
+          submit_application: 'Submit Application'
+        }
+      end
+
+      assert_response :unprocessable_content
+      expected = I18n.t(
+        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        locale: 'es'
+      )
+      assert_equal expected, flash[:alert]
+      assert_match expected, response.body
+    end
+
     test 'guardian should create application for a dependent' do
       # Setup: Create a guardian and a dependent user linked by GuardianRelationship
       guardian = create(:constituent, email: 'guardian.app.creator@example.com', phone: '5555550020')

@@ -73,6 +73,8 @@ module Applications
       when 'medical_certs_to_review'
         # Only include applications that are in progress and have received certs
         scope.where(status: :in_progress, medical_certification_status: :received)
+      when 'pending_provider_info'
+        scope.pending_provider_info
       when 'training_requests'
         # Queue is driven by persisted application state (training_requested_at)
         # rather than notification delivery, so staff don't have to rely on

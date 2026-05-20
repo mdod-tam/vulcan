@@ -29,7 +29,14 @@
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
 
     <% if @application.errors.any? %>
-      <div id="error-summary" class="bg-red-50 p-4 rounded-t-lg" role="alert" aria-live="assertive" aria-labelledby="error_messages" aria-atomic="true" tabindex="-1" autofocus>
+      <div id="error-summary"
+           class="bg-red-50 p-4 rounded-t-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+           role="alert"
+           aria-live="assertive"
+           aria-labelledby="error_messages"
+           aria-atomic="true"
+           tabindex="-1"
+           data-controller="error-summary">
         <h3 id="error_messages" class="text-red-800 font-medium">
           <%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:
         </h3>
@@ -39,15 +46,6 @@
           <% end %>
         </ul>
       </div>
-      <script>
-        // Focus the error summary for screen reader users
-        document.addEventListener('DOMContentLoaded', function() {
-          var errorSummary = document.getElementById('error-summary');
-          if (errorSummary) {
-            errorSummary.focus();
-          }
-        });
-      </script>
     <% end %>
 
      <div class="p-6 space-y-6">
@@ -196,10 +194,10 @@
          <%= render "medical_provider_form", form: mp %>
        <% end %>
 
-       <!-- Alternate Contact Section (optional) -->
-       <section aria-labelledby="alternate-contact-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
-         <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
-         <p class="text-sm text-gray-700">You may provide an alternate contact person who can be contacted regarding your application.</p>
+        <!-- Alternate Contact Section (optional) -->
+        <section aria-labelledby="alternate-contact-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+          <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
+          <p class="text-sm text-gray-700"><%= t("applications.alternate_contact.portal_help") %></p>
          
          <div class="space-y-4">
            <div>
