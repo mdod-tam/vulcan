@@ -6,16 +6,7 @@
 module ActiveStorageValidatable
   extend ActiveSupport::Concern
 
-  # Standardized file validation constants
-  # These replace the scattered constants in ProofManageable, ProofAttachmentValidator,
-  # controllers, and JavaScript files
-  ALLOWED_CONTENT_TYPES = %w[
-    application/pdf
-    image/jpeg
-    image/png
-    image/tiff
-    image/bmp
-  ].freeze
+  ALLOWED_CONTENT_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
   # Standard file size limits (5MB is the most commonly used)
   MAX_FILE_SIZE = 5.megabytes
@@ -27,7 +18,7 @@ module ActiveStorageValidatable
     max_size_bytes: MAX_FILE_SIZE,
     max_size_mb: MAX_FILE_SIZE / 1.megabyte,
     error_messages: {
-      invalid_type: 'Invalid file type. Please upload a PDF or an image file (jpg, jpeg, png, tiff, bmp).',
+      invalid_type: ProofUploadFormats::INVALID_TYPE_MESSAGE,
       file_too_large: "File is too large. Maximum size allowed is #{MAX_FILE_SIZE / 1.megabyte}MB.",
       file_too_small: "File is too small. Minimum size required is #{MIN_FILE_SIZE} bytes.",
       no_file: 'Please select a file to upload.'
@@ -35,13 +26,8 @@ module ActiveStorageValidatable
   }.freeze
 
   included do
-    # Provide validation methods that can be used by models
-
     private
 
-    # Validates content type of an attachment
-    # @param attachment [ActiveStorage::Attached::One] The attachment to validate
-    # @param attribute [Symbol] The attribute name for error reporting
     def validate_attachment_content_type(attachment, attribute)
       return unless attachment.attached?
 
@@ -50,9 +36,6 @@ module ActiveStorageValidatable
       errors.add(attribute, JS_VALIDATION_CONFIG[:error_messages][:invalid_type])
     end
 
-    # Validates file size of an attachment
-    # @param attachment [ActiveStorage::Attached::One] The attachment to validate
-    # @param attribute [Symbol] The attribute name for error reporting
     def validate_attachment_size(attachment, attribute)
       return unless attachment.attached?
 
@@ -63,9 +46,6 @@ module ActiveStorageValidatable
       end
     end
 
-    # Combined validation for both content type and size
-    # @param attachment [ActiveStorage::Attached::One] The attachment to validate
-    # @param attribute [Symbol] The attribute name for error reporting
     def validate_attachment(attachment, attribute)
       validate_attachment_content_type(attachment, attribute)
       validate_attachment_size(attachment, attribute)
@@ -73,9 +53,6 @@ module ActiveStorageValidatable
   end
 
   class_methods do
-    # Class method to validate file parameters (useful in controllers)
-    # @param file [ActionDispatch::Http::UploadedFile] The uploaded file
-    # @return [Array<String>] Array of error messages (empty if valid)
     def validate_file_params(file)
       errors = []
 
@@ -92,8 +69,6 @@ module ActiveStorageValidatable
       errors
     end
 
-    # Returns configuration hash for JavaScript validation
-    # @return [Hash] Configuration suitable for JavaScript consumption
     def js_validation_config
       JS_VALIDATION_CONFIG
     end

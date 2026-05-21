@@ -21,7 +21,8 @@ module Users
     validates :business_tax_id, presence: true
     validates :w9_form, presence: true, if: -> { vendor_approved? && !new_record? }
     validates :w9_form,
-              content_type: { in: 'application/pdf', message: 'must be a PDF' },
+              content_type: { in: ProofUploadFormats::ALLOWED_CONTENT_TYPES,
+                              message: "must be #{ProofUploadFormats::HUMAN_LABEL}" },
               size: { less_than: 10.megabytes, message: 'must be less than 10MB' },
               if: -> { w9_form.attached? }
     validates :terms_accepted_at, presence: true, if: :vendor_approved?

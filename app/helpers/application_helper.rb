@@ -4,6 +4,7 @@
 module ApplicationHelper
   include ConstituentPortal::ActivityHelper
   include ActiveStorageHelper
+  include ProofUploadFormatsHelper
   include Pagy::Frontend
   include BadgeHelper
 

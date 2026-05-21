@@ -4,7 +4,7 @@ module Vendors
   class SubmitW9Resubmission < BaseService
     MESSAGE_SCOPE = 'vendors.w9_resubmission.messages'
     MAX_FILE_SIZE = 10.megabytes
-    ALLOWED_CONTENT_TYPES = ['application/pdf'].freeze
+    ALLOWED_CONTENT_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
     attr_reader :vendor, :vendor_secure_request_form, :file, :form_errors
 
@@ -101,7 +101,7 @@ module Vendors
         return
       end
 
-      if detected_content_type != 'application/pdf'
+      unless ALLOWED_CONTENT_TYPES.include?(detected_content_type)
         form_errors.add(:file, :invalid, message: message(:file_type_invalid))
         return
       end

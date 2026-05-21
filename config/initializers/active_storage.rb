@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
-# Configure Active Storage to handle PDFs
-Rails.application.config.active_storage.content_types_allowed_inline = ['application/pdf']
+# Proof/document previews in admin (inline disposition). Matches ProofUploadFormats; does not control upload validation.
+Rails.application.config.after_initialize do
+  Rails.application.config.active_storage.content_types_allowed_inline = ProofUploadFormats::ALLOWED_CONTENT_TYPES
+end
 
-# Configure Active Storage to serve PDFs with proper content disposition
+# Serve attachments through the app proxy (not redirect) for consistent caching/headers
 Rails.application.config.active_storage.resolve_model_to_route = :rails_storage_proxy
 
 # Enable Rails' built-in direct upload functionality

@@ -44,7 +44,7 @@
       <%= form.file_field :file,
                           id: "file",
                           required: true,
-                          accept: "application/pdf,image/jpeg,image/png",
+                          accept: proof_upload_accept_attribute,
                           aria: {
                             describedby: ["file_help", ("file_error" if file_errors.any?)].compact.join(" "),
                             invalid: file_errors.any? ? "true" : nil
