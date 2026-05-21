@@ -1,110 +1,49 @@
-<%# Charts Section - Extracted for lazy loading via Turbo Frame %>
+<%# B snapshot charts — FY cohort by current status %>
 <%= turbo_frame_tag "charts_section" do %>
 <section aria-labelledby="charts-heading" class="mb-6">
   <h2 id="charts-heading" class="sr-only">Application Charts</h2>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <div class="bg-white rounded-lg shadow p-6">
-      <h3 id="pipeline-heading" class="text-lg font-medium text-gray-900 mb-4">FY<%= @metrics[:current_fiscal_year].to_s[-2..-1] %> Application Pipeline</h3>
-      <%= turbo_frame_tag "pipeline_chart_frame" do %>
-      <div>
-        <div data-controller="reports-chart" 
-             data-reports-chart-current-data-value="<%= @metrics[:pipeline_chart_data].to_json %>"
-             data-reports-chart-previous-data-value="<%= {}.to_json %>"
-             data-reports-chart-type-value="bar"
-             data-reports-chart-title-value="Application Pipeline"
-             data-reports-chart-hidden-class="hidden"
-             class="relative w-full h-[300px]">
-          <div class="sr-only" aria-labelledby="pipeline-heading">
-            Chart showing application pipeline: <%= @metrics[:submitted_count] %> submitted, <%= @metrics[:in_review_count] %> in review, and <%= @metrics[:approved_count] %> approved applications.
-          </div>
-        </div>
-      </div>
-      <% end %>
-      <div class="mt-4 grid grid-cols-4 gap-4 text-center">
-        <div>
-          <p class="text-sm font-medium text-gray-500">Draft</p>
-          <p class="text-xs text-gray-500">Started, Not Submitted</p>
-          <p class="text-lg font-bold"><%= @metrics[:draft_count] %></p>
-        </div>
-        <div>
-          <p class="text-sm font-medium text-gray-500">Submitted</p>
-          <p class="text-lg font-bold"><%= @metrics[:submitted_count] %></p>
-        </div>
-        <div>
-          <p class="text-sm font-medium text-gray-500">In Review</p>
-          <p class="text-lg font-bold"><%= @metrics[:in_review_count] %></p>
-        </div>
-        <div>
-          <p class="text-sm font-medium text-gray-500">Approved</p>
-          <p class="text-lg font-bold"><%= @metrics[:approved_count] %></p>
-        </div>
-      </div>
+  <p class="text-sm text-gray-600 mb-4">
+    Snapshot: applications <strong>created</strong> in <%= @metrics[:current_fy_range_label] %>, grouped by <strong>current</strong> status.
+    This is not MFR (see System Reports).
+  </p>
+  <div class="bg-white rounded-lg shadow p-6">
+    <h3 id="status-breakdown-heading" class="text-lg font-medium text-gray-900 mb-2">
+      <%= @metrics[:current_fy_label] %> Application Status Snapshot
+    </h3>
+    <p class="text-sm text-gray-500 mb-4"><%= @metrics[:current_fy_range_label] %></p>
+
+    <div class="overflow-x-auto mb-4">
+      <table class="min-w-full text-sm" aria-labelledby="status-breakdown-heading">
+        <caption class="sr-only">Application counts by current status for the fiscal year cohort</caption>
+        <thead>
+          <tr class="border-b border-gray-200">
+            <th scope="col" class="text-left py-2 pr-4 font-medium text-gray-700">Status</th>
+            <th scope="col" class="text-right py-2 font-medium text-gray-700">Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @metrics[:status_counts].each do |status_key, count| %>
+            <tr class="border-b border-gray-100">
+              <td class="py-2 pr-4 text-gray-600"><%= status_key.to_s.humanize %></td>
+              <td class="py-2 text-right font-medium text-gray-900"><%= count %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-6">
-      <h3 id="status-breakdown-heading" class="text-lg font-medium text-gray-900 mb-2">Status Breakdown</h3>
-      <p class="text-sm text-gray-500 mb-4">Current FY Application Breakdown</p>
-      <div>
-        <div data-controller="reports-chart" 
-             data-reports-chart-current-data-value="<%= @metrics[:status_chart_data].to_json %>"
-             data-reports-chart-previous-data-value="<%= {}.to_json %>"
-             data-reports-chart-type-value="polarArea"
-             data-reports-chart-title-value="Status Breakdown"
-             data-reports-chart-hidden-class="hidden"
-             class="relative w-full h-[300px]">
-          <div class="sr-only" aria-labelledby="status-breakdown-heading">
-            Chart showing status breakdown: <%= @metrics[:draft_count] %> draft, <%= @metrics[:in_progress_count] %> in progress, <%= @metrics[:approved_count] %> approved, and <%= @metrics[:rejected_count] %> rejected applications.
-          </div>
-        </div>
-      </div>
-      <div class="mt-4 grid grid-cols-2 gap-4">
-        <div class="flex justify-between">
-          <span class="text-sm font-medium text-gray-500">Draft:</span>
-          <span class="text-sm font-bold">
-            <%= @metrics[:draft_count] || 0 %>
-            <% 
-              # Safely calculate percentages, handling nil values
-              draft_count = @metrics[:draft_count].to_i
-              in_progress_count = @metrics[:in_progress_count].to_i
-              approved_count = @metrics[:approved_count].to_i
-              rejected_count = @metrics[:rejected_count].to_i
-              total = draft_count + in_progress_count + approved_count + rejected_count
-              if total > 0
-            %>
-              (<%= calculate_percentage(draft_count, total) %>)
-            <% end %>
-          </span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-sm font-medium text-gray-500">In Progress:</span>
-          <span class="text-sm font-bold">
-            <%= @metrics[:in_progress_count] || 0 %>
-            <% if total > 0 %>
-              (<%= calculate_percentage(in_progress_count, total) %>)
-            <% end %>
-          </span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-sm font-medium text-gray-500">Approved:</span>
-          <span class="text-sm font-bold">
-            <%= @metrics[:approved_count] || 0 %>
-            <% if total > 0 %>
-              (<%= calculate_percentage(approved_count, total) %>)
-            <% end %>
-          </span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-sm font-medium text-gray-500">Rejected:</span>
-          <span class="text-sm font-bold">
-            <%= @metrics[:rejected_count] || 0 %>
-            <% if total > 0 %>
-              (<%= calculate_percentage(rejected_count, total) %>)
-            <% end %>
-          </span>
-        </div>
-      </div>
+    <p id="status-chart-desc" class="sr-only">
+      Chart showing the same status counts as the table above for <%= @metrics[:current_fy_range_label] %>.
+    </p>
+    <div data-controller="reports-chart"
+         data-reports-chart-current-data-value="<%= @metrics[:status_chart_data].to_json %>"
+         data-reports-chart-previous-data-value="{}"
+         data-reports-chart-current-dataset-label-value="<%= @metrics[:current_fy_label] %>"
+         data-reports-chart-type-value="bar"
+         data-reports-chart-title-value="<%= @metrics[:current_fy_label] %> Application Status Snapshot"
+         class="relative w-full h-[300px]"
+         aria-describedby="status-chart-desc">
     </div>
   </div>
 </section>
 <% end %>
-

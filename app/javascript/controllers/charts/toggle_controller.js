@@ -29,5 +29,14 @@ export default class extends Controller {
       this.buttonTarget.setAttribute('aria-expanded', isHidden ? 'true' : 'false')
       this.buttonTarget.textContent = isHidden ? 'Hide Chart' : 'Show Chart'
     }
+
+    if (isHidden) {
+      this.chartTarget.querySelectorAll('[data-controller~="chart"]').forEach((el) => {
+        el.dispatchEvent(new CustomEvent('visibility-changed', {
+          bubbles: true,
+          detail: { visible: true }
+        }))
+      })
+    }
   }
 }

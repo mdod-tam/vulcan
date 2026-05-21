@@ -14,10 +14,6 @@ import { chartConfig } from "../../services/chart_config"
  */
 class ChartBaseController extends Controller {
 
-  static values = {
-    chartHeight: { type: Number, default: 300 }
-  }
-
   connect() {
     this.cleanupExistingChart()
     // Chart.js container positioning is handled by ERB templates
@@ -49,38 +45,50 @@ class ChartBaseController extends Controller {
     return true
   }
 
-  createCanvas(ariaLabel, ariaDesc) {
+  createCanvas(ariaLabel, ariaDesc, { describedById = null } = {}) {
     const canvas = document.createElement("canvas")
 
-    // With responsive: true, Chart.js handles canvas sizing automatically
-    // based on the container's dimensions. Don't set explicit canvas size.
-    // The container must have explicit height (set in ERB templates).
+    // With responsive: false, container height is set in ERB templates.
 
-    // Add accessibility attributes
     canvas.setAttribute("role", "img")
     canvas.setAttribute("aria-label", ariaLabel)
 
-    // Generate unique ID for aria-describedby with collision prevention
-    const baseId = this.element.id || `chart-${Date.now()}`
-    const randomSuffix = Math.random().toString(36).substring(2, 6)
-    const descId = `chart-desc-${baseId}-${randomSuffix}`
+    const externalDesc = describedById && document.getElementById(describedById)
+    let desc = null
+    let descId
+
+    if (externalDesc) {
+      descId = describedById
+    } else {
+      const baseId = this.element.id || `chart-${Date.now()}`
+      const randomSuffix = Math.random().toString(36).substring(2, 6)
+      descId = `chart-desc-${baseId}-${randomSuffix}`
+      desc = document.createElement("p")
+      desc.id = descId
+      desc.className = "sr-only"
+      desc.textContent = ariaDesc
+    }
+
     canvas.setAttribute("aria-describedby", descId)
-
-    // Store for cleanup
     this._descId = descId
-
-    // Create screen reader description
-    const desc = document.createElement("p")
-    desc.id = descId
-    desc.className = "sr-only"
-    desc.textContent = ariaDesc
 
     return { canvas, desc }
   }
 
+  externalDescriptionId() {
+    const id = this.element.getAttribute("aria-describedby")
+    return id && document.getElementById(id) ? id : null
+  }
+
   mountCanvas(canvas, desc) {
-    // Clear container and mount canvas with description
+    // Preserve ERB-provided sr-only descriptions placed as direct children (not wiped by chart init)
+    const preservedDescriptions = Array.from(this.element.children).filter((el) =>
+      el.classList.contains("sr-only") || (el.tagName === "P" && el.classList.contains("sr-only"))
+    )
+
     this.element.textContent = ""
+
+    preservedDescriptions.forEach((el) => this.element.appendChild(el))
 
     // Add fallback content inside canvas for accessibility (Chart.js docs recommendation)
     const fallback = document.createElement("p")
@@ -88,7 +96,9 @@ class ChartBaseController extends Controller {
     canvas.appendChild(fallback)
 
     this.element.appendChild(canvas)
-    this.element.appendChild(desc)
+    if (desc) {
+      this.element.appendChild(desc)
+    }
   }
 
   getCtx(canvas) {
@@ -202,8 +212,10 @@ class ChartBaseController extends Controller {
     const ariaLabel = accessibility.label || `${type} chart`
     const ariaDesc = accessibility.description || `Interactive ${type} chart displaying data`
 
-    // Create canvas and description
+    // Create canvas and description; mount before Chart.js measures container
     const { canvas, desc } = this.createCanvas(ariaLabel, ariaDesc)
+    this.mountCanvas(canvas, desc)
+
     const ctx = this.getCtx(canvas)
     if (!ctx) return null
 
@@ -218,11 +230,7 @@ class ChartBaseController extends Controller {
     }
 
     try {
-      // Create chart instance
       const chartInstance = new Chart(ctx, config)
-
-      // Mount to DOM
-      this.mountCanvas(canvas, desc)
 
       // Store reference for cleanup
       this.chartInstance = chartInstance

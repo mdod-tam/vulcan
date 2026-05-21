@@ -5,28 +5,30 @@ import ChartBaseController from "./base_controller"
 /**
  * Chart Controller (v3)
  *
- * Builds on ChartBaseController's safeguards and restores full "responsive" behavior
- * and basic animations for visual interest.
+ * Builds on ChartBaseController; charts use fixed sizing (responsive: false) and
+ * lazy-init via visibility-changed when nested inside chart-toggle.
  */
 export default class extends ChartBaseController {
   static values = {
     data: Object,
     type: { type: String, default: "bar" },
+    format: { type: String, default: "number" },
     ariaLabel: { type: String, default: "Chart visualization" },
     ariaDescription: { type: String, default: "Chart data is available in the table above" },
-    chartHeight: { type: Number, default: 300 },
     datasetLabel: { type: String, default: "Monthly Total" }
   }
 
   connect() {
     super.connect()
 
+    this.onVisibilityChange = this.onVisibilityChange.bind(this)
+    this.element.addEventListener("visibility-changed", this.onVisibilityChange)
+
     const Chart = this.getChart()
     if (!Chart) {
       return this.handleUnavailable()
     }
 
-    // Additional guard: if container is hidden, defer
     if (!this.isVisible()) {
       return
     }
@@ -39,6 +41,17 @@ export default class extends ChartBaseController {
       this.createChart()
     } catch (error) {
       this.handleError("Error initializing chart", error)
+    }
+  }
+
+  disconnect() {
+    this.element.removeEventListener("visibility-changed", this.onVisibilityChange)
+    super.disconnect()
+  }
+
+  onVisibilityChange(event) {
+    if (event.detail?.visible && !this.chartInstance && this.validateData(this.dataValue)) {
+      this.createChart()
     }
   }
 
@@ -64,9 +77,11 @@ export default class extends ChartBaseController {
 
     // 1) Create a new <canvas> (sized to the current container)
     // 2) Mount it (wipes any previous chart + description)
+    const describedById = this.externalDescriptionId()
     const { canvas, desc } = this.createCanvas(
       this.ariaLabelValue,
-      this.ariaDescriptionValue
+      this.ariaDescriptionValue,
+      { describedById }
     )
 
     // IMPORTANT: Mount the canvas FIRST, before creating the chart
@@ -82,55 +97,50 @@ export default class extends ChartBaseController {
     // 4) Turn string values into numbers (with fallback to 0)
     const numericData = this.prepareChartData()
 
-    // 5) Custom plugin/scale settings (legends, tooltips, axis labels, etc.)
+    const currencyFormat = this.formatValue === "currency"
+    const formatValue = (value) => {
+      const n = Number(value)
+      if (currencyFormat) return "$" + n.toLocaleString()
+      return n.toLocaleString()
+    }
+
     const customOptions = {
-      // Explicitly set responsive to false to match global defaults
       responsive: false,
       maintainAspectRatio: false,
-      // Disable animations to prevent performance issues
       animation: false,
       plugins: {
         legend: {
           display: true,
-          labels: {
-            font: { size: 14 }
-          }
+          labels: { font: { size: 14 } }
         },
         tooltip: {
           enabled: true,
           callbacks: {
-            label: function (context) {
-              return "$" + context.raw.toLocaleString()
-            }
+            label: (context) => formatValue(context.raw)
           },
           bodyFont: { size: 14 },
           titleFont: { size: 16 }
         }
-      },
-      scales: {
+      }
+    }
+
+    if (this.typeValue === "bar" || this.typeValue === "line") {
+      customOptions.scales = {
         y: {
           beginAtZero: true,
           ticks: {
-            callback: function (value) {
-              return "$" + value.toLocaleString()
-            },
+            callback: (value) => formatValue(value),
             font: { size: 14 }
           },
-          title: {
+          title: currencyFormat ? {
             display: true,
             text: "Amount in USD",
             font: { size: 16, weight: "bold" }
-          }
+          } : { display: false }
         },
         x: {
-          ticks: {
-            font: { size: 14 }
-          },
-          title: {
-            display: true,
-            text: "Month",
-            font: { size: 16, weight: "bold" }
-          }
+          ticks: { font: { size: 14 } },
+          title: { display: false }
         }
       }
     }

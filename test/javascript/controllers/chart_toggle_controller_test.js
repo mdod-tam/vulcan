@@ -18,7 +18,7 @@ describe("ChartToggleController", () => {
           Show Chart
         </button>
         <div id="monthly-totals-chart" data-chart-toggle-target="chart" class="hidden">
-          Chart content
+          <div data-controller="chart" id="nested-chart"></div>
         </div>
       </div>
     `
@@ -80,5 +80,17 @@ describe("ChartToggleController", () => {
     // Check accessibility attributes again
     expect(buttonElement.getAttribute("aria-expanded")).toBe("false")
     expect(buttonElement.getAttribute("aria-controls")).toBe("monthly-totals-chart")
+  })
+
+  test("dispatches visibility-changed to nested chart controller when revealing chart", () => {
+    const chartControllerEl = element.querySelector('[data-controller~="chart"]')
+    const handler = jest.fn()
+    chartControllerEl.addEventListener("visibility-changed", handler)
+
+    const toggleController = application.getControllerForElementAndIdentifier(element, "chart-toggle")
+    toggleController.toggle()
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler.mock.calls[0][0].detail).toEqual({ visible: true })
   })
 })

@@ -34,31 +34,21 @@ module Admin
       visit admin_applications_path
 
       # Verify page title
-      assert_selector 'h1', text: 'Admin Dashboard'
-
-      # Verify status cards section
-      assert_selector "section[aria-labelledby='status-cards-heading']"
-      assert_selector 'h3', text: /In Progress Applications/i
-      assert_selector 'h3', text: /Approved/i
-
-      # Verify common tasks section
-      assert_selector "section[aria-labelledby='common-tasks-heading']"
-      assert_selector 'h2#common-tasks-heading', text: 'Common Tasks'
+      assert_selector 'h1', text: 'Applications'
 
       # Verify applications section
       assert_selector "section[aria-labelledby='applications-heading']"
 
-      # Verify charts section appears after applications section
-      # Instead of comparing DOM paths, check the order of elements on the page
-      assert_selector "section[aria-labelledby='applications-heading'] ~ section[aria-labelledby='charts-heading']"
+      # Verify charts section appears in the lazy-loaded frame below applications
+      scroll_to find('turbo-frame#charts_section')
+      assert_selector "turbo-frame#charts_section section[aria-labelledby='charts-heading']"
 
-      # Verify chart headings
-      assert_selector 'h3#pipeline-heading', text: 'Application Pipeline'
-      assert_selector 'h3#status-breakdown-heading', text: 'Status Breakdown'
+      # Verify chart heading
+      assert_selector 'h3#status-breakdown-heading', text: /Application Status Snapshot/
     end
 
     test 'common tasks section shows correct links with counts' do
-      visit admin_applications_path
+      visit admin_dashboard_path
 
       # Wait for page to fully load and authenticate
       assert_selector 'h1', text: 'Admin Dashboard', wait: 10
@@ -79,7 +69,7 @@ module Admin
     end
 
     test 'clicking on common tasks links filters applications correctly' do
-      visit admin_applications_path
+      visit admin_dashboard_path
 
       # Wait for page to load completely
       assert_selector 'h1', text: 'Admin Dashboard', wait: 15
@@ -87,15 +77,11 @@ module Admin
       # Click on proofs needing review link
       click_on 'Proofs Needing Review'
 
-      # NOTE: These links use turbo_frame: "applications_list" so URL doesn't change
-      # Verify the filter is applied by checking the link is highlighted
-      within "section[aria-labelledby='common-tasks-heading']" do
-        assert_selector 'a', text: /Proofs Needing Review/, wait: 10
-        assert_selector 'a[class*="bg-gray-50"]', text: /Proofs Needing Review/, wait: 10
-      end
+      assert_current_path admin_applications_path(filter: 'proofs_needing_review')
+      assert_selector 'h1', text: 'Applications', wait: 10
 
       # Go back to main page
-      visit admin_applications_path
+      visit admin_dashboard_path
 
       # Wait for page to load completely
       assert_selector 'h1', text: 'Admin Dashboard', wait: 10
@@ -103,14 +89,11 @@ module Admin
       # Click on medical certs to review link
       click_on 'Medical Certs to Review'
 
-      # Verify the link is highlighted (turbo frame navigation doesn't change URL)
-      within "section[aria-labelledby='common-tasks-heading']" do
-        assert_selector 'a', text: /Medical Certs to Review/, wait: 10
-        assert_selector 'a[class*="bg-gray-50"]', text: /Medical Certs to Review/, wait: 10
-      end
+      assert_current_path admin_applications_path(filter: 'medical_certs_to_review')
+      assert_selector 'h1', text: 'Applications', wait: 10
 
       # Go back to main page
-      visit admin_applications_path
+      visit admin_dashboard_path
 
       # Wait for page to load completely
       assert_selector 'h1', text: 'Admin Dashboard', wait: 10
@@ -118,18 +101,15 @@ module Admin
       # Click on training requests link
       click_on 'Training Requests'
 
-      # Verify the link is highlighted (turbo frame navigation doesn't change URL)
-      within "section[aria-labelledby='common-tasks-heading']" do
-        assert_selector 'a', text: /Training Requests/, wait: 10
-        assert_selector 'a[class*="bg-gray-50"]', text: /Training Requests/, wait: 10
-      end
+      assert_current_path admin_applications_path(filter: 'training_requests')
+      assert_selector 'h1', text: 'Applications', wait: 10
     end
 
     test 'view reports button links to reports page' do
-      visit admin_applications_path
+      visit admin_dashboard_path
 
-      # Click on the View Reports button
-      click_on 'View Reports'
+      # Click on the Reports button
+      click_on 'Reports'
 
       # Verify we're on the reports page
       assert_current_path admin_reports_path
@@ -139,45 +119,47 @@ module Admin
     end
 
     test 'admin action buttons are present and functional' do
-      visit admin_applications_path
+      visit admin_dashboard_path
 
-      # Verify all four admin action buttons are present
+      # Verify key admin action buttons are present
+      assert_selector 'a', text: 'Apply for Constituent'
+      assert_selector 'a', text: 'Applications'
+      assert_selector 'a', text: 'Reports'
       assert_selector 'a', text: 'Edit Policies'
       assert_selector 'a', text: 'Manage Products'
-      assert_selector 'a', text: 'Upload Paper Application'
-      assert_selector 'a', text: 'View Reports'
 
       # Test Edit Policies button
       click_on 'Edit Policies'
       assert_current_path admin_policies_path
-      visit admin_applications_path
+      visit admin_dashboard_path
 
       # Test Manage Products button
       click_on 'Manage Products'
       assert_current_path admin_products_path
-      visit admin_applications_path
+      visit admin_dashboard_path
 
-      # Test Upload Paper Application button
-      click_on 'Upload Paper Application'
+      # Test Apply for Constituent button
+      click_on 'Apply for Constituent'
       assert_current_path new_admin_paper_application_path
-      visit admin_applications_path
+      visit admin_dashboard_path
 
-      # Test View Reports button (already tested in previous test, but included for completeness)
-      click_on 'View Reports'
+      # Test Reports button (already tested in previous test, but included for completeness)
+      click_on 'Reports'
       assert_current_path admin_reports_path
     end
 
     test 'admin can access core administrative functions' do
-      visit admin_applications_path
+      visit admin_dashboard_path
 
       # Test that users can access key administrative functions
-      assert_selector "a[aria-label*='paper application']" # Can upload papers
-      assert_selector "a[aria-label*='policies']"          # Can edit policies
-      assert_selector "a[aria-label*='products']"          # Can manage products
-      assert_selector "a[aria-label*='reports']"           # Can view reports
+      assert_selector "a[aria-label*='constituent']"  # Can create applications
+      assert_selector "a[aria-label*='applications']" # Can view applications
+      assert_selector "a[aria-label*='policies']"     # Can edit policies
+      assert_selector "a[aria-label*='products']"     # Can manage products
+      assert_selector "a[aria-label*='reports']"      # Can view reports
 
       # Test accessibility patterns for primary actions
-      page.all('a[aria-label]').find_each do |button|
+      page.all('a[aria-label]').to_a.each do |button|
         assert button['aria-label'].present?, "Button missing aria-label: #{button.text}"
       end
     end

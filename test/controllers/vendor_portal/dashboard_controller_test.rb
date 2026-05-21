@@ -25,5 +25,12 @@ module VendorPortal
       # check for content in the response body that indicates the page loaded correctly
       assert_match(/dashboard/i, response.body)
     end
+
+    test 'monthly totals chart is explicitly currency formatted' do
+      get vendor_portal_dashboard_path
+      assert_response :success
+
+      assert_select '#monthly-totals-chart [data-controller="chart"][data-chart-format-value="currency"]'
+    end
   end
 end

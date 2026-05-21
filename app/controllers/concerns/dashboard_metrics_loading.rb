@@ -144,8 +144,8 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   def load_fiscal_year_application_counts
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
-    current_range = @current_fy_start..@current_fy_end
-    previous_range = @previous_fy_start..@previous_fy_end
+    current_range = fy_created_at_range(@current_fy_start, @current_fy_end)
+    previous_range = fy_created_at_range(@previous_fy_start, @previous_fy_end)
 
     safe_assign(:current_fy_applications, Application.where(created_at: current_range).count)
     safe_assign(:previous_fy_applications, Application.where(created_at: previous_range).count)
@@ -157,30 +157,36 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   def load_fiscal_year_voucher_counts
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
-    current_range = @current_fy_start..@current_fy_end
-    previous_range = @previous_fy_start..@previous_fy_end
+    current_range = fy_created_at_range(@current_fy_start, @current_fy_end)
+    previous_range = fy_created_at_range(@previous_fy_start, @previous_fy_end)
 
-    safe_assign(:current_fy_vouchers, Voucher.where(created_at: current_range).count)
-    safe_assign(:previous_fy_vouchers, Voucher.where(created_at: previous_range).count)
-    safe_assign(:current_fy_active_vouchers, Voucher.where(created_at: current_range, status: :active).count)
-    safe_assign(:previous_fy_active_vouchers, Voucher.where(created_at: previous_range, status: :active).count)
-    safe_assign(:current_fy_expired_vouchers, Voucher.where(created_at: current_range, status: :expired).count)
-    safe_assign(:previous_fy_expired_vouchers, Voucher.where(created_at: previous_range, status: :expired).count)
-    safe_assign(:current_fy_voucher_value, Voucher.where(created_at: current_range).sum(:initial_value))
-    safe_assign(:previous_fy_voucher_value, Voucher.where(created_at: previous_range).sum(:initial_value))
+    safe_assign(:current_fy_vouchers, Voucher.where(issued_at: current_range).count)
+    safe_assign(:previous_fy_vouchers, Voucher.where(issued_at: previous_range).count)
+    safe_assign(:current_fy_active_vouchers, Voucher.where(issued_at: current_range, status: :active).count)
+    safe_assign(:previous_fy_active_vouchers, Voucher.where(issued_at: previous_range, status: :active).count)
+    safe_assign(:current_fy_expired_vouchers, Voucher.where(issued_at: current_range, status: :expired).count)
+    safe_assign(:previous_fy_expired_vouchers, Voucher.where(issued_at: previous_range, status: :expired).count)
+    safe_assign(:current_fy_voucher_value, Voucher.where(issued_at: current_range).sum(:initial_value))
+    safe_assign(:previous_fy_voucher_value, Voucher.where(issued_at: previous_range).sum(:initial_value))
   end
 
   # Loads service counts (training sessions, evaluations) by fiscal year
   def load_fiscal_year_service_counts
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
-    current_range = @current_fy_start..@current_fy_end
-    previous_range = @previous_fy_start..@previous_fy_end
+    current_range = fy_created_at_range(@current_fy_start, @current_fy_end)
+    previous_range = fy_created_at_range(@previous_fy_start, @previous_fy_end)
 
     safe_assign(:current_fy_trainings, TrainingSession.where(created_at: current_range).count)
     safe_assign(:previous_fy_trainings, TrainingSession.where(created_at: previous_range).count)
     safe_assign(:current_fy_evaluations, Evaluation.where(created_at: current_range).count)
     safe_assign(:previous_fy_evaluations, Evaluation.where(created_at: previous_range).count)
+    safe_assign(:current_fy_training_status_counts, service_status_counts(TrainingSession, current_range))
+    safe_assign(:previous_fy_training_status_counts, service_status_counts(TrainingSession, previous_range))
+    safe_assign(:current_fy_evaluation_status_counts, service_status_counts(Evaluation, current_range))
+    safe_assign(:previous_fy_evaluation_status_counts, service_status_counts(Evaluation, previous_range))
+    safe_assign(:training_requests_count, calculate_training_requests_count)
+    safe_assign(:evaluation_requests_count, calculate_evaluation_requests_count)
   end
 
   # === Chart Data Utilities ===
@@ -191,11 +197,11 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
     safe_assign(:applications_chart_data, {
                   current: {
-                    'Applications' => @current_fy_applications,
+                    'Applications Created' => @current_fy_applications,
                     'Draft Applications' => @current_fy_draft_applications
                   },
                   previous: {
-                    'Applications' => @previous_fy_applications,
+                    'Applications Created' => @previous_fy_applications,
                     'Draft Applications' => @previous_fy_draft_applications
                   }
                 })
@@ -245,51 +251,13 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                                            .distinct.count)
   end
 
-  # Loads MFR (Managing for Results) data for both most recent and preceding FY
-  def load_mfr_data
-    load_fiscal_year_data unless @previous_fy_start && @previous_fy_end
-
-    # Most recent concluded FY (previous_fy is the most recent complete year)
-    most_recent_range = @previous_fy_start..@previous_fy_end
-    safe_assign(:mfr_applications_approved, Application.where(created_at: most_recent_range, status: :approved).count)
-    safe_assign(:mfr_vouchers_issued, Voucher.where(created_at: most_recent_range).count)
-
-    # Preceding FY (the year before the most recent)
-    preceding_fy = @previous_fy - 1
-    preceding_fy_start = Date.new(preceding_fy, 7, 1)
-    preceding_fy_end = Date.new(@previous_fy, 6, 30)
-    preceding_range = preceding_fy_start..preceding_fy_end
-
-    safe_assign(:mfr_preceding_applications_approved, Application.where(created_at: preceding_range, status: :approved).count)
-    safe_assign(:mfr_preceding_vouchers_issued, Voucher.where(created_at: preceding_range).count)
-    safe_assign(:preceding_fy, preceding_fy)
-    safe_assign(:preceding_fy_label, "FY#{@previous_fy.to_s[-2..]}")
-  end
-
-  # Loads MFR chart data
-  def load_mfr_chart_data
-    load_mfr_data unless @mfr_applications_approved
-
-    safe_assign(:mfr_chart_data, {
-                  current: {
-                    'Applications Approved' => @mfr_applications_approved,
-                    'Vouchers Issued' => @mfr_vouchers_issued
-                  },
-                  previous: {
-                    'Applications Approved' => @mfr_preceding_applications_approved || 0,
-                    'Vouchers Issued' => @mfr_preceding_vouchers_issued || 0
-                  }
-                })
-  end
-
   # === Comprehensive Chart Data Loading ===
 
-  # Loads all chart data for reports
+  # Loads operational chart data for reports (MFR uses ReportingService#generate_mfr_reports_data).
   def load_chart_data
     load_applications_chart_data
     load_vouchers_chart_data
     load_services_chart_data
-    load_mfr_chart_data
   end
 
   # Disability type breakdown from submitted applications by fiscal year
@@ -300,10 +268,10 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     disability_types = %i[hearing vision speech mobility cognition]
 
     # Current FY disability counts
-    load_disability_counts_for_period(:current_fy, @current_fy_start..@current_fy_end, disability_types)
+    load_disability_counts_for_period(:current_fy, fy_created_at_range(@current_fy_start, @current_fy_end), disability_types)
 
     # Previous FY disability counts
-    load_disability_counts_for_period(:previous_fy, @previous_fy_start..@previous_fy_end, disability_types)
+    load_disability_counts_for_period(:previous_fy, fy_created_at_range(@previous_fy_start, @previous_fy_end), disability_types)
   end
 
   # Helper to load disability counts for a specific time period
@@ -342,7 +310,12 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
     # Calculate referral sources for each period
     time_periods.each do |period, range|
-      apps = Application.where.not(status: :draft).where(created_at: range[:start]..range[:end])
+      created_range = if %i[ytd prior_year].include?(period)
+                        fy_created_at_range(range[:start], range[:end])
+                      else
+                        range[:start].beginning_of_day..range[:end].end_of_day
+                      end
+      apps = Application.where.not(status: :draft).where(created_at: created_range)
       safe_assign(:"referral_#{period}_data", calculate_referral_sources(apps))
     end
 
@@ -364,6 +337,10 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   private
 
+  def fy_created_at_range(start_date, end_date)
+    FiscalYear.time_range(start_date, end_date)
+  end
+
   # Count applications with an outstanding training request. Driven by
   # persisted application state so admin queue visibility doesn't depend on
   # notification delivery.
@@ -374,6 +351,14 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   # Count applications with an outstanding admin-initiated evaluation request.
   def calculate_evaluation_requests_count
     Application.with_pending_evaluation_request.count
+  end
+
+  def service_status_counts(model, created_at_range)
+    raw_counts = model.where(created_at: created_at_range).group(:status).count
+
+    model.statuses.keys.index_with do |status|
+      raw_counts[status] || raw_counts[model.statuses.fetch(status)] || 0
+    end
   end
 
   # Get the current fiscal year (July 1 - June 30)
@@ -403,7 +388,12 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   # Keys to exclude when loading reporting service data to avoid duplication
   def excluded_reporting_keys
-    %w[open_applications_count pending_services_count]
+    %w[
+      open_applications_count pending_services_count
+      pipeline_chart_data status_chart_data combined_pipeline_chart_data combined_status_chart_data
+      draft_count submitted_count in_review_count approved_count rejected_count in_progress_count
+      draft_and_needs_info_count
+    ]
   end
 
   # Return default metric values as a hash for load_dashboard_metrics
@@ -417,15 +407,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       training_requests_count: 0,
       evaluation_requests_count: 0,
       print_queue_pending_count: 0,
-      current_fiscal_year: current_fiscal_year,
-      draft_count: 0,
-      submitted_count: 0,
-      in_review_count: 0,
-      approved_count: 0,
-      rejected_count: 0,
-      in_progress_count: 0,
-      pipeline_chart_data: {},
-      status_chart_data: {}
+      current_fiscal_year: current_fiscal_year
     }
   end
 

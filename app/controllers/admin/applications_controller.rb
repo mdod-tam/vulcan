@@ -488,37 +488,13 @@ module Admin
       end
     end
 
-    # New action for lazy-loading charts via Turbo Frames
+    # Lazy-loaded B snapshot charts (FY cohort by current status).
     def charts
-      # Only load chart data, not full dashboard metrics
-      service_result = Applications::ReportingService.new.generate_index_data
+      service_result = Applications::ReportingService.new.generate_index_chart_data
       @metrics = if service_result.is_a?(BaseService::Result) && service_result.success?
-                   # Assign the data as a hash to match what the partial expects
-                   {
-                     pipeline_chart_data: service_result.data[:pipeline_chart_data],
-                     status_chart_data: service_result.data[:status_chart_data],
-                     draft_count: service_result.data[:draft_count],
-                     submitted_count: service_result.data[:submitted_count],
-                     in_review_count: service_result.data[:in_review_count],
-                     approved_count: service_result.data[:approved_count],
-                     in_progress_count: service_result.data[:in_progress_count],
-                     rejected_count: service_result.data[:rejected_count],
-                     current_fiscal_year: service_result.data[:current_fiscal_year]
-                   }
+                   service_result.data
                  else
-                   # Set default values if service fails
-                   # Use current_fiscal_year method to properly calculate fiscal year (July 1 - June 30)
-                   {
-                     pipeline_chart_data: {},
-                     status_chart_data: {},
-                     draft_count: 0,
-                     submitted_count: 0,
-                     in_review_count: 0,
-                     approved_count: 0,
-                     in_progress_count: 0,
-                     rejected_count: 0,
-                     current_fiscal_year: current_fiscal_year
-                   }
+                   empty_index_chart_metrics
                  end
 
       render partial: 'charts_section', layout: false
@@ -762,6 +738,18 @@ module Admin
     rescue StandardError => e
       Rails.logger.error "Pagination failed: #{e.message}"
       [Pagy.new(count: scope.count, page: 1), scope.limit(20)]
+    end
+
+    def empty_index_chart_metrics
+      start_year = current_fiscal_year
+      empty_counts = Application.statuses.keys.index_with { 0 }
+      {
+        current_fy: start_year,
+        current_fy_label: FiscalYear.label_for_start_year(start_year),
+        current_fy_range_label: '',
+        status_chart_data: empty_counts.transform_keys { |k| k.to_s.humanize },
+        status_counts: empty_counts
+      }
     end
   end
 end

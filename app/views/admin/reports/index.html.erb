@@ -16,7 +16,11 @@
         </a>
         </div>
       </div>
-      <p class="text-sm text-gray-600 mt-2">Note: Fiscal Year runs from July 1 to June 30</p>
+      <p class="text-sm text-gray-600 mt-2">Note: Fiscal Year runs from July 1 to June 30.</p>
+      <p class="text-sm text-gray-600 mt-1">
+        Overview sections count applications <strong>created</strong> in each fiscal year (operational).
+        The MFR section counts <strong>status changes</strong> that occurred during each fiscal year.
+      </p>
     </div>
 
     <%# Table of Contents for Screen Readers %>
@@ -35,13 +39,16 @@
     <%# Applications Overview Section %>
     <section aria-labelledby="applications-overview-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="applications-overview-heading" class="text-xl font-bold mb-4">Applications Overview</h2>
+      <p class="text-sm text-gray-500 mb-4">
+        Operational counts: applications <strong>created</strong> in each fiscal year. This is not MFR.
+      </p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <!-- Current FY Applications -->
         <div class="bg-gray-50 rounded p-4">
           <h3 id="current-fy-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @current_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
-              <dt class="text-sm text-gray-500">Applications Submitted:</dt>
+              <dt class="text-sm text-gray-500">Applications Created:</dt>
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-heading"><%= @current_fy_applications %></dd>
             </div>
             <div class="flex justify-between">
@@ -54,14 +61,13 @@
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="reports-chart" 
-                 data-reports-chart-chart-height-value="200" 
-                 data-reports-chart-current-data-value="<%= { 'Submitted' => @current_fy_applications, 'Draft' => @current_fy_draft_applications }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= { 'Submitted' => 0, 'Draft' => 0 }.to_json %>"
+                 data-reports-chart-current-data-value="<%= { 'Created' => @current_fy_applications, 'Draft' => @current_fy_draft_applications }.to_json %>"
+                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
                  data-reports-chart-type-value="bar"
                  data-reports-chart-compact-value="true"
                  data-reports-chart-title-value="Current FY Applications">
               <div class="sr-only">
-                Chart showing current fiscal year applications: <%= @current_fy_applications %> submitted and <%= @current_fy_draft_applications %> draft applications.
+                Chart showing current fiscal year applications: <%= @current_fy_applications %> created and <%= @current_fy_draft_applications %> draft applications.
               </div>
             </div>
           </div>
@@ -72,7 +78,7 @@
           <h3 id="previous-fy-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
-              <dt class="text-sm text-gray-500">Applications Submitted:</dt>
+              <dt class="text-sm text-gray-500">Applications Created:</dt>
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-heading"><%= @previous_fy_applications %></dd>
             </div>
             <div class="flex justify-between">
@@ -85,14 +91,13 @@
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="reports-chart" 
-                 data-reports-chart-chart-height-value="200" 
-                 data-reports-chart-current-data-value="<%= { 'Submitted' => @previous_fy_applications, 'Draft' => @previous_fy_draft_applications }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= { 'Submitted' => 0, 'Draft' => 0 }.to_json %>"
+                 data-reports-chart-current-data-value="<%= { 'Created' => @previous_fy_applications, 'Draft' => @previous_fy_draft_applications }.to_json %>"
+                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
                  data-reports-chart-type-value="bar"
                  data-reports-chart-compact-value="true"
                  data-reports-chart-title-value="Previous FY Applications">
               <div class="sr-only">
-                Chart showing previous fiscal year applications: <%= @previous_fy_applications %> submitted and <%= @previous_fy_draft_applications %> draft applications.
+                Chart showing previous fiscal year applications: <%= @previous_fy_applications %> created and <%= @previous_fy_draft_applications %> draft applications.
               </div>
             </div>
           </div>
@@ -108,7 +113,7 @@
              data-reports-chart-type-value="bar"
              data-reports-chart-title-value="Applications Comparison">
           <div id="chart-description-applications" class="sr-only">
-            This chart compares the number of applications submitted and draft applications between the current fiscal year and the previous fiscal year.
+            This chart compares the number of applications created and draft applications between the current fiscal year and the previous fiscal year.
           </div>
         </div>
       </div>
@@ -188,7 +193,6 @@
         <div class="mt-4">
           <h4 class="sr-only" id="disability-comparison-chart-heading">Disability Type Comparison Chart</h4>
           <div style="position: relative; height: 300px; width: 100%;"
-               role="img"
                aria-labelledby="disability-comparison-chart-heading disability-comparison-chart-desc"
                data-controller="reports-chart" 
                data-reports-chart-current-data-value="<%= { 
@@ -244,9 +248,8 @@
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="reports-chart" 
-                 data-reports-chart-chart-height-value="200" 
                data-reports-chart-current-data-value="<%= { 'Issued' => @current_fy_vouchers, 'Active' => @current_fy_active_vouchers || 0, 'Expired' => @current_fy_expired_vouchers || 0 }.to_json %>"
-               data-reports-chart-previous-data-value="<%= { 'Issued' => 0, 'Active' => 0, 'Expired' => 0 }.to_json %>"
+               data-reports-chart-previous-data-value="<%= {}.to_json %>"
                  data-reports-chart-type-value="bar"
                  data-reports-chart-compact-value="true"
                  data-reports-chart-title-value="Current FY Vouchers">
@@ -282,9 +285,8 @@
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="reports-chart" 
-                 data-reports-chart-chart-height-value="200" 
                data-reports-chart-current-data-value="<%= { 'Issued' => @previous_fy_vouchers, 'Active' => @previous_fy_active_vouchers || 0, 'Expired' => @previous_fy_expired_vouchers || 0 }.to_json %>"
-               data-reports-chart-previous-data-value="<%= { 'Issued' => 0, 'Active' => 0, 'Expired' => 0 }.to_json %>"
+               data-reports-chart-previous-data-value="<%= {}.to_json %>"
                  data-reports-chart-type-value="bar"
                  data-reports-chart-compact-value="true"
                  data-reports-chart-title-value="Previous FY Vouchers">
@@ -357,9 +359,8 @@
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="reports-chart" 
-                 data-reports-chart-chart-height-value="200" 
                  data-reports-chart-current-data-value="<%= { 'Training' => @current_fy_trainings, 'Evaluation' => @current_fy_evaluations }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= { 'Training' => 0, 'Evaluation' => 0 }.to_json %>"
+                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
                  data-reports-chart-type-value="bar"
                  data-reports-chart-compact-value="true"
                  data-reports-chart-title-value="Current FY Services">
@@ -387,9 +388,8 @@
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="reports-chart" 
-                 data-reports-chart-chart-height-value="200" 
                  data-reports-chart-current-data-value="<%= { 'Training' => @previous_fy_trainings, 'Evaluation' => @previous_fy_evaluations }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= { 'Training' => 0, 'Evaluation' => 0 }.to_json %>"
+                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
                  data-reports-chart-type-value="bar"
                  data-reports-chart-compact-value="true"
                  data-reports-chart-title-value="Previous FY Services">
@@ -397,6 +397,74 @@
                 Chart showing previous fiscal year services: <%= @previous_fy_trainings %> training sessions and <%= @previous_fy_evaluations %> evaluation sessions.
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <% training_statuses = TrainingSession.statuses.keys %>
+      <% evaluation_statuses = Evaluation.statuses.keys %>
+      <%# Text-only service status details %>
+      <div class="mt-4 bg-gray-50 rounded p-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+          <div>
+            <h3 id="service-status-breakdown-heading" class="font-medium text-gray-700">Service Status Breakdown</h3>
+            <p class="text-sm text-gray-500">Session records created during each fiscal year.</p>
+          </div>
+          <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            <div>
+              <dt class="text-sm text-gray-500">Training requests awaiting session</dt>
+              <dd class="text-sm font-medium text-gray-900"><%= @training_requests_count %></dd>
+            </div>
+            <div>
+              <dt class="text-sm text-gray-500">Evaluation requests awaiting session</dt>
+              <dd class="text-sm font-medium text-gray-900"><%= @evaluation_requests_count %></dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" aria-labelledby="service-status-breakdown-heading">
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+              <caption class="sr-only">Training Sessions by Status</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="py-2 pr-3 text-left font-medium text-gray-700">Training status</th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium text-gray-700"><%= @current_fy_label %></th>
+                  <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700"><%= @previous_fy_label %></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <% training_statuses.each do |status| %>
+                  <tr>
+                    <th scope="row" class="py-2 pr-3 text-left font-normal text-gray-600"><%= status.humanize %></th>
+                    <td class="px-3 py-2 text-right font-medium text-gray-900"><%= @current_fy_training_status_counts.fetch(status, 0) %></td>
+                    <td class="py-2 pl-3 text-right font-medium text-gray-900"><%= @previous_fy_training_status_counts.fetch(status, 0) %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+              <caption class="sr-only">Evaluation Sessions by Status</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="py-2 pr-3 text-left font-medium text-gray-700">Evaluation status</th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium text-gray-700"><%= @current_fy_label %></th>
+                  <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700"><%= @previous_fy_label %></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <% evaluation_statuses.each do |status| %>
+                  <tr>
+                    <th scope="row" class="py-2 pr-3 text-left font-normal text-gray-600"><%= status.humanize %></th>
+                    <td class="px-3 py-2 text-right font-medium text-gray-900"><%= @current_fy_evaluation_status_counts.fetch(status, 0) %></td>
+                    <td class="py-2 pl-3 text-right font-medium text-gray-900"><%= @previous_fy_evaluation_status_counts.fetch(status, 0) %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -449,9 +517,8 @@
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="reports-chart" 
-                 data-reports-chart-chart-height-value="200" 
                  data-reports-chart-current-data-value="<%= { 'Recent' => @recent_active_vendors, 'Other' => (@active_vendors - @recent_active_vendors) }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= { 'Recent' => 0, 'Other' => 0 }.to_json %>"
+                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
                  data-reports-chart-type-value="bar"
                  data-reports-chart-compact-value="true"
                  data-reports-chart-title-value="Vendor Activity">
@@ -486,57 +553,7 @@
       </div>
     </section>
     
-    <%# MFR Data Section %>
-    <section aria-labelledby="mfr-data-heading" class="bg-white rounded-lg shadow p-6 mb-4">
-      <h2 id="mfr-data-heading" class="text-xl font-bold mb-4">MFR Data (Managing for Results)</h2>
-      <p class="text-sm text-indigo-700 mb-4">Official MFR reporting data for completed fiscal years</p>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div class="bg-gray-50 rounded p-4">
-          <h3 id="mfr-most-recent-heading" class="font-medium text-gray-700 mb-2">Most Recent FY Summary (<%= @previous_fy_label %>)</h3>
-          <p class="text-sm text-gray-500 mb-2">July 1, <%= @previous_fy %> to June 30, <%= @current_fy %></p>
-          <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
-            <div class="flex justify-between">
-              <dt class="text-sm text-gray-500">Applications Approved:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="mfr-most-recent-heading"><%= @mfr_applications_approved %></dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-sm text-gray-500">Vouchers Issued:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="mfr-most-recent-heading"><%= @mfr_vouchers_issued %></dd>
-            </div>
-          </dl>
-        </div>
-        
-        <div class="bg-gray-50 rounded p-4">
-          <h3 id="mfr-preceding-heading" class="font-medium text-gray-700 mb-2">Preceding FY Summary (<%= @preceding_fy_label %>)</h3>
-          <p class="text-sm text-gray-500 mb-2">July 1, <%= @preceding_fy %> to June 30, <%= @previous_fy %></p>
-          <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
-            <div class="flex justify-between">
-              <dt class="text-sm text-gray-500">Applications Approved:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="mfr-preceding-heading"><%= @mfr_preceding_applications_approved || 0 %></dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-sm text-gray-500">Vouchers Issued:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="mfr-preceding-heading"><%= @mfr_preceding_vouchers_issued || 0 %></dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-      
-      <%# MFR Chart - Horizontal Bar Chart %>
-      <div class="mt-4 bg-gray-50 rounded p-4">
-        <div style="position: relative; height: 300px; width: 100%;"
-             data-controller="reports-chart" 
-             data-reports-chart-current-data-value="<%= @mfr_chart_data[:current].to_json %>"
-             data-reports-chart-previous-data-value="<%= @mfr_chart_data[:previous].to_json %>"
-             data-reports-chart-type-value="horizontalBar"
-             data-reports-chart-title-value="MFR Data Comparison">
-          <div id="chart-description-mfr" class="sr-only">
-            This horizontal bar chart compares MFR data between the most recent fiscal year (<%= @previous_fy_label %>: <%= @mfr_applications_approved %> applications approved, <%= @mfr_vouchers_issued %> vouchers issued) and the preceding fiscal year (<%= @preceding_fy_label %>: <%= @mfr_preceding_applications_approved || 0 %> applications approved, <%= @mfr_preceding_vouchers_issued || 0 %> vouchers issued).
-          </div>
-        </div>
-      </div>
-    </section>
+    <%= render 'mfr_section' %>
 
     <%# Referral Origin Section %>
     <section aria-labelledby="referral-origin-heading" class="bg-white rounded-lg shadow p-6 mb-4">
@@ -620,7 +637,6 @@
         <h4 id="referral-ytd-chart-heading" class="font-medium text-gray-700 mb-2">Referral Sources - Year to Date</h4>
         <% if @referral_ytd_data&.any? %>
           <div style="position: relative; height: 300px; width: 100%;"
-               role="img"
                aria-labelledby="referral-ytd-chart-heading referral-ytd-chart-desc"
                data-controller="reports-chart" 
                data-reports-chart-current-data-value="<%= @referral_ytd_data.to_json %>"

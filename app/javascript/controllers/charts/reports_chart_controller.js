@@ -14,15 +14,13 @@ class ReportsChartController extends ChartBaseController {
     title: String,
     compact: Boolean,
     yAxisLabel: String,
-    chartHeight: { type: Number, default: 300 }
+    currentDatasetLabel: { type: String, default: "Current Fiscal Year" },
+    previousDatasetLabel: { type: String, default: "Previous Fiscal Year" }
   }
 
   connect() {
     super.connect()
-    
-    // Generate unique ID for this controller instance
-    this.controllerId = Math.random().toString(36).substr(2, 4)
-    
+
     const Chart = this.getChart()
     if (!Chart) {
       return this.handleUnavailable()
@@ -121,9 +119,16 @@ class ReportsChartController extends ChartBaseController {
     // Compact mode should be handled in the template, not JavaScript
     
     // Create and mount canvas
+    const describedById = this.externalDescriptionId()
+    const fallbackDesc = `Chart showing ${this.titleValue || "data comparison"}`
+    const externalDescText = describedById
+      ? document.getElementById(describedById)?.textContent?.trim()
+      : null
+
     const { canvas, desc } = this.createCanvas(
       this.titleValue || "Chart visualization",
-      `Chart showing ${this.titleValue || "data comparison"}`
+      externalDescText || fallbackDesc,
+      { describedById }
     )
     this.mountCanvas(canvas, desc)
 
@@ -180,8 +185,8 @@ class ReportsChartController extends ChartBaseController {
       reportOptions.indexAxis = 'y'
     }
     
-    // Add Y-axis label if provided
-    if (this.yAxisLabelValue) {
+    const cartesian = type === 'bar' || type === 'line'
+    if (cartesian && this.yAxisLabelValue) {
       reportOptions.scales = reportOptions.scales || {}
       reportOptions.scales.y = reportOptions.scales.y || {}
       reportOptions.scales.y.title = {
@@ -192,25 +197,30 @@ class ReportsChartController extends ChartBaseController {
 
     const finalOptions = this.mergeOptions(baseConfig, reportOptions)
 
-    // Use centralized dataset creation
-    const datasets = this.createDatasets([
-      { 
-        label: 'Current Fiscal Year', 
+    const datasetSpecs = [
+      {
+        label: this.currentDatasetLabelValue,
         data: currentValues,
         options: {
           backgroundColor: 'rgba(79,70,229,0.8)',
           borderColor: 'rgba(79,70,229,1)'
         }
-      },
-      { 
-        label: 'Previous Fiscal Year', 
+      }
+    ]
+
+    const hasPrevious = Object.keys(this.previousDataValue || {}).length > 0
+    if (hasPrevious) {
+      datasetSpecs.push({
+        label: this.previousDatasetLabelValue,
         data: previousValues,
         options: {
           backgroundColor: 'rgba(156,163,175,0.8)',
           borderColor: 'rgba(156,163,175,1)'
         }
-      }
-    ])
+      })
+    }
+
+    const datasets = this.createDatasets(datasetSpecs)
 
     return {
       type,

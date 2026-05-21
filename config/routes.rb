@@ -156,7 +156,6 @@ Rails.application.routes.draw do
         get  :search
         get  :filter
         get  :dashboard
-        get  :refresh_pipeline_chart
         get  :charts
       end
 

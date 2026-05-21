@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class ApplicationStatusChange < ApplicationRecord
+  LIFECYCLE_METADATA_TYPES = %w[medical_certification proof].freeze
+  APPLICATION_STATUS_KEYS = Application.statuses.keys.freeze
+
   belongs_to :application
   belongs_to :user, optional: true
 
@@ -15,6 +18,19 @@ class ApplicationStatusChange < ApplicationRecord
   validates :changed_at, presence: true
 
   before_validation :set_changed_at
+
+  scope :lifecycle, lambda {
+    certified = where(change_type: :medical_certification)
+                .or(where(change_type: :proof))
+                .or(where("metadata->>'change_type' IN (?)", LIFECYCLE_METADATA_TYPES))
+
+    lifecycle_status = where(change_type: :status)
+    legacy_lifecycle = where(change_type: nil)
+                       .where("COALESCE(metadata->>'change_type', '') NOT IN (?)", LIFECYCLE_METADATA_TYPES)
+                       .where(to_status: APPLICATION_STATUS_KEYS)
+
+    lifecycle_status.or(legacy_lifecycle).where.not(id: certified.select(:id))
+  }
 
   # Normalize legacy status names for backward compatibility
   def normalized_from_status
@@ -33,7 +49,6 @@ class ApplicationStatusChange < ApplicationRecord
     end
   end
 
-  # Use this in views/helpers instead of direct status access
   def display_from_status
     normalized_from_status.humanize
   end
