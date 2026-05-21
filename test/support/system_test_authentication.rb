@@ -113,7 +113,9 @@ module SystemTestAuthentication
       # Wait for EITHER successful redirect OR error message
       # This is better than checking current_path immediately
       # Try to wait for successful redirect to dashboard
-      if dashboard_path_reached?(user, wait: 8)
+      if verify_path.present? && page.has_current_path?(verify_path, wait: 5)
+        # Success: 2FA sign-in has reached the expected verification step.
+      elsif dashboard_path_reached?(user, wait: 8)
         # Success! Continue to dashboard verification below
       elsif page.has_text?('Invalid email or password', wait: 2)
         # Clear authentication failure

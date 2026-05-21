@@ -24,6 +24,9 @@ class TwoFactorAuthenticationsController < ApplicationController
     @user = find_setup_user
     return redirect_to sign_in_path unless @user
 
+    @mfa_required_for_setup_user = mfa_required_for_role?(@user)
+    @setup_dashboard_path = _dashboard_for(@user)
+
     set_credential_availability
     handle_existing_credentials_redirect if existing_credentials? && !force_setup?
   end
@@ -352,11 +355,17 @@ class TwoFactorAuthenticationsController < ApplicationController
       )
     end
     format.turbo_stream do
-      set_verification_context
-      handle_error_response(
-        error_message: message,
-        status: status
-      )
+      if @type == 'sms'
+        redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
+                    alert: message,
+                    status: :see_other
+      else
+        set_verification_context
+        handle_error_response(
+          error_message: message,
+          status: status
+        )
+      end
     end
     format.json { render json: { error: message }, status: status }
   end

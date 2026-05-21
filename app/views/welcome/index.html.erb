@@ -86,9 +86,9 @@
         </div>
         <div>
           <% if @has_second_factor %>
-            <a href="<%= root_path %>" class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">Continue to Dashboard</a>
+            <a href="<%= dashboard_path_for_current_user %>" class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">Continue to Dashboard</a>
           <% else %>
-            <a href="<%= root_path %>" class="inline-block bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition">Skip and Continue to Dashboard</a>
+            <a href="<%= dashboard_path_for_current_user %>" class="inline-block bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition">Skip and Continue to Dashboard</a>
           <% end %>
         </div>
       </nav>

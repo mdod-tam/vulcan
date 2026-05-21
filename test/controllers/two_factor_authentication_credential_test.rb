@@ -60,6 +60,14 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_select 'div', { minimum: 0 } # More lenient check, just ensure page renders
   end
 
+  test 'webauthn credential form starts registration on submit' do
+    get new_credential_two_factor_authentication_path(type: 'webauthn')
+
+    assert_response :success
+    assert_select 'form[data-controller="add-credential"][data-action*="submit->add-credential#register"]'
+    assert_select 'input[type="submit"][data-add-credential-target="submitButton"]'
+  end
+
   test 'should generate options for credential creation' do
     # Step 1: Request WebAuthn credential creation options
     # The client calls this endpoint via AJAX to get the WebAuthn challenge and options
@@ -155,6 +163,21 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     credential = @user.reload.sms_credentials.first
     assert_equal '555-123-4567', credential.phone_number
     assert credential.verified_at.present?
+  end
+
+  test 'successful SMS setup confirmation redirects Turbo requests to success page' do
+    post create_credential_two_factor_authentication_path(type: 'sms'), params: {
+      phone_number: '555-123-4567'
+    }
+    assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    @session_token = nil
+
+    post confirm_pending_sms_credential_two_factor_authentication_path,
+         params: { code: '123456' },
+         headers: { 'Accept' => Mime[:turbo_stream].to_s }
+
+    assert_redirected_to credential_success_two_factor_authentication_path(type: 'sms')
+    assert_response :see_other
   end
 
   test 'invalid SMS setup confirmation does not create credential' do

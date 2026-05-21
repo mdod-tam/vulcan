@@ -30,41 +30,41 @@
       </div>
     </div>
 
-    <%= form_with url: process_verification_two_factor_authentication_path(type: 'sms'), method: :post, class: "space-y-4" do |form| %>
-      <div>
-        <label for="code" class="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
-        <div class="mt-1 relative rounded-md shadow-sm">
-          <%= form.text_field :code, 
-              class: "block w-full py-3 px-4 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg text-center tracking-widest", 
-              placeholder: "123456", 
-              required: true, 
-              pattern: "[0-9]{6}", 
-              inputmode: "numeric", 
-              autocomplete: "one-time-code",
-              autofocus: true,
-              maxlength: 6 %>
+    <% if @sms_code_sent %>
+      <%= form_with url: process_verification_two_factor_authentication_path(type: 'sms'), method: :post, class: "space-y-4" do |form| %>
+        <div>
+          <label for="code" class="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
+          <div class="mt-1 relative rounded-md shadow-sm">
+            <%= form.text_field :code,
+                class: "block w-full py-3 px-4 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg text-center tracking-widest",
+                placeholder: "123456",
+                required: true,
+                pattern: "[0-9]{6}",
+                inputmode: "numeric",
+                autocomplete: "one-time-code",
+                autofocus: true,
+                maxlength: 6 %>
+          </div>
+          <p class="mt-2 text-sm text-gray-500">Enter the 6-digit code from the text message.</p>
         </div>
-        <p class="mt-2 text-sm text-gray-500">Enter the 6-digit code from the text message.</p>
-      </div>
 
-    <div class="flex justify-between items-center pt-4">
-      <% if @sms_code_sent %>
-        <%= render 'shared/sms_resend',
-            resend_path: resend_sms_verification_two_factor_authentication_path,
-            message: nil,
-            message_type: :success %>
-      <% else %>
-        <div id="sms_resend" class="flex flex-col items-start">
-          <%= link_to "Send verification code",
-              select_sms_verification_two_factor_authentication_path,
-              class: "text-indigo-600 hover:text-indigo-900 text-sm font-medium",
-              data: { turbo_method: :post } %>
-          <p class="mt-2 text-xs text-gray-500">We will send a 6-digit code to your saved phone number.</p>
+        <div class="flex justify-between items-center pt-4">
+          <%= render 'shared/sms_resend',
+              resend_path: resend_sms_verification_two_factor_authentication_path,
+              message: nil,
+              message_type: :success %>
+
+          <%= form.submit "Verify", class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
         </div>
       <% end %>
-
-      <%= form.submit "Verify", class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-    </div>
+    <% else %>
+      <div id="sms_resend" class="space-y-3">
+        <%= button_to "Send verification code",
+            select_sms_verification_two_factor_authentication_path,
+            method: :post,
+            class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+        <p class="text-sm text-gray-500 text-center">We will send a 6-digit code to your saved phone number.</p>
+      </div>
     <% end %>
 
     <div class="mt-4 flex justify-between">
@@ -90,7 +90,7 @@
         <div class="ml-3">
           <h3 class="text-sm font-medium text-yellow-800">Having trouble?</h3>
           <div class="mt-2 text-sm text-yellow-700">
-            <p>The verification code expires after 10 minutes. If you don't receive the code, check that your phone has service and try resending the code.</p>
+            <p>The verification code expires after 10 minutes. Make sure your phone has service before sending or requesting another code.</p>
           </div>
         </div>
       </div>

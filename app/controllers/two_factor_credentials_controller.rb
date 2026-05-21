@@ -457,10 +457,12 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def redirect_to_sms_confirmation_success
+    success_path = credential_success_two_factor_authentication_path(type: 'sms')
     handle_success_response(
-      html_redirect_path: credential_success_two_factor_authentication_path(type: 'sms'),
+      html_redirect_path: success_path,
       html_message: 'Phone number verified successfully',
-      turbo_message: 'Phone number verified successfully'
+      turbo_message: 'Phone number verified successfully',
+      turbo_redirect_path: success_path
     )
   end
 

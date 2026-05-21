@@ -143,9 +143,11 @@
         </div>
       </aside>
 
-      <div class="mt-8 text-center">
-        <%= link_to 'Skip for now (not recommended)', root_path, class: 'text-indigo-600 hover:text-indigo-800 font-medium' %>
-      </div>
+      <% unless @mfa_required_for_setup_user %>
+        <div class="mt-8 text-center">
+          <%= link_to 'Skip for now (not recommended)', @setup_dashboard_path, class: 'text-indigo-600 hover:text-indigo-800 font-medium' %>
+        </div>
+      <% end %>
 
     </div>
   </main>

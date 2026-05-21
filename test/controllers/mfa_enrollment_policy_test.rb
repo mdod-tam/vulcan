@@ -48,6 +48,46 @@ class MfaEnrollmentPolicyTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test 'does not offer skip link to required-role users during MFA setup' do
+    admin = create(:admin)
+    sign_in_for_integration_test(admin, bypass_mfa_enrollment: false)
+
+    get setup_two_factor_authentication_path
+
+    assert_response :success
+    assert_select 'a', text: /Skip for now/, count: 0
+  end
+
+  test 'does not offer skip link to required-role temp-session users during MFA setup' do
+    admin = create(:admin)
+    admin.totp_credentials.create!(
+      secret: ROTP::Base32.random_base32,
+      nickname: 'Authenticator App',
+      last_used_at: Time.current
+    )
+
+    post sign_in_path, params: {
+      email: admin.email,
+      password: 'password123'
+    }
+    assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
+
+    get setup_two_factor_authentication_path(force: 'true')
+
+    assert_response :success
+    assert_select 'a', text: /Skip for now/, count: 0
+  end
+
+  test 'offers skip link to constituents during optional MFA setup' do
+    constituent = create(:constituent)
+    sign_in_for_integration_test(constituent, bypass_mfa_enrollment: false)
+
+    get setup_two_factor_authentication_path
+
+    assert_response :success
+    assert_select 'a', text: /Skip for now/
+  end
+
   test 'allows constituents without MFA to access their dashboard' do
     constituent = create(:constituent)
     sign_in_for_integration_test(constituent, bypass_mfa_enrollment: false)

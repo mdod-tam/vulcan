@@ -64,7 +64,7 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
   def stub_verification_check(error)
     verification_checks = mock('verification_checks')
     verification_checks.expects(:create)
-                       .with({ verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', code: '123456' })
+                       .with(verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', code: '123456')
                        .raises(error)
 
     verify_service = mock('verify_service')

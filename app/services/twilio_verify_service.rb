@@ -71,7 +71,7 @@ class TwilioVerifyService
                            .v2
                            .services(verify_service_sid)
                            .verification_checks
-                           .create(verification_check_params(code, verification_sid: verification_sid))
+                           .create(**verification_check_params(code, verification_sid: verification_sid))
 
       is_valid = verification_check.status == 'approved'
       Rails.logger.info("[TwilioVerify] Verification check result: #{verification_check.status}, Valid: #{is_valid}")

@@ -44,7 +44,8 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select 'p', text: /Send a 6-digit code by text/
-    assert_select 'a', text: 'Send verification code'
+    assert_select 'button', text: 'Send verification code'
+    assert_select 'input[type="submit"][value="Verify"]', count: 0
     assert_select 'a', text: "Didn't receive the code? Resend", count: 0
   end
 
@@ -64,6 +65,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     follow_redirect!
     assert_response :success
     assert_select 'p', text: /We've sent a 6-digit code by text/
+    assert_select 'input[type="submit"][value="Verify"]'
   end
 
   test 'choosing SMS verification again reuses active challenge without sending another code' do
@@ -81,6 +83,36 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     post select_sms_verification_two_factor_authentication_path
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
     assert_equal 'Enter the verification code we sent.', flash[:notice]
+  end
+
+  test 'terminal SMS Turbo failure redirects back to send-first state' do
+    start_password_step
+
+    TwilioVerifyService.expects(:send_verification).once.with('555-123-4567').returns(
+      success: true,
+      verification_sid: 'TEST_SMS_TERMINAL_FAILURE',
+      status: 'pending'
+    )
+    TwilioVerifyService.expects(:check_verification).once.returns(
+      success: true,
+      status: 'max_attempts_reached',
+      valid: false
+    )
+
+    post select_sms_verification_two_factor_authentication_path
+    assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
+
+    post process_verification_two_factor_authentication_path(type: 'sms'),
+         params: { code: '000000' },
+         headers: { 'Accept' => Mime[:turbo_stream].to_s }
+
+    assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
+    assert_response :see_other
+
+    follow_redirect!
+    assert_response :success
+    assert_select 'button', text: 'Send verification code'
+    assert_select 'input[type="submit"][value="Verify"]', count: 0
   end
 
   test 'SMS-only sign in sends one SMS code before showing verification page' do

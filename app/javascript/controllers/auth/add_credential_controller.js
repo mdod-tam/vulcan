@@ -105,6 +105,11 @@ class AddCredentialController extends Controller {
           }
         }
         // Successful registrations will redirect automatically from auth.js
+      } else {
+        this.showNicknameError(result.message || "Could not prepare your device or security key. Please try again.")
+        if (this.hasSubmitButtonTarget) {
+          this.submitButtonTarget.disabled = false;
+        }
       }
 
     } catch (error) {

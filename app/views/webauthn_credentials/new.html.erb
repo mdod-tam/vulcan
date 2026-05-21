@@ -84,6 +84,7 @@
                       class: "space-y-6",
                       local: true,
                       data: { controller: "add-credential",
+                              action: "submit->add-credential#register",
                               "add-credential-callback-url-value": create_credential_two_factor_authentication_path(type: 'webauthn'),
                               turbo: false } do |form| %>
             <div>
@@ -112,7 +113,7 @@
               <% end %>
               <%= form.submit "Continue to Key Activation",
                     class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                    data: { "add-credential-target": "submitButton", action: "click->add-credential#register" } %>
+                    data: { "add-credential-target": "submitButton" } %>
             </div>
           <% end %>
         </section>
