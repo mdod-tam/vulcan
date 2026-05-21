@@ -31,10 +31,7 @@ module ActiveStorageHelper
   def safe_attachment_previewable?(attachment)
     return false unless attachment.attached?
 
-    # Check common previewable content types without accessing associations
-    previewable_types = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif',
-                         'application/pdf', 'video/mp4', 'video/quicktime']
-    previewable_types.include?(safe_attachment_content_type(attachment))
+    ProofUploadFormats::ALLOWED_CONTENT_TYPES.include?(safe_attachment_content_type(attachment))
   end
 
   # Safely get representation URL without triggering eager loading of variant_records

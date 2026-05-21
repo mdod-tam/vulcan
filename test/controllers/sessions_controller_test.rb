@@ -16,6 +16,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_should_get_new
     get sign_in_path
     assert_response :success
+    assert_select 'a[href=?]', new_password_path, text: 'Forgot password?'
   end
 
   def test_should_not_sign_in_with_wrong_credentials

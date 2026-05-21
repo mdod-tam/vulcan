@@ -61,7 +61,22 @@ module Vendors
                    result.data.fetch(:errors).messages.fetch(:file)
     end
 
-    test 'fails validation when file is not a PDF' do
+    test 'accepts JPEG W9 when Marcel detects image/jpeg' do
+      file = fixture_file_upload(Rails.root.join('test/fixtures/files/sample.jpg'), 'image/jpeg')
+      Marcel::MimeType.stubs(:for).returns('image/jpeg')
+
+      result = SubmitW9Resubmission.new(
+        vendor: @vendor,
+        vendor_secure_request_form: @secure_request_form,
+        file: file
+      ).call
+
+      assert_predicate result, :success?
+      assert @vendor.w9_form.attached?
+      assert_equal 'image/jpeg', @vendor.w9_form.content_type
+    end
+
+    test 'fails validation when file type is not allowed' do
       Tempfile.create(['w9-upload', '.txt']) do |file|
         file.write('not a pdf')
         file.rewind

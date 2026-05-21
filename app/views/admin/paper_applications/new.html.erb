@@ -642,12 +642,12 @@
                          name="medical_certification"
                          id="medical_certification"
                          class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                         accept=".pdf,.jpg,.jpeg,.png"
+                         accept="<%= proof_upload_accept_attribute %>"
                          aria-describedby="medical_certification_help"
                          data-document-proof-handler-target="fileInput">
                   <p id="medical_certification_help" class="mt-1 text-xs text-gray-500">
                     Upload documentation verifying the disability certification.
-                    Accepted formats: PDF, JPG, PNG.
+                    Accepted formats: <%= proof_upload_formats_label %>.
                   </p>
                 </div>
 
@@ -818,13 +818,13 @@
                        name="income_proof"
                        id="income_proof"
                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                       accept=".pdf,.jpg,.jpeg,.png"
+                       accept="<%= proof_upload_accept_attribute %>"
                        aria-describedby="income_proof_help"
                        data-document-proof-handler-target="fileInput">
                 <p id="income_proof_help" class="mt-1 text-xs text-gray-500">
                   Upload documents verifying income eligibility: recent tax return (1040), Social Security award letter,
                   SSI/SSDI benefits statement, pension statement, pay stubs, or other income verification.
-                  Accepted formats: PDF, JPG, PNG.
+                  Accepted formats: <%= proof_upload_formats_label %>.
                 </p>
 
                 <%# Income Information Fields %>
@@ -991,13 +991,13 @@
                        name="residency_proof"
                        id="residency_proof"
                        class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                       accept=".pdf,.jpg,.jpeg,.png"
+                       accept="<%= proof_upload_accept_attribute %>"
                        aria-describedby="residency_proof_help"
                        data-document-proof-handler-target="fileInput">
                 <p id="residency_proof_help" class="mt-1 text-xs text-gray-500">
                   Upload documents verifying Maryland residency: utility bill, mortgage statement, lease agreement,
                   bank statement, or government-issued ID showing the same physical address provided in this application.
-                  Accepted formats: PDF, JPG, PNG.
+                  Accepted formats: <%= proof_upload_formats_label %>.
                 </p>
               </div>
 
@@ -1098,12 +1098,12 @@
                      name="id_proof"
                      id="id_proof"
                      class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                     accept=".pdf,.jpg,.jpeg,.png"
+                     accept="<%= proof_upload_accept_attribute %>"
                      aria-describedby="id_proof_help"
                      data-document-proof-handler-target="fileInput">
               <p id="id_proof_help" class="mt-1 text-xs text-gray-500">
                 Upload documents verifying identity: driver's license, state ID, identification card, passport,
-                or other government-issued photo ID. Accepted formats: PDF, JPG, PNG.
+                or other government-issued photo ID. Accepted formats: <%= proof_upload_formats_label %>.
               </p>
             </div>
 

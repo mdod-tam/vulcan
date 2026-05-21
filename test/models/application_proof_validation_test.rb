@@ -5,7 +5,7 @@ require 'test_helper'
 # Tests for Application model proof attachment validations
 #
 # These tests verify the validation rules defined in ProofManageable concern:
-# - File type restrictions (PDF, JPEG, PNG, TIFF, BMP)
+# - File type restrictions (PDF, JPEG, PNG, HEIC/HEIF)
 # - File size limit (5MB)
 # - Required attachments based on application status
 #
@@ -67,6 +67,21 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
     # Test PNG
     @application.income_proof.attach(@valid_png)
     assert @application.valid?, 'PNG should be accepted for income proof'
+    @application.income_proof.detach
+
+    # Test HEIC (content type only; Marcel validates on secure/email paths)
+    heic_io = StringIO.new('sample heic content')
+    @application.income_proof.attach(
+      io: heic_io,
+      filename: 'proof.heic',
+      content_type: 'image/heic'
+    )
+    assert @application.valid?, 'HEIC should be accepted for income proof'
+  end
+
+  test 'accepts valid file types for id proof' do
+    @application.id_proof.attach(@valid_png)
+    assert @application.valid?, 'PNG should be accepted for id proof'
   end
 
   test 'rejects invalid file types for income proof' do
@@ -95,7 +110,7 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
 
       # Verify that validation failed for the income proof with the exact error message
       assert_includes application.errors[:income_proof],
-                      'must be a PDF or an image file (jpg, jpeg, png, tiff, bmp)',
+                      "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})",
                       'Validation should reject text file for income proof'
     ensure
       file.close
@@ -152,7 +167,7 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
 
       # Verify that validation failed for the residency proof with the exact error message
       assert_includes application.errors[:residency_proof],
-                      'must be a PDF or an image file (jpg, jpeg, png, tiff, bmp)',
+                      "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})",
                       'Validation should reject text file for residency proof'
     ensure
       file.close

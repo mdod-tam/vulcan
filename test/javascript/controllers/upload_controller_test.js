@@ -22,7 +22,11 @@ describe("UploadController", () => {
     
     // Set up DOM
     document.body.innerHTML = `
-      <form data-controller="upload" data-upload-direct-upload-url-value="/rails/active_storage/direct_uploads">
+      <form data-controller="upload"
+            data-upload-direct-upload-url-value="/rails/active_storage/direct_uploads"
+            data-upload-allowed-types-value='["application/pdf","image/jpeg","image/png","image/heic","image/heif"]'
+            data-upload-invalid-type-message-value="Invalid file type. Please upload a PDF or an image file (PDF, JPEG, PNG, or HEIC/HEIF)."
+            data-upload-max-file-size-value="5242880">
         <input type="file" data-upload-target="input">
         <div data-upload-target="progress" class="hidden">
           <div role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
@@ -75,6 +79,21 @@ describe("UploadController", () => {
     
     Object.defineProperty(controller, 'directUploadUrlValue', {
       value: "/rails/active_storage/direct_uploads",
+      writable: false
+    })
+
+    Object.defineProperty(controller, 'allowedTypesValue', {
+      value: ["application/pdf", "image/jpeg", "image/png", "image/heic", "image/heif"],
+      writable: false
+    })
+
+    Object.defineProperty(controller, 'invalidTypeMessageValue', {
+      value: "Invalid file type. Please upload a PDF or an image file (PDF, JPEG, PNG, or HEIC/HEIF).",
+      writable: false
+    })
+
+    Object.defineProperty(controller, 'maxFileSizeValue', {
+      value: 5 * 1024 * 1024,
       writable: false
     })
 

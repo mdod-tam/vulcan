@@ -342,7 +342,7 @@ class VendorNotificationsMailer < ApplicationMailer
   end
 
   def org_url
-    root_url(host: default_url_options[:host])
+    ProgramContact.website_url
   end
 
   def resolve_vendor_portal_url

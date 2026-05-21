@@ -131,7 +131,7 @@ module Mailers
     def footer_text(organization_name: nil, contact_email: nil, website_url: nil, locale: nil, **_kwargs)
       org_name  = organization_name || Policy.get('organization_name') || 'MAT Program'
       email     = contact_email || Policy.get('support_email') || 'support@example.com'
-      web_url   = website_url || root_url(host: default_url_options[:host])
+      web_url   = website_url || ProgramContact.website_url
 
       render_email_template('email_footer_text', :text, {
                               organization_name: org_name.to_s,

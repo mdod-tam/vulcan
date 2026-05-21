@@ -22,8 +22,6 @@ Rails.application.configure do
 
   config.active_storage.service = :local
 
-  # Configure Active Storage for PDF serving
-  config.active_storage.content_types_allowed_inline = ['application/pdf']
   config.active_storage.content_types_to_serve_as_binary = []
 
   # Configure default URL options

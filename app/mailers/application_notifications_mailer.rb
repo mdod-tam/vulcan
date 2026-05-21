@@ -193,14 +193,14 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
-  def account_created(constituent, temp_password)
+  def account_created(constituent)
     with_mailer_error_handling("account_created constituent=#{constituent&.id}") do
       return handle_nil_constituent if constituent.nil?
 
       template_name   = 'application_notifications_account_created'
       locale          = resolve_template_locale(recipient: constituent)
       text_template   = find_text_template(template_name, locale: locale)
-      variables       = build_account_created_variables(constituent, temp_password, template: text_template, locale: locale)
+      variables       = build_account_created_variables(constituent, template: text_template, locale: locale)
       recipient_email = extract_recipient_email(constituent)
 
       if prefers_letter_delivery?(constituent)
@@ -214,6 +214,18 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       end
 
       send_email(recipient_email, text_template, variables)
+    end
+  end
+
+  def security_key_recovery_approved(recovery_request, notification)
+    with_mailer_error_handling("security_key_recovery_approved recovery_request=#{recovery_request&.id}") do
+      recipient = notification.recipient
+      template_name = 'application_notifications_security_key_recovery_approved'
+      locale = resolve_template_locale(recipient: recipient)
+      text_template = find_text_template(template_name, locale: locale)
+      variables = build_security_key_recovery_approved_variables(recipient, template: text_template, locale: locale)
+
+      send_email(recipient_email_for(recipient), text_template, variables)
     end
   end
 
@@ -357,7 +369,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     header_title = header_title_from_template_subject(template: template, subject_variables: subject_variables)
     org_name = organization_name || Policy.get('organization_name') || 'Maryland Accessible Telecommunications'
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     header_logo_url = safe_asset_path('logo.png')
 
     {
@@ -371,7 +383,9 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       ),
       header_logo_url: header_logo_url,
       header_subtitle: nil,
-      support_email: footer_contact_email
+      support_email: footer_contact_email,
+      office_address: ProgramContact.office_address,
+      program_website_url: ProgramContact.website_url
     }
   end
 
@@ -545,7 +559,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       "#{scope}.#{option_type}",
       locale: locale,
       secure_upload_url: secure_upload_url,
-      proof_type_formatted: proof_type_formatted
+      proof_type_formatted: proof_type_formatted,
+      office_address: ProgramContact.office_address
     ).strip
   end
 
@@ -625,7 +640,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     nil
   end
 
-  def build_account_created_variables(constituent, temp_password, template:, locale: nil)
+  def build_account_created_variables(constituent, template:, locale: nil)
     header_title = header_title_from_template_subject(
       template: template,
       subject_variables: { constituent_first_name: constituent.first_name }
@@ -636,25 +651,29 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       subject_variables: { constituent_first_name: constituent.first_name }
     )
 
-    is_paper_app = constituent.applications.order(created_at: :desc).first&.submission_method_paper?
-
     variables = {
       constituent_first_name: constituent.first_name,
       header_title: header_title,
       footer_contact_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
-      footer_website_url: root_url(host: default_url_options[:host]),
+      footer_website_url: ProgramContact.website_url,
+      program_website_url: ProgramContact.website_url,
       footer_show_automated_message: true
     }
 
-    unless is_paper_app
-      variables.merge!({
-                         constituent_email: constituent.email,
-                         temp_password: temp_password,
-                         sign_in_url: sign_in_url(host: default_url_options[:host])
-                       })
-    end
-
     base_variables.merge(variables).compact
+  end
+
+  def build_security_key_recovery_approved_variables(user, template:, locale: nil)
+    base_variables = build_base_email_variables(
+      template: template,
+      locale: locale,
+      subject_variables: { user_first_name: user.first_name }
+    )
+
+    base_variables.merge({
+                           user_first_name: user.first_name,
+                           sign_in_url: sign_in_url(host: default_url_options[:host])
+                         }).compact
   end
 
   def extract_recipient_email(constituent)

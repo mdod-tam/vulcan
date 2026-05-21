@@ -234,6 +234,12 @@ The links below point to tracked repository documentation intended to be availab
 
    Add the generated Active Record encryption keys under `active_record_encryption`. Do not commit `config/master.key`.
 
+4b. Seed feature flags:
+   ```bash
+   rake db:seed_feature_flags
+   ```
+   This command populates the `feature_flags` table with the default feature flags used by the application.
+
 ## Configuration
 
 ### Required Local Configuration

@@ -36,7 +36,7 @@ class PasswordVisibilityIntegrationTest < ActionDispatch::IntegrationTest
 
     # Check that password fields exist within the visibility controller div
     # We test button existence/attributes in other tests
-    assert_select "div[data-controller='visibility'] input[type='password']", count: 3 # challenge, password, confirmation
+    assert_select "div[data-controller='visibility'] input[type='password']", count: 2 # password, confirmation
   end
 
   test 'password visibility toggle has correct accessibility attributes' do

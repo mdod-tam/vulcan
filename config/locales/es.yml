@@ -1,4 +1,11 @@
 es:
+  password_visibility:
+    status:
+      hidden: "La contraseña está oculta"
+      visible: "La contraseña es visible"
+    toggle:
+      show: "Mostrar contraseña"
+      hide: "Ocultar contraseña"
   activerecord:
     errors:
       models:
@@ -99,7 +106,7 @@ es:
         resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
         invalid_request: "Este enlace seguro ya no está disponible."
         file_blank: "Seleccione un documento para subir."
-        file_type_invalid: "Suba un archivo PDF, JPEG o PNG."
+        file_type_invalid: "Suba un archivo PDF, JPEG, PNG o HEIC/HEIF."
         file_too_large: "Suba un archivo menor de %{max_size} MB."
         file_too_small: "Suba un documento que no esté vacío."
         file_suspicious: "Suba otro archivo. Este archivo no se puede aceptar."
@@ -122,7 +129,7 @@ es:
         invalid_request: "Este enlace seguro ya no está disponible."
         attachment_failed: "No se pudo adjuntar el documento de certificación. Inténtelo de nuevo."
         file_blank: "Seleccione un documento de certificación para subir."
-        file_type_invalid: "Suba un archivo PDF, JPEG o PNG."
+        file_type_invalid: "Suba un archivo PDF, JPEG, PNG o HEIC/HEIF."
         file_too_large: "Suba un archivo menor de %{max_size} MB."
         file_too_small: "Suba un documento de certificación que no esté vacío."
         file_suspicious: "Suba otro archivo. Este archivo no se puede aceptar."
@@ -329,15 +336,13 @@ es:
           CÓMO ENVIAR ESTE DOCUMENTO:
           Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           CÓMO ENVIAR ESTE DOCUMENTO:
           1. Use este enlace seguro para subir su %{proof_type_formatted}: %{secure_upload_url}
           2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
     proof_rejected:
       none_provided:
         default: "No se proporcionó la prueba requerida con la solicitud."
@@ -352,15 +357,13 @@ es:
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
           Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
           1. Use este enlace seguro para subir una copia corregida de su %{proof_type_formatted}: %{secure_upload_url}
           2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
       archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada. Puede volver a solicitar después del %{reapply_date}."
   vendor_notifications:
     w9_rejected:
@@ -397,8 +400,8 @@ es:
         revoked: "Este enlace seguro para cargar el W9 fue revocado."
         expired: "Este enlace seguro para cargar el W9 ha vencido."
         validation_failed: "Corrija los errores del archivo y vuelva a intentarlo."
-        file_blank: "Seleccione un archivo PDF del W9 para cargar."
-        file_type_invalid: "Solo se pueden cargar archivos PDF para la revisión del W9."
+        file_blank: "Seleccione un archivo W9 para cargar."
+        file_type_invalid: "Suba un archivo PDF, JPEG, PNG o HEIC/HEIF para la revisión del W9."
         file_too_large: "El archivo debe ser de %{max_size} MB o menos."
         submitted: "Gracias. Su formulario W9 fue enviado para revisión."
   document_signing:
@@ -463,11 +466,11 @@ es:
         organization: "Telecomunicaciones Accesibles de Maryland"
         team: "Equipo de Servicio al Cliente"
       footer:
-        address: "Telecomunicaciones Accesibles de Maryland | 123 Main Street, Baltimore, MD 21201"
-        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: mdmat.org"
+        address: "Telecomunicaciones Accesibles de Maryland | %{office_address}"
+        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: %{program_website_url}"
       page_number: "Página %{page} de %{total}"
       titles:
-        application_notifications_account_created: "Su cuenta de Telecomunicaciones Accesibles de Maryland"
+        application_notifications_account_created: "Recibimos su solicitud de Telecomunicaciones Accesibles de Maryland"
         application_notifications_registration_confirmation: "Bienvenido al Programa de Telecomunicaciones Accesibles de Maryland"
         application_notifications_proof_rejected: "Se requiere seguimiento para la verificación de documentos"
         application_notifications_id_proof_rejected: "Se requiere seguimiento para el documento de identificación"
@@ -539,7 +542,7 @@ es:
       intro: "Use este formulario seguro para subir el documento solicitado por el equipo de MAT."
       required: "Requerido"
       file_label: "Documento"
-      file_help: "Tipos de archivo aceptados: PDF, JPEG o PNG. Tamaño máximo: 10 MB."
+      file_help: "Tipos de archivo aceptados: PDF, JPEG, PNG o HEIC/HEIF. Tamaño máximo: 10 MB."
       submit: "Subir Documento"
       submitting: "Subiendo..."
       error_summary: "Corrija los siguientes campos:"
@@ -579,7 +582,7 @@ es:
       constituent_unknown: "el solicitante"
       required: "Requerido"
       file_label: "Documento de certificación"
-      file_help: "Tipos de archivo aceptados: PDF, JPEG o PNG. Tamaño máximo: 10 MB."
+      file_help: "Tipos de archivo aceptados: PDF, JPEG, PNG o HEIC/HEIF. Tamaño máximo: 10 MB."
       submit: "Subir Certificación"
       submitting: "Subiendo..."
       error_summary: "Corrija los siguientes campos:"
@@ -616,10 +619,10 @@ es:
     show:
       title: "Carga de W9"
       heading: "Suba su formulario W9"
-      intro: "Se le ha solicitado que suba un formulario W9. Cargue una copia en PDF usando este enlace seguro."
+      intro: "Se le ha solicitado que suba un formulario W9. Cargue una copia usando este enlace seguro."
       required: "Requerido"
       file_label: "Formulario W9"
-      file_help: "Solo PDF, hasta 10 MB."
+      file_help: "Tipos de archivo aceptados: PDF, JPEG, PNG o HEIC/HEIF. Tamaño máximo: 10 MB."
       submit_help: "Después de elegir su archivo, haga clic en Enviar W9 para terminar de enviarlo."
       submit: "Enviar W9"
       submitting: "Enviando…"

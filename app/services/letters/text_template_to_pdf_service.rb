@@ -16,7 +16,7 @@ module Letters
     }.freeze
 
     DEFAULT_LETTER_TITLES = {
-      'application_notifications_account_created' => 'Your Maryland Accessible Telecommunications Account',
+      'application_notifications_account_created' => 'We Received Your Maryland Accessible Telecommunications Application',
       'application_notifications_registration_confirmation' => 'Welcome to the Maryland Accessible Telecommunications Program',
       'application_notifications_proof_rejected' => 'Document Verification Follow-up Required',
       'application_notifications_id_proof_rejected' => 'Identification Document Follow-up Required',
@@ -189,8 +189,13 @@ module Letters
       pdf.stroke_horizontal_rule
       pdf.move_down 10
       support_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-      pdf.text I18n.t('letters.pdf.footer.address', locale: resolved_locale), align: :center
-      pdf.text I18n.t('letters.pdf.footer.contact_line', support_email: support_email, locale: resolved_locale), align: :center
+      pdf.text I18n.t('letters.pdf.footer.address',
+                      office_address: ProgramContact.office_address,
+                      locale: resolved_locale), align: :center
+      pdf.text I18n.t('letters.pdf.footer.contact_line',
+                      support_email: support_email,
+                      program_website_url: ProgramContact.website_url,
+                      locale: resolved_locale), align: :center
     end
 
     def add_page_numbers(pdf)

@@ -35,7 +35,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       fallback: "New Training Assignment - Application ##{application.id}"
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
     header_logo_url = begin
@@ -125,7 +125,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       fallback: "Training Scheduled - Application ##{application.id}"
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
     header_logo_url = begin
@@ -216,7 +216,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       fallback: "Training Rescheduled - Application ##{application.id}"
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
     header_logo_url = begin
@@ -310,7 +310,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       fallback: "Training Completed - Application ##{application.id}"
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
     header_logo_url = begin
@@ -398,7 +398,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       fallback: "Training Cancelled - Application ##{application.id}"
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
     header_logo_url = begin
@@ -486,7 +486,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       fallback: "Training Session Missed - Application ##{application.id}"
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
     header_logo_url = begin

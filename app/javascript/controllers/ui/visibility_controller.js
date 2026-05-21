@@ -6,7 +6,11 @@ export default class extends Controller {
 
   
   static values = {
-    timeout: { type: Number, default: 5000 } // 5 seconds timeout
+    timeout: { type: Number, default: 5000 }, // 5 seconds timeout
+    hiddenStatus: { type: String, default: "Password is hidden" },
+    visibleStatus: { type: String, default: "Password is visible" },
+    showLabel: { type: String, default: "Show password" },
+    hideLabel: { type: String, default: "Hide password" }
   }
   
   initialize() {
@@ -132,7 +136,7 @@ export default class extends Controller {
     
     // Update accessibility attributes
     button.setAttribute("aria-pressed", newVisibility);
-    button.setAttribute("aria-label", newVisibility ? "Hide password" : "Show password");
+    button.setAttribute("aria-label", newVisibility ? this.hideLabelValue : this.showLabelValue);
     
     // Toggle icon class
     button.classList.toggle("eye-open", newVisibility);
@@ -143,7 +147,7 @@ export default class extends Controller {
                           document.getElementById(passwordField.getAttribute("aria-describedby"));
     
     if (statusElement) {
-      statusElement.textContent = newVisibility ? "Password is visible" : "Password is hidden";
+      statusElement.textContent = newVisibility ? this.visibleStatusValue : this.hiddenStatusValue;
     }
     
     // Security: Auto-hide after timeout (ensure timeoutValue is valid)
@@ -155,13 +159,13 @@ export default class extends Controller {
         }
         passwordField.type = "password";
         button.setAttribute("aria-pressed", "false");
-        button.setAttribute("aria-label", "Show password");
+        button.setAttribute("aria-label", this.showLabelValue);
         button.classList.remove("eye-open");
         button.classList.add("eye-closed");
         
         // Update status for screen readers
         if (statusElement) {
-          statusElement.textContent = "Password is hidden";
+          statusElement.textContent = this.hiddenStatusValue;
         }
       }, this.timeoutValue);
     } else {
