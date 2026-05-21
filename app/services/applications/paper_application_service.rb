@@ -274,6 +274,7 @@ module Applications
         # Store temp passwords if created
         store_temp_password(@guardian_user_for_app) if @guardian_user_for_app
         store_temp_password(@constituent) if @constituent
+        return false unless update_existing_applicant_disability_info(@constituent)
 
         validate_no_active_application('dependent')
       else
@@ -288,6 +289,8 @@ module Applications
       if result.success?
         @constituent = result.data[:user]
         store_temp_password(@constituent, result.data[:temp_password])
+        return false unless update_existing_applicant_disability_info(@constituent)
+
         validate_no_active_application('constituent')
       else
         @errors.concat(result.data[:errors] || [result.message])
