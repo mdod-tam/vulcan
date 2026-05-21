@@ -176,12 +176,12 @@
             <%= f.label :w9_form, "Upload New W9", class: "block text-sm font-medium text-gray-700" %>
             <div class="mt-1">
               <%= f.file_field :w9_form,
-                  accept: "application/pdf",
+                  accept: proof_upload_accept_attribute,
                   class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
                   direct_upload: true %>
             </div>
             <p class="mt-2 text-sm text-gray-500">
-              PDF format only, maximum size 10MB
+              Accepted formats: <%= proof_upload_formats_label %>. Maximum size 10MB.
             </p>
           </div>
         </div>

@@ -69,7 +69,8 @@ class ProofManageableTest < ActiveSupport::TestCase
 
     assert_not @application.valid?
     assert_empty @application.errors[:income_proof]
-    assert_includes @application.errors[:residency_proof], 'must be a PDF or an image file (jpg, jpeg, png, tiff, bmp)'
+    assert_includes @application.errors[:residency_proof],
+                    "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})"
   end
 
   test 'handles direct uploads' do

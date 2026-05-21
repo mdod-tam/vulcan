@@ -26,8 +26,8 @@
 module ProofManageable
   extend ActiveSupport::Concern
 
-  # Allowed MIME types for proof documents
-  ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/bmp'].freeze
+  # Allowed MIME types for proof documents (see ProofUploadFormats)
+  ALLOWED_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
   # Maximum file size for proof documents (5MB)
   MAX_FILE_SIZE = 5.megabytes
@@ -132,16 +132,16 @@ module ProofManageable
 
   # Validates that attached proofs have correct MIME types and size limits
   def correct_proof_mime_type
-    PROOF_TYPES.each do |proof_type|
+    ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
       attachment = send("#{proof_type}_proof")
       next unless attachment.attached?
 
-      errors.add(:"#{proof_type}_proof", 'must be a PDF or an image file (jpg, jpeg, png, tiff, bmp)') unless ALLOWED_TYPES.include?(attachment.content_type)
+      errors.add(:"#{proof_type}_proof", "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})") unless ALLOWED_TYPES.include?(attachment.content_type)
     end
   end
 
   def proof_size_within_limit
-    PROOF_TYPES.each do |proof_type|
+    ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
       attachment = send("#{proof_type}_proof")
       next unless attachment.attached?
       next if attachment.byte_size <= MAX_FILE_SIZE

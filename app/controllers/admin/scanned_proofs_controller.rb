@@ -11,12 +11,7 @@ module Admin
     before_action :validate_proof_type, only: %i[new create]
     before_action :validate_file, only: [:create]
 
-    ALLOWED_CONTENT_TYPES = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'image/tiff'
-    ].freeze
+    ALLOWED_CONTENT_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
     MAX_FILE_SIZE = 10.megabytes
 

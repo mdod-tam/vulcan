@@ -250,7 +250,7 @@
              <%= f.file_field :residency_proof,
                  class: "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100",
                  "aria-describedby": "residency-hint",
-                 accept: ".pdf,.jpg,.jpeg,.png" %>
+                 accept: proof_upload_accept_attribute %>
            </div>
 
            <% if @application.income_collection_enabled? %>
@@ -263,7 +263,7 @@
              <%= f.file_field :income_proof,
                  class: "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100",
                  "aria-describedby": "income-hint",
-                 accept: ".pdf,.jpg,.jpeg,.png" %>
+                 accept: proof_upload_accept_attribute %>
            </div>
            <% end %>
 
@@ -276,7 +276,7 @@
              <%= f.file_field :id_proof,
                  class: "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100",
                  "aria-describedby": "id-hint",
-                 accept: ".pdf,.jpg,.jpeg,.png" %>
+                 accept: proof_upload_accept_attribute %>
            </div>
          </div>
        </section>

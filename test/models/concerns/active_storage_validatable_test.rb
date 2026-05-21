@@ -45,7 +45,7 @@ class ActiveStorageValidatableTest < ActiveSupport::TestCase
     model.errors.clear
     model.attach_file(content_type: 'application/exe', size: 2.megabytes)
     model.send(:validate_attachment_content_type, model.test_attachment, :test_attachment)
-    assert_includes model.errors[:test_attachment], 'Invalid file type. Please upload a PDF or an image file (jpg, jpeg, png, tiff, bmp).'
+    assert_includes model.errors[:test_attachment], ProofUploadFormats::INVALID_TYPE_MESSAGE
   end
 
   test 'validates file size correctly' do
@@ -80,7 +80,7 @@ class ActiveStorageValidatableTest < ActiveSupport::TestCase
     # Test invalid content type
     invalid_file = FileParams.new(false, 'application/exe', 2.megabytes)
     errors = TestModel.validate_file_params(invalid_file)
-    assert_includes errors, 'Invalid file type. Please upload a PDF or an image file (jpg, jpeg, png, tiff, bmp).'
+    assert_includes errors, ProofUploadFormats::INVALID_TYPE_MESSAGE
 
     # Test file too large
     large_file = FileParams.new(false, 'application/pdf', 10.megabytes)

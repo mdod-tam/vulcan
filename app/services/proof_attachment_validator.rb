@@ -1,11 +1,7 @@
 # frozen_string_literal: true
 
 class ProofAttachmentValidator
-  ALLOWED_MIME_TYPES = %w[
-    application/pdf
-    image/jpeg
-    image/png
-  ].freeze
+  ALLOWED_MIME_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
   MAX_FILE_SIZE = 10.megabytes
   MIN_FILE_SIZE = 1.kilobyte
