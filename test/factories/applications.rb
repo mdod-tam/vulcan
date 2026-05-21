@@ -43,12 +43,14 @@ FactoryBot.define do
       status { :approved }
       income_proof_status { :approved }
       residency_proof_status { :approved }
+      id_proof_status { :approved }
     end
 
     trait :completed do
       status { :approved }
       income_proof_status { :approved }
       residency_proof_status { :approved }
+      id_proof_status { :approved }
       medical_certification_status { :approved }
       terms_accepted { true }
       information_verified { true }
@@ -74,6 +76,7 @@ FactoryBot.define do
       status { :archived }
       income_proof_status { :approved }
       residency_proof_status { :approved }
+      id_proof_status { :approved }
       terms_accepted { true }
       information_verified { true }
       medical_release_authorized { true }

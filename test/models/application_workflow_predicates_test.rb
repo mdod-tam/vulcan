@@ -170,6 +170,20 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not app.voucher_issuable?
   end
 
+  test 'voucher_issuable? returns false without all required proofs approved' do
+    app = create(:application, :approved, :voucher_fulfillment)
+    app.update_columns(
+      medical_certification_status: Application.medical_certification_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      income_proof_status: Application.income_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:not_reviewed]
+    )
+    app.reload
+
+    assert_not app.required_proofs_approved?
+    assert_not app.voucher_issuable?
+  end
+
   # --- with_proofs_needing_review scope ---
 
   test 'with_proofs_needing_review includes income not_reviewed only when income required' do
@@ -212,6 +226,23 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app = create(:application, :completed, :voucher_fulfillment)
     app.reload
     assert app.can_create_voucher?
+  end
+
+  test 'can_create_voucher? requires all required proofs approved' do
+    @vouchers_flag.update!(enabled: true)
+    app = create(:application, :approved, :voucher_fulfillment)
+    app.update_columns(
+      medical_certification_status: Application.medical_certification_statuses[:approved],
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      income_proof_status: Application.income_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:not_reviewed]
+    )
+    app.reload
+
+    assert_not app.can_create_voucher?
+    assert_no_difference -> { Voucher.where(application: app).count } do
+      assert_not app.assign_voucher!(assigned_by: create(:admin))
+    end
   end
 
   # --- all_requirements_met? uses required_proofs_approved? ---

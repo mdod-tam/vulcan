@@ -167,14 +167,15 @@ Application.managed_by(guardian)  # Apps guardian manages
 
 ### 5.1 Auto-Assignment
 
-Triggered when `all_requirements_met?`:
+Triggered after a real approval transition commits. `transition_status!(:approved)` enqueues `IssueInitialVoucherJob`, which issues the voucher only if the application is still eligible:
 - Income proof approved
 - Residency proof approved
+- ID proof approved
 - Medical certification approved
 
 ```ruby
-# VoucherManagement concern handles assignment
-application.assign_voucher!
+# Approval commits first; the job issues the voucher asynchronously.
+IssueInitialVoucherJob.perform_later(application.id, actor.id, 'automatic')
 ```
 
 ### 5.2 Voucher Lifecycle
@@ -308,7 +309,7 @@ AuditEventService.log(
 | Med cert stuck | Provider delivery logs, Notification status |
 | Guardian can't see app | `GuardianRelationship` exists, `managing_guardian_id` set |
 | DocuSeal not working | Credentials, webhook configuration |
-| Voucher not assigned | Check all 3 proof statuses are `approved` |
+| Voucher not assigned | Check `IssueInitialVoucherJob`, voucher fulfillment, required proof statuses, and medical certification approval |
 
 ---
 
@@ -318,6 +319,7 @@ AuditEventService.log(
 |-----|---------|
 | `MedicalCertificationEmailJob` | Send medical cert requests |
 | `UpdateEmailStatusJob` | Poll Postmark for delivery status |
+| `IssueInitialVoucherJob` | Issue the first voucher after approval commits |
 | `CheckVoucherExpirationJob` | Process expired vouchers |
 | `GenerateVendorInvoicesJob` | Create vendor invoices |
 | `ProofAttachmentMetricsJob` | Monitor attachment failures |

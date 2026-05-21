@@ -7,12 +7,15 @@ module VoucherManagement
 
   # Assigns a new voucher to this application
   # @param assigned_by [User] The user assigning the voucher (defaults to Current.user)
+  # @param assignment_method [Symbol] How the voucher was assigned (:manual, :manual_approval, :automatic)
+  # @param raise_on_failure [Boolean] Whether assignment errors should be re-raised for retryable callers
   # @return [Voucher, false] The created voucher or false on failure
-  def assign_voucher!(assigned_by: nil)
-    return false unless can_create_voucher?
+  def assign_voucher!(assigned_by: nil, assignment_method: :manual, raise_on_failure: false)
     return false unless FeatureFlag.enabled?(:vouchers_enabled)
 
     with_lock do
+      return false unless can_create_voucher?
+
       voucher = vouchers.create!
 
       # Step 1: Log the auditable business event
@@ -22,8 +25,11 @@ module VoucherManagement
         auditable: voucher, # The voucher is the auditable record
         metadata: {
           application_id: id,
+          voucher_id: voucher.id,
           voucher_code: voucher.code,
           initial_value: voucher.initial_value,
+          issued_at: voucher.issued_at.iso8601,
+          assignment_method: assignment_method.to_s,
           timestamp: Time.current.iso8601
         }
       )
@@ -35,6 +41,8 @@ module VoucherManagement
     end
   rescue StandardError => e
     Rails.logger.error "Failed to assign voucher for application #{id}: #{e.message}"
+    raise if raise_on_failure
+
     false
   end
 
@@ -43,16 +51,20 @@ module VoucherManagement
   def can_create_voucher?
     voucher_fulfillment? &&
       status_approved? &&
+      required_proofs_approved? &&
       medical_certification_status_approved? &&
       !vouchers.exists?
   end
 
-  # Creates an initial voucher for a newly approved application
-  # @return [Voucher, nil] The created voucher or nil if not eligible
-  def create_initial_voucher
+  def maybe_assign_initial_voucher!(actor:, assignment_method: :automatic)
+    return unless FeatureFlag.enabled?(:vouchers_enabled)
     return unless can_create_voucher?
 
-    assign_voucher!(assigned_by: Current.user)
+    assign_voucher!(
+      assigned_by: actor,
+      assignment_method: assignment_method,
+      raise_on_failure: true
+    )
   end
 
   private

@@ -107,6 +107,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
   test 'proof reviewer auto-approval creates canonical status audit artifacts' do
     with_after_commit_callbacks do
       admin = create(:admin)
+      FeatureFlag.enable!(:vouchers_enabled)
       application = create_application_with_documents(
         attach_medical_certification: true
       )
@@ -121,9 +122,15 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       reviewer = Applications::ProofReviewer.new(application, admin)
 
-      assert_difference -> { application.proof_reviews.where(proof_type: :residency, status: :approved).count }, 1 do
-        assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
-          reviewer.review(proof_type: :residency, status: :approved)
+      assert_difference -> { Voucher.where(application: application).count }, 1 do
+        assert_difference -> { Event.where(action: 'voucher_assigned', auditable_type: 'Voucher').count }, 1 do
+          perform_enqueued_jobs(only: IssueInitialVoucherJob) do
+            assert_difference -> { application.proof_reviews.where(proof_type: :residency, status: :approved).count }, 1 do
+              assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
+                reviewer.review(proof_type: :residency, status: :approved)
+              end
+            end
+          end
         end
       end
 
@@ -142,6 +149,10 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_equal 'auto_approval', approved_status_events.first.metadata['trigger']
       assert_equal admin, approved_status_events.first.user
       assert_equal 0, Event.where(auditable: application, action: 'application_auto_approved').count
+
+      voucher = Voucher.find_by!(application: application)
+      voucher_assignment_event = Event.find_by!(auditable: voucher, action: 'voucher_assigned')
+      assert_equal 'automatic', voucher_assignment_event.metadata['assignment_method']
     end
   end
 
@@ -258,6 +269,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
   test 'certification approval auto-approves the application via reconciler' do
     with_after_commit_callbacks do
       admin = create(:admin)
+      FeatureFlag.enable!(:vouchers_enabled)
       application = create_application_with_documents(
         attach_medical_certification: true
       )
@@ -270,14 +282,20 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         medical_certification_status: :requested
       )
 
-      result = MedicalCertificationAttachmentService.update_certification_status(
-        application: application,
-        status: :approved,
-        admin: admin,
-        submission_method: :admin_review
-      )
+      assert_difference -> { Voucher.where(application: application).count }, 1 do
+        assert_difference -> { Event.where(action: 'voucher_assigned', auditable_type: 'Voucher').count }, 1 do
+          perform_enqueued_jobs(only: IssueInitialVoucherJob) do
+            result = MedicalCertificationAttachmentService.update_certification_status(
+              application: application,
+              status: :approved,
+              admin: admin,
+              submission_method: :admin_review
+            )
 
-      assert result[:success], 'Certification approval should succeed'
+            assert result[:success], 'Certification approval should succeed'
+          end
+        end
+      end
 
       application.reload
 
@@ -300,6 +318,10 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       # No legacy application_auto_approved events
       assert_equal 0, Event.where(auditable: application, action: 'application_auto_approved').count
+
+      voucher = Voucher.find_by!(application: application)
+      voucher_assignment_event = Event.find_by!(auditable: voucher, action: 'voucher_assigned')
+      assert_equal 'automatic', voucher_assignment_event.metadata['assignment_method']
     end
   end
 
@@ -367,7 +389,9 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_difference -> { Voucher.where(application: application).count }, 1 do
         assert_difference -> { Event.where(auditable: application, action: 'application_approved').count }, 1 do
           assert_difference -> { Event.where(action: 'voucher_assigned', auditable_type: 'Voucher').count }, 1 do
-            assert service.call
+            perform_enqueued_jobs(only: IssueInitialVoucherJob) do
+              assert service.call
+            end
           end
         end
       end
@@ -391,6 +415,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert voucher.persisted?
       voucher_assignment_event = Event.find_by!(auditable: voucher, action: 'voucher_assigned')
       assert_equal admin, voucher_assignment_event.user
+      assert_equal 'manual_approval', voucher_assignment_event.metadata['assignment_method']
     end
   end
 

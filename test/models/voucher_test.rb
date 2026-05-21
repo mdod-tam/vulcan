@@ -18,7 +18,7 @@ class VoucherTest < ActiveSupport::TestCase
     @application = create(:application, user: constituent)
     @voucher = create(:voucher, application: @application)
     FeatureFlag.find_or_create_by(name: 'vouchers_enabled', enabled: true)
-   end
+  end
 
   test 'valid voucher' do
     assert @voucher.valid?
@@ -119,8 +119,7 @@ class VoucherTest < ActiveSupport::TestCase
   test 'sends notification when assigned' do
     FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
     constituent = create(:constituent, email: "unique_#{Time.now.to_i}@example.com")
-    application = create(:application, status: :approved, user: constituent)
-    application.update!(medical_certification_status: :approved)
+    application = create(:application, :completed, :voucher_fulfillment, user: constituent)
 
     perform_enqueued_jobs do
       application.assign_voucher!
@@ -132,8 +131,7 @@ class VoucherTest < ActiveSupport::TestCase
   test 'creates event when assigned' do
     FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
     constituent = create(:constituent, email: "unique_event_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
-    application = create(:application, status: :approved, user: constituent)
-    application.update!(medical_certification_status: :approved)
+    application = create(:application, :completed, :voucher_fulfillment, user: constituent)
 
     assert_difference -> { Event.where(action: 'voucher_assigned').count }, 1 do
       application.assign_voucher!
@@ -141,8 +139,11 @@ class VoucherTest < ActiveSupport::TestCase
 
     event = Event.where(action: 'voucher_assigned').last
     assert_equal application.id, event.metadata['application_id']
+    assert_not_nil event.metadata['voucher_id']
     assert_not_nil event.metadata['voucher_code']
     assert_not_nil event.metadata['initial_value']
+    assert_not_nil event.metadata['issued_at']
+    assert_equal 'manual', event.metadata['assignment_method']
     assert_not_nil event.metadata['timestamp']
   end
 

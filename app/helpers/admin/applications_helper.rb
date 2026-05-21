@@ -92,6 +92,26 @@ module Admin
       end
     end
 
+    def voucher_assignment_detail(metadata, fallback_time:)
+      issued_at = if metadata['issued_at'].present?
+                    Time.zone.parse(metadata['issued_at'])
+                  else
+                    fallback_time
+                  end
+      issued_date = issued_at.strftime('%B %d, %Y')
+      voucher_text = "Voucher #{metadata['voucher_code']}"
+      value_text = "for #{number_to_currency(metadata['initial_value'])}"
+
+      case metadata['assignment_method']
+      when 'automatic'
+        "#{voucher_text} automatically issued on #{issued_date} #{value_text}"
+      when 'manual_approval'
+        "#{voucher_text} issued after admin approval on #{issued_date} #{value_text}"
+      else
+        "#{voucher_text} assigned on #{issued_date} #{value_text}"
+      end
+    end
+
     def format_rejection_reason(proof_type, application)
       proof_status_method = "#{proof_type}_proof_status"
       return nil unless application.respond_to?(proof_status_method)

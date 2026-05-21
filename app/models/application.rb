@@ -453,6 +453,11 @@ class Application < ApplicationRecord
         )
       )
 
+      if target_status == 'approved' && voucher_fulfillment?
+        assignment_method = metadata[:trigger].to_s == 'auto_approval' ? 'automatic' : 'manual_approval'
+        IssueInitialVoucherJob.perform_later(id, actor.id, assignment_method)
+      end
+
       true
     end
   end
@@ -613,10 +618,7 @@ class Application < ApplicationRecord
   end
 
   def voucher_issuable?
-    voucher_fulfillment? &&
-      status_approved? &&
-      medical_certification_status_approved? &&
-      !vouchers.exists?
+    can_create_voucher?
   end
 
   def active_training_session
