@@ -12,25 +12,23 @@ module Letters
       # Create template with all required variables
       @template = create(:email_template,
                          name: 'application_notifications_account_created',
-                         subject: 'Your account has been created',
+                         subject: 'We Received Your Maryland Accessible Telecommunications Application',
                          body: "Hello %<constituent_first_name>s,\n\n" \
                                "Welcome to the service!\n\n" \
-                               "Your username is %<constituent_email>s.\n" \
-                               "Your temporary password is %<temp_password>s.\n\n" \
-                               "Please login at %<sign_in_url>s soon.\n\n" \
+                               "Questions? Contact %<support_email>s.\n" \
+                               "Program website: %<program_website_url>s.\n\n" \
                                "%<header_text>s\n" \
                                "%<footer_text>s\n",
                          variables: {
-                           'required' => %w[constituent_first_name constituent_email temp_password sign_in_url header_text footer_text],
+                           'required' => %w[constituent_first_name support_email program_website_url header_text footer_text],
                            'optional' => []
                          },
                          format: :text)
 
       @variables = {
         constituent_first_name: @user.first_name,
-        constituent_email: @user.email,
-        temp_password: 'SecurePassword123',
-        sign_in_url: 'https://example.com/sign_in',
+        support_email: 'mat.program1@maryland.gov',
+        program_website_url: ProgramContact.website_url,
         header_text: 'Header text for testing',
         footer_text: 'Footer text for testing'
       }
@@ -67,11 +65,12 @@ module Letters
 
       # Verify that all variables were substituted
       assert_includes result, "Hello #{@user.first_name},"
-      assert_includes result, "Your username is #{@user.email}."
-      assert_includes result, 'Your temporary password is SecurePassword123.'
-      assert_includes result, 'Please login at https://example.com/sign_in soon.'
+      assert_includes result, 'Questions? Contact mat.program1@maryland.gov.'
+      assert_includes result, "Program website: #{ProgramContact.website_url}."
       assert_includes result, 'Header text for testing'
       assert_includes result, 'Footer text for testing'
+      assert_not_includes result, 'SecurePassword123'
+      assert_not_includes result, 'sign_in'
 
       # Verify there are no remaining placeholders
       assert_no_match(/%<\w+>s/, result)
@@ -155,6 +154,25 @@ module Letters
       end
       date_pdf.expects(:move_down).with(10)
       service.send(:add_date, date_pdf)
+    end
+
+    test 'letter footer uses centralized office address' do
+      service = TextTemplateToPdfService.new(
+        template_name: 'application_notifications_account_created',
+        recipient: @user,
+        variables: @variables
+      )
+
+      footer_pdf = mock('footer_pdf')
+      footer_pdf.expects(:move_down).with(50)
+      footer_pdf.expects(:font_size).with(8)
+      footer_pdf.expects(:stroke_horizontal_rule)
+      footer_pdf.expects(:move_down).with(10)
+      footer_pdf.expects(:text).with("Maryland Accessible Telecommunications | #{ProgramContact.office_address}",
+                                     align: :center)
+      footer_pdf.expects(:text).with(regexp_matches(/www\.mdmat\.org/), align: :center)
+
+      service.send(:add_footer, footer_pdf)
     end
 
     test 'correctly queues item for printing' do

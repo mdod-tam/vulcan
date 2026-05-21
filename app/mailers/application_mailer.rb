@@ -33,6 +33,7 @@ class ApplicationMailer < ActionMailer::Base
       return
     end
 
+    variables = common_template_variables.merge(variables)
     rendered_subject, rendered_text_body = template.render(**variables)
 
     # Apply subject override if provided
@@ -82,7 +83,7 @@ class ApplicationMailer < ActionMailer::Base
 
   def queue_letter_delivery(recipient:, template_name:, variables:, letter_type: nil, application: nil)
     print_recipient = letter_recipient_for(recipient)
-    letter_variables = variables.respond_to?(:to_h) ? variables.to_h.deep_symbolize_keys : variables.dup
+    letter_variables = common_template_variables.merge(variables.respond_to?(:to_h) ? variables.to_h.deep_symbolize_keys : variables.dup)
     letter_variables[:application] = application if application.present?
 
     Letters::TextTemplateToPdfService.new(
@@ -126,7 +127,14 @@ class ApplicationMailer < ActionMailer::Base
     @current_year = Time.current.year
     @organization_name = 'Maryland Accessible Telecommunications Program'
     @organization_email = 'no_reply@mdmat.org'
-    @organization_website = 'https://mdmat.org'
+    @organization_website = ProgramContact.website_url
+  end
+
+  def common_template_variables
+    {
+      office_address: ProgramContact.office_address,
+      program_website_url: ProgramContact.website_url
+    }
   end
 
   def normalize_locale(locale)

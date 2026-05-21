@@ -17,6 +17,16 @@ class User < ApplicationRecord
     email_value.to_s.strip.downcase.presence
   end
 
+  def self.normalize_phone(phone_value)
+    return nil if phone_value.blank?
+
+    digits = phone_value.to_s.gsub(/\D/, '')
+    digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
+    return digits.gsub(/(\d{3})(\d{3})(\d{4})/, '\1-\2-\3') if digits.length == 10
+
+    phone_value.to_s
+  end
+
   def self.system_user
     if @system_user.nil? || !system_user_valid?(@system_user)
       @system_user = find_by_email('system@mdmat.org')
@@ -37,7 +47,7 @@ class User < ApplicationRecord
   end
 
   def self.system_user_valid?(user)
-    user.persisted? && user.admin? && self.exists?(user.id)
+    user.persisted? && user.admin? && exists?(user.id)
   end
   private_class_method :system_user_valid?
 
@@ -54,9 +64,10 @@ class User < ApplicationRecord
   end
 
   def self.find_by_phone(phone_value)
-    return nil if phone_value.blank?
+    normalized_phone = normalize_phone(phone_value)
+    return nil if normalized_phone.blank?
 
-    User.find_by(phone: phone_value)
+    User.find_by(phone: normalized_phone)
   rescue StandardError => e
     Rails.logger.warn "find_by_phone failed: #{e.message}"
     nil
@@ -75,9 +86,10 @@ class User < ApplicationRecord
   end
 
   def self.exists_with_phone?(phone_value, excluding_id: nil)
-    return false if phone_value.blank?
+    normalized_phone = normalize_phone(phone_value)
+    return false if normalized_phone.blank?
 
-    query = User.where(phone: phone_value)
+    query = User.where(phone: normalized_phone)
     query = query.where.not(id: excluding_id) if excluding_id
     query.exists?
   rescue StandardError => e

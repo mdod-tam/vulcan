@@ -132,7 +132,7 @@ class EvaluatorMailer < ApplicationMailer
   # Build header and footer data for email template
   def build_header_footer_data(title, locale: nil)
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = root_url(host: default_url_options[:host])
+    footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     footer_organization_name = Policy.get('organization_name') || 'MAT Program'
     header_logo_url = safe_logo_url

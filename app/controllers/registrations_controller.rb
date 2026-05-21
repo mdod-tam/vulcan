@@ -20,6 +20,7 @@ class RegistrationsController < ApplicationController
 
   def create
     build_user
+    return render_duplicate_account_prompt if duplicate_account_match?
 
     # Check for potential duplicates based on Name + DOB and flag for admin review
     @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
@@ -70,6 +71,27 @@ class RegistrationsController < ApplicationController
     @user.force_password_change = false
   end
 
+  def duplicate_account_match?
+    email_user = User.find_by_email(registration_params[:email])
+    phone_user = User.find_by_phone(registration_params[:phone])
+
+    if email_user.present? && phone_user.present? && email_user.id != phone_user.id
+      @account_access_conflict = true
+      @support_email = support_email
+      return true
+    end
+
+    @account_access_user = email_user || phone_user
+    @account_access_match_type = email_user.present? ? 'email' : 'phone'
+    @account_access_contact = account_access_contact_for(@account_access_user, @account_access_match_type)
+    @account_access_available = @account_access_contact.present?
+    @account_access_user.present?
+  end
+
+  def render_duplicate_account_prompt
+    render :new, status: :unprocessable_content
+  end
+
   def create_session_and_cookie
     @session = @user.sessions.create!(
       user_agent: request.user_agent,
@@ -108,6 +130,19 @@ class RegistrationsController < ApplicationController
              :city, :state, :zip_code,
              :needs_duplicate_review]
     )
+  end
+
+  def support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
+  end
+
+  def account_access_contact_for(user, match_type)
+    return nil unless user
+    return user.email if match_type == 'email'
+    return user.phone if user.phone_type.to_s == 'text'
+
+    @support_email = support_email
+    nil
   end
 
   # Helper method for the soft duplicate check

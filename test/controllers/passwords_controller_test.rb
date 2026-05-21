@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class PasswordsControllerTest < ActionDispatch::IntegrationTest
+  include ActiveJob::TestHelper
+
   def setup
     # Track performance for monitoring
     @start_time = Time.current
@@ -30,6 +32,89 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     get edit_password_path
     assert_response :success
     assert_select 'form[action=?]', password_path
+  end
+
+  def test_should_send_account_access_email_for_existing_email
+    assert_difference -> { Event.where(action: 'account_access_instructions_sent', user: @user).count }, 1 do
+      assert_enqueued_emails 1 do
+        post password_path, params: { contact: @user.email }
+      end
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
+                 flash[:notice]
+  end
+
+  def test_should_send_account_access_sms_for_existing_phone
+    SmsService.expects(:send_message).with(@user.phone, regexp_matches(/This link expires in 20 minutes\./)).returns(true)
+
+    assert_difference -> { Event.where(action: 'account_access_instructions_sent', user: @user).count }, 1 do
+      assert_no_enqueued_emails do
+        post password_path, params: { contact: @user.phone }
+      end
+    end
+
+    assert_redirected_to sign_in_path
+  end
+
+  def test_should_return_generic_confirmation_when_sms_delivery_fails
+    SmsService.expects(:send_message).raises(StandardError, 'invalid number')
+
+    assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', user: @user).count }, 1 do
+      post password_path, params: { contact: @user.phone }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
+                 flash[:notice]
+  end
+
+  def test_should_rate_limit_repeated_account_access_sms_requests
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
+    SmsService.expects(:send_message).times(PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT).returns(true)
+
+    (PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT + 1).times do
+      post password_path, params: { contact: @user.phone }
+    end
+
+    assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', user: @user).count
+  ensure
+    Rails.cache = old_cache
+  end
+
+  def test_should_return_generic_confirmation_for_unknown_contact
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: 'unknown@example.com' }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
+                 flash[:notice]
+  end
+
+  def test_should_update_password_with_valid_token_without_current_password
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+
+    get edit_password_path(token: token)
+    assert_response :success
+    assert_select 'input[name=token][value=?]', token
+    assert_select 'label', { text: 'Current Password', count: 0 }
+
+    patch password_path, params: {
+      token: token,
+      password: 'TokenReset*Password123',
+      password_confirmation: 'TokenReset*Password123'
+    }
+
+    assert_redirected_to sign_in_path
+    assert_equal 'Password successfully updated.', flash[:notice]
+    assert @user.reload.authenticate('TokenReset*Password123')
   end
 
   def test_should_update_password_with_valid_inputs

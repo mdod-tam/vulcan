@@ -28,6 +28,13 @@
 #       enabled: "ON"
 
 en:
+  password_visibility:
+    status:
+      hidden: "Password is hidden"
+      visible: "Password is visible"
+    toggle:
+      show: "Show password"
+      hide: "Hide password"
   activerecord:
     errors:
       models:
@@ -226,15 +233,13 @@ en:
           HOW TO SUBMIT THIS DOCUMENT:
           If it is easier, you may mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           HOW TO SUBMIT THIS DOCUMENT:
           1. Use this secure link to upload your %{proof_type_formatted}: %{secure_upload_url}
           2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
     proof_rejected:
       none_provided:
         default: "No required proof was provided with the application."
@@ -249,15 +254,13 @@ en:
           HOW TO SUBMIT A CORRECTED DOCUMENT:
           If it is easier, you may mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           HOW TO SUBMIT A CORRECTED DOCUMENT:
           1. Use this secure link to upload a corrected copy of your %{proof_type_formatted}: %{secure_upload_url}
           2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
       archived_message: "Unfortunately, you have reached the maximum number of submission attempts for this application. Your application has been archived. You may apply again after %{reapply_date}."
   vendor_notifications:
     w9_rejected:
@@ -618,11 +621,11 @@ en:
         organization: "Maryland Accessible Telecommunications"
         team: "Customer Service Team"
       footer:
-        address: "Maryland Accessible Telecommunications | 123 Main Street, Baltimore, MD 21201"
-        contact_line: "Phone: 555-123-4567 | Email: %{support_email} | Website: mdmat.org"
+        address: "Maryland Accessible Telecommunications | %{office_address}"
+        contact_line: "Phone: 555-123-4567 | Email: %{support_email} | Website: %{program_website_url}"
       page_number: "Page %{page} of %{total}"
       titles:
-        application_notifications_account_created: "Your Maryland Accessible Telecommunications Account"
+        application_notifications_account_created: "We Received Your Maryland Accessible Telecommunications Application"
         application_notifications_registration_confirmation: "Welcome to the Maryland Accessible Telecommunications Program"
         application_notifications_proof_rejected: "Document Verification Follow-up Required"
         application_notifications_id_proof_rejected: "Identification Document Follow-up Required"

@@ -40,11 +40,11 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                         'Text Body: Reminder for %<admin_full_name>s. ' \
                                         '%<stale_reviews_count>s apps need review. %<stale_reviews_text_list>s')
     @mock_account_created = mock_template('Mock Account Created for %<constituent_first_name>s',
-                                          '<p>HTML Body: Welcome %<constituent_first_name>s! Your password is ' \
-                                          '%<temp_password>s. Sign in: %<sign_in_url>s</p>')
+                                          '<p>HTML Body: Welcome %<constituent_first_name>s! ' \
+                                          'Contact %<support_email>s. Website: %<program_website_url>s</p>')
     @mock_account_created_text = mock_template('Mock Account Created for %<constituent_first_name>s',
-                                               'Text Body: Welcome %<constituent_first_name>s! Your password is ' \
-                                               '%<temp_password>s. Sign in: %<sign_in_url>s')
+                                               'Text Body: Welcome %<constituent_first_name>s! ' \
+                                               'Contact %<support_email>s. Website: %<program_website_url>s')
     @mock_income_exceeded = mock_template('Mock Income Threshold Exceeded for %<constituent_first_name>s',
                                           '<p>HTML Body: %<constituent_first_name>s, your income ' \
                                           '%<annual_income_formatted>s exceeds the threshold ' \
@@ -64,6 +64,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                             'No authorized vendors found at this time.')
     @mock_training_requested_text = mock_template('Training Requested for Application #%<application_id>s',
                                                   'Training requested by %<constituent_full_name>s for application %<application_id>s.')
+    @mock_security_key_recovery_text = mock_template('Security Key Recovery Approved',
+                                                     'Recovery approved for %<user_first_name>s. Sign in: %<sign_in_url>s')
     @mock_application_submitted_text = mock_template('Application Submitted',
                                                      'Application submitted for %<constituent_first_name>s.')
   end
@@ -77,6 +79,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(@mock_income_exceeded_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(@mock_registration_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_training_requested', format: :text, locale: 'en').returns(@mock_training_requested_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_security_key_recovery_approved', format: :text, locale: 'en').returns(@mock_security_key_recovery_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_application_submitted', format: :text, locale: 'en').returns(@mock_application_submitted_text)
   end
 
@@ -475,7 +478,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Deliver the email directly with deliver_now instead of deliver_later
     email = nil
     assert_emails 1 do
-      email = ApplicationNotificationsMailer.account_created(constituent, temp_password)
+      email = ApplicationNotificationsMailer.account_created(constituent)
       email.deliver_now
     end
 
@@ -492,8 +495,25 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     # Check the content of the email
     assert_includes email.body.to_s, "Welcome #{constituent.first_name}"
-    assert_includes email.body.to_s, "password is #{temp_password}"
-    assert_includes email.body.to_s, 'http://example.com/users/sign_in' # Check sign_in_url
+    assert_includes email.body.to_s, 'mat.program1@maryland.gov'
+    assert_includes email.body.to_s, ProgramContact.website_url
+    assert_not_includes email.body.to_s, temp_password
+    assert_not_includes email.body.to_s, 'http://example.com/users/sign_in'
+  end
+
+  test 'security_key_recovery_approved includes account access link' do
+    user = create(:constituent, first_name: 'Jane')
+    recovery_request = create(:recovery_request, user: user, status: 'approved')
+    notification = Notification.new(recipient: user, notifiable: recovery_request, action: 'security_key_recovery_approved')
+
+    email = ApplicationNotificationsMailer.security_key_recovery_approved(recovery_request, notification)
+
+    assert_emails 1 do
+      email.deliver_now
+    end
+    assert_equal [user.email], email.to
+    assert_includes email.body.to_s, 'Recovery approved for Jane'
+    assert_includes email.body.to_s, 'http://example.com/users/sign_in'
   end
 
   test 'account_created generates letter when preference is letter' do
@@ -511,13 +531,11 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       state: 'MD',
       zip_code: '21201'
     )
-    temp_password = 'temporary123'
-
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
     Letters::TextTemplateToPdfService.stubs(:new).returns(pdf_service_mock)
 
-    delivery = ApplicationNotificationsMailer.account_created(constituent, temp_password)
+    delivery = ApplicationNotificationsMailer.account_created(constituent)
     assert_no_emails do
       delivery.deliver_now
     end

@@ -1,4 +1,11 @@
 es:
+  password_visibility:
+    status:
+      hidden: "La contraseña está oculta"
+      visible: "La contraseña es visible"
+    toggle:
+      show: "Mostrar contraseña"
+      hide: "Ocultar contraseña"
   activerecord:
     errors:
       models:
@@ -329,15 +336,13 @@ es:
           CÓMO ENVIAR ESTE DOCUMENTO:
           Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           CÓMO ENVIAR ESTE DOCUMENTO:
           1. Use este enlace seguro para subir su %{proof_type_formatted}: %{secure_upload_url}
           2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
     proof_rejected:
       none_provided:
         default: "No se proporcionó la prueba requerida con la solicitud."
@@ -352,15 +357,13 @@ es:
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
           Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
         online: |-
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
           1. Use este enlace seguro para subir una copia corregida de su %{proof_type_formatted}: %{secure_upload_url}
           2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
-             123 Main Street
-             Baltimore, MD 21201
+             %{office_address}
       archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada. Puede volver a solicitar después del %{reapply_date}."
   vendor_notifications:
     w9_rejected:
@@ -463,11 +466,11 @@ es:
         organization: "Telecomunicaciones Accesibles de Maryland"
         team: "Equipo de Servicio al Cliente"
       footer:
-        address: "Telecomunicaciones Accesibles de Maryland | 123 Main Street, Baltimore, MD 21201"
-        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: mdmat.org"
+        address: "Telecomunicaciones Accesibles de Maryland | %{office_address}"
+        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: %{program_website_url}"
       page_number: "Página %{page} de %{total}"
       titles:
-        application_notifications_account_created: "Su cuenta de Telecomunicaciones Accesibles de Maryland"
+        application_notifications_account_created: "Recibimos su solicitud de Telecomunicaciones Accesibles de Maryland"
         application_notifications_registration_confirmation: "Bienvenido al Programa de Telecomunicaciones Accesibles de Maryland"
         application_notifications_proof_rejected: "Se requiere seguimiento para la verificación de documentos"
         application_notifications_id_proof_rejected: "Se requiere seguimiento para el documento de identificación"

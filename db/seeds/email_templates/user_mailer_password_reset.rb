@@ -1,23 +1,22 @@
 # frozen_string_literal: true
 
-# Seed File for "user_mailer_password_reset"
-# (Suggest saving as db/seeds/email_templates/user_mailer_password_reset.rb)
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'user_mailer_password_reset', format: :text, locale: 'en') do |template|
-  template.subject = 'Password Reset Instructions'
-  template.description = 'Sent when a user requests to reset their password. Contains a link to set a new password.'
+  template.subject = 'Account Access Instructions'
+  template.description = 'Sent when a user requests account access or a password reset. Contains a link to set a password.'
   template.body = <<~TEXT
-    Hey there,
+    Hello,
 
-    Can't remember your password for %<user_email>s? That's OK, it happens. Just click the link below to set a new one.
+    We received a request for account access or a password reset for %<user_email>s.
+
+    Use this secure link to set your password and access your account:
 
     %<reset_url>s
 
-    If you did not request a password reset you can safely ignore this email, it expires in 20 minutes. Only someone with access to this email account can reset your password.
+    This link expires in 20 minutes. If you did not request account access, you can safely ignore this email.
 
     ---
 
-    Have questions or need help? Just reply to this email and our support team will help you sort it out.
+    Have questions or need help? Reply to this email and our support team will help.
   TEXT
   template.variables = {
     'required' => %w[user_email reset_url],
