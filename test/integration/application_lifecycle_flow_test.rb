@@ -131,7 +131,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       assert_equal 'approved', application.status
 
-      approved_changes = ApplicationStatusChange.where(application: application, to_status: 'approved').where(change_type: [nil, ''])
+      approved_changes = ApplicationStatusChange.lifecycle.where(application: application, to_status: 'approved')
       assert_equal 1, approved_changes.count
       assert_equal 'auto_approval', approved_changes.first.metadata['trigger']
 
@@ -284,10 +284,10 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_equal 'approved', application.medical_certification_status
       assert_equal 'approved', application.status
 
-      # Exactly 1 ApplicationStatusChange to approved (from reconciler via transition_status!)
-      approved_status_changes = ApplicationStatusChange.where(
+      # Exactly 1 lifecycle ApplicationStatusChange to approved (from reconciler via transition_status!)
+      approved_status_changes = ApplicationStatusChange.lifecycle.where(
         application: application, to_status: 'approved'
-      ).where(change_type: [nil, ''])
+      )
       assert_equal 1, approved_status_changes.count
 
       # Exactly 1 application_status_changed event with trigger: auto_approval
@@ -325,10 +325,10 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       assert_equal 'approved', application.status
 
-      # Exactly 1 ApplicationStatusChange to approved with trigger metadata
-      approved_changes = ApplicationStatusChange.where(
+      # Exactly 1 lifecycle ApplicationStatusChange to approved with trigger metadata
+      approved_changes = ApplicationStatusChange.lifecycle.where(
         application: application, to_status: 'approved'
-      ).where(change_type: [nil, ''])
+      )
       assert_equal 1, approved_changes.count
       assert_equal 'auto_approval', approved_changes.first.metadata['trigger']
 

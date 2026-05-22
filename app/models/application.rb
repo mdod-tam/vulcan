@@ -429,6 +429,7 @@ class Application < ApplicationRecord
       status_changes.create!(
         from_status: old_status,
         to_status: status,
+        change_type: :status,
         user: actor,
         notes: notes,
         metadata: metadata.reverse_merge(

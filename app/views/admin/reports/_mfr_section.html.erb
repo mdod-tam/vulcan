@@ -1,0 +1,61 @@
+<%# MFR Data Section %>
+<section aria-labelledby="mfr-data-heading" class="bg-white rounded-lg shadow p-6 mb-4">
+  <h2 id="mfr-data-heading" class="text-xl font-bold mb-4">MFR Data (Managing for Results)</h2>
+  <p class="text-sm text-indigo-700 mb-4">
+    Official MFR throughput: application <strong>status transitions</strong> during each completed fiscal year.
+    Summary metrics include operational context; the chart shows non-overlapping throughput categories only.
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <% [@mfr_most_recent, @mfr_preceding].each_with_index do |fy_data, index| %>
+      <% heading_id = index.zero? ? 'mfr-most-recent-heading' : 'mfr-preceding-heading' %>
+      <% card_title = index.zero? ? 'Most Recent FY Summary' : 'Preceding FY Summary' %>
+      <div class="bg-gray-50 rounded p-4">
+        <h3 id="<%= heading_id %>" class="font-medium text-gray-700 mb-2"><%= card_title %> (<%= fy_data[:fy_label] %>)</h3>
+        <p class="text-sm text-gray-500 mb-2"><%= fy_data[:fy_period_label] %></p>
+        <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
+          <% fy_data[:summary].each do |label, value| %>
+            <div class="flex justify-between">
+              <dt class="text-sm text-gray-500"><%= label %>:</dt>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="<%= heading_id %>"><%= value %></dd>
+            </div>
+          <% end %>
+        </dl>
+        <table class="mt-4 min-w-full text-sm" aria-labelledby="<%= heading_id %>">
+          <caption class="sr-only">MFR chart categories for <%= fy_data[:fy_label] %></caption>
+          <thead>
+            <tr class="border-b border-gray-200">
+              <th scope="col" class="text-left py-2 pr-4 font-medium text-gray-700">Category</th>
+              <th scope="col" class="text-right py-2 font-medium text-gray-700">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% fy_data[:chart_data].each do |label, count| %>
+              <tr class="border-b border-gray-100">
+                <td class="py-2 pr-4 text-gray-600"><%= label %></td>
+                <td class="py-2 text-right font-medium text-gray-900"><%= count %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </div>
+
+  <p id="mfr-chart-desc" class="sr-only">
+    Compares MFR throughput for <%= @mfr_most_recent[:fy_label] %> and <%= @mfr_preceding[:fy_label] %>.
+  </p>
+  <div class="mt-4 bg-gray-50 rounded p-4">
+    <h3 class="font-medium text-gray-700 mb-2">MFR throughput comparison (events in period)</h3>
+    <div style="position: relative; height: 300px; width: 100%;"
+         data-controller="reports-chart"
+         data-reports-chart-current-data-value="<%= @mfr_chart_data[:current].to_json %>"
+         data-reports-chart-previous-data-value="<%= @mfr_chart_data[:previous].to_json %>"
+         data-reports-chart-current-dataset-label-value="<%= @mfr_most_recent[:fy_label] %>"
+         data-reports-chart-previous-dataset-label-value="<%= @mfr_preceding[:fy_label] %>"
+         data-reports-chart-type-value="horizontalBar"
+         data-reports-chart-title-value="MFR throughput comparison"
+         aria-describedby="mfr-chart-desc">
+    </div>
+  </div>
+</section>

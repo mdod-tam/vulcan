@@ -1,13 +1,11 @@
 /**
- * Minimal Chart.js configuration focused on reliability
- * Ignores test expectations - tests will be rewritten once charts work
+ * Minimal Chart.js configuration focused on reliable fixed-size charts.
  */
 export class ChartConfigService {
-  // Enable responsive charts with explicit container heights
-  // Chart.js will handle resizing automatically when container changes
+  // Fixed-size charts: responsive stays false; containers set explicit height.
   getBaseConfig() {
     return {
-      responsive: true,
+      responsive: false,
       maintainAspectRatio: false
     }
   }

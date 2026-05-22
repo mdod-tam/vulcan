@@ -99,11 +99,11 @@ module Applications
       case params[:date_range]
       when 'current_fy'
         fy = fiscal_year
-        date_range = Date.new(fy, 7, 1)..Date.new(fy + 1, 6, 30)
+        date_range = FiscalYear.time_range(FiscalYear.start_date_for(fy), FiscalYear.end_date_for(fy))
         scope.where(created_at: date_range)
       when 'previous_fy'
         fy = fiscal_year - 1
-        date_range = Date.new(fy, 7, 1)..Date.new(fy + 1, 6, 30)
+        date_range = FiscalYear.time_range(FiscalYear.start_date_for(fy), FiscalYear.end_date_for(fy))
         scope.where(created_at: date_range)
       when 'last_30'
         scope.where(created_at: 30.days.ago.beginning_of_day..)
@@ -181,8 +181,7 @@ module Applications
     end
 
     def fiscal_year
-      current_date = Date.current
-      current_date.month >= 7 ? current_date.year : current_date.year - 1
+      FiscalYear.current_start_year
     end
   end
 end

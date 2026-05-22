@@ -21,7 +21,7 @@ module Users
     scope :needs_evaluation, -> { joins(:applications).where(applications: { status: :approved }) }
     scope :active, -> { where.not(status: %i[withdrawn rejected expired]) }
     scope :ytd, lambda {
-      where(created_at: Date.new(Date.current.year >= 7 ? Date.current.year : Date.current.year - 1, 7, 1)..)
+      where(created_at: FiscalYear.start_date_for(FiscalYear.current_start_year)..)
     }
 
     DISABILITY_TYPES = %w[hearing vision speech mobility cognition].freeze

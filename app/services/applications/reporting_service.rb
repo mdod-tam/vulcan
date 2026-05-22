@@ -30,19 +30,15 @@ module Applications
       failure("Error generating dashboard data: #{e.message}", {})
     end
 
-    # Generate index data for the applications index page
+    # Generate index data for the applications index page (operational cards only; no chart payloads).
     def generate_index_data
       data = {}
 
       add_basic_index_counts(data)
       add_guardian_dependent_index_counts(data)
       add_recent_notifications(data)
-      status_counts = fetch_application_status_counts
       add_proof_review_metrics(data)
       add_training_requests_count(data)
-      add_application_pipeline_data(data, status_counts)
-      add_status_breakdown_data(data, status_counts)
-      add_individual_status_counts(data, status_counts)
 
       success(nil, data)
     rescue StandardError => e
@@ -51,32 +47,124 @@ module Applications
       failure("Error generating index data: #{e.message}", {})
     end
 
+    # B — Snapshot: applications created in current FY cohort, grouped by current status.
+    def generate_index_chart_data
+      start_year = current_fiscal_year
+      fy_start = FiscalYear.start_date_for(start_year)
+      fy_end = FiscalYear.end_date_for(start_year)
+      cohort_end = [Date.current, fy_end].min
+      cohort_range = FiscalYear.time_range(fy_start, cohort_end)
+
+      status_counts = snapshot_status_counts(cohort_range)
+      chart_data = status_counts.transform_keys { |status| status.to_s.humanize }
+
+      success(nil, {
+                current_fy: start_year,
+                current_fy_label: FiscalYear.label_for_start_year(start_year),
+                current_fy_range_label: FiscalYear.cohort_range_label(start_year: start_year, cohort_end_date: cohort_end),
+                status_chart_data: chart_data,
+                status_counts: status_counts
+              })
+    rescue StandardError => e
+      Rails.logger.error "Error generating index chart data: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      failure("Error generating index chart data: #{e.message}", {})
+    end
+
+    # C — MFR throughput: lifecycle status transitions during completed fiscal years.
+    def generate_mfr_reports_data
+      current_start_year = current_fiscal_year
+      most_recent_start_year = current_start_year - 1
+      preceding_start_year = current_start_year - 2
+
+      most_recent = build_mfr_fy_payload(most_recent_start_year)
+      preceding = build_mfr_fy_payload(preceding_start_year)
+
+      success(nil, {
+                most_recent_fy: most_recent,
+                preceding_fy: preceding,
+                mfr_chart_data: {
+                  current: most_recent[:chart_data],
+                  previous: preceding[:chart_data]
+                }
+              })
+    rescue StandardError => e
+      Rails.logger.error "Error generating MFR reports data: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      failure("Error generating MFR reports data: #{e.message}", {})
+    end
+
     private
 
+    def snapshot_status_counts(cohort_range)
+      raw = Application.where(created_at: cohort_range).group(:status).count
+      Application.statuses.keys.index_with do |status_key|
+        raw[status_key] || raw[status_key.to_s] || raw[Application.statuses[status_key]] || 0
+      end.symbolize_keys
+    end
+
+    def build_mfr_fy_payload(fy_start_year)
+      fy_start = FiscalYear.start_date_for(fy_start_year)
+      fy_end = FiscalYear.end_date_for(fy_start_year)
+      event_range = FiscalYear.time_range(fy_start, fy_end)
+      created_range = event_range
+      issued_range = event_range
+
+      summary = {
+        'Applications created during FY' => Application.where(created_at: created_range).count,
+        'Draft to in progress during FY' => lifecycle_transitions(event_range, from_status: 'draft', to_status: 'in_progress'),
+        'Status changed to approved during FY' => lifecycle_transitions(event_range, to_status: 'approved'),
+        'Status changed to rejected during FY' => lifecycle_transitions(event_range, to_status: 'rejected')
+      }
+
+      chart_data = {
+        'Approved (status changed during FY)' => summary['Status changed to approved during FY'],
+        'Rejected (status changed during FY)' => summary['Status changed to rejected during FY'],
+        'Vouchers issued during FY' => Voucher.where(issued_at: issued_range).count
+      }
+
+      {
+        fy_start_year: fy_start_year,
+        fy_label: FiscalYear.label_for_start_year(fy_start_year),
+        fy_period_label: "July 1, #{fy_start_year} to June 30, #{fy_start_year + 1}",
+        summary: summary,
+        chart_data: chart_data
+      }
+    end
+
+    def lifecycle_transitions(range, from_status: nil, to_status: nil)
+      scope = ApplicationStatusChange.lifecycle.where(changed_at: range)
+      scope = scope.where(from_status: from_status) if from_status
+      scope = scope.where(to_status: to_status) if to_status
+      scope.count
+    end
+
     def add_guardian_dependent_metrics(data, start_date, end_date, period_key)
+      period_range = fy_time_range(start_date, end_date)
+
       # Count of guardian users created in the period
       data[:"#{period_key}_guardian_users_count"] =
         User.with_dependents
-            .where(created_at: start_date..end_date)
+            .where(created_at: period_range)
             .count
 
       # Count of dependent users created in the period
       data[:"#{period_key}_dependent_users_count"] =
         User.with_guardians
-            .where(created_at: start_date..end_date)
+            .where(created_at: period_range)
             .count
 
       # Count of applications for dependents (applications where user is a dependent)
       data[:"#{period_key}_dependent_applications_count"] =
         Application.joins(user: :guardian_relationships_as_dependent)
-                   .where(applications: { created_at: start_date..end_date })
+                   .where(applications: { created_at: period_range })
                    .distinct
                    .count
 
       # Count of applications managed by guardians
       data[:"#{period_key}_guardian_managed_applications_count"] =
         Application.where.not(managing_guardian_id: nil)
-                   .where(created_at: start_date..end_date)
+                   .where(created_at: period_range)
                    .count
 
       # Guardian relationship metrics
@@ -90,11 +178,13 @@ module Applications
     end
 
     def calculate_avg_dependents_per_guardian(start_date, end_date)
+      period_range = fy_time_range(start_date, end_date)
+
       # Get count of dependents per guardian who registered in the given period
       # Fix the join reference - use the guardian_user association directly
       guardian_counts = GuardianRelationship
                         .joins(:guardian_user)
-                        .where(users: { created_at: start_date..end_date })
+                        .where(users: { created_at: period_range })
                         .group(:guardian_id)
                         .count
 
@@ -105,11 +195,13 @@ module Applications
     end
 
     def count_guardians_with_multiple_dependents(start_date, end_date)
+      period_range = fy_time_range(start_date, end_date)
+
       # Count guardians who have more than one dependent
       # Fix the join reference - use the guardian_user association directly
       guardian_counts = GuardianRelationship
                         .joins(:guardian_user)
-                        .where(users: { created_at: start_date..end_date })
+                        .where(users: { created_at: period_range })
                         .group(:guardian_id)
                         .count
 
@@ -124,11 +216,6 @@ module Applications
       current_date.month >= 7 ? current_date.year : current_date.year - 1
     end
 
-    def fiscal_year_start
-      year = current_fiscal_year
-      Date.new(year, 7, 1)
-    end
-
     def setup_fiscal_year_data(data)
       data[:current_fy] = current_fiscal_year
       data[:previous_fy] = data[:current_fy] - 1
@@ -140,8 +227,8 @@ module Applications
     end
 
     def add_application_metrics(data)
-      current_range = data[:current_fy_start]..data[:current_fy_end]
-      previous_range = data[:previous_fy_start]..data[:previous_fy_end]
+      current_range = fy_time_range(data[:current_fy_start], data[:current_fy_end])
+      previous_range = fy_time_range(data[:previous_fy_start], data[:previous_fy_end])
 
       data[:current_fy_applications] = Application.where(created_at: current_range).count
       data[:previous_fy_applications] = Application.where(created_at: previous_range).count
@@ -160,8 +247,8 @@ module Applications
     end
 
     def add_voucher_metrics(data)
-      current_range = data[:current_fy_start]..data[:current_fy_end]
-      previous_range = data[:previous_fy_start]..data[:previous_fy_end]
+      current_range = fy_time_range(data[:current_fy_start], data[:current_fy_end])
+      previous_range = fy_time_range(data[:previous_fy_start], data[:previous_fy_end])
 
       data[:current_fy_vouchers] = Voucher.where(created_at: current_range).count
       data[:previous_fy_vouchers] = Voucher.where(created_at: previous_range).count
@@ -180,8 +267,8 @@ module Applications
     end
 
     def add_service_metrics(data)
-      current_range = data[:current_fy_start]..data[:current_fy_end]
-      previous_range = data[:previous_fy_start]..data[:previous_fy_end]
+      current_range = fy_time_range(data[:current_fy_start], data[:current_fy_end])
+      previous_range = fy_time_range(data[:previous_fy_start], data[:previous_fy_end])
 
       # Training sessions
       data[:current_fy_trainings] = TrainingSession.where(created_at: current_range).count
@@ -201,12 +288,9 @@ module Applications
     end
 
     def add_mfr_metrics(data)
-      previous_range = data[:previous_fy_start]..data[:previous_fy_end]
-
-      # MFR Data (previous full fiscal year)
-      data[:mfr_applications_approved] =
-        Application.where(created_at: previous_range, status: :approved).count
-      data[:mfr_vouchers_issued] = Voucher.where(created_at: previous_range).count
+      payload = build_mfr_fy_payload(data[:previous_fy])
+      data[:mfr_applications_approved] = payload[:summary]['Status changed to approved during FY']
+      data[:mfr_vouchers_issued] = payload[:chart_data]['Vouchers issued during FY']
     end
 
     def build_chart_data(data)
@@ -220,9 +304,9 @@ module Applications
     def build_applications_chart_data(data)
       data[:applications_chart_data] = {
         current: { 'Applications' => data[:current_fy_applications],
-                   'Draft Applications' => data[:current_fy_draft_and_needs_info_applications] },
+                   'Draft / Needs Info' => data[:current_fy_draft_and_needs_info_applications] },
         previous: { 'Applications' => data[:previous_fy_applications],
-                    'Draft Applications' => data[:previous_fy_draft_and_needs_info_applications] }
+                    'Draft / Needs Info' => data[:previous_fy_draft_and_needs_info_applications] }
       }
     end
 
@@ -245,10 +329,10 @@ module Applications
     end
 
     def build_mfr_chart_data(data)
+      most_recent = build_mfr_fy_payload(data[:previous_fy])
       data[:mfr_chart_data] = {
-        current: { 'Applications Approved' => data[:mfr_applications_approved],
-                   'Vouchers Issued' => data[:mfr_vouchers_issued] },
-        previous: { 'Applications Approved' => 0, 'Vouchers Issued' => 0 } # Empty for comparison
+        current: most_recent[:chart_data],
+        previous: {}
       }
     end
 
@@ -281,7 +365,7 @@ module Applications
     def add_basic_index_counts(data)
       data[:current_fiscal_year] = current_fiscal_year
       data[:total_users_count] = User.count
-      data[:ytd_constituents_count] = Application.where(created_at: fiscal_year_start..).count
+      data[:ytd_constituents_count] = Application.where(created_at: current_fy_ytd_range).count
       data[:open_applications_count] = Application.active.count
       data[:pending_services_count] = Application.where(status: :approved).count
     end
@@ -307,12 +391,6 @@ module Applications
       data[:recent_notifications] = notifications
     end
 
-    def fetch_application_status_counts
-      status_counts = Application.group(:status).count
-      status_counts.default = 0 # Ensure keys exist even if count is 0
-      status_counts
-    end
-
     def add_proof_review_metrics(data)
       data[:proofs_needing_review_count] = Application.with_proofs_needing_review.distinct.count
 
@@ -326,83 +404,13 @@ module Applications
       data[:training_requests_count] = Application.with_pending_training_request.count
     end
 
-    def status_count_helper(counts, status_key)
-      status_int = Application.statuses[status_key]
-      status_str = status_int.to_s
-      counts[status_str].to_i + counts[status_int].to_i + counts[status_key.to_s].to_i
+    def fy_time_range(start_date, end_date)
+      FiscalYear.time_range(start_date, end_date)
     end
 
-    def add_application_pipeline_data(data, status_counts)
-      draft_count = status_count_helper(status_counts, :draft)
-      needs_info_count = status_count_helper(status_counts, :awaiting_proof)
-      draft_and_needs_info_count = draft_count + needs_info_count
-      submitted_count = status_count_helper(status_counts, :submitted)
-      in_review_count = status_count_helper(status_counts, :in_review)
-      approved_count = status_count_helper(status_counts, :approved)
-      rejected_count = status_count_helper(status_counts, :rejected)
-
-      total_submitted_or_later = submitted_count + in_review_count + approved_count + rejected_count # Approximation
-      total_in_review_or_later = in_review_count + approved_count + rejected_count # Approximation
-
-      data[:pipeline_chart_data] = {
-        'Draft' => draft_count, # For test compatibility
-        'Submitted' => total_submitted_or_later, # Represents apps that passed draft
-        'In Review' => total_in_review_or_later, # Represents apps that passed submission
-        'Approved' => approved_count
-      }
-
-      data[:combined_pipeline_chart_data] = {
-        'Draft' => draft_and_needs_info_count,
-        'Submitted' => total_submitted_or_later,
-        'In Review' => total_in_review_or_later,
-        'Approved' => approved_count
-      }
-    end
-
-    def add_status_breakdown_data(data, status_counts)
-      draft_count = status_count_helper(status_counts, :draft)
-      needs_info_count = status_count_helper(status_counts, :awaiting_proof)
-      draft_and_needs_info_count = draft_count + needs_info_count
-      submitted_count = status_count_helper(status_counts, :submitted)
-      in_review_count = status_count_helper(status_counts, :in_review)
-      approved_count = status_count_helper(status_counts, :approved)
-      rejected_count = status_count_helper(status_counts, :rejected)
-
-      in_progress_combined_count = submitted_count + in_review_count # Combine for 'In Progress'
-
-      data[:status_chart_data] = {
-        'Draft' => draft_count, # For test compatibility
-        'In Progress' => in_progress_combined_count,
-        'Approved' => approved_count,
-        'Rejected' => rejected_count
-      }
-
-      data[:combined_status_chart_data] = {
-        'Draft' => draft_and_needs_info_count,
-        'In Progress' => in_progress_combined_count,
-        'Approved' => approved_count,
-        'Rejected' => rejected_count
-      }
-    end
-
-    def add_individual_status_counts(data, status_counts)
-      draft_count = status_count_helper(status_counts, :draft)
-      needs_info_count = status_count_helper(status_counts, :awaiting_proof)
-      draft_and_needs_info_count = draft_count + needs_info_count
-      submitted_count = status_count_helper(status_counts, :submitted)
-      in_review_count = status_count_helper(status_counts, :in_review)
-      approved_count = status_count_helper(status_counts, :approved)
-      rejected_count = status_count_helper(status_counts, :rejected)
-
-      in_progress_combined_count = submitted_count + in_review_count # Combine for 'In Progress'
-
-      data[:draft_count] = draft_count
-      data[:draft_and_needs_info_count] = draft_and_needs_info_count
-      data[:submitted_count] = submitted_count
-      data[:in_review_count] = in_review_count
-      data[:approved_count] = approved_count
-      data[:rejected_count] = rejected_count
-      data[:in_progress_count] = in_progress_combined_count # Keep for consistency if used directly
+    def current_fy_ytd_range
+      fy_start = FiscalYear.start_date_for(current_fiscal_year)
+      FiscalYear.time_range(fy_start, Date.current)
     end
   end
 end

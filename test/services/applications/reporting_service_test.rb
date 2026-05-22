@@ -77,10 +77,12 @@ module Applications
       previous_fy_start = Date.new(current_fy_year - 1, 7, 1)
 
       # Get initial counts from the database before adding our test data
-      initial_current_fy_count = Application.where(created_at: current_fy_start..Date.new(current_fy_year + 1, 6, 30)).count
-      initial_previous_fy_count = Application.where(created_at: previous_fy_start..Date.new(current_fy_year, 6, 30)).count
-      initial_draft_count = Application.where(status: :draft, created_at: current_fy_start..Date.new(current_fy_year + 1, 6, 30)).count
-      initial_prev_draft_count = Application.where(status: :draft, created_at: previous_fy_start..Date.new(current_fy_year, 6, 30)).count
+      current_fy_range = FiscalYear.time_range(current_fy_start, Date.new(current_fy_year + 1, 6, 30))
+      previous_fy_range = FiscalYear.time_range(previous_fy_start, Date.new(current_fy_year, 6, 30))
+      initial_current_fy_count = Application.where(created_at: current_fy_range).count
+      initial_previous_fy_count = Application.where(created_at: previous_fy_range).count
+      initial_draft_count = Application.where(status: :draft, created_at: current_fy_range).count
+      initial_prev_draft_count = Application.where(status: :draft, created_at: previous_fy_range).count
 
       # Create applications with specific statuses and dates for reporting tests using unique users
       # 1 Draft application
@@ -277,8 +279,10 @@ module Applications
         assert data[:mfr_chart_data].present?
 
         # Count applications in the current and previous fiscal years
-        current_fy_test_apps = test_applications.where(created_at: data[:current_fy_start]..data[:current_fy_end]).count
-        prev_fy_test_apps = test_applications.where(created_at: data[:previous_fy_start]..data[:previous_fy_end]).count
+        current_fy_range = FiscalYear.time_range(data[:current_fy_start], data[:current_fy_end])
+        previous_fy_range = FiscalYear.time_range(data[:previous_fy_start], data[:previous_fy_end])
+        current_fy_test_apps = test_applications.where(created_at: current_fy_range).count
+        prev_fy_test_apps = test_applications.where(created_at: previous_fy_range).count
 
         # We should have 5 applications in the current fiscal year and 1 in the previous
         assert_equal 5, current_fy_test_apps
@@ -456,17 +460,8 @@ module Applications
         assert_equal created_applications.length, found_count,
                      'Not all created applications were found in the database'
 
-        # NOTE: The actual business logic in the service may calculate numbers differently than our
-        # raw database counts. For example, it might exclude certain applications based on other criteria
-        # or it might combine multiple statuses. This is okay and expected - don't test the specifics.
-        # Only verify the data structure is correct (not the exact counts)
-        assert data[:pipeline_chart_data].is_a?(Hash), 'Pipeline chart data should be a hash'
-        assert data[:status_chart_data].is_a?(Hash), 'Status chart data should be a hash'
-        assert data[:combined_pipeline_chart_data].is_a?(Hash), 'Combined pipeline chart data should be a hash'
-        assert data[:combined_status_chart_data].is_a?(Hash), 'Combined status chart data should be a hash'
-
-        # Test passes if the raw database counts are correct, which tests that the records were
-        # created successfully, without making assertions about the presentation layer logic
+        assert_not data.key?(:pipeline_chart_data), 'Index data should not include chart payloads'
+        assert_not data.key?(:status_chart_data), 'Index data should not include chart payloads'
       end
     end
 
@@ -553,6 +548,171 @@ module Applications
 
       assert result.success?
       assert_equal 1, result.data[:training_requests_count]
+    end
+
+    test 'generate_index_chart_data cohort includes June 30 end-of-day and excludes July 1' do
+      travel_to Time.zone.local(2026, 6, 30, 12, 0, 0) do
+        baseline = ReportingService.new.generate_index_chart_data.data[:status_counts].symbolize_keys[:draft] || 0
+        fy_boundary = Time.zone.local(2026, 6, 30, 23, 59, 59)
+        next_fy_start = Time.zone.local(2026, 7, 1, 0, 0, 0)
+
+        create(:application,
+               user: create(:constituent, email: "chart_b_jun30_#{Time.now.to_i}@example.com"),
+               status: :draft,
+               created_at: fy_boundary)
+        create(:application,
+               user: create(:constituent, email: "chart_b_jul1_#{Time.now.to_i}@example.com"),
+               status: :draft,
+               created_at: next_fy_start)
+
+        counts = ReportingService.new.generate_index_chart_data.data[:status_counts].symbolize_keys
+        assert_equal baseline + 1, counts[:draft]
+      end
+    end
+
+    test 'generate_mfr_reports_data counts approved transitions on June 30 and excludes July 1' do
+      travel_to Time.zone.local(2026, 8, 1, 12, 0, 0) do
+        admin = create(:admin)
+        jun30 = Time.zone.local(2026, 6, 30, 23, 59, 59)
+        jul1 = Time.zone.local(2026, 7, 1, 0, 0, 0)
+
+        in_fy_app = create(:application, :draft)
+        in_fy_app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
+        in_fy_app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
+        ApplicationStatusChange.lifecycle.find_by(application: in_fy_app, to_status: 'approved')
+                               .update!(changed_at: jun30)
+
+        out_fy_app = create(:application, :draft)
+        out_fy_app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
+        out_fy_app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
+        ApplicationStatusChange.lifecycle.find_by(application: out_fy_app, to_status: 'approved')
+                               .update!(changed_at: jul1)
+
+        most_recent = ReportingService.new.generate_mfr_reports_data.data[:most_recent_fy]
+        assert_equal 1, most_recent[:summary]['Status changed to approved during FY']
+      end
+    end
+
+    test 'generate_mfr_reports_data excludes cert and proof status-change rows from approved throughput' do
+      travel_to Date.new(2026, 8, 1) do
+        admin = create(:admin)
+        in_fy = Time.zone.local(2025, 10, 1, 12, 0, 0)
+
+        cert_only = create(:application, status: :approved, created_at: in_fy)
+        ApplicationStatusChange.create!(
+          application: cert_only,
+          from_status: 'in_progress',
+          to_status: 'approved',
+          change_type: :medical_certification,
+          changed_at: in_fy + 1.day,
+          user: admin
+        )
+        ApplicationStatusChange.create!(
+          application: cert_only,
+          from_status: 'in_progress',
+          to_status: 'approved',
+          change_type: :proof,
+          changed_at: in_fy + 2.days,
+          user: admin
+        )
+
+        app = create(:application, :draft, created_at: in_fy)
+        app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
+        app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
+        ApplicationStatusChange.lifecycle.find_by(application: app, to_status: 'approved')
+                               .update!(changed_at: in_fy + 3.days)
+
+        ApplicationStatusChange.create!(
+          application: app,
+          from_status: 'approved',
+          to_status: 'approved',
+          change_type: :medical_certification,
+          changed_at: in_fy + 4.days,
+          user: admin
+        )
+
+        most_recent = ReportingService.new.generate_mfr_reports_data.data[:most_recent_fy]
+        assert_equal 1, most_recent[:summary]['Status changed to approved during FY']
+
+        dashboard = ReportingService.new.generate_dashboard_data
+        assert dashboard.success?
+        assert_equal 1, dashboard.data[:mfr_applications_approved]
+        assert_equal dashboard.data[:mfr_applications_approved],
+                     dashboard.data[:mfr_chart_data][:current]['Approved (status changed during FY)']
+      end
+    end
+
+    test 'generate_index_chart_data returns zero-filled status keys for FY cohort' do
+      travel_to Date.new(2026, 5, 19) do
+        fy_start = Date.new(2025, 7, 1)
+        baseline = ReportingService.new.generate_index_chart_data.data[:status_counts].symbolize_keys
+
+        user = create(:constituent, email: "chart_b_#{Time.now.to_i}@example.com")
+        create(:application, user: user, status: :draft, created_at: fy_start + 1.day)
+        create(:application, user: create(:constituent, email: "chart_b2_#{Time.now.to_i}@example.com"),
+                             status: :approved, created_at: fy_start + 2.days)
+        create(:application, user: create(:constituent, email: "chart_b_old_#{Time.now.to_i}@example.com"),
+                             status: :approved, created_at: fy_start - 1.day)
+
+        result = ReportingService.new.generate_index_chart_data
+        assert result.success?
+
+        data = result.data
+        counts = data[:status_counts].symbolize_keys
+        assert_equal Application.statuses.keys.map(&:to_sym).sort, counts.keys.map(&:to_sym).sort
+        assert_equal baseline[:draft] + 1, counts[:draft]
+        assert_equal baseline[:approved] + 1, counts[:approved]
+        assert_match(/FY26/, data[:current_fy_label])
+        assert_match(/YTD/, data[:current_fy_range_label])
+        assert_equal counts[:draft], data[:status_chart_data]['Draft']
+      end
+    end
+
+    test 'generate_mfr_reports_data uses lifecycle changed_at not created_at approval' do
+      travel_to Date.new(2026, 8, 1) do
+        admin = create(:admin)
+        in_fy = Date.new(2025, 8, 1)
+
+        app = create(:application, :draft, created_at: in_fy)
+        app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
+        status_change = ApplicationStatusChange.lifecycle.find_by(application: app, to_status: 'in_progress')
+        status_change.update!(changed_at: in_fy + 2.days)
+
+        app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
+        approved_change = ApplicationStatusChange.lifecycle.find_by(application: app, to_status: 'approved')
+        approved_change.update!(changed_at: in_fy + 3.days)
+
+        result = ReportingService.new.generate_mfr_reports_data
+        assert result.success?
+
+        most_recent = result.data[:most_recent_fy]
+        assert_equal 1, most_recent[:summary]['Draft to in progress during FY']
+        assert_equal 1, most_recent[:summary]['Status changed to approved during FY']
+        assert_equal most_recent[:chart_data]['Approved (status changed during FY)'],
+                     most_recent[:summary]['Status changed to approved during FY']
+      end
+    end
+
+    test 'generate_mfr_reports_data counts vouchers by issued_at rather than created_at' do
+      travel_to Date.new(2026, 8, 1) do
+        baseline = ReportingService.new.generate_mfr_reports_data
+                                   .data[:most_recent_fy][:chart_data]['Vouchers issued during FY']
+
+        create(:voucher,
+               application: create(:application, :approved),
+               created_at: Time.zone.local(2024, 8, 1, 12, 0, 0),
+               issued_at: Time.zone.local(2025, 8, 1, 12, 0, 0))
+        create(:voucher,
+               application: create(:application, :approved),
+               created_at: Time.zone.local(2025, 8, 1, 12, 0, 0),
+               issued_at: Time.zone.local(2026, 7, 1, 0, 0, 0))
+
+        result = ReportingService.new.generate_mfr_reports_data
+        assert result.success?
+
+        most_recent = result.data[:most_recent_fy]
+        assert_equal baseline + 1, most_recent[:chart_data]['Vouchers issued during FY']
+      end
     end
 
     private
