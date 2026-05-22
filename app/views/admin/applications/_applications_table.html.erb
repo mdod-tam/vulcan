@@ -134,17 +134,11 @@
               <div class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900"
                    aria-label="<%= secure_request_summary_accessible_label(provider_info_summary) %>">
                 <div class="font-medium"><%= t('admin.applications.secure_request_forms.summary.label') %></div>
-                <% if provider_info_summary[:recipient_count].zero? %>
-                  <div class="text-amber-800"><%= t('admin.applications.secure_request_forms.summary.none') %></div>
-                <% else %>
-                  <div class="text-amber-800"><%= secure_request_summary_recipient_count(provider_info_summary) %></div>
-                  <div class="text-amber-800"><%= secure_request_summary_status_counts(provider_info_summary) %></div>
-                  <% if (sent_text = secure_request_summary_sent_text(provider_info_summary)) %>
-                    <div class="text-amber-800"><%= sent_text %></div>
-                  <% end %>
-                  <% if (expiration_text = secure_request_summary_expiration_text(provider_info_summary)) %>
-                    <div class="text-amber-800"><%= expiration_text %></div>
-                  <% end %>
+                <% if (sent_text = secure_request_summary_sent_text(provider_info_summary)) %>
+                  <div class="text-amber-800"><%= sent_text %></div>
+                <% end %>
+                <% if (expiration_text = secure_request_summary_expiration_text(provider_info_summary)) %>
+                  <div class="text-amber-800"><%= expiration_text %></div>
                 <% end %>
               </div>
             <% end %>

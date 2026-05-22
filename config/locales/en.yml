@@ -304,6 +304,7 @@ en:
   date:
     formats:
       long: "%B %d, %Y"
+      month_day: "%B %-d"
   document_signing:
     medical_certification_request:
       submission_name: "Medical Certification - %{constituent_full_name} (Application %{application_id})"
@@ -400,14 +401,11 @@ en:
           no_actions: "No actions"
           empty: "No secure provider information requests have been sent."
         summary:
-          label: "Pending provider info"
-          none: "No secure request sent"
-          recipients:
-            one: "1 recipient"
-            other: "%{count} recipients"
-          status_counts: "%{active} active, %{submitted} submitted, %{expired} expired, %{revoked} revoked"
+          label: "Provider info requested"
           last_sent: "Sent %{time}"
           nearest_expiration: "Expires %{time}"
+          expired: "Expired"
+          revoked: "Revoked"
       secure_request_form_revocations:
         create:
           success: "Secure link revoked."

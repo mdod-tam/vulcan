@@ -193,14 +193,11 @@ es:
           no_actions: "Sin acciones"
           empty: "No se han enviado solicitudes seguras de información del proveedor."
         summary:
-          label: "Información del proveedor pendiente"
-          none: "No se ha enviado ninguna solicitud segura"
-          recipients:
-            one: "1 destinatario"
-            other: "%{count} destinatarios"
-          status_counts: "%{active} activos, %{submitted} enviados, %{expired} vencidos, %{revoked} revocados"
+          label: "Información del proveedor solicitada"
           last_sent: "Enviado %{time}"
           nearest_expiration: "Vence %{time}"
+          expired: "Vencido"
+          revoked: "Revocado"
       secure_request_form_revocations:
         create:
           success: "Enlace seguro revocado."
@@ -426,6 +423,7 @@ es:
   date:
     formats:
       long: "%d de %B de %Y"
+      month_day: "%-d de %B"
     month_names:
       - ~
       - enero

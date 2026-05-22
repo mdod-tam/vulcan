@@ -30,29 +30,113 @@ module Admin
     end
 
     test 'index shows compact provider info request summary for pending applications' do
-      pending_application = create(:application, :with_residency_proof, :with_id_proof)
-      pending_application.update!(
-        residency_proof_status: :approved,
-        id_proof_status: :approved,
-        income_proof_required: false,
-        status: :awaiting_proof,
-        medical_provider_name: nil
-      )
-      batch_id = SecureRandom.uuid
-      create(:secure_request_form, application: pending_application, recipient: pending_application.user,
-                                   request_batch_id: batch_id)
-      create(:secure_request_form, :submitted, application: pending_application, recipient: create(:constituent),
-                                               request_batch_id: batch_id)
+      travel_to Time.zone.local(2026, 5, 22, 15, 43) do
+        pending_application = create_pending_provider_info_application
+        batch_id = SecureRandom.uuid
+        expires_at = 2.days.from_now
+        create(:secure_request_form, application: pending_application, recipient: pending_application.user,
+                                     request_batch_id: batch_id,
+                                     sent_at: Time.current,
+                                     expires_at: expires_at)
+        create(:secure_request_form, :submitted, application: pending_application, recipient: create(:constituent),
+                                                 request_batch_id: batch_id,
+                                                 sent_at: Time.current,
+                                                 expires_at: expires_at)
+
+        get admin_applications_path(filter: 'pending_provider_info')
+
+        assert_response :success
+        assert_select "tr#application_#{pending_application.id}" do
+          assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label')
+          assert_select 'div', text: provider_info_summary_sent_text(Time.current)
+          assert_select 'div', text: provider_info_summary_expires_text(expires_at)
+          assert_select 'div', text: '2 recipients', count: 0
+          assert_select 'div', text: '1 active, 1 submitted, 0 expired, 0 revoked', count: 0
+        end
+      end
+    end
+
+    test 'index hides provider info request summary when no secure link was sent' do
+      pending_application = create_pending_provider_info_application
 
       get admin_applications_path(filter: 'pending_provider_info')
 
       assert_response :success
       assert_select "tr#application_#{pending_application.id}" do
-        assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label')
-        assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.recipients', count: 2)
-        assert_select 'div',
-                      text: I18n.t('admin.applications.secure_request_forms.summary.status_counts',
-                                   active: 1, submitted: 1, expired: 0, revoked: 0)
+        assert_select 'span', text: 'Requested'
+        assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label'), count: 0
+      end
+    end
+
+    test 'index shows recently expired provider info request summary' do
+      travel_to Time.zone.local(2026, 5, 22, 15, 43) do
+        pending_application = create_pending_provider_info_application
+        sent_at = provider_info_link_ttl_hours.hours.ago
+        create(:secure_request_form, application: pending_application, recipient: pending_application.user,
+                                     sent_at: sent_at,
+                                     expires_at: provider_info_recent_link_offset.ago)
+
+        get admin_applications_path(filter: 'pending_provider_info')
+
+        assert_response :success
+        assert_select "tr#application_#{pending_application.id}" do
+          assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label')
+          assert_select 'div', text: provider_info_summary_sent_text(sent_at)
+          assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.expired')
+        end
+      end
+    end
+
+    test 'index hides stale expired provider info request summary' do
+      travel_to Time.zone.local(2026, 5, 22, 15, 43) do
+        pending_application = create_pending_provider_info_application
+        create(:secure_request_form, application: pending_application, recipient: pending_application.user,
+                                     sent_at: (provider_info_link_ttl_hours + 2).hours.ago,
+                                     expires_at: (provider_info_link_ttl_hours + 1).hours.ago)
+
+        get admin_applications_path(filter: 'pending_provider_info')
+
+        assert_response :success
+        assert_select "tr#application_#{pending_application.id}" do
+          assert_select 'span', text: 'Requested'
+          assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label'), count: 0
+        end
+      end
+    end
+
+    test 'index shows recently revoked provider info request summary' do
+      travel_to Time.zone.local(2026, 5, 22, 15, 43) do
+        pending_application = create_pending_provider_info_application
+        sent_at = 2.hours.ago
+        create(:secure_request_form, :revoked, application: pending_application, recipient: pending_application.user,
+                                               sent_at: sent_at,
+                                               revoked_at: provider_info_recent_link_offset.ago)
+
+        get admin_applications_path(filter: 'pending_provider_info')
+
+        assert_response :success
+        assert_select "tr#application_#{pending_application.id}" do
+          assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label')
+          assert_select 'div', text: provider_info_summary_sent_text(sent_at)
+          assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.revoked')
+        end
+      end
+    end
+
+    test 'index hides stale revoked provider info request summary' do
+      travel_to Time.zone.local(2026, 5, 22, 15, 43) do
+        pending_application = create_pending_provider_info_application
+        create(:secure_request_form, :revoked, application: pending_application, recipient: pending_application.user,
+                                               sent_at: (provider_info_link_ttl_hours + 2).hours.ago,
+                                               revoked_at: (provider_info_link_ttl_hours + 1).hours.ago)
+
+        get admin_applications_path(filter: 'pending_provider_info')
+
+        assert_response :success
+        assert_select "tr#application_#{pending_application.id}" do
+          assert_select 'span', text: 'Requested'
+          assert_select 'div', text: I18n.t('admin.applications.secure_request_forms.summary.label'), count: 0
+        end
       end
     end
 
@@ -334,8 +418,8 @@ module Admin
       RejectionReason.where(code: 'missing_name', proof_type: 'income', locale: 'en').destroy_all
       RejectionReason.where(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en').destroy_all
 
-      income_reason = RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
-      medical_reason = RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
+      RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
+      RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
 
       get admin_application_path(@application)
       assert_response :success
@@ -566,6 +650,41 @@ module Admin
 
       assert_response :unprocessable_content
       assert_equal 'Unable to reject applications', response.parsed_body['error']
+    end
+
+    private
+
+    def create_pending_provider_info_application
+      create(:application, :with_residency_proof, :with_id_proof).tap do |application|
+        application.update!(
+          residency_proof_status: :approved,
+          id_proof_status: :approved,
+          income_proof_required: false,
+          status: :awaiting_proof,
+          medical_certification_status: :requested,
+          medical_provider_name: nil,
+          medical_provider_phone: nil,
+          medical_provider_email: nil
+        )
+      end
+    end
+
+    def provider_info_link_ttl_hours
+      Policy.get('secure_form_link_expiration_hours') || 48
+    end
+
+    def provider_info_recent_link_offset
+      (provider_info_link_ttl_hours / 2.0).hours
+    end
+
+    def provider_info_summary_sent_text(time)
+      I18n.t('admin.applications.secure_request_forms.summary.last_sent',
+             time: I18n.l(time.to_date, format: :month_day))
+    end
+
+    def provider_info_summary_expires_text(time)
+      I18n.t('admin.applications.secure_request_forms.summary.nearest_expiration',
+             time: I18n.l(time.to_date, format: :month_day))
     end
   end
 end

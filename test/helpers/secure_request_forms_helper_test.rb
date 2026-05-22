@@ -1,0 +1,54 @@
+# frozen_string_literal: true
+
+require 'test_helper'
+
+class SecureRequestFormsHelperTest < ActionView::TestCase
+  include SecureRequestFormsHelper
+
+  test 'summary copy uses date-only sent and expiration details' do
+    summary = {
+      summary_status: :active,
+      last_sent_at: Time.zone.local(2026, 5, 22, 15, 43),
+      nearest_expiration_at: Time.zone.local(2026, 5, 24, 15, 43)
+    }
+
+    assert_equal 'Sent May 22', secure_request_summary_sent_text(summary)
+    assert_equal 'Expires May 24', secure_request_summary_expiration_text(summary)
+    assert_equal 'Provider info requested. Sent May 22. Expires May 24.',
+                 secure_request_summary_accessible_label(summary)
+  end
+
+  test 'summary copy shows expired instead of an expired timestamp' do
+    summary = {
+      summary_status: :expired,
+      last_sent_at: Time.zone.local(2026, 5, 22, 15, 43),
+      nearest_expiration_at: Time.zone.local(2026, 5, 24, 15, 43)
+    }
+
+    assert_equal 'Expired', secure_request_summary_expiration_text(summary)
+    assert_equal 'Provider info requested. Sent May 22. Expired.',
+                 secure_request_summary_accessible_label(summary)
+  end
+
+  test 'summary copy shows revoked for recently revoked requests' do
+    summary = {
+      summary_status: :revoked,
+      last_sent_at: Time.zone.local(2026, 5, 22, 15, 43),
+      nearest_expiration_at: nil
+    }
+
+    assert_equal 'Revoked', secure_request_summary_expiration_text(summary)
+    assert_equal 'Provider info requested. Sent May 22. Revoked.',
+                 secure_request_summary_accessible_label(summary)
+  end
+
+  test 'summary copy omits expiration text when status is not visible' do
+    summary = {
+      summary_status: nil,
+      last_sent_at: Time.zone.local(2026, 5, 22, 15, 43),
+      nearest_expiration_at: nil
+    }
+
+    assert_nil secure_request_summary_expiration_text(summary)
+  end
+end

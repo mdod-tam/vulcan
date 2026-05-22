@@ -29,28 +29,11 @@ module SecureRequestFormsHelper
     t("admin.applications.secure_request_forms.statuses.#{secure_request_form.display_status}")
   end
 
-  def secure_request_summary_recipient_count(summary)
-    t('admin.applications.secure_request_forms.summary.recipients',
-      count: summary.fetch(:recipient_count))
-  end
-
-  def secure_request_summary_status_counts(summary)
-    counts = summary.fetch(:status_counts)
-    t('admin.applications.secure_request_forms.summary.status_counts',
-      active: counts.fetch(:active),
-      submitted: counts.fetch(:submitted),
-      expired: counts.fetch(:expired),
-      revoked: counts.fetch(:revoked))
-  end
-
   def secure_request_summary_accessible_label(summary)
     label = t('admin.applications.secure_request_forms.summary.label')
-    return "#{label}. #{t('admin.applications.secure_request_forms.summary.none')}." if summary.fetch(:recipient_count).zero?
 
     segments = [
       label,
-      secure_request_summary_recipient_count(summary),
-      secure_request_summary_status_counts(summary),
       secure_request_summary_sent_text(summary),
       secure_request_summary_expiration_text(summary)
     ].compact
@@ -61,14 +44,21 @@ module SecureRequestFormsHelper
     return if summary[:last_sent_at].blank?
 
     t('admin.applications.secure_request_forms.summary.last_sent',
-      time: l(summary.fetch(:last_sent_at), format: :short))
+      time: secure_request_summary_date(summary.fetch(:last_sent_at)))
   end
 
   def secure_request_summary_expiration_text(summary)
-    return if summary[:nearest_expiration_at].blank?
+    case summary[:summary_status]&.to_sym
+    when :active
+      return if summary[:nearest_expiration_at].blank?
 
-    t('admin.applications.secure_request_forms.summary.nearest_expiration',
-      time: l(summary.fetch(:nearest_expiration_at), format: :short))
+      t('admin.applications.secure_request_forms.summary.nearest_expiration',
+        time: secure_request_summary_date(summary.fetch(:nearest_expiration_at)))
+    when :expired
+      t('admin.applications.secure_request_forms.summary.expired')
+    when :revoked
+      t('admin.applications.secure_request_forms.summary.revoked')
+    end
   end
 
   def secure_request_masked_email(email)
@@ -132,6 +122,10 @@ module SecureRequestFormsHelper
   alias secure_request_revocation_event_detail secure_request_lifecycle_event_detail
 
   private
+
+  def secure_request_summary_date(time)
+    l(time.to_date, format: :month_day)
+  end
 
   def secure_request_notification_expires_text(metadata)
     expires_at = metadata['expires_at']
