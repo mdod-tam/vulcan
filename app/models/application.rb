@@ -369,7 +369,9 @@ class Application < ApplicationRecord
 
   # Instance Methods
   def skip_medical_provider_validation?
-    status_draft? || status_awaiting_proof?
+    status_draft? ||
+      status_awaiting_proof? ||
+      ((status_awaiting_dcf? || medical_certification_status_approved?) && missing_required_provider_info?)
   end
 
   def missing_required_provider_info?
@@ -429,7 +431,6 @@ class Application < ApplicationRecord
       status_changes.create!(
         from_status: old_status,
         to_status: status,
-        change_type: :status,
         user: actor,
         notes: notes,
         metadata: metadata.reverse_merge(
@@ -453,6 +454,11 @@ class Application < ApplicationRecord
           notes: notes
         )
       )
+
+      if target_status == 'approved' && voucher_fulfillment?
+        assignment_method = metadata[:trigger].to_s == 'auto_approval' ? 'automatic' : 'manual_approval'
+        IssueInitialVoucherJob.perform_later(id, actor.id, assignment_method)
+      end
 
       true
     end
@@ -614,10 +620,7 @@ class Application < ApplicationRecord
   end
 
   def voucher_issuable?
-    voucher_fulfillment? &&
-      status_approved? &&
-      medical_certification_status_approved? &&
-      !vouchers.exists?
+    can_create_voucher?
   end
 
   def active_training_session

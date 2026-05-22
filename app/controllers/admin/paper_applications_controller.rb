@@ -63,13 +63,20 @@ module Admin
 
       if service_result
         success_message = generate_success_message(service.application)
-        success_message += " #{service.reconciliation_note}" if service.reconciliation_note.present?
-        handle_success_response(
-          html_redirect_path: admin_application_path(service.application),
-          html_message: success_message,
-          turbo_message: success_message,
-          turbo_redirect_path: admin_application_path(service.application)
-        )
+        if service.reconciliation_note.present?
+          handle_reconciliation_warning_response(
+            application: service.application,
+            success_message: success_message,
+            warning_message: service.reconciliation_note
+          )
+        else
+          handle_success_response(
+            html_redirect_path: admin_application_path(service.application),
+            html_message: success_message,
+            turbo_message: success_message,
+            turbo_redirect_path: admin_application_path(service.application)
+          )
+        end
       else
         Rails.logger.info "[PaperApplicationsController] Handling service failure, request format: #{request.format}"
 
@@ -102,20 +109,20 @@ module Admin
 
       if service.update(application)
         update_message = generate_success_message(application)
-        handle_success_response(
-          html_redirect_path: admin_application_path(application),
-          html_message: update_message,
-          turbo_message: update_message,
-          turbo_redirect_path: admin_application_path(application)
-        )
-      elsif service.application&.persisted? && service.errors.any? { |e| e.include?('Workflow status update failed') }
-        # If the application was updated but reconciliation failed, redirect to the application
-        # with an alert instead of re-rendering the form.
-        error_msg = service.errors.join('; ')
-        handle_error_response(
-          html_redirect_path: admin_application_path(service.application),
-          error_message: error_msg
-        )
+        if service.reconciliation_note.present?
+          handle_reconciliation_warning_response(
+            application: application,
+            success_message: update_message,
+            warning_message: service.reconciliation_note
+          )
+        else
+          handle_success_response(
+            html_redirect_path: admin_application_path(application),
+            html_message: update_message,
+            turbo_message: update_message,
+            turbo_redirect_path: admin_application_path(application)
+          )
+        end
       else
         handle_service_failure(service, application)
       end
@@ -251,6 +258,21 @@ module Admin
     end
 
     private
+
+    def handle_reconciliation_warning_response(application:, success_message:, warning_message:)
+      respond_to do |format|
+        format.html do
+          redirect_to admin_application_path(application),
+                      flash: { notice: success_message, alert: warning_message }
+        end
+
+        format.turbo_stream do
+          redirect_to admin_application_path(application),
+                      status: :see_other,
+                      flash: { notice: success_message, alert: warning_message }
+        end
+      end
+    end
 
     def calculate_income_threshold(household_size)
       threshold_result = IncomeThresholdCalculationService.new(household_size).call

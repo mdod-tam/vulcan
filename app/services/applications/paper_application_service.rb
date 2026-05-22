@@ -752,6 +752,7 @@ module Applications
     # the form manually from the application show page if delivery fails.
     def request_provider_info_if_missing
       return unless params[:no_medical_provider_information]
+      return if @application.medical_certification_status_approved?
 
       result = Applications::RequestProviderInfo.new(
         application: @application,
