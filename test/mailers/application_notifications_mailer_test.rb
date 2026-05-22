@@ -26,7 +26,13 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                         'Text Body: Income approved for %<user_first_name>s.')
     @mock_rejected_text = mock_template('Mock Proof Needs Revision: Income',
                                         'Text Body: Income needs revision for %<user_first_name>s. ' \
-                                        'Reason: %<rejection_reason>s')
+                                        'Reason: %<rejection_reason>s ' \
+                                        '%<default_options_text>s')
+    @mock_requested_text = mock_template('Mock Proof Requested: %<proof_type_formatted>s',
+                                         'Text Body: Please submit %<proof_type_formatted>s. ' \
+                                         '%<default_options_text>s')
+    @mock_received_text = mock_template('Mock Proof Received: %<proof_type_formatted>s',
+                                        'Text Body: Received %<proof_type_formatted>s for %<user_first_name>s.')
     @mock_max_reached = mock_template('Mock Application Archived - ID 7',
                                       '<p>HTML Body: Application 7 archived for John. ' \
                                       'Reapply after May 15, 2028.</p>')
@@ -73,6 +79,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   def setup_email_template_stubs
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text, locale: 'en').returns(@mock_approved_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_rejected', format: :text, locale: 'en').returns(@mock_rejected_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_requested', format: :text, locale: 'en').returns(@mock_requested_text)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_received', format: :text, locale: 'en').returns(@mock_received_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_max_rejections_reached', format: :text, locale: 'en').returns(@mock_max_reached_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_needs_review_reminder', format: :text, locale: 'en').returns(@mock_reminder_text)
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text, locale: 'en').returns(@mock_account_created_text)
@@ -294,6 +302,40 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     # Check the content of the email
     assert_includes email.body.to_s, "needs revision for #{@user.first_name}"
     assert_includes email.body.to_s, "Reason: #{@proof_review.rejection_reason}"
+  end
+
+  test 'proof_requested includes secure upload url for paper application email delivery' do
+    @application.update!(submission_method: :paper)
+    @user.update!(communication_preference: :email)
+    secure_upload_url = 'https://example.test/secure_proof_form?token=abc'
+
+    email = ApplicationNotificationsMailer.proof_requested(
+      @application,
+      :id,
+      secure_upload_url: secure_upload_url
+    )
+    email.deliver_now
+
+    assert_equal [@user.email], email.to
+    assert_includes email.body.to_s, secure_upload_url
+    assert_includes email.body.to_s, 'Use this secure link'
+  end
+
+  test 'proof_rejected includes secure upload url for paper application email delivery' do
+    @application.update!(submission_method: :paper)
+    @user.update!(communication_preference: :email)
+    secure_upload_url = 'https://example.test/secure_proof_form?token=abc'
+
+    email = ApplicationNotificationsMailer.proof_rejected(
+      @application,
+      @proof_review,
+      secure_upload_url: secure_upload_url
+    )
+    email.deliver_now
+
+    assert_equal [@user.email], email.to
+    assert_includes email.body.to_s, secure_upload_url
+    assert_includes email.body.to_s, 'Use this secure link'
   end
 
   test 'proof_rejected renders none_provided id reason as friendly text without seed row' do

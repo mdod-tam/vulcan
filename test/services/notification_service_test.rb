@@ -206,6 +206,65 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
   end
 
+  test 'proof attached routes proof type from metadata to proof received mailer' do
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.expects(:proof_received)
+                                  .with(@application, 'income')
+                                  .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :income_proof_attached,
+      recipient: @constituent,
+      actor: @constituent,
+      notifiable: @application,
+      metadata: { proof_type: 'income' },
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+  end
+
+  test 'proof attached falls back to action name for proof received mailer' do
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.expects(:proof_received)
+                                  .with(@application, 'id')
+                                  .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :id_proof_attached,
+      recipient: @constituent,
+      actor: @constituent,
+      notifiable: @application,
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+  end
+
+  test 'id proof attached is preference routed' do
+    @constituent.update!(communication_preference: 'letter')
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.stubs(:proof_received).returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :id_proof_attached,
+      recipient: @constituent,
+      actor: @constituent,
+      notifiable: @application,
+      metadata: { proof_type: 'id' },
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'letter', notification.reload.metadata['actual_delivery_channel']
+    assert_equal 'preference', notification.metadata['delivery_route_reason']
+  end
+
   test 'training_rescheduled routes session and notification metadata to training mailer' do
     trainer = create(:trainer)
     training_session = create(:training_session, application: @application, trainer: trainer)

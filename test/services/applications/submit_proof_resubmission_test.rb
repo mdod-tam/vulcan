@@ -32,6 +32,31 @@ module Applications
       assert_equal 'secure_form', attachment_event.metadata.fetch('submission_method')
     end
 
+    test 'secure id proof upload delivers document received notification' do
+      application = create(:application, :in_progress, id_proof_status: :not_reviewed)
+      secure_request_form = create(:secure_request_form, kind: :id_proof_resubmission, application: application)
+      mail_delivery = mock('id-proof-received-mail-delivery')
+      mail_delivery.expects(:deliver_later).returns(true)
+      ApplicationNotificationsMailer.expects(:proof_received)
+                                    .with(application, 'id')
+                                    .returns(mail_delivery)
+
+      result = SubmitProofResubmission.new(
+        application: application,
+        secure_request_form: secure_request_form,
+        file: @file
+      ).call
+
+      assert_predicate result, :success?
+      assert_predicate secure_request_form.reload, :submitted?
+      assert_predicate application.reload.id_proof, :attached?
+
+      notification = Notification.find_by!(notifiable: application, action: 'id_proof_attached')
+      assert_equal 'id', notification.metadata.fetch('proof_type')
+      assert_not_equal 'error', notification.delivery_status
+      assert_nil notification.metadata&.dig('delivery_error', 'message')
+    end
+
     test 'rejects unsupported file type without submitting request' do
       file = fixture_file_upload(Rails.root.join('test/fixtures/files/sample.txt'), 'text/plain')
 

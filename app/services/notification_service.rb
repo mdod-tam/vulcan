@@ -135,6 +135,7 @@ class NotificationService
     'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
     'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
     'account_created' => [ApplicationNotificationsMailer, :account_created],
+    'id_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
     'income_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
     'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
     'w9_approved' => [VendorNotificationsMailer, :w9_approved],
@@ -168,6 +169,7 @@ class NotificationService
     income_proof_rejected
     residency_proof_rejected
     account_created
+    id_proof_attached
     income_proof_attached
     residency_proof_attached
     training_requested
@@ -442,6 +444,11 @@ class NotificationService
       proof_type = notification.metadata&.dig('proof_type')
       proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
       mailer_class.public_send(method_name, application, proof_review, recipient: notification.recipient)
+    when 'id_proof_attached', 'income_proof_attached', 'residency_proof_attached'
+      application = notification.notifiable
+      proof_type = notification.metadata&.dig('proof_type').presence ||
+                   notification.action.delete_suffix('_proof_attached')
+      mailer_class.public_send(method_name, application, proof_type)
     when 'trainer_assigned', 'training_scheduled',
          'training_completed', 'training_cancelled', 'training_missed',
          'max_rejections_warning'
