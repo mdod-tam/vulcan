@@ -37,6 +37,18 @@ module ApplicationHelper
                 )}")
   end
 
+  def fulfillment_type_badge(application)
+    label = if application.voucher_fulfillment?
+              'Fulfillment: Voucher'
+            else
+              'Fulfillment: Equipment Order'
+            end
+
+    content_tag(:span,
+                label,
+                class: 'px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center bg-gray-100 text-gray-800')
+  end
+
   def proof_status_badge(_proof_type, status)
     content_tag(:span,
                 badge_label_for(:proof, status),
