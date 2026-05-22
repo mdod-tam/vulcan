@@ -3,6 +3,15 @@
 require 'test_helper'
 
 class FiscalYearTest < ActiveSupport::TestCase
+  test 'current_start_year returns the July fiscal year start' do
+    assert_equal 2025, FiscalYear.current_start_year(on: Date.new(2026, 5, 22))
+    assert_equal 2026, FiscalYear.current_start_year(on: Date.new(2026, 7, 1))
+  end
+
+  test 'label_for_start_year uses fiscal year ending year' do
+    assert_equal 'FY26', FiscalYear.label_for_start_year(2025)
+  end
+
   test 'time_range is half-open' do
     start_date = Date.new(2025, 7, 1)
     end_date = Date.new(2025, 7, 31)
