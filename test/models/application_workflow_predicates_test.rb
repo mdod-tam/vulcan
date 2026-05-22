@@ -228,6 +228,40 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert app.can_create_voucher?
   end
 
+  test 'can_create_voucher? returns true with only cancelled voucher and no successful voucher history' do
+    app = create(:application, :completed, :voucher_fulfillment)
+    create(:voucher, :cancelled, application: app)
+
+    assert app.reload.can_create_voucher?
+  end
+
+  test 'can_create_voucher? returns false after successful voucher assignment history' do
+    app = create(:application, :completed, :voucher_fulfillment)
+    voucher = create(:voucher, :cancelled, application: app)
+    Event.create!(
+      user: app.user,
+      auditable: voucher,
+      action: 'voucher_assigned',
+      metadata: { application_id: app.id }
+    )
+
+    assert_not app.reload.can_create_voucher?
+  end
+
+  test 'can_create_voucher? ignores voucher history event when auditable voucher belongs to another application' do
+    app = create(:application, :completed, :voucher_fulfillment)
+    other_app = create(:application, :completed, :voucher_fulfillment)
+    other_voucher = create(:voucher, :cancelled, application: other_app)
+    Event.create!(
+      user: app.user,
+      auditable: other_voucher,
+      action: 'voucher_assigned',
+      metadata: { application_id: app.id }
+    )
+
+    assert app.reload.can_create_voucher?
+  end
+
   test 'can_create_voucher? requires all required proofs approved' do
     @vouchers_flag.update!(enabled: true)
     app = create(:application, :approved, :voucher_fulfillment)

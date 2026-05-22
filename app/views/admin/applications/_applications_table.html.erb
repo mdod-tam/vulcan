@@ -5,7 +5,7 @@
     <thead class="bg-gray-50" role="rowgroup">
       <tr role="row"> 
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" role="columnheader" style="width: 7%;">
-          <%= link_to admin_applications_path(sort: 'application_date', direction: toggle_direction('application_date')),
+          <%= link_to applications_sort_path('application_date'),
                       class: "flex items-center",
                       aria: { label: "Sort applications by Date" },
                       data: { turbo_frame: "applications_list" } do %>
@@ -16,7 +16,7 @@
           <% end %>
         </th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" style="width: 11%;">
-          <%= link_to admin_applications_path(sort: 'user.last_name', direction: toggle_direction('user.last_name')),
+          <%= link_to applications_sort_path('user.last_name'),
                       class: "flex items-center",
                       aria: { label: "Sort applications by Applicant" },
                       data: { turbo_frame: "applications_list" } do %>
@@ -30,7 +30,7 @@
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell" role="columnheader" style="width: 9%;">Phone</th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" style="width: 15%;">Email</th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" role="columnheader" style="width: 8%;">
-          <%= link_to admin_applications_path(sort: 'status', direction: toggle_direction('status')),
+          <%= link_to applications_sort_path('status'),
                       class: "flex items-center",
                       aria: { label: "Sort applications by Status" },
                       data: { turbo_frame: "applications_list" } do %>

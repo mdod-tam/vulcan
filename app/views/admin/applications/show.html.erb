@@ -254,7 +254,7 @@
     <%= render "modals" %>
 
     <!-- Voucher Details Section -->
-    <% if FeatureFlag.enabled?(:vouchers_enabled) && @application.voucher_fulfillment? %>
+    <% if @application.voucher_fulfillment? %>
       <%= render "voucher_details" %>
     <% end %>
 

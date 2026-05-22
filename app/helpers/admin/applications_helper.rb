@@ -3,6 +3,7 @@
 module Admin
   module ApplicationsHelper
     include RejectionReasonsHelper
+    include VoucherPanelHelper
 
     MedicalCertificationActionState = Struct.new(
       :latest_certification_request,
@@ -105,8 +106,10 @@ module Admin
       case metadata['assignment_method']
       when 'automatic'
         "#{voucher_text} automatically issued on #{issued_date} #{value_text}"
-      when 'manual_approval'
-        "#{voucher_text} issued after admin approval on #{issued_date} #{value_text}"
+      when 'manual', 'manual_approval'
+        "#{voucher_text} manually issued on #{issued_date} #{value_text}"
+      when 'backfill'
+        "#{voucher_text} issued via backfill on #{issued_date} #{value_text}"
       else
         "#{voucher_text} assigned on #{issued_date} #{value_text}"
       end
@@ -212,6 +215,18 @@ module Admin
 
     def application_status_options
       Application.statuses.keys.map { |s| [s.titleize, s] }
+    end
+
+    def applications_sort_path(column)
+      query_parameters = request.query_parameters.except(:page, 'page')
+      query_parameters = query_parameters.except(:status, 'status') if params[:filter] == 'missing_voucher'
+
+      admin_applications_path(
+        query_parameters.merge(
+          sort: column,
+          direction: toggle_direction(column)
+        )
+      )
     end
 
     def application_type_options

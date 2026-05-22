@@ -4,6 +4,25 @@ module Applications
   class FilterService < BaseService
     attr_reader :scope, :params
 
+    def self.missing_voucher_scope(scope)
+      return scope.none unless FeatureFlag.enabled?(:vouchers_enabled)
+
+      active_voucher_application_ids = Voucher.where(status: :active).select(:application_id)
+      redeemed_voucher_application_ids = Voucher.where(status: :redeemed).select(:application_id)
+      successful_voucher_ids = Event
+                               .where(action: VoucherManagement::SUCCESSFUL_VOUCHER_ACTIONS, auditable_type: 'Voucher')
+                               .select(:auditable_id)
+      successful_voucher_event_application_ids = Voucher.where(id: successful_voucher_ids).select(:application_id)
+
+      scope
+        .where(status: :approved, fulfillment_type: :voucher, medical_certification_status: :approved)
+        .where(residency_proof_status: :approved, id_proof_status: :approved)
+        .where('income_proof_required = FALSE OR income_proof_status = ?', Application.income_proof_statuses[:approved])
+        .where.not(id: active_voucher_application_ids)
+        .where.not(id: redeemed_voucher_application_ids)
+        .where.not(id: successful_voucher_event_application_ids)
+    end
+
     def initialize(scope, params = {})
       super()
       @scope = scope
@@ -35,6 +54,8 @@ module Applications
     end
 
     def apply_conditional_explicit_status_filter(result)
+      return result if params[:filter] == 'missing_voucher'
+
       params[:status].present? ? result.where(status: params[:status]) : result
     end
 
@@ -84,6 +105,8 @@ module Applications
         # Explicit admin-initiated evaluation requests only. We do not auto-queue
         # every approved equipment application as needing evaluation.
         scope.with_pending_evaluation_request
+      when 'missing_voucher'
+        missing_voucher_scope(scope)
       when 'dependent_applications'
         # Filter applications that are for dependents (have a managing_guardian)
         scope.where.not(managing_guardian_id: nil)
@@ -93,6 +116,10 @@ module Applications
       else
         scope
       end
+    end
+
+    def missing_voucher_scope(scope)
+      self.class.missing_voucher_scope(scope)
     end
 
     def apply_date_range_filter(scope)

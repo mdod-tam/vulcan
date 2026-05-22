@@ -13,16 +13,20 @@
     <section aria-labelledby="applications-heading" class="bg-white rounded-lg shadow mb-6" id="application-table">      
       <div class="p-4 border-b">
         <%= form_tag admin_applications_path, method: :get, class: "flex flex-wrap items-center gap-4", data: { turbo_frame: "applications_list", turbo_action: "advance", controller: "autosubmit" } do %>
-          <div class="flex items-center gap-2">
-            <%= label_tag :status, "Status:", class: "text-sm font-medium text-gray-700" %>
-            <%= select_tag :status, options_for_select([
-              ["All", ""],
-              ["Draft", "draft"],
-              ["In Progress", "in_progress"],
-              ["Approved", "approved"],
-              ["Rejected", "rejected"]
-            ], params[:status]), class: "rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50", onchange: "this.form.requestSubmit()" %>
-          </div>
+          <%= hidden_field_tag :filter, params[:filter] if params[:filter].present? %>
+
+          <% unless params[:filter] == 'missing_voucher' %>
+            <div class="flex items-center gap-2">
+              <%= label_tag :status, "Status:", class: "text-sm font-medium text-gray-700" %>
+              <%= select_tag :status, options_for_select([
+                ["All", ""],
+                ["Draft", "draft"],
+                ["In Progress", "in_progress"],
+                ["Approved", "approved"],
+                ["Rejected", "rejected"]
+              ], params[:status]), class: "rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50", onchange: "this.form.requestSubmit()" %>
+            </div>
+          <% end %>
           
           <div class="flex items-center gap-2">
             <%= label_tag :date_range, "Date Range:", class: "text-sm font-medium text-gray-700" %>
@@ -64,11 +68,39 @@
             <%= label_tag :for_minors, "Show only dependent applications", class: "text-sm font-medium text-gray-700" %>
           </div>
           <%= submit_tag "Search", class: "sr-only" %>
-          <%= link_to "Clear Filters", admin_applications_path, class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", data: { turbo_frame: "applications_list" } %>
+          <%= link_to "Clear Filters", admin_applications_path, class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", data: { turbo_frame: "_top" } %>
+        <% end %>
+        <% if FeatureFlag.enabled?(:vouchers_enabled) %>
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <% needs_voucher_active = params[:filter] == 'missing_voucher' %>
+          <%= link_to admin_applications_path(filter: "missing_voucher"),
+              class: "inline-flex items-center px-3 py-2 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{needs_voucher_active ? 'border-indigo-500 bg-indigo-50 text-indigo-700 hover:bg-indigo-100' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}",
+              aria: { label: "Show approved voucher fulfillment applications missing a voucher", pressed: needs_voucher_active },
+              data: { turbo_frame: "_top" } do %>
+            Needs Voucher
+          <% end %>
+        </div>
         <% end %>
       </div>
 
       <%= turbo_frame_tag "applications_list" do %>
+        <% if params[:filter] == 'missing_voucher' %>
+          <% vouchers_enabled = FeatureFlag.enabled?(:vouchers_enabled) %>
+          <div class="border-b <%= vouchers_enabled ? 'border-indigo-100 bg-indigo-50' : 'border-gray-200 bg-gray-50' %> px-4 py-3">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-base font-semibold <%= vouchers_enabled ? 'text-indigo-900' : 'text-gray-900' %>">Needs Voucher</h2>
+                <p class="mt-1 text-sm <%= vouchers_enabled ? 'text-indigo-800' : 'text-gray-700' %>">
+                  <%= vouchers_enabled ? 'Approved voucher applications that still need a voucher issued.' : 'Voucher issuance is currently disabled.' %>
+                </p>
+              </div>
+              <%= link_to "View all applications",
+                  admin_applications_path,
+                  class: "text-sm font-medium #{vouchers_enabled ? 'text-indigo-700 hover:text-indigo-900' : 'text-gray-700 hover:text-gray-900'}",
+                  data: { turbo_frame: "_top" } %>
+            </div>
+          </div>
+        <% end %>
         <div class="overflow-x-auto">
           <% if @applications.present? %>
             <% queue_partial = case params[:filter]
@@ -83,7 +115,13 @@
                        } %>
           <% else %>
             <div class="p-6 text-center">
-              <p class="text-gray-500">No applications found</p>
+              <p class="text-gray-500">
+                <%= if params[:filter] == 'missing_voucher'
+                      FeatureFlag.enabled?(:vouchers_enabled) ? "No approved voucher applications are missing vouchers" : "Voucher issuance is disabled. No voucher queue is available."
+                    else
+                      "No applications found"
+                    end %>
+              </p>
             </div>
           <% end %>
         </div>

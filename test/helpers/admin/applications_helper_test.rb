@@ -97,5 +97,22 @@ module Admin
       assert_not medical_certification_pending_review?(@application)
       assert show_secure_cert_upload_button?(@application)
     end
+
+    test 'voucher assignment detail describes assignment methods' do
+      metadata = {
+        'voucher_code' => 'ABC123',
+        'initial_value' => 500,
+        'issued_at' => '2026-05-21T12:00:00Z'
+      }
+
+      assert_includes voucher_assignment_detail(metadata.merge('assignment_method' => 'manual'), fallback_time: Time.zone.now),
+                      'manually issued'
+      assert_includes voucher_assignment_detail(metadata.merge('assignment_method' => 'manual_approval'), fallback_time: Time.zone.now),
+                      'manually issued'
+      assert_includes voucher_assignment_detail(metadata.merge('assignment_method' => 'automatic'), fallback_time: Time.zone.now),
+                      'automatically issued'
+      assert_includes voucher_assignment_detail(metadata.merge('assignment_method' => 'backfill'), fallback_time: Time.zone.now),
+                      'issued via backfill'
+    end
   end
 end
