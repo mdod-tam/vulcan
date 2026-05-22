@@ -247,7 +247,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     # Test alternative method links if available
     assert_selector 'a', text: 'Use Authenticator App Instead' if user.totp_credentials.exists?
 
-    assert_selector 'a', text: 'Use Text Message Instead' if user.sms_credentials.exists?
+    assert_selector 'a', text: 'Use Text Message Instead' if user.sms_credentials.verified.exists?
 
     # Test "lost security key" link
     assert_selector 'a', text: "I've lost my security key"

@@ -199,7 +199,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   test 'user logs in successfully using SMS' do
     # Setup user with SMS
     test_phone = '555-999-8888'
-    @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current)
+    @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current, verified_at: Time.current)
 
     # Sign in
     system_test_sign_in(@user, verify_path: verify_method_two_factor_authentication_path(type: 'sms'))
@@ -231,7 +231,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   test 'user fails login with invalid SMS code' do
     # Setup user with SMS
     test_phone = '555-777-6666'
-    @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current)
+    @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current, verified_at: Time.current)
 
     # Sign in
     system_test_sign_in(@user, verify_path: verify_method_two_factor_authentication_path(type: 'sms'))
@@ -255,7 +255,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   test 'user fails login with expired SMS code' do
     # Setup user with SMS
     test_phone = '555-555-4444'
-    @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current)
+    @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current, verified_at: Time.current)
 
     # Sign in
     system_test_sign_in(@user, verify_path: verify_method_two_factor_authentication_path(type: 'sms'))
@@ -368,7 +368,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   test 'user removes SMS credential successfully' do
     # Setup user with SMS
     test_phone = '555-000-1111'
-    credential = @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current)
+    credential = @user.sms_credentials.create!(phone_number: test_phone, last_sent_at: Time.current, verified_at: Time.current)
     assert @user.reload.sms_credentials.exists?(phone_number: test_phone)
 
     system_test_sign_in(@user, verify_path: verify_method_two_factor_authentication_path(type: 'sms'))
@@ -472,7 +472,8 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
     @user.sms_credentials.create!(
       phone_number: '555-123-4567',
-      last_sent_at: Time.current
+      last_sent_at: Time.current,
+      verified_at: Time.current
     )
 
     # Sign out first
@@ -546,6 +547,6 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
   # Helper to get the latest SMS credential for the user
   def get_latest_sms_credential(user)
-    user.reload.sms_credentials.order(created_at: :desc).first
+    user.reload.sms_credentials.verified.order(created_at: :desc).first
   end
 end

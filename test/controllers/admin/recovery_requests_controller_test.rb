@@ -5,6 +5,8 @@ require 'webauthn/fake_client'
 
 module Admin
   class RecoveryRequestsControllerTest < ActionDispatch::IntegrationTest
+    include AuthenticationTestHelper
+
     setup do
       # Create admin and user with unique emails
       @admin = FactoryBot.create(:admin, email: "admin-recovery-#{SecureRandom.hex(4)}@example.com")
@@ -17,7 +19,7 @@ module Admin
       @recovery_request = FactoryBot.create(:recovery_request, user: @user)
 
       # Sign in as admin
-      sign_in_as(@admin)
+      sign_in_for_integration_test(@admin)
     end
 
     test 'should get index' do
@@ -55,7 +57,7 @@ module Admin
 
       # Sign in as regular user
       @regular_user = FactoryBot.create(:user, email: "regular-#{SecureRandom.hex(4)}@example.com")
-      sign_in_as(@regular_user)
+      sign_in_for_integration_test(@regular_user)
 
       get admin_recovery_requests_path
       assert_redirected_to root_path
@@ -88,13 +90,6 @@ module Admin
         nickname: 'Test Key',
         sign_count: 0
       )
-    end
-
-    def sign_in_as(user)
-      post sign_in_path, params: {
-        email: user.email,
-        password: 'password123'
-      }
     end
   end
 end

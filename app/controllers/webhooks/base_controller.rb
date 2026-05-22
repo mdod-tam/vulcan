@@ -4,6 +4,8 @@ module Webhooks
   class InvalidPayloadError < StandardError; end
 
   class BaseController < ApplicationController
+    skip_before_action :authenticate_user!
+    skip_before_action :enforce_required_mfa_enrollment
     skip_before_action :verify_authenticity_token
     before_action :verify_webhook_signature
     before_action :validate_payload

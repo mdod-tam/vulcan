@@ -23,7 +23,7 @@ Rails.application.config.filter_parameters += [
   /_encrypted\z/, /_encrypted_iv\z/,
 
   # Authentication credential secrets
-  :secret, :code_digest,
+  :secret,
   # NOTE: public_key omitted as it's not secret data in cryptographic terms
 
   # Legacy broad filters (be careful with these)

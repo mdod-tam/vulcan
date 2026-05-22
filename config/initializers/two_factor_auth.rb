@@ -86,6 +86,15 @@ module TwoFactorAuth
     Rails.logger.info('[2FA] Challenge cleared after successful sign-in')
   end
 
+  def self.abort_authentication(session)
+    session.delete(SESSION_KEYS[:temp_user_id])
+    session.delete(SESSION_KEYS[:available_methods])
+    session.delete(SESSION_KEYS[:return_path])
+    session.delete(SESSION_KEYS[:verified_at])
+    clear_challenge(session)
+    Rails.logger.info('[2FA] Authentication aborted and temporary state cleared')
+  end
+
   def self.verified?(session)
     verified_at = session[SESSION_KEYS[:verified_at]]
     return false unless verified_at

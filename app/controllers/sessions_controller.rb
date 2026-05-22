@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
 class SessionsController < ApplicationController
+  include TwoFactorVerification
+
   skip_before_action :authenticate_user!, only: %i[new create]
+  skip_before_action :enforce_required_mfa_enrollment
+
   def new
     respond_to do |format|
       format.turbo_stream do
@@ -14,20 +18,20 @@ class SessionsController < ApplicationController
   def create
     user = User.find_by(email: params[:email])
 
-    if !user&.authenticate(params[:password])
-      @errors = { email: "Invalid email or password" }
+    unless user&.authenticate(params[:password])
+      @errors = { email: 'Invalid email or password' }
       return render_form_errors
     end
 
-    return sign_in(user) if !user.second_factor_enabled?
+    return sign_in(user) unless user.second_factor_enabled?
 
     setup_two_factor_session(user)
     redirect_to_two_factor_verification(user)
   end
 
   def destroy
-    # Clean up any 2FA in progress
-    TwoFactorAuth.complete_authentication(session) if two_factor_authentication_initiated?
+    # Clean up any temporary 2FA state without marking the session verified.
+    TwoFactorAuth.abort_authentication(session)
 
     # Find and destroy the current session if it exists
     if current_user&.sessions
@@ -91,7 +95,7 @@ class SessionsController < ApplicationController
   def count_available_two_factor_methods(user)
     [
       user.totp_credentials.exists?,
-      user.sms_credentials.exists?,
+      user.sms_credentials.verified.exists?,
       user.webauthn_credentials.exists?
     ].count(true)
   end
@@ -99,10 +103,30 @@ class SessionsController < ApplicationController
   def redirect_to_single_two_factor_method(user)
     if user.totp_credentials.exists?
       redirect_to verify_method_two_factor_authentication_path(type: 'totp')
-    elsif user.sms_credentials.exists?
-      redirect_to verify_method_two_factor_authentication_path(type: 'sms')
+    elsif user.sms_credentials.verified.exists?
+      redirect_to_sms_verification_or_sign_in(user)
     elsif user.webauthn_credentials.exists?
       redirect_to verify_method_two_factor_authentication_path(type: 'webauthn')
+    end
+  end
+
+  def redirect_to_sms_verification_or_sign_in(user)
+    sms_challenge_result = ensure_sms_challenge_for_user(user.sms_credentials.verified.first, user)
+
+    case sms_challenge_result
+    when :active
+      redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
+                  notice: 'Enter the verification code we sent.'
+    when :sent
+      redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
+                  notice: 'A verification code has been sent.'
+    when :sending
+      redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
+                  notice: TwoFactor::SmsLoginChallenge::DUPLICATE_SEND_MESSAGE
+    else
+      TwoFactorAuth.abort_authentication(session)
+      redirect_to sign_in_path(email_hint: user.email),
+                  alert: 'Could not send verification code. Please try again.'
     end
   end
 end

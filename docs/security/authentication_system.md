@@ -67,12 +67,12 @@ WebAuthn is configured in `config/initializers/webauthn.rb`:
 
 ```ruby
 WebAuthn.configure do |config|
-  config.allowed_origins = [ENV["WEBAUTHN_ORIGIN"]]
+  config.allowed_origins = ["https://#{ENV.fetch('APPLICATION_HOST')}"]
   config.rp_name = "MAT Vulcan"
 end
 ```
 
-**Important**: `WEBAUTHN_ORIGIN` must match your application's domain (e.g., `https://your-app-domain.com`). In development, set to `http://localhost:3000`.
+**Important**: `APPLICATION_HOST` is used to derive the production WebAuthn origin (e.g., `https://your-app-domain.com`). In development, WebAuthn uses `http://localhost:3000`.
 
 ### Registration Flow
 
@@ -278,7 +278,7 @@ end
 
 ### Common Issues
 
-1. **WebAuthn Origin Mismatch**: Ensure `WEBAUTHN_ORIGIN` matches your domain exactly
+1. **WebAuthn Origin Mismatch**: Ensure `APPLICATION_HOST` matches your production domain
 2. **TOTP Time Sync**: Verify server and client clocks are synchronized
 3. **SMS Delivery**: Check SMS service configuration and rate limits
 4. **Session Issues**: Verify session storage and cleanup

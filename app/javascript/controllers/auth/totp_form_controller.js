@@ -35,6 +35,13 @@ class TotpFormController extends Controller {
     }
   }
 
+  submitEnd() {
+    this.enableSubmitButton()
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("Form submission finished, button enabled")
+    }
+  }
+
   // Called BEFORE a Turbo Stream action is processed
   handleStreamRender(event) {
     if (process.env.NODE_ENV !== 'production') {

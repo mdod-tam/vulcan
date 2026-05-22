@@ -6,6 +6,7 @@ class PasswordsController < ApplicationController
   ACCOUNT_ACCESS_RATE_LIMIT_WINDOW = 1.hour
 
   skip_before_action :authenticate_user!
+  skip_before_action :enforce_required_mfa_enrollment
   before_action :set_user_from_token, only: %i[edit]
 
   def new; end
@@ -25,6 +26,7 @@ class PasswordsController < ApplicationController
   def update
     return update_password_from_token if params[:token].present?
 
+    forced_password_change = current_user&.force_password_change?
     service = Users::PasswordUpdateService.new(
       current_user,
       params[:password_challenge],
@@ -32,29 +34,40 @@ class PasswordsController < ApplicationController
       params[:password_confirmation]
     )
     result = service.call
-    handle_password_update_result(result)
+    handle_password_update_result(result, forced_password_change: forced_password_change)
   end
 
   private
 
-  def handle_password_update_result(result)
+  def handle_password_update_result(result, forced_password_change:)
     if result.success?
-      handle_successful_password_update(result)
+      handle_successful_password_update(result, forced_password_change: forced_password_change)
     else
       handle_failed_password_update(result)
     end
   end
 
-  def handle_successful_password_update(result)
+  def handle_successful_password_update(result, forced_password_change:)
     flash[:notice] = result.message
-    respond_to_password_update_success
+    respond_to_password_update_success(forced_password_change: forced_password_change)
   end
 
-  def respond_to_password_update_success
+  def respond_to_password_update_success(forced_password_change:)
+    redirect_path = password_update_redirect_path(forced_password_change: forced_password_change)
+
     respond_to do |format|
-      format.turbo_stream
-      format.html { redirect_to sign_in_path, notice: flash[:notice] }
+      format.turbo_stream { redirect_to redirect_path, status: :see_other, notice: flash[:notice] }
+      format.html { redirect_to redirect_path, notice: flash[:notice] }
     end
+  end
+
+  def password_update_redirect_path(forced_password_change:)
+    return sign_in_path unless current_user
+    return _dashboard_for(current_user) if current_user.second_factor_enabled?
+    return setup_two_factor_authentication_path if mfa_required_for_current_user?
+    return welcome_path if forced_password_change
+
+    _dashboard_for(current_user)
   end
 
   def handle_failed_password_update(result)

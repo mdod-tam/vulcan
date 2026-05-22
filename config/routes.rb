@@ -56,6 +56,7 @@ Rails.application.routes.draw do
     get 'verify/:type', to: 'two_factor_authentications#verify_method', as: :verify_method
     post 'verify/:type', to: 'two_factor_authentications#process_verification', as: :process_verification
     get 'verification_options/:type', to: 'two_factor_authentications#verification_options', as: :verification_options
+    post 'verify/sms/select', to: 'two_factor_authentications#select_sms_verification', as: :select_sms_verification
     post 'verify/sms/resend', to: 'two_factor_authentications#resend_sms_verification', as: :resend_sms_verification
 
     # Credential management routes (delegated to TwoFactorCredentialsController)
@@ -65,9 +66,9 @@ Rails.application.routes.draw do
     get 'credentials/:type/success', to: 'two_factor_credentials#credential_success', as: :credential_success
 
     # SMS specific routes
-    get 'credentials/sms/:id/verify', to: 'two_factor_credentials#verify_sms_credential', as: :verify_sms_credential
-    post 'credentials/sms/:id/confirm', to: 'two_factor_credentials#confirm_sms_credential', as: :confirm_sms_credential
-    post 'credentials/sms/:id/resend', to: 'two_factor_credentials#resend_sms_code', as: :resend_sms_code
+    get 'credentials/sms/verify', to: 'two_factor_credentials#verify_pending_sms_credential', as: :verify_pending_sms_credential
+    post 'credentials/sms/confirm', to: 'two_factor_credentials#confirm_pending_sms_credential', as: :confirm_pending_sms_credential
+    post 'credentials/sms/resend', to: 'two_factor_credentials#resend_pending_sms_code', as: :resend_pending_sms_code
 
     # WebAuthn specific routes
     post 'credentials/webauthn/options', to: 'two_factor_credentials#webauthn_creation_options', as: :webauthn_creation_options

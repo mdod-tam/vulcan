@@ -279,7 +279,6 @@ SOLID_QUEUE_POOL_SIZE=10
 WEB_CONCURRENCY=2
 SOLID_QUEUE_IN_PUMA=true
 WEBAUTHN_RP_ID=your-host.example
-WEBAUTHN_ORIGIN=https://your-host.example
 ```
 
 ### Production Credentials and Integrations

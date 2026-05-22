@@ -29,8 +29,8 @@
     logo_aria_label = "Go to your dashboard"
     logo_sr_text = "TAM Logo - Go to Dashboard"
     
-    # Check if user has 2FA set up
-    has_webauthn = user.webauthn_credentials.exists?
+    # Check if user has any enrolled 2FA method set up
+    has_second_factor = user.second_factor_enabled?
   else
     logo_link_path = root_path
     logo_aria_label = "Return to homepage"
@@ -100,8 +100,7 @@
                 Hello, <%= user.first_name %>
               </span>
               
-              <%# Use has_webauthn for consistency %>
-              <% unless has_webauthn %>
+              <% unless has_second_factor %>
                 <%= link_to setup_two_factor_authentication_path, 
                     class: "flex items-center px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500",
                     aria: { label: "Set up two-factor authentication for your account" } do %>
@@ -172,7 +171,7 @@
               Hello, <%= user.first_name %>
             </p>
             
-            <% unless has_webauthn %>
+            <% unless has_second_factor %>
               <%= link_to setup_two_factor_authentication_path, 
                   class: "mt-2 flex items-center justify-center w-full px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500",
                   role: "menuitem",

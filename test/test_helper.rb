@@ -292,7 +292,9 @@ module ActiveSupport
         'HTTP_USER_AGENT' => 'Rails Testing',
         'REMOTE_ADDR' => '127.0.0.1'
       }
-      base['Cookie'] = "session_token=#{@session_token}" if defined?(@session_token) && @session_token.present?
+      # Do not set a raw Cookie header here — it replaces the integration cookie jar and
+      # drops the Rails session cookie (including test-only keys like skip_2fa).
+      # Auth is restored via X-Test-User-Id; session_token is set on the cookie jar in sign-in helpers.
       base['X-Test-User-Id'] = @test_user_id.to_s if defined?(@test_user_id) && @test_user_id.present?
 
       base

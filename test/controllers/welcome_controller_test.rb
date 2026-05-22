@@ -14,6 +14,13 @@ class WelcomeControllerTest < ActionDispatch::IntegrationTest
     assert_select 'h1', text: /Welcome to Maryland Accessible Telecommunications/
   end
 
+  test 'dashboard action links point to current user dashboard' do
+    get welcome_path
+
+    assert_response :success
+    assert_select "a[href='#{constituent_portal_dashboard_path}']", text: /Skip and Continue to Dashboard/
+  end
+
   test 'should redirect to dashboard if user already has webauthn credentials' do
     # Create a webauthn credential for the user
     @user.webauthn_credentials.create!(
@@ -39,6 +46,19 @@ class WelcomeControllerTest < ActionDispatch::IntegrationTest
     get welcome_path(force: 'true')
     assert_response :success
     assert_select 'h1', text: /Welcome to Maryland Accessible Telecommunications/
+    assert_select "a[href='#{constituent_portal_dashboard_path}']", text: /Continue to Dashboard/
+  end
+
+  test 'should redirect to dashboard if user already has totp credentials' do
+    @user.totp_credentials.create!(
+      secret: ROTP::Base32.random_base32,
+      nickname: 'Authenticator App',
+      last_used_at: Time.current
+    )
+
+    get welcome_path
+
+    assert_redirected_to constituent_portal_dashboard_path
   end
 
   test 'redirects to sign in when not authenticated' do

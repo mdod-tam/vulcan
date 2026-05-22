@@ -14,8 +14,10 @@ class ApplicationController < ActionController::Base
   # Include our helpers
   helper PasswordFieldHelper
   helper EmailStatusHelper
+  helper_method :dashboard_path_for_current_user, :mfa_required_for_current_user?
 
   before_action :check_password_change_required
+  before_action :enforce_required_mfa_enrollment
 
   def default_url_options
     if Rails.env.production?
@@ -39,6 +41,36 @@ class ApplicationController < ActionController::Base
 
     # Redirect to password change form with notice
     redirect_to edit_password_path, notice: t('.password_security_change')
+  end
+
+  def enforce_required_mfa_enrollment
+    return if Rails.env.test? && session[:skip_2fa]
+    return unless mfa_required_for_current_user?
+    return if current_user.second_factor_enabled?
+
+    redirect_to setup_two_factor_authentication_path,
+                alert: 'Please set up two-factor authentication to continue.'
+  end
+
+  def mfa_required_for_current_user?
+    current_user.present? && mfa_required_for_role?(current_user)
+  end
+
+  def dashboard_path_for_current_user
+    return sign_in_path unless current_user
+
+    _dashboard_for(current_user)
+  end
+
+  def mfa_required_for_role?(user)
+    user.admin? || user.evaluator? || user.trainer? || user.vendor?
+  end
+
+  def after_sign_in_path_for(user)
+    return _dashboard_for(user) if Rails.env.test? && session[:skip_2fa]
+    return setup_two_factor_authentication_path if mfa_required_for_role?(user) && !user.second_factor_enabled?
+
+    _dashboard_for(user)
   end
 
   # Standard flash helper methods
@@ -82,7 +114,7 @@ class ApplicationController < ActionController::Base
   def sign_in(user)
     session_record = _create_and_set_session_cookie(user)
     if session_record
-      redirect_to _dashboard_for(user), notice: t('controllers.application.sign_in.signin_pass')
+      redirect_to after_sign_in_path_for(user), notice: t('controllers.application.sign_in.signin_pass')
     else
       redirect_to sign_in_path(email_hint: user.email), alert: t('alerts.session_fail')
     end
@@ -119,8 +151,9 @@ class ApplicationController < ActionController::Base
     when 'Users::Administrator' then admin_dashboard_path
     when 'Users::Constituent' then constituent_portal_dashboard_path
     when 'Users::Evaluator' then evaluators_dashboard_path
+    when 'Users::Trainer' then trainers_dashboard_path
     when 'Users::Vendor' then vendor_portal_dashboard_path
-    else root_path
+    else edit_profile_path
     end
   end
 

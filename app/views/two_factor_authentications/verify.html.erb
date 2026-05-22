@@ -69,8 +69,10 @@
       <% end %>
 
       <% if @sms_enabled %>
-        <%= link_to verify_method_two_factor_authentication_path(type: 'sms'), 
-            class: "block w-full p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-indigo-300 transition-colors duration-200 group" do %>
+        <%= button_to select_sms_verification_two_factor_authentication_path,
+            method: :post,
+            form: { class: "block w-full" },
+            class: "block w-full p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-indigo-300 transition-colors duration-200 group text-left bg-white" do %>
           <div class="flex items-center">
             <div class="flex-shrink-0">
               <svg class="h-8 w-8 text-indigo-600 group-hover:text-indigo-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">

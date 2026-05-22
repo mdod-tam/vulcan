@@ -37,7 +37,8 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
     # Create credential for this test with unique phone number to avoid uniqueness constraint errors
     sms_credential = @user.sms_credentials.create!(
       phone_number: "555-#{rand(100..999)}-#{rand(1000..9999)}",
-      last_sent_at: Time.current
+      last_sent_at: Time.current,
+      verified_at: Time.current
     )
 
     # Create a simple string challenge instead of a BCrypt digest
@@ -115,6 +116,26 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:metadata]]
   end
 
+  test 'abort_authentication clears temporary two factor state' do
+    @session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]] = @user.id
+    @session[TwoFactorAuth::SESSION_KEYS[:available_methods]] = %w[sms totp]
+    @session[TwoFactorAuth::SESSION_KEYS[:return_path]] = '/dashboard'
+    @session[TwoFactorAuth::SESSION_KEYS[:verified_at]] = Time.current.to_i
+    @session[TwoFactorAuth::SESSION_KEYS[:type]] = :sms
+    @session[TwoFactorAuth::SESSION_KEYS[:challenge]] = 'sid'
+    @session[TwoFactorAuth::SESSION_KEYS[:metadata]] = { credential_id: 1 }
+
+    TwoFactorAuth.abort_authentication(@session)
+
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:available_methods]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:return_path]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:verified_at]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:type]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:challenge]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:metadata]]
+  end
+
   test 'logging methods record success and failure with context' do
     # Verify that the methods can be called without raising exceptions
     TwoFactorAuth.log_verification_success(@user.id, :webauthn, { credential_id: 123 })
@@ -147,7 +168,8 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   def setup_sms_credential
     @sms_credential = @user.sms_credentials.create!(
       phone_number: "555-#{rand(100..999)}-#{rand(1000..9999)}",
-      last_sent_at: Time.current
+      last_sent_at: Time.current,
+      verified_at: Time.current
     )
 
     # Mock the SMS service to avoid sending real texts in tests

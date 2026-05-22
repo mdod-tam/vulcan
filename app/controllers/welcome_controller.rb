@@ -8,28 +8,14 @@ class WelcomeController < ApplicationController
   def index
     @user = current_user
     @has_webauthn = @user.webauthn_credentials.exists?
+    @has_totp = @user.totp_credentials.exists?
+    @has_sms = @user.sms_credentials.verified.exists?
+    @has_second_factor = @user.second_factor_enabled?
+    @dashboard_path = _dashboard_for(@user)
 
     # If user already has 2FA set up, redirect to dashboard
-    return unless @has_webauthn && params[:force] != 'true'
+    return unless @has_second_factor && params[:force] != 'true'
 
-    redirect_to_appropriate_dashboard
-  end
-
-  private
-
-  def redirect_to_appropriate_dashboard
-    if current_user.constituent?
-      redirect_to constituent_portal_dashboard_path
-    elsif current_user.vendor?
-      redirect_to vendor_portal_dashboard_path
-    elsif current_user.evaluator?
-      redirect_to evaluators_dashboard_path
-    elsif current_user.trainer?
-      redirect_to trainers_dashboard_path
-    elsif current_user.admin?
-      redirect_to admin_applications_path
-    else
-      redirect_to root_path
-    end
+    redirect_to @dashboard_path
   end
 end

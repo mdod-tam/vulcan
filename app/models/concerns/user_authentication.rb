@@ -44,6 +44,10 @@ module UserAuthentication
       return false
     end
 
+    # Sign-in tracking should not be blocked by unrelated legacy profile validations.
+    # No auth state transition callbacks depend on these audit columns, and updated_at
+    # is maintained explicitly here.
+    # rubocop:disable Rails/SkipsModelValidations
     update_columns(
       last_sign_in_at: Time.current,
       last_sign_in_ip: ip,
@@ -51,6 +55,7 @@ module UserAuthentication
       locked_at: nil,
       updated_at: Time.current
     )
+    # rubocop:enable Rails/SkipsModelValidations
   end
 
   def lock_account!
@@ -69,6 +74,6 @@ module UserAuthentication
   def second_factor_enabled?
     webauthn_credentials.exists? ||
       totp_credentials.exists? ||
-      sms_credentials.exists?
+      sms_credentials.verified.exists?
   end
 end

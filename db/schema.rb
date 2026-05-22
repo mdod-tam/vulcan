@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_18_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_19_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -512,15 +512,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_18_120000) do
   end
 
   create_table "sms_credentials", force: :cascade do |t|
-    t.text "code_digest"
-    t.datetime "code_expires_at"
     t.datetime "created_at", null: false
     t.datetime "last_sent_at", null: false
     t.string "phone_number", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.datetime "verified_at"
     t.index ["user_id", "phone_number"], name: "index_sms_credentials_on_user_id_and_phone_number", unique: true
     t.index ["user_id"], name: "index_sms_credentials_on_user_id"
+    t.index ["verified_at"], name: "index_sms_credentials_on_verified_at"
   end
 
   create_table "solid_cache_entries", force: :cascade do |t|
