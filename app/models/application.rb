@@ -455,11 +455,6 @@ class Application < ApplicationRecord
         )
       )
 
-      if target_status == 'approved' && voucher_fulfillment?
-        assignment_method = metadata[:trigger].to_s == 'auto_approval' ? 'automatic' : 'manual_approval'
-        IssueInitialVoucherJob.perform_later(id, actor.id, assignment_method)
-      end
-
       true
     end
   end
