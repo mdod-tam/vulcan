@@ -130,6 +130,101 @@ module Applications
       end
     end
 
+    test 'filters by missing_voucher using approved voucher fulfillment application state' do
+      with_mocked_attachments do
+        FeatureFlag.enable!(:vouchers_enabled)
+        missing_voucher = create(:application, :completed, :voucher_fulfillment,
+                                 user: create(:constituent, email: 'missing_voucher_filter@example.com'))
+
+        issued_voucher = create(:application, :completed, :voucher_fulfillment,
+                                user: create(:constituent, email: 'issued_voucher_filter@example.com'))
+        create(:voucher, application: issued_voucher)
+
+        cancelled_without_history = create(:application, :completed, :voucher_fulfillment,
+                                           user: create(:constituent, email: 'cancelled_no_history_voucher_filter@example.com'))
+        create(:voucher, :cancelled, application: cancelled_without_history)
+
+        cancelled_with_history = create(:application, :completed, :voucher_fulfillment,
+                                        user: create(:constituent, email: 'cancelled_with_history_voucher_filter@example.com'))
+        history_voucher = create(:voucher, :cancelled, application: cancelled_with_history)
+        Event.create!(
+          user: cancelled_with_history.user,
+          auditable: history_voucher,
+          action: 'voucher_assigned',
+          metadata: { application_id: cancelled_with_history.id }
+        )
+        Event.create!(
+          user: cancelled_with_history.user,
+          auditable_type: 'Voucher',
+          auditable_id: history_voucher.id,
+          action: 'voucher_assigned',
+          metadata: { application_id: 'not-an-id' }
+        )
+
+        mismatched_history = create(:application, :completed, :voucher_fulfillment,
+                                    user: create(:constituent, email: 'mismatched_history_voucher_filter@example.com'))
+        other_application = create(:application, :completed, :voucher_fulfillment,
+                                   user: create(:constituent, email: 'other_history_voucher_filter@example.com'))
+        other_history_voucher = create(:voucher, :cancelled, application: other_application)
+        Event.create!(
+          user: mismatched_history.user,
+          auditable: other_history_voucher,
+          action: 'voucher_assigned',
+          metadata: { application_id: mismatched_history.id }
+        )
+
+        redeemed_voucher = create(:application, :completed, :voucher_fulfillment,
+                                  user: create(:constituent, email: 'redeemed_voucher_filter@example.com'))
+        create(:voucher, :redeemed, application: redeemed_voucher)
+
+        equipment_fulfillment = create(:application, :completed,
+                                       user: create(:constituent, email: 'equipment_voucher_filter@example.com'))
+        equipment_fulfillment.update!(fulfillment_type: :equipment)
+
+        blocked_by_proofs = create(:application, :completed, :voucher_fulfillment,
+                                   user: create(:constituent, email: 'proof_blocked_voucher_filter@example.com'))
+        blocked_by_proofs.update!(id_proof_status: :not_reviewed)
+
+        service = FilterService.new(@scope, { filter: 'missing_voucher' })
+        result_data = service.apply_filters.data
+
+        assert_includes result_data, missing_voucher
+        assert_includes result_data, cancelled_without_history
+        assert_includes result_data, mismatched_history
+        assert_not_includes result_data, issued_voucher
+        assert_not_includes result_data, cancelled_with_history
+        assert_not_includes result_data, redeemed_voucher
+        assert_not_includes result_data, equipment_fulfillment
+        assert_not_includes result_data, blocked_by_proofs
+      end
+    end
+
+    test 'missing_voucher filter ignores incompatible explicit status params' do
+      with_mocked_attachments do
+        FeatureFlag.enable!(:vouchers_enabled)
+        missing_voucher = create(:application, :completed, :voucher_fulfillment,
+                                 user: create(:constituent, email: 'missing_voucher_status_filter@example.com'))
+
+        service = FilterService.new(@scope, { filter: 'missing_voucher', status: 'rejected' })
+        result_data = service.apply_filters.data
+
+        assert_includes result_data, missing_voucher
+      end
+    end
+
+    test 'missing_voucher filter returns no records when vouchers are disabled' do
+      with_mocked_attachments do
+        FeatureFlag.disable!(:vouchers_enabled)
+        missing_voucher = create(:application, :completed, :voucher_fulfillment,
+                                 user: create(:constituent, email: 'missing_voucher_disabled_filter@example.com'))
+
+        service = FilterService.new(@scope, { filter: 'missing_voucher' })
+        result_data = service.apply_filters.data
+
+        assert_not_includes result_data, missing_voucher
+      end
+    end
+
     test 'filters by proofs needing review' do
       with_mocked_attachments do
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
@@ -366,13 +461,6 @@ module Applications
 
         assert service_result.success?, 'Expected service call to be successful'
         result_data = service_result.data
-
-        # Debug output
-        puts "Guardian ID: #{@guardian.id}"
-        puts "Dependent ID: #{@dependent.id}"
-        puts "Found guardian relationships: #{GuardianRelationship.where(guardian_id: @guardian.id).count}"
-        puts "Active app ID: #{@active_app.id}, user_id: #{@active_app.user_id}"
-        puts "Dependent app ID: #{@dependent_app.id}, user_id: #{@dependent_app.user_id}"
 
         # Only the dependent_app should be included since it's for a dependent of this guardian
         # @active_app has a different user with no guardian relationship, so it should be excluded

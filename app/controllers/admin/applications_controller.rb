@@ -45,7 +45,6 @@ module Admin
       # Remove the filtered status from exclusions so it can be shown
       excluded_statuses.delete(filtered_status) if filtered_status && excluded_statuses.include?(filtered_status)
 
-      # Skip heavy ActiveStorage eager-loading; we preload attachment existence separately
       scoped = filtered_scope(build_application_base_scope(exclude_statuses: excluded_statuses))
 
       scoped = if filtered_status == :training_requests
@@ -752,7 +751,7 @@ module Admin
       end
     rescue StandardError => e
       Rails.logger.error "Filter error: #{e.message}"
-      flash.now[:alert] = t(unfiltered_error)
+      flash.now[:alert] = t('alerts.unfiltered_error')
       scope
     end
 

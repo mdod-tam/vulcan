@@ -5,9 +5,11 @@
 module VoucherManagement
   extend ActiveSupport::Concern
 
+  SUCCESSFUL_VOUCHER_ACTIONS = %w[voucher_assigned voucher_redeemed].freeze
+
   # Assigns a new voucher to this application
   # @param assigned_by [User] The user assigning the voucher (defaults to Current.user)
-  # @param assignment_method [Symbol] How the voucher was assigned (:manual, :manual_approval, :automatic)
+  # @param assignment_method [Symbol] How the voucher was assigned (:manual, :automatic, :backfill)
   # @param raise_on_failure [Boolean] Whether assignment errors should be re-raised for retryable callers
   # @return [Voucher, false] The created voucher or false on failure
   def assign_voucher!(assigned_by: nil, assignment_method: :manual, raise_on_failure: false)
@@ -53,7 +55,11 @@ module VoucherManagement
       status_approved? &&
       required_proofs_approved? &&
       medical_certification_status_approved? &&
-      !vouchers.exists?
+      voucher_missing_for_issuance?
+  end
+
+  def voucher_successfully_issued?
+    vouchers.exists?(status: %i[active redeemed]) || successful_voucher_history?
   end
 
   def maybe_assign_initial_voucher!(actor:, assignment_method: :automatic)
@@ -68,6 +74,20 @@ module VoucherManagement
   end
 
   private
+
+  def voucher_missing_for_issuance?
+    # One successful issue/redeem history consumes this application's voucher issuance.
+    # Cancelled or expired voucher rows without that history remain eligible for legacy repair.
+    !voucher_successfully_issued?
+  end
+
+  def successful_voucher_history?
+    voucher_ids = Event
+                  .where(action: SUCCESSFUL_VOUCHER_ACTIONS, auditable_type: 'Voucher')
+                  .select(:auditable_id)
+
+    Voucher.exists?(id: voucher_ids, application_id: id)
+  end
 
   def create_system_notification!(recipient:, actor:, action:)
     # Use NotificationService for centralized notification creation

@@ -63,6 +63,13 @@ module ApplicationDataLoading
     # Access user if needed (for caching, if necessary)
     User.find_by(id: application.user_id) if application.user_id.present?
 
+    if application.voucher_fulfillment?
+      ActiveRecord::Associations::Preloader.new(
+        records: [application],
+        associations: { vouchers: [:vendor, { transactions: :vendor }] }
+      ).call
+    end
+
     # Load training-related data for approved applications
     load_training_associations(application) if application.status_approved?
   end

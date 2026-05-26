@@ -56,9 +56,203 @@ module Admin
       end
     end
 
+    test 'index missing_voucher filter shows eligible voucher fulfillment applications without vouchers' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      missing_voucher = create(:application, :completed, :voucher_fulfillment,
+                               user: create(:constituent, email: generate(:email)))
+
+      issued_voucher = create(:application, :completed, :voucher_fulfillment,
+                              user: create(:constituent, email: generate(:email)))
+      create(:voucher, application: issued_voucher)
+
+      equipment_fulfillment = create(:application, :completed, :with_all_proofs,
+                                     user: create(:constituent, email: generate(:email)))
+      equipment_fulfillment.update!(fulfillment_type: :equipment)
+
+      get admin_applications_path(filter: 'missing_voucher')
+
+      assert_response :success
+      assert_select 'a', text: 'Needs Voucher'
+      assert_select 'a[aria-pressed="true"]', text: 'Needs Voucher'
+      assert_includes response.body, 'Approved voucher applications that still need a voucher issued.'
+      assert_select 'a', text: 'View all applications'
+      assert_select 'label[for="status"]', count: 0
+      assert_select "a[href*='filter=missing_voucher'][href*='sort=application_date']"
+      assert_select "a[href*='filter=missing_voucher'][href*='sort=user.last_name']"
+      assert_select "a[href*='filter=missing_voucher'][href*='sort=status']"
+      assert_select "tr#application_#{missing_voucher.id}", count: 1
+      assert_select "tr#application_#{issued_voucher.id}", count: 0
+      assert_select "tr#application_#{equipment_fulfillment.id}", count: 0
+    end
+
+    test 'index hides needs voucher queue when vouchers are disabled' do
+      FeatureFlag.disable!(:vouchers_enabled)
+
+      get admin_applications_path
+
+      assert_response :success
+      assert_select 'a', text: /Needs Voucher/, count: 0
+    end
+
+    test 'index missing_voucher direct URL explains disabled voucher issuance' do
+      FeatureFlag.disable!(:vouchers_enabled)
+
+      get admin_applications_path(filter: 'missing_voucher')
+
+      assert_response :success
+      assert_select 'a', text: /Needs Voucher/, count: 0
+      assert_includes response.body, 'Voucher issuance is currently disabled.'
+      assert_includes response.body, 'Voucher issuance is disabled. No voucher queue is available.'
+    end
+
+    test 'index missing_voucher filter hides incompatible visible status filter' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      missing_voucher = create(:application, :completed, :voucher_fulfillment,
+                               user: create(:constituent, email: generate(:email)))
+
+      get admin_applications_path(filter: 'missing_voucher', status: 'rejected')
+
+      assert_response :success
+      assert_select 'label[for="status"]', count: 0
+      assert_select "a[href*='filter=missing_voucher'][href*='sort=application_date']"
+      assert_select "a[href*='status=rejected'][href*='sort=application_date']", count: 0
+      assert_select "tr#application_#{missing_voucher.id}", count: 1
+    end
+
     test 'should show application' do
       get admin_application_path(@application)
       assert_response :success
+    end
+
+    test 'show voucher panel explains ready state and preserves manual assignment action' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      application = create(:application, :completed, :voucher_fulfillment,
+                           user: create(:constituent, email: generate(:email)))
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, 'Voucher ready'
+      assert_includes response.body, 'This application is eligible for voucher issuance'
+      assert_select "form[action='#{assign_voucher_admin_application_path(application)}']"
+      assert_select 'button', text: /Assign Voucher/
+    end
+
+    test 'show voucher panel treats cancelled-only voucher history as ready' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      application = create(:application, :completed, :voucher_fulfillment,
+                           user: create(:constituent, email: generate(:email)))
+      create(:voucher, :cancelled, application: application)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, 'Voucher ready'
+      assert_includes response.body, 'A previous voucher is cancelled or expired'
+      assert_select "form[action='#{assign_voucher_admin_application_path(application)}']"
+      assert_not_includes response.body, 'Voucher issued'
+    end
+
+    test 'show voucher panel treats successful cancelled voucher history as previously issued' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      application = create(:application, :completed, :voucher_fulfillment,
+                           user: create(:constituent, email: generate(:email)))
+      voucher = create(:voucher, :cancelled, application: application)
+      Event.create!(
+        user: application.user,
+        auditable: voucher,
+        action: 'voucher_assigned',
+        metadata: { application_id: application.id }
+      )
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, 'Voucher previously issued'
+      assert_includes response.body, 'cannot be re-issued'
+      assert_includes response.body, voucher.code
+      assert_select "form[action='#{assign_voucher_admin_application_path(application)}']", count: 0
+      assert_select 'p', text: /\AVoucher issued\z/, count: 0
+    end
+
+    test 'show voucher panel explains blocked voucher states without manual assignment action' do
+      FeatureFlag.enable!(:vouchers_enabled)
+
+      missing_certification = create(:application, :approved, :voucher_fulfillment,
+                                     user: create(:constituent, email: generate(:email)))
+      missing_proof = create(:application, :completed, :with_all_proofs, :voucher_fulfillment,
+                             user: create(:constituent, email: generate(:email)))
+      missing_proof.update!(id_proof_status: :not_reviewed)
+
+      [
+        [missing_certification, 'disability certification is not approved'],
+        [missing_proof.reload, 'required proofs are not all approved']
+      ].each do |application, reason|
+        get admin_application_path(application)
+
+        assert_response :success
+        assert_includes response.body, 'Voucher blocked'
+        assert_includes response.body, reason
+        assert_select "form[action='#{assign_voucher_admin_application_path(application)}']", count: 0
+      end
+    end
+
+    test 'show does not render voucher panel for equipment fulfillment applications' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      application = create(:application, :completed, :with_all_proofs,
+                           user: create(:constituent, email: generate(:email)))
+      application.update!(fulfillment_type: :equipment)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select '#voucher-details-title', count: 0
+      assert_select "form[action='#{assign_voucher_admin_application_path(application)}']", count: 0
+    end
+
+    test 'show voucher panel explains disabled voucher issuance without manual assignment action' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      application = create(:application, :completed, :voucher_fulfillment,
+                           user: create(:constituent, email: generate(:email)))
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select '#voucher-details-title', count: 1
+      assert_includes response.body, 'Voucher issuance disabled'
+      assert_includes response.body, 'Voucher cannot be issued while voucher issuance is disabled.'
+      assert_not_includes response.body, 'the application is not approved'
+      assert_select "form[action='#{assign_voucher_admin_application_path(application)}']", count: 0
+    end
+
+    test 'show voucher panel explains disabled flag while showing existing vouchers' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      application = create(:application, :completed, :voucher_fulfillment,
+                           user: create(:constituent, email: generate(:email)))
+      voucher = create(:voucher, application: application)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, 'Voucher issuance disabled'
+      assert_includes response.body, 'Existing vouchers are shown below'
+      assert_select 'p', text: /\AVoucher issued\z/, count: 0
+      assert_includes response.body, voucher.code
+    end
+
+    test 'show voucher panel explains issued state' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      application = create(:application, :completed, :voucher_fulfillment,
+                           user: create(:constituent, email: generate(:email)))
+      voucher = create(:voucher, application: application)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, 'Voucher issued'
+      assert_includes response.body, 'A voucher has been issued for this application.'
+      assert_includes response.body, voucher.code
+      assert_select "form[action='#{assign_voucher_admin_application_path(application)}']", count: 0
     end
 
     test 'show page displays secure proof and certification submissions in activity history' do
@@ -334,8 +528,8 @@ module Admin
       RejectionReason.where(code: 'missing_name', proof_type: 'income', locale: 'en').destroy_all
       RejectionReason.where(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en').destroy_all
 
-      income_reason = RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
-      medical_reason = RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
+      RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
+      RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
 
       get admin_application_path(@application)
       assert_response :success
