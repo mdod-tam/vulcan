@@ -29,17 +29,27 @@ export default class extends Controller {
     // Listen for income validation events from income_validation_controller
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this);
     this.element.addEventListener('income-validation:validated', this._boundHandleIncomeValidation);
+    this._boundSyncMedicalProviderRequirement = this.syncMedicalProviderRequirement.bind(this);
+    this.element.addEventListener('input', this._boundSyncMedicalProviderRequirement);
+    this.element.addEventListener('change', this._boundSyncMedicalProviderRequirement);
 
     this.updateLanguagePreferenceNotices();
 
     // After sibling Stimulus controllers on this element finish connect (income validation, etc.)
-    requestAnimationFrame(() => this._applySubmitGating());
+    requestAnimationFrame(() => {
+      this.syncMedicalProviderRequirement();
+      this._applySubmitGating();
+    });
   }
 
   disconnect() {
     // Clean up event listeners
     if (this._boundHandleIncomeValidation) {
       this.element.removeEventListener('income-validation:validated', this._boundHandleIncomeValidation);
+    }
+    if (this._boundSyncMedicalProviderRequirement) {
+      this.element.removeEventListener('input', this._boundSyncMedicalProviderRequirement);
+      this.element.removeEventListener('change', this._boundSyncMedicalProviderRequirement);
     }
   }
 
@@ -117,44 +127,68 @@ export default class extends Controller {
    * When "No medical provider information provided" is checked, hide fields and remove required
    */
   toggleMedicalProvider(event) {
-    const checkbox = event.target;
-    const isChecked = checkbox.checked;
-    
-    // Find the medical provider fieldset
+    this.syncMedicalProviderRequirement(event);
+  }
+
+  syncMedicalProviderRequirement(event = null) {
+    if (event?.target && !this._isMedicalProviderControl(event.target)) return;
+
+    const checkbox = this.element.querySelector('input[name="no_medical_provider_information"]');
+    if (!checkbox) return;
+
     const fieldset = checkbox.closest('fieldset');
-    const medicalProviderFields = fieldset.querySelectorAll('[name*="medical_provider"]');
+    if (!fieldset) return;
+
+    const isChecked = checkbox.checked;
+    const medicalProviderFields = Array.from(fieldset.querySelectorAll('input, select, textarea'))
+      .filter((field) => field.name?.startsWith("application[medical_provider_"));
+    const requiredProviderFields = Array.from(medicalProviderFields)
+      .filter((field) => this._isApplicationMedicalProviderField(field));
+    const hasProviderInfo = medicalProviderFields
+      .some((field) => String(field.value || "").trim() !== "");
     const description = fieldset.querySelector('p.text-sm');
     const fieldsContainer = fieldset.querySelector('.grid');
-    
+    const medicalRelease = fieldset.querySelector('input[type="checkbox"][name="application[medical_release_authorized]"]');
+
     if (isChecked) {
-      // Hide only the form fields and description, keep the header visible
       if (description) description.classList.add('hidden');
       if (fieldsContainer) fieldsContainer.classList.add('hidden');
-      
-      // Remove required attribute from all medical provider fields
-      medicalProviderFields.forEach(field => {
-        if (!this._isApplicationMedicalProviderField(field)) return;
 
-        field.removeAttribute('required');
-        field.removeAttribute('aria-required');
-      });
-    } else {
-      // Show the form fields and description
-      if (description) description.classList.remove('hidden');
-      if (fieldsContainer) fieldsContainer.classList.remove('hidden');
-      
-      // Add required attribute back to all medical provider fields
-      medicalProviderFields.forEach(field => {
-        if (this._isApplicationMedicalProviderField(field)) {
-          field.setAttribute('required', 'required');
-          field.setAttribute('aria-required', 'true');
-        }
-      });
+      this._setRequired(requiredProviderFields, false);
+      this._setRequired([medicalRelease], false);
+      checkbox.required = false;
+      checkbox.setCustomValidity("");
+      return;
     }
+
+    if (description) description.classList.remove('hidden');
+    if (fieldsContainer) fieldsContainer.classList.remove('hidden');
+
+    this._setRequired(requiredProviderFields, hasProviderInfo);
+    this._setRequired([medicalRelease], hasProviderInfo);
+    checkbox.required = !hasProviderInfo;
+    checkbox.setCustomValidity(hasProviderInfo ? "" : "Check this box if no certifying professional information was provided.");
   }
 
   _isApplicationMedicalProviderField(field) {
     return field.name.startsWith("application[medical_provider_") && !field.name.includes("fax");
+  }
+
+  _isMedicalProviderControl(field) {
+    return field.name === "no_medical_provider_information" ||
+      field.name?.startsWith("application[medical_provider_");
+  }
+
+  _setRequired(fields, required) {
+    fields.filter(Boolean).forEach((field) => {
+      if (required) {
+        field.setAttribute('required', 'required');
+        field.setAttribute('aria-required', 'true');
+      } else {
+        field.removeAttribute('required');
+        field.removeAttribute('aria-required');
+      }
+    });
   }
 
   /**

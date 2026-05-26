@@ -120,7 +120,7 @@ describe("PaperApplicationController", () => {
     expect(submitButton.disabled).toBe(false)
   })
 
-  test("medical provider toggle does not make the no-provider checkbox required", () => {
+  test("medical provider toggle manages provider and release requirements", () => {
     document.body.innerHTML = `
       <form data-controller="paper-application">
         <fieldset>
@@ -136,6 +136,8 @@ describe("PaperApplicationController", () => {
             <input type="email" name="application[medical_provider_email]" required>
             <input type="text" name="application[medical_provider_fax]">
           </div>
+          <input type="hidden" name="application[medical_release_authorized]" value="0">
+          <input type="checkbox" name="application[medical_release_authorized]" value="1" required>
         </fieldset>
       </form>
     `
@@ -147,6 +149,8 @@ describe("PaperApplicationController", () => {
     const providerPhone = document.querySelector("input[name='application[medical_provider_phone]']")
     const providerEmail = document.querySelector("input[name='application[medical_provider_email]']")
     const providerFax = document.querySelector("input[name='application[medical_provider_fax]']")
+    const hiddenMedicalRelease = document.querySelector("input[type='hidden'][name='application[medical_release_authorized]']")
+    const medicalRelease = document.querySelector("input[type='checkbox'][name='application[medical_release_authorized]']")
 
     Object.defineProperty(directController, "element", {
       value: form,
@@ -161,15 +165,77 @@ describe("PaperApplicationController", () => {
     expect(providerPhone.hasAttribute("required")).toBe(false)
     expect(providerEmail.hasAttribute("required")).toBe(false)
     expect(providerFax.hasAttribute("required")).toBe(false)
+    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
+    expect(medicalRelease.hasAttribute("required")).toBe(false)
     expect(checkbox.hasAttribute("required")).toBe(false)
 
     checkbox.checked = false
-    directController.toggleMedicalProvider({ target: checkbox })
+    providerName.value = "Dr. Test"
+    directController.syncMedicalProviderRequirement({ target: providerName })
 
     expect(providerName.hasAttribute("required")).toBe(true)
     expect(providerPhone.hasAttribute("required")).toBe(true)
     expect(providerEmail.hasAttribute("required")).toBe(true)
     expect(providerFax.hasAttribute("required")).toBe(false)
+    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
+    expect(medicalRelease.hasAttribute("required")).toBe(true)
     expect(checkbox.hasAttribute("required")).toBe(false)
+  })
+
+  test("blank provider info requires the no-provider checkbox instead of provider fields", () => {
+    document.body.innerHTML = `
+      <form data-controller="paper-application">
+        <fieldset>
+          <input type="checkbox" name="no_medical_provider_information">
+          <p class="text-sm">Provider description</p>
+          <div class="grid">
+            <input type="text" name="application[medical_provider_name]" required>
+            <input type="tel" name="application[medical_provider_phone]" required>
+            <input type="email" name="application[medical_provider_email]" required>
+            <input type="text" name="application[medical_provider_fax]">
+          </div>
+          <input type="hidden" name="application[medical_release_authorized]" value="0">
+          <input type="checkbox" name="application[medical_release_authorized]" value="1" required>
+        </fieldset>
+      </form>
+    `
+
+    const form = document.querySelector("[data-controller='paper-application']")
+    const directController = new PaperApplicationController()
+    const checkbox = document.querySelector("input[name='no_medical_provider_information']")
+    const providerName = document.querySelector("input[name='application[medical_provider_name]']")
+    const providerPhone = document.querySelector("input[name='application[medical_provider_phone]']")
+    const providerEmail = document.querySelector("input[name='application[medical_provider_email]']")
+    const hiddenMedicalRelease = document.querySelector("input[type='hidden'][name='application[medical_release_authorized]']")
+    const medicalRelease = document.querySelector("input[type='checkbox'][name='application[medical_release_authorized]']")
+
+    Object.defineProperty(directController, "element", {
+      value: form,
+      writable: false,
+      configurable: true
+    })
+
+    directController.syncMedicalProviderRequirement()
+
+    expect(providerName.hasAttribute("required")).toBe(false)
+    expect(providerPhone.hasAttribute("required")).toBe(false)
+    expect(providerEmail.hasAttribute("required")).toBe(false)
+    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
+    expect(medicalRelease.hasAttribute("required")).toBe(false)
+    expect(checkbox.hasAttribute("required")).toBe(true)
+    expect(checkbox.validationMessage).toBe("Check this box if no certifying professional information was provided.")
+
+    providerName.value = "Dr. Test"
+    providerPhone.value = "555-111-2222"
+    providerEmail.value = "dr.test@example.com"
+    directController.syncMedicalProviderRequirement({ target: providerEmail })
+
+    expect(providerName.hasAttribute("required")).toBe(true)
+    expect(providerPhone.hasAttribute("required")).toBe(true)
+    expect(providerEmail.hasAttribute("required")).toBe(true)
+    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
+    expect(medicalRelease.hasAttribute("required")).toBe(true)
+    expect(checkbox.hasAttribute("required")).toBe(false)
+    expect(checkbox.validationMessage).toBe("")
   })
 })
