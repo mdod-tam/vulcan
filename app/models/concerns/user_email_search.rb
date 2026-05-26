@@ -55,6 +55,7 @@ module UserEmailSearch
       domain_labels = domain.to_s.split('.')
 
       tokens = [normalized_email, domain]
+      tokens.concat(prefixes_for(normalized_email))
       tokens.concat(prefixes_for(local_part))
       tokens.concat(local_part.to_s.split(EMAIL_SEGMENT_SPLIT).flat_map { |segment| prefixes_for(segment) })
       tokens.concat(domain_labels[0...-1].to_a.flat_map { |label| prefixes_for(label) })

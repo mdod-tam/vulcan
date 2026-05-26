@@ -9,6 +9,8 @@ class UserEmailSearchTokenTest < ActiveSupport::TestCase
     assert_not_empty user.email_search_tokens.reload
     assert_includes User.with_email_search_match('alex.smith+portal@example.com'), user
     assert_includes User.with_email_search_match('alex'), user
+    assert_includes User.with_email_search_match('alex.smith+portal@'), user
+    assert_includes User.with_email_search_match('alex.smith+portal@exam'), user
     assert_includes User.with_email_search_match('smit'), user
     assert_includes User.with_email_search_match('port'), user
     assert_includes User.with_email_search_match('example.com'), user

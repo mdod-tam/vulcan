@@ -20,6 +20,8 @@ module Users
       scope = User.where(id: [matching_user.id, other_user.id])
 
       assert_filter_matches scope, 'alex.smith+portal@searchable-domain.test', matching_user, other_user
+      assert_filter_matches scope, 'alex.smith+portal@', matching_user, other_user
+      assert_filter_matches scope, 'alex.smith+portal@search', matching_user, other_user
       assert_filter_matches scope, 'alex', matching_user, other_user
       assert_filter_matches scope, 'smit', matching_user, other_user
       assert_filter_matches scope, 'portal', matching_user, other_user
