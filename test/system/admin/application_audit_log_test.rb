@@ -177,6 +177,9 @@ module Admin
       # First approve the application and medical certification so voucher assignment becomes available
       @application.update!(
         status: 'approved',
+        income_proof_status: 'approved',
+        residency_proof_status: 'approved',
+        id_proof_status: 'approved',
         medical_certification_status: 'approved'
       )
 
@@ -194,7 +197,7 @@ module Admin
         # Verify all the text
         assert_text 'Voucher Assigned'
         assert_text @admin.full_name
-        assert_match(/Voucher \w+ assigned with value \$[\d,]+\.\d{2}/, page.text)
+        assert_match(/Voucher \w+ assigned on \w+ \d{2}, \d{4} for \$[\d,]+\.\d{2}/, page.text)
       end
     end
   end

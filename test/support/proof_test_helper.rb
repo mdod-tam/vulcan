@@ -92,13 +92,15 @@ module ProofTestHelper
     options = {
       status: 'in_progress',
       income_proof_status: 'not_reviewed',
-      residency_proof_status: 'not_reviewed'
+      residency_proof_status: 'not_reviewed',
+      id_proof_status: 'not_reviewed'
     }.merge(options)
 
     app.update!(
       status: options[:status],
       income_proof_status: options[:income_proof_status],
-      residency_proof_status: options[:residency_proof_status]
+      residency_proof_status: options[:residency_proof_status],
+      id_proof_status: options[:id_proof_status]
     )
 
     app

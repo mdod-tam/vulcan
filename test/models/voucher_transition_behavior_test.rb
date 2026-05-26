@@ -4,11 +4,20 @@ require 'test_helper'
 
 class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   include ActionDispatch::TestProcess::FixtureFile
+  include ActiveJob::TestHelper
 
   def setup
+    clear_enqueued_jobs
+    clear_performed_jobs
     setup_paper_application_context
     @income_flag = FeatureFlag.find_or_create_by!(name: 'income_proof_required') { |f| f.enabled = true }
     @vouchers_flag = FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
+  end
+
+  def teardown
+    clear_enqueued_jobs
+    clear_performed_jobs
+    Current.reset
   end
 
   # --- AuditEventService: value-aware dedup for feature_flag_toggled ---
@@ -223,9 +232,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     # proof status, so the application correctly escalates to awaiting_dcf. This verifies that
     # income is ignored in the proof-sufficiency check when the flag is off.
     assert_equal 'awaiting_dcf', app.status,
-                 "Expected awaiting_dcf: income ignored (flag off), residency approved triggers DCF escalation"
+                 'Expected awaiting_dcf: income ignored (flag off), residency approved triggers DCF escalation'
     assert_equal 'requested', app.medical_certification_status,
-                 "Expected cert request to be sent when proofs are sufficient"
+                 'Expected cert request to be sent when proofs are sufficient'
   end
 
   # --- PaperApplicationService: income proof processing skip ---
@@ -284,6 +293,20 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
 
     assert app.voucher_fulfillment?, 'voucher_fulfillment? should remain true after voucher issuance'
     assert_not app.voucher_issuable?, 'voucher_issuable? should be false once a voucher exists'
+  end
+
+  test 're-transition to approved does not double enqueue or issue voucher' do
+    @vouchers_flag.update!(enabled: true)
+    admin = create(:admin)
+    app = create(:application, :completed, :voucher_fulfillment)
+    create(:voucher, application: app)
+    app.reload
+
+    assert_no_enqueued_jobs only: IssueInitialVoucherJob do
+      assert_no_difference -> { Voucher.where(application: app).count } do
+        assert app.transition_status!(:approved, actor: admin)
+      end
+    end
   end
 
   # --- FeatureFlagsController: transactional audit ---

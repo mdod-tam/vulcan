@@ -24,14 +24,17 @@ Before a voucher can be assigned to a constituent, their application must meet s
 
 **Required Status Checks:**
 - `status_approved?` - Application must be fully approved by an administrator
+- `voucher_fulfillment?` - Application must be assigned to voucher fulfillment
+- `required_proofs_approved?` - Required proof statuses must all be approved
 - `medical_certification_status_approved?` - Medical certification must be verified and approved
-- Income proof must be validated and approved
-- Residency proof must be validated and approved
+- Only one voucher may exist for the application
 
 **Implementation:**
 ```ruby
 def can_create_voucher?
-  status_approved? &&
+  voucher_fulfillment? &&
+    status_approved? &&
+    required_proofs_approved? &&
     medical_certification_status_approved? &&
     !vouchers.exists?
 end

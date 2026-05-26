@@ -96,7 +96,7 @@
                       <% if item[:type] == :event %>
                         <% case item[:action]
                           when "voucher_assigned" %>
-                            Voucher <%= item[:metadata]['voucher_code'] %> assigned with value <%= number_to_currency(item[:metadata]['initial_value']) %>
+                            <%= voucher_assignment_detail(item[:metadata], fallback_time: item[:timestamp]) %>
                           <% when "voucher_redeemed" %>
                             Voucher <%= item[:metadata]['voucher_code'] %> redeemed for <%= number_to_currency(item[:metadata]['amount']) %> at <%= item[:metadata]['vendor_name'] %>
                           <% when "voucher_expired" %>

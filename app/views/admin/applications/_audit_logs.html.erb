@@ -218,7 +218,7 @@
                       provider_text = provider.present? ? " from #{provider}" : ""
                       "Disability certification requested#{provider_text} (via #{method})"
                     when "voucher_assigned"
-                      "Voucher #{log.metadata['voucher_code']} assigned with value #{number_to_currency(log.metadata['initial_value'])}"
+                      voucher_assignment_detail(log.metadata, fallback_time: log.created_at)
                     when "voucher_redeemed"
                       "Voucher #{log.metadata['voucher_code']} redeemed for #{number_to_currency(log.metadata['amount'])} at #{log.metadata['vendor_name']}"
                     when "voucher_expired"
