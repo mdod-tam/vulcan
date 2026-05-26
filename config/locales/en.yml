@@ -604,7 +604,7 @@ en:
           not_active: "This secure W9 upload link is not active."
   controllers:
     application:
-      check_passsword_change_required:
+      check_password_change_required:
         password_security_change: "For security reasons, you must change your password before continuing."
       sign_in:
         signin_pass: "Signed in successfully"

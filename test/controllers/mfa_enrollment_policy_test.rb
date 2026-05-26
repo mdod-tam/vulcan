@@ -48,6 +48,18 @@ class MfaEnrollmentPolicyTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test 'forced password change notice uses global translation during MFA setup access' do
+    admin = create(:admin, force_password_change: true)
+    sign_in_for_integration_test(admin, bypass_mfa_enrollment: false)
+
+    get setup_two_factor_authentication_path
+
+    assert_redirected_to edit_password_path
+    assert_equal I18n.t('controllers.application.check_password_change_required.password_security_change'),
+                 flash[:notice]
+    assert_no_match(/Translation missing/, flash[:notice])
+  end
+
   test 'does not offer skip link to required-role users during MFA setup' do
     admin = create(:admin)
     sign_in_for_integration_test(admin, bypass_mfa_enrollment: false)
