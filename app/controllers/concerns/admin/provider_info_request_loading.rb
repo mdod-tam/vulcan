@@ -42,13 +42,12 @@ module Admin
       return {} if application_ids.blank?
 
       pending_ids = Application.pending_provider_info.where(id: application_ids).pluck(:id)
-      summaries = pending_ids.index_with { provider_info_empty_summary }
-      return summaries if pending_ids.blank?
+      return {} if pending_ids.blank?
 
-      provider_info_latest_batch_forms(pending_ids).each do |application_id, batch_forms|
-        summaries[application_id] = provider_info_batch_summary(batch_forms)
+      provider_info_latest_batch_forms(pending_ids).each_with_object({}) do |(application_id, batch_forms), summaries|
+        summary = provider_info_batch_summary(batch_forms)
+        summaries[application_id] = summary if summary
       end
-      summaries
     end
 
     def provider_info_guardian_relationships(application)
@@ -107,28 +106,38 @@ module Admin
         end
     end
 
-    def provider_info_empty_summary
+    def provider_info_batch_summary(batch_forms)
+      active_expirations = batch_forms.select(&:active?).filter_map(&:expires_at)
+      summary_status = provider_info_summary_status(batch_forms, active_expirations)
+      return nil if summary_status.blank?
+
       {
         pending: true,
-        recipient_count: 0,
-        status_counts: { active: 0, submitted: 0, expired: 0, revoked: 0 },
-        last_sent_at: nil,
-        nearest_expiration_at: nil
+        summary_status: summary_status,
+        last_sent_at: batch_forms.filter_map(&:sent_at).max,
+        nearest_expiration_at: active_expirations.min
       }
     end
 
-    def provider_info_batch_summary(batch_forms)
-      status_counts = { active: 0, submitted: 0, expired: 0, revoked: 0 }
-      batch_forms.each { |form| status_counts[form.display_status] += 1 }
+    def provider_info_summary_status(batch_forms, active_expirations)
+      return :active if active_expirations.any?
 
-      active_expirations = batch_forms.select(&:active?).filter_map(&:expires_at)
-      {
-        pending: true,
-        recipient_count: batch_forms.size,
-        status_counts: status_counts,
-        last_sent_at: batch_forms.filter_map(&:sent_at).max,
-        nearest_expiration_at: active_expirations.min || batch_forms.filter_map(&:expires_at).min
-      }
+      cutoff = provider_info_secure_link_recent_cutoff
+      return :expired if batch_forms.any? { |form| provider_info_recently_expired?(form, cutoff) }
+
+      :revoked if batch_forms.any? { |form| provider_info_recently_revoked?(form, cutoff) }
+    end
+
+    def provider_info_recently_expired?(form, cutoff)
+      form.display_status == :expired && form.expires_at.present? && form.expires_at >= cutoff
+    end
+
+    def provider_info_recently_revoked?(form, cutoff)
+      form.display_status == :revoked && form.revoked_at.present? && form.revoked_at >= cutoff
+    end
+
+    def provider_info_secure_link_recent_cutoff
+      (Policy.get('secure_form_link_expiration_hours') || 48).hours.ago
     end
   end
 end
