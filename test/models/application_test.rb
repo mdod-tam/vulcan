@@ -28,6 +28,32 @@ class ApplicationTest < ActiveSupport::TestCase
     skip 'Skipping notification test until compatible with new guards'
   end
 
+  test 'submitted application requires provider info before DCF routing or approval' do
+    application = build(:application, :in_progress,
+                        medical_provider_name: nil,
+                        medical_provider_phone: nil,
+                        medical_provider_email: nil)
+
+    assert_not application.valid?
+    assert_includes application.errors.attribute_names, :medical_provider_name
+    assert_includes application.errors.attribute_names, :medical_provider_phone
+    assert_includes application.errors.attribute_names, :medical_provider_email
+  end
+
+  test 'missing provider info is allowed while awaiting DCF or after DCF approval' do
+    application = build(:application, :in_progress,
+                        medical_provider_name: nil,
+                        medical_provider_phone: nil,
+                        medical_provider_email: nil)
+
+    application.status = :awaiting_dcf
+    assert application.valid?
+
+    application.status = :approved
+    application.medical_certification_status = :approved
+    assert application.valid?
+  end
+
   test 'paper applications can be rejected without attachments' do
     # Set Current attributes for paper application context
     Current.force_notifications = false

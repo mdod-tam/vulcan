@@ -131,6 +131,50 @@ module Admin
       assert_equal 'paper', created_application.submission_method
     end
 
+    test 'create shows workflow reconciliation failure as alert instead of success text' do
+      unique_email = generate(:email)
+      unique_phone = "240-#{format('%03d', SecureRandom.random_number(900) + 100)}-#{format('%04d', SecureRandom.random_number(9000) + 1000)}"
+
+      request_service = mock('request-provider-info-service')
+      request_service.expects(:call).returns(BaseService::Result.new(success: true))
+      Applications::RequestProviderInfo.stubs(:new).returns(request_service)
+      Application.any_instance.stubs(:reconcile_workflow_state!).raises(StandardError, 'simulated reconciliation failure')
+
+      begin
+        post admin_paper_applications_path, headers: default_headers, params: {
+          no_medical_provider_information: true,
+          constituent: {
+            first_name: 'Workflow',
+            last_name: 'Warning',
+            email: unique_email,
+            phone: unique_phone,
+            physical_address_1: '101 Warning Way',
+            city: 'Baltimore',
+            state: 'MD',
+            zip_code: '21201',
+            hearing_disability: '1'
+          },
+          application: {
+            household_size: 1,
+            annual_income: 10_000,
+            maryland_resident: '1',
+            self_certify_disability: '1'
+          }
+        }
+      ensure
+        Application.any_instance.unstub(:reconcile_workflow_state!)
+      end
+
+      user = User.find_by(email: unique_email)
+      assert user, "Expected paper intake to create user #{unique_email}"
+
+      created_application = Application.find_by(user: user)
+      assert created_application, "Expected paper intake to create application for #{unique_email}"
+      assert_redirected_to admin_application_path(created_application)
+      assert_equal 'Paper application successfully submitted.', flash[:notice]
+      assert_equal 'Workflow status update failed -- please verify this application status and advance it manually if needed.', flash[:alert]
+    end
+
     test 'should persist locale for self-applicant' do
       unique_email = "self.locale.#{Time.now.to_i}@example.com"
 

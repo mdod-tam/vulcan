@@ -79,6 +79,17 @@ module Applications
       create(:constituent, email: email)
     end
 
+    def uploaded_pdf(filename = 'income_proof.pdf')
+      fixture_file_upload(
+        Rails.root.join('test/fixtures/files', filename),
+        'application/pdf'
+      )
+    end
+
+    def unique_paper_phone
+      "240-#{format('%03d', SecureRandom.random_number(900) + 100)}-#{format('%04d', SecureRandom.random_number(9000) + 1000)}"
+    end
+
     test 'creates application with accepted income proof' do
       # We'll focus only on testing the service approach for simplicity
 
@@ -373,6 +384,43 @@ module Applications
       assert_nil service.application.medical_provider_name
       assert_nil service.application.medical_provider_phone
       assert_nil service.application.medical_provider_email
+    end
+
+    test 'paper intake without provider info auto-approves when proofs and disability certification are approved' do
+      unique_email = generate(:email)
+
+      service_params = {
+        no_medical_provider_information: true,
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_paper_phone),
+        application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email),
+        income_proof_action: 'accept',
+        income_proof: uploaded_pdf,
+        residency_proof_action: 'accept',
+        residency_proof: uploaded_pdf,
+        id_proof_action: 'accept',
+        id_proof: uploaded_pdf,
+        medical_certification_action: 'accept',
+        medical_certification: uploaded_pdf('medical_certification_valid.pdf')
+      }
+
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+      Applications::RequestProviderInfo.expects(:new).never
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      result = service.create
+
+      assert result, "Failed to create auto-approvable paper application: #{service.errors.inspect}"
+
+      application = service.application.reload
+      assert_predicate application, :status_approved?
+      assert_predicate application, :income_proof_status_approved?
+      assert_predicate application, :residency_proof_status_approved?
+      assert_predicate application, :id_proof_status_approved?
+      assert_predicate application, :medical_certification_status_approved?
+      assert_nil application.medical_provider_name
+      assert_nil application.medical_provider_phone
+      assert_nil application.medical_provider_email
+      assert_nil service.reconciliation_note
     end
 
     test 'routes medical certification rejection directly when provider contact information is missing' do

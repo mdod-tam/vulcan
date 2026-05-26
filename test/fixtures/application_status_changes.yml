@@ -3,21 +3,21 @@ draft_to_in_progress:
   from_status: draft
   to_status: in_progress
   user: admin_david
-  changed_at: <%= Time.current %>
-  created_at: <%= Time.current %>
+  changed_at: <%= Time.zone.local(2024, 1, 15, 12, 0, 0) %>
+  created_at: <%= Time.zone.local(2024, 1, 15, 12, 0, 0) %>
 
 in_progress_to_approved:
   application: active
   from_status: in_progress
   to_status: approved
   user: admin_david
-  changed_at: <%= 1.day.ago %>
-  created_at: <%= 1.day.ago %>
+  changed_at: <%= Time.zone.local(2024, 1, 16, 12, 0, 0) %>
+  created_at: <%= Time.zone.local(2024, 1, 16, 12, 0, 0) %>
 
 needs_info_to_in_progress:
   application: in_review
   from_status: awaiting_proof
   to_status: in_progress
   user: admin_david
-  changed_at: <%= 2.days.ago %>
-  created_at: <%= 2.days.ago %>
+  changed_at: <%= Time.zone.local(2024, 1, 17, 12, 0, 0) %>
+  created_at: <%= Time.zone.local(2024, 1, 17, 12, 0, 0) %>
