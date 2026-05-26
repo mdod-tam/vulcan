@@ -944,7 +944,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_26_123000) do
   add_foreign_key "training_sessions", "applications"
   add_foreign_key "training_sessions", "products", column: "product_trained_on_id"
   add_foreign_key "training_sessions", "users", column: "trainer_id"
-  add_foreign_key "user_email_search_tokens", "users"
+  add_foreign_key "user_email_search_tokens", "users", on_delete: :cascade
   add_foreign_key "users", "users", column: "evaluator_id"
   add_foreign_key "users", "users", column: "income_verified_by_id"
   add_foreign_key "users", "users", column: "medical_provider_id"

@@ -3,7 +3,7 @@
 class CreateUserEmailSearchTokens < ActiveRecord::Migration[8.1]
   def change
     create_table :user_email_search_tokens do |t|
-      t.references :user, null: false, foreign_key: true
+      t.references :user, null: false, foreign_key: { on_delete: :cascade }
       t.string :token_digest, null: false
 
       t.timestamps
