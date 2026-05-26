@@ -66,6 +66,37 @@ module Applications
       assert_predicate form, :kind_income_proof_resubmission?
     end
 
+    test 'creates proof request for rejected residency status without matching proof review' do
+      application = create(:application, :in_progress, residency_proof_status: :rejected)
+      application.residency_proof.attach(
+        io: StringIO.new('rejected proof still attached'),
+        filename: 'rejected-residency.pdf',
+        content_type: 'application/pdf'
+      )
+      assert_empty application.proof_reviews.where(proof_type: :residency, status: :rejected)
+
+      ApplicationNotificationsMailer.expects(:proof_rejected).never
+      ApplicationNotificationsMailer
+        .expects(:proof_requested)
+        .with(
+          application,
+          :residency,
+          secure_upload_url: regexp_matches(/secure_proof_form/),
+          recipient: application.user
+        )
+        .returns(@mailer_delivery)
+      @mailer_delivery.expects(:deliver_now).returns(true)
+
+      result = RequestProofResubmission.new(application: application, actor: @actor, proof_type: :residency).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_predicate form, :kind_residency_proof_resubmission?
+      assert_equal 'residency',
+                   Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested')
+                               .metadata.fetch('proof_type')
+    end
+
     test 'issued proof resubmission request appears in application audit logs' do
       result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
 
