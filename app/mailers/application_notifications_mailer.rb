@@ -551,9 +551,9 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     )
   end
 
-  def build_proof_submission_options(scope, application, secure_upload_url, proof_type_formatted:, locale: nil)
+  def build_proof_submission_options(scope, _application, secure_upload_url, proof_type_formatted:, locale: nil)
     locale = locale.presence || I18n.default_locale
-    option_type = secure_upload_url.present? && !application.submission_method_paper? ? 'online' : 'paper'
+    option_type = secure_upload_url.present? ? 'online' : 'paper'
 
     I18n.t(
       "#{scope}.#{option_type}",

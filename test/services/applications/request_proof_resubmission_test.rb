@@ -315,6 +315,56 @@ module Applications
       assert_equal 'id', Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested').metadata.fetch('proof_type')
     end
 
+    test 'paper application with email preference sends secure proof request email with upload url' do
+      application = create(:application, :in_progress, id_proof_status: :not_reviewed, submission_method: :paper)
+      application.user.update!(communication_preference: :email)
+
+      @mailer_delivery.expects(:deliver_now).returns(true)
+      ApplicationNotificationsMailer
+        .expects(:proof_requested)
+        .with(
+          application,
+          :id,
+          secure_upload_url: regexp_matches(/secure_proof_form/),
+          recipient: application.user
+        )
+        .returns(@mailer_delivery)
+
+      result = RequestProofResubmission.new(
+        application: application,
+        actor: @actor,
+        proof_type: :id
+      ).call
+
+      assert_predicate result, :success?
+      assert_predicate result.data.fetch(:secure_request_forms).first, :recipient_channel_email?
+    end
+
+    test 'letter preference proof request does not pass bearer url to mailer' do
+      application = create(:application, :in_progress, id_proof_status: :not_reviewed)
+      application.user.update!(communication_preference: :letter)
+
+      @mailer_delivery.expects(:deliver_now).returns(true)
+      ApplicationNotificationsMailer
+        .expects(:proof_requested)
+        .with(
+          application,
+          :id,
+          secure_upload_url: nil,
+          recipient: application.user
+        )
+        .returns(@mailer_delivery)
+
+      result = RequestProofResubmission.new(
+        application: application,
+        actor: @actor,
+        proof_type: :id
+      ).call
+
+      assert_predicate result, :success?
+      assert_predicate result.data.fetch(:secure_request_forms).first, :recipient_channel_letter?
+    end
+
     test 'fails when proof upload request is not needed' do
       application = create(:application, :in_progress, id_proof_status: :approved)
 
