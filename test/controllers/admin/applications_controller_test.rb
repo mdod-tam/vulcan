@@ -216,6 +216,21 @@ module Admin
       assert_select 'div.flex.items-center.space-x-2 span', text: 'In progress'
     end
 
+    test 'show page displays the fulfillment type badge' do
+      equipment_app = create(:application,
+                             user: create(:constituent, email: generate(:email)))
+      get admin_application_path(equipment_app)
+      assert_response :success
+      assert_includes response.body, 'Fulfillment: Equipment Order'
+
+      voucher_app = create(:application,
+                           :voucher_fulfillment,
+                           user: create(:constituent, email: generate(:email)))
+      get admin_application_path(voucher_app)
+      assert_response :success
+      assert_includes response.body, 'Fulfillment: Voucher'
+    end
+
     test 'show page displays the correct proof review button text' do
       # Assuming there's a button related to income proof review
       # Need to create applications with different proof statuses
@@ -334,8 +349,8 @@ module Admin
       RejectionReason.where(code: 'missing_name', proof_type: 'income', locale: 'en').destroy_all
       RejectionReason.where(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en').destroy_all
 
-      income_reason = RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
-      medical_reason = RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
+      RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
+      RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
 
       get admin_application_path(@application)
       assert_response :success

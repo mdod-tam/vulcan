@@ -24,6 +24,7 @@
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
         <div class="flex items-center space-x-2">
           <%= application_status_badge(@application) %>
+          <%= fulfillment_type_badge(@application) %>
           <p class="text-sm text-gray-500">
             Last Updated: <%= @application.updated_at.strftime("%B %d, %Y at %I:%M %p") %>
           </p>
