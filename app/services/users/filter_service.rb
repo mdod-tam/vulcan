@@ -59,7 +59,7 @@ module Users
         .then { |result| apply_sorting(result) }
     end
 
-    # Text search across first_name, last_name, email
+    # Text search across first_name, last_name, and email search tokens
     # Consolidates logic from Admin::UsersController#apply_search_filter and build_search_query
     def apply_search_filter(result)
       return result if params[:q].blank?
@@ -78,22 +78,20 @@ module Users
     end
 
     def apply_single_term_search(result, term)
-      query_term = "%#{term.downcase}%"
-      result.where(
-        'LOWER(first_name) ILIKE :q OR LOWER(last_name) ILIKE :q OR LOWER(email) ILIKE :q',
-        q: query_term
-      )
+      table = User.arel_table
+      query_term = search_pattern(term)
+      name_condition = table[:first_name].lower.matches(query_term).or(table[:last_name].lower.matches(query_term))
+
+      where_name_or_email(result, name_condition, term)
     end
 
     # Multi-term search: first try full name match, then fall back to OR matching
     # Matches the logic in Admin::UsersController#build_search_query
     def apply_multi_term_search(result, full_term, terms)
       # First try full name match using CONCAT
-      full_name_term = "%#{full_term.downcase}%"
-      full_name_result = result.where(
-        "LOWER(CONCAT(first_name, ' ', last_name)) ILIKE :q OR LOWER(email) ILIKE :q",
-        q: full_name_term
-      )
+      full_name_term = search_pattern(full_term)
+      full_name_result = result.where("LOWER(CONCAT(first_name, ' ', last_name)) ILIKE :q", q: full_name_term)
+                               .or(result.where(id: email_search_user_ids(full_term)))
 
       # If we get results, use them; otherwise fall back to OR matching individual terms
       return full_name_result if full_name_result.exists?
@@ -101,14 +99,13 @@ module Users
       # Build OR condition using Arel for safety (matches build_multi_term_condition)
       table = User.arel_table
       condition = terms.inject(nil) do |cond, term|
-        term_pattern = "%#{term.downcase}%"
+        term_pattern = search_pattern(term)
         term_cond = table[:first_name].lower.matches(term_pattern)
                                       .or(table[:last_name].lower.matches(term_pattern))
-                                      .or(table[:email].lower.matches(term_pattern))
         cond ? cond.or(term_cond) : term_cond
       end
 
-      result.where(condition)
+      where_name_or_email(result, condition, full_term)
     end
 
     # Filter by user role type (STI column)
@@ -164,6 +161,18 @@ module Users
       Rails.logger.error "Error applying user filters: #{error.message}"
       Rails.logger.error error.backtrace.join("\n")
       failure("Error applying filters: #{error.message}", scope)
+    end
+
+    def where_name_or_email(result, condition, query)
+      result.where(condition).or(result.where(id: email_search_user_ids(query)))
+    end
+
+    def email_search_user_ids(query)
+      User.with_email_search_match(query).select(:id)
+    end
+
+    def search_pattern(term)
+      "%#{ActiveRecord::Base.sanitize_sql_like(term.to_s.downcase)}%"
     end
   end
 end

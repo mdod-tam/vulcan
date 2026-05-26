@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_19_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_26_123000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -779,6 +779,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_19_000000) do
     t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
   end
 
+  create_table "user_email_search_tokens", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["token_digest"], name: "index_user_email_search_tokens_on_token_digest"
+    t.index ["user_id", "token_digest"], name: "index_user_email_search_tokens_on_user_id_and_token_digest", unique: true
+    t.index ["user_id"], name: "index_user_email_search_tokens_on_user_id"
+  end
+
   create_table "vendor_secure_request_forms", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "expires_at", null: false
@@ -934,6 +944,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_19_000000) do
   add_foreign_key "training_sessions", "applications"
   add_foreign_key "training_sessions", "products", column: "product_trained_on_id"
   add_foreign_key "training_sessions", "users", column: "trainer_id"
+  add_foreign_key "user_email_search_tokens", "users"
   add_foreign_key "users", "users", column: "evaluator_id"
   add_foreign_key "users", "users", column: "income_verified_by_id"
   add_foreign_key "users", "users", column: "medical_provider_id"

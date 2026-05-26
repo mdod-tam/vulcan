@@ -8,6 +8,7 @@ class User < ApplicationRecord
   include UserRolesAndCapabilities
   include UserProfile
   include UserGuardianship
+  include UserEmailSearch
 
   # Ensure duplicate review flag is accessible
   attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')

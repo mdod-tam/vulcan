@@ -115,12 +115,12 @@ module Applications
     end
 
     def apply_search_filter(scope)
-      search_term = "%#{params[:q]}%"
+      search_term = search_pattern(params[:q])
       # Join with users table to search on user fields in a single query
-      scope.joins(:user).where(
-        'applications.id::text ILIKE ? OR users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ?',
-        search_term, search_term, search_term, search_term
-      )
+      result = scope.joins(:user)
+      result.where('applications.id::text ILIKE :q OR users.first_name ILIKE :q OR users.last_name ILIKE :q',
+                   q: search_term)
+            .or(result.where(user_id: email_search_user_ids(params[:q])))
     end
 
     # Support text queries for guardian and dependent specific searches
@@ -128,16 +128,18 @@ module Applications
       result = scope
 
       if params[:managing_guardian_q].present?
-        q = "%#{params[:managing_guardian_q]}%"
+        q = search_pattern(params[:managing_guardian_q])
         # Explicit join to users as managing guardians
         result = result.joins('INNER JOIN users mg_users ON mg_users.id = applications.managing_guardian_id')
-                       .where('mg_users.first_name ILIKE ? OR mg_users.last_name ILIKE ? OR mg_users.email ILIKE ?', q, q, q)
+        result = result.where('mg_users.first_name ILIKE :q OR mg_users.last_name ILIKE :q', q: q)
+                       .or(result.where(managing_guardian_id: email_search_user_ids(params[:managing_guardian_q])))
       end
 
       if params[:dependent_q].present?
-        q = "%#{params[:dependent_q]}%"
+        q = search_pattern(params[:dependent_q])
         result = result.joins(:user)
-                       .where('users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.email ILIKE ?', q, q, q)
+        result = result.where('users.first_name ILIKE :q OR users.last_name ILIKE :q', q: q)
+                       .or(result.where(user_id: email_search_user_ids(params[:dependent_q])))
       end
 
       result
@@ -182,6 +184,14 @@ module Applications
 
     def fiscal_year
       FiscalYear.current_start_year
+    end
+
+    def email_search_user_ids(query)
+      User.with_email_search_match(query).select(:id)
+    end
+
+    def search_pattern(query)
+      "%#{ActiveRecord::Base.sanitize_sql_like(query.to_s.strip)}%"
     end
   end
 end
