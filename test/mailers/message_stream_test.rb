@@ -41,6 +41,6 @@ class MessageStreamTest < ActionMailer::TestCase
       email.deliver_now
     end
 
-    assert_equal 'user-email', email.message_stream
+    assert_equal 'outbound', email.message_stream
   end
 end

@@ -17,7 +17,7 @@ class UserMailer < ApplicationMailer
       reset_url: reset_url
     }.compact
 
-    send_email(user.email, text_template, variables, { message_stream: 'user-email' })
+    send_email(user.email, text_template, variables, { message_stream: 'outbound' })
   rescue ActiveRecord::RecordNotFound => e
     Rails.logger.error "Missing EmailTemplate (text format) for #{template_name}: #{e.message}"
     raise "Email template (text format) not found for #{template_name}"
