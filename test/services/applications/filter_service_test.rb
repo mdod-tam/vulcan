@@ -319,6 +319,127 @@ module Applications
       end
     end
 
+    test 'filters by applicant email search token' do
+      with_mocked_attachments do
+        matching_user = create(:constituent,
+                               first_name: 'Searchable',
+                               last_name: 'Applicant',
+                               email: 'applicant.anchor@example.com',
+                               vision_disability: true)
+        other_user = create(:constituent,
+                            first_name: 'Other',
+                            last_name: 'Applicant',
+                            email: 'other.applicant@example.com',
+                            hearing_disability: true)
+        matching_app = create(:application, status: :draft, user: matching_user)
+        other_app = create(:application, status: :draft, user: other_user)
+
+        service = FilterService.new(Application.where(id: [matching_app.id, other_app.id]), { q: 'anchor' })
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        assert_includes service_result.data, matching_app
+        assert_not_includes service_result.data, other_app
+      end
+    end
+
+    test 'filters by applicant underscore email search token literally' do
+      with_mocked_attachments do
+        matching_user = create(:constituent,
+                               email: 'firstname_lastname@member.senate.gov',
+                               vision_disability: true)
+        other_user = create(:constituent,
+                            email: 'firstnameXlastname@member.senate.gov',
+                            hearing_disability: true)
+        matching_app = create(:application, status: :draft, user: matching_user)
+        other_app = create(:application, status: :draft, user: other_user)
+
+        service = FilterService.new(
+          Application.where(id: [matching_app.id, other_app.id]),
+          { q: 'firstname_lastname' }
+        )
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        assert_includes service_result.data, matching_app
+        assert_not_includes service_result.data, other_app
+      end
+    end
+
+    test 'search filter still matches application id and applicant name' do
+      with_mocked_attachments do
+        matching_user = create(:constituent,
+                               first_name: 'Ida',
+                               last_name: 'Needleman',
+                               email: 'ida.needleman@example.com',
+                               speech_disability: true)
+        other_user = create(:constituent,
+                            first_name: 'Other',
+                            last_name: 'Person',
+                            email: 'other.person@example.com',
+                            hearing_disability: true)
+        matching_app = create(:application, status: :draft, user: matching_user)
+        other_app = create(:application, status: :draft, user: other_user)
+        scope = Application.where(id: [matching_app.id, other_app.id])
+
+        name_result = FilterService.new(scope, { q: 'Needleman' }).apply_filters
+        id_result = FilterService.new(scope, { q: matching_app.id.to_s }).apply_filters
+
+        assert name_result.success?
+        assert_includes name_result.data, matching_app
+        assert_not_includes name_result.data, other_app
+        assert id_result.success?
+        assert_includes id_result.data, matching_app
+        assert_not_includes id_result.data, other_app
+      end
+    end
+
+    test 'filters by managing guardian email search token' do
+      with_mocked_attachments do
+        guardian = create(:constituent, email: 'guardian.signal@example.com', hearing_disability: true)
+        dependent = create(:constituent, email: 'dependent.guardian-filter@example.com', vision_disability: true)
+        other_guardian = create(:constituent, email: 'other.guardian@example.com', speech_disability: true)
+        other_dependent = create(:constituent, email: 'other.dependent@example.com', mobility_disability: true)
+        matching_app = create(:application, status: :draft, user: dependent, managing_guardian: guardian)
+        other_app = create(:application, status: :draft, user: other_dependent, managing_guardian: other_guardian)
+
+        service = FilterService.new(
+          Application.where(id: [matching_app.id, other_app.id]),
+          { managing_guardian_q: 'signal' }
+        )
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        assert_includes service_result.data, matching_app
+        assert_not_includes service_result.data, other_app
+      end
+    end
+
+    test 'filters by dependent applicant email search token' do
+      with_mocked_attachments do
+        matching_user = create(:constituent,
+                               email: 'dependent.anchor@example.com',
+                               dependent_email: 'child.contact@example.com',
+                               vision_disability: true)
+        other_user = create(:constituent,
+                            email: 'other.dependent-filter@example.com',
+                            dependent_email: 'other.contact@example.com',
+                            hearing_disability: true)
+        matching_app = create(:application, status: :draft, user: matching_user)
+        other_app = create(:application, status: :draft, user: other_user)
+
+        service = FilterService.new(
+          Application.where(id: [matching_app.id, other_app.id]),
+          { dependent_q: 'child' }
+        )
+        service_result = service.apply_filters
+
+        assert service_result.success?
+        assert_includes service_result.data, matching_app
+        assert_not_includes service_result.data, other_app
+      end
+    end
+
     test 'combines multiple filter parameters' do
       with_mocked_attachments do
         # Set up applications with different properties
