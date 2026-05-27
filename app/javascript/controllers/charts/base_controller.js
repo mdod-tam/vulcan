@@ -45,17 +45,35 @@ class ChartBaseController extends Controller {
     return true
   }
 
+  containerDimensions() {
+    const el = this.element
+    let width = el.clientWidth || el.offsetWidth
+    let height = el.clientHeight || el.offsetHeight
+
+    if (!width && el.parentElement) {
+      width = el.parentElement.clientWidth || el.parentElement.offsetWidth
+    }
+
+    return {
+      width: Math.max(width || 400, 1),
+      height: Math.max(height || 300, 1)
+    }
+  }
+
+  applyContainerDimensions(canvas) {
+    const { width, height } = this.containerDimensions()
+    canvas.width = width
+    canvas.height = height
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+  }
+
   createCanvas(ariaLabel, ariaDesc, { describedById = null } = {}) {
     const canvas = document.createElement("canvas")
 
-    // With responsive: false, we need explicit canvas dimensions
-    // Get the container's computed dimensions
-    const rect = this.element.getBoundingClientRect()
-    const width = Math.round(rect.width) || 800
-    const height = Math.round(rect.height) || 300
-
-    canvas.width = width
-    canvas.height = height
+    // responsive: false — set explicit canvas size before Chart.js init so it does not
+    // recurse through getComputedStyle (critical on reports pages with many charts).
+    this.applyContainerDimensions(canvas)
 
     canvas.setAttribute("role", "img")
     canvas.setAttribute("aria-label", ariaLabel)
@@ -134,9 +152,14 @@ class ChartBaseController extends Controller {
     this._showMessage("text-gray-500", "Chart unavailable")
   }
 
-  // Simple visibility check used to avoid layout-measure loops
+  // Prefer layout box dimensions over offsetParent (unreliable in grids / Turbo prefetch).
   isVisible() {
-    return this.element && this.element.offsetParent !== null
+    if (!this.element) {
+      return false
+    }
+
+    const { width, height } = this.element.getBoundingClientRect()
+    return width > 0 && height > 0
   }
 
   _showMessage(colorClass, text) {
