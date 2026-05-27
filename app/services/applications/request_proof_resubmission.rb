@@ -95,7 +95,7 @@ module Applications
 
     def requestable_proof_state?
       return false if current_proof_status == 'approved'
-      return latest_rejection_review.present? if current_proof_status == 'rejected'
+      return true if current_proof_status == 'rejected'
       return false if current_proof_attachment.attached?
 
       current_proof_status == 'not_reviewed'
