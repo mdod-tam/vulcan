@@ -48,7 +48,14 @@ class ChartBaseController extends Controller {
   createCanvas(ariaLabel, ariaDesc, { describedById = null } = {}) {
     const canvas = document.createElement("canvas")
 
-    // With responsive: false, container height is set in ERB templates.
+    // With responsive: false, we need explicit canvas dimensions
+    // Get the container's computed dimensions
+    const rect = this.element.getBoundingClientRect()
+    const width = Math.round(rect.width) || 800
+    const height = Math.round(rect.height) || 300
+
+    canvas.width = width
+    canvas.height = height
 
     canvas.setAttribute("role", "img")
     canvas.setAttribute("aria-label", ariaLabel)
