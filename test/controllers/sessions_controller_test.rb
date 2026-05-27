@@ -37,6 +37,14 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to constituent_portal_dashboard_path
   end
 
+  def test_should_sign_in_with_normalized_email
+    user = create(:constituent, email: 'casey@example.com')
+
+    post sign_in_path, params: { email: "  #{user.email.upcase}  ", password: 'password123' }
+
+    assert_redirected_to constituent_portal_dashboard_path
+  end
+
   def test_sms_only_login_keeps_two_factor_session_when_sms_send_is_in_progress
     user = create(:constituent)
     user.sms_credentials.create!(

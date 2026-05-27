@@ -40,7 +40,8 @@ class ApplicationController < ActionController::Base
     store_location if request.get? && !request.xhr?
 
     # Redirect to password change form with notice
-    redirect_to edit_password_path, notice: t('.password_security_change')
+    redirect_to edit_password_path,
+                notice: t('controllers.application.check_password_change_required.password_security_change')
   end
 
   def enforce_required_mfa_enrollment

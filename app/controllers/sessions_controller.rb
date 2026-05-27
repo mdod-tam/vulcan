@@ -16,7 +16,7 @@ class SessionsController < ApplicationController
   end
 
   def create
-    user = User.find_by(email: params[:email])
+    user = User.find_by_email(params[:email])
 
     unless user&.authenticate(params[:password])
       @errors = { email: 'Invalid email or password' }
@@ -64,7 +64,7 @@ class SessionsController < ApplicationController
 
   def handle_invalid_credentials
     # Add user feedback for failed login attempts if User model supports it
-    # user = User.find_by(email: params[:email])
+    # user = User.find_by_email(params[:email])
     # user&.track_failed_attempt!(request.remote_ip) if user # Assuming track_failed_attempt! exists
     redirect_to sign_in_path(email_hint: params[:email]), alert: 'Invalid email or password'
   end
