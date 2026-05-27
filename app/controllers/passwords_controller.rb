@@ -8,12 +8,13 @@ class PasswordsController < ApplicationController
   skip_before_action :authenticate_user!
   skip_before_action :enforce_required_mfa_enrollment
   before_action :set_user_from_token, only: %i[edit]
+  before_action :require_password_change_authorization, only: %i[edit update]
 
   def new; end
 
   def edit
     # The form to enter new password
-    # @user is set by set_user
+    # @user is set by set_user_from_token for reset links.
   end
 
   def create
@@ -80,6 +81,13 @@ class PasswordsController < ApplicationController
 
     @user = User.find_by_token_for(:password_reset, params[:token])
     redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless @user
+  end
+
+  def require_password_change_authorization
+    return if params[:token].present?
+    return if current_user.present?
+
+    redirect_to new_password_path, alert: 'Use your account access link to reset your password.'
   end
 
   def find_user_for_account_access

@@ -32,6 +32,29 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     get edit_password_path
     assert_response :success
     assert_select 'form[action=?]', password_path
+    assert_select 'h2', text: 'Change Password'
+    assert_select 'label', text: 'Current Password'
+  end
+
+  def test_should_redirect_unauthenticated_edit_without_token_to_account_access
+    sign_out if respond_to?(:sign_out)
+
+    get edit_password_path
+
+    assert_redirected_to new_password_path
+    assert_equal 'Use your account access link to reset your password.', flash[:alert]
+  end
+
+  def test_should_redirect_unauthenticated_update_without_token_to_account_access
+    sign_out if respond_to?(:sign_out)
+
+    patch password_path, params: {
+      password: 'NewValid*Password123',
+      password_confirmation: 'NewValid*Password123'
+    }
+
+    assert_redirected_to new_password_path
+    assert_equal 'Use your account access link to reset your password.', flash[:alert]
   end
 
   def test_should_send_account_access_email_for_existing_email
@@ -103,6 +126,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     get edit_password_path(token: token)
     assert_response :success
+    assert_select 'h2', text: 'Reset Password'
     assert_select 'input[name=token][value=?]', token
     assert_select 'label', { text: 'Current Password', count: 0 }
 
