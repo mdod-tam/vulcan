@@ -7,6 +7,8 @@ import ChartBaseController from "./base_controller"
  * Uses centralized base functionality with data validation and default options.
  */
 class ReportsChartController extends ChartBaseController {
+  static initQueue = Promise.resolve()
+
   static values = {
     currentData: Object,
     previousData: Object,
@@ -19,6 +21,7 @@ class ReportsChartController extends ChartBaseController {
   }
 
   connect() {
+    this.connected = true
     super.connect()
 
     const Chart = this.getChart()
@@ -35,18 +38,55 @@ class ReportsChartController extends ChartBaseController {
     this.onVisibilityChange = this.onVisibilityChange.bind(this)
     this.element.addEventListener('visibility-changed', this.onVisibilityChange)
 
-    // If already visible on connect, init immediately
-    if (this.isVisible() && !this.chartInstance) {
-      this.initializeChart()
-    }
+    this.scheduleInitialization()
   }
 
   disconnect() {
-    // Remove event listener
+    this.connected = false
     this.element.removeEventListener('visibility-changed', this.onVisibilityChange)
-    
-    // Call parent cleanup
+    this.cancelDeferredInitialization()
     super.disconnect()
+  }
+
+  scheduleInitialization() {
+    if (!this.connected || this.chartInstance) {
+      return
+    }
+
+    if (this.isVisible()) {
+      this.initializeChart()
+      return
+    }
+
+    this.cancelDeferredInitialization()
+    this.onTurboRender = () => {
+      if (!this.connected || this.chartInstance || !this.isVisible()) {
+        return
+      }
+      this.initializeChart()
+    }
+    document.addEventListener('turbo:render', this.onTurboRender)
+    document.addEventListener('turbo:load', this.onTurboRender)
+
+    this.visibilityRetryTimer = window.setTimeout(() => {
+      if (!this.connected || this.chartInstance || !this.isVisible()) {
+        return
+      }
+      this.initializeChart()
+    }, 50)
+  }
+
+  cancelDeferredInitialization() {
+    if (this.onTurboRender) {
+      document.removeEventListener('turbo:render', this.onTurboRender)
+      document.removeEventListener('turbo:load', this.onTurboRender)
+      this.onTurboRender = null
+    }
+
+    if (this.visibilityRetryTimer) {
+      window.clearTimeout(this.visibilityRetryTimer)
+      this.visibilityRetryTimer = null
+    }
   }
 
   // Stimulus value change callbacks for live updates
@@ -63,21 +103,40 @@ class ReportsChartController extends ChartBaseController {
   }
 
   onVisibilityChange(event) {
-    if (event.detail.visible && !this.chartInstance) {
+    if (event.detail.visible && this.connected && !this.chartInstance) {
       this.initializeChart()
     }
   }
 
-  isVisible() {
-    // Simple visibility check
-    return this.element.offsetParent !== null
-  }
-
   async initializeChart() {
-    try {
-      // Next animation frame to ensure DOM ready
+    if (!this.connected || this.chartInstance) {
+      return
+    }
+
+    this.cancelDeferredInitialization()
+
+    const run = async () => {
       await new Promise(r => requestAnimationFrame(r))
+      if (!this.connected) {
+        return
+      }
+      if (!this.isVisible()) {
+        this.scheduleInitialization()
+        return
+      }
       this.renderChart()
+    }
+
+    // Serialize inits without letting one failure reject the shared queue for all
+    // other charts (a rejected .then() skips subsequent work on that chain).
+    const task = ReportsChartController.initQueue
+      .catch(() => {})
+      .then(run)
+
+    ReportsChartController.initQueue = task.catch(() => {})
+
+    try {
+      await task
     } catch (error) {
       this.handleError("Chart initialization failed", error)
     }
@@ -131,6 +190,7 @@ class ReportsChartController extends ChartBaseController {
       { describedById }
     )
     this.mountCanvas(canvas, desc)
+    this.applyContainerDimensions(canvas)
 
     // Get context and create chart
     const ctx = this.getCtx(canvas)
@@ -172,6 +232,7 @@ class ReportsChartController extends ChartBaseController {
     
     // Customize for reports
     const reportOptions = {
+      events: [],
       plugins: {
         title: { 
           display: !this.compactValue && !!this.titleValue, 

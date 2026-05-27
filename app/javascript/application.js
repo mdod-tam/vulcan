@@ -45,121 +45,12 @@ Chart.register(
   Legend
 )
 
-// Minimal configuration - disable responsive to prevent DOM calculation recursion
+// Fixed-size charts: controllers set canvas width/height before init (see ChartBaseController).
+// responsive: false skips Chart.js resize/getMaximumSize on init; do not patch getComputedStyle —
+// Chart.js calls it for tooltips/hover (getRelativePosition) and a depth guard returns bogus 0x0 stubs.
 Chart.defaults.animation = false
 Chart.defaults.responsive = false
 Chart.defaults.maintainAspectRatio = false
-
-// Override getComputedStyle to prevent infinite recursion in Chart.js (enabled globally)
-// Note: The depth counter is safe because JavaScript is single-threaded and getComputedStyle
-// is synchronous. Recursive calls increment/decrement atomically with no async interleaving.
-if (!window._getComputedStylePatched) {
-  const originalGetComputedStyle = window.getComputedStyle
-  let depth = 0
-  const MAX_RECURSION_DEPTH = 50
-
-  // Comprehensive stub implementing CSSStyleDeclaration interface
-  // Used as fallback when max recursion depth is exceeded to prevent stack overflow
-  const createStubStyle = () => {
-    const defaults = {
-      display: 'block',
-      visibility: 'visible',
-      position: 'static',
-      width: '0px',
-      height: '0px',
-      minWidth: '0px',
-      minHeight: '0px',
-      maxWidth: 'none',
-      maxHeight: 'none',
-      top: 'auto',
-      right: 'auto',
-      bottom: 'auto',
-      left: 'auto',
-      margin: '0px',
-      marginTop: '0px',
-      marginRight: '0px',
-      marginBottom: '0px',
-      marginLeft: '0px',
-      padding: '0px',
-      paddingTop: '0px',
-      paddingRight: '0px',
-      paddingBottom: '0px',
-      paddingLeft: '0px',
-      border: '0px none rgb(0, 0, 0)',
-      borderWidth: '0px',
-      borderStyle: 'none',
-      borderColor: 'rgb(0, 0, 0)',
-      fontSize: '16px',
-      fontFamily: 'sans-serif',
-      fontWeight: '400',
-      fontStyle: 'normal',
-      lineHeight: 'normal',
-      color: 'rgb(0, 0, 0)',
-      backgroundColor: 'rgba(0, 0, 0, 0)',
-      opacity: '1',
-      overflow: 'visible',
-      overflowX: 'visible',
-      overflowY: 'visible',
-      boxSizing: 'content-box',
-      zIndex: 'auto',
-      transform: 'none',
-      transition: 'none',
-      textAlign: 'start',
-      verticalAlign: 'baseline',
-      float: 'none',
-      clear: 'none'
-    }
-
-    // Convert camelCase to kebab-case for property lookup
-    const toKebab = (str) => str.replace(/([A-Z])/g, '-$1').toLowerCase()
-    // Convert kebab-case to camelCase for property lookup
-    const toCamel = (str) => str.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
-
-    // Build kebab-case lookup map
-    const kebabDefaults = {}
-    for (const key of Object.keys(defaults)) {
-      kebabDefaults[toKebab(key)] = defaults[key]
-    }
-
-    const keys = Object.keys(defaults)
-
-    return {
-      ...defaults,
-      getPropertyValue(property) {
-        const camelKey = toCamel(property)
-        return defaults[camelKey] ?? kebabDefaults[property] ?? ''
-      },
-      getPropertyPriority() {
-        return ''
-      },
-      item(index) {
-        return keys[index] ?? ''
-      },
-      length: keys.length,
-      [Symbol.iterator]() {
-        return keys[Symbol.iterator]()
-      }
-    }
-  }
-
-  window.getComputedStyle = function (element, pseudoElement) {
-    if (depth > MAX_RECURSION_DEPTH) {
-      if (process.env?.NODE_ENV !== 'production') {
-        console.warn('[Chart.js recursion guard] Max depth exceeded, returning stub styles')
-      }
-      return createStubStyle()
-    }
-
-    depth += 1
-    try {
-      return originalGetComputedStyle.call(window, element, pseudoElement)
-    } finally {
-      depth -= 1
-    }
-  }
-
-  window._getComputedStylePatched = true
-}
 
 // Make Chart available globally for controllers
 window.Chart = Chart
