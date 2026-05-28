@@ -29,6 +29,30 @@ module Admin
       assert_response :success
     end
 
+    test 'index attachment statuses omit income when income proof was not required' do
+      application = create(
+        :application,
+        :with_residency_proof,
+        :with_id_proof,
+        user: create(:constituent, email: generate(:email))
+      )
+      application.update!(
+        income_proof_required: false,
+        income_proof_status: :not_reviewed,
+        residency_proof_status: :approved,
+        id_proof_status: :approved
+      )
+
+      get admin_applications_path
+
+      assert_response :success
+      assert_select "tr#application_#{application.id}" do
+        assert_select 'span', text: 'Income:', count: 0
+        assert_select 'span', text: 'Residency:'
+        assert_select 'span', text: 'ID:'
+      end
+    end
+
     test 'index shows compact provider info request summary for pending applications' do
       travel_to Time.zone.local(2026, 5, 22, 15, 43) do
         pending_application = create_pending_provider_info_application
