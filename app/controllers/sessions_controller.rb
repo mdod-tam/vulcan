@@ -18,7 +18,13 @@ class SessionsController < ApplicationController
   def create
     user = User.find_by(email: params[:email])
 
+    if user&.account_locked?
+      @errors = { email: 'Invalid email or password' }
+      return render_form_errors
+    end
+
     unless user&.authenticate(params[:password])
+      user&.record_failed_login!
       @errors = { email: 'Invalid email or password' }
       return render_form_errors
     end

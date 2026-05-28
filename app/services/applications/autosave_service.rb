@@ -2,6 +2,24 @@
 
 module Applications
   class AutosaveService < BaseService
+    APPLICATION_AUTOSAVE_FIELDS = %w[
+      annual_income
+      household_size
+      maryland_resident
+      self_certify_disability
+      terms_accepted
+      information_verified
+      medical_release_authorized
+      medical_provider_name
+      medical_provider_phone
+      medical_provider_fax
+      medical_provider_email
+      alternate_contact_name
+      alternate_contact_phone
+      alternate_contact_email
+      alternate_contact_relationship_type
+    ].freeze
+
     attr_reader :current_user, :params
 
     def initialize(current_user:, params:)
@@ -53,7 +71,8 @@ module Applications
     def find_or_create_draft_application
       # Determine if this is for a dependent based on params
       # Could come from multiple sources: user_id param or nested application[user_id]
-      dependent_id = params[:user_id].presence || params.dig(:application, :user_id).presence
+      dependent_id = authorized_dependent_id
+      return nil if dependent_id == :unauthorized
 
       # Build query to find existing draft
       # For dependent applications: match both user_id (the dependent) and managing_guardian_id (current user)
@@ -92,6 +111,17 @@ module Applications
           app.managing_guardian_id = current_user.id
         end
       end
+    end
+
+    def dependent_id_param
+      params[:user_id].presence || params.dig(:application, :user_id).presence
+    end
+
+    def authorized_dependent_id
+      dependent_id = dependent_id_param
+      return nil if dependent_id.blank?
+
+      current_user.dependents.exists?(id: dependent_id) ? dependent_id : :unauthorized
     end
 
     def apply_default_attributes(app)
@@ -137,7 +167,7 @@ module Applications
 
       if user_fields.include?(attribute_name)
         [:user, attribute_name]
-      elsif ignored_fields.include?(attribute_name)
+      elsif ignored_fields.include?(attribute_name) || APPLICATION_AUTOSAVE_FIELDS.exclude?(attribute_name)
         [:ignored, attribute_name]
       else
         [:application, attribute_name]
