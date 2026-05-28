@@ -29,6 +29,37 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_match 'Invalid email or password', flash[:alert]
   end
 
+  def test_failed_login_increments_failed_attempts
+    user = create(:constituent)
+
+    assert_difference -> { user.reload.failed_attempts.to_i }, 1 do
+      post sign_in_path, params: { email: user.email, password: 'wrongpassword' }
+    end
+
+    assert_redirected_to sign_in_path(email_hint: user.email)
+  end
+
+  def test_repeated_failed_logins_lock_account
+    user = create(:constituent)
+
+    UserAuthentication::MAX_LOGIN_ATTEMPTS.times do
+      post sign_in_path, params: { email: user.email, password: 'wrongpassword' }
+    end
+
+    assert user.reload.account_locked?
+    assert_not_nil user.locked_at
+  end
+
+  def test_locked_account_cannot_sign_in_with_valid_password
+    user = create(:constituent, failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
+
+    assert_no_difference('Session.count') do
+      post sign_in_path, params: { email: user.email, password: 'password123' }
+    end
+
+    assert_redirected_to sign_in_path(email_hint: user.email)
+  end
+
   def test_should_sign_in_constituent_without_mfa
     user = create(:constituent)
 

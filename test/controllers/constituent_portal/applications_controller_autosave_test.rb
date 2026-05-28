@@ -66,6 +66,46 @@ module ConstituentPortal
       assert_equal @user.id, new_application.user_id
     end
 
+    test 'should not create dependent draft for unrelated user id' do
+      @draft_application.destroy
+      unrelated_user = create(:constituent, :with_disabilities)
+
+      assert_no_difference('Application.count') do
+        patch autosave_field_constituent_portal_applications_path,
+              params: {
+                user_id: unrelated_user.id,
+                field_name: 'application[household_size]',
+                field_value: '3'
+              },
+              as: :json
+      end
+
+      assert_response :unprocessable_content
+      assert_not response.parsed_body['success']
+      assert_nil Application.find_by(user_id: unrelated_user.id, managing_guardian_id: @user.id)
+    end
+
+    test 'should create dependent draft only for existing dependent relationship' do
+      @draft_application.destroy
+      dependent = create(:constituent, :with_disabilities)
+      create(:guardian_relationship, guardian_user: @user, dependent_user: dependent, relationship_type: 'Parent')
+
+      assert_difference('Application.count') do
+        patch autosave_field_constituent_portal_applications_path,
+              params: {
+                user_id: dependent.id,
+                field_name: 'application[household_size]',
+                field_value: '3'
+              },
+              as: :json
+      end
+
+      assert_response :success
+      new_application = Application.find(response.parsed_body['applicationId'])
+      assert_equal dependent.id, new_application.user_id
+      assert_equal @user.id, new_application.managing_guardian_id
+    end
+
     test 'should log application_created when autosave creates a new draft' do
       @draft_application.destroy
 
@@ -166,22 +206,30 @@ module ConstituentPortal
       assert_equal true, @user.hearing_disability
     end
 
-    test 'should autosave application as managing guardian' do
-      # Create a dependent user first
-      create(:constituent, :with_disabilities)
-
-      # Test updating the application to be managed by current user
+    test 'should not autosave managing guardian directly' do
       patch autosave_field_constituent_portal_application_path(@draft_application),
             params: { field_name: 'application[managing_guardian_id]', field_value: @user.id.to_s },
             as: :json
 
-      # Verify the response
-      assert_response :success
-      assert_json_response(success: true)
+      assert_response :unprocessable_content
+      assert_not response.parsed_body['success']
 
-      # Verify the application was updated
       @draft_application.reload
-      assert_equal @user.id, @draft_application.managing_guardian_id
+      assert_nil @draft_application.managing_guardian_id
+    end
+
+    test 'should not autosave applicant user directly' do
+      unrelated_user = create(:constituent, :with_disabilities)
+
+      patch autosave_field_constituent_portal_application_path(@draft_application),
+            params: { field_name: 'application[user_id]', field_value: unrelated_user.id.to_s },
+            as: :json
+
+      assert_response :unprocessable_content
+      assert_not response.parsed_body['success']
+
+      @draft_application.reload
+      assert_equal @user.id, @draft_application.user_id
     end
 
     test 'should create guardian relationship when setting up dependent application' do

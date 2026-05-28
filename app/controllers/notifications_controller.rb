@@ -66,7 +66,8 @@ class NotificationsController < ApplicationController
   private
 
   def set_notification
-    @notification = Notification.find(params[:id])
+    scope = current_user.admin? ? Notification.all : current_user.received_notifications
+    @notification = scope.find(params[:id])
   rescue ActiveRecord::RecordNotFound
     respond_to do |format|
       format.html do
