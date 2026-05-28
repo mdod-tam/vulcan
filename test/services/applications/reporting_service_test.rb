@@ -572,6 +572,8 @@ module Applications
 
     test 'generate_mfr_reports_data counts approved transitions on June 30 and excludes July 1' do
       travel_to Time.zone.local(2026, 8, 1, 12, 0, 0) do
+        baseline = ReportingService.new.generate_mfr_reports_data
+                                   .data[:most_recent_fy][:summary]['Status changed to approved during FY']
         admin = create(:admin)
         jun30 = Time.zone.local(2026, 6, 30, 23, 59, 59)
         jul1 = Time.zone.local(2026, 7, 1, 0, 0, 0)
@@ -589,12 +591,16 @@ module Applications
                                .update!(changed_at: jul1)
 
         most_recent = ReportingService.new.generate_mfr_reports_data.data[:most_recent_fy]
-        assert_equal 1, most_recent[:summary]['Status changed to approved during FY']
+        assert_equal baseline + 1, most_recent[:summary]['Status changed to approved during FY']
       end
     end
 
     test 'generate_mfr_reports_data excludes cert and proof status-change rows from approved throughput' do
       travel_to Date.new(2026, 8, 1) do
+        report_baseline = ReportingService.new.generate_mfr_reports_data
+                                          .data[:most_recent_fy][:summary]['Status changed to approved during FY']
+        dashboard_baseline = ReportingService.new.generate_dashboard_data
+                                             .data[:mfr_applications_approved]
         admin = create(:admin)
         in_fy = Time.zone.local(2025, 10, 1, 12, 0, 0)
 
@@ -632,11 +638,11 @@ module Applications
         )
 
         most_recent = ReportingService.new.generate_mfr_reports_data.data[:most_recent_fy]
-        assert_equal 1, most_recent[:summary]['Status changed to approved during FY']
+        assert_equal report_baseline + 1, most_recent[:summary]['Status changed to approved during FY']
 
         dashboard = ReportingService.new.generate_dashboard_data
         assert dashboard.success?
-        assert_equal 1, dashboard.data[:mfr_applications_approved]
+        assert_equal dashboard_baseline + 1, dashboard.data[:mfr_applications_approved]
         assert_equal dashboard.data[:mfr_applications_approved],
                      dashboard.data[:mfr_chart_data][:current]['Approved (status changed during FY)']
       end
@@ -670,6 +676,8 @@ module Applications
 
     test 'generate_mfr_reports_data uses lifecycle changed_at not created_at approval' do
       travel_to Date.new(2026, 8, 1) do
+        baseline = ReportingService.new.generate_mfr_reports_data
+                                   .data[:most_recent_fy][:summary]
         admin = create(:admin)
         in_fy = Date.new(2025, 8, 1)
 
@@ -686,8 +694,10 @@ module Applications
         assert result.success?
 
         most_recent = result.data[:most_recent_fy]
-        assert_equal 1, most_recent[:summary]['Draft to in progress during FY']
-        assert_equal 1, most_recent[:summary]['Status changed to approved during FY']
+        assert_equal baseline['Draft to in progress during FY'] + 1,
+                     most_recent[:summary]['Draft to in progress during FY']
+        assert_equal baseline['Status changed to approved during FY'] + 1,
+                     most_recent[:summary]['Status changed to approved during FY']
         assert_equal most_recent[:chart_data]['Approved (status changed during FY)'],
                      most_recent[:summary]['Status changed to approved during FY']
       end
