@@ -94,6 +94,8 @@ module Admin
       @certification_requests = certification_service.request_events
       @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
+      @reserved_training_sessions_count = @application.reserved_training_sessions_count
+      @remaining_training_sessions = @application.remaining_training_sessions
       load_provider_info_request_data(@application)
       @medical_provider_secure_request_forms = @application.medical_provider_secure_request_forms
                                                            .order(created_at: :desc)

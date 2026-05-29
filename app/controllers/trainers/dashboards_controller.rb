@@ -25,10 +25,10 @@ module Trainers
     private
 
     def load_training_sessions
-      @requested_sessions = latest_training_sessions.where(status: :requested)
-                                                    .includes(application: :user)
-                                                    .order(created_at: :desc)
-      @scheduled_sessions = latest_training_sessions.where(status: %i[scheduled confirmed])
+      @requested_sessions = training_sessions.where(status: :requested)
+                                             .includes(application: :user)
+                                             .order(created_at: :desc)
+      @scheduled_sessions = training_sessions.where(status: %i[scheduled confirmed])
       @completed_sessions = training_sessions.where(status: :completed)
       @followup_sessions = ordered_followup_sessions
       load_admin_training_sessions
@@ -59,8 +59,7 @@ module Trainers
       @my_scheduled_sessions = TrainingSession.none
       return unless current_user.admin?
 
-      @my_scheduled_sessions = TrainingSession.latest_per_application_records
-                                              .where(trainer_id: current_user.id, status: %i[scheduled confirmed])
+      @my_scheduled_sessions = TrainingSession.where(trainer_id: current_user.id, status: %i[scheduled confirmed])
                                               .includes(application: :user)
                                               .order(scheduled_for: :asc)
     end
@@ -139,13 +138,6 @@ module Trainers
                                TrainingSession.where(trainer_id: current_user.id)
                                               .includes(application: :user)
                              end
-    end
-
-    def latest_training_sessions
-      @latest_training_sessions ||= begin
-        scope = TrainingSession.latest_per_application_records
-        current_user.admin? ? scope : scope.where(trainer_id: current_user.id)
-      end
     end
   end
 end

@@ -13,6 +13,7 @@ module TrainingSessions
     end
 
     def call
+      validate_status!
       validate_params!
 
       ActiveRecord::Base.transaction do
@@ -20,7 +21,7 @@ module TrainingSessions
         create_event!
       end
 
-      success('Training session completed successfully.', { training_session: @training_session })
+      success(I18n.t('training_sessions.complete.success'), { training_session: @training_session })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error completing training session: #{e.message}")
       failure(e.message)
@@ -34,11 +35,17 @@ module TrainingSessions
 
     private
 
+    def validate_status!
+      return if @training_session.can_complete?
+
+      raise ArgumentError, I18n.t('training_sessions.complete.invalid_status')
+    end
+
     def validate_params!
-      raise ArgumentError, 'notes is required' if @params[:notes].blank?
+      raise ArgumentError, I18n.t('training_sessions.complete.notes_required') if @params[:notes].blank?
       return if @params[:product_trained_on_id].present?
 
-      raise ArgumentError, 'product_trained_on_id is required'
+      raise ArgumentError, I18n.t('training_sessions.complete.product_required')
     end
 
     def log_validation_failure(error)

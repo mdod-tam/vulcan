@@ -86,6 +86,33 @@ module Trainers
       assert_includes @response.body, 'Schedule Training'
     end
 
+    test 'assigned trainer sees completion form before scheduled time but not no-show form' do
+      sign_in_for_controller_test @trainer
+
+      get trainers_training_session_url(@training_session)
+
+      assert_response :success
+      assert_includes @response.body, 'Mark Training as Completed'
+      assert_includes @response.body, 'Cancel Training'
+      assert_not_includes @response.body, 'Mark as No Show'
+      assert_includes @response.body, 'aria-label="View training session'
+    end
+
+    test 'assigned trainer sees cancellation form after scheduled time' do
+      sign_in_for_controller_test @trainer
+      update_max_training_sessions(3)
+      @application.update_columns(status: Application.statuses[:approved], application_date: 1.year.ago.to_date)
+      @training_session.update_columns(scheduled_for: 1.day.ago)
+
+      get trainers_training_session_url(@training_session)
+
+      assert_response :success
+      assert_includes @response.body, 'Mark Training as Completed'
+      assert_includes @response.body, 'Cancel Training'
+      assert_includes @response.body, 'Mark as No Show'
+      assert_includes @response.body, 'Schedule Another Session'
+    end
+
     test 'admin cannot schedule a training session' do
       sign_in_for_controller_test @admin
 
@@ -106,6 +133,18 @@ module Trainers
       assert_redirected_to trainers_training_session_url(@training_session)
       assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
       assert_equal 'scheduled', @training_session.reload.status
+    end
+
+    test 'admin cannot schedule an additional training session' do
+      sign_in_for_controller_test @admin
+
+      assert_no_difference('TrainingSession.count') do
+        post schedule_additional_trainers_training_session_url(@training_session),
+             params: { scheduled_for: 2.weeks.from_now, notes: 'Admin attempt' }
+      end
+
+      assert_redirected_to trainers_training_session_url(@training_session)
+      assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
     end
 
     test 'other trainer cannot mutate a training session' do
@@ -143,6 +182,8 @@ module Trainers
                    assigns(:session_number)
       assert_not_nil assigns(:constituent_cancelled_sessions_count) # Test the complex query
       assert_includes @response.body, 'Activity History'
+      assert_includes @response.body, 'Session Capacity'
+      assert_includes @response.body, 'sessions reserved'
     end
 
     test 'should get show and assign instance variables for admin' do
@@ -163,6 +204,29 @@ module Trainers
       assert_select 'a[href=?]',
                     filtered_trainers_training_sessions_path(scope: 'all', trainer_id: @trainer.id),
                     text: @trainer.full_name
+    end
+
+    test 'show assigns distinct session numbers for multiple open sessions' do
+      sign_in_for_controller_test @trainer
+      update_max_training_sessions(3)
+      application = create(:application, :approved, user: @constituent, application_date: 1.year.ago)
+      create(:training_session, :completed, trainer: @trainer, application: application)
+      first_open = create(:training_session, :scheduled,
+                          trainer: @trainer,
+                          application: application,
+                          scheduled_for: 1.week.from_now)
+      second_open = create(:training_session, :scheduled,
+                           trainer: @trainer,
+                           application: application,
+                           scheduled_for: 2.weeks.from_now)
+
+      get trainers_training_session_url(first_open)
+      assert_response :success
+      assert_equal 2, assigns(:session_number)
+
+      get trainers_training_session_url(second_open)
+      assert_response :success
+      assert_equal 3, assigns(:session_number)
     end
 
     test 'show action should correctly calculate constituent_cancelled_sessions_count' do
@@ -348,6 +412,35 @@ module Trainers
       assert_equal @trainer, event.user
     end
 
+    test 'complete should work before scheduled time' do
+      sign_in_for_controller_test @trainer
+      @training_session.update_columns(scheduled_for: 2.weeks.from_now)
+
+      assert_difference('Event.where(action: "training_completed").count', 1) do
+        post complete_trainers_training_session_url(@training_session),
+             params: { notes: 'Completed during an early visit.', product_trained_on_id: @product.id }
+      end
+
+      @training_session.reload
+      assert_equal 'completed', @training_session.status
+      assert_equal 'Completed during an early visit.', @training_session.notes
+      assert_redirected_to trainers_training_session_url(@training_session)
+    end
+
+    test 'complete should fail for requested sessions' do
+      sign_in_for_controller_test @trainer
+
+      assert_no_difference('Event.count') do
+        post complete_trainers_training_session_url(@requested_session),
+             params: { notes: 'Premature completion attempt.', product_trained_on_id: @product.id }
+      end
+
+      @requested_session.reload
+      assert_equal 'requested', @requested_session.status
+      assert_response :unprocessable_content
+      assert_includes @response.body, I18n.t('training_sessions.complete.invalid_status')
+    end
+
     test 'complete should fail without notes' do
       sign_in_for_controller_test @trainer
       # @product is created in setup
@@ -426,6 +519,68 @@ module Trainers
       assert_equal 'requested', @requested_session.status # Status should not change
       assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to schedule training session:' # Check for error message in body
+    end
+
+    test 'schedule additional creates another scheduled session and logs event' do
+      sign_in_for_controller_test @trainer
+      update_max_training_sessions(3)
+      @application.update_columns(status: Application.statuses[:approved], application_date: 1.year.ago.to_date)
+      scheduled_time = 2.weeks.from_now
+
+      assert_difference('TrainingSession.count', 1) do
+        assert_difference('Event.where(action: "training_scheduled").count', 1) do
+          post schedule_additional_trainers_training_session_url(@training_session),
+               params: {
+                 scheduled_for: scheduled_time,
+                 location: 'Library',
+                 notes: 'Second weekly session'
+               }
+        end
+      end
+
+      additional_session = @application.training_sessions.order(created_at: :desc).first
+      assert_equal 'scheduled', additional_session.status
+      assert_equal @trainer, additional_session.trainer
+      assert_in_delta scheduled_time, additional_session.scheduled_for, 1.second
+      assert_equal 'Library', additional_session.location
+      assert_equal 'Second weekly session', additional_session.notes
+      assert_redirected_to trainers_training_session_url(additional_session)
+
+      event = Event.where(action: 'training_scheduled').last
+      assert_equal additional_session.id, event.metadata['training_session_id']
+      assert_equal @application.id, event.metadata['application_id']
+      assert_equal @training_session.id, event.metadata['source_training_session_id']
+      assert_equal 'additional', event.metadata['scheduled_via']
+    end
+
+    test 'schedule additional fails when training slots are exhausted' do
+      sign_in_for_controller_test @trainer
+      update_max_training_sessions(1)
+      @application.update_columns(status: Application.statuses[:approved], application_date: 1.year.ago.to_date)
+
+      assert_no_difference('TrainingSession.count') do
+        assert_no_difference('Event.count') do
+          post schedule_additional_trainers_training_session_url(@training_session),
+               params: { scheduled_for: 2.weeks.from_now }
+        end
+      end
+
+      assert_response :unprocessable_content
+      assert_includes @response.body, 'Failed to schedule additional training session:'
+    end
+
+    test 'schedule additional fails with a past scheduled time' do
+      sign_in_for_controller_test @trainer
+
+      assert_no_difference('TrainingSession.count') do
+        assert_no_difference('Event.count') do
+          post schedule_additional_trainers_training_session_url(@training_session),
+               params: { scheduled_for: 1.day.ago }
+        end
+      end
+
+      assert_response :unprocessable_content
+      assert_includes @response.body, 'scheduled_for must be in the future'
     end
 
     # --- Reschedule Action Tests ---
@@ -546,26 +701,29 @@ module Trainers
       assert_equal cancelled_session.id, event.metadata['previous_training_session_id']
     end
 
-    test 'reschedule no-show session fails when a follow-up is already active' do
+    test 'reschedule no-show session schedules follow-up when another session is active and quota remains' do
       sign_in_for_controller_test @trainer
+      update_max_training_sessions(3)
       application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
       no_show_session = create(:training_session, :no_show, application: application, trainer: @trainer)
       create(:training_session, :scheduled, application: application, trainer: @trainer)
+      scheduled_time = 3.days.from_now
 
-      assert_no_difference('TrainingSession.count') do
-        assert_no_difference('Event.count') do
+      assert_difference('TrainingSession.count', 1) do
+        assert_difference('Event.where(action: "training_followup_scheduled").count', 1) do
           post trainers_training_session_follow_up_url(no_show_session),
                params: {
-                 scheduled_for: 3.days.from_now,
-                 reschedule_reason: 'Try duplicate follow-up'
+                 scheduled_for: scheduled_time,
+                 reschedule_reason: 'Schedule within remaining quota'
                }
         end
       end
 
       no_show_session.reload
+      follow_up_session = application.training_sessions.where(status: :scheduled).order(:created_at).last
       assert_equal 'no_show', no_show_session.status
-      assert_redirected_to trainers_training_session_url(no_show_session)
-      assert_includes flash[:alert], 'already has an active training session'
+      assert_redirected_to trainers_training_session_url(follow_up_session)
+      assert_equal 'Schedule within remaining quota', follow_up_session.reschedule_reason
     end
 
     # --- Cancel Action Tests ---
@@ -595,6 +753,35 @@ module Trainers
       assert_equal cancellation_reason, event.metadata['cancellation_reason']
       assert_equal 'trainer', event.metadata['cancellation_initiator']
       assert_equal @trainer, event.user
+    end
+
+    test 'cancel should work after scheduled time' do
+      sign_in_for_controller_test @trainer
+      @training_session.update_columns(scheduled_for: 1.day.ago)
+
+      assert_difference('Event.where(action: "training_cancelled").count', 1) do
+        post cancel_trainers_training_session_url(@training_session),
+             params: { cancellation_reason: 'Constituent called after the appointment time.' }
+      end
+
+      @training_session.reload
+      assert_equal 'cancelled', @training_session.status
+      assert_equal 'Constituent called after the appointment time.', @training_session.cancellation_reason
+      assert_redirected_to trainers_training_session_url(@training_session)
+    end
+
+    test 'cancel should fail for completed sessions' do
+      sign_in_for_controller_test @trainer
+
+      assert_no_difference('Event.count') do
+        post cancel_trainers_training_session_url(@completed_session),
+             params: { cancellation_reason: 'Late cancellation attempt.' }
+      end
+
+      @completed_session.reload
+      assert_equal 'completed', @completed_session.status
+      assert_response :unprocessable_content
+      assert_includes @response.body, I18n.t('training_sessions.cancel.invalid_status')
     end
 
     test 'cancel should fail without cancellation_reason' do
@@ -766,5 +953,13 @@ module Trainers
 
     # Add tests for requested, scheduled, completed, needs_followup actions if they are still used directly
     # (The index/filter actions seem to be the primary way to view lists now, but double-check routes and usage)
+
+    private
+
+    def update_max_training_sessions(value)
+      policy = Policy.find_or_create_by(key: 'max_training_sessions')
+      policy.updated_by = @admin
+      policy.update!(value: value)
+    end
   end
 end

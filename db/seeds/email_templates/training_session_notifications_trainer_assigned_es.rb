@@ -3,31 +3,36 @@
 # Seed File for "training_session_notifications_trainer_assigned"
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'es') do |template|
-  template.subject = 'Entrenador Asignado'
-  template.description = 'Enviado al usuario cuando se le ha asignado un capacitador.'
+  template.subject = 'Nueva asignación de capacitación'
+  template.description = 'Enviado a un capacitador cuando se le ha asignado una sesión de capacitación.'
   template.body = <<~TEXT
     %<header_text>s
 
-    Hola %<constituent_full_name>s,
+    Hola %<trainer_full_name>s,
 
-    ENTRENADOR ASIGNADO
-    Se le ha asignado un entrenador para capacitarle en el uso de productos de telecomunicaciones.
+    Aquí tiene información sobre una sesión de capacitación que se le ha asignado. Comuníquese con la persona para hablar sobre sus necesidades de capacitación y programar una sesión.
 
-    Detalles del Entrenador:
-    - Nombre: %<trainer_full_name>s
-    - Correo Electrónico: %<trainer_email>s
-    - Teléfono: %<trainer_phone_formatted>s
+    Detalles de la persona:
+    - Nombre: %<constituent_full_name>s
+    - Correo electrónico: %<constituent_email>s
+    - Teléfono: %<constituent_phone_formatted>s
+    - Dirección: %<constituent_address_formatted>s
+    - Discapacidades: %<constituent_disabilities_text_list>s
 
-    Horario de la Sesión de Entrenamiento:
-    %<training_session_schedule_text>s
+    Preferencias de comunicación:
+    - Idioma preferido: %<constituent_language>s
+    - Método de contacto preferido: %<constituent_contact_method>s
+    - Modalidad de comunicación: %<constituent_communication_modality>s
 
-    Por favor comuníquese con su entrenador para discutir sus necesidades de entrenamiento y programar una sesión.
+    ID de solicitud: %<application_id>s
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text constituent_full_name trainer_full_name trainer_email
-                     trainer_phone_formatted training_session_schedule_text footer_text],
+    'required' => %w[header_text trainer_full_name constituent_full_name constituent_email
+                     constituent_phone_formatted constituent_address_formatted constituent_disabilities_text_list
+                     constituent_language constituent_contact_method constituent_communication_modality
+                     application_id footer_text],
     'optional' => []
   }
   template.version = 1

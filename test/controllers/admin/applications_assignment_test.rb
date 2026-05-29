@@ -84,10 +84,29 @@ module Admin
       assert_select "a[href='#{trainers_training_session_path(training_session)}'][data-turbo-frame='_top']",
                     text: 'View Details'
       assert_select "form[action='#{unassign_trainer_admin_application_path(@application)}']"
+      assert_select 'dialog#trainer-unassign-confirm-dialog' do
+        assert_select 'p', text: I18n.t('admin.applications.unassign_trainer.confirm', count: 1)
+        assert_select 'button', text: I18n.t('admin.applications.unassign_trainer.confirm_no')
+        assert_select 'button', text: I18n.t('admin.applications.unassign_trainer.confirm_yes')
+      end
     end
 
-    test 'admin can unassign active trainer' do
-      training_session = create(:training_session, :requested, application: @application, trainer: create(:trainer))
+    test 'unassign trainer confirmation includes all open training sessions' do
+      trainer = create(:trainer)
+      create(:training_session, :requested, application: @application, trainer: trainer)
+      create(:training_session, :scheduled, application: @application, trainer: trainer)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select 'dialog#trainer-unassign-confirm-dialog p',
+                    text: I18n.t('admin.applications.unassign_trainer.confirm', count: 2)
+    end
+
+    test 'admin can unassign active trainer and cancel all open training sessions' do
+      trainer = create(:trainer)
+      training_session = create(:training_session, :requested, application: @application, trainer: trainer)
+      scheduled_session = create(:training_session, :scheduled, application: @application, trainer: trainer)
 
       assert_difference -> { Event.where(action: 'trainer_unassigned', auditable: @application).count }, 1 do
         post unassign_trainer_admin_application_path(@application)
@@ -98,6 +117,9 @@ module Admin
       training_session.reload
       assert training_session.status_cancelled?
       assert training_session.cancellation_initiator_admin?
+      scheduled_session.reload
+      assert scheduled_session.status_cancelled?
+      assert scheduled_session.cancellation_initiator_admin?
     end
 
     test 'trainer assignment post is blocked when completed training quota is exhausted' do
@@ -124,6 +146,20 @@ module Admin
 
       assert_response :success
       assert_select 'form[data-testid="trainer-assignment-form"]', count: 0
+      assert_select 'strong', text: 'Maximum Reached'
+    end
+
+    test 'trainer assignment form is hidden when reserved training quota is exhausted' do
+      Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
+      trainer = create(:trainer)
+      create_list(:training_session, 2, :completed, application: @application, trainer: trainer)
+      create(:training_session, :scheduled, application: @application, trainer: trainer)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select 'form[data-testid="trainer-assignment-form"]', count: 0
+      assert_select 'p', text: %r{3 / 3 sessions reserved, 0 remaining}
       assert_select 'strong', text: 'Maximum Reached'
     end
 

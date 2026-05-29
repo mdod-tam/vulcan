@@ -41,12 +41,42 @@
               class: "inline-flex h-10 items-center justify-center rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
               data: { turbo_frame: "_top" }) %>
           <% if local_assigns[:unassign_form_path].present? %>
-            <%= button_to("Unassign #{type.titleize}",
-                unassign_form_path,
-                method: :post,
-                class: "inline-flex h-10 items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2",
-                data: { turbo_confirm: "Remove this #{type} assignment?" },
-                aria: { label: "Unassign #{assigned_person&.full_name || type.titleize}" }) %>
+            <% unassign_dialog_id = "#{type}-unassign-confirm-dialog" %>
+            <button type="button"
+                    class="inline-flex h-10 items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    data-controller="modal"
+                    data-action="click->modal#open"
+                    data-modal-id="<%= unassign_dialog_id %>"
+                    aria-label="Unassign <%= assigned_person&.full_name || type.titleize %>">
+              Unassign <%= type.titleize %>
+            </button>
+
+            <dialog id="<%= unassign_dialog_id %>"
+                    class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-md w-full shadow-xl p-0"
+                    data-controller="modal"
+                    data-action="click->modal#clickOutside close->modal#onClose"
+                    aria-labelledby="<%= unassign_dialog_id %>-heading"
+                    aria-describedby="<%= unassign_dialog_id %>-description">
+              <div class="p-6">
+                <h3 id="<%= unassign_dialog_id %>-heading" class="text-lg font-medium text-gray-900">
+                  <%= local_assigns[:unassign_confirm_title].presence || "Unassign #{type.titleize}" %>
+                </h3>
+                <p id="<%= unassign_dialog_id %>-description" class="mt-3 text-sm text-gray-600">
+                  <%= local_assigns[:unassign_confirm_message].presence || "Remove this #{type} assignment?" %>
+                </p>
+                <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <button type="button"
+                          class="inline-flex h-10 items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                          data-action="click->modal#close">
+                    <%= local_assigns[:unassign_confirm_no_label].presence || "No" %>
+                  </button>
+                  <%= button_to local_assigns[:unassign_confirm_yes_label].presence || "Yes",
+                      unassign_form_path,
+                      method: :post,
+                      class: "inline-flex h-10 items-center justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" %>
+                </div>
+              </div>
+            </dialog>
           <% end %>
         </div>
       <% end %>

@@ -125,6 +125,49 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
+  test 'trainer_assigned footer uses program name fallback' do
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en').destroy_all
+    EmailTemplate.create!(
+      name: 'training_session_notifications_trainer_assigned',
+      format: :text,
+      locale: 'en',
+      subject: 'Trainer assigned',
+      description: 'Trainer assigned footer test template',
+      body: <<~TEXT,
+        %<trainer_full_name>s
+        %<constituent_language>s
+        %<constituent_contact_method>s
+        %<constituent_communication_modality>s
+        %<footer_text>s
+      TEXT
+      variables: {
+        'required' => %w[
+          trainer_full_name
+          constituent_language
+          constituent_contact_method
+          constituent_communication_modality
+          footer_text
+        ],
+        'optional' => []
+      },
+      version: 1
+    )
+    @constituent.update!(locale: 'es', phone_type: 'videophone', preferred_means_of_communication: 'asl')
+    Policy.stubs(:get).returns(nil)
+    Policy.stubs(:get).with('support_email').returns('mat.program1@maryland.gov')
+    Policy.stubs(:get).with('organization_name').returns(nil)
+
+    email = TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
+
+    assert_includes email.body.to_s, @trainer.full_name
+    assert_includes email.body.to_s, 'Spanish'
+    assert_includes email.body.to_s, 'Videophone (ASL)'
+    assert_includes email.body.to_s, 'American Sign Language (ASL)'
+    assert_includes email.body.to_s, 'Maryland Accessible Telecommunications Program'
+    assert_not_includes email.body.to_s, 'MAT-Vulcan'
+  end
+
   test 'training_scheduled' do
     # Create a specific stub for this test to ensure consistent results
     expected_date = @scheduled_for.strftime('%B %d, %Y')

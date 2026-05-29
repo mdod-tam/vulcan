@@ -12,7 +12,6 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Notify a trainer that a new training session has been assigned
   # Expects training_session passed via .with(training_session: ...)
   def trainer_assigned(training_session)
-    training_session = training_session
     trainer = training_session.trainer
     locale = resolve_template_locale(recipient: trainer)
     template_name = 'training_session_notifications_trainer_assigned'
@@ -37,7 +36,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -45,17 +44,19 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        trainer_full_name: trainer.full_name,
-        trainer_email: trainer.email,
-        trainer_phone_formatted: trainer.phone,
-        constituent_full_name: constituent.full_name,
-        constituent_address_formatted: format_constituent_address(constituent),
-        constituent_phone_formatted: constituent.phone,
-        constituent_email: recipient_email_for(constituent),
-        constituent_disabilities_text_list: format_disabilities_text(constituent),
-        status_box_text: status_box_text(status: :info, title: 'Training Assignment', message: 'Please contact the constituent to schedule this training session.'),
-        application_id: application.id,
-        training_session_schedule_text: training_session_schedule_text(training_session),
+      trainer_full_name: trainer.full_name,
+      trainer_email: trainer.email,
+      trainer_phone_formatted: trainer.phone,
+      constituent_full_name: constituent.full_name,
+      constituent_address_formatted: format_constituent_address(constituent),
+      constituent_phone_formatted: constituent.phone,
+      constituent_email: recipient_email_for(constituent),
+      constituent_disabilities_text_list: format_disabilities_text(constituent),
+      constituent_language: format_constituent_language(constituent, locale),
+      constituent_contact_method: format_constituent_contact_method(constituent, locale),
+      constituent_communication_modality: format_constituent_communication_modality(constituent, locale),
+      status_box_text: status_box_text(status: :info, title: 'Training Assignment', message: 'Please contact the constituent to schedule this training session.'),
+      application_id: application.id,
       # Shared partial variables (rendered content - text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -127,7 +128,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -218,7 +219,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -312,7 +313,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -400,7 +401,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -488,7 +489,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -601,6 +602,43 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     return 'No disabilities recorded' if disabilities.blank?
 
     disabilities.map { |disability| "- #{disability}" }.join("\n")
+  end
+
+  def format_constituent_language(constituent, template_locale)
+    constituent_locale = if constituent.respond_to?(:effective_locale)
+                           constituent.effective_locale
+                         else
+                           constituent.locale
+                         end
+
+    language = constituent_locale.to_s == 'es' ? :spanish : :english
+    localized_label(language, locale: template_locale)
+  end
+
+  def format_constituent_contact_method(constituent, locale)
+    phone_type = if constituent.respond_to?(:effective_phone_type)
+                   constituent.effective_phone_type
+                 else
+                   constituent.phone_type
+                 end
+
+    localized_label(phone_type.to_s, locale: locale)
+  end
+
+  def format_constituent_communication_modality(constituent, locale)
+    localized_label(constituent.preferred_means_of_communication.to_s, locale: locale)
+  end
+
+  def localized_label(value, locale:)
+    I18n.t("training_session_notifications.trainer_assigned.labels.#{value}",
+           default: localized_not_specified(locale),
+           locale: locale)
+  end
+
+  def localized_not_specified(locale)
+    I18n.t('training_session_notifications.trainer_assigned.labels.not_specified',
+           default: 'Not specified',
+           locale: locale)
   end
 
   def queue_letter_if_preferred(constituent, template_name, variables, application: nil)

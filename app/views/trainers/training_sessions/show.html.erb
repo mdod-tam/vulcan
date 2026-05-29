@@ -203,11 +203,50 @@
         </div>
 
         <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Sessions Progress</dt>
+          <dt class="text-sm font-medium text-gray-500"><%= t('trainers.training_sessions.capacity.title') %></dt>
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <%= @completed_training_sessions_count %> / <%= @max_training_sessions %> completed
+            <%= t(
+              'trainers.training_sessions.capacity.summary',
+              reserved: @application.reserved_training_sessions_count,
+              max: @max_training_sessions,
+              remaining: @remaining_training_session_slots
+            ) %>
           </dd>
         </div>
+
+        <% if @open_training_sessions.present? %>
+          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500"><%= t('trainers.training_sessions.open_sessions.title') %></dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <ul class="space-y-2">
+                <% @open_training_sessions.each do |session| %>
+                  <li>
+                    <% scheduled_for_label =
+                         if session.scheduled_for.present?
+                           session.scheduled_for.strftime("%B %d, %Y at %I:%M %p")
+                         else
+                           t('trainers.training_sessions.open_sessions.not_scheduled')
+                         end %>
+                    <%= link_to t('trainers.training_sessions.open_sessions.session_link', id: session.id),
+                        trainers_training_session_path(session),
+                        class: "font-medium text-indigo-600 hover:text-indigo-900",
+                        aria: { label: t('trainers.training_sessions.open_sessions.session_link_aria', id: session.id, scheduled_for: scheduled_for_label) } %>
+                    <span class="text-gray-600">
+                      -
+                      <% if session.scheduled_for.present? %>
+                        <time datetime="<%= session.scheduled_for.iso8601 %>">
+                          <%= scheduled_for_label %>
+                        </time>
+                      <% else %>
+                        <%= scheduled_for_label %>
+                      <% end %>
+                    </span>
+                  </li>
+                <% end %>
+              </ul>
+            </dd>
+          </div>
+        <% end %>
       </dl>
     </div>
   </section>
@@ -300,24 +339,45 @@
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="complete-training-heading">
-              Mark Training as Completed
+              <%= t('trainers.training_sessions.actions.complete.title') %>
             </h3>
 
             <%= form_with(url: complete_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "complete-training-heading" }) do |f| %>
               <div>
                 <%= f.label :product_trained_on_id, class: "block text-sm font-medium text-gray-700" do %>
-                  Product Trained On <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                  <%= t('trainers.training_sessions.actions.complete.product_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.actions.required') %></span>
                 <% end %>
-                <%= f.collection_select :product_trained_on_id, Product.all.order(:name), :id, :name, { prompt: "Select a product" }, { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md", required: true, aria: { required: "true" } } %>
+                <%= f.collection_select :product_trained_on_id, Product.all.order(:name), :id, :name, { prompt: t('trainers.training_sessions.actions.complete.product_prompt') }, { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md", required: true, aria: { required: "true" } } %>
               </div>
               <div>
                  <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
-                    Training Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                    <%= t('trainers.training_sessions.actions.complete.notes_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.actions.required') %></span>
                  <% end %>
-                <%= f.text_area :notes, rows: 4, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Enter details about what was covered...", aria: { required: "true", describedby: "complete_notes_hint" } %>
-                <p class="sr-only" id="complete_notes_hint">Enter details about what was covered in the training session, any challenges or notable achievements.</p>
+                <%= f.text_area :notes, rows: 4, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('trainers.training_sessions.actions.complete.notes_placeholder'), aria: { required: "true", describedby: "complete_notes_hint" } %>
+                <p class="sr-only" id="complete_notes_hint"><%= t('trainers.training_sessions.actions.complete.notes_hint') %></p>
               </div>
-              <%= f.submit "Mark as Completed", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
+              <%= f.submit t('trainers.training_sessions.actions.complete.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Cancel Training Form -->
+        <div class="bg-white shadow rounded-lg">
+          <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="cancel-training-heading">
+              <%= t('trainers.training_sessions.actions.cancel.title') %>
+            </h3>
+
+            <%= form_with(url: cancel_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "cancel-training-heading" }) do |f| %>
+              <div>
+                <%= f.label :cancellation_reason, class: "block text-sm font-medium text-gray-700" do %>
+                  <%= t('trainers.training_sessions.actions.cancel.reason_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.actions.required') %></span>
+                <% end %>
+                <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('trainers.training_sessions.actions.cancel.reason_placeholder'), aria: { required: "true", describedby: "cancel_reason_hint" } %>
+                <p class="sr-only" id="cancel_reason_hint"><%= t('trainers.training_sessions.actions.cancel.reason_hint') %></p>
+              </div>
+
+              <%= f.submit t('trainers.training_sessions.actions.cancel.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
             <% end %>
           </div>
         </div>
@@ -326,45 +386,75 @@
         <div class="bg-white shadow rounded-lg">
           <div class="px-4 py-5 sm:p-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="no-show-heading">
-              Mark as No Show
+              <%= t('trainers.training_sessions.actions.no_show.title') %>
             </h3>
             <p class="text-sm text-gray-600 mb-4" id="no_show_desc">
-              Use this if the constituent did not attend the scheduled training session.
+              <%= t('trainers.training_sessions.actions.no_show.description') %>
             </p>
             <%= form_with(model: @training_session, url: update_status_trainers_training_session_path(@training_session), method: :patch, local: true, class: "space-y-4", aria: { labelledby: "no-show-heading" }) do |f| %>
               <%= f.hidden_field :status, value: 'no_show' %>
               <div>
                   <%= f.label :no_show_notes, class: "block text-sm font-medium text-gray-700" do %>
-                    No Show Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                    <%= t('trainers.training_sessions.actions.no_show.notes_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.actions.required') %></span>
                   <% end %>
-                  <%= f.text_area :no_show_notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Describe the no show...", aria: { required: "true", describedby: "no_show_desc"} %>
+                  <%= f.text_area :no_show_notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('trainers.training_sessions.actions.no_show.notes_placeholder'), aria: { required: "true", describedby: "no_show_desc"} %>
               </div>
-              <%= f.submit "Mark as No Show", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
+              <%= f.submit t('trainers.training_sessions.actions.no_show.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
             <% end %>
           </div>
         </div>
+
+        <% if @remaining_training_session_slots.positive? %>
+          <%= render 'schedule_additional_form', training_session: @training_session %>
+        <% end %>
       </div>
 
 
     <% elsif @training_session.status_scheduled? || @training_session.status_confirmed? %>
       <!-- Actions for Scheduled/Confirmed Sessions where time has NOT passed -->
+      <!-- Complete Training Form -->
+      <div class="bg-white shadow rounded-lg mb-6">
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="complete-training-heading">
+            <%= t('trainers.training_sessions.actions.complete.title') %>
+          </h3>
+
+          <%= form_with(url: complete_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "complete-training-heading" }) do |f| %>
+            <div>
+              <%= f.label :product_trained_on_id, class: "block text-sm font-medium text-gray-700" do %>
+                <%= t('trainers.training_sessions.actions.complete.product_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.actions.required') %></span>
+              <% end %>
+              <%= f.collection_select :product_trained_on_id, Product.all.order(:name), :id, :name, { prompt: t('trainers.training_sessions.actions.complete.product_prompt') }, { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md", required: true, aria: { required: "true" } } %>
+            </div>
+            <div>
+               <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
+                  <%= t('trainers.training_sessions.actions.complete.notes_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.actions.required') %></span>
+               <% end %>
+              <%= f.text_area :notes, rows: 4, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('trainers.training_sessions.actions.complete.notes_placeholder'), aria: { required: "true", describedby: "complete_notes_hint" } %>
+              <p class="sr-only" id="complete_notes_hint"><%= t('trainers.training_sessions.actions.complete.notes_hint') %></p>
+            </div>
+            <%= f.submit t('trainers.training_sessions.actions.complete.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
+          <% end %>
+        </div>
+      </div>
+
       <!-- Cancel Training Form -->
       <div class="bg-white shadow rounded-lg mb-6">
         <div class="px-4 py-5 sm:p-6">
           <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="cancel-training-heading">
-            Cancel Training
+            <%= t('trainers.training_sessions.actions.cancel.title') %>
           </h3>
 
           <%= form_with(url: cancel_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "cancel-training-heading" }) do |f| %>
             <div>
               <%= f.label :cancellation_reason, class: "block text-sm font-medium text-gray-700" do %>
-                Reason for Cancellation <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                <%= t('trainers.training_sessions.actions.cancel.reason_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('trainers.training_sessions.actions.required') %></span>
               <% end %>
-              <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true", describedby: "cancel_reason_hint" } %>
-              <p class="sr-only" id="cancel_reason_hint">Please provide a reason for cancelling this training session.</p>
+              <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('trainers.training_sessions.actions.cancel.reason_placeholder'), aria: { required: "true", describedby: "cancel_reason_hint" } %>
+              <p class="sr-only" id="cancel_reason_hint"><%= t('trainers.training_sessions.actions.cancel.reason_hint') %></p>
             </div>
 
-            <%= f.submit "Cancel Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
+            <%= f.submit t('trainers.training_sessions.actions.cancel.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
           <% end %>
         </div>
       </div>
@@ -401,6 +491,12 @@
           <% end %>
         </div>
       </div>
+
+      <% if @remaining_training_session_slots.positive? %>
+        <div class="mb-6">
+          <%= render 'schedule_additional_form', training_session: @training_session %>
+        </div>
+      <% end %>
 
     <% elsif @training_session.status_cancelled? || @training_session.status_no_show? %>
       <!-- Follow-up scheduling creates a new session and preserves this historical record. -->

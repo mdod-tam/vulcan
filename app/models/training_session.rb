@@ -4,6 +4,7 @@ class TrainingSession < ApplicationRecord
   include StatusManagement
   include NotificationDelivery
 
+  # `rescheduled` is legacy/display-only; current reschedules keep sessions scheduled.
   OPEN_STATUSES = %i[requested scheduled confirmed].freeze
   HISTORICAL_STATUSES = %i[completed cancelled no_show].freeze
 
@@ -50,7 +51,7 @@ class TrainingSession < ApplicationRecord
   validate :trainer_must_be_trainer_type
   validate :scheduled_time_must_be_future
   validate :historical_session_cannot_reopen, if: :reopening_historical_session?
-  validate :at_most_one_open_session_per_application, if: :entering_open_status?
+  validate :training_session_capacity_available, if: :entering_open_status?
 
   # Conditional Validations based on status
   validates :cancellation_reason, presence: true, if: :status_cancelled?
@@ -114,6 +115,10 @@ class TrainingSession < ApplicationRecord
     false
   end
 
+  def open_status?
+    OPEN_STATUSES.include?(status&.to_sym)
+  end
+
   private
 
   def entering_open_status?
@@ -124,13 +129,14 @@ class TrainingSession < ApplicationRecord
     new_record? || will_save_change_to_status?
   end
 
-  def at_most_one_open_session_per_application
-    return unless application.training_sessions
-                             .where(status: OPEN_STATUSES)
-                             .where.not(id: id)
-                             .exists?
+  def training_session_capacity_available
+    reserved_count = application.training_sessions
+                                .where(status: OPEN_STATUSES + [:completed])
+                                .where.not(id: id)
+                                .count
+    return if reserved_count < application.max_training_sessions
 
-    errors.add(:base, :duplicate_open_session)
+    errors.add(:base, :training_session_quota_exhausted)
   end
 
   def reopening_historical_session?
