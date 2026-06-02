@@ -171,4 +171,29 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
            params: { proof_type: 'income', income_proof_upload: @valid_pdf }
     end
   end
+
+  test 'can access dependent application for proof submission' do
+    # Create a dependent user
+    dependent = create(:constituent, :with_address_and_phone)
+    
+    create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
+
+    # Create an application for the dependent with rejected income proof
+    dependent_application = create(:application, :paper_rejected_proofs, user: dependent)
+  
+    # Guardian should be able to submit proof for dependent's application
+    assert_difference 'Event.count', 2 do
+      post "/constituent_portal/applications/#{dependent_application.id}/proofs/resubmit",
+           params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+    end
+  
+    # Verify redirect and flash
+    assert_redirected_to constituent_portal_application_path(dependent_application)
+    assert_equal 'Proof submitted successfully', flash[:notice]
+  
+    # Verify the dependent's application was updated
+    dependent_application.reload
+    assert dependent_application.income_proof.attached?
+    assert_equal 'not_reviewed', dependent_application.income_proof_status
+  end
 end
