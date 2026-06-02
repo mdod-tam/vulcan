@@ -107,22 +107,29 @@
               residency_attached = application.respond_to?(:residency_proof_attached?) ? 
                 application.residency_proof_attached? : 
                 (application.respond_to?(:residency_proof) && application.residency_proof.attached?)
+
+              id_attached = application.respond_to?(:id_proof_attached?) ?
+                application.id_proof_attached? :
+                (application.respond_to?(:id_proof) && application.id_proof.attached?)
+
+              proof_status_rows = []
+              if application.income_proof_required?
+                proof_status_rows << ['income', 'Income', application.income_proof_status]
+              end
+              proof_status_rows << ['residency', 'Residency', application.residency_proof_status]
+              proof_status_rows << ['id', 'ID', application.id_proof_status]
+
+              proofs_attached = (application.income_proof_required? && income_attached) || residency_attached || id_attached
             %>
             
-            <% if income_attached || residency_attached %>
+            <% if proofs_attached %>
               <div class="flex flex-col space-y-1">
-                <div class="flex items-center space-x-2">
-                  <span class="text-sm text-gray-600">Income:</span>
-                  <%= proof_status_badge('income', application.income_proof_status) %>
-                </div>
-                <div class="flex items-center space-x-2">
-                  <span class="text-sm text-gray-600">Residency:</span>
-                  <%= proof_status_badge('residency', application.residency_proof_status) %>
-                </div>
-                <div class="flex items-center space-x-2">
-                  <span class="text-sm text-gray-600">ID:</span>
-                  <%= proof_status_badge('id', application.id_proof_status) %>
-                </div>
+                <% proof_status_rows.each do |proof_type, label, status| %>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-600"><%= label %>:</span>
+                    <%= proof_status_badge(proof_type, status) %>
+                  </div>
+                <% end %>
               </div>
             <% else %>
               <span class="text-sm text-gray-500">No Proofs</span>

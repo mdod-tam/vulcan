@@ -9,12 +9,14 @@ module Admin
       sign_in_for_integration_test(@admin)
     end
 
-    test 'index includes operational vs MFR distinction copy' do
+    test 'index includes simplified fiscal year report copy' do
       get admin_reports_path
       assert_response :success
       assert_match(/created.*fiscal year/i, response.body)
-      assert_match(/status transitions/i, response.body)
+      assert_match(/Official Managing for Results \(MFR\) data for each fiscal year\./, response.body)
       assert_match(/not MFR/i, response.body)
+      assert_no_match(/Overview sections count/i, response.body)
+      assert_no_match(/Official MFR throughput/i, response.body)
     end
 
     test 'index includes text-only service status breakdowns' do

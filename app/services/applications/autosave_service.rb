@@ -2,7 +2,28 @@
 
 module Applications
   class AutosaveService < BaseService
-    # Only these Application attributes may be assigned through autosave.
+    USER_AUTOSAVE_FIELD_ALLOWLIST = %w[
+      hearing_disability
+      vision_disability
+      speech_disability
+      mobility_disability
+      cognition_disability
+    ].freeze
+
+    # These form fields can appear in autosave requests, but this service does
+    # not persist them because they are saved through user/profile or proof flows.
+    NON_AUTOSAVED_FORM_FIELDS = %w[
+      physical_address_1
+      physical_address_2
+      city
+      state
+      zip_code
+      residency_proof
+      income_proof
+    ].freeze
+
+    # Unlike NON_AUTOSAVED_FORM_FIELDS, this is a security allowlist: only these
+    # Application attributes may fall through to assign_attributes via autosave.
     APPLICATION_AUTOSAVE_FIELD_ALLOWLIST = %w[
       annual_income
       household_size
@@ -161,18 +182,11 @@ module Applications
     end
 
     def determine_target_model_and_attribute(attribute_name)
-      user_fields = %w[hearing_disability vision_disability speech_disability
-                       mobility_disability cognition_disability]
-      ignored_fields = %w[physical_address_1 physical_address_2 city state zip_code
-                          residency_proof income_proof]
+      return [:user, attribute_name] if USER_AUTOSAVE_FIELD_ALLOWLIST.include?(attribute_name)
+      return [:ignored, attribute_name] if NON_AUTOSAVED_FORM_FIELDS.include?(attribute_name)
+      return [:ignored, attribute_name] unless APPLICATION_AUTOSAVE_FIELD_ALLOWLIST.include?(attribute_name)
 
-      if user_fields.include?(attribute_name)
-        [:user, attribute_name]
-      elsif ignored_fields.include?(attribute_name) || APPLICATION_AUTOSAVE_FIELD_ALLOWLIST.exclude?(attribute_name)
-        [:ignored, attribute_name]
-      else
-        [:application, attribute_name]
-      end
+      [:application, attribute_name]
     end
 
     def save_user_field(attribute)
