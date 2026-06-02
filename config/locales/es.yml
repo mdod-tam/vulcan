@@ -324,6 +324,7 @@ es:
       invalid_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden completar."
       notes_required: "notes es obligatorio"
       product_required: "product_trained_on_id es obligatorio"
+      duration_hours_required: "duration_hours es obligatorio"
     cancel:
       success: "La sesión de capacitación se canceló correctamente."
       invalid_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden cancelar."

@@ -213,6 +213,7 @@ en:
       invalid_status: "Only scheduled or confirmed training sessions can be completed."
       notes_required: "notes is required"
       product_required: "product_trained_on_id is required"
+      duration_hours_required: "duration_hours is required"
     cancel:
       success: "Training session cancelled successfully."
       invalid_status: "Only scheduled or confirmed training sessions can be cancelled."

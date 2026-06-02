@@ -161,8 +161,14 @@
               </dd>
             </div>
           <% end %>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Training Duration</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= training_duration_hours_label(@training_session.duration_hours) %>
+            </dd>
+          </div>
            <% if @training_session.notes.present? %>
-            <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
               <dt class="text-sm font-medium text-gray-500">Training Notes</dt>
               <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                 <%= simple_format(@training_session.notes) %>
@@ -277,6 +283,9 @@
                   <% end %>
                   by <%= session.trainer.full_name %>
                 </p>
+                <p class="mt-1 text-sm text-gray-500">
+                  Duration: <%= training_duration_hours_label(session.duration_hours) %>
+                </p>
               </div>
             </div>
 
@@ -337,31 +346,7 @@
     <% elsif (@training_session.status_scheduled? || @training_session.status_confirmed?) && @training_session.scheduled_for.present? && @training_session.scheduled_for < Time.current %>
       <!-- Actions for Scheduled/Confirmed Sessions where time has passed -->
       <div class="space-y-6">
-        <!-- Complete Training Form -->
-        <div class="bg-white shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="complete-training-heading">
-              Mark Training as Completed
-            </h3>
-
-            <%= form_with(url: complete_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "complete-training-heading" }) do |f| %>
-              <div>
-                <%= f.label :product_trained_on_id, class: "block text-sm font-medium text-gray-700" do %>
-                  Product Trained On <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-                <% end %>
-                <%= f.collection_select :product_trained_on_id, Product.all.order(:name), :id, :name, { prompt: "Select a product" }, { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md", required: true, aria: { required: "true" } } %>
-              </div>
-              <div>
-                 <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
-                    Training Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-                 <% end %>
-                <%= f.text_area :notes, rows: 4, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Enter details about what was covered...", aria: { required: "true", describedby: "complete_notes_hint" } %>
-                <p class="mt-1 text-sm text-gray-500" id="complete_notes_hint">This sends the constituent a completion notification by email or letter. These notes stay internal and are not included in that notification.</p>
-              </div>
-              <%= f.submit "Mark as Completed", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
-            <% end %>
-          </div>
-        </div>
+        <%= render "completion_form", training_session: @training_session, card_class: "bg-white shadow rounded-lg" %>
 
         <!-- Cancel Training Form -->
         <div class="bg-white shadow rounded-lg">
@@ -415,31 +400,7 @@
 
     <% elsif @training_session.status_scheduled? || @training_session.status_confirmed? %>
       <!-- Actions for Scheduled/Confirmed Sessions where time has NOT passed -->
-      <!-- Complete Training Form -->
-      <div class="bg-white shadow rounded-lg mb-6">
-        <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="complete-training-heading">
-            Mark Training as Completed
-          </h3>
-
-          <%= form_with(url: complete_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "complete-training-heading" }) do |f| %>
-            <div>
-              <%= f.label :product_trained_on_id, class: "block text-sm font-medium text-gray-700" do %>
-                Product Trained On <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-              <% end %>
-              <%= f.collection_select :product_trained_on_id, Product.all.order(:name), :id, :name, { prompt: "Select a product" }, { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md", required: true, aria: { required: "true" } } %>
-            </div>
-            <div>
-               <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
-                  Training Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-               <% end %>
-              <%= f.text_area :notes, rows: 4, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Enter details about what was covered...", aria: { required: "true", describedby: "complete_notes_hint" } %>
-              <p class="mt-1 text-sm text-gray-500" id="complete_notes_hint">This sends the constituent a completion notification by email or letter. These notes stay internal and are not included in that notification.</p>
-            </div>
-            <%= f.submit "Mark as Completed", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
-          <% end %>
-        </div>
-      </div>
+      <%= render "completion_form", training_session: @training_session, card_class: "bg-white shadow rounded-lg mb-6" %>
 
       <!-- Cancel Training Form -->
       <div class="bg-white shadow rounded-lg mb-6">

@@ -57,6 +57,7 @@ class TrainingSession < ApplicationRecord
   validates :cancellation_reason, presence: true, if: :status_cancelled?
   validates :no_show_notes, presence: true, if: :status_no_show?
   validates :notes, presence: true, if: :status_completed?
+  validates :duration_hours, presence: true, numericality: { greater_than: 0 }, if: :status_completed?
 
   # Callbacks
   before_save :set_completed_at, if: :status_changed_to_completed?

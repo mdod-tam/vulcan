@@ -43,9 +43,10 @@ module TrainingSessions
 
     def validate_params!
       raise ArgumentError, I18n.t('training_sessions.complete.notes_required') if @params[:notes].blank?
-      return if @params[:product_trained_on_id].present?
+      raise ArgumentError, I18n.t('training_sessions.complete.product_required') if @params[:product_trained_on_id].blank?
+      return if @params[:duration_hours].present?
 
-      raise ArgumentError, I18n.t('training_sessions.complete.product_required')
+      raise ArgumentError, I18n.t('training_sessions.complete.duration_hours_required')
     end
 
     def log_validation_failure(error)
@@ -58,6 +59,7 @@ module TrainingSessions
         completed_at: Time.current,
         notes: @params[:notes],
         product_trained_on_id: @params[:product_trained_on_id],
+        duration_hours: @params[:duration_hours],
         cancellation_reason: nil,
         no_show_notes: nil
       )
@@ -72,6 +74,7 @@ module TrainingSessions
           application_id: @training_session.application_id,
           training_session_id: @training_session.id,
           completed_at: @training_session.completed_at&.iso8601,
+          duration_hours: @training_session.duration_hours.to_s('F'),
           notes: @training_session.notes,
           product_trained_on: @training_session.product_trained_on&.name,
           timestamp: Time.current.iso8601

@@ -93,6 +93,9 @@ module Trainers
 
       assert_response :success
       assert_includes @response.body, 'Mark Training as Completed'
+      assert_select 'label', text: /Training Duration/
+      assert_select 'input[name="duration_hours"][type="number"][step="0.25"][value="2.0"]'
+      assert_select 'p', text: 'Enter total time spent training, in hours.'
       assert_includes @response.body, 'Cancel Training'
       assert_not_includes @response.body, 'Mark as No Show'
       assert_includes @response.body, 'aria-label="Session #'
@@ -127,6 +130,8 @@ module Trainers
       get trainers_training_session_url(completed_session)
 
       assert_response :success
+      assert_includes @response.body, 'Training Duration'
+      assert_includes @response.body, '2 hours'
       assert_includes @response.body, 'Schedule Another Session'
       assert_includes @response.body, 'This creates another scheduled session and sends the constituent'
     end
@@ -146,7 +151,7 @@ module Trainers
       sign_in_for_controller_test @admin
 
       post complete_trainers_training_session_url(@training_session),
-           params: { notes: 'Admin attempt', product_trained_on_id: @product.id }
+           params: { notes: 'Admin attempt', product_trained_on_id: @product.id, duration_hours: '2.0' }
 
       assert_redirected_to trainers_training_session_url(@training_session)
       assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
@@ -407,7 +412,7 @@ module Trainers
 
       assert_difference('Event.count') do
         post complete_trainers_training_session_url(@training_session),
-             params: { notes: notes, product_trained_on_id: @product.id }
+             params: { notes: notes, product_trained_on_id: @product.id, duration_hours: '2.5' }
       end
 
       @training_session.reload
@@ -415,6 +420,7 @@ module Trainers
       assert_not_nil @training_session.completed_at
       assert_equal notes, @training_session.notes
       assert_equal @product, @training_session.product_trained_on
+      assert_equal BigDecimal('2.5'), @training_session.duration_hours
       assert_nil @training_session.cancellation_reason # Ensure cleared
       assert_nil @training_session.no_show_notes # Ensure cleared
       assert_redirected_to trainers_training_session_url(@training_session)
@@ -425,6 +431,7 @@ module Trainers
       assert_equal @training_session.id, event.metadata['training_session_id']
       assert_equal @training_session.application_id, event.metadata['application_id']
       assert_not_nil event.metadata['completed_at']
+      assert_equal '2.5', event.metadata['duration_hours']
       assert_equal notes, event.metadata['notes']
       assert_equal @product.name, event.metadata['product_trained_on']
       assert_equal @trainer, event.user
@@ -436,7 +443,7 @@ module Trainers
 
       assert_difference('Event.where(action: "training_completed").count', 1) do
         post complete_trainers_training_session_url(@training_session),
-             params: { notes: 'Completed during an early visit.', product_trained_on_id: @product.id }
+             params: { notes: 'Completed during an early visit.', product_trained_on_id: @product.id, duration_hours: '2.0' }
       end
 
       @training_session.reload
@@ -450,7 +457,7 @@ module Trainers
 
       assert_no_difference('Event.count') do
         post complete_trainers_training_session_url(@requested_session),
-             params: { notes: 'Premature completion attempt.', product_trained_on_id: @product.id }
+             params: { notes: 'Premature completion attempt.', product_trained_on_id: @product.id, duration_hours: '2.0' }
       end
 
       @requested_session.reload
@@ -465,7 +472,7 @@ module Trainers
 
       assert_no_difference('Event.count') do
         post complete_trainers_training_session_url(@training_session),
-             params: { product_trained_on_id: @product.id }
+             params: { product_trained_on_id: @product.id, duration_hours: '2.0' }
       end
 
       @training_session.reload
@@ -486,6 +493,40 @@ module Trainers
       assert_equal 'scheduled', @training_session.status # Status should not change
       assert_response :unprocessable_content
       assert_includes @response.body, 'Failed to complete training session:' # Check for error message in body
+    end
+
+    test 'complete should fail without duration_hours' do
+      sign_in_for_controller_test @trainer
+
+      assert_no_difference('Event.count') do
+        post complete_trainers_training_session_url(@training_session),
+             params: { notes: 'Training session completed successfully.', product_trained_on_id: @product.id }
+      end
+
+      @training_session.reload
+      assert_equal 'scheduled', @training_session.status
+      assert_response :unprocessable_content
+      assert_includes @response.body, 'Failed to complete training session:'
+    end
+
+    test 'complete should fail with zero or negative duration_hours' do
+      sign_in_for_controller_test @trainer
+
+      ['0', '-1'].each do |duration_hours|
+        assert_no_difference('Event.count') do
+          post complete_trainers_training_session_url(@training_session),
+               params: {
+                 notes: 'Training session completed successfully.',
+                 product_trained_on_id: @product.id,
+                 duration_hours: duration_hours
+               }
+        end
+
+        @training_session.reload
+        assert_equal 'scheduled', @training_session.status
+        assert_response :unprocessable_content
+        assert_includes @response.body, 'Failed to complete training session:'
+      end
     end
 
     # --- Schedule Action Tests ---
@@ -989,6 +1030,16 @@ module Trainers
       assert_includes assigns(:training_sessions), @completed_session
       assert_not_includes assigns(:training_sessions), @other_trainer_session
       assert_includes @response.body, @trainer.full_name
+    end
+
+    test 'completed sessions list displays training duration' do
+      sign_in_for_controller_test @trainer
+      @completed_session.update!(duration_hours: 2.5)
+
+      get completed_trainers_training_sessions_url
+
+      assert_response :success
+      assert_includes @response.body, 'Duration: 2.5 hours'
     end
 
     # Add tests for requested, scheduled, completed, needs_followup actions if they are still used directly

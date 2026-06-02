@@ -309,7 +309,7 @@ module Trainers
     end
 
     def complete_params
-      params.permit(:notes, :product_trained_on_id)
+      params.permit(:notes, :product_trained_on_id, :duration_hours)
     end
 
     def cancel_params

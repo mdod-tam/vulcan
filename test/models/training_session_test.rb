@@ -10,6 +10,12 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
   end
 
+  test 'defaults duration_hours to two hours' do
+    training_session = TrainingSession.new
+
+    assert_equal BigDecimal('2.0'), training_session.duration_hours
+  end
+
   test 'should require application' do
     # Build, don't create, to test validation before saving
     training_session = build(:training_session, application: nil)
@@ -125,6 +131,21 @@ class TrainingSessionTest < ActiveSupport::TestCase
 
     training_session.notes = 'Training completed successfully'
     assert training_session.valid?
+  end
+
+  test 'should require positive duration_hours if status is completed' do
+    training_session = build(:training_session, :scheduled, status: :completed, notes: 'Training completed successfully')
+
+    training_session.duration_hours = nil
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:duration_hours], "can't be blank"
+
+    training_session.duration_hours = 0
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:duration_hours], 'must be greater than 0'
+
+    training_session.duration_hours = 2.5
+    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
   end
 
   test 'should allow multiple open sessions while training slots remain' do
