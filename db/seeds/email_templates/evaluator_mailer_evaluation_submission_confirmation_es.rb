@@ -9,28 +9,23 @@ template.update!(
   body: <<~TEXT,
     %<header_text>s
 
-    Hola %<constituent_first_name>s,
+    Estimado/a %<constituent_first_name>s:
 
-    %<status_box_text>s
+    Le escribimos para confirmar que el Programa de Telecomunicaciones Accesibles de Maryland ha recibido su informe de evaluación.
 
-    CONFIRMACIÓN DE ENVÍO DE EVALUACIÓN:
-    - ID de Solicitud: %<application_id>s
-    - Evaluador: %<evaluator_full_name>s
-    - Fecha de Envío: %<submission_date_formatted>s
-
-    Según la evaluación, el evaluador recomendó los siguientes productos:
-
+    Según la evaluación, el evaluador recomendó los siguientes productos de telecomunicaciones accesibles como útiles para sus necesidades de comunicación:
     %<recommended_products_text_list>s
 
-    Esta información se proporciona para sus registros.
+    Esta información se proporciona para sus registros. Tenga en cuenta que la recomendación se basa en la evaluación del evaluador.
 
-    Si tiene alguna pregunta o necesita más ayuda, no dude en comunicarse.
+    No dude en comunicarse con nosotros si tiene alguna pregunta o necesita más ayuda.
+
+    Atentamente,
 
     %<footer_text>s
   TEXT
   variables: {
-    'required' => %w[header_text evaluator_full_name constituent_first_name application_id
-                     submission_date_formatted recommended_products_text_list status_box_text footer_text],
+    'required' => %w[header_text constituent_first_name recommended_products_text_list footer_text],
     'optional' => []
   },
   version: 1

@@ -14,8 +14,7 @@ class UpdateEvaluatorEmailTemplatesForWorkflowParity < ActiveRecord::Migration[8
 
   SUBMISSION_VARIABLES = {
     'required' => %w[
-      header_text evaluator_full_name constituent_first_name application_id
-      submission_date_formatted recommended_products_text_list status_box_text footer_text
+      header_text constituent_first_name recommended_products_text_list footer_text
     ],
     'optional' => []
   }.freeze
@@ -81,44 +80,36 @@ class UpdateEvaluatorEmailTemplatesForWorkflowParity < ActiveRecord::Migration[8
     'en' => <<~TEXT,
       %<header_text>s
 
-      Hi %<constituent_first_name>s,
+      Dear %<constituent_first_name>s
 
-      %<status_box_text>s
+      We are writing to confirm that the Maryland Accessible Telecommunications Program has received your evaluation report.
 
-      EVALUATION SUBMISSION CONFIRMATION:
-      - Application ID: %<application_id>s
-      - Evaluator: %<evaluator_full_name>s
-      - Submission Date: %<submission_date_formatted>s
-
-      Based on the evaluation, the evaluator recommended the following product(s):
-
+      Based on the evaluation, the evaluator recommended the following accessible telecommunications product(s) as being useful for your communication needs:
       %<recommended_products_text_list>s
 
-      This information is being provided for your records.
+      This information is being provided for your records. Please note that the recommendation is based on the evaluator’s assessment.
 
-      If you have any questions or need further assistance, please feel free to reach out.
+      Please feel free to contact us with any questions or if you need further assistance.
+
+      Sincerely,
 
       %<footer_text>s
     TEXT
     'es' => <<~TEXT
       %<header_text>s
 
-      Hola %<constituent_first_name>s,
+      Estimado/a %<constituent_first_name>s:
 
-      %<status_box_text>s
+      Le escribimos para confirmar que el Programa de Telecomunicaciones Accesibles de Maryland ha recibido su informe de evaluación.
 
-      CONFIRMACIÓN DE ENVÍO DE EVALUACIÓN:
-      - ID de Solicitud: %<application_id>s
-      - Evaluador: %<evaluator_full_name>s
-      - Fecha de Envío: %<submission_date_formatted>s
-
-      Según la evaluación, el evaluador recomendó los siguientes productos:
-
+      Según la evaluación, el evaluador recomendó los siguientes productos de telecomunicaciones accesibles como útiles para sus necesidades de comunicación:
       %<recommended_products_text_list>s
 
-      Esta información se proporciona para sus registros.
+      Esta información se proporciona para sus registros. Tenga en cuenta que la recomendación se basa en la evaluación del evaluador.
 
-      Si tiene alguna pregunta o necesita más ayuda, no dude en comunicarse.
+      No dude en comunicarse con nosotros si tiene alguna pregunta o necesita más ayuda.
+
+      Atentamente,
 
       %<footer_text>s
     TEXT

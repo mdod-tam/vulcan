@@ -19,7 +19,7 @@ class EvaluatorMailerTest < ActionMailer::TestCase
 
     evaluation_submission_mock = mock_template(
       'Evaluation has been Submitted',
-      'Recommended products: %<recommended_products_text_list>s. %<status_box_text>s %<footer_text>s'
+      'Recommended products: %<recommended_products_text_list>s. %<footer_text>s'
     )
 
     # Stub EmailTemplate.find_by! for text format only
@@ -88,7 +88,8 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
 
     # Check that the email body contains expected content from the mock
-    assert_includes email.body.to_s, "- #{@alpha_product.name}\n- #{@zeta_product.name}"
+    assert_includes email.body.to_s, "#{@alpha_product.name}\n#{@zeta_product.name}"
+    assert_not_includes email.body.to_s, "- #{@alpha_product.name}"
     assert_not_includes email.body.to_s, 'equipment order'
   end
 

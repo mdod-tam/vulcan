@@ -199,7 +199,7 @@ class EvaluatorMailer < ApplicationMailer
   end
 
   def format_recommended_products_text(evaluation)
-    evaluation.recommended_products.order(:name).map { |product| "- #{product.name}" }.join("\n")
+    evaluation.recommended_products.order(:name).map(&:name).join("\n")
   end
 
   # Queue letter if constituent prefers print communication
