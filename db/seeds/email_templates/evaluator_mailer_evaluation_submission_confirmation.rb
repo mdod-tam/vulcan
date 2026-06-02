@@ -2,10 +2,11 @@
 
 # Seed File for "evaluator_mailer_evaluation_submission_confirmation"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'en') do |template|
-  template.subject = 'Evaluation Submission Confirmation'
-  template.description = 'Sent to the evaluator after they have submitted their evaluation.'
-  template.body = <<~TEXT
+template = EmailTemplate.find_or_initialize_by(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'en')
+template.update!(
+  subject: 'Evaluation Submission Confirmation',
+  description: 'Sent to the constituent after the evaluator submits an evaluation.',
+  body: <<~TEXT,
     %<header_text>s
 
     Hi %<constituent_first_name>s,
@@ -17,17 +18,21 @@ EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_evaluation_submission_c
     - Evaluator: %<evaluator_full_name>s
     - Submission Date: %<submission_date_formatted>s
 
-    Thank you for your prompt submission. Your evaluation is now under review.
+    Based on the evaluation, the evaluator recommended the following product(s):
+
+    %<recommended_products_text_list>s
+
+    This information is being provided for your records.
 
     If you have any questions or need further assistance, please feel free to reach out.
 
     %<footer_text>s
   TEXT
-  template.variables = {
+  variables: {
     'required' => %w[header_text evaluator_full_name constituent_first_name application_id
-                     submission_date_formatted status_box_text footer_text],
+                     submission_date_formatted recommended_products_text_list status_box_text footer_text],
     'optional' => []
-  }
-  template.version = 1
-end
+  },
+  version: 1
+)
 Rails.logger.debug 'Seeded evaluator_mailer_evaluation_submission_confirmation (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

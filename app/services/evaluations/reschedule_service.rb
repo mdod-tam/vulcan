@@ -19,13 +19,16 @@ module Evaluations
         create_event!(old_evaluation_date)
       end
 
-      success('Evaluation rescheduled successfully.', { evaluation: @evaluation })
+      success(I18n.t('evaluations.reschedule.success'), { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error rescheduling evaluation: #{e.message}")
       failure(e.message)
     rescue ArgumentError => e
       log_validation_failure(e)
       failure(e.message)
+    rescue TypeError => e
+      log_validation_failure(e)
+      failure(I18n.t('evaluations.reschedule.invalid_evaluation_date'))
     rescue StandardError => e
       Rails.logger.error("Unexpected error rescheduling evaluation: #{e.message}")
       failure("An unexpected error occurred: #{e.message}")
@@ -34,14 +37,19 @@ module Evaluations
     private
 
     def validate_params!
-      return unless @params[:evaluation_date].blank? || @params[:reschedule_reason].blank?
+      raise ArgumentError, I18n.t('evaluations.reschedule.wrong_status') unless @evaluation.can_reschedule?
 
-      raise ArgumentError, 'evaluation_date and reschedule_reason are required'
+      raise ArgumentError, I18n.t('evaluations.reschedule.missing_required_fields') if required_fields_missing?
+      raise ArgumentError, I18n.t('evaluations.reschedule.evaluation_date_in_future') if evaluation_date <= Time.current
+    end
+
+    def required_fields_missing?
+      @params[:evaluation_date].blank? || @params[:reschedule_reason].blank?
     end
 
     def reschedule_evaluation!
       @evaluation.update!(
-        evaluation_date: @params[:evaluation_date],
+        evaluation_date: evaluation_date,
         location: @params[:location],
         reschedule_reason: @params[:reschedule_reason],
         status: :scheduled
@@ -67,6 +75,13 @@ module Evaluations
 
     def log_validation_failure(error)
       Rails.logger.warn("Evaluations::RescheduleService validation failed: #{error.message}")
+    end
+
+    def evaluation_date
+      @evaluation_date ||= begin
+        value = @params[:evaluation_date]
+        value.respond_to?(:in_time_zone) ? value.in_time_zone : Time.zone.parse(value.to_s)
+      end
     end
   end
 end

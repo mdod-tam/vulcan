@@ -4,6 +4,7 @@ class EvaluatorMailer < ApplicationMailer
   include Rails.application.routes.url_helpers
   # Include helpers for rendering shared partials
   include Mailers::SharedPartialHelpers # Use the extracted shared helper module
+  include ConstituentCommunicationLabelsHelper
 
   def self.default_url_options
     Rails.application.config.action_mailer.default_url_options
@@ -92,9 +93,18 @@ class EvaluatorMailer < ApplicationMailer
       constituent_address_formatted: format_constituent_address(constituent),
       constituent_phone_formatted: constituent.phone || 'Not Provided',
       constituent_email: constituent.email,
+      constituent_contact_method: contact_method_label(constituent.phone_type),
+      constituent_preferred_language: language_label(constituent.locale),
+      constituent_communication_modality: constituent.preferred_means_of_communication.presence || 'Not specified',
+      constituent_delivery_preference: delivery_preference_label(constituent),
       evaluators_evaluation_url: evaluation_url,
       constituent_disabilities_html_list: format_disabilities_html(constituent),
       constituent_disabilities_text_list: format_disabilities_text(constituent),
+      status_box_text: status_box_text(
+        status: :info,
+        title: I18n.t('evaluator_mailer.status_boxes.assignment.title', locale: locale),
+        message: I18n.t('evaluator_mailer.status_boxes.assignment.message', locale: locale)
+      ),
       **header_data
     }.compact
   end
@@ -104,7 +114,7 @@ class EvaluatorMailer < ApplicationMailer
     constituent = evaluation.constituent
     application = evaluation.application
     evaluator = evaluation.evaluator
-    submission_date_formatted = evaluation.try(:submitted_at)&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not Provided'
+    submission_date_formatted = evaluation.evaluation_date&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not Provided'
 
     header_title = header_title_from_template_subject(
       template: template,
@@ -118,6 +128,12 @@ class EvaluatorMailer < ApplicationMailer
       application_id: application.id,
       evaluator_full_name: evaluator.full_name,
       submission_date_formatted: submission_date_formatted,
+      recommended_products_text_list: format_recommended_products_text(evaluation),
+      status_box_text: status_box_text(
+        status: :success,
+        title: I18n.t('evaluator_mailer.status_boxes.submitted.title', locale: locale),
+        message: I18n.t('evaluator_mailer.status_boxes.submitted.message', locale: locale)
+      ),
       **header_data
     }.compact
   end
@@ -180,6 +196,10 @@ class EvaluatorMailer < ApplicationMailer
     return '' if constituent.disabilities.blank?
 
     constituent.disabilities.map { |d| "- #{d}" }.join("\n")
+  end
+
+  def format_recommended_products_text(evaluation)
+    evaluation.recommended_products.order(:name).map { |product| "- #{product.name}" }.join("\n")
   end
 
   # Queue letter if constituent prefers print communication

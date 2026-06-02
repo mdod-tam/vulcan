@@ -11,6 +11,8 @@ module ActivityHistoryHelper
     'training_missed' => 'No Show',
     'evaluation_scheduled' => 'Evaluation Scheduled',
     'evaluation_completed' => 'Evaluation Completed',
+    'evaluation_cancelled' => 'Evaluation Cancelled',
+    'evaluation_no_show' => 'Evaluation No-Show',
     'evaluation_rescheduled' => 'Evaluation Rescheduled',
     'requested_additional_info' => 'Additional Info Requested',
     'evaluator_assigned' => 'Evaluator Assigned',
@@ -36,7 +38,7 @@ module ActivityHistoryHelper
                 scheduled_detail(metadata, 'scheduled_for', 'Scheduled for')
               when 'training_completed'
                 completed_training_detail(metadata)
-              when 'training_cancelled'
+              when 'training_cancelled', 'evaluation_cancelled'
                 cancellation_detail(metadata)
               when 'training_rescheduled'
                 rescheduled_detail(metadata, old_key: 'old_scheduled_for', new_key: 'new_scheduled_for')
@@ -44,6 +46,8 @@ module ActivityHistoryHelper
                 followup_scheduled_detail(metadata)
               when 'training_no_show', 'training_missed'
                 metadata_value(metadata, 'no_show_notes').presence || 'Marked as no show'
+              when 'evaluation_no_show'
+                metadata_value(metadata, 'no_show_notes').presence || 'Marked as no-show'
               when 'evaluation_scheduled'
                 scheduled_detail(metadata, 'evaluation_date', 'Scheduled for')
               when 'evaluation_rescheduled'

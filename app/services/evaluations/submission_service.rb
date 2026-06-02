@@ -17,17 +17,27 @@ module Evaluations
         notify_constituent
       end
 
-      success('Evaluation submitted successfully.', { evaluation: @evaluation })
+      success(I18n.t('evaluations.complete.success'), { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error "Evaluation submission FAILED for ID #{@evaluation&.id}: #{e.message}"
+      failure(e.message)
+    rescue ArgumentError => e
+      Rails.logger.warn("Evaluations::SubmissionService validation failed: #{e.message}")
       failure(e.message)
     end
 
     private
 
     def prepare_evaluation
+      validate_status!
       @evaluation.assign_attributes(submission_params)
       @evaluation.status = :completed
+    end
+
+    def validate_status!
+      return if @evaluation.can_complete?
+
+      raise ArgumentError, I18n.t('evaluations.complete.wrong_status')
     end
 
     def save_evaluation!

@@ -7,6 +7,7 @@ module ApplicationHelper
   include ProofUploadFormatsHelper
   include Pagy::Frontend
   include BadgeHelper
+  include ConstituentCommunicationLabelsHelper
 
   def flash_class_for(flash_type)
     case flash_type.to_s
@@ -96,26 +97,6 @@ module ApplicationHelper
 
     content_tag(:span, label,
                 class: "px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(:document_signing, status)}") # rubocop:disable Layout/LineLength
-  end
-
-  CONTACT_METHOD_LABELS = {
-    'voice' => 'Call me on the phone',
-    'text' => 'Text me',
-    'videophone' => 'Call me using ASL (videophone)',
-    'email' => 'Email me',
-    'letter' => 'Send me a letter in the mail'
-  }.freeze
-
-  def contact_method_label(phone_type)
-    CONTACT_METHOD_LABELS[phone_type.to_s]
-  end
-
-  LANGUAGE_LABELS = {
-    'es' => 'Spanish'
-  }.freeze
-
-  def language_label(locale)
-    LANGUAGE_LABELS.fetch(locale.to_s, 'English')
   end
 
   def admin_fulfillment_badge(application)

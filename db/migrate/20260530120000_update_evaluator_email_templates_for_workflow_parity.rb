@@ -1,0 +1,189 @@
+# frozen_string_literal: true
+
+class UpdateEvaluatorEmailTemplatesForWorkflowParity < ActiveRecord::Migration[8.0]
+  ASSIGNMENT_VARIABLES = {
+    'required' => %w[
+      header_text evaluator_full_name status_box_text constituent_full_name
+      constituent_address_formatted constituent_phone_formatted constituent_email
+      constituent_contact_method constituent_preferred_language
+      constituent_communication_modality constituent_delivery_preference
+      constituent_disabilities_text_list evaluators_evaluation_url footer_text
+    ],
+    'optional' => []
+  }.freeze
+
+  SUBMISSION_VARIABLES = {
+    'required' => %w[
+      header_text evaluator_full_name constituent_first_name application_id
+      submission_date_formatted recommended_products_text_list status_box_text footer_text
+    ],
+    'optional' => []
+  }.freeze
+
+  ASSIGNMENT_BODIES = {
+    'en' => <<~TEXT,
+      %<header_text>s
+
+      Hi %<evaluator_full_name>s,
+
+      %<status_box_text>s
+
+      CONSTITUENT DETAILS:
+      - Name: %<constituent_full_name>s
+      - Address: %<constituent_address_formatted>s
+      - Phone: %<constituent_phone_formatted>s
+      - Email: %<constituent_email>s
+      - Contact Method: %<constituent_contact_method>s
+      - Preferred Language: %<constituent_preferred_language>s
+      - Communication Modality: %<constituent_communication_modality>s
+      - Delivery Preference: %<constituent_delivery_preference>s
+
+      DISABILITIES:
+      %<constituent_disabilities_text_list>s
+
+      You can view and update the evaluation here:
+      %<evaluators_evaluation_url>s
+
+      Please begin the evaluation process by contacting the constituent to schedule an assessment.
+
+      %<footer_text>s
+    TEXT
+    'es' => <<~TEXT
+      %<header_text>s
+
+      Hola %<evaluator_full_name>s,
+
+      %<status_box_text>s
+
+      DETALLES DEL SOLICITANTE:
+      - Nombre: %<constituent_full_name>s
+      - Dirección: %<constituent_address_formatted>s
+      - Teléfono: %<constituent_phone_formatted>s
+      - Correo Electrónico: %<constituent_email>s
+      - Método de Contacto: %<constituent_contact_method>s
+      - Idioma Preferido: %<constituent_preferred_language>s
+      - Modalidad de Comunicación: %<constituent_communication_modality>s
+      - Preferencia de Entrega: %<constituent_delivery_preference>s
+
+      DISCAPACIDADES:
+      %<constituent_disabilities_text_list>s
+
+      Puede ver y actualizar la evaluación aquí:
+      %<evaluators_evaluation_url>s
+
+      Por favor, comience el proceso de evaluación comunicándose con el solicitante para programar una evaluación.
+
+      %<footer_text>s
+    TEXT
+  }.freeze
+
+  SUBMISSION_BODIES = {
+    'en' => <<~TEXT,
+      %<header_text>s
+
+      Hi %<constituent_first_name>s,
+
+      %<status_box_text>s
+
+      EVALUATION SUBMISSION CONFIRMATION:
+      - Application ID: %<application_id>s
+      - Evaluator: %<evaluator_full_name>s
+      - Submission Date: %<submission_date_formatted>s
+
+      Based on the evaluation, the evaluator recommended the following product(s):
+
+      %<recommended_products_text_list>s
+
+      This information is being provided for your records.
+
+      If you have any questions or need further assistance, please feel free to reach out.
+
+      %<footer_text>s
+    TEXT
+    'es' => <<~TEXT
+      %<header_text>s
+
+      Hola %<constituent_first_name>s,
+
+      %<status_box_text>s
+
+      CONFIRMACIÓN DE ENVÍO DE EVALUACIÓN:
+      - ID de Solicitud: %<application_id>s
+      - Evaluador: %<evaluator_full_name>s
+      - Fecha de Envío: %<submission_date_formatted>s
+
+      Según la evaluación, el evaluador recomendó los siguientes productos:
+
+      %<recommended_products_text_list>s
+
+      Esta información se proporciona para sus registros.
+
+      Si tiene alguna pregunta o necesita más ayuda, no dude en comunicarse.
+
+      %<footer_text>s
+    TEXT
+  }.freeze
+
+  def up
+    upsert_assignment_templates
+    upsert_submission_templates
+  end
+
+  def down
+    raise ActiveRecord::IrreversibleMigration
+  end
+
+  private
+
+  def upsert_assignment_templates
+    ASSIGNMENT_BODIES.each do |locale, body|
+      template = EmailTemplate.find_or_initialize_by(
+        name: 'evaluator_mailer_new_evaluation_assigned',
+        format: :text,
+        locale: locale
+      )
+
+      template.update!(
+        subject: locale == 'es' ? 'Nueva Evaluación Asignada' : 'New Evaluation Assigned',
+        description: assignment_description(locale),
+        body: body,
+        variables: ASSIGNMENT_VARIABLES,
+        version: 1
+      )
+    end
+  end
+
+  def upsert_submission_templates
+    SUBMISSION_BODIES.each do |locale, body|
+      template = EmailTemplate.find_or_initialize_by(
+        name: 'evaluator_mailer_evaluation_submission_confirmation',
+        format: :text,
+        locale: locale
+      )
+
+      template.update!(
+        subject: locale == 'es' ? 'Confirmación de Envío de Evaluación' : 'Evaluation Submission Confirmation',
+        description: submission_description(locale),
+        body: body,
+        variables: SUBMISSION_VARIABLES,
+        version: 1
+      )
+    end
+  end
+
+  def assignment_description(locale)
+    if locale == 'es'
+      'Enviado a un evaluador cuando se le ha asignado una nueva evaluación de un constituyente.'
+    else
+      'Sent to an evaluator when a new constituent evaluation has been assigned to them.'
+    end
+  end
+
+  def submission_description(locale)
+    if locale == 'es'
+      'Enviado a la persona solicitante después de que el evaluador envía una evaluación.'
+    else
+      'Sent to the constituent after the evaluator submits an evaluation.'
+    end
+  end
+end
