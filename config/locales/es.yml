@@ -246,8 +246,8 @@ es:
         confirm:
           one: "Este capacitador tiene 1 sesión de capacitación abierta. Al quitar este capacitador se cancelará esa sesión. ¿Desea continuar?"
           other: "Este capacitador tiene %{count} sesiones de capacitación abiertas. Al quitar este capacitador se cancelarán las %{count} sesiones. ¿Desea continuar?"
-        confirm_yes: "Sí"
-        confirm_no: "No"
+        confirm_yes: "Cancelar sesiones y quitar capacitador"
+        confirm_no: "Mantener capacitador asignado"
       training_capacity:
         summary: "%{reserved} / %{max} sesiones reservadas, %{remaining} restantes"
         maximum_reached: "Esta persona ha alcanzado el número máximo de sesiones de capacitación reservadas (%{max})."

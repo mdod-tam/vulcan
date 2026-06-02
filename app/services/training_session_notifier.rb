@@ -35,10 +35,10 @@ class TrainingSessionNotifier
     )
   rescue StandardError => e
     Rails.logger.error(
-      "Failed to send training session notification via NotificationService " \
+      'Failed to send training session notification via NotificationService ' \
       "(training_session_id=#{training_session.id}, action=#{notification_action}): #{e.message}"
     )
-    raise if Rails.env.development? || Rails.env.test?
+    raise if Rails.env.local?
 
     # In production, notification errors should not fail the training session update.
   end
@@ -48,7 +48,6 @@ class TrainingSessionNotifier
 
     case training_session.status
     when 'scheduled', 'confirmed' then 'training_scheduled'
-    when 'completed' then 'training_completed'
     when 'cancelled' then 'training_cancelled'
     when 'no_show' then 'training_missed'
     end

@@ -20,11 +20,6 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
                         body_format.gsub('%<constituent_name>s', vars[:constituent_name])
                                    .gsub('%<trainer_name>s', vars[:trainer_name])
                                    .gsub('%<scheduled_date>s', vars[:scheduled_date])
-                      # Handle training completed variables
-                      elsif vars[:constituent_name] && vars[:trainer_name] && vars[:completion_date]
-                        body_format.gsub('%<constituent_name>s', vars[:constituent_name])
-                                   .gsub('%<trainer_name>s', vars[:trainer_name])
-                                   .gsub('%<completion_date>s', vars[:completion_date])
                       else
                         body_format
                       end
@@ -53,8 +48,6 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Create a mock training session with the necessary attributes
     @scheduled_for = 1.week.from_now
-    @completed_at = Time.current
-
     # Stub the training session
     @training_session = Struct.new(
       :application, :trainer, :constituent, :scheduled_for, :completed_at, :status, :id
@@ -73,11 +66,6 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
       'Mock Body for %<constituent_name>s with %<trainer_name>s on %<scheduled_date>s'
     )
 
-    @training_completed_template = mock_template(
-      'Mock Training Completed - App %<application_id>s',
-      'Mock Body for %<constituent_name>s with %<trainer_name>s on %<completion_date>s'
-    )
-
     # Per project strategy, HTML emails are not used. Only stub for :text format.
     # If the mailer attempts to find_by!(format: :html), it should fail (e.g., RecordNotFound)
     # as no HTML templates should be seeded for these, and we provide no stub.
@@ -87,8 +75,6 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
                                         format: :text, locale: 'en').returns(@trainer_assigned_template)
     EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_training_scheduled',
                                         format: :text, locale: 'en').returns(@training_scheduled_template)
-    EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_training_completed',
-                                        format: :text, locale: 'en').returns(@training_completed_template)
   end
 
   test 'trainer_assigned' do
@@ -194,43 +180,6 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@constituent.email], email.to
     assert_equal 'Training scheduled', email.subject
-
-    # For non-multipart emails, we check the body directly
-    assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
-
-    # Check that the email body contains expected text
-    assert_includes email.body.to_s, expected_text
-  end
-
-  test 'training_completed' do
-    # Create a specific stub for this test to ensure consistent results
-    expected_date = @completed_at.strftime('%B %d, %Y')
-    expected_text = "Mock Body for #{@constituent.full_name} with #{@trainer.full_name} on #{expected_date}"
-    training_completed_template = mock('training_completed_specific')
-    training_completed_template.stubs(:subject).returns('Training completed')
-    training_completed_template.stubs(:render).returns(['Training completed', expected_text])
-
-    # Re-stub for this test only
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_training_completed', format: :text, locale: 'en')
-                 .returns(training_completed_template)
-
-    # Update the status to completed
-    @training_session.status = :completed
-
-    # Using Rails 7.1.0+ capture_emails helper
-    emails = capture_emails do
-      TrainingSessionNotificationsMailer.training_completed(@training_session).deliver_now
-    end
-
-    # Verify we captured an email
-    assert_equal 1, emails.size
-    email = emails.first
-
-    assert_equal ['no_reply@mdmat.org'], email.from
-    assert_equal [@constituent.email], email.to
-    assert_equal 'Training completed', email.subject
 
     # For non-multipart emails, we check the body directly
     assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'

@@ -226,7 +226,7 @@
                     <%= link_to "Session ##{session.id}",
                         trainers_training_session_path(session),
                         class: "font-medium text-indigo-600 hover:text-indigo-900",
-                        aria: { label: "View training session #{session.id}, #{scheduled_for_label}" } %>
+                        aria: { label: "Session ##{session.id}, #{scheduled_for_label}" } %>
                     <span class="text-gray-600">
                       -
                       <% if session.scheduled_for.present? %>

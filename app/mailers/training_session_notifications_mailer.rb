@@ -103,7 +103,6 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Notify constituent that training is scheduled
   # Expects training_session passed via .with(training_session: ...)
   def training_scheduled(training_session)
-    training_session = training_session
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_scheduled'
@@ -136,17 +135,17 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        constituent_name: constituent.full_name || 'Valued Constituent',
-        constituent_full_name: constituent.full_name || 'Valued Constituent',
-        trainer_name: trainer.full_name || 'Your Trainer',
-        trainer_full_name: trainer.full_name || 'Your Trainer',
-        trainer_email: trainer.email,
-        trainer_phone_formatted: trainer.phone,
-        scheduled_date: formatted_training_date(training_session.scheduled_for),
-        scheduled_time: formatted_training_time(training_session.scheduled_for),
-        scheduled_date_formatted: formatted_training_date(training_session.scheduled_for),
-        scheduled_time_formatted: formatted_training_time(training_session.scheduled_for),
-        application_id: application.id,
+      constituent_name: constituent.full_name || 'Valued Constituent',
+      constituent_full_name: constituent.full_name || 'Valued Constituent',
+      trainer_name: trainer.full_name || 'Your Trainer',
+      trainer_full_name: trainer.full_name || 'Your Trainer',
+      trainer_email: trainer.email,
+      trainer_phone_formatted: trainer.phone,
+      scheduled_date: formatted_training_date(training_session.scheduled_for),
+      scheduled_time: formatted_training_time(training_session.scheduled_for),
+      scheduled_date_formatted: formatted_training_date(training_session.scheduled_for),
+      scheduled_time_formatted: formatted_training_time(training_session.scheduled_for),
+      application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -193,6 +192,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   end
 
   # Notify constituent that training is rescheduled
+  # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
   def training_rescheduled(training_session, notification = nil)
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
@@ -284,96 +284,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
     raise
   end
-
-  # Notify constituent that training is completed
-  # Expects training_session passed via .with(training_session: ...)
-  def training_completed(training_session)
-    training_session = training_session
-    constituent = training_session.constituent
-    locale = resolve_template_locale(recipient: constituent)
-    template_name = 'training_session_notifications_training_completed'
-    begin
-      # Only find the text template as per project strategy
-      text_template = find_text_template(template_name, locale: locale)
-    rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
-      raise "Email templates not found for #{template_name}"
-    end
-
-    # Prepare variables
-    trainer = training_session.trainer
-    application = training_session.application
-
-    # Common elements for shared partials
-    header_title = header_title_from_template_subject(
-      template: text_template,
-      subject_variables: { application_id: application.id },
-      fallback: "Training Completed - Application ##{application.id}"
-    )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = ProgramContact.website_url
-    footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
-    header_logo_url = begin
-      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-    rescue StandardError
-      nil
-    end
-
-    variables = {
-        constituent_name: constituent.full_name || 'Valued Constituent',
-        constituent_full_name: constituent.full_name || 'Valued Constituent',
-        trainer_name: trainer.full_name || 'Your Trainer',
-        trainer_full_name: trainer.full_name || 'Your Trainer',
-        trainer_email: trainer.email,
-        trainer_phone_formatted: trainer.phone,
-        completion_date: training_session.completed_at.strftime('%B %d, %Y'),
-        completed_date_formatted: formatted_training_date(training_session.completed_at),
-        application_id: application.id,
-      # Shared partial variables (text only for non-multipart emails)
-      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
-                               locale: locale),
-      header_logo_url: header_logo_url, # Optional
-      header_subtitle: nil, # Optional
-      support_email: footer_contact_email
-    }.compact
-
-    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
-
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send training_completed email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(constituent),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
-  rescue StandardError => e
-    # Log error with more details
-    AuditEventService.log(
-      actor: trainer, # Use local variable if available, otherwise nil
-      action: 'email_delivery_error',
-      auditable: trainer,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name, # Use local variable
-        variables: variables, # Use local variable
-        backtrace: e.backtrace&.first(5)
-      }
-    )
-    raise
-  end
+  # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
 
   # Notify constituent that training is cancelled
   def training_cancelled(training_session)
@@ -497,14 +408,14 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        constituent_name: constituent.full_name || 'Valued Constituent',
-        constituent_full_name: constituent.full_name || 'Valued Constituent',
-        trainer_name: trainer.full_name || 'Your Trainer',
-        trainer_email: trainer.email,
-        missed_date: formatted_training_date(training_session.scheduled_for),
-        missed_time: formatted_training_time(training_session.scheduled_for),
-        scheduled_date_time_formatted: training_session_schedule_text(training_session),
-        application_id: application.id,
+      constituent_name: constituent.full_name || 'Valued Constituent',
+      constituent_full_name: constituent.full_name || 'Valued Constituent',
+      trainer_name: trainer.full_name || 'Your Trainer',
+      trainer_email: trainer.email,
+      missed_date: formatted_training_date(training_session.scheduled_for),
+      missed_time: formatted_training_time(training_session.scheduled_for),
+      scheduled_date_time_formatted: training_session_schedule_text(training_session),
+      application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,

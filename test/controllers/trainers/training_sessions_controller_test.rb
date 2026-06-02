@@ -95,7 +95,7 @@ module Trainers
       assert_includes @response.body, 'Mark Training as Completed'
       assert_includes @response.body, 'Cancel Training'
       assert_not_includes @response.body, 'Mark as No Show'
-      assert_includes @response.body, 'aria-label="View training session'
+      assert_includes @response.body, 'aria-label="Session #'
     end
 
     test 'assigned trainer sees cancellation form after scheduled time' do
@@ -111,6 +111,11 @@ module Trainers
       assert_includes @response.body, 'Cancel Training'
       assert_includes @response.body, 'Mark as No Show'
       assert_includes @response.body, 'Schedule Another Session'
+      assert_select '#notes', count: 1
+      assert_select 'label[for=schedule_additional_notes]', count: 1
+      assert_select '#schedule_additional_notes', count: 1
+      assert_select 'label[for=schedule_additional_scheduled_for]', count: 1
+      assert_select '#schedule_additional_scheduled_for', count: 1
     end
 
     test 'assigned trainer sees schedule another session form after completing a session when quota remains' do

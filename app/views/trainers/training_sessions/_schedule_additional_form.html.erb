@@ -6,22 +6,22 @@
 
     <%= form_with(url: schedule_additional_trainers_training_session_path(training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "schedule-additional-heading" }) do |f| %>
       <div>
-        <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
+        <%= f.label :scheduled_for, for: "schedule_additional_scheduled_for", class: "block text-sm font-medium text-gray-700" do %>
           Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
-        <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { describedby: "schedule_additional_time_hint", required: "true" } %>
+        <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), id: "schedule_additional_scheduled_for", class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { describedby: "schedule_additional_time_hint", required: "true" } %>
         <p class="mt-1 text-sm text-gray-500" id="schedule_additional_time_hint">This creates another scheduled session and sends the constituent a scheduled training notification by email or letter with the date and time.</p>
       </div>
 
       <div>
-        <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
-        <%= f.text_field :location, value: training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
+        <%= f.label :location, "Location", for: "schedule_additional_location", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.text_field :location, value: training_session.location, id: "schedule_additional_location", class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
         <p class="mt-1 text-sm text-gray-500">Internal detail only. It is not included in the constituent notification.</p>
       </div>
 
       <div>
-        <%= f.label :notes, "Notes", class: "block text-sm font-medium text-gray-700" %>
-        <%= f.text_area :notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
+        <%= f.label :notes, "Notes", for: "schedule_additional_notes", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.text_area :notes, rows: 3, id: "schedule_additional_notes", class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
         <p class="mt-1 text-sm text-gray-500">Internal note only. It is not included in the constituent notification.</p>
       </div>
 

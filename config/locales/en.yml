@@ -483,8 +483,8 @@ en:
         confirm:
           one: "This trainer has 1 open training session. Unassigning this trainer will cancel that session. Proceed?"
           other: "This trainer has %{count} open training sessions. Unassigning this trainer will cancel all %{count} sessions. Proceed?"
-        confirm_yes: "Yes"
-        confirm_no: "No"
+        confirm_yes: "Cancel sessions and unassign trainer"
+        confirm_no: "Keep trainer assigned"
       training_capacity:
         summary: "%{reserved} / %{max} sessions reserved, %{remaining} remaining"
         maximum_reached: "This constituent has reached the maximum number of reserved training sessions (%{max})."
