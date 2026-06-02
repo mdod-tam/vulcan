@@ -86,27 +86,23 @@
       </h3>
       
       <%# No Email Checkbox %>
-      <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-        <label class="flex items-start cursor-pointer">
-          <%= hidden_field_tag :no_email_address, "0", id: nil %>
+      <div class="mb-4">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <%= hidden_field_tag :no_email_address, "0" %>
           <input type="checkbox" 
                  name="no_email_address" 
                  value="1" 
                  id="no_email_address"
-                 class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                 class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                  data-action="change->contact-feedback#toggleEmailField">
-          <span class="ml-3">
-            <span class="block text-sm font-medium text-gray-700">Applicant does not have an email address</span>
-            <span class="block text-xs text-gray-500 mt-1">If checked, official documents will be sent by printed letter. Email field will be optional.</span>
-          </span>
+          <span class="text-sm font-medium text-gray-700">Applicant does not have an email address</span>
         </label>
       </div>
 
       <%# Email and Phone row %>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div>
-          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700", id: "email_label" %>
-          <span class="text-xs text-red-600 ml-1" id="email_required_indicator">*</span>
+        <div id="email_field_wrapper">
+          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700 required-label" %>
           <%= c.email_field :email, 
               required: true,
               autocomplete: "email",

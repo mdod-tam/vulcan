@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_02_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_04_172500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -698,6 +698,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_02_170000) do
     t.index ["trainer_id"], name: "index_training_sessions_on_trainer_id"
   end
 
+  create_table "user_email_search_tokens", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["token_digest"], name: "index_user_email_search_tokens_on_token_digest"
+    t.index ["user_id", "token_digest"], name: "index_user_email_search_tokens_on_user_id_and_token_digest", unique: true
+    t.index ["user_id"], name: "index_user_email_search_tokens_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.json "availability_schedule"
     t.string "business_name"
@@ -710,7 +720,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_02_170000) do
     t.text "date_of_birth"
     t.string "dependent_email", comment: "Optional email for dependents; if blank, uses guardian email"
     t.string "dependent_phone", comment: "Optional phone for dependents; if blank, uses guardian phone"
-    t.string "email", limit: 510, null: false
+    t.string "email"
     t.boolean "email_verified"
     t.bigint "evaluator_id"
     t.integer "failed_attempts"
