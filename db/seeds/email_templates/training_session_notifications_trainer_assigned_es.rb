@@ -10,7 +10,7 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_a
 
     Hola %<trainer_full_name>s,
 
-    Aquí tiene información sobre una sesión de capacitación que se le ha asignado. Comuníquese con la persona para hablar sobre sus necesidades de capacitación y programar una sesión.
+    Se le ha asignado como capacitador de %<constituent_full_name>s. Comuníquese con la persona para programar la primera sesión. Hay más información a continuación.
 
     Detalles de la persona:
     - Nombre: %<constituent_full_name>s

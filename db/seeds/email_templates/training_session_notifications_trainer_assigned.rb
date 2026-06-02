@@ -10,7 +10,7 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_a
 
     Hello %<trainer_full_name>s,
 
-    Here is information about a training session that has been assigned to you. Please contact the constituent to discuss their training needs and schedule a session.
+    You've been assigned as the trainer for %<constituent_full_name>s. Please contact them to schedule your first session. More information is below.
 
     Constituent details:
     - Name: %<constituent_full_name>s

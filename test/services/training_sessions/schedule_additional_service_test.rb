@@ -43,6 +43,28 @@ module TrainingSessions
       assert_equal 'additional', event.metadata['scheduled_via']
     end
 
+    test 'schedules another session from a completed source session' do
+      source_session = create(:training_session, :completed, trainer: @trainer, application: @application)
+      scheduled_time = 2.weeks.from_now
+
+      assert_difference('TrainingSession.count', 1) do
+        result = ScheduleAdditionalService.new(
+          source_session,
+          @trainer,
+          scheduled_for: scheduled_time,
+          notes: 'Post-completion follow-up'
+        ).call
+
+        assert result.success?
+        @additional_session = result.data[:training_session]
+      end
+
+      assert_equal 'scheduled', @additional_session.status
+      assert_equal @application, @additional_session.application
+      assert_equal @trainer, @additional_session.trainer
+      assert_equal source_session.id, Event.where(action: 'training_scheduled').last.metadata['source_training_session_id']
+    end
+
     test 'fails when training slots are exhausted' do
       update_max_training_sessions(1)
 

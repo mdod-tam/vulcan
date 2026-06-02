@@ -302,56 +302,6 @@ es:
         reschedule_failed: "No se pudo reprogramar la sesión de capacitación: %{message}"
         cancel_failed: "No se pudo cancelar la sesión de capacitación: %{message}"
         follow_up_failed: "No se pudo programar la sesión de capacitación de seguimiento: %{message}"
-      follow_up:
-        title: "Programar nueva fecha de capacitación"
-        description: "Use esto después de confirmar una nueva fecha con la persona."
-        scheduled_for_label: "Nueva fecha/hora"
-        location_label: "Ubicación"
-        location_placeholder: "p. ej., hogar del participante, biblioteca, en línea"
-        reason_label: "Motivo del seguimiento"
-        reason_placeholder: "Proporcione un motivo..."
-        reason_hint: "Proporcione un motivo para programar la capacitación de seguimiento."
-        required: "(obligatorio)"
-        submit: "Programar nueva fecha de capacitación"
-      actions:
-        required: "(obligatorio)"
-        complete:
-          title: "Marcar capacitación como completada"
-          product_label: "Producto de la capacitación"
-          product_prompt: "Seleccione un producto"
-          notes_label: "Notas de capacitación"
-          notes_placeholder: "Ingrese detalles sobre lo que se cubrió..."
-          notes_hint: "Ingrese detalles sobre lo que se cubrió en la sesión de capacitación, cualquier dificultad o logro notable."
-          submit: "Marcar como completada"
-        cancel:
-          title: "Cancelar capacitación"
-          reason_label: "Motivo de cancelación"
-          reason_placeholder: "Proporcione un motivo..."
-          reason_hint: "Proporcione un motivo para cancelar esta sesión de capacitación."
-          submit: "Cancelar capacitación"
-        no_show:
-          title: "Marcar como no asistida"
-          description: "Use esto si la persona no asistió a la sesión de capacitación programada."
-          notes_label: "Notas de no asistencia"
-          notes_placeholder: "Describa la no asistencia..."
-          submit: "Marcar como no asistida"
-        schedule_additional:
-          title: "Programar otra sesión"
-          scheduled_for_label: "Fecha/hora"
-          location_label: "Ubicación"
-          location_placeholder: "p. ej., hogar del participante, biblioteca, en línea"
-          notes_label: "Notas"
-          notes_placeholder: "Notas opcionales de programación..."
-          submit: "Programar otra sesión"
-      open_sessions:
-        title: "Sesiones de capacitación abiertas"
-        not_scheduled: "Sin programar"
-        session_link: "Sesión n.º %{id}"
-        session_link_aria: "Ver sesión de capacitación %{id}, %{scheduled_for}"
-      capacity:
-        title: "Capacidad de sesiones"
-        summary: "%{reserved} / %{max} sesiones reservadas, %{remaining} restantes"
-      read_only_notice: "Esta es una vista de supervisión de solo lectura. Solo el capacitador asignado puede actualizar esta sesión de capacitación."
   training_session_notifications:
     trainer_assigned:
       labels:
@@ -391,7 +341,7 @@ es:
       unexpected_error: "Ocurrió un error inesperado: %{message}"
     schedule_additional:
       success: "La sesión de capacitación adicional se programó correctamente."
-      invalid_source: "Las sesiones adicionales solo se pueden programar desde una sesión de capacitación programada o confirmada."
+      invalid_source: "Las sesiones adicionales solo se pueden programar desde una sesión de capacitación programada, confirmada o completada."
       missing_scheduled_for: "scheduled_for es obligatorio"
       service_window_closed: "La capacitación ya no está disponible para esta solicitud."
       quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."

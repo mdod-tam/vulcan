@@ -40,7 +40,9 @@ module TrainingSessions
     end
 
     def validate_source!
-      return if source_training_session.status_scheduled? || source_training_session.status_confirmed?
+      return if source_training_session.status_scheduled? ||
+                source_training_session.status_confirmed? ||
+                source_training_session.status_completed?
 
       raise ArgumentError, I18n.t('training_sessions.schedule_additional.invalid_source')
     end

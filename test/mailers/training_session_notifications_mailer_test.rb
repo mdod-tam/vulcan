@@ -164,6 +164,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, 'Spanish'
     assert_includes email.body.to_s, 'Videophone (ASL)'
     assert_includes email.body.to_s, 'American Sign Language (ASL)'
+    assert_not_includes email.body.to_s, '{english:'
     assert_includes email.body.to_s, 'Maryland Accessible Telecommunications Program'
     assert_not_includes email.body.to_s, 'MAT-Vulcan'
   end

@@ -41,6 +41,35 @@ module TrainingSessions
       assert_equal @source_session.id, event.metadata['previous_training_session_id']
     end
 
+    test 'follow-up scheduled session uses constituent scheduled training notification path' do
+      scheduled_time = 3.days.from_now
+      result = ScheduleFollowUpService.new(
+        @source_session,
+        @trainer,
+        scheduled_for: scheduled_time,
+        reschedule_reason: 'Makeup training',
+        location: 'Library'
+      ).call
+
+      assert result.success?
+      follow_up_session = result.data[:training_session]
+      assert follow_up_session.saved_change_to_status?
+
+      Current.user = @trainer
+      NotificationService.expects(:create_and_deliver!).once.with do |params|
+        params[:type] == 'training_scheduled' &&
+          params[:recipient] == @application.user &&
+          params[:actor] == @trainer &&
+          params[:notifiable] == follow_up_session &&
+          params[:metadata][:scheduled_for].present? &&
+          params[:channel] == :email
+      end
+
+      TrainingSessionNotifier.new(follow_up_session).deliver_all
+    ensure
+      Current.reset
+    end
+
     test 'fails when reserved training slots are exhausted' do
       update_max_training_sessions(2)
       create(:training_session, :completed, application: @application, trainer: @trainer)

@@ -113,6 +113,19 @@ module Trainers
       assert_includes @response.body, 'Schedule Another Session'
     end
 
+    test 'assigned trainer sees schedule another session form after completing a session when quota remains' do
+      sign_in_for_controller_test @trainer
+      update_max_training_sessions(3)
+      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
+      completed_session = create(:training_session, :completed, trainer: @trainer, application: application)
+
+      get trainers_training_session_url(completed_session)
+
+      assert_response :success
+      assert_includes @response.body, 'Schedule Another Session'
+      assert_includes @response.body, 'This creates another scheduled session and sends the constituent'
+    end
+
     test 'admin cannot schedule a training session' do
       sign_in_for_controller_test @admin
 
@@ -551,6 +564,28 @@ module Trainers
       assert_equal @application.id, event.metadata['application_id']
       assert_equal @training_session.id, event.metadata['source_training_session_id']
       assert_equal 'additional', event.metadata['scheduled_via']
+    end
+
+    test 'schedule additional works from a completed session' do
+      sign_in_for_controller_test @trainer
+      update_max_training_sessions(3)
+      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
+      completed_session = create(:training_session, :completed, trainer: @trainer, application: application)
+      scheduled_time = 2.weeks.from_now
+
+      assert_difference('TrainingSession.count', 1) do
+        assert_difference('Event.where(action: "training_scheduled").count', 1) do
+          post schedule_additional_trainers_training_session_url(completed_session),
+               params: {
+                 scheduled_for: scheduled_time,
+                 notes: 'Second session after completion'
+               }
+        end
+      end
+
+      additional_session = application.training_sessions.where(status: :scheduled).order(created_at: :desc).first
+      assert_redirected_to trainers_training_session_url(additional_session)
+      assert_equal completed_session.id, Event.where(action: 'training_scheduled').last.metadata['source_training_session_id']
     end
 
     test 'schedule additional fails when training slots are exhausted' do

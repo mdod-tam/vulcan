@@ -30,7 +30,7 @@ class UpdateTrainerAssignedEmailTemplate < ActiveRecord::Migration[8.1]
 
         Hello %<trainer_full_name>s,
 
-        Here is information about a training session that has been assigned to you. Please contact the constituent to discuss their training needs and schedule a session.
+        You've been assigned as the trainer for %<constituent_full_name>s. Please contact them to schedule your first session. More information is below.
 
         Constituent details:
         - Name: %<constituent_full_name>s
@@ -57,7 +57,7 @@ class UpdateTrainerAssignedEmailTemplate < ActiveRecord::Migration[8.1]
 
         Hola %<trainer_full_name>s,
 
-        Aquí tiene información sobre una sesión de capacitación que se le ha asignado. Comuníquese con la persona para hablar sobre sus necesidades de capacitación y programar una sesión.
+        Se le ha asignado como capacitador de %<constituent_full_name>s. Comuníquese con la persona para programar la primera sesión. Hay más información a continuación.
 
         Detalles de la persona:
         - Nombre: %<constituent_full_name>s
