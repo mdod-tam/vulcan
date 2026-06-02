@@ -29,7 +29,7 @@ module UserProfile
     validates :first_name, presence: true, length: { maximum: 50 }
     validates :last_name, presence: true, length: { maximum: 50 }
     validates :middle_initial, length: { maximum: 1 }, allow_blank: true
-    validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }
+    validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: :paper_context_no_email?
     validates :dependent_email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
     validate :email_must_be_unique
     validate :phone_must_be_unique
