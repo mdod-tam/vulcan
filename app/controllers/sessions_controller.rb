@@ -19,13 +19,13 @@ class SessionsController < ApplicationController
     user = User.find_by_email(params[:email])
 
     if user&.account_locked?
-      @errors = { email: 'Invalid email or password' }
+      @errors = { email: invalid_credentials_message }
       return render_form_errors
     end
 
     unless user&.authenticate(params[:password])
       user&.record_failed_login!
-      @errors = { email: 'Invalid email or password' }
+      @errors = { email: invalid_credentials_message }
       return render_form_errors
     end
 
@@ -63,7 +63,7 @@ class SessionsController < ApplicationController
         render turbo_stream: turbo_stream.replace('sign_in_form', partial: 'sessions/form')
       end
       format.html do
-        redirect_to sign_in_path(email_hint: params[:email]), alert: 'Invalid email or password'
+        redirect_to sign_in_path(email_hint: params[:email]), alert: invalid_credentials_message
       end
     end
   end
@@ -72,7 +72,11 @@ class SessionsController < ApplicationController
     # Add user feedback for failed login attempts if User model supports it
     # user = User.find_by_email(params[:email])
     # user&.track_failed_attempt!(request.remote_ip) if user # Assuming track_failed_attempt! exists
-    redirect_to sign_in_path(email_hint: params[:email]), alert: 'Invalid email or password'
+    redirect_to sign_in_path(email_hint: params[:email]), alert: invalid_credentials_message
+  end
+
+  def invalid_credentials_message
+    t('controllers.sessions.invalid_credentials')
   end
 
   def setup_two_factor_session(user)

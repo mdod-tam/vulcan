@@ -26,7 +26,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     }
     assert_redirected_to sign_in_path(email_hint: @admin.email)
     follow_redirect!
-    assert_match 'Invalid email or password', flash[:alert]
+    assert_match I18n.t('controllers.sessions.invalid_credentials'), flash[:alert]
   end
 
   def test_failed_login_increments_failed_attempts

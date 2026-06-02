@@ -2,7 +2,8 @@
 
 module Applications
   class AutosaveService < BaseService
-    APPLICATION_AUTOSAVE_FIELDS = %w[
+    # Only these Application attributes may be assigned through autosave.
+    APPLICATION_AUTOSAVE_FIELD_ALLOWLIST = %w[
       annual_income
       household_size
       maryland_resident
@@ -167,7 +168,7 @@ module Applications
 
       if user_fields.include?(attribute_name)
         [:user, attribute_name]
-      elsif ignored_fields.include?(attribute_name) || APPLICATION_AUTOSAVE_FIELDS.exclude?(attribute_name)
+      elsif ignored_fields.include?(attribute_name) || APPLICATION_AUTOSAVE_FIELD_ALLOWLIST.exclude?(attribute_name)
         [:ignored, attribute_name]
       else
         [:application, attribute_name]
