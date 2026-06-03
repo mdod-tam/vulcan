@@ -2,46 +2,6 @@
 
 module Applications
   class AutosaveService < BaseService
-    USER_AUTOSAVE_FIELD_ALLOWLIST = %w[
-      hearing_disability
-      vision_disability
-      speech_disability
-      mobility_disability
-      cognition_disability
-    ].freeze
-
-    # These form fields can appear in autosave requests, but this service does
-    # not persist them because they are saved through user/profile or proof flows.
-    NON_AUTOSAVED_FORM_FIELDS = %w[
-      physical_address_1
-      physical_address_2
-      city
-      state
-      zip_code
-      residency_proof
-      income_proof
-    ].freeze
-
-    # Unlike NON_AUTOSAVED_FORM_FIELDS, this is a security allowlist: only these
-    # Application attributes may fall through to assign_attributes via autosave.
-    APPLICATION_AUTOSAVE_FIELD_ALLOWLIST = %w[
-      annual_income
-      household_size
-      maryland_resident
-      self_certify_disability
-      terms_accepted
-      information_verified
-      medical_release_authorized
-      medical_provider_name
-      medical_provider_phone
-      medical_provider_fax
-      medical_provider_email
-      alternate_contact_name
-      alternate_contact_phone
-      alternate_contact_email
-      alternate_contact_relationship_type
-    ].freeze
-
     attr_reader :current_user, :params
 
     def initialize(current_user:, params:)
@@ -155,14 +115,14 @@ module Applications
 
     def save_field
       attribute_name = extract_attribute_name
-      target_model, actual_attribute = determine_target_model_and_attribute(attribute_name)
+      target_model = autosave_target_for(attribute_name)
 
       result = if target_model == :user
-                 save_user_field(actual_attribute)
+                 save_user_field(attribute_name)
                elsif target_model == :ignored
                  { success: false, errors: { field_name => ['This field cannot be autosaved'] } }
                else
-                 save_application_field(actual_attribute)
+                 save_application_field(attribute_name)
                end
 
       result[:success] ? autosave_success_result : result
@@ -181,12 +141,20 @@ module Applications
       field_name
     end
 
-    def determine_target_model_and_attribute(attribute_name)
-      return [:user, attribute_name] if USER_AUTOSAVE_FIELD_ALLOWLIST.include?(attribute_name)
-      return [:ignored, attribute_name] if NON_AUTOSAVED_FORM_FIELDS.include?(attribute_name)
-      return [:ignored, attribute_name] unless APPLICATION_AUTOSAVE_FIELD_ALLOWLIST.include?(attribute_name)
+    def autosave_target_for(attribute_name)
+      user_fields = %w[hearing_disability vision_disability speech_disability
+                       mobility_disability cognition_disability]
+      application_fields = %w[annual_income household_size maryland_resident
+                              self_certify_disability terms_accepted information_verified
+                              medical_release_authorized medical_provider_name
+                              medical_provider_phone medical_provider_fax medical_provider_email
+                              alternate_contact_name alternate_contact_phone alternate_contact_email
+                              alternate_contact_relationship_type]
 
-      [:application, attribute_name]
+      return :user if user_fields.include?(attribute_name)
+      return :application if application_fields.include?(attribute_name)
+
+      :ignored
     end
 
     def save_user_field(attribute)
