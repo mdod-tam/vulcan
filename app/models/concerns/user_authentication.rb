@@ -38,6 +38,29 @@ module UserAuthentication
   end
 
   # Authentication methods
+  def account_locked?
+    return false if locked_at.blank?
+    return true if locked_at > LOCK_DURATION.ago
+
+    unlock_account!
+    false
+  end
+
+  def record_failed_login!
+    next_attempt_count = failed_attempts.to_i + 1
+
+    # Failed login counters are auth bookkeeping and should not be blocked by
+    # unrelated legacy profile validations.
+    # rubocop:disable Rails/SkipsModelValidations
+    update_columns(
+      failed_attempts: next_attempt_count,
+      updated_at: Time.current
+    )
+    # rubocop:enable Rails/SkipsModelValidations
+
+    lock_account! if next_attempt_count >= MAX_LOGIN_ATTEMPTS
+  end
+
   def track_sign_in!(ip)
     if failed_attempts.to_i >= MAX_LOGIN_ATTEMPTS
       lock_account!
@@ -60,6 +83,16 @@ module UserAuthentication
 
   def lock_account!
     update!(locked_at: Time.current)
+  end
+
+  def unlock_account!
+    # rubocop:disable Rails/SkipsModelValidations
+    update_columns(
+      failed_attempts: 0,
+      locked_at: nil,
+      updated_at: Time.current
+    )
+    # rubocop:enable Rails/SkipsModelValidations
   end
 
   # Password reset methods

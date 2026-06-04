@@ -597,9 +597,10 @@ module Applications
 
     test 'generate_mfr_reports_data excludes cert and proof status-change rows from approved throughput' do
       travel_to Date.new(2026, 8, 1) do
-        baseline = ReportingService.new.generate_mfr_reports_data
-                                   .data[:most_recent_fy][:summary]['Status changed to approved during FY']
-        dashboard_baseline = ReportingService.new.generate_dashboard_data.data[:mfr_applications_approved]
+        report_baseline = ReportingService.new.generate_mfr_reports_data
+                                          .data[:most_recent_fy][:summary]['Status changed to approved during FY']
+        dashboard_baseline = ReportingService.new.generate_dashboard_data
+                                             .data[:mfr_applications_approved]
         admin = create(:admin)
         in_fy = Time.zone.local(2025, 10, 1, 12, 0, 0)
 
@@ -637,7 +638,7 @@ module Applications
         )
 
         most_recent = ReportingService.new.generate_mfr_reports_data.data[:most_recent_fy]
-        assert_equal baseline + 1, most_recent[:summary]['Status changed to approved during FY']
+        assert_equal report_baseline + 1, most_recent[:summary]['Status changed to approved during FY']
 
         dashboard = ReportingService.new.generate_dashboard_data
         assert dashboard.success?
@@ -675,7 +676,8 @@ module Applications
 
     test 'generate_mfr_reports_data uses lifecycle changed_at not created_at approval' do
       travel_to Date.new(2026, 8, 1) do
-        baseline = ReportingService.new.generate_mfr_reports_data.data[:most_recent_fy][:summary]
+        baseline = ReportingService.new.generate_mfr_reports_data
+                                   .data[:most_recent_fy][:summary]
         admin = create(:admin)
         in_fy = Date.new(2025, 8, 1)
 

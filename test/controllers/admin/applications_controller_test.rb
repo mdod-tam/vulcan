@@ -34,6 +34,7 @@ module Admin
         :application,
         :with_residency_proof,
         :with_id_proof,
+        application_date: Time.current,
         user: create(:constituent, email: generate(:email))
       )
       application.update!(

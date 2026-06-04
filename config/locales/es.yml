@@ -655,6 +655,8 @@ es:
       body: "Este enlace seguro para cargar el W9 ya no está disponible. Comuníquese con el equipo de soporte de MAT si todavía necesita ayuda con esta solicitud."
       contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
   controllers:
+    sessions:
+      invalid_credentials: "Correo electrónico o contraseña inválidos"
     application:
       check_password_change_required:
         password_security_change: "Por razones de seguridad, debe cambiar su contraseña antes de continuar."
