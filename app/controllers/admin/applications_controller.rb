@@ -5,7 +5,7 @@ module Admin
   # Handles application listing, viewing, editing, status updates, proof review,
   # voucher assignments, and other application-related administrative operations
   class ApplicationsController < BaseController
-    WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof medical_certification].freeze
+    WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
 
     include ActionView::Helpers::TagHelper
     include ActionView::Helpers::JavaScriptHelper

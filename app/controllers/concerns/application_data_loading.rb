@@ -4,7 +4,7 @@ module ApplicationDataLoading
   extend ActiveSupport::Concern
 
   # Preload attachment names
-  DEFAULT_ATTACHMENT_NAMES = %w[income_proof residency_proof medical_certification].freeze
+  DEFAULT_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
 
   # Load an application with optimized attachment preloading
   # @param application_id [Integer] The ID of the application to load
