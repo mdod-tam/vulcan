@@ -284,7 +284,7 @@ module Applications
 
     def process_self_applicant(applicant_data)
       # Handle no email address scenario
-      no_email = params[:no_email_address].present? && params[:no_email_address] != "0"
+      no_email = params[:no_email_address].present? && params[:no_email_address] == "1"
       if no_email
         applicant_data = applicant_data.dup
         applicant_data.delete(:email)
