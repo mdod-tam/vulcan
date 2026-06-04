@@ -265,6 +265,7 @@ Rails.application.routes.draw do
         post :reset_password
         post :remind_to_complete
         post :assign_evaluator
+        delete :mfa_tokens, action: :destroy_mfa_tokens
         patch :update_role
         patch :update_capabilities
         get :history
