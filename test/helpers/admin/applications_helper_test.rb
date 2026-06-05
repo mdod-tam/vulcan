@@ -97,5 +97,50 @@ module Admin
       assert_not medical_certification_pending_review?(@application)
       assert show_secure_cert_upload_button?(@application)
     end
+
+    test 'secure cert upload button is hidden when a not requested certification is already attached' do
+      @application.update!(medical_certification_status: :not_requested)
+      attach_medical_certification
+
+      assert_not show_secure_cert_upload_button?(@application)
+    end
+
+    test 'secure cert upload button is hidden when a requested certification is already attached' do
+      @application.update!(medical_certification_status: :requested)
+      attach_medical_certification
+
+      assert_not show_secure_cert_upload_button?(@application)
+    end
+
+    test 'secure cert upload button is shown when no certification is attached before initial request' do
+      @application.update!(medical_certification_status: :not_requested)
+      @application.medical_certification.purge if @application.medical_certification.attached?
+
+      assert show_secure_cert_upload_button?(@application)
+    end
+
+    test 'secure cert upload button is shown when rejected certification has no attachment' do
+      @application.update!(medical_certification_status: :rejected)
+      @application.medical_certification.purge if @application.medical_certification.attached?
+
+      assert show_secure_cert_upload_button?(@application)
+    end
+
+    test 'secure cert upload button is hidden for approved certification without an attachment' do
+      @application.update!(medical_certification_status: :approved)
+      @application.medical_certification.purge if @application.medical_certification.attached?
+
+      assert_not show_secure_cert_upload_button?(@application)
+    end
+
+    private
+
+    def attach_medical_certification
+      @application.medical_certification.attach(
+        io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+        filename: 'medical_certification.pdf',
+        content_type: 'application/pdf'
+      )
+    end
   end
 end
