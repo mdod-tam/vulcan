@@ -16,16 +16,18 @@
 class NotificationComposer
   include ActionView::Helpers::TextHelper # For helpers like pluralize
   include ActionView::Helpers::UrlHelper # For link_to
+  include ActionView::Helpers::OutputSafetyHelper # For safe_join
 
-  def self.generate(notification_action, notifiable, actor = nil, metadata = {})
-    new(notification_action, notifiable, actor, metadata).generate
+  def self.generate(notification_action, notifiable, actor = nil, metadata = {}, viewer: nil)
+    new(notification_action, notifiable, actor, metadata, viewer: viewer).generate
   end
 
-  def initialize(action, notifiable, actor, metadata)
+  def initialize(action, notifiable, actor, metadata, viewer: nil)
     @action = action.to_s
     @notifiable = notifiable
     @actor = actor
     @metadata = metadata || {}
+    @viewer = viewer
   end
 
   def generate
@@ -39,11 +41,29 @@ class NotificationComposer
 
   private
 
-  def application_reference(application=nil)
-    application ||= @notifiable
-    return "Application missing" unless application&.id
+  def application_reference(application = nil)
+    application ||= notification_application
+    return 'Application missing' unless application&.id
 
-    link_to("Application ##{application.id}", "/admin/applications/#{application.id}", class: "text-indigo-600 hover:text-indigo-500")
+    link_to(
+      application_label(application),
+      application_path_for_viewer(application),
+      class: 'text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500',
+      aria: { label: "View #{application_label(application)}" }
+    )
+  end
+
+  def sentence_application_reference(application = nil)
+    reference = application_reference(application)
+    reference == 'Application missing' ? 'application missing' : reference
+  end
+
+  def notification_application
+    if @notifiable.respond_to?(:application)
+      @notifiable.application
+    else
+      @notifiable
+    end
   end
 
   # --- Message Generation Methods ---
@@ -56,12 +76,12 @@ class NotificationComposer
     training_session = find_training_session(application, @actor)
     status_info = training_session ? " (#{training_session.status.humanize})" : ''
 
-    "#{trainer_name} assigned to train #{constituent_name} for #{application_reference}#{status_info}."
+    safe_join([trainer_name, ' assigned to train ', constituent_name, ' for ', sentence_application_reference, status_info, '.'])
   end
 
   def message_for_training_requested
     constituent_name = @actor&.full_name || @notifiable&.constituent_full_name || 'A constituent'
-    "#{constituent_name} requested training for #{application_reference}."
+    safe_join([constituent_name, ' requested training for ', sentence_application_reference, '.'])
   end
 
   def message_for_training_scheduled
@@ -81,62 +101,195 @@ class NotificationComposer
   end
 
   def message_for_proof_rejected
-    proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    reason = @metadata['rejection_reason']
-    reason_text = reason.present? ? " - #{reason}" : ''
+    proof_rejected_message(metadata_value('proof_type'), metadata_value('rejection_reason'))
+  end
 
-    "#{proof_type} rejected for #{application_reference.downcase}#{reason_text}."
+  def message_for_id_proof_rejected
+    typed_proof_rejected_message('id')
+  end
+
+  def message_for_income_proof_rejected
+    typed_proof_rejected_message('income')
+  end
+
+  def message_for_residency_proof_rejected
+    typed_proof_rejected_message('residency')
   end
 
   def message_for_proof_approved
-    proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    "#{proof_type} approved for #{application_reference.downcase}."
+    safe_join([ProofNotificationCopy.approved_text(metadata_value('proof_type')), ' for ', sentence_application_reference, '.'])
+  end
+
+  def message_for_id_proof_attached
+    proof_attached_message('id')
+  end
+
+  def message_for_income_proof_attached
+    proof_attached_message('income')
+  end
+
+  def message_for_residency_proof_attached
+    proof_attached_message('residency')
   end
 
   def message_for_medical_certification_requested
-    "Disability certification requested for #{application_reference.downcase}"
+    safe_join(['Disability certification requested for ', sentence_application_reference, '.'])
   end
 
   def message_for_cert_upload_requested
-    "Secure disability certification upload requested for application ##{@notifiable&.id}"
+    safe_join(['Secure disability certification upload requested for ', sentence_application_reference, '.'])
   end
 
   def message_for_proof_resubmission_requested
-    proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    "Secure #{proof_type.downcase} upload requested for application ##{@notifiable&.id}"
+    proof_type = metadata_value('proof_type')
+    reason = proof_resubmission_rejection_reason(proof_type)
+
+    if proof_resubmission_rejected?
+      proof_rejected_message(proof_type, reason)
+    else
+      proof_requested_message(proof_type)
+    end
   end
 
   def message_for_provider_info_requested
-    "Certifying professional information requested for application ##{@notifiable&.id}"
+    safe_join(['Certifying professional information requested for ', sentence_application_reference])
   end
 
   def message_for_medical_certification_received
-    "Disability certification received for #{application_reference.downcase}"
+    safe_join(['Disability certification received for ', sentence_application_reference])
   end
 
   def message_for_medical_certification_approved
-    "Disability certification approved for #{application_reference.downcase}"
+    safe_join(['Disability certification approved for ', sentence_application_reference])
   end
 
   def message_for_medical_certification_rejected
-    reason = @metadata['reason']
+    reason = metadata_value('reason') || metadata_value('rejection_reason')
     reason_text = reason.present? ? " - #{reason}" : ''
-    "Disability certification rejected for #{application_reference.downcase}#{reason_text}."
+    safe_join(['Disability certification rejected for ', sentence_application_reference, reason_text, '.'])
   end
 
   def message_for_documents_requested
-    "Documents requested for #{application_reference.downcase}"
+    safe_join(['Documents requested for ', sentence_application_reference])
   end
 
   def message_for_review_requested
-    "Review requested for #{application_reference.downcase}"
+    safe_join(['Staff follow-up requested for ', sentence_application_reference, '.'])
+  end
+
+  def message_for_security_key_recovery_requested
+    requester = @notifiable.respond_to?(:user) ? @notifiable.user : @actor
+    requester_label = requester&.full_name.presence || requester&.email || 'a user'
+
+    safe_join(['Security key recovery requested for ', requester_label, '.'])
   end
 
   def default_message
-    "#{@action.humanize} notification regarding #{@notifiable.class.name} ##{@notifiable&.id}."
+    reference = @notifiable.is_a?(Application) ? application_reference : generic_notifiable_reference
+
+    safe_join([@action.humanize, ' notification regarding ', reference, '.'])
   end
 
   # --- Helper Methods ---
+
+  def proof_attached_message(proof_type)
+    safe_join([ProofNotificationCopy.attached_text(proof_type), ' for ', sentence_application_reference, '.'])
+  end
+
+  def proof_rejected_message(proof_type, reason)
+    safe_join([
+                ProofNotificationCopy.rejected_text(proof_type),
+                ' for ',
+                sentence_application_reference,
+                ProofNotificationCopy.rejection_reason_suffix(reason),
+                '.'
+              ])
+  end
+
+  def proof_requested_message(proof_type)
+    safe_join([ProofNotificationCopy.requested_text(proof_type), ' for ', sentence_application_reference, '.'])
+  end
+
+  def typed_proof_rejected_message(proof_type)
+    proof_rejected_message(metadata_value('proof_type').presence || proof_type, metadata_value('rejection_reason'))
+  end
+
+  def application_label(application)
+    label = "Application ##{application.id}"
+    applicant_name = if application.respond_to?(:constituent_full_name)
+                       application.constituent_full_name
+                     else
+                       application.user&.full_name
+                     end
+    applicant_name = applicant_name&.strip
+
+    applicant_name.present? ? "#{label} (#{applicant_name})" : label
+  end
+
+  def generic_notifiable_reference
+    return 'record missing' unless @notifiable
+
+    label = @notifiable.class.name.demodulize.titleize
+    @notifiable.id ? "#{label} ##{@notifiable.id}" : label
+  end
+
+  def metadata_value(key)
+    key = key.to_s
+    @metadata[key] ||
+      @metadata[key.to_sym] ||
+      template_variables_value(key) ||
+      template_variables_value(template_variable_alias_for(key))
+  end
+
+  def proof_resubmission_rejection_reason(proof_type)
+    return unless Notification.proof_resubmission_rejected_metadata?(@metadata)
+
+    metadata_value('rejection_reason').presence || latest_rejected_proof_review(proof_type)&.rejection_reason
+  end
+
+  def latest_rejected_proof_review(proof_type)
+    application = notification_application
+    proof_type = proof_type.to_s
+    return if proof_type.blank? || !application.is_a?(Application)
+
+    if application.association(:proof_reviews).loaded?
+      application.proof_reviews
+                 .select { |review| review.proof_type == proof_type && review.status_rejected? }
+                 .max_by { |review| [review.updated_at || review.created_at, review.created_at] }
+    else
+      application.proof_reviews
+                 .where(proof_type: proof_type, status: :rejected)
+                 .order(updated_at: :desc, created_at: :desc)
+                 .first
+    end
+  end
+
+  def proof_resubmission_rejected?
+    Notification.proof_resubmission_rejected_metadata?(@metadata)
+  end
+
+  def template_variables_value(key)
+    return if key.blank?
+
+    variables = @metadata['template_variables'] || @metadata[:template_variables]
+    return unless variables.respond_to?(:[])
+
+    variables[key.to_s] || variables[key.to_sym]
+  end
+
+  def template_variable_alias_for(key)
+    key.to_s == 'proof_type' ? 'proof_type_formatted' : nil
+  end
+
+  def application_path_for_viewer(application)
+    routes = Rails.application.routes.url_helpers
+
+    if @viewer.blank? || @viewer.admin?
+      routes.admin_application_path(application)
+    else
+      routes.constituent_portal_application_path(application)
+    end
+  end
 
   def training_session_message(verb_phrase)
     return default_message unless @notifiable.is_a?(TrainingSession)
@@ -149,9 +302,7 @@ class NotificationComposer
     constituent_name = application&.constituent_full_name.presence ||
                        @notifiable.constituent&.full_name.presence ||
                        'a constituent'
-    application_id = @metadata['application_id'].presence || application&.id
-
-    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference(application)}."
+    safe_join([trainer_name, " #{verb_phrase} for ", constituent_name, ' on ', sentence_application_reference(application), '.'])
   end
 
   def preloaded_trainer_name

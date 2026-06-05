@@ -108,7 +108,8 @@ class Evaluation < ApplicationRecord
       actor: evaluator,
       notifiable: self,
       metadata: { evaluation_id: id },
-      channel: :email
+      channel: :email,
+      deliver: false
     )
   end
 

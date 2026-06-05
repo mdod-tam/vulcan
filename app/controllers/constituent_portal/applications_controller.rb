@@ -131,18 +131,6 @@ module ConstituentPortal
       end
     end
 
-    def request_review
-      @application = current_user.applications.find(params[:id])
-      if @application.update(needs_review_since: Time.current)
-        notify_admins_of_review_request
-        redirect_with_notice(constituent_portal_application_path(@application),
-                             'Review requested successfully.')
-      else
-        redirect_with_alert(constituent_portal_application_path(@application),
-                            'Unable to request review at this time.')
-      end
-    end
-
     def submit
       @application = current_user.applications.find(params[:id])
       ApplicationRecord.transaction do
@@ -435,25 +423,6 @@ module ConstituentPortal
       # MedicalProviderHelper concern: Uses standardized medical provider creation from application data
       # Flow: medical_provider_from_application(app) -> creates ApplicationDataStructures::MedicalProviderInfo object
       @medical_provider = medical_provider_from_application(@application)
-    end
-
-    def notify_admins_of_review_request
-      User.where(type: 'Users::Administrator').find_each do |admin|
-        AuditEventService.log(
-          action: 'review_requested',
-          actor: current_user,
-          auditable: @application,
-          metadata: { recipient_id: admin.id }
-        )
-
-        NotificationService.create_and_deliver!(
-          type: 'review_requested',
-          recipient: admin,
-          actor: current_user,
-          notifiable: @application,
-          channel: :email
-        )
-      end
     end
 
     def render_autosave_response(result)

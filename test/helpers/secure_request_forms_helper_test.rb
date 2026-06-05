@@ -51,4 +51,62 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
 
     assert_nil secure_request_summary_expiration_text(summary)
   end
+
+  test 'proof resubmission detail leads with rejection context when proof is rejected' do
+    application = create(:application, id_proof_status: :rejected)
+    admin = create(:admin)
+    create(:proof_review,
+           :rejected,
+           application: application,
+           admin: admin,
+           proof_type: :id,
+           rejection_reason: 'Too blurry')
+    notification = create(
+      :notification,
+      recipient: application.user,
+      actor: admin,
+      notifiable: application,
+      action: 'proof_resubmission_requested',
+      metadata: {
+        'proof_type' => 'id',
+        'proof_request_display_mode' => 'rejected',
+        'rejection_reason' => 'Too blurry',
+        'recipient_channel' => 'email'
+      }
+    )
+
+    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata)
+
+    assert_includes detail, 'ID proof rejected - Too blurry; secure upload link sent to'
+    assert_includes detail, 'via Email'
+  end
+
+  test 'proof resubmission detail leads with request context when proof is not rejected' do
+    application = create(:application, id_proof_status: :not_reviewed)
+    admin = create(:admin)
+    create(:proof_review,
+           :rejected,
+           application: application,
+           admin: admin,
+           proof_type: :id,
+           rejection_reason: 'Old blurry document')
+    application.update!(id_proof_status: :not_reviewed)
+    notification = create(
+      :notification,
+      recipient: application.user,
+      actor: admin,
+      notifiable: application,
+      action: 'proof_resubmission_requested',
+      metadata: {
+        'proof_type' => 'id',
+        'proof_request_display_mode' => 'requested',
+        'recipient_channel' => 'email'
+      }
+    )
+
+    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata)
+
+    assert_includes detail, 'ID proof requested; secure upload link sent to'
+    assert_not_includes detail, 'Old blurry document'
+  end
 end

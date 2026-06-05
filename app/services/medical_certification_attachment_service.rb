@@ -199,7 +199,8 @@ class MedicalCertificationAttachmentService
           actor: admin,
           notifiable: application,
           metadata: metadata,
-          channel: :email
+          channel: :email,
+          deliver: notification_action != 'medical_certification_approved'
         )
       end
     end
@@ -364,6 +365,7 @@ class MedicalCertificationAttachmentService
       notifiable: params[:application],
       metadata: {
         'reason' => params[:resolved_reason],
+        'rejection_reason' => params[:resolved_reason],
         'notes' => params[:notes]
       },
       channel: :email,
