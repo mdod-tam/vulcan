@@ -139,7 +139,7 @@ class Application < ApplicationRecord
   validates :maryland_resident, inclusion: { in: [true], message: 'You must be a Maryland resident to apply' }, unless: :status_draft?
   validates :terms_accepted, acceptance: { accept: true }, if: :submitted?
   validates :information_verified, acceptance: { accept: true }, if: :submitted?
-  validates :medical_release_authorized, acceptance: { accept: true }, if: :submitted?
+  validates :medical_release_authorized, acceptance: { accept: true }, if: -> { submitted? && !skip_medical_provider_validation? }
   validates :medical_provider_name, presence: true, unless: :skip_medical_provider_validation?
   validates :medical_provider_phone, presence: true, unless: :skip_medical_provider_validation?
   validates :medical_provider_email, presence: true, unless: :skip_medical_provider_validation?
