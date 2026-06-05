@@ -46,6 +46,15 @@ class NotificationComposer
     link_to("Application ##{application.id}", "/admin/applications/#{application.id}", class: "text-indigo-600 hover:text-indigo-500")
   end
 
+  def notifiable_application
+    return @notifiable if @notifiable.is_a?(Application)
+    return @notifiable.application if @notifiable.respond_to?(:application)
+
+    nil
+  end
+
+
+
   # --- Message Generation Methods ---
 
   def message_for_trainer_assigned
@@ -85,12 +94,12 @@ class NotificationComposer
     reason = @metadata['rejection_reason']
     reason_text = reason.present? ? " - #{reason}" : ''
 
-    "#{proof_type} rejected for #{application_reference.downcase}#{reason_text}."
+    "#{proof_type} rejected for #{application_reference(notifiable_application).downcase}#{reason_text}."
   end
 
   def message_for_proof_approved
     proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    "#{proof_type} approved for #{application_reference.downcase}."
+    "#{proof_type} approved for #{application_reference(notifiable_application).downcase}."
   end
 
   def message_for_medical_certification_requested
