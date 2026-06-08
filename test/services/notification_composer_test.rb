@@ -97,7 +97,7 @@ class NotificationComposerTest < ActiveSupport::TestCase
       { 'proof_type' => 'id' }
     )
 
-    assert_equal "Secure id upload requested for application ##{@application.id}", message
+    assert_equal "Secure id upload requested for <a class=\"text-indigo-600 hover:text-indigo-500\" href=\"/admin/applications/#{@application.id}\">Application ##{@application.id}</a>", message
   end
 
   test 'generate default message for unknown action' do

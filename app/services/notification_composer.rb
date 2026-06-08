@@ -115,7 +115,7 @@ class NotificationComposer
   end
 
   def message_for_provider_info_requested
-    "Certifying professional information requested for #{application_reference}"
+    "Certifying professional information requested for #{}"
   end
 
   def message_for_medical_certification_received
@@ -153,10 +153,9 @@ class NotificationComposer
                    @metadata['trainer_name'].presence ||
                    preloaded_trainer_name ||
                    'A trainer'
-    constituent_name = application&.constituent_full_name.presence ||
+    constituent_name = notifiable_application&.constituent_full_name.presence ||
                        @notifiable.constituent&.full_name.presence ||
                        'a constituent'
-    application_id = @metadata['application_id'].presence || application&.id
 
     "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference}."
   end
