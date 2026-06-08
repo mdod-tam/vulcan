@@ -32,8 +32,9 @@
                            step: 0.25,
                            required: true,
                            class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                           aria: { required: "true" },
+                           aria: { required: "true" , describedBy: "duration_hours_hints"},
                            data: { training_duration_confirmation_target: "duration" } %>
+        <p class="mt-1 text-sm text-gray-500" id="duration_hours_hint">Enter total time spent training, in hours.</p>
       </div>
 
       <div>
