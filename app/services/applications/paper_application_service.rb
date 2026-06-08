@@ -283,7 +283,14 @@ module Applications
     end
 
     def process_self_applicant(applicant_data)
-      result = UserCreationService.new(applicant_data, is_managing_adult: true).call
+      # Handle no email address scenario
+      if params[:no_email_address]
+        applicant_data = applicant_data.dup
+        applicant_data.delete(:email)
+        applicant_data[:communication_preference] = 'letter'
+      end
+
+      result = UserCreationService.new(applicant_data, is_managing_adult: true, skip_email_validation: params[:no_email_address]).call
 
       if result.success?
         @constituent = result.data[:user]

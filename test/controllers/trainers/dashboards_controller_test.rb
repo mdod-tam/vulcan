@@ -100,6 +100,19 @@ module Trainers
       assert_includes assigns(:upcoming_sessions), scheduled_session
     end
 
+    test 'scheduled sessions include multiple future sessions for the same application' do
+      sign_in_for_integration_test(@trainer)
+      additional_session = create(:training_session, :scheduled, trainer: @trainer, application: @application, scheduled_for: 2.days.from_now)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_includes assigns(:scheduled_sessions), @session
+      assert_includes assigns(:scheduled_sessions), additional_session
+      assert_includes assigns(:upcoming_sessions), @session
+      assert_includes assigns(:upcoming_sessions), additional_session
+    end
+
     test 'admin dashboard surfaces scheduled sessions assigned to the admin separately' do
       sign_in_for_integration_test(@admin)
       admin_constituent = create(:constituent, first_name: 'Admin', last_name: 'Training')

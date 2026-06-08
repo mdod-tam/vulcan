@@ -20,7 +20,7 @@ es:
         training_session:
           attributes:
             base:
-              duplicate_open_session: "Esta solicitud ya tiene una sesión de capacitación activa."
+              training_session_quota_exhausted: "Esta solicitud no tiene más espacios disponibles para capacitación."
               historical_session_reopen: "Las sesiones de capacitación históricas no se pueden reabrir. Programe una sesión de seguimiento."
   activemodel:
     errors:
@@ -241,6 +241,17 @@ es:
           success: "Enlace seguro para subir la certificación enviado correctamente."
           failure: "No se pudo enviar el enlace seguro para subir la certificación."
           provider_email_required: "No se puede enviar el formulario seguro para subir la certificación: falta el correo electrónico del proveedor. Envíe un formulario de información del proveedor a la persona solicitante o tutor para recopilar información de contacto actualizada."
+      unassign_trainer:
+        confirm_title: "Quitar capacitador"
+        confirm:
+          one: "Este capacitador tiene 1 sesión de capacitación abierta. Al quitar este capacitador se cancelará esa sesión. ¿Desea continuar?"
+          other: "Este capacitador tiene %{count} sesiones de capacitación abiertas. Al quitar este capacitador se cancelarán las %{count} sesiones. ¿Desea continuar?"
+        confirm_yes: "Cancelar sesiones y quitar capacitador"
+        confirm_no: "Mantener capacitador asignado"
+      training_capacity:
+        summary: "%{reserved} / %{max} sesiones reservadas, %{remaining} restantes"
+        maximum_reached: "Esta persona ha alcanzado el número máximo de sesiones de capacitación reservadas (%{max})."
+        maximum_reached_badge: "Máximo alcanzado"
     vendors:
       vendor_secure_request_forms:
         create:
@@ -287,26 +298,37 @@ es:
         update_status_failed: "No se pudo actualizar el estado de la sesión de capacitación: %{message}"
         complete_failed: "No se pudo completar la sesión de capacitación: %{message}"
         schedule_failed: "No se pudo programar la sesión de capacitación: %{message}"
+        schedule_additional_failed: "No se pudo programar la sesión de capacitación adicional: %{message}"
         reschedule_failed: "No se pudo reprogramar la sesión de capacitación: %{message}"
         cancel_failed: "No se pudo cancelar la sesión de capacitación: %{message}"
         follow_up_failed: "No se pudo programar la sesión de capacitación de seguimiento: %{message}"
-      follow_up:
-        title: "Programar nueva fecha de capacitación"
-        description: "Use esto después de confirmar una nueva fecha con la persona."
-        scheduled_for_label: "Nueva fecha/hora"
-        location_label: "Ubicación"
-        location_placeholder: "p. ej., hogar del participante, biblioteca, en línea"
-        reason_label: "Motivo del seguimiento"
-        reason_placeholder: "Proporcione un motivo..."
-        reason_hint: "Proporcione un motivo para programar la capacitación de seguimiento."
-        required: "(obligatorio)"
-        submit: "Programar nueva fecha de capacitación"
-      read_only_notice: "Esta es una vista de supervisión de solo lectura. Solo el capacitador asignado puede actualizar esta sesión de capacitación."
   training_session_notifications:
+    trainer_assigned:
+      labels:
+        english: "Inglés"
+        spanish: "Español"
+        voice: "Llamada telefónica"
+        text: "Texto/SMS"
+        videophone: "Videoteléfono (ASL)"
+        email: "Correo electrónico"
+        letter: "Carta postal"
+        asl: "Lengua de señas americana (ASL)"
+        typed: "Comunicación escrita"
+        not_specified: "No especificado"
     training_cancelled:
       scheduled_message: "Su sesión de capacitación programada para %{scheduled_for} ha sido cancelada. Lamentamos cualquier inconveniente."
       assignment_removed_message: "Su asignación de capacitador se eliminó antes de que se programara una fecha de sesión. Estamos trabajando para asignarle un nuevo capacitador."
   training_sessions:
+    complete:
+      success: "La sesión de capacitación se marcó como completada correctamente."
+      invalid_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden completar."
+      notes_required: "notes es obligatorio"
+      product_required: "product_trained_on_id es obligatorio"
+      duration_hours_required: "duration_hours es obligatorio"
+    cancel:
+      success: "La sesión de capacitación se canceló correctamente."
+      invalid_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden cancelar."
+      reason_required: "cancellation_reason es obligatorio"
     reschedule:
       wrong_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden reprogramar."
     schedule_follow_up:
@@ -315,7 +337,15 @@ es:
       missing_required_fields: "scheduled_for y reschedule_reason son obligatorios"
       service_window_closed: "La capacitación ya no está disponible para esta solicitud."
       quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
-      active_session: "Esta persona ya tiene una sesión de capacitación activa."
+      invalid_scheduled_for: "scheduled_for debe ser una fecha y hora válidas"
+      scheduled_for_in_future: "scheduled_for debe estar en el futuro"
+      unexpected_error: "Ocurrió un error inesperado: %{message}"
+    schedule_additional:
+      success: "La sesión de capacitación adicional se programó correctamente."
+      invalid_source: "Las sesiones adicionales solo se pueden programar desde una sesión de capacitación programada, confirmada o completada."
+      missing_scheduled_for: "scheduled_for es obligatorio"
+      service_window_closed: "La capacitación ya no está disponible para esta solicitud."
+      quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
       invalid_scheduled_for: "scheduled_for debe ser una fecha y hora válidas"
       scheduled_for_in_future: "scheduled_for debe estar en el futuro"
       unexpected_error: "Ocurrió un error inesperado: %{message}"

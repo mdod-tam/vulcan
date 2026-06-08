@@ -365,6 +365,7 @@ Rails.application.routes.draw do
         patch :update_status
         post :complete
         post :schedule
+        post :schedule_additional
         post :reschedule
         post :cancel
       end

@@ -271,6 +271,9 @@
                       <%= session.scheduled_for.strftime("%B %d, %Y at %I:%M %p") %>
                     <% elsif @current_filter == 'completed' && session.completed_at.present? %>
                       <%= session.completed_at.strftime("%B %d, %Y") %>
+                      <div class="text-xs text-gray-500">
+                        Duration: <%= training_duration_hours_label(session.duration_hours) %>
+                      </div>
                     <% else %>
                       <%= session.created_at.strftime("%B %d, %Y") %>
                     <% end %>
@@ -378,6 +381,9 @@
                 <p class="font-medium"><%= session.application.constituent_full_name %></p>
                 <p class="text-sm text-gray-500">
                   Completed: <%= session.completed_at&.strftime("%B %d, %Y") || "Unknown" %>
+                </p>
+                <p class="text-sm text-gray-500">
+                  Duration: <%= training_duration_hours_label(session.duration_hours) %>
                 </p>
               </div>
               <%= link_to "View Details", trainers_training_session_path(session),

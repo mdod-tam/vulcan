@@ -10,6 +10,12 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
   end
 
+  test 'defaults duration_hours to two hours' do
+    training_session = TrainingSession.new
+
+    assert_equal BigDecimal('2.0'), training_session.duration_hours
+  end
+
   test 'should require application' do
     # Build, don't create, to test validation before saving
     training_session = build(:training_session, application: nil)
@@ -127,14 +133,43 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert training_session.valid?
   end
 
-  test 'should reject duplicate open sessions for an application' do
+  test 'should require positive duration_hours if status is completed' do
+    training_session = build(:training_session, :scheduled, status: :completed, notes: 'Training completed successfully')
+
+    training_session.duration_hours = nil
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:duration_hours], "can't be blank"
+
+    training_session.duration_hours = 0
+    assert_not training_session.valid?
+    assert_includes training_session.errors[:duration_hours], 'must be greater than 0'
+
+    training_session.duration_hours = 2.5
+    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
+  end
+
+  test 'should allow multiple open sessions while training slots remain' do
+    update_max_training_sessions(3)
     application = create(:application, :old_enough_for_new_application)
     create(:training_session, :scheduled, application: application)
 
-    duplicate_session = build(:training_session, :requested, application: application)
+    additional_session = build(:training_session, :scheduled, application: application)
 
-    assert_not duplicate_session.valid?
-    assert_includes duplicate_session.errors[:base], I18n.t('activerecord.errors.models.training_session.attributes.base.duplicate_open_session')
+    assert additional_session.valid?, -> { additional_session.errors.full_messages.join(', ') }
+  end
+
+  test 'should reject open sessions when reserved training slots are exhausted' do
+    update_max_training_sessions(2)
+    application = create(:application, :old_enough_for_new_application)
+    trainer = create(:trainer)
+    create(:training_session, :scheduled, application: application, trainer: trainer)
+    create(:training_session, :completed, application: application, trainer: trainer)
+
+    additional_session = build(:training_session, :scheduled, application: application, trainer: trainer)
+
+    assert_not additional_session.valid?
+    assert_includes additional_session.errors[:base],
+                    I18n.t('activerecord.errors.models.training_session.attributes.base.training_session_quota_exhausted')
   end
 
   test 'should allow updates to an existing open session' do
@@ -288,6 +323,7 @@ class TrainingSessionTest < ActiveSupport::TestCase
   end
 
   test 'previous_completed_sessions returns earlier completed sessions for the same application newest first' do
+    update_max_training_sessions(4)
     application = create(:application)
     trainer = create(:trainer)
     old_completed_session = create(
@@ -345,4 +381,12 @@ class TrainingSessionTest < ActiveSupport::TestCase
 
   # Add tests for NotificationDelivery concern if needed, but often tested via integration/system tests
   # Add tests for TrainingStatusManagement concern if needed, but often tested via controller/system tests
+
+  private
+
+  def update_max_training_sessions(value)
+    policy = Policy.find_or_create_by(key: 'max_training_sessions')
+    policy.updated_by = create(:admin)
+    policy.update!(value: value)
+  end
 end
