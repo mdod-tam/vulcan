@@ -39,12 +39,20 @@ class NotificationComposer
 
   private
 
-  def application_reference(application=nil)
-    application ||= @notifiable
-    return "Application missing" unless application&.id
+  def application_reference
+    return "Application missing" unless notifiable_application && notifiable_application&.id
 
-    link_to("Application ##{application.id}", "/admin/applications/#{application.id}", class: "text-indigo-600 hover:text-indigo-500")
+    link_to("Application ##{notifiable_application.id}", "/admin/applications/#{notifiable_application.id}", class: "text-indigo-600 hover:text-indigo-500")
   end
+
+  def notifiable_application
+    return @notifiable if @notifiable.is_a?(Application)
+    return @notifiable.application if @notifiable.respond_to?(:application)
+
+    nil
+  end
+
+
 
   # --- Message Generation Methods ---
 
@@ -98,16 +106,16 @@ class NotificationComposer
   end
 
   def message_for_cert_upload_requested
-    "Secure disability certification upload requested for application ##{@notifiable&.id}"
+    "Secure disability certification upload requested for #{application_reference}"
   end
 
   def message_for_proof_resubmission_requested
     proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    "Secure #{proof_type.downcase} upload requested for application ##{@notifiable&.id}"
+    "Secure #{proof_type.downcase} upload requested for #{application_reference}"
   end
 
   def message_for_provider_info_requested
-    "Certifying professional information requested for application ##{@notifiable&.id}"
+    "Certifying professional information requested for #{}"
   end
 
   def message_for_medical_certification_received
@@ -145,13 +153,11 @@ class NotificationComposer
                    @metadata['trainer_name'].presence ||
                    preloaded_trainer_name ||
                    'A trainer'
-    application = @notifiable.application
-    constituent_name = application&.constituent_full_name.presence ||
+    constituent_name = notifiable_application&.constituent_full_name.presence ||
                        @notifiable.constituent&.full_name.presence ||
                        'a constituent'
-    application_id = @metadata['application_id'].presence || application&.id
 
-    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference(application)}."
+    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference}."
   end
 
   def preloaded_trainer_name
