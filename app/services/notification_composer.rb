@@ -39,11 +39,10 @@ class NotificationComposer
 
   private
 
-  def application_reference(application=nil)
-    application ||= @notifiable
-    return "Application missing" unless application&.id
+  def application_reference
+    return "Application missing" unless notifiable_application&.id
 
-    link_to("Application ##{application.id}", "/admin/applications/#{application.id}", class: "text-indigo-600 hover:text-indigo-500")
+    link_to("Application ##{notifiable_application.id}", "/admin/applications/#{@notifiable_application.id}", class: "text-indigo-600 hover:text-indigo-500")
   end
 
   def notifiable_application
@@ -94,12 +93,12 @@ class NotificationComposer
     reason = @metadata['rejection_reason']
     reason_text = reason.present? ? " - #{reason}" : ''
 
-    "#{proof_type} rejected for #{application_reference(notifiable_application).downcase}#{reason_text}."
+    "#{proof_type} rejected for #{application_reference.downcase}#{reason_text}."
   end
 
   def message_for_proof_approved
     proof_type = @metadata['proof_type']&.titleize || 'Proof'
-    "#{proof_type} approved for #{application_reference(notifiable_application).downcase}."
+    "#{proof_type} approved for #{application_reference.downcase}."
   end
 
   def message_for_medical_certification_requested
@@ -154,13 +153,12 @@ class NotificationComposer
                    @metadata['trainer_name'].presence ||
                    preloaded_trainer_name ||
                    'A trainer'
-    application = @notifiable.application
     constituent_name = application&.constituent_full_name.presence ||
                        @notifiable.constituent&.full_name.presence ||
                        'a constituent'
     application_id = @metadata['application_id'].presence || application&.id
 
-    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference(application)}."
+    "#{trainer_name} #{verb_phrase} for #{constituent_name} for #{application_reference}."
   end
 
   def preloaded_trainer_name
