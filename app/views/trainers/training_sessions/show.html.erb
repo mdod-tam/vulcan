@@ -169,7 +169,7 @@
           </div>
            <% if @training_session.notes.present? %>
             <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt class="text-sm font-medium text-gray-500">Training Notes</dt>
+              <dt class="text-sm font-medium text-gray-500">Internal Training Notes</dt>
               <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                 <%= simple_format(@training_session.notes) %>
               </dd>
@@ -322,20 +322,21 @@
               <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
                 Training Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
-              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { describedby: "schedule_time_hint", required: "true" } %>
-              <p class="mt-1 text-sm text-gray-500" id="schedule_time_hint">This sends the constituent a training scheduled notification by email or letter with the date and time.</p>
+              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
             </div>
 
             <div>
               <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
               <%= f.text_field :location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
-              <p class="mt-1 text-sm text-gray-500">Internal detail only. It is not included in the constituent notification.</p>
             </div>
 
             <div>
               <%= f.label :notes, "Notes", class: "block text-sm font-medium text-gray-700" %>
               <%= f.text_area :notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
-              <p class="mt-1 text-sm text-gray-500">Internal note only. It is not included in the constituent notification.</p>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 rounded p-3">
+              <p class="text-sm text-blue-900"><span class="font-medium">An email will be sent</span> to the constituent with the training date and time.</p>
             </div>
 
             <%= f.submit "Schedule Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
@@ -358,12 +359,13 @@
             <%= form_with(url: cancel_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "cancel-training-heading" }) do |f| %>
               <div>
                 <%= f.label :cancellation_reason, class: "block text-sm font-medium text-gray-700" do %>
-                  Reason for Cancellation <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                  Internal Reason for Cancellation <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
                 <% end %>
-                <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true", describedby: "cancel_reason_hint" } %>
-                <p class="mt-1 text-sm text-gray-500" id="cancel_reason_hint">This sends the constituent a cancellation notification by email or letter. This reason stays internal and is not included in that notification.</p>
+                <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
               </div>
-
+              <div class="bg-red-50 border border-red-200 rounded p-3">
+                <p class="text-sm text-red-900"><span class="font-medium">An email will be sent</span> to the constituent.</p>
+              </div>
               <%= f.submit "Cancel Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
             <% end %>
           </div>
@@ -376,7 +378,7 @@
               Mark as No Show
             </h3>
             <p class="text-sm text-gray-600 mb-4" id="no_show_desc">
-              Use this if the constituent did not attend the scheduled training session. This sends the constituent a no-show notification by email or letter.
+              Use this if the constituent did not attend the scheduled training session.
             </p>
             <%= form_with(model: @training_session, url: update_status_trainers_training_session_path(@training_session), method: :patch, local: true, class: "space-y-4", aria: { labelledby: "no-show-heading" }) do |f| %>
               <%= f.hidden_field :status, value: 'no_show' %>
@@ -384,8 +386,10 @@
                   <%= f.label :no_show_notes, class: "block text-sm font-medium text-gray-700" do %>
                     No Show Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
                   <% end %>
-                  <%= f.text_area :no_show_notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Describe the no show...", aria: { required: "true", describedby: "no_show_notes_hint"} %>
-                  <p class="mt-1 text-sm text-gray-500" id="no_show_notes_hint">Internal note only. It is not included in the constituent notification.</p>
+                  <%= f.text_area :no_show_notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Describe the no show...", aria: { required: "true" } %>
+              </div>
+              <div class="bg-red-50 border border-red-200 rounded p-3">
+                <p class="text-sm text-red-900"><span class="font-medium">An email will be sent</span> to the constituent.</p>
               </div>
               <%= f.submit "Mark as No Show", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
             <% end %>
@@ -412,12 +416,13 @@
           <%= form_with(url: cancel_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "cancel-training-heading" }) do |f| %>
             <div>
               <%= f.label :cancellation_reason, class: "block text-sm font-medium text-gray-700" do %>
-                Reason for Cancellation <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+                Internal Reason for Cancellation <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
-              <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true", describedby: "cancel_reason_hint" } %>
-              <p class="mt-1 text-sm text-gray-500" id="cancel_reason_hint">This sends the constituent a cancellation notification by email or letter. This reason stays internal and is not included in that notification.</p>
+              <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
             </div>
-
+            <div class="bg-red-50 border border-red-200 rounded p-3">
+              <p class="text-sm text-red-900"><span class="font-medium">An email will be sent</span> to the constituent noting the cancellation.</p>
+            </div>
             <%= f.submit "Cancel Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
           <% end %>
         </div>
@@ -435,22 +440,23 @@
               <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
                 New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
-              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { describedby: "reschedule_time_hint", required: "true" } %>
-              <p class="mt-1 text-sm text-gray-500" id="reschedule_time_hint">This sends the constituent a reschedule notification by email or letter with the new date and time.</p>
+              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
             </div>
 
             <div>
               <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
               <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
-              <p class="mt-1 text-sm text-gray-500">Internal detail only. It is not included in the constituent notification.</p>
             </div>
 
             <div>
               <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
                 Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
-              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true", describedby: "reschedule_reason_hint" } %>
-               <p class="mt-1 text-sm text-gray-500" id="reschedule_reason_hint">This reason is included in the constituent reschedule notification.</p>
+              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 rounded p-3">
+              <p class="text-sm text-blue-900"><span class="font-medium">An email will be sent</span> to the constituent with the new date, time, and reason.</p>
             </div>
 
             <%= f.submit "Reschedule Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
@@ -480,22 +486,23 @@
               <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
                 New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
-              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { describedby: "follow_up_time_hint", required: "true" } %>
-              <p class="mt-1 text-sm text-gray-500" id="follow_up_time_hint">This creates a new scheduled session and sends the constituent a scheduled training notification by email or letter with the date and time.</p>
+              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
             </div>
 
             <div>
               <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
               <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
-              <p class="mt-1 text-sm text-gray-500">Internal detail only. It is not included in the constituent notification.</p>
             </div>
 
             <div>
               <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
                 Reason for Follow-up <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
               <% end %>
-              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true", describedby: "reschedule_cancelled_reason_hint" } %>
-              <p class="mt-1 text-sm text-gray-500" id="reschedule_cancelled_reason_hint">Internal note only. It is not included in the constituent notification.</p>
+              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 rounded p-3">
+              <p class="text-sm text-blue-900"><span class="font-medium">An email will be sent</span> to the constituent with the new date and time.</p>
             </div>
 
             <%= f.submit "Schedule new training date", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
