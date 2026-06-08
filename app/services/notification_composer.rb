@@ -40,9 +40,9 @@ class NotificationComposer
   private
 
   def application_reference
-    return "Application missing" unless notifiable_application&.id
+    return "Application missing" unless notifiable_application && notifiable_application&.id
 
-    link_to("Application ##{notifiable_application.id}", "/admin/applications/#{@notifiable_application.id}", class: "text-indigo-600 hover:text-indigo-500")
+    link_to("Application ##{notifiable_application.id}", "/admin/applications/#{notifiable_application.id}", class: "text-indigo-600 hover:text-indigo-500")
   end
 
   def notifiable_application
