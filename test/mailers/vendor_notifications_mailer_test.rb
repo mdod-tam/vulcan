@@ -172,7 +172,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     # Check that the email body contains the secure-link instructions from the stored template
     assert_includes email.body.to_s, review.rejection_reason
     assert_includes email.body.to_s, secure_upload_url
-    assert_includes email.body.to_s, 'Upload your corrected W9 securely here'
+    assert_includes email.body.to_s, 'Secure W9 upload link'
   end
 
   test 'w9_upload_requested' do

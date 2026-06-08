@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
 EmailTemplate.create_or_find_by!(name: 'application_notifications_training_requested', format: :text, locale: 'es') do |template|
-  template.subject = 'Capacitacion solicitada para la solicitud #%<application_id>s'
-  template.description = 'Se envia a administradores cuando un constituyente solicita capacitacion.'
+  template.subject = 'Capacitación solicitada para la solicitud #%<application_id>s'
+  template.description = 'Se envía a administradores cuando un constituyente solicita capacitación.'
   template.body = <<~TEXT
     %<header_text>s
 
     Hola %<admin_full_name>s,
 
-    %<constituent_full_name>s solicito capacitacion para la solicitud #%<application_id>s el %<request_date_formatted>s.
+    %<constituent_full_name>s solicitó capacitación para la solicitud #%<application_id>s el %<request_date_formatted>s.
 
-    Revise la solicitud aqui:
+    Enlace a la solicitud administrativa:
     %<admin_application_url>s
 
     %<footer_text>s

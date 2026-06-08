@@ -244,9 +244,9 @@ module DocumentSigning
       )
 
       Docuseal.expects(:create_submission).with do |payload|
-        assert_equal "Certificacion medica - #{@application.user.full_name} (Solicitud #{@application.id})", payload[:name]
-        assert_equal "Solicitud de certificacion de discapacidad para #{@application.user.full_name}", payload.dig(:message, :subject)
-        assert_includes payload.dig(:message, :body), 'Informacion del solicitante'
+        assert_equal "Certificación médica - #{@application.user.full_name} (Solicitud #{@application.id})", payload[:name]
+        assert_equal "Solicitud de certificación de discapacidad para #{@application.user.full_name}", payload.dig(:message, :subject)
+        assert_includes payload.dig(:message, :body), 'Información del solicitante'
         assert_includes payload.dig(:message, :body), '{{submitter.link}}'
         true
       end.returns(@mock_submission)

@@ -318,7 +318,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal [@user.email], email.to
     assert_includes email.body.to_s, secure_upload_url
-    assert_includes email.body.to_s, 'Use this secure link'
+    assert_includes email.body.to_s, 'Secure proof upload link'
   end
 
   test 'proof_rejected includes secure upload url for paper application email delivery' do
@@ -335,7 +335,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal [@user.email], email.to
     assert_includes email.body.to_s, secure_upload_url
-    assert_includes email.body.to_s, 'Use this secure link'
+    assert_includes email.body.to_s, 'Secure corrected proof upload link'
   end
 
   test 'proof_rejected renders none_provided id reason as friendly text without seed row' do

@@ -10,7 +10,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_training_reque
 
     %<constituent_full_name>s requested training for Application #%<application_id>s on %<request_date_formatted>s.
 
-    Review the request here:
+    Admin application link:
     %<admin_application_url>s
 
     %<footer_text>s

@@ -21,7 +21,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_needs_re
 
     Por favor, revise estas solicitudes lo antes posible para asegurar un procesamiento oportuno para nuestros solicitantes.
 
-    Puede acceder al panel de control de administrador para revisar todas las solicitudes pendientes en:
+    Enlace al panel de administrador:
     %<admin_dashboard_url>s
 
     %<footer_text>s

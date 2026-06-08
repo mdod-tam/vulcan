@@ -21,7 +21,7 @@ EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_new_evaluation_assigned
     DISCAPACIDADES:
     %<constituent_disabilities_text_list>s
 
-    Puede ver y actualizar la evaluación aquí:
+    Enlace de evaluación para evaluador:
     %<evaluators_evaluation_url>s
 
     Por favor, comience el proceso de evaluación comunicándose con el solicitante para programar una evaluación.

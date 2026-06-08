@@ -27,7 +27,7 @@ class MedicalProviderRequestCertificationTemplateTest < ActionMailer::TestCase
 
     assert_includes body, 'DISABILITY CERTIFICATION FORM REQUEST'
     assert_includes body, 'Alex Smith'
-    assert_includes body, 'Upload the completed form securely'
+    assert_includes body, 'Secure certification upload link'
     assert_not_includes body, 'and was sent on'
     assert_not_includes body, 'May 07, 2026'
   end

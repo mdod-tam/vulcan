@@ -8,7 +8,8 @@ EmailTemplate.create_or_find_by!(name: 'email_footer_text', format: :text, local
     --
     %<organization_name>
     Email: %<contact_email>
-    Website: %<website_url>
+    MAT program website:
+    %<website_url>s
 
     %<show_automated_message>
     This is an automated message. Please do not reply directly to this email.
