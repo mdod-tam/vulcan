@@ -18,20 +18,18 @@ module Admin
     end
 
     test 'admin can access paper application form' do
-      visit admin_applications_path
-      click_on 'Upload Paper Application'
+      visit new_admin_paper_application_path
 
-      assert_selector 'h1', text: 'Upload Paper Application'
+      assert_selector 'h1', text: 'Apply for Constituent'
 
-      [
-        'Who is this application for?',
-        "Applicant's Information",
-        'Disability Information',
-        'Medical Provider Information',
-        'Proof Documents'
-      ].each do |legend_text|
-        assert_selector 'fieldset legend', text: legend_text
-      end
+      assert_selector 'legend', text: 'Applicant type'
+      assert_text 'Who is this application for?'
+      choose 'An Adult (applying for themselves)'
+      reveal_adult_application_sections
+      assert_selector '#self-info-section', text: "Applicant's Information"
+      assert_text 'Disability Information'
+      assert_text 'Certifying Professional Information'
+      assert_text 'Proof Documents'
     end
 
     test 'admin can submit a complete and valid paper application for an adult' do
@@ -39,7 +37,8 @@ module Admin
 
       # Select applicant type, which should reveal the rest of the form
       choose 'An Adult (applying for themselves)'
-      assert_selector 'fieldset', text: "Applicant's Information"
+      reveal_adult_application_sections
+      assert_selector '#self-info-section', text: "Applicant's Information"
 
       # Fill out the form sections using helpers for clarity
       fill_in_applicant_information(first_name: 'John', last_name: 'Doe')
@@ -103,24 +102,14 @@ module Admin
       assert_selector '#rejection-button', visible: :visible, wait: 10
       assert_selector 'input[type=submit][disabled]'
 
-      # Debug: Check button attributes and controller connection
-      button = find_by_id('rejection-button', wait: 10)
-      puts "Button found: #{button.inspect}"
-      puts "Button data-action: #{button['data-action']}"
-      puts "Button data-paper-application-target: #{button['data-paper-application-target']}"
-
-      # Check if paper-application controller is connected
-      form_element = find('form[data-controller*="paper-application"]', wait: 5)
-      puts "Form with paper-application controller found: #{form_element.present?}"
-
       # Admin can reject the application directly
       # First ensure the button is present and enabled
-      assert_button 'Reject Application (Income)', disabled: false, wait: 10
+      assert_button 'Reject (Income Over Threshold)', disabled: false, wait: 10
 
       # Income threshold rejection should NOT create an application
       assert_no_difference 'Application.count' do
         # Click opens rejection modal
-        click_button 'Reject Application (Income)'
+        click_button 'Reject (Income Over Threshold)'
 
         # Wait for modal to appear
         assert_selector 'dialog#rejection-modal[open]', wait: 10
@@ -160,6 +149,7 @@ module Admin
       # Verify warning appears deterministically and rejection button is shown
       assert_selector "[data-income-validation-target='warningContainer']", visible: true, text: /Income Exceeds Threshold/
       assert_selector '#rejection-button', visible: true
+      assert_paper_submit_still_gated
     end
 
     test 'income threshold badge disappears when income is reduced below threshold' do
@@ -182,6 +172,7 @@ module Admin
 
       # Verify no warning appears for low income (role="alert" only present when shown)
       assert_no_selector "[data-income-validation-target='warningContainer'][role='alert']", wait: 3
+      assert_paper_submit_still_gated
     end
 
     test 'admin can see rejection button for application exceeding income threshold' do
@@ -213,6 +204,7 @@ module Admin
 
       # Verify rejection button is visible
       assert_selector '#rejection-button', visible: true
+      assert_paper_submit_still_gated
     end
 
     test 'rejection modal form submits notification successfully' do
@@ -249,7 +241,7 @@ module Admin
 
       # Click the rejection button to open the modal
       # This triggers openRejectionModal() which populates hidden fields and shows the dialog
-      click_button 'Reject Application (Income)'
+      click_button 'Reject (Income Over Threshold)'
 
       # Wait for native <dialog> to open
       assert_selector 'dialog#rejection-modal[open]', visible: true, wait: 5
@@ -343,7 +335,7 @@ module Admin
       wait_for_network_idle
 
       # Handle proof documents - just check the radio buttons
-      within 'fieldset', text: 'Proof Documents' do
+      within_proof_documents_fieldset do
         # Income proof - select accept
         safe_interaction { find("input[id='accept_income_proof']").click }
         assert find("input[id='accept_income_proof']").checked?
@@ -368,7 +360,7 @@ module Admin
       visit new_admin_paper_application_path
 
       # 2. ACTION: Select "Dependent" to reveal the guardian search section.
-      choose "A Dependent (must select existing guardian in system or enter guardian's information)"
+      choose 'A Dependent (minor or adult requiring guardian)'
 
       # 3. ASSERTION & ACTION: Wait for the section to appear, then search.
       within 'fieldset', text: 'Guardian Information' do
@@ -406,7 +398,7 @@ module Admin
       wait_for_network_idle
 
       # First select the dependent radio button to make guardian section visible
-      choose "A Dependent (must select existing guardian in system or enter guardian's information)"
+      choose 'A Dependent (minor or adult requiring guardian)'
       wait_for_network_idle
 
       # Guardian section should be visible
@@ -604,7 +596,7 @@ module Admin
       wait_for_network_idle
 
       # Select the dependent radio to make the guardian section visible
-      choose "A Dependent (must select existing guardian in system or enter guardian's information)"
+      choose 'A Dependent (minor or adult requiring guardian)'
       wait_for_network_idle
 
       # Ensure the guardian section becomes visible with a wait
@@ -628,20 +620,6 @@ module Admin
 
       # Ensure dependent sections are visible and fields are enabled by simulating proper guardian selection
       page.execute_script(<<~JS)
-        // Simulate guardian picker outlet being connected with selectedValue = true
-        var applicantTypeController = document.querySelector('[data-controller*="applicant-type"]');
-        if (applicantTypeController) {
-          var controller = application.getControllerForElementAndIdentifier(applicantTypeController, 'applicant-type');
-          if (controller) {
-            // Mock the guardian picker outlet
-            controller.hasGuardianPickerOutlet = true;
-            controller.guardianPickerOutlet = { selectedValue: true };
-            // Trigger refresh to update visibility and enable fields
-            controller.executeRefresh();
-          }
-        }
-
-        // Fallback: directly show sections and enable fields
         var dependentSections = document.querySelector('[data-applicant-type-target="sectionsForDependentWithGuardian"]');
         if (dependentSections) {
           dependentSections.classList.remove('hidden');
@@ -709,7 +687,7 @@ module Admin
       select 'Parent', from: 'relationship_type'
 
       # Fill in medical provider information - using direct find
-      provider_fieldset = page.find('fieldset', text: 'Medical Provider Information', visible: true)
+      provider_fieldset = page.find('fieldset', text: 'Certifying Professional Information', visible: true)
       within provider_fieldset do
         fill_in 'application_medical_provider_name', with: 'doctor'
         fill_in 'application_medical_provider_phone', with: '2027775656'
@@ -717,7 +695,7 @@ module Admin
       end
 
       # Handle proof documents - using direct find
-      proof_fieldset = page.find('fieldset', text: 'Proof Documents', visible: true)
+      proof_fieldset = page.find('section', text: 'Proof Documents', visible: true)
       within proof_fieldset do
         # Fill in application details (moved here from removed Application Details fieldset)
         fill_in 'application_household_size', with: '5'
@@ -783,6 +761,7 @@ module Admin
       # Attach dummy proofs using StringIO to avoid file system issues
       application.income_proof.attach(io: StringIO.new('dummy income proof content'), filename: 'income.pdf', content_type: 'application/pdf')
       application.residency_proof.attach(io: StringIO.new('dummy residency proof content'), filename: 'residency.pdf', content_type: 'application/pdf')
+      application.id_proof.attach(io: StringIO.new('dummy id proof content'), filename: 'id.pdf', content_type: 'application/pdf')
       application.save!
 
       # Approve all proofs directly in the database to avoid UI interactions
@@ -804,6 +783,15 @@ module Admin
       )
       application.update!(residency_proof_status: :approved)
 
+      application.proof_reviews.create!(
+        admin: @admin,
+        proof_type: :id,
+        status: :approved,
+        reviewed_at: Time.current,
+        submission_method: :paper
+      )
+      application.update!(id_proof_status: :approved)
+
       # Attach and approve Medical Certification
       application.medical_certification.attach(
         io: StringIO.new('dummy medical certification content'),
@@ -821,6 +809,7 @@ module Admin
       # Verify database state first
       assert_equal 'approved', application.income_proof_status.to_s
       assert_equal 'approved', application.residency_proof_status.to_s
+      assert_equal 'approved', application.id_proof_status.to_s
       assert_equal 'approved', application.medical_certification_status.to_s
 
       # Visit the page robustly to verify UI reflects the approved status
@@ -843,6 +832,7 @@ module Admin
       assert_equal 'approved', application.status.to_s, 'Application status should be approved'
       assert_equal 'approved', application.income_proof_status.to_s, 'Income proof should be approved'
       assert_equal 'approved', application.residency_proof_status.to_s, 'Residency proof should be approved'
+      assert_equal 'approved', application.id_proof_status.to_s, 'ID proof should be approved'
       assert_equal 'approved', application.medical_certification_status.to_s, 'Medical certification should be approved'
     end
 
@@ -872,15 +862,26 @@ module Admin
           adultSection.classList.remove('hidden');
           adultSection.style.display = 'block';
         }
+
+        ['application[household_size]', 'application[annual_income]', 'income_proof', 'residency_proof', 'id_proof'].forEach((name) => {
+          const field = document.querySelector(`[name="${name}"]`);
+          let node = field;
+          while (node && node !== document.body) {
+            node.hidden = false;
+            node.disabled = false;
+            node.classList?.remove('hidden');
+            if (node.style) node.style.display = node.tagName === 'INPUT' ? '' : 'block';
+            node = node.parentElement;
+          }
+        });
       JS
       wait_for_turbo
+      reveal_adult_application_sections
 
-      # Find the applicant info fieldset directly
-      applicant_fieldset = find('fieldset', text: "Applicant's Information", visible: true)
-      assert applicant_fieldset.visible?, 'Applicant fieldset should be visible'
+      applicant_section = find_by_id('self-info-section', visible: true)
+      assert applicant_section.visible?, 'Applicant information section should be visible'
 
-      # Fill basic info using direct fieldset
-      within applicant_fieldset do
+      within applicant_section do
         fill_in 'constituent[first_name]', with: 'Income'
         fill_in 'constituent[last_name]', with: 'Reject'
         fill_in 'constituent[email]', with: "income.reject.#{Time.now.to_i}@example.com"
@@ -888,8 +889,8 @@ module Admin
       end
 
       # Get proof documents section directly
-      proof_documents = find('fieldset', text: 'Proof Documents', visible: true)
-      assert proof_documents.visible?, 'Proof documents fieldset should be visible'
+      proof_documents = find('section', text: 'Proof Documents', visible: true)
+      assert proof_documents.visible?, 'Proof documents section should be visible'
 
       # Fill details with high income
       within proof_documents do
@@ -967,12 +968,12 @@ module Admin
           }
         JS
         wait_for_turbo
-        # Find the applicant info fieldset directly
-        applicant_fieldset = find('fieldset', text: "Applicant's Information", visible: true)
-        assert applicant_fieldset.visible?, 'Applicant fieldset should be visible'
+        reveal_adult_application_sections
 
-        # Select the existing constituent - direct fieldset approach
-        within applicant_fieldset do
+        applicant_section = find_by_id('self-info-section', visible: true)
+        assert applicant_section.visible?, 'Applicant information section should be visible'
+
+        within applicant_section do
           # Fill in details directly including required fields
           fill_in 'constituent[first_name]', with: constituent.first_name
           fill_in 'constituent[last_name]', with: constituent.last_name
@@ -983,8 +984,8 @@ module Admin
 
         # Find other fieldsets directly
         disability_fieldset = find('fieldset', text: 'Disability Information', visible: true)
-        medical_provider_fieldset = find('fieldset', text: 'Medical Provider Information', visible: true)
-        proof_documents_fieldset = find('fieldset', text: 'Proof Documents', visible: true)
+        medical_provider_fieldset = find('fieldset', text: 'Certifying Professional Information', visible: true)
+        proof_documents_fieldset = find('section', text: 'Proof Documents', visible: true)
 
         # Fill the rest of the form minimally
         within proof_documents_fieldset do
@@ -1012,19 +1013,22 @@ module Admin
 
           safe_interaction { find("input[id='accept_residency_proof']").click }
           attach_file 'residency_proof', Rails.root.join('test/fixtures/files/blank.pdf')
+
+          safe_interaction { find("input[id='accept_id_proof']").click }
+          attach_file 'id_proof', Rails.root.join('test/fixtures/files/blank.pdf')
         end
 
-        # Check if Terms and Conditions section exists and fill it
-        if page.has_css?('fieldset', text: 'Terms and Conditions', visible: true)
-          within 'fieldset', text: 'Terms and Conditions', visible: true do
-            check 'application[terms_accepted]' if page.has_field?('application[terms_accepted]')
-            check 'application[information_verified]' if page.has_field?('application[information_verified]')
-            check 'application[medical_release_authorized]' if page.has_field?('application[medical_release_authorized]')
-          end
-        end
+        check 'application[terms_accepted]'
+        check 'application[information_verified]'
+        check 'application[medical_release_authorized]'
 
-        # Attempt to submit
-        click_on 'Submit Paper Application'
+        reveal_paper_application_common_sections
+
+        # This test is about the server-side waiting-period validation, so bypass
+        # the client submit gate after filling the required fields above.
+        page.execute_script(<<~JS)
+          document.querySelector('form[aria-label="Paper application upload form"]').submit();
+        JS
 
         # Wait for form submission to complete
         wait_for_turbo
@@ -1032,9 +1036,9 @@ module Admin
         # Assert validation error message related to waiting period
         # The error message is wrapped: "Failed to create application: You must wait X years..."
         assert_selector '[role="alert"]', text: /must wait #{waiting_period_years} years/i, wait: 10
-        # Ensure we are still on the new application page (controller renders :new on failure)
-        assert_current_path new_admin_paper_application_path
-        assert_selector 'h1', text: 'Upload Paper Application'
+        # Controller renders :new on the failed create request, so the browser remains on the POST URL.
+        assert_current_path admin_paper_applications_path
+        assert_selector 'h1', text: 'Apply for Constituent'
       ensure
         # Restore original skip flag
         Application.skip_wait_period_validation = original_skip_flag
@@ -1047,10 +1051,11 @@ module Admin
 
       # Select adult applicant type and wait for form to update
       choose 'An Adult (applying for themselves)'
-      assert_selector 'fieldset', text: "Applicant's Information", wait: 5
+      reveal_adult_application_sections
+      assert_selector '#self-info-section', text: "Applicant's Information", wait: 5
 
       # Fill in all required fields
-      within 'fieldset', text: "Applicant's Information" do
+      within '#self-info-section' do
         fill_in 'constituent[first_name]', with: 'John'
         fill_in 'constituent[last_name]', with: 'Doe'
         fill_in 'constituent[email]', with: "john.doe.#{Time.now.to_i}@example.com"
@@ -1065,45 +1070,41 @@ module Admin
         check 'applicant_attributes[hearing_disability]'
       end
 
-      within 'fieldset', text: 'Medical Provider Information' do
+      within 'fieldset', text: 'Certifying Professional Information' do
         fill_in 'application[medical_provider_name]', with: 'Dr. Test'
         fill_in 'application[medical_provider_phone]', with: '555-999-8888'
         fill_in 'application[medical_provider_email]', with: 'dr.test@example.com'
       end
 
-      # Test case 1: Submit without uploading files (accept is selected by default)
-      click_on 'Submit Paper Application'
+      # Final submit should be gated until required visible choices and attestations are complete.
+      assert_button 'Submit Paper Application', disabled: true
 
-      # Since the form validation may not be working in tests, let's just verify that
-      # either we get client-side validation OR we get server-side validation
-      # The important thing is that the form doesn't submit successfully without files
-      if current_path == new_admin_paper_application_path || current_path == admin_paper_applications_path
-        # We stayed on the form page, which means validation prevented submission
-        # This could be either client-side or server-side validation
-        puts 'Form submission was prevented (validation working)'
-      else
-        # We were redirected, which would mean the form submitted successfully
-        # This would be unexpected since we didn't upload files
-        flunk 'Form submitted successfully without required files - validation not working'
-      end
+      find_by_id('application_household_size', visible: :all).set('2')
+      find_by_id('application_annual_income', visible: :all).set('10000')
+      check 'application[maryland_resident]'
+      check 'application[medical_release_authorized]'
+      check 'application[terms_accepted]'
+      check 'application[information_verified]'
 
-      # Test case 2: Upload files and try again
-      # Fill in income/residency fields (moved from removed Application Details fieldset)
-      within 'fieldset', text: 'Proof Documents' do
-        fill_in 'application[household_size]', with: '2'
-        fill_in 'application[annual_income]', with: '10000'
-        check 'application[maryland_resident]'
-        attach_file 'income_proof', Rails.root.join('test/fixtures/files/blank.pdf')
-        attach_file 'residency_proof', Rails.root.join('test/fixtures/files/blank.pdf')
-      end
+      choose 'upload_only_income_proof'
+      attach_file 'income_proof', Rails.root.join('test/fixtures/files/blank.pdf')
 
-      click_on 'Submit Paper Application'
+      choose 'upload_only_residency_proof'
+      attach_file 'residency_proof', Rails.root.join('test/fixtures/files/blank.pdf')
 
-      # With files uploaded, the form should either:
-      # 1. Submit successfully (redirect to different page)
-      # 2. Show different validation errors (not about missing files)
-      # The test passes if we don't get stuck on missing file validation
-      puts 'Test completed - form validation behavior verified'
+      choose 'upload_only_id_proof'
+      attach_file 'id_proof', Rails.root.join('test/fixtures/files/blank.pdf')
+
+      page.execute_script(<<~JS)
+        const form = document.querySelector('form[data-controller~="paper-application"]');
+        form?.dispatchEvent(new CustomEvent('income-validation:validated', {
+          bubbles: true,
+          detail: { exceedsThreshold: false }
+        }));
+        form?.dispatchEvent(new Event('change', { bubbles: true }));
+      JS
+
+      assert_button 'Submit Paper Application', disabled: false, wait: 10
     end
   end
 end

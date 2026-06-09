@@ -130,6 +130,74 @@ module Applications
       assert_equal 2, application.household_size, 'Household size should match'
     end
 
+    test 'creates application with MM/DD/YYYY date of birth' do
+      unique_email = generate(:email)
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_paper_phone, date_of_birth: '01/15/1980'),
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+
+      assert_equal Date.new(1980, 1, 15), Constituent.find_by!(email: unique_email).date_of_birth
+    end
+
+    test 'rejects malformed paper intake date of birth' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone, date_of_birth: 'January 15 1980'),
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert_not service.create
+      assert service.errors.any? { |error| error.include?('Date of birth must be in MM/DD/YYYY format') },
+             "Expected DOB format error, got: #{service.errors.inspect}"
+    end
+
+    test 'upload only attaches income residency and id proofs as not reviewed' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'upload_only',
+        income_proof: uploaded_pdf('income_proof.pdf'),
+        residency_proof_action: 'upload_only',
+        residency_proof: uploaded_pdf('residency_proof.pdf'),
+        id_proof_action: 'upload_only',
+        id_proof: uploaded_pdf('id_proof.pdf')
+      }
+
+      %i[income residency id].each do |proof_type|
+        ProofAttachmentService.expects(:attach_proof).with(
+          has_entries(
+            proof_type: proof_type,
+            status: :not_reviewed,
+            admin: @admin,
+            submission_method: :paper
+          )
+        ).returns({ success: true })
+      end
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_predicate service.application, :persisted?
+    end
+
+    test 'upload only requires an uploaded proof file' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'upload_only'
+      }
+
+      ProofAttachmentService.expects(:attach_proof).never
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert_not service.create
+      assert_includes service.errors, 'Please upload a file for income proof before sending it for review'
+    end
+
     test 'existing self applicant disability flags are saved before application validation' do
       applicant = create(
         :constituent,

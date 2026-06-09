@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
   include ActionDispatch::TestProcess::FixtureFile
 
   setup do
@@ -155,7 +156,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
 
     Current.paper_context = true
 
-    assert_no_difference -> { Notification.where(action: 'proof_submitted').count } do
+    assert_no_enqueued_jobs only: NotifyAdminsJob do
       ProofAttachmentService.attach_proof(
         application: app,
         proof_type: :income,
@@ -163,6 +164,21 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
         status: :not_reviewed,
         admin: @admin,
         submission_method: :paper,
+        metadata: {}
+      )
+    end
+  end
+
+  test 'web proof attachment enqueues admin proof review notification' do
+    app = create_application_for_resubmission
+
+    assert_enqueued_with(job: NotifyAdminsJob, args: [app]) do
+      ProofAttachmentService.attach_proof(
+        application: app,
+        proof_type: :income,
+        blob_or_file: @valid_pdf,
+        status: :not_reviewed,
+        submission_method: :web,
         metadata: {}
       )
     end

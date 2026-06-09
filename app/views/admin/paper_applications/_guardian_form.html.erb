@@ -44,12 +44,16 @@
         </div>
         <div class="md:col-span-2">
           <%= g.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700 required-label" %>
-          <%= g.date_field :date_of_birth, 
+          <%= g.text_field :date_of_birth,
               required: true,
+              value: accessible_date_value(g.object.respond_to?(:date_of_birth) ? g.object.date_of_birth : g.object&.[](:date_of_birth)),
+              placeholder: "MM/DD/YYYY",
               autocomplete: "bday",
+              inputmode: "numeric",
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white",
               "aria-required": "true",
-              max: Date.current.to_s %>
+              "aria-describedby": "guardian_dob_hint" %>
+          <p id="guardian_dob_hint" class="text-xs text-gray-500 mt-1">Enter date of birth as MM/DD/YYYY</p>
         </div>
       </div>
 
@@ -96,8 +100,9 @@
       </div>
 
       <%# Preferred Contact Method %>
-      <fieldset class="mb-4 p-3 bg-white rounded border border-gray-200">
-        <legend class="text-sm font-medium text-gray-700 mb-2">How would you like us to contact you if we have any questions?</legend>
+      <fieldset class="mb-4 p-3 bg-white rounded border border-gray-200" aria-describedby="guardian_contact_method_help guardian_contact_method_feedback">
+        <legend class="text-sm font-medium text-gray-700 mb-2">Contact method</legend>
+        <p id="guardian_contact_method_help" class="text-xs text-gray-500 mb-2">How would you like us to contact you if we have any questions?</p>
         <div class="flex flex-wrap gap-4">
           <div class="flex items-center">
             <%= g.radio_button :phone_type, "voice", 
@@ -135,7 +140,7 @@
             <%= g.label :phone_type_letter, "Send me a letter in the mail", for: "guardian_phone_type_letter", class: "ml-2 text-sm text-gray-700" %>
           </div>
         </div>
-        <div data-contact-feedback-target="feedback" class="hidden" aria-live="polite"></div>
+        <div id="guardian_contact_method_feedback" data-contact-feedback-target="feedback" class="hidden" aria-live="polite"></div>
       </fieldset>
 
       <%# Address %>
@@ -219,10 +224,11 @@
         </div>
       </div>
 
-      <fieldset class="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+      <fieldset class="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg" aria-describedby="guardian_document_delivery_help guardian_document_delivery_feedback">
         <legend class="text-base font-semibold text-blue-900 mb-1 px-2">
-          Where should we send official program documents?
+          Document delivery
         </legend>
+        <p id="guardian_document_delivery_help" class="text-xs text-blue-800 mb-3">Where should we send official program documents?</p>
         <p class="text-sm text-blue-700 mb-3 px-2">
           Important notices, approval letters, and voucher information will be delivered here
         </p>
@@ -249,7 +255,7 @@
             </label>
           </div>
         </div>
-        <div data-contact-feedback-target="deliveryFeedback" class="hidden" aria-live="polite" aria-atomic="true"></div>
+        <div id="guardian_document_delivery_feedback" data-contact-feedback-target="deliveryFeedback" class="hidden" aria-live="polite" aria-atomic="true"></div>
       </fieldset>
 
       <%# Newsletter Signup %>

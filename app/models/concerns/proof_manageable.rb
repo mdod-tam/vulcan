@@ -48,7 +48,7 @@ module ProofManageable
 
     # Callbacks for proof state management
     after_save :set_needs_review_timestamp, if: :proof_attachments_changed?
-    after_save :notify_admins_of_new_proofs, if: -> { needs_review_since_changed? && needs_review_since.present? }
+    after_save :notify_admins_of_new_proofs, if: -> { saved_change_to_needs_review_since? && needs_review_since.present? }
   end
 
   # Checks if all required proofs have been approved (delegates to Application predicate)
@@ -220,7 +220,8 @@ module ProofManageable
 
   # Notifies admins when new proofs require review
   def notify_admins_of_new_proofs
-    return unless needs_review_since_changed? && needs_review_since.present?
+    return unless saved_change_to_needs_review_since? && needs_review_since.present?
+    return if Current.paper_context?
 
     NotifyAdminsJob.perform_later(self)
   end

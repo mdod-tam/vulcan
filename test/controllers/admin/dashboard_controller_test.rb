@@ -11,38 +11,50 @@ module Admin
 
       # Create applications with different statuses for testing
       @draft_app = create(:application, :draft, user: create(:constituent, email: "draft#{@admin.email}"))
+      mark_proofs_approved(@draft_app)
       @in_progress_app = create(:application, :in_progress, user: create(:constituent, email: "in_progress#{@admin.email}"))
+      mark_proofs_approved(@in_progress_app)
       @approved_app = create(:application, :approved, user: create(:constituent, email: "approved#{@admin.email}"))
 
       # Create applications with proofs needing review
-      @app_with_income_proof = create(:application, :in_progress, user: create(:constituent, email: "income_proof#{@admin.email}"))
+      @app_with_income_proof = create(:application, :in_progress,
+                                      user: create(:constituent, email: "income_proof#{@admin.email}"),
+                                      income_proof_required: true)
+      mark_proofs_approved(@app_with_income_proof)
       @app_with_income_proof.income_proof.attach(
         io: Rails.root.join('test/fixtures/files/income_proof.pdf').open,
         filename: 'income_proof.pdf',
         content_type: 'application/pdf'
       )
       # Use correct enum value :not_reviewed instead of :pending
-      @app_with_income_proof.update!(income_proof_status: :not_reviewed)
+      @app_with_income_proof.update_columns(income_proof_status: Application.income_proof_statuses[:not_reviewed])
 
       email = "residency_proof#{@admin.email}"
       @app_with_residency_proof = create(:application, :in_progress, user: create(:constituent, email: email))
+      mark_proofs_approved(@app_with_residency_proof)
       @app_with_residency_proof.residency_proof.attach(
         io: Rails.root.join('test/fixtures/files/residency_proof.pdf').open,
         filename: 'residency_proof.pdf',
         content_type: 'application/pdf'
       )
       # Use correct enum value :not_reviewed instead of :pending
-      @app_with_residency_proof.update!(residency_proof_status: :not_reviewed)
+      @app_with_residency_proof.update_columns(residency_proof_status: Application.residency_proof_statuses[:not_reviewed])
+
+      email = "id_proof#{@admin.email}"
+      @app_with_id_proof = create(:application, :in_progress, user: create(:constituent, email: email))
+      mark_proofs_approved(@app_with_id_proof)
+      @app_with_id_proof.update_columns(id_proof_status: Application.id_proof_statuses[:not_reviewed])
 
       # Create application with medical certification received
       email = "medical_cert#{@admin.email}"
       @app_with_medical_cert = create(:application, :in_progress, user: create(:constituent, email: email))
+      mark_proofs_approved(@app_with_medical_cert)
       @app_with_medical_cert.medical_certification.attach(
         io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
         filename: 'medical_certification_valid.pdf',
         content_type: 'application/pdf'
       )
-      @app_with_medical_cert.update!(medical_certification_status: :received)
+      @app_with_medical_cert.update_columns(medical_certification_status: Application.medical_certification_statuses[:received])
 
       # Skip training request for now since the columns don't exist in the database
       # @app_with_training = create(:application, :in_progress)
@@ -53,12 +65,11 @@ module Admin
       get admin_dashboard_path
       assert_response :success
 
-      expected_proofs_count = Application.where(income_proof_status: :not_reviewed)
-                                         .or(Application.where(residency_proof_status: :not_reviewed))
-                                         .count
+      expected_proofs_count = Application.with_proofs_needing_review.count
       expected_medical_certs_count = Application.where(medical_certification_status: 'received').count
 
       assert_equal expected_proofs_count, assigns(:metrics)[:proofs_needing_review_count]
+      assert_includes Application.with_proofs_needing_review, @app_with_id_proof
       assert_equal expected_medical_certs_count, assigns(:metrics)[:medical_certs_to_review_count]
     end
 
@@ -68,10 +79,11 @@ module Admin
 
       applications = assigns(:applications)
       assert_not_empty applications, 'Expected applications needing proof review, but found none.'
+      assert_includes applications.map(&:id), @app_with_id_proof.id
       applications.each do |app|
         assert(
-          app.income_proof_status_not_reviewed? || app.residency_proof_status_not_reviewed?,
-          "Application #{app.id} (status: #{app.status}, income: #{app.income_proof_status}, residency: #{app.residency_proof_status}) does not have a proof needing review"
+          Application.with_proofs_needing_review.where(id: app.id).exists?,
+          "Application #{app.id} (status: #{app.status}, income: #{app.income_proof_status}, residency: #{app.residency_proof_status}, id: #{app.id_proof_status}) does not have a proof needing review"
         )
       end
     end
@@ -125,6 +137,16 @@ module Admin
     end
 
     private
+
+    def mark_proofs_approved(application)
+      application.update_columns(
+        income_proof_status: Application.income_proof_statuses[:approved],
+        residency_proof_status: Application.residency_proof_statuses[:approved],
+        id_proof_status: Application.id_proof_statuses[:approved],
+        updated_at: Time.current
+      )
+      application.reload
+    end
 
     def create_reviewed_application(user:)
       application = create(:application, skip_proofs: true, user: user, status: :in_progress)

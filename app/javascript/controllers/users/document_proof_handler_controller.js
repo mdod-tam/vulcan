@@ -10,6 +10,7 @@ import { setVisible } from "../../utils/visibility"
 class DocumentProofHandlerController extends Controller {
   static targets = [
     "acceptRadio",
+    "uploadOnlyRadio",
     "rejectRadio",
     "noneButton",
     "uploadSection",
@@ -51,9 +52,10 @@ class DocumentProofHandlerController extends Controller {
 
     // Check which radio button is currently selected and show the correct fields
     const isAccepted = this.acceptRadioTarget.checked;
+    const isUploadOnly = this.hasUploadOnlyRadioTarget && this.uploadOnlyRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
 
-    if (isAccepted || isRejected) {
+    if (isAccepted || isUploadOnly || isRejected) {
       // Radio button state is already set, just update visibility
       this.updateVisibility();
     }
@@ -100,20 +102,21 @@ class DocumentProofHandlerController extends Controller {
     }
 
     const isAccepted = this.acceptRadioTarget.checked;
+    const isUploadOnly = this.hasUploadOnlyRadioTarget && this.uploadOnlyRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
   
     // Toggle visibility of sections using utility
     // Note: display:none automatically removes elements from accessibility tree
-    setVisible(this.uploadSectionTarget, isAccepted);
+    setVisible(this.uploadSectionTarget, isAccepted || isUploadOnly);
     setVisible(this.rejectionSectionTarget, isRejected);
     
     // Toggle file input enabled state
     // Note: We don't set 'required' attribute to allow server-side validation to handle missing files
     if (this.hasFileInputTarget) {
       const target = this.fileInputTarget;
-      target.disabled = !isAccepted;
+      target.disabled = !(isAccepted || isUploadOnly);
 
-      if (!isAccepted) {
+      if (isRejected) {
         // Clear file when switching to reject
         if (target.value) {
           target.value = '';
@@ -124,10 +127,10 @@ class DocumentProofHandlerController extends Controller {
     // Toggle required attributes on fields
     if (this.hasRejectionReasonSelectTarget) {
       const target = this.rejectionReasonSelectTarget;
-      if (isAccepted) {
-        target.removeAttribute('required');
-      } else {
+      if (isRejected) {
         target.setAttribute('required', 'required');
+      } else {
+        target.removeAttribute('required');
       }
     }
 

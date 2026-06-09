@@ -388,7 +388,7 @@ module ConstituentPortal
             cognition_disability: checkbox_params(false),
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true)
           },
           medical_provider: {
             name: 'Dr. Portal Locale',
@@ -769,7 +769,7 @@ module ConstituentPortal
             zip_code: '21201',
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true)
           },
           medical_provider_attributes: {
             name: 'Dr. Smith',
@@ -937,6 +937,15 @@ module ConstituentPortal
       # Guardian's address should remain unchanged
       assert_equal '999 Guardian Lane', guardian.physical_address_1, 'Guardian address should not be affected'
       assert_equal 'Bethesda', guardian.city, 'Guardian city should not be affected'
+    end
+
+    test 'request review route is not available' do
+      assert_raises(ActionController::RoutingError) do
+        Rails.application.routes.recognize_path(
+          "/constituent_portal/applications/#{@application.id}/request_review",
+          method: :post
+        )
+      end
     end
   end
 end
