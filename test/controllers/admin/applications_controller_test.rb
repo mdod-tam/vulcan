@@ -413,13 +413,21 @@ module Admin
         :voucher_fulfillment,
         user: create(:constituent, email: generate(:email))
       )
-      create(:training_session, application: voucher_app, trainer: create(:trainer), status: :requested)
+      create(
+        :training_session,
+        :completed,
+        application: voucher_app,
+        trainer: create(:trainer),
+        duration_hours: 2.5
+      )
 
       get admin_application_path(voucher_app)
       assert_response :success
 
       assert_no_match(/Current Evaluator|Assign Evaluator/, response.body)
       assert_match(/Training Sessions \(1\)/, response.body)
+      assert_includes response.body, 'Training Duration:'
+      assert_includes response.body, '2.5 hours'
     end
 
     test 'admin training mutation routes are removed' do

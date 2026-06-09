@@ -150,7 +150,7 @@ module Users
       sort_direction = params[:direction]&.downcase == 'desc' ? 'DESC' : 'ASC'
 
       if sort_column.present? && SORTABLE_COLUMNS.include?(sort_column)
-        result.order(Arel.sql("#{sort_column} #{sort_direction}"))
+        result.order(sort_column => sort_direction)
       else
         # Default sorting: by type, then by name
         result.order(:type, :last_name, :first_name)

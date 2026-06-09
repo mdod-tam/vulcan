@@ -248,8 +248,10 @@ module Admin
     end
 
     def show_secure_cert_upload_button?(application)
-      !application.medical_certification_status_approved? &&
-        !medical_certification_pending_review?(application)
+      return false if application.medical_certification_status_approved?
+      return true if application.medical_certification_status_rejected?
+
+      !application.medical_certification.attached?
     end
 
     def medical_certification_action_state(application, secure_request_forms: nil)

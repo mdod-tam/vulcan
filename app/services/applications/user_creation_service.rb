@@ -3,14 +3,15 @@
 module Applications
   # Handles user creation and lookup for paper applications
   class UserCreationService < BaseService
-    attr_reader :attrs, :is_managing_adult, :errors, :skip_user_lookup
+    attr_reader :attrs, :is_managing_adult, :errors, :skip_user_lookup, :skip_email_validation
 
-    def initialize(attrs, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false)
+    def initialize(attrs, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false, skip_email_validation: false)
       super()
       @attrs = attrs.with_indifferent_access
       @is_managing_adult = is_managing_adult
       @skip_user_lookup = skip_user_lookup
       @require_disability_validation = require_disability_validation
+      @skip_email_validation = skip_email_validation
       @errors = []
     end
 
@@ -64,6 +65,7 @@ module Applications
     end
 
     def validate_email_presence
+      return if skip_email_validation
       return if attrs[:email].present?
 
       context = is_managing_adult ? 'guardian' : 'dependent'

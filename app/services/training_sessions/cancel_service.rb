@@ -14,6 +14,7 @@ module TrainingSessions
     end
 
     def call
+      validate_status!
       validate_params!
 
       ActiveRecord::Base.transaction do
@@ -21,7 +22,7 @@ module TrainingSessions
         create_event!
       end
 
-      success('Training session cancelled successfully.', { training_session: @training_session })
+      success(I18n.t('training_sessions.cancel.success'), { training_session: @training_session })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error cancelling training session: #{e.message}")
       failure(e.message)
@@ -35,10 +36,16 @@ module TrainingSessions
 
     private
 
+    def validate_status!
+      return if @training_session.can_cancel?
+
+      raise ArgumentError, I18n.t('training_sessions.cancel.invalid_status')
+    end
+
     def validate_params!
       return if @params[:cancellation_reason].present?
 
-      raise ArgumentError, 'cancellation_reason is required'
+      raise ArgumentError, I18n.t('training_sessions.cancel.reason_required')
     end
 
     def log_validation_failure(error)

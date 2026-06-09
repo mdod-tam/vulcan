@@ -42,7 +42,7 @@ class NotificationComposer
   private
 
   def application_reference(application = nil)
-    application ||= notification_application
+    application ||= notifiable_application
     return 'Application missing' unless application&.id
 
     link_to(
@@ -58,12 +58,11 @@ class NotificationComposer
     reference == 'Application missing' ? 'application missing' : reference
   end
 
-  def notification_application
-    if @notifiable.respond_to?(:application)
-      @notifiable.application
-    else
-      @notifiable
-    end
+  def notifiable_application
+    return @notifiable if @notifiable.is_a?(Application)
+    return @notifiable.application if @notifiable.respond_to?(:application)
+
+    nil
   end
 
   # --- Message Generation Methods ---
@@ -248,7 +247,7 @@ class NotificationComposer
   end
 
   def latest_rejected_proof_review(proof_type)
-    application = notification_application
+    application = notifiable_application
     proof_type = proof_type.to_s
     return if proof_type.blank? || !application.is_a?(Application)
 
@@ -298,11 +297,10 @@ class NotificationComposer
                    @metadata['trainer_name'].presence ||
                    preloaded_trainer_name ||
                    'A trainer'
-    application = @notifiable.application
-    constituent_name = application&.constituent_full_name.presence ||
+    constituent_name = notifiable_application&.constituent_full_name.presence ||
                        @notifiable.constituent&.full_name.presence ||
                        'a constituent'
-    safe_join([trainer_name, " #{verb_phrase} for ", constituent_name, ' on ', sentence_application_reference(application), '.'])
+    safe_join([trainer_name, " #{verb_phrase} for ", constituent_name, ' on ', sentence_application_reference, '.'])
   end
 
   def preloaded_trainer_name

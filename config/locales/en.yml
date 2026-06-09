@@ -49,7 +49,7 @@ en:
         training_session:
           attributes:
             base:
-              duplicate_open_session: "This application already has an active training session."
+              training_session_quota_exhausted: "This application has no remaining training session slots."
               historical_session_reopen: "Historical training sessions cannot be reopened. Schedule a follow-up session instead."
   activemodel:
     errors:
@@ -187,26 +187,37 @@ en:
         update_status_failed: "Failed to update training session status: %{message}"
         complete_failed: "Failed to complete training session: %{message}"
         schedule_failed: "Failed to schedule training session: %{message}"
+        schedule_additional_failed: "Failed to schedule additional training session: %{message}"
         reschedule_failed: "Failed to reschedule training session: %{message}"
         cancel_failed: "Failed to cancel training session: %{message}"
         follow_up_failed: "Failed to schedule follow-up training session: %{message}"
-      follow_up:
-        title: "Schedule new training date"
-        description: "Use this after confirming a new date with the constituent."
-        scheduled_for_label: "New Date/Time"
-        location_label: "Location"
-        location_placeholder: "e.g., Constituent's Home, Library, Online"
-        reason_label: "Reason for Follow-up"
-        reason_placeholder: "Please provide a reason..."
-        reason_hint: "Please provide a reason for scheduling follow-up training."
-        required: "(required)"
-        submit: "Schedule new training date"
-      read_only_notice: "This is a read-only oversight view. Only the assigned trainer can update this training session."
   training_session_notifications:
+    trainer_assigned:
+      labels:
+        english: "English"
+        spanish: "Spanish"
+        voice: "Phone call"
+        text: "Text/SMS"
+        videophone: "Videophone (ASL)"
+        email: "Email"
+        letter: "Mailed letter"
+        asl: "American Sign Language (ASL)"
+        typed: "Typed communication"
+        not_specified: "Not specified"
     training_cancelled:
       scheduled_message: "Your training session that was scheduled for %{scheduled_for} has been cancelled. We apologize for any inconvenience."
       assignment_removed_message: "Your trainer assignment has been removed before a session date was scheduled. We are working to assign you to a new trainer."
   training_sessions:
+    complete:
+      success: "Training session completed successfully."
+      invalid_status: "Only scheduled or confirmed training sessions can be completed."
+      notes_required: "notes is required"
+      product_required: "product_trained_on_id is required"
+      duration_hours_required: "duration_hours is required"
+    cancel:
+      success: "Training session cancelled successfully."
+      invalid_status: "Only scheduled or confirmed training sessions can be cancelled."
+      reason_required: "cancellation_reason is required"
     reschedule:
       wrong_status: "Only scheduled or confirmed training sessions can be rescheduled."
     schedule_follow_up:
@@ -215,7 +226,15 @@ en:
       missing_required_fields: "scheduled_for and reschedule_reason are required"
       service_window_closed: "Training is no longer available for this application."
       quota_exhausted: "This constituent has used all available training sessions."
-      active_session: "This constituent already has an active training session."
+      invalid_scheduled_for: "scheduled_for must be a valid date and time"
+      scheduled_for_in_future: "scheduled_for must be in the future"
+      unexpected_error: "An unexpected error occurred: %{message}"
+    schedule_additional:
+      success: "Additional training session scheduled successfully."
+      invalid_source: "Additional sessions can only be scheduled from a scheduled, confirmed, or completed training session."
+      missing_scheduled_for: "scheduled_for is required"
+      service_window_closed: "Training is no longer available for this application."
+      quota_exhausted: "This constituent has used all available training sessions."
       invalid_scheduled_for: "scheduled_for must be a valid date and time"
       scheduled_for_in_future: "scheduled_for must be in the future"
       unexpected_error: "An unexpected error occurred: %{message}"
@@ -461,6 +480,16 @@ en:
       unassign_trainer:
         trainer_unassign_pass: "Trainer assignment removed."
         trainer_unassign_fail: "Failed to remove trainer assignment."
+        confirm_title: "Unassign Trainer"
+        confirm:
+          one: "This trainer has 1 open training session. Unassigning this trainer will cancel that session. Proceed?"
+          other: "This trainer has %{count} open training sessions. Unassigning this trainer will cancel all %{count} sessions. Proceed?"
+        confirm_yes: "Cancel sessions and unassign trainer"
+        confirm_no: "Keep trainer assigned"
+      training_capacity:
+        summary: "%{reserved} / %{max} sessions reserved, %{remaining} remaining"
+        maximum_reached: "This constituent has reached the maximum number of reserved training sessions (%{max})."
+        maximum_reached_badge: "Maximum Reached"
       training_follow_up_needed:
         title: "Training needs follow-up"
         summary: "Last session: %{status} on %{date}."

@@ -13,6 +13,7 @@ module TrainingSessions
     end
 
     def call
+      validate_status!
       validate_params!
 
       ActiveRecord::Base.transaction do
@@ -20,7 +21,7 @@ module TrainingSessions
         create_event!
       end
 
-      success('Training session completed successfully.', { training_session: @training_session })
+      success(I18n.t('training_sessions.complete.success'), { training_session: @training_session })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error completing training session: #{e.message}")
       failure(e.message)
@@ -34,11 +35,18 @@ module TrainingSessions
 
     private
 
-    def validate_params!
-      raise ArgumentError, 'notes is required' if @params[:notes].blank?
-      return if @params[:product_trained_on_id].present?
+    def validate_status!
+      return if @training_session.can_complete?
 
-      raise ArgumentError, 'product_trained_on_id is required'
+      raise ArgumentError, I18n.t('training_sessions.complete.invalid_status')
+    end
+
+    def validate_params!
+      raise ArgumentError, I18n.t('training_sessions.complete.notes_required') if @params[:notes].blank?
+      raise ArgumentError, I18n.t('training_sessions.complete.product_required') if @params[:product_trained_on_id].blank?
+      return if @params[:duration_hours].present?
+
+      raise ArgumentError, I18n.t('training_sessions.complete.duration_hours_required')
     end
 
     def log_validation_failure(error)
@@ -51,6 +59,7 @@ module TrainingSessions
         completed_at: Time.current,
         notes: @params[:notes],
         product_trained_on_id: @params[:product_trained_on_id],
+        duration_hours: @params[:duration_hours],
         cancellation_reason: nil,
         no_show_notes: nil
       )
@@ -65,6 +74,7 @@ module TrainingSessions
           application_id: @training_session.application_id,
           training_session_id: @training_session.id,
           completed_at: @training_session.completed_at&.iso8601,
+          duration_hours: @training_session.duration_hours.to_s('F'),
           notes: @training_session.notes,
           product_trained_on: @training_session.product_trained_on&.name,
           timestamp: Time.current.iso8601

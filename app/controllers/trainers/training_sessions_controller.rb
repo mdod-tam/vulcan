@@ -4,8 +4,8 @@ module Trainers
   # Controller for managing training sessions for trainers.
   # Handles listing, filtering, showing, and updating the status of training sessions.
   class TrainingSessionsController < Trainers::BaseController
-    before_action :set_training_session, only: %i[show update_status complete schedule reschedule cancel] # Removed :edit
-    before_action :authorize_training_session_mutation!, only: %i[update_status complete schedule reschedule cancel]
+    before_action :set_training_session, only: %i[show update_status complete schedule schedule_additional reschedule cancel] # Removed :edit
+    before_action :authorize_training_session_mutation!, only: %i[update_status complete schedule schedule_additional reschedule cancel]
 
     def index
       if params[:status].present? || params[:scope].present? || params[:filter].present?
@@ -144,6 +144,23 @@ module Trainers
       end
     end
 
+    def schedule_additional
+      @application = @training_session.application
+      @constituent = @application&.user
+
+      result = ::TrainingSessions::ScheduleAdditionalService.new(@training_session, current_user, schedule_additional_params).call
+
+      if result.success?
+        redirect_to trainers_training_session_path(result.data[:training_session]),
+                    notice: result.message
+      else
+        @training_session.reload
+        prepare_show_context
+        flash.now[:alert] = t('trainers.training_sessions.flash.schedule_additional_failed', message: result.message)
+        render :show, status: :unprocessable_content
+      end
+    end
+
     def reschedule
       @application = @training_session.application
       @constituent = @application&.user
@@ -185,6 +202,11 @@ module Trainers
       @constituent = @application.user
       @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
+      @remaining_training_session_slots = @application.remaining_training_sessions
+      @open_training_sessions = @application.training_sessions
+                                            .assigned_or_scheduled
+                                            .includes(:trainer)
+                                            .order(:scheduled_for, :created_at)
       @session_number = calculate_session_number
       @previous_training_sessions = @training_session.previous_completed_sessions
       @constituent_cancelled_sessions_count = count_constituent_cancelled_sessions
@@ -278,12 +300,16 @@ module Trainers
       params.permit(:scheduled_for, :notes, :location)
     end
 
+    def schedule_additional_params
+      params.permit(:scheduled_for, :notes, :location)
+    end
+
     def reschedule_params
       params.permit(:scheduled_for, :reschedule_reason, :location)
     end
 
     def complete_params
-      params.permit(:notes, :product_trained_on_id)
+      params.permit(:notes, :product_trained_on_id, :duration_hours)
     end
 
     def cancel_params
@@ -306,16 +332,21 @@ module Trainers
     end
 
     def calculate_session_number
+      return nil unless @training_session.status_completed? || @training_session.open_status?
+
       if @training_session.status_completed?
         completed_ids = @application.training_sessions.completed_sessions.order(:completed_at, :created_at).pluck(:id)
         return completed_ids.index(@training_session.id).to_i + 1
       end
 
-      return @application.completed_training_sessions_count + 1 if @training_session.status_requested? ||
-                                                                   @training_session.status_scheduled? ||
-                                                                   @training_session.status_confirmed?
+      open_sessions = @application.training_sessions.assigned_or_scheduled.to_a.sort_by do |session|
+        [session.scheduled_for.nil? ? 1 : 0, session.scheduled_for || session.created_at, session.created_at, session.id]
+      end
 
-      nil
+      open_index = open_sessions.index { |session| session.id == @training_session.id }
+      return nil unless open_index
+
+      @application.completed_training_sessions_count + open_index + 1
     end
 
     def count_constituent_cancelled_sessions

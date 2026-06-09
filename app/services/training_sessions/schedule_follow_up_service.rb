@@ -39,13 +39,9 @@ module TrainingSessions
     end
 
     def validate_params!
-      unless source_training_session.can_schedule_followup?
-        raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.invalid_source')
-      end
+      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.invalid_source') unless source_training_session.can_schedule_followup?
 
-      if @params[:scheduled_for].blank? || @params[:reschedule_reason].blank?
-        raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.missing_required_fields')
-      end
+      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.missing_required_fields') if @params[:scheduled_for].blank? || @params[:reschedule_reason].blank?
 
       validate_scheduled_time!
     end
@@ -53,7 +49,6 @@ module TrainingSessions
     def validate_application_state!
       raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.service_window_closed') unless application.service_window_active?
       raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.quota_exhausted') if application.training_session_quota_exhausted?
-      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.active_session') if application.active_training_session_present?
     end
 
     def validate_scheduled_time!
