@@ -15,7 +15,7 @@ class EvaluatorMailer < ApplicationMailer
   def new_evaluation_assigned
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_new_evaluation_assigned'
-    locale = resolve_template_locale(recipient: evaluation&.evaluator)
+    locale = 'en'
 
     text_template = load_email_template(template_name, locale: locale)
     variables = build_new_evaluation_variables(evaluation, template: text_template, locale: locale)
@@ -102,8 +102,8 @@ class EvaluatorMailer < ApplicationMailer
       constituent_disabilities_text_list: format_disabilities_text(constituent),
       status_box_text: status_box_text(
         status: :info,
-        title: I18n.t('evaluator_mailer.status_boxes.assignment.title', locale: locale),
-        message: I18n.t('evaluator_mailer.status_boxes.assignment.message', locale: locale)
+        title: 'Evaluation Assignment',
+        message: 'Please contact the constituent to schedule or complete this evaluation when you have the required information.'
       ),
       **header_data
     }.compact

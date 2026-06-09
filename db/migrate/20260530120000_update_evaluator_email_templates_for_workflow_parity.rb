@@ -19,62 +19,33 @@ class UpdateEvaluatorEmailTemplatesForWorkflowParity < ActiveRecord::Migration[8
     'optional' => []
   }.freeze
 
-  ASSIGNMENT_BODIES = {
-    'en' => <<~TEXT,
-      %<header_text>s
+  ASSIGNMENT_BODY = <<~TEXT
+    %<header_text>s
 
-      Hi %<evaluator_full_name>s,
+    Hi %<evaluator_full_name>s,
 
-      %<status_box_text>s
+    %<status_box_text>s
 
-      CONSTITUENT DETAILS:
-      - Name: %<constituent_full_name>s
-      - Address: %<constituent_address_formatted>s
-      - Phone: %<constituent_phone_formatted>s
-      - Email: %<constituent_email>s
-      - Contact Method: %<constituent_contact_method>s
-      - Preferred Language: %<constituent_preferred_language>s
-      - Communication Modality: %<constituent_communication_modality>s
-      - Delivery Preference: %<constituent_delivery_preference>s
+    CONSTITUENT DETAILS:
+    - Name: %<constituent_full_name>s
+    - Address: %<constituent_address_formatted>s
+    - Phone: %<constituent_phone_formatted>s
+    - Email: %<constituent_email>s
+    - Contact Method: %<constituent_contact_method>s
+    - Preferred Language: %<constituent_preferred_language>s
+    - Communication Modality: %<constituent_communication_modality>s
+    - Delivery Preference: %<constituent_delivery_preference>s
 
-      DISABILITIES:
-      %<constituent_disabilities_text_list>s
+    DISABILITIES:
+    %<constituent_disabilities_text_list>s
 
-      You can view and update the evaluation here:
-      %<evaluators_evaluation_url>s
+    You can view and update the evaluation here:
+    %<evaluators_evaluation_url>s
 
-      Please begin the evaluation process by contacting the constituent to schedule an assessment.
+    Please begin the evaluation process by contacting the constituent to schedule an assessment.
 
-      %<footer_text>s
-    TEXT
-    'es' => <<~TEXT
-      %<header_text>s
-
-      Hola %<evaluator_full_name>s,
-
-      %<status_box_text>s
-
-      DETALLES DEL SOLICITANTE:
-      - Nombre: %<constituent_full_name>s
-      - Dirección: %<constituent_address_formatted>s
-      - Teléfono: %<constituent_phone_formatted>s
-      - Correo Electrónico: %<constituent_email>s
-      - Método de Contacto: %<constituent_contact_method>s
-      - Idioma Preferido: %<constituent_preferred_language>s
-      - Modalidad de Comunicación: %<constituent_communication_modality>s
-      - Preferencia de Entrega: %<constituent_delivery_preference>s
-
-      DISCAPACIDADES:
-      %<constituent_disabilities_text_list>s
-
-      Puede ver y actualizar la evaluación aquí:
-      %<evaluators_evaluation_url>s
-
-      Por favor, comience el proceso de evaluación comunicándose con el solicitante para programar una evaluación.
-
-      %<footer_text>s
-    TEXT
-  }.freeze
+    %<footer_text>s
+  TEXT
 
   SUBMISSION_BODIES = {
     'en' => <<~TEXT,
@@ -127,21 +98,19 @@ class UpdateEvaluatorEmailTemplatesForWorkflowParity < ActiveRecord::Migration[8
   private
 
   def upsert_assignment_templates
-    ASSIGNMENT_BODIES.each do |locale, body|
-      template = EmailTemplate.find_or_initialize_by(
-        name: 'evaluator_mailer_new_evaluation_assigned',
-        format: :text,
-        locale: locale
-      )
+    template = EmailTemplate.find_or_initialize_by(
+      name: 'evaluator_mailer_new_evaluation_assigned',
+      format: :text,
+      locale: 'en'
+    )
 
-      template.update!(
-        subject: locale == 'es' ? 'Nueva Evaluación Asignada' : 'New Evaluation Assigned',
-        description: assignment_description(locale),
-        body: body,
-        variables: ASSIGNMENT_VARIABLES,
-        version: 1
-      )
-    end
+    template.update!(
+      subject: 'New Evaluation Assigned',
+      description: 'Sent to an evaluator when a new constituent evaluation has been assigned to them.',
+      body: ASSIGNMENT_BODY,
+      variables: ASSIGNMENT_VARIABLES,
+      version: 1
+    )
   end
 
   def upsert_submission_templates
@@ -159,14 +128,6 @@ class UpdateEvaluatorEmailTemplatesForWorkflowParity < ActiveRecord::Migration[8
         variables: SUBMISSION_VARIABLES,
         version: 1
       )
-    end
-  end
-
-  def assignment_description(locale)
-    if locale == 'es'
-      'Enviado a un evaluador cuando se le ha asignado una nueva evaluación de un constituyente.'
-    else
-      'Sent to an evaluator when a new constituent evaluation has been assigned to them.'
     end
   end
 

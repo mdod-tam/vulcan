@@ -321,12 +321,14 @@ class ApplicationTest < ActiveSupport::TestCase
                     I18n.t('activerecord.errors.models.application.attributes.base.training_session_active')
   end
 
-  test 'unassign_trainer! cancels active training session with admin initiator' do
+  test 'unassign_trainer! cancels open training sessions with admin initiator' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     trainer = create(:trainer)
     admin = create(:admin)
     training_session = create(:training_session, :requested, application: application, trainer: trainer)
+    scheduled_session = create(:training_session, :scheduled, application: application, trainer: trainer)
 
     assert_difference -> { Event.where(action: 'trainer_unassigned').count }, 1 do
       assert application.unassign_trainer!(actor: admin)
@@ -335,7 +337,13 @@ class ApplicationTest < ActiveSupport::TestCase
     training_session.reload
     assert training_session.status_cancelled?
     assert training_session.cancellation_initiator_admin?
+    scheduled_session.reload
+    assert scheduled_session.status_cancelled?
+    assert scheduled_session.cancellation_initiator_admin?
     assert_not application.reload.active_training_session_present?
+
+    event = Event.where(action: 'trainer_unassigned').last
+    assert_equal [training_session.id, scheduled_session.id].sort, event.metadata['training_session_ids'].sort
   end
 
   test 'assign_evaluator! fails outside the service window' do

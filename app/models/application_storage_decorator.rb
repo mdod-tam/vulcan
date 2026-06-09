@@ -27,6 +27,8 @@ class ApplicationStorageDecorator
 
   delegate :residency_proof_status, to: :application
 
+  delegate :id_proof_status, to: :application
+
   delegate :medical_certification_status, to: :application
 
   # ActiveStorage attachment accessors that avoid triggering eager loading
@@ -36,6 +38,10 @@ class ApplicationStorageDecorator
   end
 
   def residency_proof
+    self
+  end
+
+  def id_proof
     self
   end
 
@@ -70,6 +76,18 @@ class ApplicationStorageDecorator
       application.residency_proof_attachment.present?
     else
       attachment_exists?('residency_proof')
+    end
+  end
+
+  # Safe method to check if ID proof is attached without eager loading blob associations
+  def id_proof_attached?
+    if application.respond_to?(:id_proof_attachment_changes_to_save) &&
+       application.id_proof_attachment_changes_to_save.present?
+      true
+    elsif application.association(:id_proof_attachment).loaded?
+      application.id_proof_attachment.present?
+    else
+      attachment_exists?('id_proof')
     end
   end
 

@@ -74,6 +74,12 @@ module ApplicationHelper
                 )}")
   end
 
+  def training_duration_hours_label(duration_hours)
+    hours = number_with_precision(duration_hours, precision: 2, strip_insignificant_zeros: true)
+
+    "#{hours} #{'hour'.pluralize(hours.to_f)}"
+  end
+
   def medical_certification_status_badge(application)
     content_tag(:span,
                 application.medical_certification_status.titleize,

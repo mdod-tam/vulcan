@@ -108,17 +108,19 @@ module ConstituentPortal
       def find_user_application(application_id)
         # First try the standard approach
         application = current_user.applications.find_by(id: application_id)
-
-        # If that fails, try a more flexible query to handle potential type mismatches
         return application unless application.nil?
 
+        # Also check for applications belonging to dependents
+        dependent_ids = current_user.dependents.pluck(:id)
+        return nil if dependent_ids.empty?
+
         Application.where(id: application_id)
-                   .where(user_id: current_user.id)
+                   .where(user_id: dependent_ids)
                    .first
       end
 
       def handle_application_not_found(application_id)
-        Rails.logger.error "Application not found with ID: #{application_id} for user: #{current_user.id}"
+        Rails.logger.error "Application not found with ID: #{application_id} for user: #{current_user.id} with dependents: #{current_user.&dependents.pluck(:id)}"
         redirect_to constituent_portal_dashboard_path, alert: 'Application not found'
       end
 

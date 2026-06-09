@@ -5,7 +5,7 @@ module Admin
   # Handles application listing, viewing, editing, status updates, proof review,
   # voucher assignments, and other application-related administrative operations
   class ApplicationsController < BaseController
-    WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof medical_certification].freeze
+    WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
 
     include ActionView::Helpers::TagHelper
     include ActionView::Helpers::JavaScriptHelper
@@ -94,6 +94,8 @@ module Admin
       @certification_requests = certification_service.request_events
       @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
+      @reserved_training_sessions_count = @application.reserved_training_sessions_count
+      @remaining_training_sessions = @application.remaining_training_sessions
       load_provider_info_request_data(@application)
       @medical_provider_secure_request_forms = @application.medical_provider_secure_request_forms
                                                            .order(created_at: :desc)

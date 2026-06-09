@@ -423,6 +423,7 @@ module Admin
         :contact_info_mode, :contact_info_verified,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
+        :no_email_address,
         :income_proof_action, :income_proof, :income_proof_signed_id,
         :income_proof_rejection_reason, :income_proof_custom_rejection_reason,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,

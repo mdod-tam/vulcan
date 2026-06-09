@@ -517,7 +517,7 @@
                       "aria-required": "true",
                       "aria-describedby": "self_certify_hint" %>
                   <label for="applicant_attributes_self_certify_disability" class="ml-3">
-                    <span class="block text-sm font-medium text-gray-700">The applicant certifies that they have a disability that affects their ability to access telecommunications services</span>
+                    <span class="block text-sm font-medium text-gray-700 required-label">The applicant certifies that they have a disability that affects their ability to access telecommunications services</span>
                     <span id="self_certify_hint" class="block text-xs text-gray-500 mt-1">Required for program eligibility</span>
                   </label>
                 </div>
@@ -636,7 +636,7 @@
 
                 <%# Upload Field %>
                 <div id="medical_certification_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                  <label for="medical_certification" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Medical Certification</label>
+                  <label for="medical_certification" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Disability Certification</label>
                   <input type="file"
                          name="medical_certification"
                          id="medical_certification"

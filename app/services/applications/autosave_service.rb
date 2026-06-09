@@ -53,7 +53,8 @@ module Applications
     def find_or_create_draft_application
       # Determine if this is for a dependent based on params
       # Could come from multiple sources: user_id param or nested application[user_id]
-      dependent_id = params[:user_id].presence || params.dig(:application, :user_id).presence
+      dependent_id = authorized_dependent_id
+      return nil if dependent_id == :unauthorized
 
       # Build query to find existing draft
       # For dependent applications: match both user_id (the dependent) and managing_guardian_id (current user)
@@ -94,6 +95,17 @@ module Applications
       end
     end
 
+    def dependent_id_param
+      params[:user_id].presence || params.dig(:application, :user_id).presence
+    end
+
+    def authorized_dependent_id
+      dependent_id = dependent_id_param
+      return nil if dependent_id.blank?
+
+      current_user.dependents.exists?(id: dependent_id) ? dependent_id : :unauthorized
+    end
+
     def apply_default_attributes(app)
       app.status = :draft
       app.application_date = Time.current
@@ -103,14 +115,14 @@ module Applications
 
     def save_field
       attribute_name = extract_attribute_name
-      target_model, actual_attribute = determine_target_model_and_attribute(attribute_name)
+      target_model = autosave_target_for(attribute_name)
 
       result = if target_model == :user
-                 save_user_field(actual_attribute)
+                 save_user_field(attribute_name)
                elsif target_model == :ignored
                  { success: false, errors: { field_name => ['This field cannot be autosaved'] } }
                else
-                 save_application_field(actual_attribute)
+                 save_application_field(attribute_name)
                end
 
       result[:success] ? autosave_success_result : result
@@ -129,19 +141,20 @@ module Applications
       field_name
     end
 
-    def determine_target_model_and_attribute(attribute_name)
+    def autosave_target_for(attribute_name)
       user_fields = %w[hearing_disability vision_disability speech_disability
                        mobility_disability cognition_disability]
-      ignored_fields = %w[physical_address_1 physical_address_2 city state zip_code
-                          residency_proof income_proof]
+      application_fields = %w[annual_income household_size maryland_resident
+                              self_certify_disability terms_accepted information_verified
+                              medical_release_authorized medical_provider_name
+                              medical_provider_phone medical_provider_fax medical_provider_email
+                              alternate_contact_name alternate_contact_phone alternate_contact_email
+                              alternate_contact_relationship_type]
 
-      if user_fields.include?(attribute_name)
-        [:user, attribute_name]
-      elsif ignored_fields.include?(attribute_name)
-        [:ignored, attribute_name]
-      else
-        [:application, attribute_name]
-      end
+      return :user if user_fields.include?(attribute_name)
+      return :application if application_fields.include?(attribute_name)
+
+      :ignored
     end
 
     def save_user_field(attribute)

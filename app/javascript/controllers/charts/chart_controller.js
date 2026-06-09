@@ -87,6 +87,7 @@ export default class extends ChartBaseController {
     // IMPORTANT: Mount the canvas FIRST, before creating the chart
     // This ensures the canvas is in the DOM when Chart.js initializes
     this.mountCanvas(canvas, desc)
+    this.applyContainerDimensions(canvas)
 
     // 3) Grab the 2D drawing context
     const ctx = this.getCtx(canvas)
