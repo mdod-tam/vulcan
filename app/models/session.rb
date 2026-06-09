@@ -30,7 +30,7 @@ class Session < ApplicationRecord
 
   # Default session expiration period
   def self.default_expiry_period
-    2.weeks
+    24.hours
   end
 
   private
