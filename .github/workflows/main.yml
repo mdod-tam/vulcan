@@ -78,6 +78,10 @@ jobs:
 
       - name: Run rails test
         run: bin/rails test
+
+      - name: run Brakeman
+        run: bundle exec brakeman -q
+        
       #test:system commented out due to errors with test files
       #- name: Run system test
       #  run: bin/rails test:system
