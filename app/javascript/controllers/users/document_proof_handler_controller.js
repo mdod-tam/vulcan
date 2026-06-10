@@ -90,6 +90,7 @@ class DocumentProofHandlerController extends Controller {
     this.updateVisibility();
     this.previewRejectionReason();
     this.updateReasonInputMode();
+    this.rejectRadioTarget.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   /**

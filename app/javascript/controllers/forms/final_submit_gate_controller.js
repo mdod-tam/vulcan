@@ -26,8 +26,8 @@ export default class extends Controller {
 
   update() {
     const disabled = this._incomeExceedsThreshold ||
-      this._requiredCheckboxBlocksSubmit() ||
-      this._requiredNonFileFieldsBlockSubmit() ||
+      this._requiredControlsBlockSubmit() ||
+      this._requiredRadioGroupBlocksSubmit() ||
       this._checkboxGroupBlocksSubmit()
 
     this.submitButtonTargets.forEach((button) => {
@@ -47,15 +47,20 @@ export default class extends Controller {
     }
   }
 
-  _requiredCheckboxBlocksSubmit() {
-    return this._enabledVisibleFields('input[type="checkbox"][required]')
-      .some((field) => !field.checked)
+  _requiredControlsBlockSubmit() {
+    return this._enabledVisibleFields(
+      'input[required]:not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), select[required], textarea[required]'
+    ).some((field) => this._fieldInvalid(field))
   }
 
-  _requiredNonFileFieldsBlockSubmit() {
-    return this._enabledVisibleFields(
-      'input[required]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]), select[required], textarea[required]'
-    ).some((field) => field.value.trim() === "")
+  _requiredRadioGroupBlocksSubmit() {
+    const radios = this._enabledVisibleFields('input[type="radio"][required]')
+    const names = [...new Set(radios.map((radio) => radio.name).filter(Boolean))]
+
+    return names.some((name) => {
+      const group = radios.filter((radio) => radio.name === name)
+      return group.length > 0 && !group.some((radio) => radio.checked)
+    })
   }
 
   _checkboxGroupBlocksSubmit() {
@@ -71,6 +76,18 @@ export default class extends Controller {
   _enabledVisibleFields(selector) {
     return Array.from(this.element.querySelectorAll(selector))
       .filter((field) => !field.disabled && this.elementIsVisible(field))
+  }
+
+  _fieldInvalid(field) {
+    if ((field.type || "").toLowerCase() === "file") {
+      return field.required && (!field.files || field.files.length === 0)
+    }
+
+    if (typeof field.checkValidity === "function") {
+      return !field.checkValidity()
+    }
+
+    return String(field.value || "").trim() === ""
   }
 
   elementIsVisible(element) {

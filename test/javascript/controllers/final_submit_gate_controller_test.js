@@ -59,6 +59,14 @@ describe("FinalSubmitGateController", () => {
     document.body.innerHTML = ""
   })
 
+  function attachRequiredFile() {
+    const fileInput = document.querySelector('input[name="application[income_proof]"]')
+    Object.defineProperty(fileInput, "files", {
+      value: [new File(["proof"], "proof.pdf", { type: "application/pdf" })],
+      configurable: true
+    })
+  }
+
   test("requires portal self-certification and disability group before final submit", () => {
     controller.update()
 
@@ -70,6 +78,7 @@ describe("FinalSubmitGateController", () => {
     document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
     document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
     document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    attachRequiredFile()
     controller.update()
 
     expect(submitButton.disabled).toBe(true)
@@ -81,7 +90,7 @@ describe("FinalSubmitGateController", () => {
     expect(status.textContent).toBe("Application is ready to submit.")
   })
 
-  test("requires visible required non-file fields before final submit", () => {
+  test("requires visible required fields before final submit", () => {
     document.querySelector('input[name="application[self_certify_disability]"]').checked = true
     document.querySelector('input[name="application[terms_accepted]"]').checked = true
     document.querySelector('input[name="application[hearing_disability]"]').checked = true
@@ -93,12 +102,13 @@ describe("FinalSubmitGateController", () => {
     document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
     document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
     document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    attachRequiredFile()
     controller.update()
 
     expect(submitButton.disabled).toBe(false)
   })
 
-  test("ignores required file fields in final submit gate", () => {
+  test("requires visible required file fields before final submit", () => {
     document.querySelector('input[name="application[self_certify_disability]"]').checked = true
     document.querySelector('input[name="application[terms_accepted]"]').checked = true
     document.querySelector('input[name="application[hearing_disability]"]').checked = true
@@ -106,6 +116,11 @@ describe("FinalSubmitGateController", () => {
     document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
     document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
 
+    controller.update()
+
+    expect(submitButton.disabled).toBe(true)
+
+    attachRequiredFile()
     controller.update()
 
     expect(submitButton.disabled).toBe(false)
@@ -118,6 +133,7 @@ describe("FinalSubmitGateController", () => {
     document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
     document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
     document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    attachRequiredFile()
 
     controller.handleIncomeValidation({ detail: { exceedsThreshold: true } })
     expect(submitButton.disabled).toBe(true)

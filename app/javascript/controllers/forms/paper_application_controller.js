@@ -105,10 +105,10 @@ export default class extends Controller {
   _applySubmitGating() {
     const incomeBlocks = !!this._incomeExceedsThreshold;
     const verifyBlocks = this._adultVerificationBlocksSubmit();
-    const attestationBlocks = this._requiredCheckboxBlocksSubmit();
+    const requiredControlBlocks = this._requiredControlsBlockSubmit();
     const proofActionBlocks = this._requiredRadioGroupBlocksSubmit();
     const checkboxGroupBlocks = this._checkboxGroupBlocksSubmit();
-    const disable = incomeBlocks || verifyBlocks || attestationBlocks || proofActionBlocks || checkboxGroupBlocks;
+    const disable = incomeBlocks || verifyBlocks || requiredControlBlocks || proofActionBlocks || checkboxGroupBlocks;
 
     if (this.hasSubmitButtonTarget) {
       this.submitButtonTarget.disabled = disable;
@@ -207,9 +207,12 @@ export default class extends Controller {
     });
   }
 
-  _requiredCheckboxBlocksSubmit() {
+  _requiredControlsBlockSubmit() {
     return this._enabledVisibleFields('input[type="checkbox"][required]')
-      .some((field) => !field.checked);
+      .concat(this._enabledVisibleFields(
+        'input[required]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), select[required], textarea[required]'
+      ))
+      .some((field) => this._fieldInvalid(field));
   }
 
   _requiredRadioGroupBlocksSubmit() {
@@ -235,6 +238,18 @@ export default class extends Controller {
   _enabledVisibleFields(selector) {
     return Array.from(this.element.querySelectorAll(selector))
       .filter((field) => !field.disabled && this.elementIsVisible(field));
+  }
+
+  _fieldInvalid(field) {
+    if ((field.type || "").toLowerCase() === "file") {
+      return field.required && (!field.files || field.files.length === 0);
+    }
+
+    if (typeof field.checkValidity === "function") {
+      return !field.checkValidity();
+    }
+
+    return String(field.value || "").trim() === "";
   }
 
   /**

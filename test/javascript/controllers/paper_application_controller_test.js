@@ -248,11 +248,13 @@ describe("PaperApplicationController", () => {
         </fieldset>
         <input type="checkbox" name="application[maryland_resident]" required>
         <input type="checkbox" name="application[information_verified]" required>
+        <input type="text" name="constituent[first_name]" required>
         <fieldset>
           <input type="radio" name="income_proof_action" value="upload_only" required>
           <input type="radio" name="income_proof_action" value="accept" required>
           <input type="radio" name="income_proof_action" value="reject" required>
         </fieldset>
+        <input type="file" name="income_proof" required>
         <fieldset>
           <input type="checkbox" name="no_medical_provider_information">
           <p class="text-sm">Provider description</p>
@@ -315,6 +317,18 @@ describe("PaperApplicationController", () => {
     document.querySelector('input[name="income_proof_action"][value="upload_only"]').checked = true
     document.querySelector('input[name="no_medical_provider_information"]').checked = true
 
+    directController.syncFormState()
+    expect(submitButton.disabled).toBe(true)
+
+    document.querySelector('input[name="constituent[first_name]"]').value = "Ada"
+    directController.syncFormState()
+    expect(submitButton.disabled).toBe(true)
+
+    const incomeProof = document.querySelector('input[name="income_proof"]')
+    Object.defineProperty(incomeProof, "files", {
+      value: [new File(["proof"], "income.pdf", { type: "application/pdf" })],
+      configurable: true
+    })
     directController.syncFormState()
     expect(submitButton.disabled).toBe(false)
     expect(status.textContent).toBe("Paper application is ready to submit.")

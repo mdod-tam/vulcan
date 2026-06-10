@@ -6,12 +6,12 @@ import { calculateThreshold as calculateThresholdUtil } from "../../services/inc
  * Income Validation Controller
  * 
  * Validates that annual income is within FPL (Federal Poverty Level) thresholds
- * for the given household size. Shows warnings and disables submission if income
- * exceeds the threshold.
+ * for the given household size. Shows warnings and dispatches validation state.
+ * Final submit button state is owned by the form-specific submit gate controllers.
  */
 class IncomeValidationController extends Controller {
   static targets = [
-    "householdSize", "annualIncome", "warningContainer", "submitButton", "incomeFieldsContainer", "noIncomeProvided"
+    "householdSize", "annualIncome", "warningContainer", "incomeFieldsContainer", "noIncomeProvided"
   ]
 
   static outlets = ["flash"] // Declare flash outlet
@@ -171,7 +171,6 @@ class IncomeValidationController extends Controller {
 
   updateValidationUI(exceedsThreshold, threshold) {
     this.updateWarningDisplay(exceedsThreshold, threshold)
-    this.updateSubmitButton(exceedsThreshold)
     this.updateIncomeFieldsContainerStyle(exceedsThreshold)
   }
 
@@ -216,23 +215,6 @@ class IncomeValidationController extends Controller {
         <p>Applications with income above the threshold are not eligible for this program.</p>
       </div>
     `
-  }
-
-  updateSubmitButton(exceedsThreshold) {
-    if (this.hasSubmitButtonTarget) {
-      const target = this.submitButtonTarget
-      const prev = target.disabled
-      if (prev === exceedsThreshold) return
-      target.disabled = exceedsThreshold
-
-      if (exceedsThreshold) {
-        target.classList.add("opacity-50", "cursor-not-allowed")
-        target.setAttribute("disabled", "disabled")
-      } else {
-        target.classList.remove("opacity-50", "cursor-not-allowed")
-        target.removeAttribute("disabled")
-      }
-    }
   }
 
   clearValidationState() {
