@@ -86,27 +86,23 @@
       </h3>
       
       <%# No Email Checkbox %>
-      <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-        <label class="flex items-start cursor-pointer">
-          <%= hidden_field_tag :no_email_address, "0", id: nil %>
+      <div class="mb-4">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <%= hidden_field_tag :no_email_address, "0" %>
           <input type="checkbox" 
                  name="no_email_address" 
                  value="1" 
                  id="no_email_address"
-                 class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                 class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                  data-action="change->contact-feedback#toggleEmailField">
-          <span class="ml-3">
-            <span class="block text-sm font-medium text-gray-700">Applicant does not have an email address</span>
-            <span class="block text-xs text-gray-500 mt-1">If checked, official documents will be sent by printed letter. Email field will be optional.</span>
-          </span>
+          <span class="text-sm font-medium text-gray-700">Applicant does not have an email address</span>
         </label>
       </div>
 
       <%# Email and Phone row %>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div>
-          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700", id: "email_label" %>
-          <span class="text-xs text-red-600 ml-1" id="email_required_indicator">*</span>
+        <div id="email_field_wrapper">
+          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700 required-label" %>
           <%= c.email_field :email, 
               required: true,
               autocomplete: "email",
@@ -151,20 +147,6 @@
                 class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
                 data: { action: "change->contact-feedback#updateFeedback" } %>
             <%= c.label :phone_type_videophone, "Call me using ASL (videophone)", for: "constituent_phone_type_videophone", class: "ml-2 text-sm text-gray-700" %>
-          </div>
-          <div class="flex items-center">
-            <%= c.radio_button :phone_type, "email", 
-                id: "constituent_phone_type_email", 
-                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
-                data: { action: "change->contact-feedback#updateFeedback" } %>
-            <%= c.label :phone_type_email, "Email me", for: "constituent_phone_type_email", class: "ml-2 text-sm text-gray-700" %>
-          </div>
-          <div class="flex items-center">
-            <%= c.radio_button :phone_type, "letter", 
-                id: "constituent_phone_type_letter", 
-                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
-                data: { action: "change->contact-feedback#updateFeedback" } %>
-            <%= c.label :phone_type_letter, "Send me a letter in the mail", for: "constituent_phone_type_letter", class: "ml-2 text-sm text-gray-700" %>
           </div>
         </div>
         <%# Live feedback for contact method %>
@@ -284,40 +266,8 @@
         </div>
       </div>
 
-      <%# Official Document Delivery Preference %>
-      <fieldset class="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-        <legend class="text-base font-semibold text-blue-900 mb-1 px-2">
-          Where should we send official program documents?
-        </legend>
-        <p class="text-sm text-blue-700 mb-3 px-2">
-          Important notices, approval letters, and voucher information will be delivered here
-        </p>
-        <div class="flex flex-wrap gap-6">
-          <div class="flex items-start">
-            <%= c.radio_button :communication_preference, "email", 
-                id: "constituent_communication_preference_email", 
-                checked: true,
-                class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
-                data: { action: "change->contact-feedback#updateDeliveryFeedback" } %>
-            <label for="constituent_communication_preference_email" class="ml-2">
-              <span class="block text-sm font-medium text-gray-700">Email</span>
-              <span class="block text-xs text-gray-500">Faster delivery, easy to save</span>
-            </label>
-          </div>
-          <div class="flex items-start">
-            <%= c.radio_button :communication_preference, "letter", 
-                id: "constituent_communication_preference_letter", 
-                class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
-                data: { action: "change->contact-feedback#updateDeliveryFeedback" } %>
-            <label for="constituent_communication_preference_letter" class="ml-2">
-              <span class="block text-sm font-medium text-gray-700">Printed letter by mail</span>
-              <span class="block text-xs text-gray-500">Physical copy to your address</span>
-            </label>
-          </div>
-        </div>
-        <%# Live feedback for delivery method %>
-        <div data-contact-feedback-target="deliveryFeedback" class="hidden" aria-live="polite" aria-atomic="true"></div>
-      </fieldset>
+      <%# Official Document Delivery Preference - Hidden, defaults to email unless no email address %>
+      <%= c.hidden_field :communication_preference, value: c.object&.email.present? ? "email" : "letter" %>
 
       <%# Newsletter Signup %>
       <div class="mt-6 flex items-start">
