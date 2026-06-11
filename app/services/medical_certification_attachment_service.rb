@@ -364,7 +364,6 @@ class MedicalCertificationAttachmentService
       actor: params[:admin],
       notifiable: params[:application],
       metadata: {
-        'reason' => params[:resolved_reason],
         'rejection_reason' => params[:resolved_reason],
         'notes' => params[:notes]
       },

@@ -131,6 +131,8 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
       assert_equal 'medical_certification_rejected', notification.action
       assert_equal @application.user, notification.recipient
       assert_equal @application, notification.notifiable
+      assert_equal 'missing_signature', notification.metadata['rejection_reason']
+      assert_not notification.metadata.key?('reason')
       assert_nil notification.delivery_status
       assert_nil notification.metadata&.dig('delivery_error', 'message')
     end
