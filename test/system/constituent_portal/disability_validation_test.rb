@@ -15,33 +15,32 @@ module ConstituentPortal
       wait_for_turbo
     end
 
-    test 'shows error when trying to submit without selecting disabilities' do
+    test 'keeps submit disabled without selecting disabilities' do
       # Fill in required fields
       check 'I certify that I am a resident of Maryland'
       fill_in 'Household Size', with: 2
       fill_in 'Annual Income', with: 50_000
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
+      clear_disability_type_checkboxes
 
       # Fill medical provider info
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Upload required documents
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_required_documents
+      accept_submit_confirmations
 
       # Wait for FPL thresholds to load
       wait_for_fpl_data_to_load(timeout: 15)
 
-      # Submit without selecting any specific disabilities (Hearing, Vision, etc.)
-      click_button 'Submit Application'
-
-      # Should show error about needing to select a disability
-      assert_text 'At least one disability must be selected before submitting an application'
+      assert_selector 'input[name="submit_application"]:disabled', wait: 15
+      assert_selector '#portal-submit-gate-status',
+                      text: 'Complete all required confirmations before submitting.',
+                      visible: :all
     end
 
     test 'can submit application with one disability selected' do
@@ -55,20 +54,19 @@ module ConstituentPortal
       check 'Hearing'
 
       # Fill medical provider info
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Upload required documents
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_required_documents
+      accept_submit_confirmations
 
       # Wait for FPL thresholds to load and enable submit via income validation
       wait_for_fpl_data_to_load(timeout: 15)
-      assert_button 'Submit Application', disabled: false, wait: 15
+      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
       click_button 'Submit Application'
 
       # Should be successful
@@ -92,20 +90,19 @@ module ConstituentPortal
       check 'Mobility'
 
       # Fill medical provider info
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Upload required documents
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_required_documents
+      accept_submit_confirmations
 
       # Wait for FPL thresholds to load and enable submit via income validation
       wait_for_fpl_data_to_load(timeout: 15)
-      assert_button 'Submit Application', disabled: false, wait: 15
+      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
       click_button 'Submit Application'
 
       # Should be successful
@@ -127,11 +124,11 @@ module ConstituentPortal
       fill_in 'Annual Income', with: 50_000
 
       # Even drafts need medical provider info due to required fields
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Draft Doctor'
         fill_in 'Phone', with: '555-000-0000'
         fill_in 'Email', with: 'draft@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
       # Upload required documents for draft
@@ -152,11 +149,11 @@ module ConstituentPortal
       fill_in 'Annual Income', with: 50_000
 
       # Fill minimal medical provider info for draft
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Draft Doctor'
         fill_in 'Phone', with: '555-000-0000'
         fill_in 'Email', with: 'draft@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
       # Upload required documents for draft
@@ -181,16 +178,18 @@ module ConstituentPortal
       check 'Cognition'
 
       # Fill medical provider info
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
+
+      accept_submit_confirmations
 
       # Wait for FPL thresholds to load and enable submit via income validation
       wait_for_fpl_data_to_load(timeout: 15)
-      assert_button 'Submit Application', disabled: false, wait: 15
+      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
       click_button 'Submit Application'
 
       # Should be successful
@@ -202,7 +201,7 @@ module ConstituentPortal
       assert @constituent.cognition_disability
     end
 
-    test 'preserves disability selections when validation fails for other reasons' do
+    test 'preserves disability selections when provider info is incomplete' do
       # Fill in required fields
       check 'I certify that I am a resident of Maryland'
       fill_in 'Household Size', with: 2
@@ -213,25 +212,22 @@ module ConstituentPortal
       check 'Hearing'
       check 'Vision'
 
-      # Upload required documents
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_required_documents
+      accept_submit_confirmations
 
       # Fill medical provider info but intentionally make it invalid to cause validation failure
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         # Leave name blank intentionally, but fill other required fields
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'test@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Wait for FPL thresholds to load and enable submit via income validation
+      # Wait for FPL thresholds to load, then submit with incomplete provider info.
       wait_for_fpl_data_to_load(timeout: 15)
-      assert_button 'Submit Application', disabled: false, wait: 15
+      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
       click_button 'Submit Application'
 
-      # Should show validation error (though the exact message might vary)
-      # We expect some kind of validation error to keep us on the form
       assert_no_text 'Application submitted successfully'
 
       # Disability checkboxes should still be checked
@@ -254,20 +250,19 @@ module ConstituentPortal
       check 'Cognition'
 
       # Fill medical provider info
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Upload required documents
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_required_documents
+      accept_submit_confirmations
 
       # Wait for FPL thresholds to load and enable submit via income validation
       wait_for_fpl_data_to_load(timeout: 15)
-      assert_button 'Submit Application', disabled: false, wait: 15
+      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
       click_button 'Submit Application'
 
       # Should be successful
@@ -280,6 +275,25 @@ module ConstituentPortal
       assert @constituent.speech_disability
       assert @constituent.mobility_disability
       assert @constituent.cognition_disability
+    end
+
+    private
+
+    def attach_required_documents
+      attach_file 'Upload Residency Proof Document', @valid_image
+      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_file 'Upload ID Proof Document', @valid_image
+    end
+
+    def accept_submit_confirmations
+      find_by_id('terms_accepted').check
+      find_by_id('information_verified').check
+    end
+
+    def clear_disability_type_checkboxes
+      %w[Hearing Vision Speech Mobility Cognition].each do |label|
+        uncheck label if page.has_checked_field?(label)
+      end
     end
   end
 end

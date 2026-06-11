@@ -20,7 +20,7 @@
   <% end %>
 
   <!-- Dependent Personal Information Section -->
-  <section aria-labelledby="personal-information-title" class="space-y-4 p-4 bg-gray-50 rounded">
+  <section class="space-y-4 p-4 bg-gray-50 rounded">
     <h2 id="personal-information-title" class="text-lg font-medium text-gray-900">Dependent Information</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
@@ -117,9 +117,9 @@
           </div>
         </div>
 
-      <fieldset>
-        <legend class="block text-sm font-medium text-gray-700 mb-2">Phone type</legend>
-        <div class="space-y-2">
+      <div>
+        <%= form.label :phone_type, "Phone Type", class: "block text-sm font-medium text-gray-700 mb-2" %>
+        <div role="radiogroup" class="space-y-2">
           <div class="flex items-center">
             <%= form.radio_button :phone_type, "voice", id: "dependent_phone_type_voice",
                    class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
@@ -136,7 +136,7 @@
             <%= form.label :phone_type_text, "Text/SMS", for: "dependent_phone_type_text", class: "ml-3 text-sm text-gray-700" %>
           </div>
         </div>
-      </fieldset>
+      </div>
 
       <div>
         <%= form.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
@@ -159,16 +159,13 @@
     <fieldset class="space-y-2"
               data-requires-one-checkbox="true"
               aria-required="true"
-              aria-describedby="dependent-disability-help disability-error"
+              aria-describedby="disability-error"
               aria-invalid="<%= dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>">
       <legend class="text-sm text-gray-700 font-medium">
-        Disability type
+        Select at least one disability that applies to your dependent:
         <span class="text-red-600" aria-hidden="true">*</span>
         <span class="sr-only">(required)</span>
       </legend>
-      <p id="dependent-disability-help" class="text-xs text-gray-700">
-        Select at least one disability that applies to your dependent.
-      </p>
 
       <% if dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>
         <div id="disability-error" role="alert" class="mt-2 p-3 bg-red-50 border border-red-400 text-red-700 rounded text-sm">

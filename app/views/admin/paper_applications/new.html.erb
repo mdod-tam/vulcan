@@ -96,8 +96,8 @@
           <fieldset data-applicant-type-target="radioSection"
                     data-action="change->applicant-type#updateApplicantTypeDisplay"
                     aria-describedby="applicant-type-help">
-            <legend class="text-base font-medium text-gray-900 mb-2">Applicant type</legend>
-            <p id="applicant-type-help" class="text-sm text-gray-600 mb-4">Who is this application for?</p>
+            <legend class="sr-only">Applicant type</legend>
+            <p id="applicant-type-help" class="text-sm text-gray-600 mb-4">Select who this application is for.</p>
             <div class="space-y-4">
               <label class="flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
                 <input type="radio"
@@ -161,7 +161,6 @@
                  data-admin-user-search-role-value="constituent"
                  data-admin-user-search-adult-picker-outlet="[data-controller='adult-picker']">
 
-              <h3 class="text-base font-medium text-gray-900 mb-3">Find Existing Applicant</h3>
               <div class="flex items-center gap-4 mb-4">
                 <div class="flex-grow">
                   <label for="adult_search_q" class="sr-only">Search by name or email</label>
@@ -337,8 +336,7 @@
       <fieldset id="guardian-info-section"
                class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hidden"
                data-controller="guardian-picker"
-               data-applicant-type-target="guardianSection"
-               aria-labelledby="step2-guardian-heading">
+               data-applicant-type-target="guardianSection">
         <legend id="step2-guardian-heading" class="px-6 py-4 bg-amber-50 border-b border-amber-100 w-full block">
           <span class="text-lg font-semibold text-amber-900 flex items-center gap-2">
             <span class="flex items-center justify-center w-7 h-7 rounded-full bg-amber-600 text-white text-sm font-bold">2</span>
@@ -356,7 +354,6 @@
                  data-admin-user-search-role-value="guardian"
                  data-admin-user-search-guardian-picker-outlet="[data-controller='guardian-picker']">
 
-              <h3 class="text-base font-medium text-gray-900 mb-3">Find Existing Guardian</h3>
               <div class="flex items-center gap-4 mb-4">
                 <div class="flex-grow">
                   <label for="guardian_search_q" class="sr-only">Search by name or email</label>
