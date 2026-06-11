@@ -50,4 +50,22 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to notifications_path
     assert_not_nil @other_notification.reload.read_at
   end
+
+  test 'constituent notifications index uses constituent-safe links' do
+    application = create(:application, user: @user)
+    create(:notification,
+           recipient: @user,
+           actor: create(:admin),
+           notifiable: application,
+           action: 'proof_approved',
+           metadata: { 'proof_type' => 'income' })
+
+    sign_in_for_integration_test(@user)
+    get notifications_path
+
+    assert_response :success
+    assert_select 'a[href=?]', constituent_portal_dashboard_path, text: 'Back to Dashboard'
+    assert_select 'a[href=?]', constituent_portal_application_path(application), text: /Application ##{application.id}/
+    assert_select 'a[href=?]', admin_application_path(application), count: 0
+  end
 end

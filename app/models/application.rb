@@ -781,29 +781,6 @@ class Application < ApplicationRecord
     saved_change_to_needs_review_since? && needs_review_since.present?
   end
 
-  def notify_admins_of_new_proofs
-    return unless user
-    return if Current.paper_context?
-
-    admins = User.where(type: 'Users::Administrator')
-    return if admins.empty?
-
-    # Use NotificationService for each admin to ensure proper audit trails and delivery
-    admins.each do |admin|
-      NotificationService.create_and_deliver!(
-        type: 'proof_submitted',
-        recipient: admin,
-        actor: user,
-        notifiable: self,
-        metadata: { proof_types: pending_proof_types },
-        channel: :email
-      )
-    rescue StandardError => e
-      Rails.logger.error "Failed to notify admin #{admin.id} of new proofs for application #{id}: #{e.message}"
-      # Continue with other admins even if one fails
-    end
-  end
-
   def pending_proof_types
     types = []
     types << 'income' if income_proof_required? && income_proof_status_not_reviewed?

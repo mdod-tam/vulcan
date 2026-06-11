@@ -44,13 +44,20 @@ class AccountRecoveryController < ApplicationController
   end
 
   def notify_admins_of_recovery_request(recovery_request)
-    # Queue a job to notify admins (implementation depends on your notification system)
-    NotifyAdminsJob.perform_later(
-      subject: 'Security Key Recovery Request',
-      message: "User #{recovery_request.user.email} has requested security key recovery. Please review this request in the admin panel.",
-      category: 'security_recovery',
-      resource_id: recovery_request.id,
-      resource_type: 'RecoveryRequest'
-    )
+    User.admins.find_each do |admin|
+      NotificationService.create_and_deliver!(
+        type: 'security_key_recovery_requested',
+        recipient: admin,
+        actor: recovery_request.user,
+        notifiable: recovery_request,
+        metadata: {
+          recovery_request_id: recovery_request.id,
+          requester_email: recovery_request.user.email
+        },
+        deliver: false
+      )
+    end
+  rescue StandardError => e
+    Rails.logger.error "Failed to notify admins of recovery request #{recovery_request.id}: #{e.message}"
   end
 end

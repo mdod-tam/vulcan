@@ -210,7 +210,7 @@ module Applications
         secure_request_form: secure_request_form,
         raw_token: raw_token,
         candidate: candidate,
-        proof_review: latest_rejection_review
+        proof_review: proof_request_rejected? ? latest_rejection_review : nil
       )
     end
 
@@ -239,21 +239,41 @@ module Applications
         recipient: secure_request_form.recipient,
         actor: actor,
         notifiable: application,
-        metadata: {
-          secure_request_form_id: secure_request_form.id,
-          application_id: application.id,
-          recipient_id: secure_request_form.recipient_id,
-          recipient_role: secure_request_form.recipient_role,
-          recipient_channel: secure_request_form.recipient_channel,
-          requested_recipient_channel: secure_request_form.recipient_channel,
-          request_batch_id: secure_request_form.request_batch_id,
-          proof_type: proof_type.to_s,
-          expires_at: secure_request_form.expires_at.iso8601
-        },
+        metadata: tracking_notification_metadata(secure_request_form),
         channel: notification_channel_for(secure_request_form),
         audit: true,
         deliver: false
       )
+    end
+
+    def tracking_notification_metadata(secure_request_form)
+      {
+        secure_request_form_id: secure_request_form.id,
+        application_id: application.id,
+        recipient_id: secure_request_form.recipient_id,
+        recipient_role: secure_request_form.recipient_role,
+        recipient_channel: secure_request_form.recipient_channel,
+        requested_recipient_channel: secure_request_form.recipient_channel,
+        request_batch_id: secure_request_form.request_batch_id,
+        proof_type: proof_type.to_s,
+        proof_request_display_mode: proof_request_display_mode,
+        rejection_reason: proof_request_rejection_reason,
+        expires_at: secure_request_form.expires_at.iso8601
+      }.compact
+    end
+
+    def proof_request_display_mode
+      proof_request_rejected? ? 'rejected' : 'requested'
+    end
+
+    def proof_request_rejected?
+      current_proof_status == 'rejected'
+    end
+
+    def proof_request_rejection_reason
+      return unless proof_request_rejected?
+
+      latest_rejection_review&.rejection_reason
     end
 
     def notification_channel_for(secure_request_form)
