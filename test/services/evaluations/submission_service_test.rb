@@ -54,7 +54,7 @@ module Evaluations
         result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.complete.wrong_status'), result.message
+        assert_equal 'Only scheduled or confirmed evaluations can be completed.', result.message
       end
 
       assert_equal 'requested', @evaluation.reload.status
@@ -67,7 +67,7 @@ module Evaluations
         result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.complete.wrong_status'), result.message
+        assert_equal 'Only scheduled or confirmed evaluations can be completed.', result.message
       end
 
       assert_equal 'no_show', @evaluation.reload.status
@@ -80,7 +80,7 @@ module Evaluations
         result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.complete.wrong_status'), result.message
+        assert_equal 'Only scheduled or confirmed evaluations can be completed.', result.message
       end
 
       assert_equal 'completed', @evaluation.reload.status

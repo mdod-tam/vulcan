@@ -52,7 +52,7 @@ module Evaluations
         result = CancelService.new(@evaluation, @evaluator, { notes: 'Too late' }).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.cancel.wrong_status'), result.message
+        assert_equal 'Only requested, scheduled, or confirmed evaluations can be cancelled.', result.message
       end
 
       assert_equal 'completed', @evaluation.reload.status
@@ -63,7 +63,7 @@ module Evaluations
         result = CancelService.new(@evaluation, @evaluator, { notes: '' }).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.cancel.missing_reason'), result.message
+        assert_equal 'cancellation reason is required', result.message
       end
 
       assert_equal 'scheduled', @evaluation.reload.status

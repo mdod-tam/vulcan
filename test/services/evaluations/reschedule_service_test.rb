@@ -98,7 +98,7 @@ module Evaluations
         ).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.reschedule.wrong_status'), result.message
+        assert_equal 'Only scheduled, confirmed, cancelled, or no-show evaluations can be rescheduled.', result.message
       end
 
       assert_equal 'completed', @evaluation.reload.status
@@ -112,7 +112,7 @@ module Evaluations
       ).call
 
       assert result.failure?
-      assert_equal I18n.t('evaluations.reschedule.evaluation_date_in_future'), result.message
+      assert_equal 'evaluation_date must be in the future', result.message
     end
   end
 end

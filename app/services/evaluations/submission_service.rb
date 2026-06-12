@@ -17,7 +17,7 @@ module Evaluations
         notify_constituent
       end
 
-      success(I18n.t('evaluations.complete.success'), { evaluation: @evaluation })
+      success('Evaluation submitted successfully.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error "Evaluation submission FAILED for ID #{@evaluation&.id}: #{e.message}"
       failure(e.message)
@@ -37,7 +37,7 @@ module Evaluations
     def validate_status!
       return if @evaluation.can_complete?
 
-      raise ArgumentError, I18n.t('evaluations.complete.wrong_status')
+      raise ArgumentError, 'Only scheduled or confirmed evaluations can be completed.'
     end
 
     def save_evaluation!

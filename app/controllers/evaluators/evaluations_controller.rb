@@ -6,7 +6,8 @@ module Evaluators
     before_action :require_evaluator!
     before_action :set_evaluation,
                   except: %i[index new create pending completed requested scheduled needs_followup filter]
-    before_action :authorize_evaluation_mutation!, only: %i[edit update schedule reschedule submit_report request_additional_info]
+    before_action :authorize_evaluation_mutation!,
+                  only: %i[edit update schedule reschedule submit_report cancel no_show request_additional_info]
 
     def index
       # Redirect to dashboard for main entry point
@@ -117,26 +118,27 @@ module Evaluators
 
       if @evaluation.save
         redirect_to evaluators_evaluation_path(@evaluation),
-                    notice: t('evaluators.evaluations.flash.create_success')
+                    notice: 'Evaluation created successfully.'
       else
         render :new, status: :unprocessable_content
       end
     end
 
     def update
-      return if handle_lifecycle_update
-
-      if unsupported_generic_update?
+      unless supplemental_notes_update?
         prepare_show_context
-        flash.now[:alert] = t('evaluators.evaluations.flash.lifecycle_update_restricted')
+        flash.now[:alert] = 'This evaluation action must use the appropriate lifecycle control.'
         render :show, status: :unprocessable_content
-      elsif @evaluation.update(generic_update_params)
-        redirect_to evaluators_evaluation_path(@evaluation), notice: t('evaluators.evaluations.flash.update_success')
+        return
+      end
+
+      if @evaluation.update(supplemental_notes_params)
+        redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
       else
         # If updating from the show page forms, we want to re-render show with errors
         # rather than the generic edit page
         prepare_show_context
-        flash.now[:alert] = t('evaluators.evaluations.flash.update_failed', message: @evaluation.errors.full_messages.to_sentence)
+        flash.now[:alert] = "Failed to update evaluation: #{@evaluation.errors.full_messages.to_sentence}"
         render :show, status: :unprocessable_content
       end
     end
@@ -147,8 +149,9 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
+        @evaluation.reload
         prepare_show_context
-        flash.now[:alert] = t('evaluators.evaluations.flash.schedule_failed', message: result.message)
+        flash.now[:alert] = "Failed to schedule evaluation: #{result.message}"
         render :show, status: :unprocessable_content
       end
     end
@@ -159,8 +162,9 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
+        @evaluation.reload
         prepare_show_context
-        flash.now[:alert] = t('evaluators.evaluations.flash.reschedule_failed', message: result.message)
+        flash.now[:alert] = "Failed to reschedule evaluation: #{result.message}"
         render :show, status: :unprocessable_content
       end
     end
@@ -171,14 +175,42 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        flash.now[:alert] = t('evaluators.evaluations.flash.submit_failed', message: result.message)
-        render :edit, status: :unprocessable_content
+        @evaluation.reload
+        prepare_show_context
+        flash.now[:alert] = "Failed to submit evaluation: #{result.message}"
+        render :show, status: :unprocessable_content
+      end
+    end
+
+    def cancel
+      result = ::Evaluations::CancelService.new(@evaluation, current_user, evaluation_params).call
+
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
+      else
+        @evaluation.reload
+        prepare_show_context
+        flash.now[:alert] = "Failed to cancel evaluation: #{result.message}"
+        render :show, status: :unprocessable_content
+      end
+    end
+
+    def no_show
+      result = ::Evaluations::NoShowService.new(@evaluation, current_user, evaluation_params).call
+
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
+      else
+        @evaluation.reload
+        prepare_show_context
+        flash.now[:alert] = "Failed to mark evaluation as no-show: #{result.message}"
+        render :show, status: :unprocessable_content
       end
     end
 
     def request_additional_info
       @evaluation.request_additional_info!
-      redirect_to evaluators_evaluation_path(@evaluation), notice: t('evaluators.evaluations.flash.additional_info_requested')
+      redirect_to evaluators_evaluation_path(@evaluation), notice: 'Requested additional information.'
     end
 
     private
@@ -187,51 +219,6 @@ module Evaluators
       @can_manage_evaluation = assigned_evaluator?
       @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
       @available_products = Product.order(:name)
-    end
-
-    def completing_evaluation?
-      params.dig(:evaluation, :status).to_s == 'completed' && !@evaluation.status_completed?
-    end
-
-    def cancelling_evaluation?
-      params.dig(:evaluation, :status).to_s == 'cancelled' && !@evaluation.status_cancelled?
-    end
-
-    def marking_no_show?
-      params.dig(:evaluation, :status).to_s == 'no_show' && !@evaluation.status_no_show?
-    end
-
-    def handle_lifecycle_update
-      if completing_evaluation?
-        handle_lifecycle_result(
-          ::Evaluations::SubmissionService.new(@evaluation, params, actor: current_user).call,
-          :submit_failed
-        )
-      elsif cancelling_evaluation?
-        handle_lifecycle_result(
-          ::Evaluations::CancelService.new(@evaluation, current_user, evaluation_params).call,
-          :cancel_failed
-        )
-      elsif marking_no_show?
-        handle_lifecycle_result(
-          ::Evaluations::NoShowService.new(@evaluation, current_user, evaluation_params).call,
-          :no_show_failed
-        )
-      else
-        false
-      end
-    end
-
-    def handle_lifecycle_result(result, failure_key)
-      if result.success?
-        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
-      else
-        prepare_show_context
-        flash.now[:alert] = t("evaluators.evaluations.flash.#{failure_key}", message: result.message)
-        render :show, status: :unprocessable_content
-      end
-
-      true
     end
 
     def set_evaluation
@@ -243,7 +230,7 @@ module Evaluators
                       current_user.evaluations.find(params[:id])
                     end
     rescue ActiveRecord::RecordNotFound
-      redirect_to evaluators_evaluations_path, alert: t('evaluators.evaluations.flash.not_found')
+      redirect_to evaluators_evaluations_path, alert: 'Evaluation not found.'
     end
 
     def evaluation_params
@@ -265,17 +252,12 @@ module Evaluators
       )
     end
 
-    def generic_update_params
+    def supplemental_notes_params
       params.expect(evaluation: [:post_completion_notes])
     end
 
-    def unsupported_generic_update?
-      incoming_keys = params.fetch(:evaluation, {}).keys.map(&:to_s)
-      allowed_keys = %w[post_completion_notes status]
-      return true unless (incoming_keys - allowed_keys).empty?
-
-      requested_status = params.dig(:evaluation, :status).to_s
-      requested_status.present? && requested_status != @evaluation.status
+    def supplemental_notes_update?
+      params.fetch(:evaluation, {}).keys.map(&:to_s) == %w[post_completion_notes]
     end
 
     def schedule_params
@@ -297,14 +279,14 @@ module Evaluators
     def require_evaluator!
       return if current_user&.evaluator? || current_user&.admin?
 
-      redirect_to root_path, alert: t('evaluators.evaluations.flash.not_authorized')
+      redirect_to root_path, alert: 'Not authorized'
     end
 
     def authorize_evaluation_mutation!
       return if assigned_evaluator?
 
       redirect_target = current_user&.admin? ? evaluators_evaluation_path(@evaluation) : evaluators_evaluations_path
-      redirect_to redirect_target, alert: t('evaluators.evaluations.flash.assigned_evaluator_required')
+      redirect_to redirect_target, alert: 'Only the assigned evaluator can update this evaluation.'
     end
 
     def filter_evaluations(_scope, status)

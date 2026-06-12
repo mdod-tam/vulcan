@@ -44,7 +44,7 @@ module Evaluations
         ).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.schedule.wrong_status'), result.message
+        assert_equal 'Only requested evaluations can be scheduled.', result.message
       end
     end
   end

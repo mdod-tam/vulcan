@@ -7,10 +7,9 @@
       </svg>
     </div>
     <div>
-      <p class="text-lg font-bold text-green-900"><%= t('evaluators.evaluations.completed_notes_form.completed_title') %></p>
+      <p class="text-lg font-bold text-green-900">Evaluation Completed</p>
       <p class="mt-1 text-sm text-green-700">
-        <%= t('evaluators.evaluations.completed_notes_form.completed_on_html',
-              date: tag.strong(evaluation.evaluation_date&.strftime("%B %d, %Y"))) %>
+        Completed on <%= tag.strong(evaluation.evaluation_date&.strftime("%B %d, %Y")) %>. The evaluation report above is locked. Use the form below to add supplemental notes.
       </p>
     </div>
   </div>
@@ -19,34 +18,32 @@
 <%# Post-completion notes %>
 <div class="mt-6 bg-white shadow rounded-lg border border-gray-200">
   <div class="px-4 py-4 sm:px-6 border-b border-gray-200">
-    <h3 class="text-base font-semibold text-gray-900"><%= t('evaluators.evaluations.completed_notes_form.title') %></h3>
+    <h3 class="text-base font-semibold text-gray-900">Add a Note</h3>
     <p class="mt-1 text-sm text-gray-500">
-      <%= t('evaluators.evaluations.completed_notes_form.help') %>
+      Add supplemental notes to this completed evaluation record. This does not modify the previously submitted report.
     </p>
   </div>
 
   <div class="px-4 py-5 sm:p-6">
     <% if evaluation.post_completion_notes.present? %>
       <div class="mb-4 bg-gray-50 rounded-md border border-gray-200 px-4 py-3">
-        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2"><%= t('evaluators.evaluations.completed_notes_form.existing_notes') %></p>
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Existing Notes</p>
         <p class="text-sm text-gray-800 whitespace-pre-wrap"><%= evaluation.post_completion_notes %></p>
       </div>
     <% end %>
 
     <%= form_with(model: evaluation, url: evaluators_evaluation_path(evaluation), method: :patch, local: true, class: "space-y-4") do |f| %>
-      <%= f.hidden_field :status, value: evaluation.status %>
-
       <div>
         <%= f.label :post_completion_notes,
-                    evaluation.post_completion_notes.present? ? t('evaluators.evaluations.completed_notes_form.update_label') : t('evaluators.evaluations.completed_notes_form.new_label'),
+                    evaluation.post_completion_notes.present? ? "Update Note" : "New Note",
                     class: "block text-sm font-medium text-gray-700" %>
         <%= f.text_area :post_completion_notes,
                         rows: 5,
-                        placeholder: t('evaluators.evaluations.completed_notes_form.placeholder'),
+                        placeholder: "Add follow-up observations, next steps, or supplemental information...",
                         class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
       </div>
 
-      <%= f.submit evaluation.post_completion_notes.present? ? t('evaluators.evaluations.completed_notes_form.update_submit') : t('evaluators.evaluations.completed_notes_form.add_submit'),
+      <%= f.submit evaluation.post_completion_notes.present? ? "Update Note" : "Add Note",
                   class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
     <% end %>
   </div>

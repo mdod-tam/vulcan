@@ -61,9 +61,10 @@ module Evaluators
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
                             .includes(:constituent, :application).order(evaluation_date: :desc).limit(5)
 
-      # For admins, also load their own scheduled evaluations
-      return unless current_user.admin?
+      load_admin_display_data if current_user.admin?
+    end
 
+    def load_admin_display_data
       my_scheduled_evaluations = Evaluation.where(evaluator_id: current_user.id).active
       @my_scheduled_evaluations_display = my_scheduled_evaluations.includes(:constituent)
                                                                   .order(evaluation_date: :asc)

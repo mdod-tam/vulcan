@@ -20,7 +20,7 @@ module Evaluations
         create_event!
       end
 
-      success(I18n.t('evaluations.cancel.success'), { evaluation: @evaluation })
+      success('Evaluation cancelled successfully.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error cancelling evaluation: #{e.message}")
       failure(e.message)
@@ -32,8 +32,8 @@ module Evaluations
     private
 
     def validate_params!
-      raise ArgumentError, I18n.t('evaluations.cancel.wrong_status') unless @evaluation.can_cancel?
-      raise ArgumentError, I18n.t('evaluations.cancel.missing_reason') if cancellation_reason.blank?
+      raise ArgumentError, 'Only requested, scheduled, or confirmed evaluations can be cancelled.' unless @evaluation.can_cancel?
+      raise ArgumentError, 'cancellation reason is required' if cancellation_reason.blank?
     end
 
     def cancellation_reason

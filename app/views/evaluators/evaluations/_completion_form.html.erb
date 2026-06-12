@@ -1,32 +1,30 @@
 <div class="bg-white shadow rounded-lg">
   <div class="px-4 py-5 sm:p-6">
     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-      <%= t('evaluators.evaluations.completion_form.title') %>
+      Mark Evaluation as Completed
     </h3>
     <p class="text-sm text-gray-600 mb-4">
-      <%= t('evaluators.evaluations.completion_form.early_completion_help') %>
+      You can complete this evaluation before its scheduled time if the evaluation has already happened and you have the required notes, tried products, and recommendations.
     </p>
 
-    <%= form_with(model: evaluation, url: evaluators_evaluation_path(evaluation), method: :patch, local: true, id: "complete-evaluation-form", class: "space-y-4") do |f| %>
-      <%= f.hidden_field :status, value: 'completed' %>
-
+    <%= form_with(model: evaluation, url: submit_report_evaluators_evaluation_path(evaluation), method: :post, local: true, id: "complete-evaluation-form", class: "space-y-4") do |f| %>
       <div>
         <%= f.label :location, class: "block text-sm font-medium text-gray-700" do %>
-          <%= t('evaluators.evaluations.completion_form.location_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('evaluators.evaluations.form.required_sr') %></span>
+          Location <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
         <%= f.text_field :location, value: evaluation.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true %>
       </div>
 
       <div>
         <%= f.label :attendees_field, class: "block text-sm font-medium text-gray-700" do %>
-          <%= t('evaluators.evaluations.completion_form.attendees_label') %> <span class="text-gray-500 font-normal"><%= t('evaluators.evaluations.form.optional') %></span>
+          Other Attendees <span class="text-gray-500 font-normal">(optional)</span>
         <% end %>
-        <%= f.text_field :attendees_field, value: evaluation.attendees_field, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: t('evaluators.evaluations.completion_form.attendees_placeholder') %>
-        <p class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.completion_form.attendees_help') %></p>
+        <%= f.text_field :attendees_field, value: evaluation.attendees_field, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., family friend, interpreter, Jane Doe" %>
+        <p class="mt-1 text-sm text-gray-500">If anyone else attended the session, include them here. Separate multiple attendees with commas.</p>
       </div>
 
       <fieldset>
-        <legend class="block text-sm font-medium text-gray-700"><%= t('evaluators.evaluations.completion_form.products_tried_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('evaluators.evaluations.form.required_sr') %></span></legend>
+        <legend class="block text-sm font-medium text-gray-700">Products Tried <span class="text-red-600">*</span><span class="sr-only"> (required)</span></legend>
         <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
           <%= f.collection_check_boxes :products_tried_field, available_products, :id, :name, checked: evaluation.products_tried_field do |b| %>
             <div class="flex items-start">
@@ -42,7 +40,7 @@
       </fieldset>
 
       <fieldset>
-        <legend class="block text-sm font-medium text-gray-700"><%= t('evaluators.evaluations.completion_form.recommended_products_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('evaluators.evaluations.form.required_sr') %></span></legend>
+        <legend class="block text-sm font-medium text-gray-700">Recommended Products <span class="text-red-600">*</span><span class="sr-only"> (required)</span></legend>
         <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
           <%= f.collection_check_boxes :recommended_product_ids, available_products, :id, :name, checked: evaluation.recommended_product_ids do |b| %>
             <div class="flex items-start">
@@ -59,12 +57,12 @@
 
       <div>
         <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
-          <%= t('evaluators.evaluations.completion_form.notes_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('evaluators.evaluations.form.required_sr') %></span>
+          Evaluation Report Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
-        <%= f.text_area :notes, value: "", rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: t('evaluators.evaluations.completion_form.notes_placeholder'), required: true %>
+        <%= f.text_area :notes, value: "", rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Evaluation notes, including specific needs...", required: true %>
       </div>
 
-      <%= f.submit t('evaluators.evaluations.completion_form.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
+      <%= f.submit "Mark as Completed", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
     <% end %>
   </div>
 </div>

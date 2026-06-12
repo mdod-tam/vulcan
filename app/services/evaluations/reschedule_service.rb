@@ -19,7 +19,7 @@ module Evaluations
         create_event!(old_evaluation_date)
       end
 
-      success(I18n.t('evaluations.reschedule.success'), { evaluation: @evaluation })
+      success('Evaluation rescheduled successfully.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error rescheduling evaluation: #{e.message}")
       failure(e.message)
@@ -28,7 +28,7 @@ module Evaluations
       failure(e.message)
     rescue TypeError => e
       log_validation_failure(e)
-      failure(I18n.t('evaluations.reschedule.invalid_evaluation_date'))
+      failure('evaluation_date must be a valid date/time')
     rescue StandardError => e
       Rails.logger.error("Unexpected error rescheduling evaluation: #{e.message}")
       failure("An unexpected error occurred: #{e.message}")
@@ -37,10 +37,10 @@ module Evaluations
     private
 
     def validate_params!
-      raise ArgumentError, I18n.t('evaluations.reschedule.wrong_status') unless @evaluation.can_reschedule?
+      raise ArgumentError, 'Only scheduled, confirmed, cancelled, or no-show evaluations can be rescheduled.' unless @evaluation.can_reschedule?
 
-      raise ArgumentError, I18n.t('evaluations.reschedule.missing_required_fields') if required_fields_missing?
-      raise ArgumentError, I18n.t('evaluations.reschedule.evaluation_date_in_future') if evaluation_date <= Time.current
+      raise ArgumentError, 'evaluation_date and reschedule_reason are required' if required_fields_missing?
+      raise ArgumentError, 'evaluation_date must be in the future' if evaluation_date <= Time.current
     end
 
     def required_fields_missing?

@@ -1,19 +1,18 @@
 <div class="bg-white shadow rounded-lg mb-6">
   <div class="px-4 py-5 sm:p-6">
     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="cancel-evaluation-heading">
-      <%= t('evaluators.evaluations.cancel_form.title') %>
+      Cancel Evaluation
     </h3>
 
-    <%= form_with(model: evaluation, url: evaluators_evaluation_path(evaluation), method: :patch, local: true, id: "cancel-evaluation-form", class: "space-y-4") do |f| %>
-      <%= f.hidden_field :status, value: 'cancelled' %>
+    <%= form_with(model: evaluation, url: cancel_evaluators_evaluation_path(evaluation), method: :post, local: true, id: "cancel-evaluation-form", class: "space-y-4") do |f| %>
       <div>
         <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
-          <%= t('evaluators.evaluations.cancel_form.reason_label') %> <span class="text-red-600">*</span><span class="sr-only"> <%= t('evaluators.evaluations.form.required_sr') %></span>
+          Cancellation Reason <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
-        <%= f.text_area :notes, value: "", rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: t('evaluators.evaluations.cancel_form.reason_placeholder') %>
+        <%= f.text_area :notes, value: "", rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason..." %>
       </div>
 
-      <%= f.submit t('evaluators.evaluations.cancel_form.submit'), class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
+      <%= f.submit "Cancel Evaluation", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
     <% end %>
   </div>
 </div>

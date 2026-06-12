@@ -34,7 +34,7 @@ module Evaluations
         result = NoShowService.new(@evaluation, @evaluator, { notes: 'Too late' }).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.no_show.wrong_status'), result.message
+        assert_equal 'Only scheduled or confirmed evaluations can be marked as no-show.', result.message
       end
 
       assert_equal 'completed', @evaluation.reload.status
@@ -47,7 +47,7 @@ module Evaluations
         result = NoShowService.new(@evaluation, @evaluator, { notes: 'Future no-show attempt' }).call
 
         assert result.failure?
-        assert_equal I18n.t('evaluations.no_show.scheduled_time_in_future'), result.message
+        assert_equal 'Evaluation can only be marked as no-show after its scheduled time.', result.message
       end
 
       assert_equal 'scheduled', @evaluation.reload.status

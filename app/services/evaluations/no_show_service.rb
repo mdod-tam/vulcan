@@ -20,7 +20,7 @@ module Evaluations
         create_event!
       end
 
-      success(I18n.t('evaluations.no_show.success'), { evaluation: @evaluation })
+      success('Evaluation marked as no-show.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error marking evaluation as no-show: #{e.message}")
       failure(e.message)
@@ -32,9 +32,9 @@ module Evaluations
     private
 
     def validate_transition!
-      raise ArgumentError, I18n.t('evaluations.no_show.wrong_status') unless @evaluation.status_scheduled? || @evaluation.status_confirmed?
-      raise ArgumentError, I18n.t('evaluations.no_show.scheduled_time_required') if @evaluation.evaluation_date.blank?
-      raise ArgumentError, I18n.t('evaluations.no_show.scheduled_time_in_future') if @evaluation.evaluation_date.future?
+      raise ArgumentError, 'Only scheduled or confirmed evaluations can be marked as no-show.' unless @evaluation.status_scheduled? || @evaluation.status_confirmed?
+      raise ArgumentError, 'evaluation_date is required before marking an evaluation as no-show' if @evaluation.evaluation_date.blank?
+      raise ArgumentError, 'Evaluation can only be marked as no-show after its scheduled time.' if @evaluation.evaluation_date.future?
     end
 
     def no_show_notes

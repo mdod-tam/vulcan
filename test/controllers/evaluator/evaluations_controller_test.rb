@@ -110,25 +110,27 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.view_full_application_details')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.assigned_evaluator')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.current_evaluator_notes')
+    assert_includes @response.body, 'View Full Application Details'
+    assert_includes @response.body, 'Assigned Evaluator'
+    assert_includes @response.body, 'Current Evaluator Notes'
     assert_includes @response.body, 'Call constituent before arrival'
     assert_body_order(
-      I18n.t('evaluators.evaluations.show.scheduled_for'),
-      I18n.t('evaluators.evaluations.show.location'),
-      I18n.t('evaluators.evaluations.show.assigned_evaluator'),
-      I18n.t('evaluators.evaluations.show.current_evaluator_notes'),
-      I18n.t('evaluators.evaluations.show.communication_preferences')
+      'Scheduled For',
+      'Location',
+      'Assigned Evaluator',
+      'Current Evaluator Notes',
+      'Communication Preferences'
     )
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.constituent')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.completion_form.title')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.cancel_form.title')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.reschedule_form.title')
-    assert_not_includes @response.body, I18n.t('evaluators.evaluations.no_show_form.title')
+    assert_includes @response.body, 'Constituent'
+    assert_includes @response.body, 'Mark Evaluation as Completed'
+    assert_includes @response.body, 'Cancel Evaluation'
+    assert_includes @response.body, 'Reschedule Evaluation'
+    assert_not_includes @response.body, 'Mark as No-Show'
     completion_form = form_html_for('complete-evaluation-form')
 
-    assert_includes completion_form, I18n.t('evaluators.evaluations.completion_form.notes_label')
+    assert_includes completion_form, 'Evaluation Report Notes'
+    assert_includes completion_form, %(action="#{submit_report_evaluators_evaluation_path(@evaluation)}")
+    assert_includes completion_form, 'method="post"'
     assert_not_includes completion_form, 'Call constituent before arrival'
     assert_no_training_session_context
   end
@@ -147,9 +149,11 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, I18n.t('evaluators.evaluations.cancel_form.title')
+    assert_includes @response.body, 'Cancel Evaluation'
     cancel_form = form_html_for('cancel-evaluation-form')
 
+    assert_includes cancel_form, %(action="#{cancel_evaluators_evaluation_path(@evaluation)}")
+    assert_includes cancel_form, 'method="post"'
     assert_includes cancel_form, 'textarea'
     assert_not_includes cancel_form, 'Call constituent before arrival'
   end
@@ -162,6 +166,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     no_show_form = form_html_for('no-show-evaluation-form')
 
+    assert_includes no_show_form, %(action="#{no_show_evaluators_evaluation_path(@evaluation)}")
+    assert_includes no_show_form, 'method="post"'
     assert_includes no_show_form, 'textarea'
     assert_not_includes no_show_form, 'Call constituent before arrival'
   end
@@ -170,10 +176,10 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@requested_evaluation)
 
     assert_response :success
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.next_step')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.requested_next_step_title')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.schedule_form.submit')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.cancel_form.submit')
+    assert_includes @response.body, 'Next Step'
+    assert_includes @response.body, 'This evaluation has not been scheduled yet.'
+    assert_includes @response.body, 'Schedule Evaluation'
+    assert_includes @response.body, 'Cancel Evaluation'
     assert_no_training_session_context
   end
 
@@ -183,14 +189,14 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.outcome_due_title')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.outcome_due_body')
+    assert_includes @response.body, 'This evaluation needs an outcome.'
+    assert_includes @response.body, 'Record the evaluation outcome'
     assert_body_order(
-      I18n.t('evaluators.evaluations.show.outcome_due_title'),
-      I18n.t('evaluators.evaluations.completion_form.title'),
-      I18n.t('evaluators.evaluations.no_show_form.title'),
-      I18n.t('evaluators.evaluations.cancel_form.title'),
-      I18n.t('evaluators.evaluations.reschedule_form.title')
+      'This evaluation needs an outcome.',
+      'Mark Evaluation as Completed',
+      'Mark as No-Show',
+      'Cancel Evaluation',
+      'Reschedule Evaluation'
     )
     assert_no_training_session_context
   end
@@ -201,16 +207,16 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.current_rescheduling_reason')
+    assert_includes @response.body, 'Current Rescheduling Reason'
     assert_includes @response.body, 'Original date no longer works'
-    assert_includes @response.body, I18n.t('evaluators.evaluations.reschedule_form.title')
-    assert_not_includes @response.body, I18n.t('evaluators.evaluations.show.lifecycle_unavailable')
+    assert_includes @response.body, 'Reschedule Evaluation'
+    assert_not_includes @response.body, 'No lifecycle actions are available for this evaluation status.'
   end
 
   test 'show renders reason and reschedule control for cancelled and no-show evaluations' do
     {
-      cancelled: I18n.t('evaluators.evaluations.show.current_cancellation_reason'),
-      no_show: I18n.t('evaluators.evaluations.show.current_no_show_notes')
+      cancelled: 'Current Cancellation Reason',
+      no_show: 'Current No-Show Notes'
     }.each do |status, label|
       @evaluation.update!(status: status, notes: "Recorded #{status} details")
 
@@ -219,7 +225,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_includes @response.body, label
       assert_includes @response.body, "Recorded #{status} details"
-      assert_includes @response.body, I18n.t('evaluators.evaluations.reschedule_form.title')
+      assert_includes @response.body, 'Reschedule Evaluation'
     end
   end
 
@@ -229,16 +235,16 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.completed_at')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.evaluator_notes')
-    assert_not_includes @response.body, I18n.t('evaluators.evaluations.show.current_evaluator_notes')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.attendees')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.products_tried')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.show.recommended_products')
-    assert_includes @response.body, I18n.t('evaluators.evaluations.completed_notes_form.title')
-    assert_not_includes @response.body, I18n.t('evaluators.evaluations.completion_form.title')
-    assert_not_includes @response.body, I18n.t('evaluators.evaluations.cancel_form.title')
-    assert_not_includes @response.body, I18n.t('evaluators.evaluations.reschedule_form.title')
+    assert_includes @response.body, 'Completed At'
+    assert_includes @response.body, 'Evaluator Notes'
+    assert_not_includes @response.body, 'Current Evaluator Notes'
+    assert_includes @response.body, 'Attendees'
+    assert_includes @response.body, 'Products Tried'
+    assert_includes @response.body, 'Recommended Products'
+    assert_includes @response.body, 'Add a Note'
+    assert_not_includes @response.body, 'Mark Evaluation as Completed'
+    assert_not_includes @response.body, 'Cancel Evaluation'
+    assert_not_includes @response.body, 'Reschedule Evaluation'
     assert_no_training_session_context
   end
 
@@ -257,9 +263,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     @evaluation.update!(evaluation_date: 1.day.ago)
 
     assert_difference('Event.where(action: "evaluation_cancelled").count', 1) do
-      patch evaluators_evaluation_path(@evaluation), params: {
+      post cancel_evaluators_evaluation_path(@evaluation), params: {
         evaluation: {
-          status: 'cancelled',
           notes: 'Constituent no longer wants evaluator support'
         }
       }
@@ -275,9 +280,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     @evaluation.update!(evaluation_date: 2.days.from_now)
 
     assert_difference('Event.where(action: "evaluation_completed").count', 1) do
-      patch evaluators_evaluation_path(@evaluation), params: {
+      post submit_report_evaluators_evaluation_path(@evaluation), params: {
         evaluation: {
-          status: 'completed',
           needs: 'Final needs assessment',
           notes: 'Final evaluation notes',
           location: 'Final location',
@@ -289,30 +293,51 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to evaluators_evaluation_path(@evaluation)
-    assert_equal I18n.t('evaluations.complete.success'), flash[:notice]
+    assert_equal 'Evaluation submitted successfully.', flash[:notice]
     assert_equal 'completed', @evaluation.reload.status
     assert_equal [@product.id], @evaluation.recommended_product_ids
+  end
+
+  test 'failed completion reloads scheduled state before rendering show controls' do
+    @evaluation.update!(evaluation_date: 2.days.from_now)
+
+    assert_no_difference('Event.where(action: "evaluation_completed").count') do
+      post submit_report_evaluators_evaluation_path(@evaluation), params: {
+        evaluation: {
+          notes: '',
+          location: 'Final location',
+          recommended_product_ids: [@product.id],
+          products_tried_field: [@product.id],
+          attendees_field: 'Test User'
+        }
+      }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes @response.body, 'Failed to submit evaluation:'
+    assert_includes @response.body, 'Mark Evaluation as Completed'
+    assert_not_includes @response.body, 'Add a Note'
+    assert_equal 'scheduled', @evaluation.reload.status
   end
 
   test 'assigned evaluator can mark evaluation as no-show after scheduled time' do
     @evaluation.update!(evaluation_date: 1.day.ago)
 
     assert_difference('Event.where(action: "evaluation_no_show").count', 1) do
-      patch evaluators_evaluation_path(@evaluation), params: {
+      post no_show_evaluators_evaluation_path(@evaluation), params: {
         evaluation: {
-          status: 'no_show',
           notes: 'Constituent did not attend'
         }
       }
     end
 
     assert_redirected_to evaluators_evaluation_path(@evaluation)
-    assert_equal I18n.t('evaluations.no_show.success'), flash[:notice]
+    assert_equal 'Evaluation marked as no-show.', flash[:notice]
     assert_equal 'no_show', @evaluation.reload.status
     assert_equal 'Constituent did not attend', @evaluation.notes
   end
 
-  test 'generic update cannot mark evaluation as scheduled or bypass schedule service' do
+  test 'supplemental notes update cannot mark evaluation as scheduled or bypass schedule service' do
     @evaluation.update!(status: :cancelled)
 
     assert_no_difference('Event.where(action: "evaluation_scheduled").count') do
@@ -326,11 +351,11 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_includes @response.body, I18n.t('evaluators.evaluations.flash.lifecycle_update_restricted')
+    assert_includes @response.body, 'This evaluation action must use the appropriate lifecycle control.'
     assert_equal 'cancelled', @evaluation.reload.status
   end
 
-  test 'generic update cannot reschedule completed evaluation' do
+  test 'supplemental notes update cannot reschedule completed evaluation' do
     @evaluation.update!(status: :completed, evaluation_date: Time.current)
     original_evaluation_date = @evaluation.evaluation_date
 
@@ -345,7 +370,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_includes @response.body, I18n.t('evaluators.evaluations.flash.lifecycle_update_restricted')
+    assert_includes @response.body, 'This evaluation action must use the appropriate lifecycle control.'
     assert_equal 'completed', @evaluation.reload.status
     assert_in_delta original_evaluation_date, @evaluation.evaluation_date, 1.second
   end
@@ -366,38 +391,36 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_includes @response.body, I18n.t('evaluations.reschedule.wrong_status')
+    assert_includes @response.body, 'Only scheduled, confirmed, cancelled, or no-show evaluations can be rescheduled.'
     assert_equal 'completed', @evaluation.reload.status
     assert_in_delta original_evaluation_date, @evaluation.evaluation_date, 1.second
   end
 
-  test 'generic update still allows supplemental post-completion notes' do
+  test 'update allows supplemental post-completion notes' do
     @evaluation.update!(status: :completed, evaluation_date: Time.current)
 
     patch evaluators_evaluation_path(@evaluation), params: {
       evaluation: {
-        status: 'completed',
         post_completion_notes: 'Follow-up note after submission'
       }
     }
 
     assert_redirected_to evaluators_evaluation_path(@evaluation)
-    assert_equal I18n.t('evaluators.evaluations.flash.update_success'), flash[:notice]
+    assert_equal 'Evaluation updated successfully.', flash[:notice]
     assert_equal 'Follow-up note after submission', @evaluation.reload.post_completion_notes
   end
 
-  test 'assigned evaluator cannot cancel completed evaluation through update' do
+  test 'cancel action rejects completed evaluation' do
     @evaluation.update!(status: :completed, evaluation_date: Time.current)
 
-    patch evaluators_evaluation_path(@evaluation), params: {
+    post cancel_evaluators_evaluation_path(@evaluation), params: {
       evaluation: {
-        status: 'cancelled',
         notes: 'Attempt to undo history'
       }
     }
 
     assert_response :unprocessable_content
-    assert_includes @response.body, I18n.t('evaluations.cancel.wrong_status')
+    assert_includes @response.body, 'Only requested, scheduled, or confirmed evaluations can be cancelled.'
     assert_equal 'completed', @evaluation.reload.status
   end
 
@@ -492,6 +515,9 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   def form_html_for(form_id)
     start_index = @response.body.index("id=\"#{form_id}\"")
     assert start_index, "Expected response body to include form #{form_id.inspect}"
+
+    start_index = @response.body.rindex('<form', start_index)
+    assert start_index, "Expected #{form_id.inspect} to be on a form tag"
 
     end_index = @response.body.index('</form>', start_index)
     assert end_index, "Expected form #{form_id.inspect} to have a closing tag"

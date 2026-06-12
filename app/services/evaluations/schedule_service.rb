@@ -17,7 +17,7 @@ module Evaluations
         create_event!
       end
 
-      success(I18n.t('evaluations.schedule.success'), { evaluation: @evaluation })
+      success('Evaluation scheduled successfully.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("Error scheduling evaluation: #{e.message}")
       failure(e.message)
@@ -26,14 +26,14 @@ module Evaluations
       failure(e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error scheduling evaluation: #{e.message}")
-      failure(I18n.t('evaluations.schedule.unexpected_error', message: e.message))
+      failure("An unexpected error occurred: #{e.message}")
     end
 
     private
 
     def validate_params!
-      raise ArgumentError, I18n.t('evaluations.schedule.wrong_status') unless @evaluation.status_requested?
-      raise ArgumentError, I18n.t('evaluations.schedule.evaluation_date_required') if @params[:evaluation_date].blank?
+      raise ArgumentError, 'Only requested evaluations can be scheduled.' unless @evaluation.status_requested?
+      raise ArgumentError, 'evaluation_date is required' if @params[:evaluation_date].blank?
     end
 
     def schedule_evaluation!

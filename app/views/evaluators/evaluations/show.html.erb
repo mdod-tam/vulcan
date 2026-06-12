@@ -1,13 +1,13 @@
 <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
-  <%= t('evaluators.evaluations.show.skip_to_main') %>
+  Skip to main content
 </a>
 
 <div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-    <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading"><%= t('evaluators.evaluations.show.title') %></h1>
+    <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading">Evaluation Details</h1>
 
     <div class="flex items-center space-x-4">
-      <%= link_to t('evaluators.evaluations.show.back_to_evaluations'), evaluators_evaluations_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
+      <%= link_to "Back to Evaluations", evaluators_evaluations_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
     </div>
   </div>
 
@@ -15,12 +15,12 @@
     <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
       <div>
         <h2 id="evaluation-details-heading" class="text-lg leading-6 font-medium text-gray-900">
-          <%= t('evaluators.evaluations.show.evaluation_for', name: @evaluation.constituent.full_name) %>
+          Evaluation for <%= @evaluation.constituent.full_name %>
         </h2>
         <p class="mt-1 max-w-2xl text-sm text-gray-500">
-          <%= t('evaluators.evaluations.show.application_number', id: @evaluation.application_id) %>
+          Application #<%= @evaluation.application_id %>
         </p>
-        <%= link_to t('evaluators.evaluations.show.view_full_application_details'),
+        <%= link_to "View Full Application Details",
                     admin_application_path(@evaluation.application),
                     class: "mt-1 inline-block text-sm text-indigo-600 hover:text-indigo-900" %>
       </div>
@@ -32,41 +32,41 @@
       <dl>
         <% if @evaluation.status_completed? %>
           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.completed_at') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Completed At</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <% if @evaluation.evaluation_date.present? %>
                 <time datetime="<%= @evaluation.evaluation_date.iso8601 %>">
                   <%= @evaluation.evaluation_date.strftime("%B %d, %Y at %I:%M %p") %>
                 </time>
               <% else %>
-                <%= t('evaluators.evaluations.show.unknown') %>
+                Unknown
               <% end %>
             </dd>
           </div>
         <% elsif @evaluation.status_requested? && @evaluation.evaluation_date.blank? %>
           <div class="bg-blue-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-blue-900"><%= t('evaluators.evaluations.show.next_step') %></dt>
+            <dt class="text-sm font-medium text-blue-900">Next Step</dt>
             <dd class="mt-1 text-sm text-blue-900 sm:mt-0 sm:col-span-2">
-              <p class="font-semibold"><%= t('evaluators.evaluations.show.requested_next_step_title') %></p>
+              <p class="font-semibold">This evaluation has not been scheduled yet.</p>
               <p class="mt-1">
                 <% if @can_manage_evaluation %>
-                  <%= t('evaluators.evaluations.show.requested_next_step_manage', evaluator: @evaluation.evaluator.full_name) %>
+                  This evaluation was assigned to <%= @evaluation.evaluator.full_name %>, but no date has been set. Contact the applicant, agree on an evaluation time, then use the scheduling form below.
                 <% else %>
-                  <%= t('evaluators.evaluations.show.requested_next_step_read_only', evaluator: @evaluation.evaluator.full_name) %>
+                  This evaluation was assigned to <%= @evaluation.evaluator.full_name %>, but no date has been set. The assigned evaluator should contact the applicant and set the evaluation date.
                 <% end %>
               </p>
             </dd>
           </div>
         <% elsif !@evaluation.status_cancelled? && !@evaluation.status_no_show? %>
           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.scheduled_for') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Scheduled For</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <% if @evaluation.evaluation_date.present? %>
                 <time datetime="<%= @evaluation.evaluation_date.iso8601 %>">
                   <%= @evaluation.evaluation_date.strftime("%B %d, %Y at %I:%M %p") %>
                 </time>
               <% else %>
-                <%= t('evaluators.evaluations.show.not_scheduled') %>
+                Not scheduled
               <% end %>
             </dd>
           </div>
@@ -74,7 +74,7 @@
 
         <% if @evaluation.location.present? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.location') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Location</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <%= @evaluation.location %>
             </dd>
@@ -82,7 +82,7 @@
         <% end %>
 
         <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.assigned_evaluator') %></dt>
+          <dt class="text-sm font-medium text-gray-500">Assigned Evaluator</dt>
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <%= link_to @evaluation.evaluator.full_name,
                         evaluators_evaluations_path(scope: current_user.admin? ? "all" : "mine"),
@@ -92,28 +92,28 @@
 
         <% if @evaluation.notes.present? && @evaluation.status_completed? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.evaluator_notes') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Evaluator Notes</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
         <% elsif @evaluation.notes.present? && @evaluation.status_cancelled? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.current_cancellation_reason') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Current Cancellation Reason</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
         <% elsif @evaluation.notes.present? && @evaluation.status_no_show? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.current_no_show_notes') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Current No-Show Notes</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
         <% elsif @evaluation.notes.present? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.current_evaluator_notes') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Current Evaluator Notes</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <%= simple_format(@evaluation.notes) %>
             </dd>
@@ -122,7 +122,7 @@
 
         <% if @evaluation.reschedule_reason.present? %>
           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.current_rescheduling_reason') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Current Rescheduling Reason</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <%= simple_format(@evaluation.reschedule_reason) %>
             </dd>
@@ -130,12 +130,12 @@
         <% end %>
 
         <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.constituent') %></dt>
+          <dt class="text-sm font-medium text-gray-500">Constituent</dt>
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <div>
               <p><%= @evaluation.constituent.full_name %></p>
-              <p><%= link_to @evaluation.constituent.email, "mailto:#{@evaluation.constituent.email}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: t('evaluators.evaluations.show.email_aria', email: @evaluation.constituent.email) } %></p>
-              <p><%= link_to @evaluation.constituent.phone, "tel:#{@evaluation.constituent.phone}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: t('evaluators.evaluations.show.call_aria', phone: @evaluation.constituent.phone) } %></p>
+              <p><%= link_to @evaluation.constituent.email, "mailto:#{@evaluation.constituent.email}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Email #{@evaluation.constituent.email}" } %></p>
+              <p><%= link_to @evaluation.constituent.phone, "tel:#{@evaluation.constituent.phone}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Call #{@evaluation.constituent.phone}" } %></p>
               <% if @evaluation.constituent.physical_address_1.present? %>
                 <div class="mt-2 text-gray-600">
                   <p><%= @evaluation.constituent.physical_address_1 %></p>
@@ -150,20 +150,20 @@
         </div>
 
         <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.communication_preferences') %></dt>
+          <dt class="text-sm font-medium text-gray-500">Communication Preferences</dt>
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <ul class="space-y-1">
-              <li><strong><%= t('evaluators.evaluations.show.contact_method') %>:</strong> <%= contact_method_label(@evaluation.constituent.phone_type) %></li>
-              <li><strong><%= t('evaluators.evaluations.show.preferred_language') %>:</strong> <%= language_label(@evaluation.constituent.locale) %></li>
-              <li><strong><%= t('evaluators.evaluations.show.communication_modality') %>:</strong> <%= @evaluation.constituent.preferred_means_of_communication.presence || t('evaluators.evaluations.show.not_specified') %></li>
-              <li><strong><%= t('evaluators.evaluations.show.delivery_preference') %>:</strong> <%= delivery_preference_label(@evaluation.constituent) %></li>
+              <li><strong>Contact Method:</strong> <%= contact_method_label(@evaluation.constituent.phone_type) %></li>
+              <li><strong>Preferred Language:</strong> <%= language_label(@evaluation.constituent.locale) %></li>
+              <li><strong>Communication Modality:</strong> <%= @evaluation.constituent.preferred_means_of_communication.presence || "Not specified" %></li>
+              <li><strong>Delivery Preference:</strong> <%= delivery_preference_label(@evaluation.constituent) %></li>
             </ul>
           </dd>
         </div>
 
         <% if @evaluation.constituent.disabilities.any? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.disabilities') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Disabilities</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <ul class="list-disc pl-5">
                 <% @evaluation.constituent.disabilities.each do |disability| %>
@@ -176,7 +176,7 @@
 
         <% if @evaluation.attendees.any? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.attendees') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Attendees</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <%= safe_join(@evaluation.attendee_display_values, tag.br) %>
             </dd>
@@ -185,11 +185,11 @@
 
         <% if @evaluation.products_tried.any? %>
           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.products_tried') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Products Tried</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <ul class="list-disc pl-5">
                 <% @evaluation.products_tried.each do |product| %>
-                  <% product_name = Product.find_by(id: product['product_id'])&.name || t('evaluators.evaluations.show.unknown_product') %>
+                  <% product_name = Product.find_by(id: product['product_id'])&.name || "Unknown Product" %>
                   <li><%= "#{product_name} — #{product['reaction']}" %></li>
                 <% end %>
               </ul>
@@ -199,7 +199,7 @@
 
         <% if @evaluation.recommended_products.any? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.show.recommended_products') %></dt>
+            <dt class="text-sm font-medium text-gray-500">Recommended Products</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <ul class="list-disc pl-5">
                 <% @evaluation.recommended_products.each do |product| %>
@@ -217,7 +217,7 @@
     <%= render "fulfillment_tracking", evaluation: @evaluation %>
   <% end %>
 
-  <section aria-label="<%= @can_manage_evaluation ? t('evaluators.evaluations.show.actions_label') : t('evaluators.evaluations.show.status_label') %>" class="mt-8" data-controller="evaluation-management">
+  <section aria-label="<%= @can_manage_evaluation ? "Evaluation Actions" : "Evaluation Status" %>" class="mt-8" data-controller="evaluation-management">
     <% if @evaluation.errors.any? %>
       <div class="rounded-md bg-red-50 p-4 mb-6">
         <div class="flex">
@@ -228,9 +228,7 @@
           </div>
           <div class="ml-3">
             <h3 class="text-sm font-medium text-red-800">
-              <%= t('evaluators.evaluations.show.errors_heading',
-                    count: @evaluation.errors.count,
-                    error_count: pluralize(@evaluation.errors.count, t('evaluators.evaluations.show.error'))) %>
+              <%= pluralize(@evaluation.errors.count, "error") %> prohibited this evaluation from being saved:
             </h3>
             <div class="mt-2 text-sm text-red-700">
               <ul role="list" class="list-disc space-y-1 pl-5">
@@ -246,7 +244,7 @@
 
     <% if !@can_manage_evaluation %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
-        <%= t('evaluators.evaluations.show.read_only_notice') %>
+        This is a read-only oversight view. Only the assigned evaluator can update this evaluation.
       </div>
     <% elsif @evaluation.status_requested? && @evaluation.evaluation_date.blank? %>
       <div class="space-y-6 mb-6">
@@ -255,8 +253,8 @@
       </div>
     <% elsif (@evaluation.status_scheduled? || @evaluation.status_confirmed?) && @evaluation.evaluation_date.present? && @evaluation.evaluation_date < Time.current %>
       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 mb-6">
-        <p class="font-semibold"><%= t('evaluators.evaluations.show.outcome_due_title') %></p>
-        <p class="mt-1"><%= t('evaluators.evaluations.show.outcome_due_body') %></p>
+        <p class="font-semibold">This evaluation needs an outcome.</p>
+        <p class="mt-1">The scheduled time for this evaluation has passed. Record the evaluation outcome, or use a secondary action if the evaluation did not happen as planned.</p>
       </div>
       <div class="space-y-6 mb-6">
         <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
@@ -282,12 +280,12 @@
       <%= render "completed_notes_form", evaluation: @evaluation %>
     <% else %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
-        <%= t('evaluators.evaluations.show.lifecycle_unavailable') %>
+        No lifecycle actions are available for this evaluation status.
       </div>
     <% end %>
   </section>
 
   <div class="mt-8">
-    <%= render "shared/activity_history", activity_logs: @activity_logs, title: t('evaluators.evaluations.show.activity_history') %>
+    <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Activity History" %>
   </div>
 </div>
