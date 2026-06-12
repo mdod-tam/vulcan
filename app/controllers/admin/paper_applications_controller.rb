@@ -443,7 +443,7 @@ module Admin
     def base_params_from(permitted)
       base = permitted.slice(
         :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
-        :existing_constituent_id, :contact_info_mode, :contact_info_verified
+        :existing_constituent_id, :contact_info_mode, :contact_info_verified, :no_email_address
       )
       base[:applicant_type] = compute_applicant_type(permitted)
       base

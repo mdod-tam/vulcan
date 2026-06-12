@@ -61,25 +61,21 @@ export default class ContactFeedbackController extends Controller {
   }
 
   /**
-   * Toggle email field requirement when "no email" checkbox is checked
+   * Toggle email field visibility when "no email" checkbox is checked
    */
   toggleEmailField(event) {
     const checkbox = event.target
     const emailInput = this.hasEmailTarget ? this.emailTarget : null
-    const emailLabel = this.element.querySelector('#email_label')
-    const emailRequiredIndicator = this.element.querySelector('#email_required_indicator')
+    const emailWrapper = document.querySelector('#email_field_wrapper')
     
-    if (!emailInput) return
+    if (!emailInput || !emailWrapper) return
     
     if (checkbox.checked) {
+      emailWrapper.classList.add('hidden')
       emailInput.required = false
       emailInput.removeAttribute('aria-required')
-      if (emailRequiredIndicator) {
-        emailRequiredIndicator.classList.add('hidden')
-      }
-      if (emailLabel) {
-        emailLabel.classList.remove('required-label')
-      }
+      emailInput.value = ''
+      emailInput.disabled = true
       // Auto-select letter delivery when no email
       const letterRadio = this.element.querySelector('input[name="constituent[communication_preference]"][value="letter"]')
       if (letterRadio) {
@@ -87,14 +83,10 @@ export default class ContactFeedbackController extends Controller {
         this.updateDeliveryFeedback()
       }
     } else {
+      emailWrapper.classList.remove('hidden')
       emailInput.required = true
       emailInput.setAttribute('aria-required', 'true')
-      if (emailRequiredIndicator) {
-        emailRequiredIndicator.classList.remove('hidden')
-      }
-      if (emailLabel) {
-        emailLabel.classList.add('required-label')
-      }
+      emailInput.disabled = false
     }
   }
 

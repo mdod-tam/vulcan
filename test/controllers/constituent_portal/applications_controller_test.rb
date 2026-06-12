@@ -34,6 +34,15 @@ module ConstituentPortal
     end
 
     # Test that the checkbox handling works correctly
+    test 'request review route is not available' do
+      assert_raises(ActionController::RoutingError) do
+        Rails.application.routes.recognize_path(
+          "/constituent_portal/applications/#{@application.id}/request_review",
+          method: :post
+        )
+      end
+    end
+
     test 'should handle array values for self_certify_disability' do
       # Create a unique user for this test to avoid 3-year validation
       unique_user = create(:constituent, :with_disabilities,

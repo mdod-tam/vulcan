@@ -777,6 +777,10 @@ class Application < ApplicationRecord
     scope.order(application_date: :desc).first
   end
 
+  def needs_proof_review?
+    saved_change_to_needs_review_since? && needs_review_since.present?
+  end
+
   def pending_proof_types
     types = []
     types << 'income' if income_proof_required? && income_proof_status_not_reviewed?

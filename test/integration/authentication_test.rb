@@ -230,15 +230,14 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
   end
 
   # Test authentication with remember me
-  test 'should remember user across browser sessions' do
+  test 'should expire user after 24 hours' do
     # First, clear any existing sessions
     Session.where(user_id: @user.id).destroy_all
 
     # Sign in with remember_me parameter
     post sign_in_path, params: {
       email: @user.email,
-      password: 'password123',
-      remember_me: '1'
+      password: 'password123'
     }
 
     # Application redirects to dashboard after successful sign-in
@@ -256,14 +255,9 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
     # Verify we have a persistent cookie in cookies jar
     assert cookies[:session_token].present?
 
-    # The core test: Session should have an expiration date far in the future
-    # (at least a week out) if remember_me was used
-    assert user_session.expires_at > 7.days.from_now,
-           'Session should have extended expiration with remember_me'
-
-    # Additional verification: we can access protected content
-    get constituent_portal_applications_path
-    assert_response :success
+    # The core test: Session should expire in 24 hours
+    assert user_session.expires_at > 23.hours.from_now && user_session.expires_at < 25.hours.from_now,
+           'Session should last for 24 hours'
   end
 
   # Test the skip_unless_authentication_working helper

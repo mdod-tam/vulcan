@@ -45,6 +45,8 @@ module Applications
       )
       assert_equal form.id, notification.metadata.fetch('secure_request_form_id')
       assert_equal 'income', notification.metadata.fetch('proof_type')
+      assert_equal 'rejected', notification.metadata.fetch('proof_request_display_mode')
+      assert_equal 'Missing income details', notification.metadata.fetch('rejection_reason')
       assert_not notification.metadata.key?('secure_upload_url')
     end
 
@@ -92,9 +94,10 @@ module Applications
       assert_predicate result, :success?
       form = result.data.fetch(:secure_request_forms).first
       assert_predicate form, :kind_residency_proof_resubmission?
-      assert_equal 'residency',
-                   Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested')
-                               .metadata.fetch('proof_type')
+      notification = Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested')
+      assert_equal 'residency', notification.metadata.fetch('proof_type')
+      assert_equal 'rejected', notification.metadata.fetch('proof_request_display_mode')
+      assert_not notification.metadata.key?('rejection_reason')
     end
 
     test 'issued proof resubmission request appears in application audit logs' do
@@ -343,7 +346,47 @@ module Applications
       assert_predicate result, :success?
       form = result.data.fetch(:secure_request_forms).first
       assert_predicate form, :kind_id_proof_resubmission?
-      assert_equal 'id', Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested').metadata.fetch('proof_type')
+      notification = Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested')
+      assert_equal 'id', notification.metadata.fetch('proof_type')
+      assert_equal 'requested', notification.metadata.fetch('proof_request_display_mode')
+      assert_not notification.metadata.key?('rejection_reason')
+    end
+
+    test 'stale rejected proof review does not force rejected request snapshot or email' do
+      application = create(:application, :in_progress, id_proof_status: :not_reviewed)
+      Current.paper_context = true
+      create(:proof_review,
+             application: application,
+             admin: @actor,
+             proof_type: :id,
+             status: :rejected,
+             rejection_reason: 'Old blurry upload')
+      Current.paper_context = false
+      application.update!(id_proof_status: :not_reviewed)
+      application.id_proof.purge if application.id_proof.attached?
+
+      ApplicationNotificationsMailer.expects(:proof_rejected).never
+      ApplicationNotificationsMailer
+        .expects(:proof_requested)
+        .with(
+          application,
+          :id,
+          secure_upload_url: regexp_matches(/secure_proof_form/),
+          recipient: application.user
+        )
+        .returns(@mailer_delivery)
+      @mailer_delivery.expects(:deliver_now).returns(true)
+
+      result = RequestProofResubmission.new(
+        application: application,
+        actor: @actor,
+        proof_type: :id
+      ).call
+
+      assert_predicate result, :success?
+      notification = Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested')
+      assert_equal 'requested', notification.metadata.fetch('proof_request_display_mode')
+      assert_not notification.metadata.key?('rejection_reason')
     end
 
     test 'paper application with email preference sends secure proof request email with upload url' do

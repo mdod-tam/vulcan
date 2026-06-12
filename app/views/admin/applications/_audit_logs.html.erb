@@ -117,10 +117,9 @@
               <%= case
                   when log.is_a?(ProofReview)
                     if log.status_rejected?
-                      rejection_text = log.rejection_reason.present? ? " - #{log.rejection_reason}" : ""
-                      "Admin rejected #{log.proof_type.titleize} proof#{rejection_text}"
+                      "Admin #{ProofNotificationCopy.rejected_text(log.proof_type, log.rejection_reason)}"
                     else
-                      "Admin approved #{log.proof_type.titleize} proof"
+                      "Admin #{ProofNotificationCopy.approved_text(log.proof_type)}"
                     end
                   when log.is_a?(ApplicationStatusChange)
                     if log.metadata.try(:[], 'change_type') == 'medical_certification'
@@ -184,18 +183,18 @@
                     when "medical_certification_approved"
                       "Disability certification approved"
                     when "medical_certification_rejected"
-                      "Disability certification rejected#{log.metadata['reason'].present? ? " - #{log.metadata['reason']}" : ''}"
+                      reason = log.metadata['reason'].presence || log.metadata['rejection_reason'].presence
+                      "Disability certification rejected#{reason.present? ? " - #{reason}" : ''}"
                     when "review_requested"
-                      "Review requested by constituent"
+                      "Staff follow-up requested by constituent"
                     when "documents_requested"
                       "Additional documents requested"
                     when "proof_approved"
                       proof_type = log.metadata.try(:[], 'proof_type') || 'Unknown'
-                      "Constituent notified: #{proof_type.titleize} proof approved"
+                      "Constituent notified: #{ProofNotificationCopy.approved_text(proof_type)}"
                     when "proof_rejected"
                       proof_type = log.metadata.try(:[], 'proof_type') || 'Unknown'
-                      rejection_text = log.metadata.try(:[], 'rejection_reason').present? ? " - #{log.metadata['rejection_reason']}" : ""
-                      "Constituent notified: #{proof_type.titleize} proof rejected#{rejection_text}"
+                      "Constituent notified: #{ProofNotificationCopy.rejected_text(proof_type, log.metadata.try(:[], 'rejection_reason'))}"
                     when "provider_info_requested", "proof_resubmission_requested", "cert_upload_requested"
                       secure_request_notification_detail(log, application: @application)
                     else

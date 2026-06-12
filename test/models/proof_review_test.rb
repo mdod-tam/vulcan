@@ -165,7 +165,8 @@ class ProofReviewTest < ActiveSupport::TestCase
         params[:recipient] == guardian &&
         params[:actor] == @admin &&
         params[:notifiable] == application &&
-        params[:metadata] == { proof_type: 'income' }
+        params[:metadata] == { proof_type: 'income' } &&
+        params[:deliver] == false
     end
 
     create(:proof_review,

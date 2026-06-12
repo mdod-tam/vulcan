@@ -16,6 +16,12 @@ class Notification < ApplicationRecord
   scope :read_notifications, -> { where.not(read_at: nil) }
   scope :medical_certification_requests, -> { where(action: 'medical_certification_requested') }
 
+  def self.proof_resubmission_rejected_metadata?(metadata)
+    mode = metadata_value(metadata, 'proof_request_display_mode') || metadata_value(metadata, 'display_mode')
+
+    mode.to_s == 'rejected'
+  end
+
   def mark_as_read!
     update!(read_at: Time.current)
   end
@@ -50,7 +56,18 @@ class Notification < ApplicationRecord
 
   # Generate a human-readable message for the notification by delegating to the NotificationComposer.
   # This ensures all message logic is centralized and consistent.
-  def message
-    NotificationComposer.generate(action, notifiable, actor, metadata)
+  def message(viewer = nil)
+    NotificationComposer.generate(action, notifiable, actor, metadata, viewer: viewer)
   end
+
+  def proof_resubmission_rejected?
+    action == 'proof_resubmission_requested' && self.class.proof_resubmission_rejected_metadata?(metadata)
+  end
+
+  def self.metadata_value(metadata, key)
+    return unless metadata.respond_to?(:[])
+
+    metadata[key.to_s] || metadata[key.to_sym]
+  end
+  private_class_method :metadata_value
 end

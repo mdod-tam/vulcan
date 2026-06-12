@@ -212,4 +212,10 @@ module UserProfile
   rescue StandardError => e
     Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
   end
+
+    # Check if we're in a paper context where email is not required
+  def paper_context_no_email?
+    Current.paper_context && email.blank?
+  end
+
 end

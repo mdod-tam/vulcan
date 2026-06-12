@@ -15,18 +15,48 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'attaches medical certification with ActionDispatch::Http::UploadedFile' do
-    assert_difference 'ActiveStorage::Attachment.count' do
-      result = MedicalCertificationAttachmentService.attach_certification(
-        application: @application,
-        blob_or_file: @test_file,
-        status: :approved,
-        admin: @admin,
-        submission_method: :admin_upload
+    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+      assert_difference 'ActiveStorage::Attachment.count' do
+        assert_difference -> { Notification.where(action: 'medical_certification_approved').count }, 1 do
+          assert_difference -> { Event.where(action: 'medical_certification_status_changed', auditable: @application).count }, 1 do
+            result = MedicalCertificationAttachmentService.attach_certification(
+              application: @application,
+              blob_or_file: @test_file,
+              status: :approved,
+              admin: @admin,
+              submission_method: :admin_upload
+            )
+
+            assert result[:success], 'Direct file upload should succeed'
+            assert @application.reload.medical_certification.attached?
+            assert_equal 'approved', @application.medical_certification_status # Corrected assertion
+          end
+        end
+      end
+    end
+
+    notification = Notification.where(action: 'medical_certification_approved').last
+    assert_equal @application.user, notification.recipient
+    assert_equal @application, notification.notifiable
+    assert_nil notification.delivery_status
+    assert_nil notification.metadata&.dig('delivery_error', 'message')
+
+    event = Event.where(action: 'medical_certification_status_changed', auditable: @application).last
+    assert_equal 'approved', event.metadata['new_status']
+  end
+
+  test 'medical certification approval notification remains record-only when delivery is requested' do
+    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+      notification = NotificationService.create_and_deliver!(
+        type: 'medical_certification_approved',
+        recipient: @application.user,
+        actor: @admin,
+        notifiable: @application,
+        channel: :email
       )
 
-      assert result[:success], 'Direct file upload should succeed'
-      assert @application.reload.medical_certification.attached?
-      assert_equal 'approved', @application.medical_certification_status # Corrected assertion
+      assert_equal 'none', notification.reload.metadata['actual_delivery_channel']
+      assert_equal 'no_email_action', notification.metadata['delivery_route_reason']
     end
   end
 
@@ -101,6 +131,8 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
       assert_equal 'medical_certification_rejected', notification.action
       assert_equal @application.user, notification.recipient
       assert_equal @application, notification.notifiable
+      assert_equal 'missing_signature', notification.metadata['rejection_reason']
+      assert_not notification.metadata.key?('reason')
       assert_nil notification.delivery_status
       assert_nil notification.metadata&.dig('delivery_error', 'message')
     end
