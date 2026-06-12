@@ -5,6 +5,8 @@
 module EvaluationManagement
   extend ActiveSupport::Concern
 
+  REUSABLE_EVALUATION_STATUSES = %i[requested cancelled no_show rescheduled].freeze
+
   # Assigns an evaluator to this application
   # @param evaluator [Evaluator] The evaluator to assign
   # @return [Boolean] True if the evaluator was assigned successfully
@@ -15,16 +17,44 @@ module EvaluationManagement
     end
 
     with_lock do
-      evaluation = evaluations.create!(
-        evaluator: evaluator,
-        constituent: user,
-        application: self,
-        evaluation_type: determine_evaluation_type,
-        evaluation_date: nil, # Will be set when scheduling
-        needs: '',
-        location: ''
-        # Initialize other required fields as needed
-      )
+      if evaluations.exists?(status: :completed)
+        errors.add(:base, :evaluation_assignment_closed)
+        return false
+      end
+
+      evaluation = reusable_evaluation_for_assignment
+
+      if evaluation
+        # Reuse the row for lifecycle state only; preserve narrative notes because they may document constituent interactions.
+        evaluation.update!(
+          evaluator: evaluator,
+          constituent: user,
+          application: self,
+          status: :requested,
+          evaluation_date: nil,
+          location: '',
+          needs: '',
+          products_tried: [],
+          attendees: [],
+          recommended_product_ids: [],
+          report_submitted: false,
+          reschedule_reason: nil
+        )
+      elsif evaluations.exists?
+        errors.add(:base, :evaluation_assignment_closed)
+        return false
+      else
+        evaluation = evaluations.create!(
+          evaluator: evaluator,
+          constituent: user,
+          application: self,
+          evaluation_type: determine_evaluation_type,
+          evaluation_date: nil, # Will be set when scheduling
+          needs: '',
+          location: ''
+          # Initialize other required fields as needed
+        )
+      end
 
       # Create event for audit logging
       AuditEventService.log(
@@ -72,7 +102,11 @@ module EvaluationManagement
 
   private
 
+  def reusable_evaluation_for_assignment
+    evaluations.where(status: REUSABLE_EVALUATION_STATUSES).order(created_at: :desc, id: :desc).first
+  end
+
   def determine_evaluation_type
-    user&.evaluations&.exists? ? :follow_up : :initial
+    user&.evaluations&.exists? ? :renewal : :initial
   end
 end

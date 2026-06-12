@@ -17,6 +17,7 @@ es:
               training_session_quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
               training_session_active: "Esta persona ya tiene una sesión de capacitación activa."
               training_session_not_active: "Esta persona no tiene una sesión de capacitación activa."
+              evaluation_assignment_closed: "Esta solicitud ya tiene una evaluación completada."
         training_session:
           attributes:
             base:
@@ -41,6 +42,8 @@ es:
       training_status_changed: "Estado de capacitación actualizado"
       evaluation_scheduled: "Evaluación programada"
       evaluation_completed: "Evaluación completada"
+      evaluation_cancelled: "Evaluación cancelada"
+      evaluation_no_show: "Evaluación marcada como no asistida"
       evaluation_rescheduled: "Evaluación reprogramada"
       requested_additional_info: "Información adicional solicitada"
       evaluator_assigned: "Evaluador asignado"
@@ -302,6 +305,23 @@ es:
         reschedule_failed: "No se pudo reprogramar la sesión de capacitación: %{message}"
         cancel_failed: "No se pudo cancelar la sesión de capacitación: %{message}"
         follow_up_failed: "No se pudo programar la sesión de capacitación de seguimiento: %{message}"
+      follow_up:
+        title: "Programar nueva fecha de capacitación"
+        description: "Use esto después de confirmar una nueva fecha con la persona."
+        scheduled_for_label: "Nueva fecha/hora"
+        location_label: "Ubicación"
+        location_placeholder: "p. ej., hogar del participante, biblioteca, en línea"
+        reason_label: "Motivo del seguimiento"
+        reason_placeholder: "Proporcione un motivo..."
+        reason_hint: "Proporcione un motivo para programar la capacitación de seguimiento."
+        required: "(obligatorio)"
+        submit: "Programar nueva fecha de capacitación"
+      read_only_notice: "Esta es una vista de supervisión de solo lectura. Solo el capacitador asignado puede actualizar esta sesión de capacitación."
+  evaluator_mailer:
+    status_boxes:
+      submitted:
+        title: "Evaluación enviada"
+        message: "El programa MAT recibió el informe de evaluación."
   training_session_notifications:
     trainer_assigned:
       labels:

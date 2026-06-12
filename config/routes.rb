@@ -331,6 +331,8 @@ Rails.application.routes.draw do
         post :request_additional_info
         post :schedule
         post :reschedule
+        post :cancel
+        post :no_show
       end
 
       collection do
