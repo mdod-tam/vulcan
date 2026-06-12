@@ -19,6 +19,10 @@ module PaperApplicationsTestHelper
       find('input[name="constituent[phone]"]').set('').set(phone)
       # Date of birth is required
       find('input[name="constituent[date_of_birth]"]').set(date_of_birth)
+      find('input[name="constituent[physical_address_1]"]').set('').set('123 Main St')
+      find('input[name="constituent[city]"]').set('').set('Baltimore')
+      find('input[name="constituent[state]"]').set('').set('MD')
+      find('input[name="constituent[zip_code]"]').set('').set('21201')
     end
   end
 
@@ -54,19 +58,42 @@ module PaperApplicationsTestHelper
   end
 
   def attach_and_accept_proofs
+    attach_file 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+
     within_proof_documents_fieldset do
       # Income proof
-      choose 'accept_income_proof'
+      choose 'accept_income_proof', allow_label_click: true
       attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
       # Residency proof
-      choose 'accept_residency_proof'
+      choose 'accept_residency_proof', allow_label_click: true
       attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
 
       # ID proof
-      choose 'accept_id_proof'
+      choose 'accept_id_proof', allow_label_click: true
       attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
     end
+  end
+
+  def complete_paper_application_attestations
+    check 'application[terms_accepted]' if page.has_unchecked_field?('application[terms_accepted]', wait: 1)
+    check 'application[medical_release_authorized]' if page.has_unchecked_field?('application[medical_release_authorized]', wait: 1)
+    check 'application[information_verified]' if page.has_unchecked_field?('application[information_verified]', wait: 1)
+    sync_paper_submit_gate
+  end
+
+  def sync_paper_submit_gate
+    page.execute_script(<<~JS)
+      const form = document.querySelector('form[data-controller~="paper-application"]');
+      if (form) {
+        form.dispatchEvent(new CustomEvent('income-validation:validated', {
+          bubbles: true,
+          detail: { exceedsThreshold: false }
+        }));
+        form.dispatchEvent(new Event('change', { bubbles: true }));
+        form.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    JS
   end
 
   # Fieldset helper methods

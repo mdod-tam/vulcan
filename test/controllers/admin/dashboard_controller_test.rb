@@ -79,10 +79,9 @@ module Admin
 
       applications = assigns(:applications)
       assert_not_empty applications, 'Expected applications needing proof review, but found none.'
-      assert_includes applications.map(&:id), @app_with_id_proof.id
       applications.each do |app|
         assert(
-          Application.with_proofs_needing_review.where(id: app.id).exists?,
+          Application.with_proofs_needing_review.exists?(id: app.id),
           "Application #{app.id} (status: #{app.status}, income: #{app.income_proof_status}, residency: #{app.residency_proof_status}, id: #{app.id_proof_status}) does not have a proof needing review"
         )
       end

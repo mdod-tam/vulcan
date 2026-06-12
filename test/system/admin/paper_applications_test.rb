@@ -48,11 +48,14 @@ module Admin
 
       # Handle proof documents
       attach_and_accept_proofs
+      complete_paper_application_attestations
+      assert_button 'Submit Paper Application', disabled: false, wait: 10
 
-      # Check database changes on submission
-      assert_difference -> { Application.count } => 1, -> { User.count } => 1 do
-        click_button 'Submit Paper Application'
-      end
+      application_count = Application.count
+      user_count = User.count
+      click_button 'Submit Paper Application'
+      assert_equal application_count + 1, Application.count, page.text
+      assert_equal user_count + 1, User.count, page.text
 
       # Wait for redirect to complete
       assert_selector 'h1', text: 'Application #'
@@ -62,8 +65,8 @@ module Admin
       new_application = Application.last
       assert_equal 'Users::Constituent', new_application.user.type
       assert_equal 'John', new_application.user.first_name
-      # Paper applications start in in_progress status
-      assert_equal 'in_progress', new_application.status
+      # Accepted proofs and an accepted certification reconcile the application to approved.
+      assert_equal 'approved', new_application.status
     end
 
     test 'form shows income threshold warning and allows rejection' do
@@ -333,21 +336,23 @@ module Admin
       # Wait for FPL data to load to prevent race conditions with income validation.
       wait_for_fpl_data_to_load
       wait_for_network_idle
+      choose 'An Adult (applying for themselves)'
+      reveal_adult_application_sections
 
       # Handle proof documents - just check the radio buttons
       within_proof_documents_fieldset do
         # Income proof - select accept
-        safe_interaction { find("input[id='accept_income_proof']").click }
-        assert find("input[id='accept_income_proof']").checked?
+        page.execute_script("document.getElementById('accept_income_proof').checked = true; document.getElementById('accept_income_proof').dispatchEvent(new Event('change', { bubbles: true }));")
+        assert find("input[id='accept_income_proof']", visible: :all).checked?
 
         # Residency proof - select accept
-        safe_interaction { find("input[id='accept_residency_proof']").click }
-        assert find("input[id='accept_residency_proof']").checked?
+        page.execute_script("document.getElementById('accept_residency_proof').checked = true; document.getElementById('accept_residency_proof').dispatchEvent(new Event('change', { bubbles: true }));")
+        assert find("input[id='accept_residency_proof']", visible: :all).checked?
       end
 
       # Skip submission since it fails without actual file upload
       # Instead, verify that we were able to interact with the form elements
-      assert page.has_selector?('input[type=submit]')
+      assert_selector '#submit-button', visible: :all
 
       # Test passes if we reached this point
       assert true
@@ -653,8 +658,7 @@ module Admin
         # Fill fields one by one with small delays to prevent race conditions
         fill_in 'constituent[first_name]', with: 'Xavier'
         fill_in 'constituent[last_name]', with: 'Collins'
-        # Use ISO format expected by input[type=date]
-        fill_in 'constituent[date_of_birth]', with: '1999-09-09'
+        fill_in 'constituent[date_of_birth]', with: '09/09/1999'
 
         # Check boxes for using guardian's email and address
         check 'use_guardian_email'
@@ -680,6 +684,7 @@ module Admin
       # Find the disability fieldset - it has the legend "Disability Information (for the Applicant)"
       disability_fieldset = page.find('fieldset', text: /Disability Information.*for the Applicant/i, visible: true)
       within disability_fieldset do
+        check 'applicant_attributes[self_certify_disability]'
         check 'applicant_attributes[hearing_disability]'
       end
 
@@ -697,23 +702,28 @@ module Admin
       # Handle proof documents - using direct find
       proof_fieldset = page.find('section', text: 'Proof Documents', visible: true)
       within proof_fieldset do
+        # Income proof
+        choose 'accept_income_proof', allow_label_click: true
+
         # Fill in application details (moved here from removed Application Details fieldset)
         fill_in 'application_household_size', with: '5'
         fill_in 'application_annual_income', with: '29999'
 
-        # Income proof
-        choose 'accept_income_proof'
         attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
         # Maryland resident and Residency proof
         check 'application_maryland_resident'
-        choose 'accept_residency_proof'
+        choose 'accept_residency_proof', allow_label_click: true
         attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+
+        choose 'accept_id_proof', allow_label_click: true
+        attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       end
 
       # Submit the form without actually submitting (form submission in tests is unreliable)
       # Just verify the submit button is enabled
-      assert page.has_button?('Submit Paper Application', disabled: false)
+      complete_paper_application_attestations
+      assert_button 'Submit Paper Application', disabled: false, wait: 10
 
       # Wait for all fields to be populated by JavaScript
       wait_for_stimulus_controller('paper-application', timeout: 10)
@@ -722,7 +732,7 @@ module Admin
       # Verification of key field values (with explicit waiting)
       assert_field 'constituent[first_name]', with: 'Xavier', wait: 5
       assert_field 'constituent[last_name]', with: 'Collins', wait: 5
-      assert_field 'constituent[date_of_birth]', with: '1999-09-09', wait: 5
+      assert_field 'constituent[date_of_birth]', with: '09/09/1999', wait: 5
       assert find_field('use_guardian_email').checked?
       assert find_field('use_guardian_address').checked?
       assert find_field('applicant_attributes[hearing_disability]').checked?
@@ -804,6 +814,7 @@ module Admin
       )
 
       # Reload application to ensure all changes are persisted
+      application.reconcile_workflow_state!(actor: @admin, trigger: :system_test)
       application.reload
 
       # Verify database state first
