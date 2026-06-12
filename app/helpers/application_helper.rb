@@ -7,6 +7,7 @@ module ApplicationHelper
   include ProofUploadFormatsHelper
   include Pagy::Frontend
   include BadgeHelper
+  include DateInputHelper
 
   def flash_class_for(flash_type)
     case flash_type.to_s

@@ -153,7 +153,8 @@ module Applications
         income_off_app.update_columns(
           income_proof_required: false,
           income_proof_status: Application.income_proof_statuses[:not_reviewed],
-          residency_proof_status: Application.residency_proof_statuses[:approved]
+          residency_proof_status: Application.residency_proof_statuses[:approved],
+          id_proof_status: Application.id_proof_statuses[:approved]
         )
 
         service = FilterService.new(@scope, { filter: 'proofs_needing_review' })

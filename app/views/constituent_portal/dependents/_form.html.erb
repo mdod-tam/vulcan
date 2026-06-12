@@ -20,7 +20,7 @@
   <% end %>
 
   <!-- Dependent Personal Information Section -->
-  <section aria-labelledby="personal-information-title" class="space-y-4 p-4 bg-gray-50 rounded">
+  <section class="space-y-4 p-4 bg-gray-50 rounded">
     <h2 id="personal-information-title" class="text-lg font-medium text-gray-900">Dependent Information</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
@@ -140,17 +140,24 @@
 
       <div>
         <%= form.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.date_field :date_of_birth,
+        <%= form.text_field :date_of_birth,
+            value: accessible_date_value(dependent_user.date_of_birth),
+            placeholder: "MM/DD/YYYY",
+            autocomplete: "bday",
+            inputmode: "numeric",
+            "aria-describedby": "dependent-date-of-birth-hint",
             class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
             required: true %>
+        <p id="dependent-date-of-birth-hint" class="mt-1 text-xs text-gray-700">Enter date of birth as MM/DD/YYYY</p>
       </div>
     </div>
   </section>
 
   <!-- Disability Information Section -->
-  <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+  <section class="space-y-4 p-4 bg-gray-50 rounded">
     <h2 id="disability-section-title" class="text-lg font-medium text-gray-900">Disability Information</h2>
     <fieldset class="space-y-2"
+              data-requires-one-checkbox="true"
               aria-required="true"
               aria-describedby="disability-error"
               aria-invalid="<%= dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>">
@@ -186,7 +193,7 @@
 
   <!-- Relationship Information Section -->
   <%= fields_for :guardian_relationship, guardian_relationship do |gr_form| %>
-    <section aria-labelledby="relationship-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+    <section class="space-y-4 p-4 bg-gray-50 rounded">
       <h2 id="relationship-section-title" class="text-lg font-medium text-gray-900">Relationship Information</h2>
       <div>
         <%= gr_form.label :relationship_type, "Your Relationship to Dependent", class: "block text-sm font-medium text-gray-700" %>

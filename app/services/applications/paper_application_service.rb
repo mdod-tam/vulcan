@@ -3,7 +3,7 @@
 module Applications
   # This service handles paper application submissions by administrators
   # It follows the same patterns as ConstituentPortal for file uploads
-  class PaperApplicationService < BaseService
+  class PaperApplicationService < BaseService # rubocop:disable Metrics/ClassLength
     include Rails.application.routes.url_helpers
 
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
@@ -521,9 +521,11 @@ module Applications
       action_key = type == :medical_certification ? "#{type}_action" : "#{type}_proof_action"
       action = params[action_key] || params[action_key.to_sym]
 
-      return true unless %w[accept reject approved rejected not_requested].include?(action)
+      return true unless %w[upload_only accept reject approved rejected not_requested].include?(action)
 
       case action
+      when 'upload_only'
+        process_upload_only_proof(type)
       when 'accept', 'approved'
         process_accept_proof(type)
       when 'reject', 'rejected'
@@ -531,6 +533,33 @@ module Applications
       when 'not_requested'
         true
       end
+    end
+
+    def process_upload_only_proof(type)
+      return add_error('Upload only is not available for medical certification') if type == :medical_certification
+
+      file_key = "#{type}_proof"
+      signed_id_key = "#{type}_proof_signed_id"
+      blob_or_file = params[file_key].presence || params[signed_id_key].presence
+
+      return add_error("Please upload a file for #{type} proof before sending it for review") if blob_or_file.blank?
+
+      result = ProofAttachmentService.attach_proof(
+        application: @application,
+        proof_type: type,
+        blob_or_file: blob_or_file,
+        status: :not_reviewed,
+        admin: @admin,
+        submission_method: :paper,
+        metadata: {}
+      )
+
+      unless result[:success]
+        add_error("Error processing #{type} proof: #{result[:error]&.message}")
+        return false
+      end
+
+      true
     end
 
     def process_accept_proof(type)

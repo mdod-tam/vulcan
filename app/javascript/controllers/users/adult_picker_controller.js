@@ -189,7 +189,7 @@ export default class extends Controller {
       'constituent[first_name]': user.first_name,
       'constituent[middle_initial]': user.middle_initial,
       'constituent[last_name]': user.last_name,
-      'constituent[date_of_birth]': user.date_of_birth,
+      'constituent[date_of_birth]': this._formatDateForInput(user.date_of_birth),
       'constituent[email]': user.email,
       'constituent[phone]': user.phone,
       'constituent[physical_address_1]': user.physical_address_1,
@@ -246,7 +246,7 @@ export default class extends Controller {
 
       const rows = [
         ['Name', `${u.first_name || ''} ${u.last_name || ''}`],
-        ['DOB', u.date_of_birth || 'N/A'],
+        ['DOB', this._formatDateForInput(u.date_of_birth) || 'N/A'],
         ['Email', u.email || 'N/A'],
         ['Phone', u.phone || 'N/A'],
         ['Address', address || 'N/A'],
@@ -268,6 +268,14 @@ export default class extends Controller {
       })
       this.onFileSummaryContentTarget.replaceChildren(grid)
     }
+  }
+
+  _formatDateForInput(value) {
+    if (!value) return ""
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (!match) return value
+
+    return `${match[2]}/${match[3]}/${match[1]}`
   }
 
   _hideOnFileSummary() {

@@ -176,6 +176,13 @@ describe("AdultPickerController", () => {
     expect(setFieldValue).toHaveBeenCalledWith('input[name="application[annual_income]"]', 18000)
   })
 
+  it("formats selected adult DOB for text date inputs", async () => {
+    await controller.fetchAdultContext("42")
+    controller._autopopulateFields(controller._adultApplicationContext.user)
+
+    expect(fixture.querySelector('input[name="constituent[date_of_birth]"]').value).toBe("01/01/1980")
+  })
+
   it("copies medical provider fields only when explicitly requested", () => {
     controller._adultApplicationContext = {
       medical_provider_name: "Dr. Test",

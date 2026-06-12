@@ -35,14 +35,14 @@ module ConstituentPortal
       check 'Hearing'
 
       # Fill in medical provider info using correct nested attribute field names
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Test Provider')
         find('input[name="application[medical_provider_attributes][phone]"]').set('').set('2025551234')
         find('input[name="application[medical_provider_attributes][email]"]').set('').set('test@example.com')
       end
 
       # Check the medical authorization checkbox
-      check 'I authorize the release and sharing of my medical information as described above'
+      check 'I authorize the release and sharing of my disability-related information as described above'
 
       # Save the application using more specific button targeting
       find('input[type="submit"][name="save_draft"]').click
@@ -112,14 +112,14 @@ module ConstituentPortal
       end
 
       # Fill in medical provider info using correct nested attribute field names
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Test Provider')
         find('input[name="application[medical_provider_attributes][phone]"]').set('').set('2025551234')
         find('input[name="application[medical_provider_attributes][email]"]').set('').set('test@example.com')
       end
 
       # Check the medical authorization checkbox
-      check 'I authorize the release and sharing of my medical information as described above'
+      check 'I authorize the release and sharing of my disability-related information as described above'
 
       # Save the application with explicit button identification
       find('input[type="submit"][name="save_draft"]').click

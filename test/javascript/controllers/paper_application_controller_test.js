@@ -238,4 +238,112 @@ describe("PaperApplicationController", () => {
     expect(checkbox.hasAttribute("required")).toBe(false)
     expect(checkbox.validationMessage).toBe("")
   })
+
+  test("submit gate combines required attestations, proof actions, disability, and provider choices", () => {
+    document.body.innerHTML = `
+      <form data-controller="paper-application">
+        <fieldset data-requires-one-checkbox="true">
+          <input type="checkbox" name="constituent[hearing_disability]">
+          <input type="checkbox" name="constituent[vision_disability]">
+        </fieldset>
+        <input type="checkbox" name="application[maryland_resident]" required>
+        <input type="checkbox" name="application[information_verified]" required>
+        <input type="text" name="constituent[first_name]" required>
+        <fieldset>
+          <input type="radio" name="income_proof_action" value="upload_only" required>
+          <input type="radio" name="income_proof_action" value="accept" required>
+          <input type="radio" name="income_proof_action" value="reject" required>
+        </fieldset>
+        <input type="file" name="income_proof" required>
+        <fieldset>
+          <input type="checkbox" name="no_medical_provider_information">
+          <p class="text-sm">Provider description</p>
+          <div class="grid">
+            <input type="text" name="application[medical_provider_name]">
+            <input type="tel" name="application[medical_provider_phone]">
+            <input type="email" name="application[medical_provider_email]">
+          </div>
+          <input type="checkbox" name="application[medical_release_authorized]" value="1">
+        </fieldset>
+        <p data-paper-application-target="status"></p>
+        <button type="submit" data-paper-application-target="submitButton">Submit</button>
+      </form>
+    `
+
+    const form = document.querySelector("[data-controller='paper-application']")
+    const submitButton = document.querySelector("[data-paper-application-target='submitButton']")
+    const status = document.querySelector("[data-paper-application-target='status']")
+    const directController = new PaperApplicationController()
+
+    Object.defineProperty(directController, "element", {
+      value: form,
+      writable: false,
+      configurable: true
+    })
+    Object.defineProperty(directController, "hasSubmitButtonTarget", {
+      value: true,
+      writable: false,
+      configurable: true
+    })
+    Object.defineProperty(directController, "submitButtonTarget", {
+      value: submitButton,
+      writable: false,
+      configurable: true
+    })
+    Object.defineProperty(directController, "hasStatusTarget", {
+      value: true,
+      writable: false,
+      configurable: true
+    })
+    Object.defineProperty(directController, "statusTarget", {
+      value: status,
+      writable: false,
+      configurable: true
+    })
+    Object.defineProperty(directController, "hasRejectionButtonTarget", {
+      value: false,
+      writable: false,
+      configurable: true
+    })
+    directController.elementIsVisible = () => true
+
+    directController.syncFormState()
+    expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe("Complete all required confirmations before submitting.")
+
+    document.querySelector('input[name="constituent[hearing_disability]"]').checked = true
+    document.querySelector('input[name="application[maryland_resident]"]').checked = true
+    document.querySelector('input[name="application[information_verified]"]').checked = true
+    document.querySelector('input[name="income_proof_action"][value="upload_only"]').checked = true
+    document.querySelector('input[name="no_medical_provider_information"]').checked = true
+
+    directController.syncFormState()
+    expect(submitButton.disabled).toBe(true)
+
+    document.querySelector('input[name="constituent[first_name]"]').value = "Ada"
+    directController.syncFormState()
+    expect(submitButton.disabled).toBe(true)
+
+    const incomeProof = document.querySelector('input[name="income_proof"]')
+    Object.defineProperty(incomeProof, "files", {
+      value: [new File(["proof"], "income.pdf", { type: "application/pdf" })],
+      configurable: true
+    })
+    directController.syncFormState()
+    expect(submitButton.disabled).toBe(false)
+    expect(status.textContent).toBe("Paper application is ready to submit.")
+
+    document.querySelector('input[name="no_medical_provider_information"]').checked = false
+    document.querySelector('input[name="application[medical_provider_name]"]').value = "Dr. Test"
+    directController.syncFormState()
+
+    expect(submitButton.disabled).toBe(true)
+
+    document.querySelector('input[name="application[medical_provider_phone]"]').value = "555-111-2222"
+    document.querySelector('input[name="application[medical_provider_email]"]').value = "dr.test@example.com"
+    document.querySelector('input[name="application[medical_release_authorized]"]').checked = true
+    directController.syncFormState()
+
+    expect(submitButton.disabled).toBe(false)
+  })
 })
