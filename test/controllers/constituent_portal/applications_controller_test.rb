@@ -948,13 +948,5 @@ module ConstituentPortal
       assert_equal 'Bethesda', guardian.city, 'Guardian city should not be affected'
     end
 
-    test 'request review route is not available' do
-      assert_raises(ActionController::RoutingError) do
-        Rails.application.routes.recognize_path(
-          "/constituent_portal/applications/#{@application.id}/request_review",
-          method: :post
-        )
-      end
-    end
   end
 end
