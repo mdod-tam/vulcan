@@ -4,6 +4,7 @@ require 'test_helper'
 
 class ProofAttachmentServiceTest < ActiveSupport::TestCase
   include ActionDispatch::TestProcess
+  include ProofResubmissionTestHelper
 
   setup do
     # Disconnect any lingering database connections and set up Active Storage
@@ -137,15 +138,17 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     # Clear events before the test
     Event.delete_all
 
-    result = ProofAttachmentService.reject_proof_without_attachment(
-      application: @application,
-      proof_type: 'income',
-      admin: @admin,
-      submission_method: :paper,
-      reason: 'invalid_document',
-      notes: 'Document does not meet requirements',
-      metadata: { ip_address: '127.0.0.1' }
-    )
+    result = without_auto_resubmission do
+      ProofAttachmentService.reject_proof_without_attachment(
+        application: @application,
+        proof_type: 'income',
+        admin: @admin,
+        submission_method: :paper,
+        reason: 'invalid_document',
+        notes: 'Document does not meet requirements',
+        metadata: { ip_address: '127.0.0.1' }
+      )
+    end
 
     assert result[:success], 'Expected reject_proof_without_attachment to succeed'
     assert_not_nil result[:duration_ms], 'Expected duration to be tracked'
@@ -157,15 +160,17 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'rejected', proof_review.status
     assert_equal 'invalid_document', proof_review.rejection_reason
 
-    # Verify audit event was created
-    event = Event.where(action: 'income_proof_rejected').order(:created_at).last
-    assert_not_nil event, 'Expected an income_proof_rejected audit event'
-    assert_equal 'income_proof_rejected', event.action
+    # The canonical audit event is the generic `proof_rejected` written by ProofReview;
+    # no typed `income_proof_rejected` event should be emitted by ProofAttachmentService.
+    assert_empty Event.where(action: 'income_proof_rejected'), 'Did not expect a typed income_proof_rejected event'
+
+    event = Event.where(action: 'proof_rejected').order(:created_at).last
+    assert_not_nil event, 'Expected a generic proof_rejected audit event'
     assert_equal @application.id, event.auditable_id
     assert_equal 'Application', event.auditable_type
     assert_equal @admin.id, event.user_id
     assert_equal 'income', event.metadata['proof_type']
-    assert_equal 'invalid_document', event.metadata['rejection_reason']
+    assert_equal 'paper', event.metadata['submission_method']
   end
 
   test 'metrics recording handles exceptions gracefully' do

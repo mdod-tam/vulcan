@@ -578,5 +578,110 @@ module Applications
       assert_equal 'letter', dependent.communication_preference
       assert_equal 'asl', dependent.preferred_means_of_communication
     end
+
+    test 'paper application suppresses account_created notice when vouchers are disabled' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'accept',
+        income_proof: uploaded_pdf
+      }
+
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_predicate service.application, :fulfillment_type_equipment?
+    end
+
+    test 'paper application sends account_created notice when vouchers are enabled' do
+      FeatureFlag.enable!(:vouchers_enabled)
+
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'accept',
+        income_proof: uploaded_pdf
+      }
+
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).at_least_once
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_predicate service.application, :fulfillment_type_voucher?
+    ensure
+      FeatureFlag.disable!(:vouchers_enabled)
+    end
+
+    test 'voucher fulfillment does not send account_created notice when vouchers are disabled' do
+      application = build(:application, fulfillment_type: :voucher)
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@application, application)
+
+      FeatureFlag.disable!(:vouchers_enabled)
+
+      assert_not service.send(:send_account_created_notice?)
+    end
+
+    test 'medical certification not provided notice notifies constituent for none_provided review' do
+      constituent = create(:constituent, communication_preference: :email)
+      application = create(:application, :in_progress, skip_proofs: true, user: constituent)
+      %i[income residency].each do |proof_type|
+        application.public_send("#{proof_type}_proof").attach(
+          io: StringIO.new("#{proof_type} proof"),
+          filename: "#{proof_type}.pdf",
+          content_type: 'application/pdf'
+        )
+      end
+      create(:proof_review,
+             application: application,
+             admin: @admin,
+             proof_type: :medical_certification,
+             status: :rejected,
+             rejection_reason: 'none_provided',
+             rejection_reason_code: 'none_provided',
+             submission_method: :paper)
+
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@application, application)
+      service.instance_variable_set(:@constituent, constituent)
+
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'medical_certification_not_provided')).once
+
+      service.send(:send_medical_certification_not_provided_notice)
+    end
+
+    test 'append_proof_resubmission_delivery_warnings surfaces note when resubmission delivery failed' do
+      constituent = create(:constituent, communication_preference: :email)
+      application = create(:application, :in_progress, skip_proofs: true, user: constituent, income_proof_status: :rejected)
+      mailer_delivery = mock('proof-resubmission-mailer-delivery')
+      mailer_delivery.stubs(:deliver_now).raises(StandardError, 'smtp failed')
+      ApplicationNotificationsMailer.stubs(:proof_rejected).returns(mailer_delivery)
+
+      Current.paper_context = true
+      create(
+        :proof_review,
+        :rejected,
+        application: application,
+        admin: @admin,
+        proof_type: :income,
+        rejection_reason: 'Missing income details',
+        submission_method: :paper
+      )
+      Current.paper_context = false
+
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@application, application.reload)
+
+      service.send(:append_proof_resubmission_delivery_warnings)
+
+      assert_includes service.reconciliation_note,
+                      'Income proof resubmission form could not be automatically sent'
+      assert_includes service.reconciliation_note, 'You can send it from the application page.'
+    end
   end
 end

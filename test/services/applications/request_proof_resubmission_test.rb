@@ -5,17 +5,18 @@ require 'test_helper'
 module Applications
   class RequestProofResubmissionTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::TimeHelpers
+    include ProofResubmissionTestHelper
 
     setup do
       @actor = create(:admin)
       @application = create(:application, :in_progress)
       Current.paper_context = true
-      @proof_review = create(:proof_review,
-                             application: @application,
-                             admin: @actor,
-                             proof_type: :income,
-                             status: :rejected,
-                             rejection_reason: 'Missing income details')
+      @proof_review = create_rejected_proof_review_without_auto_resubmission(
+        application: @application,
+        admin: @actor,
+        proof_type: :income,
+        rejection_reason: 'Missing income details'
+      )
       Current.paper_context = false
       @application.income_proof.purge if @application.income_proof.attached?
       @mailer_delivery = mock('proof-resubmission-mailer-delivery')
@@ -26,6 +27,26 @@ module Applications
 
     teardown do
       Current.reset
+    end
+
+    test 'delivery_confirmed_for_review? reflects active secure request forms' do
+      assert_not RequestProofResubmission.delivery_confirmed_for_review?(@proof_review)
+
+      @mailer_delivery.expects(:deliver_now).returns(true)
+      result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+      assert_predicate result, :success?
+
+      assert RequestProofResubmission.delivery_confirmed_for_review?(@proof_review.reload)
+    end
+
+    test 'delivery_confirmed_for_review? is false when delivery failed and form was revoked' do
+      @mailer_delivery.stubs(:deliver_now).raises(StandardError, 'smtp failed')
+
+      result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+
+      assert_not result.success?
+      assert_predicate result.data.fetch(:secure_request_forms).first.reload, :revoked?
+      assert_not RequestProofResubmission.delivery_confirmed_for_review?(@proof_review.reload)
     end
 
     test 'creates proof request notification and delivers proof rejection email immediately' do
@@ -144,12 +165,12 @@ module Applications
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
       application = create(:application, :in_progress, user: dependent, managing_guardian: guardian)
       Current.paper_context = true
-      proof_review = create(:proof_review,
-                            application: application,
-                            admin: @actor,
-                            proof_type: :income,
-                            status: :rejected,
-                            rejection_reason: 'Missing income details')
+      proof_review = create_rejected_proof_review_without_auto_resubmission(
+        application: application,
+        admin: @actor,
+        proof_type: :income,
+        rejection_reason: 'Missing income details'
+      )
       Current.paper_context = false
       application.income_proof.purge if application.income_proof.attached?
 
@@ -182,8 +203,12 @@ module Applications
                            managing_guardian: guardian,
                            income_proof_status: :rejected)
       Current.paper_context = true
-      create(:proof_review, application: application, admin: @actor, proof_type: :income, status: :rejected,
-                            rejection_reason: 'Missing income details')
+      create_rejected_proof_review_without_auto_resubmission(
+        application: application,
+        admin: @actor,
+        proof_type: :income,
+        rejection_reason: 'Missing income details'
+      )
       Current.paper_context = false
       application.income_proof.purge if application.income_proof.attached?
 
@@ -205,8 +230,12 @@ module Applications
                            managing_guardian: guardian,
                            income_proof_status: :rejected)
       Current.paper_context = true
-      create(:proof_review, application: application, admin: @actor, proof_type: :income, status: :rejected,
-                            rejection_reason: 'Missing income details')
+      create_rejected_proof_review_without_auto_resubmission(
+        application: application,
+        admin: @actor,
+        proof_type: :income,
+        rejection_reason: 'Missing income details'
+      )
       Current.paper_context = false
       application.income_proof.purge if application.income_proof.attached?
 
@@ -229,7 +258,7 @@ module Applications
     end
 
     test 'sms request sends token-safe SMS and records requested channel' do
-      @application.user.update!(phone: '410-555-0100', phone_type: 'text')
+      @application.user.update!(phone: '410-555-0100', phone_type: 'text', communication_preference: 'email')
       SmsService.expects(:send_message).with(
         @application.user.phone,
         regexp_matches(/secure_proof_form/),
@@ -241,7 +270,12 @@ module Applications
         )
       ).returns(true)
 
-      result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+      result = RequestProofResubmission.new(
+        application: @application,
+        actor: @actor,
+        proof_type: :income,
+        channel_overrides: { @application.user_id => 'sms' }
+      ).call
 
       assert_predicate result, :success?
       form = result.data.fetch(:secure_request_forms).first
@@ -354,14 +388,12 @@ module Applications
 
     test 'stale rejected proof review does not force rejected request snapshot or email' do
       application = create(:application, :in_progress, id_proof_status: :not_reviewed)
-      Current.paper_context = true
-      create(:proof_review,
-             application: application,
-             admin: @actor,
-             proof_type: :id,
-             status: :rejected,
-             rejection_reason: 'Old blurry upload')
-      Current.paper_context = false
+      create_rejected_proof_review_without_auto_resubmission(
+        application: application,
+        admin: @actor,
+        proof_type: :id,
+        rejection_reason: 'Old blurry upload'
+      )
       application.update!(id_proof_status: :not_reviewed)
       application.id_proof.purge if application.id_proof.attached?
 
