@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# rubocop:disable Metrics/ClassLength
 class NotificationService
   VALID_CHANNELS = %i[email letter].freeze
 
@@ -163,6 +164,26 @@ class NotificationService
     medical_certification_approved
   ].freeze
 
+  # Reviewable proof rejections must deliver through Applications::RequestProofResubmission.
+  # These notification actions are legacy/mailer-test only; pass metadata: { delivery_path: 'legacy' }
+  # to create and deliver through NotificationService intentionally.
+  ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS = %w[
+    proof_rejected
+    id_proof_rejected
+    income_proof_rejected
+    residency_proof_rejected
+  ].freeze
+
+  def self.reviewable_proof_rejection_action?(action)
+    ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS.include?(action.to_s)
+  end
+
+  def self.reviewable_proof_rejection_notification_blocked?(opts)
+    return false unless reviewable_proof_rejection_action?(notification_type_from(opts))
+
+    !legacy_proof_rejection_delivery_metadata?(opts_metadata_from(opts))
+  end
+
   PREFERENCE_ROUTED_ACTIONS = %w[
     proof_rejected
     id_proof_rejected
@@ -193,6 +214,15 @@ class NotificationService
     channel = opts['channel']
 
     log_notification_creation_info(opts, channel)
+
+    if self.class.reviewable_proof_rejection_notification_blocked?(opts)
+      Rails.logger.error(
+        "NotificationService: Refused to create '#{opts[:type] || opts['type']}' notification. " \
+        'Use Applications::RequestProofResubmission for reviewable proof rejection delivery, ' \
+        "or metadata: { delivery_path: 'legacy' } for intentional mailer-only paths."
+      )
+      return nil
+    end
 
     notification = create_notification_with_rescue(opts)
     return nil unless notification
@@ -362,6 +392,19 @@ class NotificationService
       Rails.logger.info "NotificationService: No email for '#{notification.action}' (audit-only action) — Notification ##{notification.id}"
       persist_delivery_routing_metadata(notification, actual_delivery_channel: 'none', delivery_route_reason: 'no_email_action')
       return true
+    end
+
+    if orphan_proof_rejection_delivery_blocked?(notification)
+      Rails.logger.error(
+        "NotificationService: Blocked orphan proof-rejection delivery for '#{notification.action}' " \
+        "(Notification ##{notification.id}). Use Applications::RequestProofResubmission instead."
+      )
+      persist_delivery_routing_metadata(
+        notification,
+        actual_delivery_channel: 'none',
+        delivery_route_reason: 'use_request_proof_resubmission'
+      )
+      return false
     end
 
     enforce_delivery_contracts!(notification)
@@ -550,6 +593,29 @@ class NotificationService
     Rails.logger.warn "NotificationService: Failed to find proof review for #{action} notification: #{e.message}"
     nil
   end
+
+  def orphan_proof_rejection_delivery_blocked?(notification)
+    self.class.reviewable_proof_rejection_notification_blocked?(
+      'type' => notification.action,
+      'metadata' => notification.metadata
+    )
+  end
+
+  def self.notification_type_from(opts)
+    (opts[:type] || opts['type']).to_s
+  end
+  private_class_method :notification_type_from
+
+  def self.opts_metadata_from(opts)
+    metadata = opts[:metadata] || opts['metadata'] || {}
+    metadata.is_a?(Hash) ? metadata.stringify_keys : {}
+  end
+  private_class_method :opts_metadata_from
+
+  def self.legacy_proof_rejection_delivery_metadata?(metadata)
+    metadata['delivery_path'] == 'legacy'
+  end
+  private_class_method :legacy_proof_rejection_delivery_metadata?
 
   def resolve_mailer(notification)
     if (entry = MAILER_MAP[notification.action])
@@ -806,3 +872,4 @@ class NotificationService
     end
   end
 end
+# rubocop:enable Metrics/ClassLength

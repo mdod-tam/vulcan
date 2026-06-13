@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class ProofReviewTest < ActiveSupport::TestCase
+  include ProofRejectionNotificationAssertions
+
   def setup
     @admin = create(:admin)
     # Create a simple application without using problematic traits
@@ -176,19 +178,27 @@ class ProofReviewTest < ActiveSupport::TestCase
            status: :approved)
   end
 
-  def test_paper_rejection_does_not_request_secure_proof_resubmission
-    Applications::RequestProofResubmission.expects(:new).never
+  def test_paper_rejection_requests_secure_proof_resubmission_and_queues_letter
+    @application.user.update!(communication_preference: :letter, phone_type: :voice)
+    @application.update!(income_proof_status: :rejected)
+    @application.income_proof.purge if @application.income_proof.attached?
+    NotificationService.stubs(:create_and_deliver!).returns(true)
+    assert_no_orphan_proof_rejection_notification_delivery
 
     Current.paper_context = true
 
-    assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
-      create(:proof_review,
-             application: @application,
-             admin: @admin,
-             proof_type: :income,
-             status: :rejected,
-             rejection_reason: 'Invalid documentation',
-             submission_method: :paper)
+    assert_difference -> { SecureRequestForm.count }, 1 do
+      assert_difference -> { PrintQueueItem.where(letter_type: :income_proof_rejected).count }, 1 do
+        assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
+          create(:proof_review,
+                 application: @application,
+                 admin: @admin,
+                 proof_type: :income,
+                 status: :rejected,
+                 rejection_reason: 'Invalid documentation',
+                 submission_method: :paper)
+        end
+      end
     end
   ensure
     Current.reset

@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class NotificationServiceTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
+
   setup do
     @admin = create(:admin)
     @constituent = create(:constituent)
@@ -22,7 +24,11 @@ class NotificationServiceTest < ActiveSupport::TestCase
           recipient: @constituent,
           actor: @admin,
           notifiable: @application,
-          metadata: { proof_type: 'income', rejection_reason: 'Missing documentation' },
+          metadata: {
+            proof_type: 'income',
+            rejection_reason: 'Missing documentation',
+            delivery_path: 'legacy'
+          },
           channel: :email
         )
       end
@@ -134,7 +140,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
       actor: @admin,
       action: 'proof_rejected',
       notifiable: @application,
-      metadata: { proof_type: 'income' }
+      metadata: { proof_type: 'income', delivery_path: 'legacy' }
     )
 
     # Call the delivery part which should fail and handle the error
@@ -248,9 +254,12 @@ class NotificationServiceTest < ActiveSupport::TestCase
   end
 
   test 'proof rejected with proof review notifiable routes application and review to mailer' do
-    Current.paper_context = true
-    proof_review = create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :income)
-    Current.paper_context = false
+    proof_review = create_rejected_proof_review_without_auto_resubmission(
+      application: @application,
+      admin: @admin,
+      proof_type: :income,
+      rejection_reason: 'Missing documentation'
+    )
 
     mail_delivery = mock('mail_delivery')
     mail_delivery.expects(:deliver_later).returns(true)
@@ -263,7 +272,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
       recipient: @constituent,
       actor: @admin,
       notifiable: proof_review,
-      metadata: { proof_type: 'income' },
+      metadata: { proof_type: 'income', delivery_path: 'legacy' },
       channel: :email
     )
 
@@ -272,9 +281,12 @@ class NotificationServiceTest < ActiveSupport::TestCase
   end
 
   test 'typed proof rejected routes proof review lookup to proof rejected mailer' do
-    Current.paper_context = true
-    proof_review = create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :income)
-    Current.paper_context = false
+    proof_review = create_rejected_proof_review_without_auto_resubmission(
+      application: @application,
+      admin: @admin,
+      proof_type: :income,
+      rejection_reason: 'Missing documentation'
+    )
 
     mail_delivery = mock('mail_delivery')
     mail_delivery.expects(:deliver_later).returns(true)
@@ -287,11 +299,30 @@ class NotificationServiceTest < ActiveSupport::TestCase
       recipient: @constituent,
       actor: @admin,
       notifiable: @application,
+      metadata: { delivery_path: 'legacy' },
       channel: :email
     )
 
     assert_not_nil notification
     assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+  end
+
+  test 'typed proof rejected notifications are refused like generic proof rejected' do
+    create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :income)
+
+    ApplicationNotificationsMailer.expects(:proof_rejected).never
+
+    assert_no_difference 'Notification.count' do
+      notification = NotificationService.create_and_deliver!(
+        type: :income_proof_rejected,
+        recipient: @constituent,
+        actor: @admin,
+        notifiable: @application,
+        channel: :email
+      )
+
+      assert_nil notification
+    end
   end
 
   test 'id proof attached is preference routed' do

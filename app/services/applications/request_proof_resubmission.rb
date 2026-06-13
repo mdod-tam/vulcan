@@ -31,6 +31,18 @@ module Applications
     end
     # rubocop:enable Metrics/ParameterLists
 
+    def self.delivery_confirmed_for_review?(proof_review)
+      proof_type = proof_review.proof_type.to_sym
+      return false unless PROOF_KIND_BY_TYPE.key?(proof_type)
+
+      # Only count still-usable forms. Failed deliveries revoke the request record even
+      # though the row remains for audit; those must not suppress admin warnings.
+      SecureRequestForm.public_send("#{proof_type}_proof")
+                       .active
+                       .where(application_id: proof_review.application_id)
+                       .exists?(created_at: proof_review.created_at..)
+    end
+
     def call
       return failure(message(:invalid_proof_type)) unless proof_kind
       return failure(message(:request_not_needed)) unless requestable_proof_state?
