@@ -14,6 +14,36 @@ module Applications
       assert_equal :letter, candidate.channel
     end
 
+    test 'letter communication preference wins over text phone type' do
+      constituent = create(:constituent, communication_preference: 'letter', phone_type: 'text')
+      application = create(:application, user: constituent)
+
+      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+
+      assert_equal :letter, candidate.channel
+    end
+
+    test 'email communication preference routes secure requests to email' do
+      constituent = create(:constituent, communication_preference: 'email', phone_type: 'text')
+      application = create(:application, user: constituent)
+
+      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+
+      assert_equal :email, candidate.channel
+    end
+
+    test 'sms delivery requires explicit channel override' do
+      constituent = create(:constituent, communication_preference: 'email', phone_type: 'text')
+      application = create(:application, user: constituent)
+
+      candidate = SecureRequestRecipientResolver
+                  .new(application: application, channel_overrides: { constituent.id => 'sms' })
+                  .resolve
+                  .first
+
+      assert_equal :sms, candidate.channel
+    end
+
     test 'defaults adult application to applicant' do
       application = create(:application)
 

@@ -3,6 +3,7 @@
 module Applications
   # This service handles paper application submissions by administrators
   # It follows the same patterns as ConstituentPortal for file uploads
+  # rubocop:disable Metrics/ClassLength
   class PaperApplicationService < BaseService
     include Rails.application.routes.url_helpers
 
@@ -100,6 +101,7 @@ module Applications
 
     def handle_successful_application(operation = :create)
       send_notifications
+      append_proof_resubmission_delivery_warnings
       case operation
       when :create
         log_application_creation
@@ -284,7 +286,7 @@ module Applications
 
     def process_self_applicant(applicant_data)
       # Handle no email address scenario
-      no_email = params[:no_email_address].present? && params[:no_email_address] == "1"
+      no_email = params[:no_email_address].present? && params[:no_email_address] == '1'
       if no_email
         applicant_data = applicant_data.dup
         applicant_data.delete(:email)
@@ -750,7 +752,7 @@ module Applications
     end
 
     def send_notifications
-      send_proof_rejection_notifications
+      send_medical_certification_not_provided_notice
       send_account_creation_notifications
     end
 
@@ -780,35 +782,29 @@ module Applications
       ].compact.join(' ')
     end
 
-    def send_proof_rejection_notifications
-      @application.proof_reviews.reload.each do |review|
-        next unless review.status_rejected?
+    # Income/residency/id proof rejections are delivered through ProofReview ->
+    # Applications::RequestProofResubmission, which owns the secure resubmission flow.
+    # The only constituent-facing rejection notice still sent directly from paper intake
+    # is the "medical certification not provided" notice, which has no resubmission form.
+    def send_medical_certification_not_provided_notice
+      not_provided = @application.proof_reviews.reload.rejections.find_by(
+        proof_type: :medical_certification,
+        rejection_reason_code: 'none_provided'
+      )
+      return unless not_provided
 
-        if review.proof_type == 'medical_certification' && review.rejection_reason_code == 'none_provided'
-          NotificationService.create_and_deliver!(
-            type: 'medical_certification_not_provided',
-            recipient: @constituent,
-            actor: @admin,
-            notifiable: @application,
-            channel: @constituent.communication_preference.to_sym
-          )
-          next
-        end
-
-        NotificationService.create_and_deliver!(
-          type: 'proof_rejected',
-          recipient: @constituent,
-          actor: @admin,
-          notifiable: review,
-          metadata: {
-            template_variables: proof_rejection_template_variables(review)
-          },
-          channel: @constituent.communication_preference.to_sym
-        )
-      end
+      NotificationService.create_and_deliver!(
+        type: 'medical_certification_not_provided',
+        recipient: @constituent,
+        actor: @admin,
+        notifiable: @application,
+        channel: @constituent.communication_preference.to_sym
+      )
     end
 
     def send_account_creation_notifications
+      return unless send_account_created_notice?
+
       new_user_accounts.each do |user|
         temp_password = @temp_passwords[user.id]
         next unless temp_password
@@ -825,6 +821,26 @@ module Applications
           },
           channel: user.communication_preference.to_sym
         )
+      end
+    end
+
+    # Account-created notices (and their printed letters) are voucher-only.
+    # Equipment-scope applicants and cert signers should use secure temporary
+    # form links for proof/cert uploads; announcing an account they cannot create
+    # or log in to would be misleading.
+    def send_account_created_notice?
+      @application.fulfillment_type_voucher?
+    end
+
+    def append_proof_resubmission_delivery_warnings
+      @application.proof_reviews.rejections
+                  .where(proof_type: ProofReview::REVIEWABLE_PROOF_TYPES)
+                  .find_each do |review|
+        next if Applications::RequestProofResubmission.delivery_confirmed_for_review?(review)
+
+        note = "#{review.proof_type.to_s.humanize} proof resubmission form could not be automatically sent. " \
+               'You can send it from the application page.'
+        @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
       end
     end
 
@@ -848,15 +864,6 @@ module Applications
       }
     end
 
-    def proof_rejection_template_variables(review)
-      {
-        constituent_full_name: @constituent.full_name,
-        organization_name: Policy.get('organization_name') || 'MAT Program',
-        proof_type_formatted: review.proof_type.humanize,
-        rejection_reason: review.rejection_reason || 'Document did not meet requirements'
-      }
-    end
-
     def attributes_present?(attrs)
       attrs.present? && attrs.values.any?(&:present?)
     end
@@ -871,4 +878,5 @@ module Applications
       Rails.logger.error exception.backtrace.join("\n") if exception.backtrace
     end
   end
+  # rubocop:enable Metrics/ClassLength
 end
