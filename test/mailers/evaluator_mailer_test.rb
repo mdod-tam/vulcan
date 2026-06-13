@@ -7,9 +7,8 @@ class EvaluatorMailerTest < ActionMailer::TestCase
   include EmailTemplateMockHelper
 
   setup do
-    # Per project strategy, HTML emails are not used. Only stub for :text format.
-    # If the mailer attempts to find_by!(format: :html), it should fail (e.g., RecordNotFound)
-    # as no HTML templates should be seeded for these, and we provide no stub.
+    # Stored templates remain text-only; URL-bearing emails derive an HTML part
+    # from the rendered text body.
 
     # Create specific mock templates for each mailer method
     new_evaluation_assigned_mock = mock_template(
@@ -59,6 +58,19 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     # Check that the email body contains expected text
     expected_text = "Text body for evaluation assigned to #{@evaluator.full_name} for #{@constituent.full_name}"
     assert_includes email.body.to_s, expected_text
+  end
+
+  test 'new_evaluation_assigned uses English template for Spanish locale evaluator' do
+    @evaluator.update!(locale: 'es')
+
+    emails = capture_emails do
+      EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+    assert_equal [@evaluator.email], email.to
+    assert_equal 'New Evaluation Assigned', email.subject
   end
 
   test 'evaluation_submission_confirmation' do

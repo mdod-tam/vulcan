@@ -279,13 +279,15 @@ class VendorNotificationsMailer < ApplicationMailer
   end
 
   def send_mail(to, subject, body, content_type: 'text/plain')
-    mail(
+    mail_options = {
       to: to,
       subject: subject,
-      message_stream: 'outbound',
-      body: body.to_s,
-      content_type: content_type
-    )
+      message_stream: 'outbound'
+    }
+
+    return mail(mail_options.merge(body: body.to_s, content_type: content_type)) unless content_type.to_s.start_with?('text/plain')
+
+    mail_with_accessible_text_body(mail_options, body.to_s)
   end
 
   def log_mail_error(error, user, template_name, variables)

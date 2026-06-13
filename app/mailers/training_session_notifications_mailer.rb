@@ -12,9 +12,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Notify a trainer that a new training session has been assigned
   # Expects training_session passed via .with(training_session: ...)
   def trainer_assigned(training_session)
-    training_session = training_session
     trainer = training_session.trainer
-    locale = resolve_template_locale(recipient: trainer)
+    locale = staff_template_locale
     template_name = 'training_session_notifications_trainer_assigned'
     begin
       # Only find the text template as per project strategy
@@ -45,17 +44,17 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        trainer_full_name: trainer.full_name,
-        trainer_email: trainer.email,
-        trainer_phone_formatted: trainer.phone,
-        constituent_full_name: constituent.full_name,
-        constituent_address_formatted: format_constituent_address(constituent),
-        constituent_phone_formatted: constituent.phone,
-        constituent_email: recipient_email_for(constituent),
-        constituent_disabilities_text_list: format_disabilities_text(constituent),
-        status_box_text: status_box_text(status: :info, title: 'Training Assignment', message: 'Please contact the constituent to schedule this training session.'),
-        application_id: application.id,
-        training_session_schedule_text: training_session_schedule_text(training_session),
+      trainer_full_name: trainer.full_name,
+      trainer_email: trainer.email,
+      trainer_phone_formatted: trainer.phone,
+      constituent_full_name: constituent.full_name,
+      constituent_address_formatted: format_constituent_address(constituent),
+      constituent_phone_formatted: constituent.phone,
+      constituent_email: recipient_email_for(constituent),
+      constituent_disabilities_text_list: format_disabilities_text(constituent),
+      status_box_text: status_box_text(status: :info, title: 'Training Assignment', message: 'Please contact the constituent to schedule this training session.'),
+      application_id: application.id,
+      training_session_schedule_text: training_session_schedule_text(training_session),
       # Shared partial variables (rendered content - text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -102,7 +101,6 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Notify constituent that training is scheduled
   # Expects training_session passed via .with(training_session: ...)
   def training_scheduled(training_session)
-    training_session = training_session
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_scheduled'
@@ -135,17 +133,17 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        constituent_name: constituent.full_name || 'Valued Constituent',
-        constituent_full_name: constituent.full_name || 'Valued Constituent',
-        trainer_name: trainer.full_name || 'Your Trainer',
-        trainer_full_name: trainer.full_name || 'Your Trainer',
-        trainer_email: trainer.email,
-        trainer_phone_formatted: trainer.phone,
-        scheduled_date: formatted_training_date(training_session.scheduled_for),
-        scheduled_time: formatted_training_time(training_session.scheduled_for),
-        scheduled_date_formatted: formatted_training_date(training_session.scheduled_for),
-        scheduled_time_formatted: formatted_training_time(training_session.scheduled_for),
-        application_id: application.id,
+      constituent_name: constituent.full_name || 'Valued Constituent',
+      constituent_full_name: constituent.full_name || 'Valued Constituent',
+      trainer_name: trainer.full_name || 'Your Trainer',
+      trainer_full_name: trainer.full_name || 'Your Trainer',
+      trainer_email: trainer.email,
+      trainer_phone_formatted: trainer.phone,
+      scheduled_date: formatted_training_date(training_session.scheduled_for),
+      scheduled_time: formatted_training_time(training_session.scheduled_for),
+      scheduled_date_formatted: formatted_training_date(training_session.scheduled_for),
+      scheduled_time_formatted: formatted_training_time(training_session.scheduled_for),
+      application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -192,7 +190,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   end
 
   # Notify constituent that training is rescheduled
-  def training_rescheduled(training_session, notification = nil)
+  def training_rescheduled(training_session, notification = nil) # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_rescheduled'
@@ -287,7 +285,6 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Notify constituent that training is completed
   # Expects training_session passed via .with(training_session: ...)
   def training_completed(training_session)
-    training_session = training_session
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_completed'
@@ -320,15 +317,15 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        constituent_name: constituent.full_name || 'Valued Constituent',
-        constituent_full_name: constituent.full_name || 'Valued Constituent',
-        trainer_name: trainer.full_name || 'Your Trainer',
-        trainer_full_name: trainer.full_name || 'Your Trainer',
-        trainer_email: trainer.email,
-        trainer_phone_formatted: trainer.phone,
-        completion_date: training_session.completed_at.strftime('%B %d, %Y'),
-        completed_date_formatted: formatted_training_date(training_session.completed_at),
-        application_id: application.id,
+      constituent_name: constituent.full_name || 'Valued Constituent',
+      constituent_full_name: constituent.full_name || 'Valued Constituent',
+      trainer_name: trainer.full_name || 'Your Trainer',
+      trainer_full_name: trainer.full_name || 'Your Trainer',
+      trainer_email: trainer.email,
+      trainer_phone_formatted: trainer.phone,
+      completion_date: training_session.completed_at.strftime('%B %d, %Y'),
+      completed_date_formatted: formatted_training_date(training_session.completed_at),
+      application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -496,14 +493,14 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     end
 
     variables = {
-        constituent_name: constituent.full_name || 'Valued Constituent',
-        constituent_full_name: constituent.full_name || 'Valued Constituent',
-        trainer_name: trainer.full_name || 'Your Trainer',
-        trainer_email: trainer.email,
-        missed_date: formatted_training_date(training_session.scheduled_for),
-        missed_time: formatted_training_time(training_session.scheduled_for),
-        scheduled_date_time_formatted: training_session_schedule_text(training_session),
-        application_id: application.id,
+      constituent_name: constituent.full_name || 'Valued Constituent',
+      constituent_full_name: constituent.full_name || 'Valued Constituent',
+      trainer_name: trainer.full_name || 'Your Trainer',
+      trainer_email: trainer.email,
+      missed_date: formatted_training_date(training_session.scheduled_for),
+      missed_time: formatted_training_time(training_session.scheduled_for),
+      scheduled_date_time_formatted: training_session_schedule_text(training_session),
+      application_id: application.id,
       # Shared partial variables (text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,

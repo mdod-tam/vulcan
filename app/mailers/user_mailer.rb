@@ -9,7 +9,7 @@ class UserMailer < ApplicationMailer
     reset_url = edit_password_url(token: token, host: default_url_options[:host])
 
     template_name = 'user_mailer_password_reset'
-    locale = resolve_template_locale(recipient: user)
+    locale = audience_template_locale(recipient: user)
     text_template = find_text_template(template_name, locale: locale)
 
     variables = {
@@ -46,7 +46,7 @@ class UserMailer < ApplicationMailer
                                                                  host: default_url_options[:host])
 
     template_name = 'user_mailer_email_verification'
-    locale = resolve_template_locale(recipient: user)
+    locale = audience_template_locale(recipient: user)
     text_template = find_text_template(template_name, locale: locale)
 
     variables = {

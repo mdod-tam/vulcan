@@ -609,6 +609,8 @@ en:
           failure: "Unable to revoke secure W9 upload link."
           not_active: "This secure W9 upload link is not active."
   controllers:
+    sessions:
+      invalid_credentials: "Invalid email or password"
     application:
       check_password_change_required:
         password_security_change: "For security reasons, you must change your password before continuing."

@@ -14,7 +14,7 @@ class EvaluatorMailer < ApplicationMailer
   def new_evaluation_assigned
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_new_evaluation_assigned'
-    locale = resolve_template_locale(recipient: evaluation&.evaluator)
+    locale = staff_template_locale
 
     text_template = load_email_template(template_name, locale: locale)
     variables = build_new_evaluation_variables(evaluation, template: text_template, locale: locale)

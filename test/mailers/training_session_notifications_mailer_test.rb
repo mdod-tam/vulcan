@@ -125,6 +125,29 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
+  test 'trainer_assigned uses English template for Spanish locale trainer' do
+    @trainer.update!(locale: 'es')
+    expected_text = "English body for #{@trainer.full_name} about #{@constituent.full_name}"
+    english_template = mock('trainer_assigned_english_specific')
+    english_template.stubs(:subject).returns('English trainer assignment')
+    english_template.stubs(:render).returns(['English trainer assignment', expected_text])
+
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.stubs(:find_by!)
+                 .with(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en')
+                 .returns(english_template)
+
+    emails = capture_emails do
+      TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+    assert_equal [@trainer.email], email.to
+    assert_equal 'English trainer assignment', email.subject
+    assert_includes email.body.to_s, expected_text
+  end
+
   test 'training_scheduled' do
     # Create a specific stub for this test to ensure consistent results
     expected_date = @scheduled_for.strftime('%B %d, %Y')

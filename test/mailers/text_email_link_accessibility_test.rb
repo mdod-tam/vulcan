@@ -40,6 +40,40 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     vendor_notifications_w9_expiring_soon
   ].freeze
 
+  STAFF_ONLY_TEMPLATE_NAMES = %w[
+    application_notifications_proof_needs_review_reminder
+    application_notifications_training_requested
+    evaluator_mailer_new_evaluation_assigned
+    training_session_notifications_trainer_assigned
+  ].freeze
+
+  CONSTITUENT_FACING_TEMPLATE_NAMES = %w[
+    application_notifications_account_created
+    application_notifications_application_submitted
+    application_notifications_income_threshold_exceeded
+    application_notifications_max_rejections_reached
+    application_notifications_medical_certification_not_provided
+    application_notifications_proof_approved
+    application_notifications_proof_received
+    application_notifications_proof_rejected
+    application_notifications_proof_requested
+    application_notifications_provider_info_requested
+    application_notifications_registration_confirmation
+    application_notifications_security_key_recovery_approved
+    evaluator_mailer_evaluation_submission_confirmation
+    training_session_notifications_training_cancelled
+    training_session_notifications_training_completed
+    training_session_notifications_training_no_show
+    training_session_notifications_training_rescheduled
+    training_session_notifications_training_scheduled
+    user_mailer_email_verification
+    user_mailer_password_reset
+    voucher_notifications_voucher_assigned
+    voucher_notifications_voucher_expired
+    voucher_notifications_voucher_expiring_soon
+    voucher_notifications_voucher_redeemed
+  ].freeze
+
   # Locale keys used for plain-text email/SMS bodies that embed URLs via I18n.
   # When adding new locale-generated copy with URLs, register the dotted path here.
   LOCALE_SNIPPET_PATHS = [
@@ -94,6 +128,20 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     end
   end
 
+  test 'staff-facing email templates are English only in seed data' do
+    STAFF_ONLY_TEMPLATE_NAMES.each do |template_name|
+      assert seed_path_for(template_name, 'en').exist?, "Expected English seed for #{template_name}"
+      assert_not seed_path_for(template_name, 'es').exist?, "Unexpected Spanish seed for #{template_name}"
+    end
+  end
+
+  test 'constituent-facing email templates include Spanish seed data' do
+    CONSTITUENT_FACING_TEMPLATE_NAMES.each do |template_name|
+      assert seed_path_for(template_name, 'en').exist?, "Expected English seed for #{template_name}"
+      assert seed_path_for(template_name, 'es').exist?, "Expected Spanish seed for #{template_name}"
+    end
+  end
+
   test 'locale-generated text email snippets label URL-like lines with nearby purpose text' do
     %w[en es].each do |locale|
       locale_data = locale_data_for(locale)
@@ -115,13 +163,46 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     end
   end
 
+  test 'email bodies with purpose-labelled URL lines render HTML anchors named by purpose' do
+    reset_url = 'https://example.test/password/edit?token=abc'
+    proof_url = 'https://example.test/secure_proof_form?token=def'
+    body = <<~TEXT
+      Password reset link:
+      #{reset_url}
+
+      1. Secure proof upload link:
+         #{proof_url}
+    TEXT
+
+    email = AccessibleLinkTestMailer.with(body: body).labelled_link
+
+    assert email.multipart?
+    assert_includes decoded_text_part(email), "Password reset link:\n#{reset_url}"
+    assert_accessible_html_link email, href: reset_url, text: 'Password reset link'
+    assert_accessible_html_link email, href: proof_url, text: 'Secure proof upload link'
+    assert_no_match %r{>https://example\.test}, decoded_html_part(email)
+  end
+
+  test 'email bodies without URLs remain text only' do
+    email = AccessibleLinkTestMailer.with(body: 'No link in this message.').labelled_link
+
+    assert_not email.multipart?
+    assert_includes email.content_type, 'text/plain'
+    assert_includes email.body.decoded, 'No link in this message.'
+  end
+
   private
 
   def seed_paths_for(template_name)
     [
-      Rails.root.join('db/seeds/email_templates', "#{template_name}.rb"),
-      Rails.root.join('db/seeds/email_templates', "#{template_name}_es.rb")
+      seed_path_for(template_name, 'en'),
+      seed_path_for(template_name, 'es')
     ].select(&:exist?)
+  end
+
+  def seed_path_for(template_name, locale)
+    suffix = locale.to_s == 'en' ? '' : "_#{locale}"
+    Rails.root.join('db/seeds/email_templates', "#{template_name}#{suffix}.rb")
   end
 
   def template_bodies(path)

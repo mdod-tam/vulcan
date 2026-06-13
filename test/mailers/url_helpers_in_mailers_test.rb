@@ -40,7 +40,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     # Configure default URL options for testing
     Rails.application.config.action_mailer.default_url_options = { host: 'test.example.com' }
 
-    # Create the required email templates for multipart text emails
+    # Create the required text templates for URL-bearing emails.
     create_templates_if_missing
   end
 
@@ -48,7 +48,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     # Create a mock for the text template that returns text-only content
     mock_template = mock('EmailTemplate')
     subject = 'Your Proof Was Rejected'
-    body = 'http://test.example.com/dashboard'
+    body = "Proof resubmission link:\nhttp://test.example.com/dashboard"
     mock_template.stubs(:subject).returns(subject)
     mock_template.stubs(:render).returns([subject, body])
     mock_template.stubs(:enabled?).returns(true)
@@ -56,16 +56,16 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
 
     email = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review)
 
-    # We now only have text emails, not multipart
-    assert_equal 'text/plain; charset=UTF-8', email.content_type
-    assert_match(%r{http://test\.example\.com}, email.body.to_s)
+    assert email.multipart?
+    assert_match(%r{http://test\.example\.com}, decoded_text_part(email))
+    assert_accessible_html_link email, href: 'http://test.example.com/dashboard', text: 'Proof resubmission link'
   end
 
   test 'new_evaluation_assigned email contains absolute URLs' do
     # Create a mock for the text template that returns text-only content with all required variables
     mock_template = mock('EmailTemplate')
     subject = 'New Evaluation Assigned'
-    body = 'You can view and update the evaluation here: http://test.example.com/evaluations/123'
+    body = "Evaluator evaluation link:\nhttp://test.example.com/evaluations/123"
     mock_template.stubs(:subject).returns(subject)
     mock_template.stubs(:render).returns([subject, body])
     mock_template.stubs(:enabled?).returns(true)
@@ -76,9 +76,9 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
 
     email = EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned
 
-    # We now only have text emails, not multipart
-    assert_equal 'text/plain; charset=UTF-8', email.content_type
-    assert_match(%r{http://test\.example\.com}, email.body.to_s)
+    assert email.multipart?
+    assert_match(%r{http://test\.example\.com}, decoded_text_part(email))
+    assert_accessible_html_link email, href: 'http://test.example.com/evaluations/123', text: 'Evaluator evaluation link'
   end
 
   private

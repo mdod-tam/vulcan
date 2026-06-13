@@ -1,6 +1,13 @@
 # frozen_string_literal: true
 
 class UpdateTextEmailLinkAccessibilityCopy < ActiveRecord::Migration[8.0]
+  STAFF_ONLY_TEMPLATE_NAMES = %w[
+    application_notifications_proof_needs_review_reminder
+    application_notifications_training_requested
+    evaluator_mailer_new_evaluation_assigned
+    training_session_notifications_trainer_assigned
+  ].freeze
+
   TEMPLATE_UPDATES = [
     {
       name: 'application_notifications_account_created',
@@ -77,34 +84,6 @@ class UpdateTextEmailLinkAccessibilityCopy < ActiveRecord::Migration[8.0]
       TEXT
     },
     {
-      name: 'application_notifications_proof_needs_review_reminder',
-      locale: 'es',
-      subject: 'Solicitudes Pendientes de Revisión',
-      description: 'Enviado a los administradores resumiendo las solicitudes que han estado esperando revisión durante demasiado tiempo (por ejemplo, > 3 días).',
-      variables: { 'required' => %w[header_text admin_full_name stale_reviews_count stale_reviews_text_list admin_dashboard_url footer_text], 'optional' => [] },
-      body: <<~TEXT
-        %<header_text>s
-
-        Estimado/a %<admin_full_name>s,
-
-        ==================================================
-        ! ATENCIÓN REQUERIDA
-        ==================================================
-
-        Hay %<stale_reviews_count>s solicitudes que han estado esperando revisión de documentos por más de 3 días.
-
-        SOLICITUDES QUE REQUIEREN ATENCIÓN
-        %<stale_reviews_text_list>s
-
-        Por favor, revise estas solicitudes lo antes posible para asegurar un procesamiento oportuno para nuestros solicitantes.
-
-        Enlace al panel de administrador:
-        %<admin_dashboard_url>s
-
-        %<footer_text>s
-      TEXT
-    },
-    {
       name: 'application_notifications_security_key_recovery_approved',
       locale: 'en',
       subject: 'Security Key Recovery Approved',
@@ -168,29 +147,6 @@ class UpdateTextEmailLinkAccessibilityCopy < ActiveRecord::Migration[8.0]
         %<constituent_full_name>s requested training for Application #%<application_id>s on %<request_date_formatted>s.
 
         Admin application link:
-        %<admin_application_url>s
-
-        %<footer_text>s
-      TEXT
-    },
-    {
-      name: 'application_notifications_training_requested',
-      locale: 'es',
-      subject: 'Capacitación solicitada para la solicitud #%<application_id>s',
-      description: 'Se envía a administradores cuando un constituyente solicita capacitación.',
-      variables: {
-        'required' => %w[header_text admin_full_name constituent_full_name application_id request_date_formatted
-                         admin_application_url footer_text],
-        'optional' => []
-      },
-      body: <<~TEXT
-        %<header_text>s
-
-        Hola %<admin_full_name>s,
-
-        %<constituent_full_name>s solicitó capacitación para la solicitud #%<application_id>s el %<request_date_formatted>s.
-
-        Enlace a la solicitud administrativa:
         %<admin_application_url>s
 
         %<footer_text>s
@@ -261,41 +217,6 @@ class UpdateTextEmailLinkAccessibilityCopy < ActiveRecord::Migration[8.0]
         %<evaluators_evaluation_url>s
 
         Please begin the evaluation process by contacting the constituent to schedule an assessment.
-
-        %<footer_text>s
-      TEXT
-    },
-    {
-      name: 'evaluator_mailer_new_evaluation_assigned',
-      locale: 'es',
-      subject: 'Nueva Evaluación Asignada',
-      description: 'Enviado a un evaluador cuando se le ha asignado una nueva evaluación de un constituyente.',
-      variables: {
-        'required' => %w[header_text evaluator_full_name status_box_text constituent_full_name
-                         constituent_address_formatted constituent_phone_formatted constituent_email
-                         constituent_disabilities_text_list evaluators_evaluation_url footer_text],
-        'optional' => []
-      },
-      body: <<~TEXT
-        %<header_text>s
-
-        Hola %<evaluator_full_name>s,
-
-        %<status_box_text>s
-
-        DETALLES DEL SOLICITANTE:
-        - Nombre: %<constituent_full_name>s
-        - Dirección: %<constituent_address_formatted>s
-        - Teléfono: %<constituent_phone_formatted>s
-        - Correo Electrónico: %<constituent_email>s
-
-        DISCAPACIDADES:
-        %<constituent_disabilities_text_list>s
-
-        Enlace de evaluación para evaluador:
-        %<evaluators_evaluation_url>s
-
-        Por favor, comience el proceso de evaluación comunicándose con el solicitante para programar una evaluación.
 
         %<footer_text>s
       TEXT
@@ -623,6 +544,8 @@ class UpdateTextEmailLinkAccessibilityCopy < ActiveRecord::Migration[8.0]
   ].freeze
 
   def up
+    remove_staff_only_translation_templates!
+
     TEMPLATE_UPDATES.each do |attributes|
       update_template!(attributes)
     end
@@ -633,6 +556,10 @@ class UpdateTextEmailLinkAccessibilityCopy < ActiveRecord::Migration[8.0]
   end
 
   private
+
+  def remove_staff_only_translation_templates!
+    EmailTemplate.where(name: STAFF_ONLY_TEMPLATE_NAMES, format: :text, locale: 'es').delete_all
+  end
 
   def update_template!(attributes)
     template = EmailTemplate.find_or_initialize_by(
