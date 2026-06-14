@@ -39,7 +39,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     with_mailer_error_handling("training_requested application=#{application&.id} notification=#{notification&.id}") do
       admin = notification.recipient
       template_name = 'application_notifications_training_requested'
-      locale        = resolve_template_locale(recipient: admin)
+      locale        = staff_template_locale
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_training_requested_variables(
         application,
@@ -185,7 +185,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       return handle_no_stale_reviews if stale_reviews.empty? && !Rails.env.test?
 
-      locale        = resolve_template_locale(recipient: admin)
+      locale        = staff_template_locale
       text_template = find_text_template('application_notifications_proof_needs_review_reminder', locale: locale)
       variables     = build_review_reminder_variables(admin, stale_reviews, template: text_template, locale: locale)
 
@@ -221,7 +221,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     with_mailer_error_handling("security_key_recovery_approved recovery_request=#{recovery_request&.id}") do
       recipient = notification.recipient
       template_name = 'application_notifications_security_key_recovery_approved'
-      locale = resolve_template_locale(recipient: recipient)
+      locale = audience_template_locale(recipient: recipient)
       text_template = find_text_template(template_name, locale: locale)
       variables = build_security_key_recovery_approved_variables(recipient, template: text_template, locale: locale)
 

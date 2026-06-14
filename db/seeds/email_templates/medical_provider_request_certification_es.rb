@@ -40,7 +40,7 @@ TEXT
 template.variables = {
   'required' => %w[constituent_full_name request_count_message constituent_dob_formatted constituent_phone_formatted constituent_email
                    constituent_address_formatted application_id certification_submission_instructions support_email],
-  'optional' => %w[download_form_url secure_upload_url]
+  'optional' => []
 }
 template.version ||= 1
 template.save!

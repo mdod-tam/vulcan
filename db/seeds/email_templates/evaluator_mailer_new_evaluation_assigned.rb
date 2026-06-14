@@ -21,7 +21,7 @@ EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_new_evaluation_assigned
     DISABILITIES:
     %<constituent_disabilities_text_list>s
 
-    You can view and update the evaluation here:
+    Evaluator evaluation link:
     %<evaluators_evaluation_url>s
 
     Please begin the evaluation process by contacting the constituent to schedule an assessment.

@@ -8,8 +8,9 @@ EmailTemplate.create_or_find_by!(name: 'user_mailer_password_reset', format: :te
 
     Recibimos una solicitud de acceso a la cuenta o de restablecimiento de contraseña para %<user_email>s.
 
-    Use este enlace seguro para establecer su contraseña y acceder a su cuenta:
+    Use el enlace de restablecimiento de contraseña para establecer su contraseña y acceder a su cuenta.
 
+    Enlace de restablecimiento de contraseña:
     %<reset_url>s
 
     Este enlace caduca en 20 minutos. Si no solicitó acceso a la cuenta, puede ignorar este correo electrónico.

@@ -3,6 +3,12 @@
 class ApplicationMailer < ActionMailer::Base
   include SecureErrorSanitizer
 
+  TEXT_URL_PATTERN = %r{(?:https?://|www\.)[^\s<>"']+}
+  URL_ONLY_LINE_PATTERN = /\A\s*(?:\d+\.\s*)?(?<url>#{TEXT_URL_PATTERN})\s*\z/
+  PURPOSE_LABEL_LINE_PATTERN = /\A\s*(?:\d+\.\s*)?(?<label>[^:\n]+):\s*\z/
+  INLINE_PURPOSE_LINK_PATTERN = /(?<label>[^:\n]{2,80}?):\s*(?<url>#{TEXT_URL_PATTERN})/
+  STAFF_TEMPLATE_LOCALE = 'en'
+
   class NoopDelivery
     attr_reader :channel, :reason
 
@@ -46,12 +52,152 @@ class ApplicationMailer < ActionMailer::Base
       message_stream: 'notifications'
     }
 
-    mail(default_options.merge(mail_options)) do |format|
-      format.text { render plain: rendered_text_body }
-    end
+    mail_with_accessible_text_body(default_options.merge(mail_options), rendered_text_body)
   end
 
   private
+
+  def mail_with_accessible_text_body(mail_options, text_body)
+    text_body = text_body.to_s
+
+    return text_only_mail(mail_options, text_body) unless text_body.match?(TEXT_URL_PATTERN)
+
+    mail(mail_options) do |format|
+      format.text { render plain: text_body }
+      format.html { render body: accessible_email_html_from_text(text_body), layout: false }
+    end
+  end
+
+  def text_only_mail(mail_options, text_body)
+    mail(mail_options) do |format|
+      format.text { render plain: text_body }
+    end
+  end
+
+  def audience_template_locale(recipient:)
+    return staff_template_locale if staff_email_recipient?(recipient)
+
+    resolve_template_locale(recipient: recipient)
+  end
+
+  def staff_template_locale
+    STAFF_TEMPLATE_LOCALE
+  end
+
+  def staff_email_recipient?(recipient)
+    return false unless recipient
+
+    %i[admin? trainer? evaluator?].any? { |predicate| recipient.respond_to?(predicate) && recipient.public_send(predicate) }
+  end
+
+  def accessible_email_html_from_text(text_body)
+    paragraphs = accessible_html_paragraphs(text_body)
+
+    <<~HTML
+      <!DOCTYPE html>
+      <html>
+        <body>
+          #{paragraphs.join("\n      ")}
+        </body>
+      </html>
+    HTML
+  end
+
+  def accessible_html_paragraphs(text_body)
+    paragraphs = []
+    current_lines = []
+
+    accessible_html_lines(text_body).each do |line|
+      if line.blank?
+        flush_accessible_html_paragraph(paragraphs, current_lines)
+      else
+        current_lines << line
+      end
+    end
+
+    flush_accessible_html_paragraph(paragraphs, current_lines)
+    paragraphs
+  end
+
+  def accessible_html_lines(text_body)
+    lines = text_body.to_s.lines.map(&:chomp)
+    html_lines = []
+    index = 0
+
+    while index < lines.length
+      line = lines[index]
+      next_line = lines[index + 1]
+
+      if purpose_label_line?(line) && url_only_line?(next_line)
+        html_lines << accessible_html_link_line(line, next_line)
+        index += 2
+      else
+        html_lines << accessible_html_inline_links(line)
+        index += 1
+      end
+    end
+
+    html_lines
+  end
+
+  def flush_accessible_html_paragraph(paragraphs, current_lines)
+    return if current_lines.empty?
+
+    paragraphs << "<p>#{current_lines.join('<br>')}</p>"
+    current_lines.clear
+  end
+
+  def accessible_html_link_line(label_line, url_line)
+    "#{ERB::Util.html_escape(list_marker(label_line))}#{accessible_html_link(url_from_line(url_line), link_label(label_line))}"
+  end
+
+  def accessible_html_inline_links(line)
+    escaped_segments = []
+    remaining = line.to_s
+
+    while (match = remaining.match(INLINE_PURPOSE_LINK_PATTERN))
+      escaped_segments << ERB::Util.html_escape(match.pre_match)
+      escaped_segments << accessible_html_link(match[:url], link_label(match[:label]))
+      remaining = match.post_match
+    end
+
+    escaped_segments << ERB::Util.html_escape(remaining)
+    escaped_segments.join
+  end
+
+  def accessible_html_link(url, label)
+    safe_url = ERB::Util.html_escape(link_href(url))
+    safe_label = ERB::Util.html_escape(label.to_s)
+
+    %(<a href="#{safe_url}">#{safe_label}</a>)
+  end
+
+  def link_href(url)
+    url = url.to_s
+    return "https://#{url}" if url.start_with?('www.')
+
+    url
+  end
+
+  def purpose_label_line?(line)
+    line.to_s.match?(PURPOSE_LABEL_LINE_PATTERN)
+  end
+
+  def url_only_line?(line)
+    line.to_s.match?(URL_ONLY_LINE_PATTERN)
+  end
+
+  def url_from_line(line)
+    line.to_s.match(URL_ONLY_LINE_PATTERN)[:url]
+  end
+
+  def list_marker(line)
+    line.to_s.strip[/\A\d+\.\s*/].to_s
+  end
+
+  def link_label(line)
+    line.to_s.strip.sub(/\A\d+\.\s*/, '').delete_suffix(':').strip
+  end
 
   def noop_delivery(channel: nil, reason: nil)
     NoopDelivery.new(channel: channel, reason: reason)

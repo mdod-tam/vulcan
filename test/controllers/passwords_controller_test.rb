@@ -70,7 +70,10 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_send_account_access_sms_for_existing_phone
-    SmsService.expects(:send_message).with(@user.phone, regexp_matches(/This link expires in 20 minutes\./)).returns(true)
+    SmsService.expects(:send_message)
+              .with(@user.phone,
+                    regexp_matches(%r{MAT account access link to set your password: https?://\S+ This link expires in 20 minutes\.}))
+              .returns(true)
 
     assert_difference -> { Event.where(action: 'account_access_instructions_sent', user: @user).count }, 1 do
       assert_no_enqueued_emails do

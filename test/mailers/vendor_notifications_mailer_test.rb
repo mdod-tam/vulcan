@@ -34,9 +34,8 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     @invoice = create(:invoice, vendor: @vendor)
     @transactions = create_list(:voucher_transaction, 3, invoice: @invoice, vendor: @vendor)
 
-    # Per project strategy, HTML emails are not used. Only stub for :text format.
-    # If the mailer attempts to find_by!(format: :html), it should fail (e.g., RecordNotFound)
-    # as no HTML templates should be seeded for these, and we provide no stub.
+    # Stored templates remain text-only; URL-bearing emails derive an HTML part
+    # from the rendered text body.
 
     # Create specific mock templates for each mailer method
     rejected_template = mock_template(
@@ -165,14 +164,14 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [@vendor.email], email.to
     assert_equal 'W9 Form Requires Correction', email.subject
 
-    # For non-multipart emails, we check the body directly
-    assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
+    assert email.multipart?
+    assert_includes email.content_type, 'multipart/alternative'
 
     # Check that the email body contains the secure-link instructions from the stored template
-    assert_includes email.body.to_s, review.rejection_reason
-    assert_includes email.body.to_s, secure_upload_url
-    assert_includes email.body.to_s, 'Upload your corrected W9 securely here'
+    assert_includes decoded_text_part(email), review.rejection_reason
+    assert_includes decoded_text_part(email), secure_upload_url
+    assert_includes decoded_text_part(email), 'Secure W9 upload link'
+    assert_accessible_html_link email, href: secure_upload_url, text: 'Secure W9 upload link'
   end
 
   test 'w9_upload_requested' do
@@ -191,9 +190,11 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@vendor.email], email.to
     assert_equal "Secure W9 upload requested for #{@vendor.business_name}", email.subject
-    assert_includes email.content_type, 'text/plain'
-    assert_includes email.body.to_s, secure_upload_url
-    assert_includes email.body.to_s, 'has requested a W9 form from you'
+    assert email.multipart?
+    assert_includes email.content_type, 'multipart/alternative'
+    assert_includes decoded_text_part(email), secure_upload_url
+    assert_includes decoded_text_part(email), 'has requested a W9 form from you'
+    assert_accessible_html_link email, href: secure_upload_url, text: 'Secure W9 upload link'
   end
 
   test 'mailer error audit metadata redacts secure upload URLs' do
