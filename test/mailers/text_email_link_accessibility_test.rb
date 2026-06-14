@@ -62,7 +62,6 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     application_notifications_security_key_recovery_approved
     evaluator_mailer_evaluation_submission_confirmation
     training_session_notifications_training_cancelled
-    training_session_notifications_training_completed
     training_session_notifications_training_no_show
     training_session_notifications_training_rescheduled
     training_session_notifications_training_scheduled

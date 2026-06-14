@@ -179,8 +179,9 @@ class ProofReview < ApplicationRecord
     )
   end
 
-  # Creates a notification record and sends the email using the new NotificationService.
-  # Notification failures don't interrupt the proof review process.
+  # Creates a record-only notification for Recent Notifications.
+  # Approval mail/letters are intentionally suppressed; constituents can see
+  # proof status in the portal and staff can see the audit event.
   def send_approval_notification
     AuditEventService.log(
       action: 'proof_approved',
@@ -197,7 +198,8 @@ class ProofReview < ApplicationRecord
       actor: admin,
       notifiable: application,
       metadata: { proof_type: proof_type },
-      channel: :email
+      channel: :email,
+      deliver: false
     )
   rescue StandardError => e
     Rails.logger.error "Failed to send proof_approved notification via NotificationService: #{e.message}"

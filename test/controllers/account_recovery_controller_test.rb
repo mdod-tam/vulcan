@@ -6,6 +6,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   setup do
     # Set up a test user with WebAuthn credentials
     @user = create(:user) # Replaced fixture with factory
+    @admin = create(:admin)
     @webauthn_credential = setup_webauthn_credential_for(@user)
   end
 
@@ -55,11 +56,27 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to account_recovery_confirmation_path
   end
 
-  test 'should enqueue admin notification job when request created' do
-    # Check if the notification job gets enqueued
-    assert_enqueued_with(job: NotifyAdminsJob) do
+  test 'should create record-only admin notification when request created' do
+    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+      assert_difference -> { Notification.where(action: 'security_key_recovery_requested', recipient: @admin).count }, 1 do
+        post request_security_key_reset_path, params: {
+          email: @user.email,
+          details: 'Test notification'
+        }
+      end
+    end
+
+    notification = Notification.where(action: 'security_key_recovery_requested', recipient: @admin).last
+    assert_equal RecoveryRequest.last, notification.notifiable
+    assert_equal @user, notification.actor
+    assert_equal RecoveryRequest.last.id, notification.metadata['recovery_request_id']
+    assert_nil notification.delivery_status
+  end
+
+  test 'should not create admin notification for non-existent user' do
+    assert_no_difference -> { Notification.where(action: 'security_key_recovery_requested').count } do
       post request_security_key_reset_path, params: {
-        email: @user.email,
+        email: 'nonexistent@example.com',
         details: 'Test notification'
       }
     end

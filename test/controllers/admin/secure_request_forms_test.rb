@@ -179,6 +179,34 @@ module Admin
       assert_not_includes response.body, 'Send Secure Cert Upload Link'
     end
 
+    test 'show page hides secure certification upload link when certification is attached before request' do
+      application = create(:application,
+                           :with_medical_certification,
+                           medical_provider_name: 'Dr. Secure',
+                           medical_provider_email: 'secure@example.test',
+                           medical_certification_status: :not_requested)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select '[data-testid="medical-certification"]', text: /medical_certification\.pdf/
+      assert_not_includes response.body, 'Send Secure Cert Upload Link'
+    end
+
+    test 'show page offers secure certification upload link after attached certification is rejected' do
+      application = create(:application,
+                           :with_medical_certification,
+                           medical_provider_name: 'Dr. Secure',
+                           medical_provider_email: 'secure@example.test',
+                           medical_certification_status: :rejected)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select "form[action='#{admin_application_certification_upload_request_path(application)}'][data-turbo='false']"
+      assert_includes response.body, 'Send Secure Cert Upload Link'
+    end
+
     test 'show page warns before secure certification upload when DocuSeal is active' do
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',

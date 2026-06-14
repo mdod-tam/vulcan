@@ -61,6 +61,36 @@ export default class ContactFeedbackController extends Controller {
   }
 
   /**
+   * Toggle email field visibility when "no email" checkbox is checked
+   */
+  toggleEmailField(event) {
+    const checkbox = event.target
+    const emailInput = this.hasEmailTarget ? this.emailTarget : null
+    const emailWrapper = document.querySelector('#email_field_wrapper')
+    
+    if (!emailInput || !emailWrapper) return
+    
+    if (checkbox.checked) {
+      emailWrapper.classList.add('hidden')
+      emailInput.required = false
+      emailInput.removeAttribute('aria-required')
+      emailInput.value = ''
+      emailInput.disabled = true
+      // Auto-select letter delivery when no email
+      const letterRadio = this.element.querySelector('input[name="constituent[communication_preference]"][value="letter"]')
+      if (letterRadio) {
+        letterRadio.checked = true
+        this.updateDeliveryFeedback()
+      }
+    } else {
+      emailWrapper.classList.remove('hidden')
+      emailInput.required = true
+      emailInput.setAttribute('aria-required', 'true')
+      emailInput.disabled = false
+    }
+  }
+
+  /**
    * Listeners on phone/email/address inputs for real-time feedback updates
    */
   _setupInputListeners() {

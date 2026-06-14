@@ -9,69 +9,32 @@ class NotificationServiceTest < ActiveSupport::TestCase
     @application = create(:application, user: @constituent)
   end
 
-  test 'create_and_deliver! creates a notification and enqueues an email job' do
+  teardown do
+    Current.reset
+  end
+
+  test 'create_and_deliver! creates a notification and enqueues an email job for deliverable actions' do
     assert_enqueued_jobs 1, only: ActionMailer::MailDeliveryJob do
       notification = nil
       assert_difference 'Notification.count', 1 do
         notification = NotificationService.create_and_deliver!(
-          type: :proof_approved,
+          type: :proof_rejected,
           recipient: @constituent,
           actor: @admin,
           notifiable: @application,
+          metadata: { proof_type: 'income', rejection_reason: 'Missing documentation' },
           channel: :email
         )
       end
 
       assert_not_nil notification
-      assert_equal 'proof_approved', notification.action
+      assert_equal 'proof_rejected', notification.action
       assert_equal @constituent, notification.recipient
       assert_equal @application, notification.notifiable
       assert_equal 'email', notification.metadata['channel']
       assert_equal 'email', notification.metadata['actual_delivery_channel']
       assert_equal 'requested_channel', notification.metadata['delivery_route_reason']
     end
-  end
-
-  test 'create_and_deliver! tracks actual letter routing when mailer returns noop delivery' do
-    @constituent.update!(communication_preference: 'letter')
-    ApplicationNotificationsMailer.stubs(:proof_approved).returns(
-      ApplicationMailer::NoopDelivery.new
-    )
-
-    notification = NotificationService.create_and_deliver!(
-      type: :proof_approved,
-      recipient: @constituent,
-      actor: @admin,
-      notifiable: @application,
-      channel: :email
-    )
-
-    assert_not_nil notification
-    notification.reload
-    assert_equal 'email', notification.metadata['channel']
-    assert_equal 'letter', notification.metadata['actual_delivery_channel']
-    assert_equal 'preference', notification.metadata['delivery_route_reason']
-  end
-
-  test 'create_and_deliver! infers actual letter routing for preference-routed actions' do
-    @constituent.update!(communication_preference: 'letter')
-    mail_delivery = mock('mail_delivery')
-    mail_delivery.stubs(:deliver_later).returns(true)
-    ApplicationNotificationsMailer.stubs(:proof_approved).returns(mail_delivery)
-
-    notification = NotificationService.create_and_deliver!(
-      type: :proof_approved,
-      recipient: @constituent,
-      actor: @admin,
-      notifiable: @application,
-      channel: :email
-    )
-
-    assert_not_nil notification
-    notification.reload
-    assert_equal 'email', notification.metadata['channel']
-    assert_equal 'letter', notification.metadata['actual_delivery_channel']
-    assert_equal 'preference', notification.metadata['delivery_route_reason']
   end
 
   test 'create_and_deliver! records actual email when requested channel is letter for non-letter mailer actions' do
@@ -92,6 +55,44 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_equal 'letter', notification.metadata['channel']
     assert_equal 'email', notification.metadata['actual_delivery_channel']
     assert_equal 'mailer_override', notification.metadata['delivery_route_reason']
+  end
+
+  test 'proof approval notifications are record-only delivery noops' do
+    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+      notification = NotificationService.create_and_deliver!(
+        type: :proof_approved,
+        recipient: @constituent,
+        actor: @admin,
+        notifiable: @application,
+        channel: :email
+      )
+
+      assert_not_nil notification
+      notification.reload
+      assert_equal 'proof_approved', notification.action
+      assert_equal 'none', notification.metadata['actual_delivery_channel']
+      assert_equal 'no_email_action', notification.metadata['delivery_route_reason']
+      assert_nil notification.delivery_status
+    end
+  end
+
+  test 'medical certification approval notifications are record-only delivery noops' do
+    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+      notification = NotificationService.create_and_deliver!(
+        type: :medical_certification_approved,
+        recipient: @constituent,
+        actor: @admin,
+        notifiable: @application,
+        channel: :email
+      )
+
+      assert_not_nil notification
+      notification.reload
+      assert_equal 'medical_certification_approved', notification.action
+      assert_equal 'none', notification.metadata['actual_delivery_channel']
+      assert_equal 'no_email_action', notification.metadata['delivery_route_reason']
+      assert_nil notification.delivery_status
+    end
   end
 
   test 'create_and_deliver! does NOT create an Event record directly' do
@@ -121,7 +122,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
 
   test 'handle_delivery_error updates notification status on mailer failure' do
     # Stub the mailer to raise an error
-    ApplicationNotificationsMailer.stubs(:proof_approved).raises(Net::SMTPAuthenticationError, 'SMTP auth error')
+    ApplicationNotificationsMailer.stubs(:proof_rejected).raises(Net::SMTPAuthenticationError, 'SMTP auth error')
 
     assert_no_difference 'Notification.count' do # Should not create a new notification on failure, but update existing one
       # We expect it to fail, so we check the created notification afterwards
@@ -131,8 +132,9 @@ class NotificationServiceTest < ActiveSupport::TestCase
     notification = Notification.create!(
       recipient: @constituent,
       actor: @admin,
-      action: 'proof_approved',
-      notifiable: @application
+      action: 'proof_rejected',
+      notifiable: @application,
+      metadata: { proof_type: 'income' }
     )
 
     # Call the delivery part which should fail and handle the error
@@ -163,8 +165,8 @@ class NotificationServiceTest < ActiveSupport::TestCase
     # Test a few examples
     proof_approved_notif = Notification.new(action: 'proof_approved')
     mailer, method = NotificationService.send(:resolve_mailer, proof_approved_notif)
-    assert_equal ApplicationNotificationsMailer, mailer
-    assert_equal :proof_approved, method
+    assert_nil mailer
+    assert_nil method
 
     medical_cert_notif = Notification.new(action: 'medical_certification_rejected')
     mailer, method = NotificationService.send(:resolve_mailer, medical_cert_notif)
@@ -237,6 +239,53 @@ class NotificationServiceTest < ActiveSupport::TestCase
       type: :id_proof_attached,
       recipient: @constituent,
       actor: @constituent,
+      notifiable: @application,
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+  end
+
+  test 'proof rejected with proof review notifiable routes application and review to mailer' do
+    Current.paper_context = true
+    proof_review = create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :income)
+    Current.paper_context = false
+
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.expects(:proof_rejected)
+                                  .with(@application, proof_review, recipient: @constituent)
+                                  .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :proof_rejected,
+      recipient: @constituent,
+      actor: @admin,
+      notifiable: proof_review,
+      metadata: { proof_type: 'income' },
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+  end
+
+  test 'typed proof rejected routes proof review lookup to proof rejected mailer' do
+    Current.paper_context = true
+    proof_review = create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :income)
+    Current.paper_context = false
+
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.expects(:proof_rejected)
+                                  .with(@application, proof_review, recipient: @constituent)
+                                  .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :income_proof_rejected,
+      recipient: @constituent,
+      actor: @admin,
       notifiable: @application,
       channel: :email
     )

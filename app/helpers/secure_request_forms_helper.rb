@@ -147,10 +147,32 @@ module SecureRequestFormsHelper
   def secure_proof_resubmission_notification_detail(notification, metadata)
     recipient_name = notification.recipient&.full_name || 'Unknown recipient'
     channel = secure_request_recipient_channel_label(metadata)
-    proof_name = metadata['proof_type'].to_s.humanize.presence || 'proof'
+    proof_type = metadata['proof_type']
     expires_text = secure_request_notification_expires_text(metadata)
+    request_context = secure_proof_resubmission_request_context(notification, metadata, proof_type)
 
-    "Secure #{proof_name.downcase} upload link sent to #{recipient_name} via #{channel}#{expires_text}"
+    "#{request_context}; secure upload link sent to #{recipient_name} via #{channel}#{expires_text}"
+  end
+
+  def secure_proof_resubmission_request_context(notification, metadata, proof_type)
+    proof_type = proof_type.to_s
+    application = notification.notifiable if notification.notifiable.is_a?(Application)
+
+    if notification.proof_resubmission_rejected?
+      reason = metadata['rejection_reason'].presence || latest_secure_proof_rejection_reason(application, proof_type)
+      return ProofNotificationCopy.rejected_text(proof_type, reason)
+    end
+
+    ProofNotificationCopy.requested_text(proof_type)
+  end
+
+  def latest_secure_proof_rejection_reason(application, proof_type)
+    return if application.blank? || proof_type.blank?
+
+    application.proof_reviews
+               .where(proof_type: proof_type, status: :rejected)
+               .order(updated_at: :desc, created_at: :desc)
+               .pick(:rejection_reason)
   end
 
   def secure_cert_upload_notification_detail(metadata, application)

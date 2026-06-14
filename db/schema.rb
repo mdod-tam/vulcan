@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_26_123000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_04_172500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -683,6 +683,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_26_123000) do
     t.datetime "cancelled_at"
     t.datetime "completed_at"
     t.datetime "created_at", null: false
+    t.decimal "duration_hours", precision: 5, scale: 2, default: "2.0", null: false
     t.string "location"
     t.text "no_show_notes"
     t.text "notes"
@@ -693,9 +694,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_26_123000) do
     t.bigint "trainer_id", null: false
     t.datetime "updated_at", null: false
     t.index ["application_id"], name: "index_training_sessions_on_application_id"
-    t.index ["application_id"], name: "index_training_sessions_one_open_per_application", unique: true, where: "(status = ANY (ARRAY[0, 1, 2]))"
     t.index ["product_trained_on_id"], name: "index_training_sessions_on_product_trained_on_id"
     t.index ["trainer_id"], name: "index_training_sessions_on_trainer_id"
+  end
+
+  create_table "user_email_search_tokens", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["token_digest"], name: "index_user_email_search_tokens_on_token_digest"
+    t.index ["user_id", "token_digest"], name: "index_user_email_search_tokens_on_user_id_and_token_digest", unique: true
+    t.index ["user_id"], name: "index_user_email_search_tokens_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -710,7 +720,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_26_123000) do
     t.text "date_of_birth"
     t.string "dependent_email", comment: "Optional email for dependents; if blank, uses guardian email"
     t.string "dependent_phone", comment: "Optional phone for dependents; if blank, uses guardian phone"
-    t.string "email", limit: 510, null: false
+    t.string "email"
     t.boolean "email_verified"
     t.bigint "evaluator_id"
     t.integer "failed_attempts"

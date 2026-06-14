@@ -29,6 +29,7 @@ import DependentSelectorController from "./forms/dependent_selector_controller"
 import IncomeValidationController from "./forms/income_validation_controller"
 import PaperApplicationController from "./forms/paper_application_controller"
 import RejectionFormController from "./forms/rejection_form_controller"
+import TrainingDurationConfirmationController from "./forms/training_duration_confirmation_controller"
 
 // Review Controllers
 import EvaluationManagementController from "./reviews/evaluation_management_controller"
@@ -90,6 +91,7 @@ application.register("dependent-selector", DependentSelectorController)
 application.register("income-validation", IncomeValidationController)
 application.register("paper-application", PaperApplicationController)
 application.register("rejection-form", RejectionFormController)
+application.register("training-duration-confirmation", TrainingDurationConfirmationController)
 
 // Review Controllers
 application.register("evaluation-management", EvaluationManagementController)

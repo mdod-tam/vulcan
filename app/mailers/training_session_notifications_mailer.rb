@@ -36,7 +36,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -52,6 +52,9 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       constituent_phone_formatted: constituent.phone,
       constituent_email: recipient_email_for(constituent),
       constituent_disabilities_text_list: format_disabilities_text(constituent),
+      constituent_language: format_constituent_language(constituent, locale),
+      constituent_contact_method: format_constituent_contact_method(constituent, locale),
+      constituent_communication_modality: format_constituent_communication_modality(constituent, locale),
       status_box_text: status_box_text(status: :info, title: 'Training Assignment', message: 'Please contact the constituent to schedule this training session.'),
       application_id: application.id,
       training_session_schedule_text: training_session_schedule_text(training_session),
@@ -125,7 +128,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -190,7 +193,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   end
 
   # Notify constituent that training is rescheduled
-  def training_rescheduled(training_session, notification = nil) # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+  # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+  def training_rescheduled(training_session, notification = nil)
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
     template_name = 'training_session_notifications_training_rescheduled'
@@ -216,7 +220,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -281,95 +285,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
     raise
   end
-
-  # Notify constituent that training is completed
-  # Expects training_session passed via .with(training_session: ...)
-  def training_completed(training_session)
-    constituent = training_session.constituent
-    locale = resolve_template_locale(recipient: constituent)
-    template_name = 'training_session_notifications_training_completed'
-    begin
-      # Only find the text template as per project strategy
-      text_template = find_text_template(template_name, locale: locale)
-    rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
-      raise "Email templates not found for #{template_name}"
-    end
-
-    # Prepare variables
-    trainer = training_session.trainer
-    application = training_session.application
-
-    # Common elements for shared partials
-    header_title = header_title_from_template_subject(
-      template: text_template,
-      subject_variables: { application_id: application.id },
-      fallback: "Training Completed - Application ##{application.id}"
-    )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    footer_website_url = ProgramContact.website_url
-    footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
-    header_logo_url = begin
-      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-    rescue StandardError
-      nil
-    end
-
-    variables = {
-      constituent_name: constituent.full_name || 'Valued Constituent',
-      constituent_full_name: constituent.full_name || 'Valued Constituent',
-      trainer_name: trainer.full_name || 'Your Trainer',
-      trainer_full_name: trainer.full_name || 'Your Trainer',
-      trainer_email: trainer.email,
-      trainer_phone_formatted: trainer.phone,
-      completion_date: training_session.completed_at.strftime('%B %d, %Y'),
-      completed_date_formatted: formatted_training_date(training_session.completed_at),
-      application_id: application.id,
-      # Shared partial variables (text only for non-multipart emails)
-      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
-                               locale: locale),
-      header_logo_url: header_logo_url, # Optional
-      header_subtitle: nil, # Optional
-      support_email: footer_contact_email
-    }.compact
-
-    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
-
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send training_completed email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(constituent),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
-  rescue StandardError => e
-    # Log error with more details
-    AuditEventService.log(
-      actor: trainer, # Use local variable if available, otherwise nil
-      action: 'email_delivery_error',
-      auditable: trainer,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name, # Use local variable
-        variables: variables, # Use local variable
-        backtrace: e.backtrace&.first(5)
-      }
-    )
-    raise
-  end
+  # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
 
   # Notify constituent that training is cancelled
   def training_cancelled(training_session)
@@ -397,7 +313,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -485,7 +401,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'MAT-Vulcan'
+    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
     header_logo_url = begin
       ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
     rescue StandardError
@@ -598,6 +514,43 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     return 'No disabilities recorded' if disabilities.blank?
 
     disabilities.map { |disability| "- #{disability}" }.join("\n")
+  end
+
+  def format_constituent_language(constituent, template_locale)
+    constituent_locale = if constituent.respond_to?(:effective_locale)
+                           constituent.effective_locale
+                         else
+                           constituent.locale
+                         end
+
+    language = constituent_locale.to_s == 'es' ? :spanish : :english
+    localized_label(language, locale: template_locale)
+  end
+
+  def format_constituent_contact_method(constituent, locale)
+    phone_type = if constituent.respond_to?(:effective_phone_type)
+                   constituent.effective_phone_type
+                 else
+                   constituent.phone_type
+                 end
+
+    localized_label(phone_type.to_s, locale: locale)
+  end
+
+  def format_constituent_communication_modality(constituent, locale)
+    localized_label(constituent.preferred_means_of_communication.to_s, locale: locale)
+  end
+
+  def localized_label(value, locale:)
+    I18n.t("training_session_notifications.trainer_assigned.labels.#{value}",
+           default: localized_not_specified(locale),
+           locale: locale)
+  end
+
+  def localized_not_specified(locale)
+    I18n.t('training_session_notifications.trainer_assigned.labels.not_specified',
+           default: 'Not specified',
+           locale: locale)
   end
 
   def queue_letter_if_preferred(constituent, template_name, variables, application: nil)

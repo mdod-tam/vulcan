@@ -265,6 +265,7 @@ Rails.application.routes.draw do
         post :reset_password
         post :remind_to_complete
         post :assign_evaluator
+        delete :mfa_tokens, action: :destroy_mfa_tokens
         patch :update_role
         patch :update_capabilities
         get :history
@@ -365,6 +366,7 @@ Rails.application.routes.draw do
         patch :update_status
         post :complete
         post :schedule
+        post :schedule_additional
         post :reschedule
         post :cancel
       end
@@ -410,7 +412,6 @@ Rails.application.routes.draw do
       member do
         patch :autosave_field
         patch :upload_documents
-        post :request_review
         patch :submit
         post :resubmit_proof
         post :update # Handle form submissions that POST to update path

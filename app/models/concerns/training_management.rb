@@ -5,20 +5,26 @@
 module TrainingManagement
   extend ActiveSupport::Concern
 
-  def max_training_sessions
-    Policy.max_training_sessions
-  end
+  delegate :max_training_sessions, to: :Policy
 
   def completed_training_sessions_count
     training_sessions.completed_sessions.count
   end
 
+  def open_training_sessions_count
+    training_sessions.assigned_or_scheduled.count
+  end
+
+  def reserved_training_sessions_count
+    completed_training_sessions_count + open_training_sessions_count
+  end
+
   def remaining_training_sessions
-    [max_training_sessions - completed_training_sessions_count, 0].max
+    [max_training_sessions - reserved_training_sessions_count, 0].max
   end
 
   def training_session_quota_exhausted?
-    completed_training_sessions_count >= max_training_sessions
+    reserved_training_sessions_count >= max_training_sessions
   end
 
   def latest_training_session
@@ -49,6 +55,8 @@ module TrainingManagement
     end
 
     with_lock do
+      # Admin assignment creates the initial requested session. Additional dated
+      # sessions are scheduled by the assigned trainer from an existing session.
       if active_training_session_present?
         errors.add(:base, :training_session_active)
         return false
@@ -93,15 +101,15 @@ module TrainingManagement
   end
 
   def unassign_trainer!(actor:, reason: nil)
-    training_session = active_training_session
-    unless training_session
-      errors.add(:base, :training_session_not_active)
-      return false
-    end
-
     cancellation_reason = reason.presence || 'Trainer assignment removed by administrator.'
 
     with_lock do
+      open_training_sessions = training_sessions.assigned_or_scheduled.includes(:trainer).to_a
+      if open_training_sessions.empty?
+        errors.add(:base, :training_session_not_active)
+        return false
+      end
+
       update_attributes = {
         status: :cancelled,
         cancelled_at: Time.current,
@@ -111,16 +119,16 @@ module TrainingManagement
       }
       update_attributes[:cancellation_initiator] = :admin if TrainingSession.cancellation_initiator_column?
 
-      training_session.update!(update_attributes)
+      open_training_sessions.each { |training_session| training_session.update!(update_attributes) }
 
       AuditEventService.log(
         action: 'trainer_unassigned',
         actor: actor,
         auditable: self,
         metadata: {
-          training_session_id: training_session.id,
-          trainer_id: training_session.trainer_id,
-          trainer_name: training_session.trainer.full_name,
+          training_session_ids: open_training_sessions.map(&:id),
+          trainer_ids: open_training_sessions.map(&:trainer_id).uniq,
+          trainer_names: open_training_sessions.map { |training_session| training_session.trainer.full_name }.uniq,
           cancellation_reason: cancellation_reason
         }
       )

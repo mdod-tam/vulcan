@@ -423,6 +423,7 @@ module Admin
         :contact_info_mode, :contact_info_verified,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
+        :no_email_address,
         :income_proof_action, :income_proof, :income_proof_signed_id,
         :income_proof_rejection_reason, :income_proof_custom_rejection_reason,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
@@ -442,7 +443,7 @@ module Admin
     def base_params_from(permitted)
       base = permitted.slice(
         :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
-        :existing_constituent_id, :contact_info_mode, :contact_info_verified
+        :existing_constituent_id, :contact_info_mode, :contact_info_verified, :no_email_address
       )
       base[:applicant_type] = compute_applicant_type(permitted)
       base

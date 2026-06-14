@@ -360,6 +360,122 @@ module Admin
       end
     end
 
+    def destroy_mfa_tokens
+      @user = User.find(params[:id])
+
+      if protected_system_user?(@user)
+        AuditEventService.log(
+          action: 'admin_user_mfa_tokens_blocked',
+          actor: current_user,
+          auditable: @user,
+          metadata: user_audit_metadata(@user).merge(
+            admin_id: current_user.id,
+            admin_name: current_user.full_name,
+            reason: 'system_user'
+          )
+        )
+        redirect_to admin_user_path(@user), alert: 'You cannot delete MFA tokens for the system user.'
+        return
+      end
+
+      credential_counts = mfa_credential_counts(@user)
+      sessions_count = @user.sessions.count
+
+      User.transaction do
+        @user.webauthn_credentials.destroy_all
+        @user.totp_credentials.destroy_all
+        @user.sms_credentials.destroy_all
+        @user.sessions.destroy_all
+
+        AuditEventService.log(
+          action: 'admin_user_mfa_tokens_deleted',
+          actor: current_user,
+          auditable: @user,
+          metadata: user_audit_metadata(@user).merge(
+            admin_id: current_user.id,
+            admin_name: current_user.full_name,
+            deleted_mfa_credentials: credential_counts,
+            deleted_sessions_count: sessions_count
+          )
+        )
+      end
+
+      if credential_counts.values.sum.positive?
+        redirect_to admin_user_path(@user), notice: "Deleted MFA tokens for #{@user.full_name}."
+      else
+        redirect_to admin_user_path(@user), notice: "No MFA tokens were found for #{@user.full_name}."
+      end
+    end
+
+    def destroy
+      @user = User.find(params[:id])
+
+      if protected_system_user?(@user)
+        AuditEventService.log(
+          action: 'admin_user_deletion_blocked',
+          actor: current_user,
+          auditable: @user,
+          metadata: user_audit_metadata(@user).merge(
+            admin_id: current_user.id,
+            admin_name: current_user.full_name,
+            reason: 'system_user'
+          )
+        )
+        redirect_to admin_user_path(@user), alert: 'You cannot delete the system user.'
+        return
+      end
+
+      if @user == current_user
+        AuditEventService.log(
+          action: 'admin_user_deletion_blocked',
+          actor: current_user,
+          auditable: @user,
+          metadata: user_audit_metadata(@user).merge(
+            admin_id: current_user.id,
+            admin_name: current_user.full_name,
+            reason: 'self_deletion'
+          )
+        )
+        redirect_to admin_user_path(@user), alert: 'You cannot delete your own user account.'
+        return
+      end
+
+      metadata = user_audit_metadata(@user).merge(
+        admin_id: current_user.id,
+        admin_name: current_user.full_name
+      )
+
+      AuditEventService.log(
+        action: 'admin_user_deletion_attempted',
+        actor: current_user,
+        auditable: @user,
+        metadata: metadata
+      )
+
+      begin
+        @user.destroy!
+      rescue ActiveRecord::ActiveRecordError => e
+        AuditEventService.log(
+          action: 'admin_user_deletion_failed',
+          actor: current_user,
+          auditable: @user,
+          metadata: metadata.merge(error_class: e.class.name, error_message: e.message)
+        )
+
+        redirect_to admin_user_path(@user),
+                    alert: "Could not delete #{@user.full_name}. The failure was logged for review."
+        return
+      end
+
+      AuditEventService.log(
+        action: 'admin_user_deleted',
+        actor: current_user,
+        metadata: metadata
+      )
+
+      redirect_to admin_users_path, notice: "Deleted user #{metadata[:target_user_name]}."
+    end
+
     def constituents
       @q = params[:q]
       scope = User.where(type: 'Constituent')
@@ -452,6 +568,27 @@ module Admin
     end
 
     private
+
+    def protected_system_user?(user)
+      User.normalize_email(user.email) == 'system@mdmat.org'
+    end
+
+    def mfa_credential_counts(user)
+      {
+        webauthn_credentials: user.webauthn_credentials.count,
+        totp_credentials: user.totp_credentials.count,
+        sms_credentials: user.sms_credentials.count
+      }
+    end
+
+    def user_audit_metadata(user)
+      {
+        target_user_id: user.id,
+        target_user_name: user.full_name,
+        target_user_email: user.email,
+        target_user_type: user.type
+      }
+    end
 
     def adult_eligibility_context(user, last_app)
       waiting_period = Policy.get('waiting_period_years') || 3

@@ -131,7 +131,7 @@ class NotificationService
 
   MAILER_MAP = {
     'proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'proof_approved' => [ApplicationNotificationsMailer, :proof_approved],
+    'id_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
     'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
     'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
     'account_created' => [ApplicationNotificationsMailer, :account_created],
@@ -144,11 +144,9 @@ class NotificationService
     'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
     'training_scheduled' => [TrainingSessionNotificationsMailer, :training_scheduled],
     'training_rescheduled' => [TrainingSessionNotificationsMailer, :training_rescheduled],
-    'training_completed' => [TrainingSessionNotificationsMailer, :training_completed],
     'training_cancelled' => [TrainingSessionNotificationsMailer, :training_cancelled],
     'training_missed' => [TrainingSessionNotificationsMailer, :no_show_notification],
     'security_key_recovery_approved' => [ApplicationNotificationsMailer, :security_key_recovery_approved],
-    'medical_certification_approved' => [MedicalProviderMailer, :approved],
     'medical_certification_requested' => [MedicalProviderMailer, :requested],
     'medical_certification_not_provided' => [ApplicationNotificationsMailer, :medical_certification_not_provided],
     'max_rejections_warning' => [ApplicationNotificationsMailer, :max_rejections_reached]
@@ -161,11 +159,13 @@ class NotificationService
   NOOP_DELIVERY_ACTIONS = %w[
     medical_certification_received
     documents_requested
+    proof_approved
+    medical_certification_approved
   ].freeze
 
   PREFERENCE_ROUTED_ACTIONS = %w[
     proof_rejected
-    proof_approved
+    id_proof_rejected
     income_proof_rejected
     residency_proof_rejected
     account_created
@@ -176,7 +176,6 @@ class NotificationService
     trainer_assigned
     training_scheduled
     training_rescheduled
-    training_completed
     training_cancelled
     training_missed
     security_key_recovery_approved
@@ -400,7 +399,7 @@ class NotificationService
 
   def enforce_delivery_contracts!(notification)
     contract_ok = case notification.action
-                  when 'proof_rejected', 'proof_approved', 'income_proof_rejected', 'residency_proof_rejected'
+                  when 'proof_rejected', 'id_proof_rejected', 'income_proof_rejected', 'residency_proof_rejected'
                     # Accept both Application and ProofReview as valid notifiable types
                     ensure_action_contract?(notification, notifiable_class: [Application, ProofReview], actor_presence: true)
                   when 'account_created'
@@ -439,10 +438,8 @@ class NotificationService
     case notification.action
     when 'account_created'
       mailer_class.public_send(method_name, notification.recipient)
-    when 'proof_rejected', 'proof_approved'
-      application = notification.notifiable
-      proof_type = notification.metadata&.dig('proof_type')
-      proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
+    when 'proof_rejected', 'id_proof_rejected', 'income_proof_rejected', 'residency_proof_rejected'
+      application, proof_review = proof_review_delivery_context(notification)
       mailer_class.public_send(method_name, application, proof_review, recipient: notification.recipient)
     when 'id_proof_attached', 'income_proof_attached', 'residency_proof_attached'
       application = notification.notifiable
@@ -450,12 +447,31 @@ class NotificationService
                    notification.action.delete_suffix('_proof_attached')
       mailer_class.public_send(method_name, application, proof_type)
     when 'trainer_assigned', 'training_scheduled',
-         'training_completed', 'training_cancelled', 'training_missed',
+         'training_cancelled', 'training_missed',
          'max_rejections_warning'
       mailer_class.public_send(method_name, notification.notifiable)
     else
       mailer_class.public_send(method_name, notification.notifiable, notification)
     end
+  end
+
+  def proof_review_delivery_context(notification)
+    if notification.notifiable.is_a?(ProofReview)
+      proof_review = notification.notifiable
+      return [proof_review.application, proof_review]
+    end
+
+    application = notification.notifiable
+    proof_type = notification.metadata&.dig('proof_type').presence || proof_type_from_rejection_action(notification.action)
+    proof_review = find_proof_review_for_notification(application, proof_type, notification.action)
+
+    [application, proof_review]
+  end
+
+  def proof_type_from_rejection_action(action)
+    return unless action.to_s.end_with?('_proof_rejected')
+
+    action.to_s.delete_suffix('_proof_rejected')
   end
 
   def resolve_actual_delivery_channel(mail_delivery, notification:)
