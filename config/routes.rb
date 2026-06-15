@@ -112,8 +112,8 @@ Rails.application.routes.draw do
            controller: 'secure_proof_form_resends'
 
   namespace :admin do
-    get 'dashboard', to: 'dashboards#index', as: :dashboard
-    root to: 'dashboards#index'
+    resource :dashboard, only: [:show], controller: :dashboards
+    root to: 'dashboards#show'
 
     resources :guardian_relationships, only: %i[destroy]
 
