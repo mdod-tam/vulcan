@@ -2,32 +2,32 @@
 
 # Seed File for "evaluator_mailer_evaluation_submission_confirmation"
 # --------------------------------------------------
-EmailTemplate.create_or_find_by!(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'es') do |template|
-  template.subject = 'Confirmación de Envío de Evaluación'
-  template.description = 'Enviado al evaluador después de haber enviado su evaluación.'
-  template.body = <<~TEXT
+template = EmailTemplate.find_or_initialize_by(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'es')
+template.update!(
+  subject: 'Confirmación de Envío de Evaluación',
+  description: 'Enviado a la persona solicitante después de que el evaluador envía una evaluación.',
+  body: <<~TEXT,
     %<header_text>s
 
-    Hola %<constituent_first_name>s,
+    Estimado/a %<constituent_first_name>s:
 
-    %<status_box_text>s
+    Le escribimos para confirmar que el Programa de Telecomunicaciones Accesibles de Maryland ha recibido su informe de evaluación.
 
-    CONFIRMACIÓN DE ENVÍO DE EVALUACIÓN:
-    - ID de Solicitud: %<application_id>s
-    - Evaluador: %<evaluator_full_name>s
-    - Fecha de Envío: %<submission_date_formatted>s
+    Según la evaluación, el evaluador recomendó los siguientes productos de telecomunicaciones accesibles como útiles para sus necesidades de comunicación:
+    %<recommended_products_text_list>s
 
-    Gracias por su pronto envío. Su evaluación está ahora en revisión.
+    Esta información se proporciona para sus registros. Tenga en cuenta que la recomendación se basa en la evaluación del evaluador.
 
-    Si tiene alguna pregunta o necesita más ayuda, no dude en comunicarse.
+    No dude en comunicarse con nosotros si tiene alguna pregunta o necesita más ayuda.
+
+    Atentamente,
 
     %<footer_text>s
   TEXT
-  template.variables = {
-    'required' => %w[header_text evaluator_full_name constituent_first_name application_id
-                     submission_date_formatted status_box_text footer_text],
+  variables: {
+    'required' => %w[header_text constituent_first_name recommended_products_text_list footer_text],
     'optional' => []
-  }
-  template.version = 1
-end
+  },
+  version: 1
+)
 Rails.logger.debug 'Seeded evaluator_mailer_evaluation_submission_confirmation_es (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

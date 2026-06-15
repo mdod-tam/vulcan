@@ -6,6 +6,8 @@ module Evaluators
       evaluation_scheduled
       evaluation_rescheduled
       evaluation_completed
+      evaluation_cancelled
+      evaluation_no_show
       requested_additional_info
     ].freeze
 
@@ -59,11 +61,14 @@ module Evaluators
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
                             .includes(:constituent, :application).order(evaluation_date: :desc).limit(5)
 
-      # For admins, also load their own scheduled evaluations
-      if current_user.admin?
-        @my_scheduled_evaluations_display = Evaluation.where(evaluator_id: current_user.id).active
-                                            .includes(:constituent).order(evaluation_date: :asc).limit(5)
-      end
+      load_admin_display_data if current_user.admin?
+    end
+
+    def load_admin_display_data
+      my_scheduled_evaluations = Evaluation.where(evaluator_id: current_user.id).active
+      @my_scheduled_evaluations_display = my_scheduled_evaluations.includes(:constituent)
+                                                                  .order(evaluation_date: :asc)
+                                                                  .limit(5)
     end
 
     def load_recent_activity

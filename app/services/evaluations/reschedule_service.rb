@@ -26,6 +26,9 @@ module Evaluations
     rescue ArgumentError => e
       log_validation_failure(e)
       failure(e.message)
+    rescue TypeError => e
+      log_validation_failure(e)
+      failure('evaluation_date must be a valid date/time')
     rescue StandardError => e
       Rails.logger.error("Unexpected error rescheduling evaluation: #{e.message}")
       failure("An unexpected error occurred: #{e.message}")
@@ -34,14 +37,19 @@ module Evaluations
     private
 
     def validate_params!
-      return unless @params[:evaluation_date].blank? || @params[:reschedule_reason].blank?
+      raise ArgumentError, 'Only scheduled, confirmed, cancelled, or no-show evaluations can be rescheduled.' unless @evaluation.can_reschedule?
 
-      raise ArgumentError, 'evaluation_date and reschedule_reason are required'
+      raise ArgumentError, 'evaluation_date and reschedule_reason are required' if required_fields_missing?
+      raise ArgumentError, 'evaluation_date must be in the future' if evaluation_date <= Time.current
+    end
+
+    def required_fields_missing?
+      @params[:evaluation_date].blank? || @params[:reschedule_reason].blank?
     end
 
     def reschedule_evaluation!
       @evaluation.update!(
-        evaluation_date: @params[:evaluation_date],
+        evaluation_date: evaluation_date,
         location: @params[:location],
         reschedule_reason: @params[:reschedule_reason],
         status: :scheduled
@@ -67,6 +75,13 @@ module Evaluations
 
     def log_validation_failure(error)
       Rails.logger.warn("Evaluations::RescheduleService validation failed: #{error.message}")
+    end
+
+    def evaluation_date
+      @evaluation_date ||= begin
+        value = @params[:evaluation_date]
+        value.respond_to?(:in_time_zone) ? value.in_time_zone : Time.zone.parse(value.to_s)
+      end
     end
   end
 end

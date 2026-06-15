@@ -1,36 +1,31 @@
-<div class="container mx-auto px-4 py-8">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">Evaluation Details</h1>
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+  Skip to main content
+</a>
 
-    <div>
+<div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+    <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading">Evaluation Details</h1>
+
+    <div class="flex items-center space-x-4">
       <%= link_to "Back to Evaluations", evaluators_evaluations_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
     </div>
   </div>
 
-  <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+  <section aria-labelledby="evaluation-details-heading" class="bg-white shadow overflow-hidden sm:rounded-lg">
     <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
       <div>
-        <h3 class="text-lg leading-6 font-medium text-gray-900">
+        <h2 id="evaluation-details-heading" class="text-lg leading-6 font-medium text-gray-900">
           Evaluation for <%= @evaluation.constituent.full_name %>
-        </h3>
+        </h2>
         <p class="mt-1 max-w-2xl text-sm text-gray-500">
           Application #<%= @evaluation.application_id %>
         </p>
+        <%= link_to "View Full Application Details",
+                    admin_application_path(@evaluation.application),
+                    class: "mt-1 inline-block text-sm text-indigo-600 hover:text-indigo-900" %>
       </div>
 
-      <!-- Status badge with color coding -->
-      <% status_classes = case @evaluation.status
-         when 'scheduled' then 'bg-blue-100 text-blue-800'
-         when 'confirmed' then 'bg-green-100 text-green-800'
-         when 'completed' then 'bg-purple-100 text-purple-800'
-         when 'cancelled' then 'bg-yellow-100 text-yellow-800'
-         when 'no_show' then 'bg-red-100 text-red-800'
-         else 'bg-gray-100 text-gray-800'
-         end %>
-
-      <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full <%= status_classes %>">
-        <%= @evaluation.status.titleize %>
-      </span>
+      <%= evaluation_status_badge(@evaluation) %>
     </div>
 
     <div class="border-t border-gray-200">
@@ -39,14 +34,97 @@
           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt class="text-sm font-medium text-gray-500">Completed At</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= @evaluation.evaluation_date&.strftime("%B %d, %Y at %I:%M %p") || "Unknown" %>
+              <% if @evaluation.evaluation_date.present? %>
+                <time datetime="<%= @evaluation.evaluation_date.iso8601 %>">
+                  <%= @evaluation.evaluation_date.strftime("%B %d, %Y at %I:%M %p") %>
+                </time>
+              <% else %>
+                Unknown
+              <% end %>
+            </dd>
+          </div>
+        <% elsif @evaluation.status_requested? && @evaluation.evaluation_date.blank? %>
+          <div class="bg-blue-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-blue-900">Next Step</dt>
+            <dd class="mt-1 text-sm text-blue-900 sm:mt-0 sm:col-span-2">
+              <p class="font-semibold">This evaluation has not been scheduled yet.</p>
+              <p class="mt-1">
+                <% if @can_manage_evaluation %>
+                  This evaluation was assigned to <%= @evaluation.evaluator.full_name %>, but no date has been set. Contact the applicant, agree on an evaluation time, then use the scheduling form below.
+                <% else %>
+                  This evaluation was assigned to <%= @evaluation.evaluator.full_name %>, but no date has been set. The assigned evaluator should contact the applicant and set the evaluation date.
+                <% end %>
+              </p>
             </dd>
           </div>
         <% elsif !@evaluation.status_cancelled? && !@evaluation.status_no_show? %>
           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt class="text-sm font-medium text-gray-500">Scheduled For</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= @evaluation.evaluation_date&.strftime("%B %d, %Y at %I:%M %p") || "Not scheduled" %>
+              <% if @evaluation.evaluation_date.present? %>
+                <time datetime="<%= @evaluation.evaluation_date.iso8601 %>">
+                  <%= @evaluation.evaluation_date.strftime("%B %d, %Y at %I:%M %p") %>
+                </time>
+              <% else %>
+                Not scheduled
+              <% end %>
+            </dd>
+          </div>
+        <% end %>
+
+        <% if @evaluation.location.present? %>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Location</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= @evaluation.location %>
+            </dd>
+          </div>
+        <% end %>
+
+        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+          <dt class="text-sm font-medium text-gray-500">Assigned Evaluator</dt>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+            <%= link_to @evaluation.evaluator.full_name,
+                        evaluators_evaluations_path(scope: current_user.admin? ? "all" : "mine"),
+                        class: "text-indigo-600 hover:text-indigo-900" %>
+          </dd>
+        </div>
+
+        <% if @evaluation.notes.present? && @evaluation.status_completed? %>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Evaluator Notes</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= simple_format(@evaluation.notes) %>
+            </dd>
+          </div>
+        <% elsif @evaluation.notes.present? && @evaluation.status_cancelled? %>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Current Cancellation Reason</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= simple_format(@evaluation.notes) %>
+            </dd>
+          </div>
+        <% elsif @evaluation.notes.present? && @evaluation.status_no_show? %>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Current No-Show Notes</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= simple_format(@evaluation.notes) %>
+            </dd>
+          </div>
+        <% elsif @evaluation.notes.present? %>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Current Evaluator Notes</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= simple_format(@evaluation.notes) %>
+            </dd>
+          </div>
+        <% end %>
+
+        <% if @evaluation.reschedule_reason.present? %>
+          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Current Rescheduling Reason</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= simple_format(@evaluation.reschedule_reason) %>
             </dd>
           </div>
         <% end %>
@@ -56,8 +134,8 @@
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <div>
               <p><%= @evaluation.constituent.full_name %></p>
-              <p><a href="mailto:<%= @evaluation.constituent.email %>" class="text-indigo-600 hover:text-indigo-900"><%= @evaluation.constituent.email %></a></p>
-              <p><a href="tel:<%= @evaluation.constituent.phone %>" class="text-indigo-600 hover:text-indigo-900"><%= @evaluation.constituent.phone %></a></p>
+              <p><%= link_to @evaluation.constituent.email, "mailto:#{@evaluation.constituent.email}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Email #{@evaluation.constituent.email}" } %></p>
+              <p><%= link_to @evaluation.constituent.phone, "tel:#{@evaluation.constituent.phone}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Call #{@evaluation.constituent.phone}" } %></p>
               <% if @evaluation.constituent.physical_address_1.present? %>
                 <div class="mt-2 text-gray-600">
                   <p><%= @evaluation.constituent.physical_address_1 %></p>
@@ -78,18 +156,10 @@
               <li><strong>Contact Method:</strong> <%= contact_method_label(@evaluation.constituent.phone_type) %></li>
               <li><strong>Preferred Language:</strong> <%= language_label(@evaluation.constituent.locale) %></li>
               <li><strong>Communication Modality:</strong> <%= @evaluation.constituent.preferred_means_of_communication.presence || "Not specified" %></li>
+              <li><strong>Delivery Preference:</strong> <%= delivery_preference_label(@evaluation.constituent) %></li>
             </ul>
           </dd>
         </div>
-
-        <% if @evaluation.location.present? %>
-          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Location</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= @evaluation.location %>
-            </dd>
-          </div>
-        <% end %>
 
         <% if @evaluation.constituent.disabilities.any? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
@@ -100,15 +170,6 @@
                   <li><%= disability %></li>
                 <% end %>
               </ul>
-            </dd>
-          </div>
-        <% end %>
-
-        <% if @evaluation.notes.present? %>
-          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Evaluator Notes</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
         <% end %>
@@ -128,7 +189,7 @@
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <ul class="list-disc pl-5">
                 <% @evaluation.products_tried.each do |product| %>
-                  <% product_name = Product.find_by(id: product['product_id'])&.name || 'Unknown product' %>
+                  <% product_name = Product.find_by(id: product['product_id'])&.name || "Unknown Product" %>
                   <li><%= "#{product_name} — #{product['reaction']}" %></li>
                 <% end %>
               </ul>
@@ -150,20 +211,19 @@
         <% end %>
       </dl>
     </div>
-  </div>
+  </section>
 
   <% if current_user.admin? && @evaluation.status_completed? && @evaluation.application.equipment_fulfillment? %>
     <%= render "fulfillment_tracking", evaluation: @evaluation %>
   <% end %>
 
-  <!-- Form sections for managing evaluation - Start -->
-  <div class="mt-8" data-controller="evaluation-management">
+  <section aria-label="<%= @can_manage_evaluation ? "Evaluation Actions" : "Evaluation Status" %>" class="mt-8" data-controller="evaluation-management">
     <% if @evaluation.errors.any? %>
       <div class="rounded-md bg-red-50 p-4 mb-6">
         <div class="flex">
           <div class="flex-shrink-0">
             <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
             </svg>
           </div>
           <div class="ml-3">
@@ -186,40 +246,46 @@
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
         This is a read-only oversight view. Only the assigned evaluator can update this evaluation.
       </div>
-    <% elsif @evaluation.evaluation_date.blank? %>
-      <%= render "schedule_form", evaluation: @evaluation %>
+    <% elsif @evaluation.status_requested? && @evaluation.evaluation_date.blank? %>
+      <div class="space-y-6 mb-6">
+        <%= render "schedule_form", evaluation: @evaluation %>
+        <%= render "cancel_form", evaluation: @evaluation %>
+      </div>
     <% elsif (@evaluation.status_scheduled? || @evaluation.status_confirmed?) && @evaluation.evaluation_date.present? && @evaluation.evaluation_date < Time.current %>
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 mb-6">
+        <p class="font-semibold">This evaluation needs an outcome.</p>
+        <p class="mt-1">The scheduled time for this evaluation has passed. Record the evaluation outcome, or use a secondary action if the evaluation did not happen as planned.</p>
+      </div>
       <div class="space-y-6 mb-6">
         <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
         <%= render "no_show_form", evaluation: @evaluation %>
+        <%= render "cancel_form", evaluation: @evaluation %>
+        <%= render "reschedule_form",
+            evaluation: @evaluation,
+            suggested_date: @evaluation.evaluation_date %>
       </div>
-
     <% elsif @evaluation.status_scheduled? || @evaluation.status_confirmed? %>
-      <%= render "cancel_form", evaluation: @evaluation %>
-      <%= render "reschedule_form",
-          evaluation: @evaluation,
-          suggested_date: @evaluation.evaluation_date %>
-
-    <% elsif @evaluation.status_cancelled? || @evaluation.status_no_show? %>
+      <div class="space-y-6 mb-6">
+        <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
+        <%= render "cancel_form", evaluation: @evaluation %>
+        <%= render "reschedule_form",
+            evaluation: @evaluation,
+            suggested_date: @evaluation.evaluation_date %>
+      </div>
+    <% elsif @evaluation.status_cancelled? || @evaluation.status_no_show? || @evaluation.status_rescheduled? %>
       <%= render "reschedule_form",
           evaluation: @evaluation,
           suggested_date: 1.week.from_now %>
     <% elsif @evaluation.status_completed? %>
       <%= render "completed_notes_form", evaluation: @evaluation %>
     <% else %>
-      <%= render "reschedule_form",
-          evaluation: @evaluation,
-          suggested_date: 1.week.from_now %>
+      <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
+        No lifecycle actions are available for this evaluation status.
+      </div>
     <% end %>
-  </div>
-  <!-- Form sections for managing evaluation - End -->
+  </section>
 
   <div class="mt-8">
     <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Activity History" %>
-  </div>
-
-  <!-- Link to view the full application -->
-  <div class="mt-6 text-right">
-    <%= link_to "View Full Application", admin_application_path(@evaluation.application), class: "text-indigo-600 hover:text-indigo-900" %>
   </div>
 </div>

@@ -9,8 +9,7 @@
     <div>
       <p class="text-lg font-bold text-green-900">Evaluation Completed</p>
       <p class="mt-1 text-sm text-green-700">
-        Completed on <strong><%= evaluation.evaluation_date&.strftime("%B %d, %Y") %></strong>.
-        The evaluation report above is locked. Use the form below to add supplemental notes.
+        Completed on <%= tag.strong(evaluation.evaluation_date&.strftime("%B %d, %Y")) %>. The evaluation report above is locked. Use the form below to add supplemental notes.
       </p>
     </div>
   </div>
@@ -21,7 +20,7 @@
   <div class="px-4 py-4 sm:px-6 border-b border-gray-200">
     <h3 class="text-base font-semibold text-gray-900">Add a Note</h3>
     <p class="mt-1 text-sm text-gray-500">
-      Add supplemental notes to this completed evaluation record. This does not modify the submitted report above.
+      Add supplemental notes to this completed evaluation record. This does not modify the previously submitted report.
     </p>
   </div>
 
@@ -34,15 +33,13 @@
     <% end %>
 
     <%= form_with(model: evaluation, url: evaluators_evaluation_path(evaluation), method: :patch, local: true, class: "space-y-4") do |f| %>
-      <%= f.hidden_field :status, value: evaluation.status %>
-
       <div>
         <%= f.label :post_completion_notes,
                     evaluation.post_completion_notes.present? ? "Update Note" : "New Note",
                     class: "block text-sm font-medium text-gray-700" %>
         <%= f.text_area :post_completion_notes,
                         rows: 5,
-                        placeholder: "Add any follow-up observations, next steps, or supplemental information...",
+                        placeholder: "Add follow-up observations, next steps, or supplemental information...",
                         class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
       </div>
 
