@@ -18,9 +18,6 @@ module Admin
     # ApplicationDataLoading: Provides optimized methods for loading applications and attachments
     # Key methods: load_application_with_attachments, preload_attachments_for_applications, load_proof_histories
     include ApplicationDataLoading
-    # DashboardMetricsLoading: Provides methods for loading dashboard metrics and counts
-    # Key methods: load_dashboard_metrics, safe_assign, load_fiscal_year_data
-    include DashboardMetricsLoading
     include Admin::ProviderInfoRequestLoading
     # RequestMetadataHelper: Provides standardized request metadata methods
     # Key methods: basic_request_metadata, audit_metadata, proof_submission_metadata
@@ -58,7 +55,7 @@ module Admin
 
       @pagy, page_of_apps = paginate(scoped)
       page_applications = page_of_apps.to_a
-      # ApplicationDataLoading concern: Efficiently preloads attachments for multiple applications
+      # ApplicationDataLoading concern:preload_attachments_for_applications Efficiently preloads attachments for multiple applications
       # Flow: preload_attachments_for_applications -> groups attachments by application_id to avoid N+1 queries
       # Force to array to avoid PostgreSQL JSON distinct issues when relation has joins
       attachments_index = preload_attachments_for_applications(page_applications)
@@ -72,6 +69,7 @@ module Admin
       # Preload notifiable for Notification#message, actor for view display
       @recent_notifications = Notification
                               .includes(:actor, :notifiable)
+                              .includes(notifiable: :application)
                               .where('created_at > ?', 7.days.ago)
                               .order(created_at: :desc)
                               .limit(5)
