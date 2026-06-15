@@ -1,122 +1,80 @@
 # Dependent Contact Information Handling
 
-This document outlines how the system handles dependent contact information (email and phone) to maintain database integrity and avoid uniqueness constraint violations.
+This document describes how MAT Vulcan stores and resolves contact information for dependents without violating unique email and phone constraints.
 
-## Context
+## High-Level Flow
 
-To support cases where dependents share contact information with their guardians, the system must accommodate non-unique emails and phone numbers without violating database constraints. The architecture is designed to clearly distinguish between a dependent's own contact information and shared guardian information.
+1. A guardian or admin enters dependent contact information.
+2. The controller decides the contact strategy for email and phone. On portal create and paper intake, that can come from checkboxes or direct strategy params. On portal edit, the form has no checkboxes — the app infers the strategy from what was submitted (blank contact, contact matching the guardian, or the dependent's own contact).
+3. `Applications::GuardianDependentManagementService` applies those strategies before creating a new dependent, or before updating one when email or phone was submitted. If a contact field was not submitted, the service leaves that field alone.
+4. `Applications::UserCreationService` creates or reuses the constituent record, depending on the entry point.
+5. `GuardianRelationship` connects the guardian and dependent.
+6. Mailers, notification builders, secure request resolution, and admin lookup endpoints use effective contact helpers or `dependent_email` fallback when choosing recipients.
 
-## Architecture
+## Main Entry Points
 
-The system uses dedicated contact fields for dependents to provide a flexible and robust solution.
+| Area | Path | Current behavior |
+|------|------|------------------|
+| Portal dependent creation and update | `app/controllers/constituent_portal/dependents_controller.rb` | On `create`, strategy comes from `use_guardian_email` / `use_guardian_phone` checkboxes; blank contact also uses guardian strategy. Portal-created dependents always use `skip_user_lookup: true`. On `update`, strategies run only when email or phone was submitted — a name-only PATCH leaves stored contact alone. Submitted contact that matches the guardian's email or phone also uses guardian strategy (generated primary contact plus real contact in `dependent_email` / `dependent_phone`). |
+| Admin paper intake | `app/controllers/admin/paper_applications_controller.rb` | `create` permits direct strategy params and guardian-contact checkboxes, then passes normalized params to the paper application service. For an existing dependent, the service updates submitted contact fields directly from `dependent_email` and `dependent_phone` aliases instead of reapplying strategy params. |
+| Strategy application | `app/services/applications/guardian_dependent_management_service.rb` | Applies email, phone, and address strategies when creating a dependent or when a portal update submits contact fields. When a strategy is `nil` for a field, that field is not rewritten. |
+| User creation | `app/services/applications/user_creation_service.rb` | Creates constituent records and, unless `skip_user_lookup` is true, may reuse an existing user by primary email or phone. System email addresses are not used for lookup. |
+| Model behavior | `app/models/concerns/user_profile.rb`, `app/models/concerns/user_guardianship.rb` | Encrypts and validates dependent contact fields, then resolves effective contact values through guardian relationships. |
+| Mail delivery | `app/mailers/application_mailer.rb`, `app/services/notifications/parameter_normalization_service.rb` | Uses `effective_email` and `effective_communication_preference` when available. Letter delivery for dependents is addressed to `guardian_for_contact`. |
+| Lookup and secure requests | `app/controllers/admin/paper_applications_controller.rb`, `app/models/concerns/user_email_search.rb`, `app/services/applications/secure_request_recipient_resolver.rb` | Admin recipient preference lookup checks primary email first, then `dependent_email`. User email search indexes both `email` and `dependent_email`; dependents without their own `dependent_email` can be found through linked guardian email tokens. Secure request defaults use the managing guardian when the dependent's effective email matches that guardian. |
 
-**Approach**: Dependents have separate `dependent_email` and `dependent_phone` fields. This allows them to either have their own unique contact information or share their guardian's contact information without causing database conflicts.
+## Key Concepts
 
-## Implementation Details
+| Concept | Meaning |
+|---------|---------|
+| Primary contact fields | `users.email` and `users.phone`. These remain unique and are still required by user creation. |
+| Dependent contact fields | `users.dependent_email` and `users.dependent_phone`. Encrypted fields for the dependent's real contact. They are searchable but are not held to the same uniqueness rules as primary `email` and `phone`. |
+| Guardian strategy | Stores guardian contact in the dependent contact field and assigns a generated unique primary contact value to avoid uniqueness conflicts. |
+| Dependent strategy | Uses the dependent's submitted contact as both the primary contact and dependent contact field. If the submitted contact is blank, the strategy service falls back to guardian contact. |
+| Managing guardian | The guardian responsible for a dependent application. See `docs/development/guardian_relationship_system.md`. |
 
-### 1. Database Schema
+> Important distinction: contact strategies are request-time params. The app does not currently persist `email_strategy` or `phone_strategy` columns on users or guardian relationships. There is also no flag to skip uniqueness validation — shared contact is handled by storing the real address in `dependent_email` / `dependent_phone` and generating unique primary values when needed.
 
-The `users` table includes dedicated contact fields for dependents to avoid uniqueness conflicts:
+## Current Behavior
 
-- `dependent_email` (string): An optional, indexed field for the dependent's own email. If blank, communications default to the guardian's email.
-- `dependent_phone` (string): An optional, indexed field for the dependent's own phone number.
+### Email
 
-**Key Design Points:**
-- Avoids uniqueness constraint violations on the primary `email` and `phone` columns.
-- Provides a clear separation between a primary user's contact info and a dependent's.
-- Ensures database integrity and query performance with indexes.
-- Allows for flexible contact information handling.
+- With `email_strategy: "guardian"`, the dependent gets a generated primary email like `dependent-{uuid}@system.matvulcan.local`, and `dependent_email` is set to the guardian's email when the guardian has one.
+- With `email_strategy: "dependent"`, the submitted dependent email is normalized into both `email` and `dependent_email`.
+- If `email_strategy` is omitted (`nil`), the service leaves email fields unchanged. This is how partial portal updates avoid rewriting contact.
+- Invalid strategy values, or a blank email under the dependent strategy, fall back to guardian strategy.
+- On portal `update`, a submitted blank email also uses guardian strategy and generates a new primary email. Omitted email (not in the request) is left alone.
+- Portal `update` also uses guardian strategy when the submitted email matches the guardian's email (after normalization).
+- `UserGuardianship#effective_email` returns `dependent_email` for dependents when present. If it is blank and a guardian relationship exists, it falls back to `guardian_for_contact.email`. Otherwise it returns the user's primary `email`.
 
-### 2. Model Logic
+### Phone
 
-The `User` model includes logic to manage dependent-specific contact information through the `UserProfile` and `UserGuardianship` concerns:
+- With `phone_strategy: "guardian"`, the dependent gets a generated primary phone like `000-000-1234`, and `dependent_phone` is set to the guardian's phone.
+- With `phone_strategy: "dependent"`, the submitted dependent phone is normalized into both `phone` and `dependent_phone`.
+- If `phone_strategy` is omitted (`nil`), the service leaves phone fields unchanged.
+- Invalid strategy values, or a blank phone under the dependent strategy, fall back to guardian strategy.
+- On portal `update`, a submitted blank phone also uses guardian strategy and generates a new primary phone. Omitted phone (not in the request) is left alone.
+- Portal `update` also uses guardian strategy when the submitted phone matches the guardian's phone (after normalization).
+- `UserGuardianship#effective_phone` returns `dependent_phone` for dependents when present. If it is blank and a guardian relationship exists, it falls back to `guardian_for_contact.phone`. Otherwise it returns the user's primary `phone`.
+- `UserGuardianship#effective_phone_type` returns the guardian's phone type when the dependent is using the guardian's phone, including when `dependent_phone` normalizes to the guardian's phone. Otherwise it returns the dependent user's `phone_type`.
 
-- **Encryption**: The `dependent_email` and `dependent_phone` fields are encrypted using `encrypts` (implemented in `UserProfile` concern).
-- **Validation**: The model validates the format of `dependent_email` and `dependent_phone` (implemented in `UserProfile` concern).
-- **Helper Methods** (implemented in `UserGuardianship` concern):
-  - `effective_email`: Returns the dependent's own email if present, otherwise falls back to the guardian's email via `guardian_for_contact`.
-  - `effective_phone`: Returns the dependent's own phone if present, otherwise falls back to the guardian's phone via `guardian_for_contact`.
-  - `effective_phone_type`: Handles phone type logic for dependents.
-  - `effective_communication_preference`: Uses guardian's preference if user is a dependent.
-  - `guardian_for_contact`: Returns the primary guardian for contact purposes.
+### Communication Preference And Locale
 
-**Note**: The `has_own_contact_info?` and `uses_guardian_contact_info?` methods mentioned in earlier documentation are not currently implemented in the codebase.
+- `effective_communication_preference` returns the guardian's communication preference for dependents with a contact guardian.
+- `effective_locale` returns the guardian's locale only when a dependent's effective email is the guardian's email. Otherwise it returns the dependent user's locale.
+- `ApplicationMailer#letter_recipient_for` sends printed letters for dependents to `guardian_for_contact` when one exists.
 
-The implementation provides a clear and secure way to handle different contact scenarios for dependents.
+## Verified Test Coverage
 
-### 3. Paper Application Service
+| Test | Coverage |
+|------|----------|
+| `test/services/applications/dependent_email_handling_test.rb` | Paper application service behavior for guardian email, dependent email, and guardian phone type resolution. |
+| `test/services/applications/guardian_dependent_management_service_test.rb` | Failure result handling for missing guardian information, invalid guardian IDs, and missing relationship type. |
+| `test/controllers/admin/paper_applications_controller_test.rb` | Admin paper application creation for dependents with new or existing guardians, own email, guardian email, locale persistence, and recipient lookup by `dependent_email`. |
+| `test/controllers/constituent_portal/dependents_controller_test.rb` | Portal dependent creation, guardian email fallback, validation failures, forced creation of a new dependent user, contact-sharing update, and partial-update contact preservation. |
 
-The paper application service (via `GuardianDependentManagementService`) uses contact strategy parameters (`email_strategy`, `phone_strategy`, `address_strategy`) to determine how to handle a dependent's contact information. This approach avoids complex checkbox logic and validation bypasses.
+## Related Docs
 
-- **Strategy-Based Logic**: The service checks the strategy parameters in `apply_contact_strategies` method:
-  - If the strategy is `'guardian'`, the dependent is assigned the guardian's contact information, and a system-generated unique primary email/phone is created to satisfy database constraints (e.g., `dependent-{uuid}@system.matvulcan.local`).
-  - If the strategy is `'dependent'`, the service uses the provided dependent-specific contact information.
-  - If the strategy is not specified, it defaults to guardian strategy with fallback logic.
-- **Address Strategy**: Also handles address information copying from guardian to dependent.
-- **Maintainability**: This design results in cleaner, more maintainable code with clear fallback logic and proper error handling.
-
-### 4. Testing
-
-The test suite covers the contact strategy implementation through factory patterns and service tests:
-
-- **Factory Traits** (`test/factories/guardian_relationships.rb`):
-  - `:dependent_shares_contact` - Sets dependent to use guardian's contact info
-  - Various phone type traits (`:dependent_with_voice_phone`, `:dependent_with_videophone`, etc.)
-
-- **Service Testing** - Tests cover:
-  - Scenarios for a dependent having their own email and phone (`email_strategy: 'dependent'`)
-  - Scenarios for a dependent sharing a guardian's email (`email_strategy: 'guardian'`)
-  - Mixed scenarios (e.g., own email, guardian's phone)
-  - Address strategy handling
-  - Proper encryption and validation of dependent contact fields
-  - Fallback logic for when dependent contact information is left blank
-  - System-generated unique emails for constraint avoidance
-
-## Usage Patterns
-
-### Scenario 1: Dependent has their own contact information
-```ruby
-dependent = User.create!(
-  first_name: "Child",
-  email: "child@example.com",
-  phone: "555-0001",
-  dependent_email: "child@example.com",  # Same as primary email
-  dependent_phone: "555-0001"            # Same as primary phone
-)
-
-dependent.effective_email  # => "child@example.com"
-dependent.effective_phone  # => "555-0001"
-# Note: has_own_contact_info? method not currently implemented
-```
-
-### Scenario 2: Dependent shares guardian's contact information
-```ruby
-dependent = User.create!(
-  first_name: "Child",
-  email: "dependent-abc123@system.matvulcan.local",  # System-generated
-  phone: "000-000-1234",                             # System-generated
-  dependent_email: "guardian@example.com",           # Guardian's email
-  dependent_phone: "555-0002"                        # Guardian's phone
-)
-
-dependent.effective_email  # => "guardian@example.com"
-dependent.effective_phone  # => "555-0002"
-# Note: uses_guardian_contact_info? method not currently implemented
-```
-
-## Current Implementation Status
-
-The system currently implements:
-- ✅ Encrypted `dependent_email` and `dependent_phone` fields
-- ✅ Contact strategy handling in `GuardianDependentManagementService`
-- ✅ `effective_email`, `effective_phone`, `effective_phone_type`, `effective_communication_preference` methods
-- ✅ Factory patterns for testing different contact scenarios
-- ✅ Proper uniqueness constraint handling with system-generated fallback emails
-
-## Future Enhancements
-
-- Implement missing helper methods: `has_own_contact_info?` and `uses_guardian_contact_info?`
-- Update frontend forms to properly handle dependent contact field selection
-- Add an admin interface for managing dependent contact preferences
-- Consider extending this pattern to other contact fields (e.g., emergency contacts)
-- Improve contact strategy UI in paper application forms
+- `docs/development/guardian_relationship_system.md`
+- `docs/development/paper_application_architecture.md`
+- `docs/features/application_workflow_guide.md`
