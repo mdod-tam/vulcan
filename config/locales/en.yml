@@ -395,7 +395,7 @@ en:
           title: "Secure provider information requests"
           description: "Send a secure link for entering certifying professional contact information."
           recipients: "Recipients"
-          recipient_help: "Managing guardian, dependent/applicant, and recorded guardians are authorized application relationships. The default follows the dependent's effective email path; other recorded guardians receive secure links only when explicitly selected. Alternate contacts are informational only and do not receive secure links."
+          recipient_help: "Select who will receive the secure link."
           default_channel: "Default channel: %{channel}"
           email_override: "Send secure online link by email instead"
           submit: "Send secure request"
