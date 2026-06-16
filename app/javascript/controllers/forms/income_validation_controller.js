@@ -48,7 +48,7 @@ class IncomeValidationController extends Controller {
     this.element.dataset.fplLoaded = "true"
     this.element.classList.add("fpl-data-loaded")
     this.dispatch("fpl-data-loaded")
-    this.validateIncomeThreshold()
+    this.toggleIncomeRequirement()
   }
 
   disconnect() {
@@ -95,6 +95,11 @@ class IncomeValidationController extends Controller {
 
 
   validateIncomeThreshold() {
+    if (this.incomeActionDefersReview()) {
+      this.clearValidationState()
+      return
+    }
+
     const size = this.getHouseholdSize()
     const income = this.getAnnualIncome()
 
@@ -279,15 +284,48 @@ class IncomeValidationController extends Controller {
   }
 
   toggleIncome() {
+    this.toggleIncomeRequirement()
+  }
+
+  toggleIncomeRequirement() {
+    if (!this.hasNoIncomeProvidedTarget || !this.hasIncomeFieldsContainerTarget) return
+
     const incomeMissing = this.noIncomeProvidedTarget.checked
+    const detailsRequired = this.incomeActionRequiresDetails() && !incomeMissing
+
     setVisible(this.incomeFieldsContainerTarget, !incomeMissing)
-    if (incomeMissing) {
-      this.householdSizeTarget.removeAttribute('required')
-      this.annualIncomeTarget.removeAttribute('required')
+    this.setIncomeFieldsRequired(detailsRequired)
+
+    if (detailsRequired) {
+      this.validateIncomeThreshold()
     } else {
-      this.householdSizeTarget.setAttribute('required', 'required')
-      this.annualIncomeTarget.setAttribute('required', 'required')
+      this.clearValidationState()
     }
+  }
+
+  incomeActionRequiresDetails() {
+    const selectedAction = this.element.querySelector('input[name="income_proof_action"]:checked')
+    return selectedAction?.value === 'accept'
+  }
+
+  incomeActionDefersReview() {
+    const selectedAction = this.element.querySelector('input[name="income_proof_action"]:checked')
+    return selectedAction?.value === 'upload_only'
+  }
+
+  setIncomeFieldsRequired(required) {
+    [
+      this.hasHouseholdSizeTarget ? this.householdSizeTarget : null,
+      this.hasAnnualIncomeTarget ? this.annualIncomeTarget : null
+    ].filter(Boolean).forEach((target) => {
+      if (required) {
+        target.setAttribute('required', 'required')
+        target.setAttribute('aria-required', 'true')
+      } else {
+        target.removeAttribute('required')
+        target.removeAttribute('aria-required')
+      }
+    })
   }
 
 }

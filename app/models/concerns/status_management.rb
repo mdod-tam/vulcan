@@ -36,7 +36,7 @@ module StatusManagement
   end
 
   def can_reschedule?
-    can_schedule_followup?
+    can_reschedule_current_session? || can_schedule_followup? || status_rescheduled?
   end
 
   def can_schedule_followup?
@@ -48,7 +48,7 @@ module StatusManagement
   end
 
   def can_cancel?
-    status_scheduled? || status_confirmed?
+    status_requested? || status_scheduled? || status_confirmed?
   end
 
   def can_complete?

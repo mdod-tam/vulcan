@@ -156,10 +156,47 @@ module Applications
              "Expected DOB format error, got: #{service.errors.inspect}"
     end
 
-    test 'upload only attaches income residency and id proofs as not reviewed' do
+    test 'upload only attaches proofs for later review' do
       service_params = {
         constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
         application: @application_params,
+        income_proof_action: 'upload_only',
+        income_proof: uploaded_pdf('income_proof.pdf'),
+        residency_proof_action: 'upload_only',
+        residency_proof: uploaded_pdf('residency_proof.pdf'),
+        id_proof_action: 'upload_only',
+        id_proof: uploaded_pdf('id_proof.pdf'),
+        medical_certification_action: 'upload_only',
+        medical_certification: uploaded_pdf('medical_certification_valid.pdf')
+      }
+
+      %i[income residency id].each do |proof_type|
+        ProofAttachmentService.expects(:attach_proof).with(
+          has_entries(
+            proof_type: proof_type,
+            status: :not_reviewed,
+            admin: @admin,
+            submission_method: :paper
+          )
+        ).returns({ success: true })
+      end
+      MedicalCertificationAttachmentService.expects(:attach_certification).with(
+        has_entries(
+          status: :received,
+          admin: @admin,
+          submission_method: :paper
+        )
+      ).returns({ success: true })
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_predicate service.application, :persisted?
+    end
+
+    test 'upload only does not require income details before sending proof for review' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params.except(:household_size, :annual_income),
         income_proof_action: 'upload_only',
         income_proof: uploaded_pdf('income_proof.pdf'),
         residency_proof_action: 'upload_only',
@@ -181,7 +218,8 @@ module Applications
 
       service = PaperApplicationService.new(params: service_params, admin: @admin)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
-      assert_predicate service.application, :persisted?
+      assert_nil service.application.household_size
+      assert_nil service.application.annual_income
     end
 
     test 'upload only requires an uploaded proof file' do
@@ -196,6 +234,20 @@ module Applications
       service = PaperApplicationService.new(params: service_params, admin: @admin)
       assert_not service.create
       assert_includes service.errors, 'Please upload a file for income proof before sending it for review'
+    end
+
+    test 'upload only requires an uploaded medical certification file' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        medical_certification_action: 'upload_only'
+      }
+
+      MedicalCertificationAttachmentService.expects(:attach_certification).never
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert_not service.create
+      assert_includes service.errors, 'Please upload a file for medical certification before sending it for review'
     end
 
     test 'existing self applicant disability flags are saved before application validation' do

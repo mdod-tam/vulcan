@@ -21,13 +21,23 @@ module Evaluations
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error "Evaluation submission FAILED for ID #{@evaluation&.id}: #{e.message}"
       failure(e.message)
+    rescue ArgumentError => e
+      Rails.logger.warn("Evaluations::SubmissionService validation failed: #{e.message}")
+      failure(e.message)
     end
 
     private
 
     def prepare_evaluation
+      validate_status!
       @evaluation.assign_attributes(submission_params)
       @evaluation.status = :completed
+    end
+
+    def validate_status!
+      return if @evaluation.can_complete?
+
+      raise ArgumentError, 'Only scheduled or confirmed evaluations can be completed.'
     end
 
     def save_evaluation!

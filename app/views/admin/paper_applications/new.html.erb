@@ -599,12 +599,22 @@
                 <h4 class="text-sm font-semibold text-gray-900 mb-4">Disability Certification</h4>
 
                 <%# Proof Action Selection %>
-                <fieldset class="mb-4">
-                  <legend class="text-sm font-medium text-gray-700 mb-2">Disability Certification Action</legend>
-                  <div class="flex flex-wrap gap-4">
-                    <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
-                      <input type="radio"
-                             id="accept_medical_certification"
+	                <fieldset class="mb-4">
+	                  <legend class="text-sm font-medium text-gray-700 mb-2">Disability Certification Action</legend>
+	                  <div class="flex flex-wrap gap-4">
+	                    <label class="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
+	                      <input type="radio"
+	                             id="upload_only_medical_certification"
+	                             name="medical_certification_action"
+	                             value="upload_only"
+	                             class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+	                             data-action="change->document-proof-handler#toggleProofAction"
+	                             data-document-proof-handler-target="uploadOnlyRadio">
+	                      <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
+	                    </label>
+	                    <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+	                      <input type="radio"
+	                             id="accept_medical_certification"
                              name="medical_certification_action"
                              value="approved"
                              class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
@@ -785,9 +795,9 @@
                            value="upload_only"
                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                            required
-                           data-action="change->document-proof-handler#toggleProofAction"
+                           data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
                            data-document-proof-handler-target="uploadOnlyRadio">
-                    <span class="ml-2 text-sm font-medium text-blue-800">Upload Only</span>
+                    <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
                   </label>
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio"
@@ -796,7 +806,7 @@
                            value="accept"
                            class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
                            required
-                           data-action="change->document-proof-handler#toggleProofAction"
+                           data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
                            data-document-proof-handler-target="acceptRadio">
                     <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
                   </label>
@@ -807,7 +817,7 @@
                            value="reject"
                            class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
                            required
-                           data-action="change->document-proof-handler#toggleProofAction"
+                           data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
                            data-document-proof-handler-target="rejectRadio">
                     <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
                   </label>
@@ -972,7 +982,7 @@
                            required
                            data-action="change->document-proof-handler#toggleProofAction"
                            data-document-proof-handler-target="uploadOnlyRadio">
-                    <span class="ml-2 text-sm font-medium text-blue-800">Upload Only</span>
+                    <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
                   </label>
                   <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                     <input type="radio"
@@ -1091,7 +1101,7 @@
                          required
                          data-action="change->document-proof-handler#toggleProofAction"
                          data-document-proof-handler-target="uploadOnlyRadio">
-                  <span class="ml-2 text-sm font-medium text-blue-800">Upload Only</span>
+                  <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
                 </label>
                 <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
                   <input type="radio"

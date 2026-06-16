@@ -296,6 +296,68 @@ module ConstituentPortal
       assert_equal 'updated.dependent@example.com', changes['email']['new']
     end
 
+    test 'should update dependent when submitted contact matches guardian contact' do
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: {
+          first_name: 'Shared Contact',
+          email: @guardian.email,
+          phone: @guardian.phone
+        }
+      }
+
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Dependent was successfully updated.', flash[:notice]
+
+      @dependent.reload
+      assert_equal 'Shared Contact', @dependent.first_name
+      assert_match(/\Adependent-.*@system\.matvulcan\.local\z/, @dependent.email)
+      assert_equal @guardian.email, @dependent.dependent_email
+      assert_equal @guardian.phone, @dependent.dependent_phone
+    end
+
+    test 'should preserve contact fields on partial update without submitted email or phone' do
+      original_email = @dependent.email
+      original_phone = @dependent.phone
+      original_dependent_email = @dependent.dependent_email
+      original_dependent_phone = @dependent.dependent_phone
+
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: {
+          first_name: 'Test Update'
+        }
+      }
+
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Dependent was successfully updated.', flash[:notice]
+
+      @dependent.reload
+      assert_equal 'Test Update', @dependent.first_name
+      assert_equal original_email, @dependent.email
+      assert_equal original_phone, @dependent.phone
+      assert_equal original_dependent_email, @dependent.dependent_email
+      assert_equal original_dependent_phone, @dependent.dependent_phone
+    end
+
+    test 'should preserve phone on partial update when only email is submitted' do
+      original_phone = @dependent.phone
+      original_dependent_phone = @dependent.dependent_phone
+      new_email = 'only.email.updated@example.com'
+
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: {
+          email: new_email
+        }
+      }
+
+      assert_redirected_to constituent_portal_dashboard_path
+
+      @dependent.reload
+      assert_equal new_email, @dependent.email
+      assert_equal new_email, @dependent.dependent_email
+      assert_equal original_phone, @dependent.phone
+      assert_equal original_dependent_phone, @dependent.dependent_phone
+    end
+
     test 'should set Current.user before update' do
       # Verify Current.user is set during the request
       DependentsController.any_instance.expects(:set_current_user).once

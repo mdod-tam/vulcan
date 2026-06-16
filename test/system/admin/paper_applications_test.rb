@@ -30,6 +30,11 @@ module Admin
       assert_text 'Disability Information'
       assert_text 'Certifying Professional Information'
       assert_text 'Proof Documents'
+
+      assert_selector 'fieldset', text: /Income Proof Action.*Upload for later review/m
+      assert_selector 'fieldset', text: /Residency Proof Action.*Upload for later review/m
+      assert_selector 'fieldset', text: /ID Proof Action.*Upload for later review/m
+      assert_selector 'fieldset', text: /Disability Certification Action.*Upload for later review/m
     end
 
     test 'admin can submit a complete and valid paper application for an adult' do
@@ -1069,6 +1074,7 @@ module Admin
       within '#self-info-section' do
         fill_in 'constituent[first_name]', with: 'John'
         fill_in 'constituent[last_name]', with: 'Doe'
+        fill_in 'constituent[date_of_birth]', with: '01/15/1980'
         fill_in 'constituent[email]', with: "john.doe.#{Time.now.to_i}@example.com"
         fill_in 'constituent[phone]', with: '555-123-4567'
         fill_in 'constituent[physical_address_1]', with: '123 Test St'
@@ -1090,8 +1096,6 @@ module Admin
       # Final submit should be gated until required visible choices and attestations are complete.
       assert_button 'Submit Paper Application', disabled: true
 
-      find_by_id('application_household_size', visible: :all).set('2')
-      find_by_id('application_annual_income', visible: :all).set('10000')
       check 'application[maryland_resident]'
       check 'application[medical_release_authorized]'
       check 'application[terms_accepted]'

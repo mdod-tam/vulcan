@@ -284,7 +284,7 @@ module Applications
 
     def process_self_applicant(applicant_data)
       # Handle no email address scenario
-      no_email = params[:no_email_address].present? && params[:no_email_address] == "1"
+      no_email = params[:no_email_address].present? && params[:no_email_address] == '1'
       if no_email
         applicant_data = applicant_data.dup
         applicant_data.delete(:email)
@@ -433,6 +433,7 @@ module Applications
     def validate_income_threshold(application_attrs)
       return true if @skip_income_validation
       return true unless FeatureFlag.enabled?(:income_proof_required)
+      return true unless income_proof_action_requires_income_validation?
 
       household_size = application_attrs[:household_size]
       annual_income = application_attrs[:annual_income]
@@ -447,6 +448,10 @@ module Applications
 
       add_error('Income exceeds the maximum threshold for the household size.')
       false
+    end
+
+    def income_proof_action_requires_income_validation?
+      params[:income_proof_action].to_s.in?(%w[accept approved])
     end
 
     def build_and_save_application(application_attrs)
@@ -536,30 +541,43 @@ module Applications
     end
 
     def process_upload_only_proof(type)
-      return add_error('Upload only is not available for medical certification') if type == :medical_certification
-
-      file_key = "#{type}_proof"
-      signed_id_key = "#{type}_proof_signed_id"
+      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
+      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
       blob_or_file = params[file_key].presence || params[signed_id_key].presence
 
-      return add_error("Please upload a file for #{type} proof before sending it for review") if blob_or_file.blank?
+      return add_error("Please upload a file for #{proof_upload_label(type)} before sending it for review") if blob_or_file.blank?
 
-      result = ProofAttachmentService.attach_proof(
-        application: @application,
-        proof_type: type,
-        blob_or_file: blob_or_file,
-        status: :not_reviewed,
-        admin: @admin,
-        submission_method: :paper,
-        metadata: {}
-      )
+      result = if type == :medical_certification
+                 MedicalCertificationAttachmentService.attach_certification(
+                   application: @application,
+                   blob_or_file: blob_or_file,
+                   status: :received,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               else
+                 ProofAttachmentService.attach_proof(
+                   application: @application,
+                   proof_type: type,
+                   blob_or_file: blob_or_file,
+                   status: :not_reviewed,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               end
 
       unless result[:success]
-        add_error("Error processing #{type} proof: #{result[:error]&.message}")
+        add_error("Error processing #{proof_upload_label(type)}: #{result[:error]&.message}")
         return false
       end
 
       true
+    end
+
+    def proof_upload_label(type)
+      type == :medical_certification ? 'medical certification' : "#{type} proof"
     end
 
     def process_accept_proof(type)
