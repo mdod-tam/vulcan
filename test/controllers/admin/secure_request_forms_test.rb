@@ -77,7 +77,7 @@ module Admin
       assert_response :success
       assert_select "input[name='recipient_ids[]'][value='#{dependent.id}'][checked]"
       assert_select "input[name='recipient_ids[]'][value='#{guardian.id}'][checked]", count: 0
-      assert_match(/authorized application relationships/, response.body)
+      assert_match(/receive the secure link/, response.body)
     end
 
     test 'show page defaults provider info recipient checkbox from resolver for guardian email path' do
