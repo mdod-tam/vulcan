@@ -147,6 +147,22 @@ class VoucherTest < ActiveSupport::TestCase
     assert_not_nil event.metadata['timestamp']
   end
 
+  test 'cancelled or no-show voucher evaluation does not block voucher assignment' do
+    FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
+
+    %i[cancelled no_show].each do |evaluation_status|
+      constituent = create(:constituent, email: "unique_voucher_eval_#{evaluation_status}_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      application = create(:application, :completed, :voucher_fulfillment, user: constituent)
+      create(:evaluation, application: application, constituent: constituent, status: evaluation_status)
+
+      assert application.can_create_voucher?
+
+      assert_difference -> { application.vouchers.count }, 1 do
+        assert application.assign_voucher!
+      end
+    end
+  end
+
   test 'can be redeemed when active' do
     @voucher.update!(status: :active)
     assert @voucher.can_redeem?(50)

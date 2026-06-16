@@ -32,5 +32,20 @@ module Evaluations
       assert_equal @evaluation.application_id, event.metadata['application_id']
       assert_equal 'Library', event.metadata['location']
     end
+
+    test 'does not schedule active evaluation' do
+      @evaluation.update!(status: :scheduled, evaluation_date: 1.day.from_now)
+
+      assert_no_difference('Event.where(action: "evaluation_scheduled").count') do
+        result = ScheduleService.new(
+          @evaluation,
+          @evaluator,
+          { evaluation_date: 2.days.from_now, location: 'Library', notes: 'Double schedule attempt' }
+        ).call
+
+        assert result.failure?
+        assert_equal 'Only requested evaluations can be scheduled.', result.message
+      end
+    end
   end
 end

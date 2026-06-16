@@ -358,6 +358,161 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window')
   end
 
+  test 'assign_evaluator! reuses cancelled evaluation instead of creating another' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    original_evaluator = create(:evaluator)
+    new_evaluator = create(:evaluator)
+    evaluation = create(:evaluation,
+                        application: application,
+                        constituent: application.user,
+                        evaluator: original_evaluator,
+                        status: :cancelled,
+                        notes: 'Constituent called to cancel',
+                        post_completion_notes: 'Follow-up outreach attempted')
+    Current.user = create(:admin)
+
+    assert_no_difference -> { Evaluation.count } do
+      assert application.assign_evaluator!(new_evaluator)
+    end
+
+    evaluation.reload
+    assert_equal new_evaluator, evaluation.evaluator
+    assert_equal 'requested', evaluation.status
+    assert_nil evaluation.evaluation_date
+    assert_equal '', evaluation.location
+    assert_equal '', evaluation.needs
+    assert_equal 'Constituent called to cancel', evaluation.notes
+    assert_equal 'Follow-up outreach attempted', evaluation.post_completion_notes
+    assert_empty evaluation.attendees
+    assert_empty evaluation.products_tried
+    assert_empty evaluation.recommended_product_ids
+    assert_not evaluation.report_submitted
+  ensure
+    Current.user = nil
+  end
+
+  test 'assign_evaluator! reuses legacy rescheduled evaluation instead of creating another' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    new_evaluator = create(:evaluator)
+    evaluation = create(:evaluation,
+                        application: application,
+                        constituent: application.user,
+                        status: :rescheduled,
+                        evaluation_date: 1.week.from_now,
+                        notes: 'Legacy reschedule note')
+    Current.user = create(:admin)
+
+    assert_no_difference -> { Evaluation.count } do
+      assert application.assign_evaluator!(new_evaluator)
+    end
+
+    evaluation.reload
+    assert_equal new_evaluator, evaluation.evaluator
+    assert_equal 'requested', evaluation.status
+    assert_nil evaluation.evaluation_date
+    assert_equal 'Legacy reschedule note', evaluation.notes
+  ensure
+    Current.user = nil
+  end
+
+  test 'assign_evaluator! does not reset active scheduled evaluation' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    original_evaluator = create(:evaluator)
+    scheduled_time = 2.days.from_now
+    evaluation = create(:evaluation,
+                        application: application,
+                        constituent: application.user,
+                        evaluator: original_evaluator,
+                        status: :scheduled,
+                        evaluation_date: scheduled_time,
+                        location: 'Library',
+                        notes: 'Scheduled evaluation')
+    Current.user = create(:admin)
+
+    assert_no_difference -> { Evaluation.count } do
+      assert_not application.assign_evaluator!(create(:evaluator))
+    end
+
+    evaluation.reload
+    assert_equal original_evaluator, evaluation.evaluator
+    assert_equal 'scheduled', evaluation.status
+    assert_in_delta scheduled_time, evaluation.evaluation_date, 1.second
+    assert_equal 'Library', evaluation.location
+    assert_equal 'Scheduled evaluation', evaluation.notes
+    assert_includes application.errors[:base],
+                    I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')
+  ensure
+    Current.user = nil
+  end
+
+  test 'assign_evaluator! uses a valid renewal evaluation type when constituent has prior evaluations' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    constituent = create(:constituent)
+    prior_application = create(:application, status: :approved, application_date: 2.years.ago.to_date, user: constituent)
+    create(:evaluation, :completed, application: prior_application, constituent: constituent)
+    application = create(:application, status: :approved, application_date: 1.year.ago.to_date, user: constituent)
+    Current.user = create(:admin)
+
+    assert_difference -> { Evaluation.count }, 1 do
+      assert application.assign_evaluator!(create(:evaluator))
+    end
+
+    assert_equal 'renewal', application.latest_evaluation.evaluation_type
+  ensure
+    Current.user = nil
+  end
+
+  test 'assign_evaluator! does not create another evaluation after completion' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    evaluator = create(:evaluator)
+    create(:evaluation, :completed, application: application, constituent: application.user, evaluator: evaluator)
+
+    assert_no_difference -> { Evaluation.count } do
+      assert_not application.assign_evaluator!(create(:evaluator))
+    end
+
+    assert_includes application.errors[:base],
+                    I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')
+  end
+
+  test 'assign_evaluator! does not reuse cancelled evaluation when completed history exists' do
+    Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    create(:evaluation, :completed, application: application, constituent: application.user)
+    cancelled_evaluation = create(:evaluation,
+                                  application: application,
+                                  constituent: application.user,
+                                  status: :cancelled,
+                                  notes: 'Cancelled follow-up')
+    Current.user = create(:admin)
+
+    assert_no_difference -> { Evaluation.count } do
+      assert_not application.assign_evaluator!(create(:evaluator))
+    end
+
+    cancelled_evaluation.reload
+    assert_equal 'cancelled', cancelled_evaluation.status
+    assert_equal 'Cancelled follow-up', cancelled_evaluation.notes
+    assert_includes application.errors[:base],
+                    I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')
+  ensure
+    Current.user = nil
+  end
+
+  test 'equipment application remains pending evaluation after cancelled or no-show evaluation' do
+    %i[cancelled no_show].each do |evaluation_status|
+      application = create(:application, :completed, fulfillment_type: :equipment)
+      create(:evaluation, application: application, constituent: application.user, status: evaluation_status)
+
+      assert_equal :pending_evaluation, application.admin_fulfillment_responsibility_state
+      assert_includes application.evaluations.needing_followup, application.latest_evaluation
+    end
+  end
+
   test 'batch_update_status updates multiple applications and returns success' do
     app1 = create(:application, :draft)
     app2 = create(:application, :draft)
