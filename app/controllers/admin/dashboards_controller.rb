@@ -6,7 +6,7 @@ module Admin
   class DashboardsController < BaseController
     include DashboardMetricsLoading
 
-    def index
+    def show
       # Load comprehensive dashboard metrics
       @metrics = load_dashboard_metrics
 
