@@ -294,7 +294,7 @@ class MedicalProviderMailer < ApplicationMailer
   def send_approval_email(subject, body)
     application = params[:application]
 
-    mail_with_accessible_text_body(
+    mail_with_text_body(
       {
         to: application.medical_provider_email,
         from: 'no_reply@mdmat.org',
@@ -309,7 +309,7 @@ class MedicalProviderMailer < ApplicationMailer
   def send_rejection_email(subject, body)
     application = params[:application]
 
-    mail_with_accessible_text_body(
+    mail_with_text_body(
       {
         to: application.medical_provider_email,
         from: 'no_reply@mdmat.org',
@@ -328,7 +328,7 @@ class MedicalProviderMailer < ApplicationMailer
     mail_options = build_request_mail_options(application, subject)
     add_notification_tracking(mail_options, notification_id)
 
-    mail_with_accessible_text_body(mail_options, body.to_s)
+    mail_with_text_body(mail_options, body.to_s)
   end
 
   def build_request_mail_options(application, subject)

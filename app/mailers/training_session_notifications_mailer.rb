@@ -13,7 +13,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Expects training_session passed via .with(training_session: ...)
   def trainer_assigned(training_session)
     trainer = training_session.trainer
-    locale = staff_template_locale
+    # Staff-only template; only English seed content is maintained.
+    locale = 'en'
     template_name = 'training_session_notifications_trainer_assigned'
     begin
       # Only find the text template as per project strategy

@@ -56,9 +56,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
 
     email = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review)
 
-    assert email.multipart?
     assert_match(%r{http://test\.example\.com}, decoded_text_part(email))
-    assert_accessible_html_link email, href: 'http://test.example.com/dashboard', text: 'Proof resubmission link'
   end
 
   test 'new_evaluation_assigned email contains absolute URLs' do
@@ -76,9 +74,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
 
     email = EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned
 
-    assert email.multipart?
     assert_match(%r{http://test\.example\.com}, decoded_text_part(email))
-    assert_accessible_html_link email, href: 'http://test.example.com/evaluations/123', text: 'Evaluator evaluation link'
   end
 
   private

@@ -7,8 +7,7 @@ class EvaluatorMailerTest < ActionMailer::TestCase
   include EmailTemplateMockHelper
 
   setup do
-    # Stored templates remain text-only; URL-bearing emails derive an HTML part
-    # from the rendered text body.
+    # Stored templates remain text-only until explicit HTML template support is added.
 
     # Create specific mock templates for each mailer method
     new_evaluation_assigned_mock = mock_template(
@@ -55,8 +54,6 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_equal [@evaluator.email], email.to
     assert_equal 'New Evaluation Assigned', email.subject
 
-    assert email.multipart?, 'Email should be multipart when rendered text contains footer URL'
-
     # Check that the email body contains expected text
     body = decoded_text_part(email)
     expected_text = "Text body for evaluation assigned to #{@evaluator.full_name} for #{@constituent.full_name}"
@@ -93,8 +90,6 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@constituent.email], email.to
     assert_equal 'Evaluation has been Submitted', email.subject
-
-    assert email.multipart?, 'Email should be multipart when rendered text contains footer URL'
 
     # Check that the email body contains expected content from the mock
     body = decoded_text_part(email)

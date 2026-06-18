@@ -25,13 +25,10 @@ class MedicalProviderRequestCertificationTemplateTest < ActionMailer::TestCase
 
     body = decoded_text_part(email)
 
-    assert email.multipart?
     assert_includes body, 'DISABILITY CERTIFICATION FORM REQUEST'
     assert_includes body, 'Alex Smith'
     assert_includes body, 'Secure certification upload link'
-    assert_accessible_html_link email,
-                                href: 'https://example.test/secure_certification_form?token=abc',
-                                text: 'Secure certification upload link'
+    assert_includes body, 'https://example.test/secure_certification_form?token=abc'
     assert_not_includes body, 'and was sent on'
     assert_not_includes body, 'May 07, 2026'
   end

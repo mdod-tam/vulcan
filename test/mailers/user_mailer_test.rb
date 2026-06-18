@@ -20,8 +20,7 @@ class UserMailerTest < ActionMailer::TestCase
   end
 
   setup do
-    # Stored templates remain text-only; URL-bearing emails derive an HTML part
-    # from the rendered text body.
+    # Stored templates remain text-only until explicit HTML template support is added.
 
     # Stub EmailTemplate.find_by! to return mocks that respond to subject and body
     # Create template mocks with the expected rendered output (after substitution)
@@ -82,14 +81,10 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal [user.email], email.to
     assert_equal 'Password reset', email.subject # Assert subject matches the mock template subject
 
-    assert email.multipart?
-    assert_includes email.content_type, 'multipart/alternative'
-
     # Manually interpolate the expected body format string to compare with the main body
     reset_url = 'http://example.com/password/edit?token=test-password-reset-token'
     expected_body = "Password reset link:\n#{reset_url}"
     assert_includes decoded_text_part(email), expected_body
-    assert_accessible_html_link email, href: reset_url, text: 'Password reset link'
   end
 
   test 'password_reset uses Spanish template for Spanish locale constituent' do
@@ -106,7 +101,7 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal 'Restablecer contrasena', email.subject
   end
 
-  test 'password_reset uses English template for Spanish locale staff user' do
+  test 'password_reset uses Spanish template for Spanish locale staff user when available' do
     user = create(:admin, locale: 'es')
     user.stubs(:generate_token_for).with(:password_reset).returns('test-password-reset-token')
 
@@ -117,7 +112,7 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal 1, emails.size
     email = emails.first
     assert_equal [user.email], email.to
-    assert_equal 'Password reset', email.subject
+    assert_equal 'Restablecer contrasena', email.subject
   end
 
   test 'email_verification' do
@@ -140,14 +135,10 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal [user.email], email.to
     assert_equal 'Email verification', email.subject # Assert subject matches the mock template subject
 
-    assert email.multipart?
-    assert_includes email.content_type, 'multipart/alternative'
-
     # Manually interpolate the expected body format string to compare with the main body
     verification_url = 'http://example.com/constituent_portal/applications/verify?token=test-email-verification-token'
     expected_body = "Email verification link:\n#{verification_url}"
     assert_includes decoded_text_part(email), expected_body
-    assert_accessible_html_link email, href: verification_url, text: 'Email verification link'
   end
 
   test 'email_verification uses Spanish template for Spanish locale constituent' do
@@ -164,7 +155,7 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal 'Verificacion de correo electronico', email.subject
   end
 
-  test 'email_verification uses English template for Spanish locale staff user' do
+  test 'email_verification uses Spanish template for Spanish locale staff user when available' do
     user = create(:evaluator, locale: 'es')
     user.stubs(:generate_token_for).with(:email_verification).returns('test-email-verification-token')
 
@@ -175,6 +166,6 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal 1, emails.size
     email = emails.first
     assert_equal [user.email], email.to
-    assert_equal 'Email verification', email.subject
+    assert_equal 'Verificacion de correo electronico', email.subject
   end
 end

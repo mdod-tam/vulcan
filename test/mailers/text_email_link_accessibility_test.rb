@@ -162,7 +162,7 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     end
   end
 
-  test 'email bodies with purpose-labelled URL lines render HTML anchors named by purpose' do
+  test 'email bodies with purpose-labelled URL lines remain plain text' do
     reset_url = 'https://example.test/password/edit?token=abc'
     proof_url = 'https://example.test/secure_proof_form?token=def'
     body = <<~TEXT
@@ -175,11 +175,9 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
 
     email = AccessibleLinkTestMailer.with(body: body).labelled_link
 
-    assert email.multipart?
-    assert_includes decoded_text_part(email), "Password reset link:\n#{reset_url}"
-    assert_accessible_html_link email, href: reset_url, text: 'Password reset link'
-    assert_accessible_html_link email, href: proof_url, text: 'Secure proof upload link'
-    assert_no_match %r{>https://example\.test}, decoded_html_part(email)
+    assert_not email.multipart?
+    assert_includes email.body.decoded, "Password reset link:\n#{reset_url}"
+    assert_includes email.body.decoded, "Secure proof upload link:\n   #{proof_url}"
   end
 
   test 'email bodies without URLs remain text only' do

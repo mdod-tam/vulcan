@@ -336,10 +336,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     email.deliver_now
 
     assert_equal [@user.email], email.to
-    assert email.multipart?
     assert_includes decoded_text_part(email), secure_upload_url
     assert_includes decoded_text_part(email), 'Secure proof upload link'
-    assert_accessible_html_link email, href: secure_upload_url, text: 'Secure proof upload link for your proof of identity'
   end
 
   test 'proof_rejected includes secure upload url for paper application email delivery' do
@@ -355,10 +353,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     email.deliver_now
 
     assert_equal [@user.email], email.to
-    assert email.multipart?
     assert_includes decoded_text_part(email), secure_upload_url
     assert_includes decoded_text_part(email), 'Secure corrected proof upload link'
-    assert_accessible_html_link email, href: secure_upload_url, text: 'Secure corrected proof upload link for your income proof'
   end
 
   test 'proof_rejected renders none_provided id reason as friendly text without seed row' do
@@ -566,13 +562,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     expected_subject = "Mock Account Created for #{constituent.first_name}"
     assert_equal expected_subject, email.subject
 
-    assert email.multipart?
-
     # Check the content of the email
     assert_includes decoded_text_part(email), "Welcome #{constituent.first_name}"
     assert_includes decoded_text_part(email), 'mat.program1@maryland.gov'
     assert_includes decoded_text_part(email), ProgramContact.website_url
-    assert_accessible_html_link email, href: "https://#{ProgramContact.website_url}", text: 'MAT program website'
     assert_not_includes decoded_text_part(email), temp_password
     assert_not_includes decoded_text_part(email), 'http://example.com/users/sign_in'
   end
@@ -588,13 +581,19 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       email.deliver_now
     end
     assert_equal [user.email], email.to
-    assert email.multipart?
     assert_includes decoded_text_part(email), 'Recovery approved for Jane'
     assert_includes decoded_text_part(email), 'http://example.com/users/sign_in'
-    assert_accessible_html_link email, href: 'http://example.com/users/sign_in', text: 'Sign in'
   end
 
-  test 'security_key_recovery_approved uses English template for Spanish locale staff recipient' do
+  test 'security_key_recovery_approved uses recipient locale for Spanish locale staff recipient when available' do
+    spanish_template = mock_template('Recuperacion de llave de seguridad aprobada',
+                                     "Recuperacion aprobada para %<user_first_name>s.\n\n" \
+                                     "Iniciar sesion:\n%<sign_in_url>s")
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_security_key_recovery_approved',
+      format: :text,
+      locale: 'es'
+    ).returns(spanish_template)
     user = create(:admin, first_name: 'Staff', locale: 'es')
     recovery_request = create(:recovery_request, user: user, status: 'approved')
     notification = Notification.new(recipient: user, notifiable: recovery_request, action: 'security_key_recovery_approved')
@@ -603,8 +602,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     email.deliver_now
 
     assert_equal [user.email], email.to
-    assert_equal 'Security Key Recovery Approved', email.subject
-    assert_includes decoded_text_part(email), 'Recovery approved for Staff'
+    assert_equal 'Recuperacion de llave de seguridad aprobada', email.subject
+    assert_includes decoded_text_part(email), 'Recuperacion aprobada para Staff'
   end
 
   test 'account_created generates letter when preference is letter' do
@@ -750,16 +749,12 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [user.email], email.to, 'Email should be sent to the registered user'
     assert_equal 'Mock Welcome Jane!', email.subject, 'Email subject should match mock'
 
-    assert email.multipart?
-
     # Check the content of the email
     text_content = decoded_text_part(email)
     assert_match 'Welcome, Jane!', text_content
     assert_match "Dashboard link:\nhttp://example.com/dashboard", text_content
     assert_match "New application link:\nhttp://example.com/applications/new", text_content
     assert_match 'No authorized vendors found at this time.', text_content
-    assert_accessible_html_link email, href: 'http://example.com/dashboard', text: 'Dashboard link'
-    assert_accessible_html_link email, href: 'http://example.com/applications/new', text: 'New application link'
   end
 
   test 'registration_confirmation generates letter when preference is letter' do

@@ -357,10 +357,9 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal ['no_reply@mdmat.org'], email.from, 'Email should be from no_reply@mdmat.org'
     assert_equal ['testuser@example.com'], email.to, 'Email should be sent to the registered user'
     assert_equal 'Welcome to the Maryland Accessible Telecommunications Program', email.subject
-    assert email.multipart?, 'Email should be multipart when rendered text contains URL variables'
 
     # Get the email content
-    content = email.text_part.decoded
+    content = email.body.decoded
 
     # Test that variables were substituted with values
     assert_match(/Test/, content, 'First name should be substituted')

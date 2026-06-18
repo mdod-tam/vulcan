@@ -34,8 +34,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     @invoice = create(:invoice, vendor: @vendor)
     @transactions = create_list(:voucher_transaction, 3, invoice: @invoice, vendor: @vendor)
 
-    # Stored templates remain text-only; URL-bearing emails derive an HTML part
-    # from the rendered text body.
+    # Stored templates remain text-only until explicit HTML template support is added.
 
     # Create specific mock templates for each mailer method
     rejected_template = mock_template(
@@ -164,14 +163,10 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [@vendor.email], email.to
     assert_equal 'W9 Form Requires Correction', email.subject
 
-    assert email.multipart?
-    assert_includes email.content_type, 'multipart/alternative'
-
     # Check that the email body contains the secure-link instructions from the stored template
     assert_includes decoded_text_part(email), review.rejection_reason
     assert_includes decoded_text_part(email), secure_upload_url
     assert_includes decoded_text_part(email), 'Secure W9 upload link'
-    assert_accessible_html_link email, href: secure_upload_url, text: 'Secure W9 upload link'
   end
 
   test 'w9_upload_requested' do
@@ -190,11 +185,8 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@vendor.email], email.to
     assert_equal "Secure W9 upload requested for #{@vendor.business_name}", email.subject
-    assert email.multipart?
-    assert_includes email.content_type, 'multipart/alternative'
     assert_includes decoded_text_part(email), secure_upload_url
     assert_includes decoded_text_part(email), 'has requested a W9 form from you'
-    assert_accessible_html_link email, href: secure_upload_url, text: 'Secure W9 upload link'
   end
 
   test 'mailer error audit metadata redacts secure upload URLs' do
