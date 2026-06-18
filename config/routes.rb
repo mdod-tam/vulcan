@@ -115,6 +115,9 @@ Rails.application.routes.draw do
     resource :dashboard, only: [:show], controller: :dashboards
     root to: 'dashboards#show'
 
+    resources :feature_flags, only: %i[index update]
+
+
     resources :guardian_relationships, only: %i[destroy]
 
     resources :recovery_requests, only: %i[index show] do
@@ -396,10 +399,6 @@ Rails.application.routes.draw do
       get :report, on: :collection
     end
     resources :invoices, only: %i[index show]
-  end
-
-  namespace :admin do
-    resources :feature_flags, only: %i[index update]
   end
 
   # New constituent_portal namespace (replacing constituent)
