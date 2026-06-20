@@ -21,9 +21,9 @@ No yml files for any user-facing content. Everything admin-controlled, versioned
 - Unique index on `(name, format, locale)` — both `html` and `text` variants exist for each template name.
 - `ApplicationNotificationsMailer#find_email_template` looks up by `(name, format, locale)` with English fallback.
 - `%{variable}` / `%<variable>s` interpolation in `body` and `subject`.
-- `version` integer increments on each `subject` or `body` change; `previous_subject`/`previous_body` store one level of undo.
+- `version` integer increments on each `subject` or `body` change; admin edit history lives in `email_template_snapshots` (append-only). Legacy `previous_subject`/`previous_body` columns remain for show-page fallback but are no longer written on save.
 - `locale` column exists (string, not null, default `'en'`). EN templates explicitly set `locale: 'en'` in seeds, and ES variants are seeded as EN copies when missing.
-- `needs_sync` boolean flag (default `false`): set on locale variants when a counterpart's body/subject changes; cleared automatically when that variant is saved with new content.
+- `locale_needs_sync` flag (renamed from the original `needs_sync` column): set on locale variants when a counterpart's body/subject changes; admin UI reads `locale_out_of_sync?`. Cleared on the same save when body/subject is updated, or via `mark_synced`.
 
 ### Rejection Reasons (what currently exists and what's wrong)
 
@@ -133,26 +133,28 @@ Admin-only emails (e.g. `proof_needs_review_reminder`) always use `'en'`. `incom
 `EmailTemplate` enforces that locale variants don't silently drift apart:
 
 ```ruby
-# Flags other locales when this template's content changes.
-# Guard: skipped when needs_sync is already true (that save is fixing the sync).
+# Clear sync flags on the same save when stale locale is updated (not via nested after_update).
+before_update :clear_locale_sync_flags_when_content_changes,
+              if: -> { (body_changed? || subject_changed?) && locale_out_of_sync? }
+
+# Flag other locales when content changes — skipped when this save is fixing an out-of-sync locale.
 after_update :flag_counterpart_locales_for_sync,
-             if: -> { (saved_change_to_body? || saved_change_to_subject?) && !needs_sync? }
+             if: lambda {
+               (saved_change_to_body? || saved_change_to_subject?) && !locale_was_out_of_sync_before_save?
+             }
 
-# Clears our own flag after a content update that resolved the out-of-sync state.
-after_update :clear_sync_flag,
-             if: -> { (saved_change_to_body? || saved_change_to_subject?) && needs_sync? }
-
-# Blocks saves that don't actually change content while out-of-sync.
-# Saving with new body/subject is always allowed — that's how you fix the sync.
+# Blocks description/variables-only edits while body/subject remain stale; content changes always allowed.
 validate :counterpart_locales_are_synced, on: :update
 ```
 
+Admin UI and helpers use `locale_out_of_sync?` (`locale_needs_sync`).
+
 ### Admin UI ✅
 
-- **Index** — Locale column shows locale badge (`EN`/`ES`). Status column shows amber "Needs Sync" badge when `needs_sync: true`.
-- **Show** — Locale appears in the template details grid. Amber warning banner appears when `needs_sync: true`, with a "Mark Synced" button to dismiss.
-- **Edit/Form** — Amber warning at the top when `needs_sync: true`, explaining the situation and offering a "Mark Synced" escape hatch.
-- **`mark_synced` action** — `PATCH /admin/email_templates/:id/mark_synced` clears `needs_sync` without requiring content changes (for when the existing translation is still correct).
+- **Index** — Locale column shows locale badge (`EN`/`ES`). Status column shows amber "Needs Sync" badge when `locale_out_of_sync?`.
+- **Show** — Locale appears in the template details grid. Amber warning banner when out of sync, with a "Mark Synced" button to dismiss.
+- **Edit/Form** — Amber warning at the top when out of sync, explaining the situation and offering a "Mark Synced" escape hatch.
+- **`mark_synced` action** — `PATCH /admin/email_templates/:id/mark_synced` clears `locale_needs_sync` without requiring content changes (for when the existing translation is still correct).
 
 ### Remaining for Part 1
 
@@ -324,10 +326,10 @@ end
 
 ### Track A — Email Template Locale
 
-1. ✅ Add `locale` column + `needs_sync` flag to `email_templates`; update unique index.
+1. ✅ Add `locale` column + locale sync flag to `email_templates`; update unique index. PR 1 renames the original `needs_sync` flag to `locale_needs_sync`.
 2. ✅ Update `find_email_template` to accept and fall back on locale.
-3. ✅ Add `needs_sync` validation and `after_update` callbacks to `EmailTemplate`.
-4. ✅ Surface `needs_sync` state in admin UI (index, show, edit); add `mark_synced` action.
+3. ✅ Add locale sync validation and callbacks to `EmailTemplate` (`locale_needs_sync`, `locale_out_of_sync?`).
+4. ✅ Surface out-of-sync state in admin UI (index, show, edit); add `mark_synced` action.
 5. ✅ Explicitly set `locale: 'en'` in all 36 seed files.
 6. ✅ Seed ES variants of all existing templates (initially a copy of EN; translated later).
 7. ✅ Side-by-side EN/ES edit UI (model already supports it).

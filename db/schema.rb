@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_04_172500) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_18_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -178,6 +178,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_172500) do
     t.index ["product_id", "application_id"], name: "index_applications_products_on_product_id_and_application_id"
   end
 
+  create_table "email_template_snapshots", force: :cascade do |t|
+    t.text "body", null: false
+    t.string "change_source", null: false
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id"
+    t.text "description", null: false
+    t.bigint "email_template_id", null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "format", default: 1, null: false
+    t.string "locale", default: "en", null: false
+    t.integer "snapshot_number", null: false
+    t.string "subject", null: false
+    t.datetime "updated_at", null: false
+    t.jsonb "variables", default: {}, null: false
+    t.index ["created_by_id"], name: "index_email_template_snapshots_on_created_by_id"
+    t.index ["email_template_id", "snapshot_number"], name: "index_email_template_snapshots_on_template_and_number", unique: true
+    t.index ["email_template_id"], name: "index_email_template_snapshots_on_email_template_id"
+  end
+
   create_table "email_templates", force: :cascade do |t|
     t.text "body"
     t.datetime "created_at", null: false
@@ -185,8 +204,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_172500) do
     t.boolean "enabled", default: true, null: false
     t.integer "format", default: 0
     t.string "locale", default: "en", null: false
+    t.boolean "locale_needs_sync", default: false, null: false
     t.string "name", null: false
-    t.boolean "needs_sync", default: false, null: false
     t.text "previous_body"
     t.string "previous_subject"
     t.string "subject"
@@ -789,16 +808,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_172500) do
     t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
   end
 
-  create_table "user_email_search_tokens", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.string "token_digest", null: false
-    t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
-    t.index ["token_digest"], name: "index_user_email_search_tokens_on_token_digest"
-    t.index ["user_id", "token_digest"], name: "index_user_email_search_tokens_on_user_id_and_token_digest", unique: true
-    t.index ["user_id"], name: "index_user_email_search_tokens_on_user_id"
-  end
-
   create_table "vendor_secure_request_forms", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "expires_at", null: false
@@ -917,6 +926,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_172500) do
   add_foreign_key "applications", "users", column: "income_verified_by_id"
   add_foreign_key "applications", "users", column: "managing_guardian_id"
   add_foreign_key "applications", "users", column: "medical_certification_verified_by_id"
+  add_foreign_key "email_template_snapshots", "email_templates"
+  add_foreign_key "email_template_snapshots", "users", column: "created_by_id"
   add_foreign_key "email_templates", "users", column: "updated_by_id"
   add_foreign_key "evaluations", "applications"
   add_foreign_key "evaluations", "users", column: "constituent_id"

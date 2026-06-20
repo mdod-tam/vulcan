@@ -39,7 +39,7 @@ module Admin
       assert es_template.valid?
     end
 
-    test 'updating body flags counterpart locale as needs_sync' do
+    test 'updating body flags counterpart locale as locale_needs_sync' do
       es_template = create(
         :email_template, :text,
         name: @template_text.name,
@@ -50,11 +50,36 @@ module Admin
       @template_text.update!(body: 'Updated body %<name>s.')
       es_template.reload
 
-      assert es_template.needs_sync?
+      assert es_template.locale_needs_sync?
     end
 
-    test 'template blocked from saving when needs_sync is true and content is unchanged' do
-      @template_text.update_column(:needs_sync, true)
+    test 'resolving out-of-sync locale does not flag counterpart' do
+      en_template = @template_text
+      es_template = create(
+        :email_template, :text,
+        name: en_template.name,
+        body: 'Spanish body %<name>s',
+        locale: 'es',
+        locale_needs_sync: true
+      )
+
+      es_template.update!(body: 'Updated Spanish body %<name>s.')
+      en_template.reload
+      es_template.reload
+
+      assert_not en_template.locale_out_of_sync?
+      assert_not es_template.locale_out_of_sync?
+    end
+
+    test 'out-of-sync template allows enabled-only update' do
+      @template_text.update_columns(locale_needs_sync: true)
+      @template_text.reload
+
+      assert @template_text.update!(enabled: false)
+    end
+
+    test 'template blocked from saving when locale_needs_sync is true and content is unchanged' do
+      @template_text.update_column(:locale_needs_sync, true)
       @template_text.reload
       @template_text.description = 'New description only.'
 
@@ -62,13 +87,19 @@ module Admin
       assert @template_text.errors[:base].any?
     end
 
-    test 'template allowed to save when needs_sync is true but body is changing' do
-      @template_text.update_column(:needs_sync, true)
+    test 'locale_out_of_sync? reflects renamed sync flag' do
+      @template_text.update_columns(locale_needs_sync: true)
       @template_text.reload
 
-      assert @template_text.update(body: 'Fixed body %<name>s.')
-      @template_text.reload
-      assert_not @template_text.needs_sync?
+      assert @template_text.locale_out_of_sync?
+    end
+
+    test 'render_with_tracking renders hash variables' do
+      admin = create(:admin)
+      subject, body = @template_text.render_with_tracking({ 'name' => 'Alex' }, admin)
+
+      assert_includes body, 'Alex'
+      assert_includes subject, 'Text Subject'
     end
   end
 end
