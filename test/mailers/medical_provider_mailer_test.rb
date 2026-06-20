@@ -66,7 +66,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     assert_match(/Certification/i, email.subject)
   end
 
-  test 'build_rejection_variables includes download form URL' do
+  test 'build_rejection_variables includes secure upload resubmission instructions when provided' do
     mailer = MedicalProviderMailer.new
     mailer.params = {
       application: @application,
@@ -80,6 +80,23 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     assert variables[:download_form_url].present?
     assert_match %r{/medical_certification_form\z}, variables[:download_form_url]
     assert_equal 'https://example.test/secure_certification_form?token=abc', variables[:secure_upload_url]
+    assert_includes variables[:certification_resubmission_instructions], 'Secure certification upload link'
+    assert_includes variables[:certification_resubmission_instructions], variables[:secure_upload_url]
+  end
+
+  test 'build_rejection_variables omits secure upload resubmission step when no secure upload URL exists' do
+    mailer = MedicalProviderMailer.new
+    mailer.params = {
+      application: @application,
+      rejection_reason: 'Missing signature',
+      admin: create(:admin)
+    }
+
+    variables = mailer.send(:build_rejection_variables)
+
+    assert_equal '', variables[:secure_upload_url]
+    assert_includes variables[:certification_resubmission_instructions], 'Blank disability certification form'
+    assert_not_includes variables[:certification_resubmission_instructions], 'Secure certification upload link'
   end
 
   test 'build_request_certification_variables includes constituent contact info and static form URL' do
@@ -110,7 +127,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     variables = mailer.send(:build_request_certification_variables)
 
     assert_equal 'https://example.test/secure_certification_form?token=abc', variables[:secure_upload_url]
-    assert_includes variables[:certification_submission_instructions], 'Upload the completed form securely'
+    assert_includes variables[:certification_submission_instructions], 'Secure certification upload link'
     assert_includes variables[:certification_submission_instructions], variables[:secure_upload_url]
   end
 

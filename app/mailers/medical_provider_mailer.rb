@@ -122,6 +122,7 @@ class MedicalProviderMailer < ApplicationMailer
       rejection_reason: rejection_reason,
       secure_upload_url: params[:secure_upload_url].to_s,
       download_form_url: build_download_form_url,
+      certification_resubmission_instructions: certification_resubmission_instructions(locale),
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
@@ -178,15 +179,56 @@ class MedicalProviderMailer < ApplicationMailer
     english_certification_submission_instructions
   end
 
-  def english_certification_submission_instructions
+  def certification_resubmission_instructions(locale)
+    return spanish_certification_resubmission_instructions if locale.to_s == 'es'
+
+    english_certification_resubmission_instructions
+  end
+
+  def english_certification_resubmission_instructions
     return <<~TEXT.chomp if params[:secure_upload_url].present?
-      1. Download the form at: #{build_download_form_url}
-      2. Complete all required fields and sign the form
-      3. Upload the completed form securely: #{params[:secure_upload_url]}
+      1. Secure certification upload link:
+         #{params[:secure_upload_url]}
+      2. Blank disability certification form:
+         #{build_download_form_url}
+      3. Fax: Send the updated form to 410-767-4276
     TEXT
 
     <<~TEXT.chomp
-      1. Download the form at: #{build_download_form_url}
+      1. Blank disability certification form:
+         #{build_download_form_url}
+      2. Fax: Send the updated form to 410-767-4276
+    TEXT
+  end
+
+  def spanish_certification_resubmission_instructions
+    return <<~TEXT.chomp if params[:secure_upload_url].present?
+      1. Enlace seguro para cargar la certificación:
+         #{params[:secure_upload_url]}
+      2. Formulario de certificación de discapacidad en blanco:
+         #{build_download_form_url}
+      3. Fax: Envíe el formulario actualizado al 410-767-4276
+    TEXT
+
+    <<~TEXT.chomp
+      1. Formulario de certificación de discapacidad en blanco:
+         #{build_download_form_url}
+      2. Fax: Envíe el formulario actualizado al 410-767-4276
+    TEXT
+  end
+
+  def english_certification_submission_instructions
+    return <<~TEXT.chomp if params[:secure_upload_url].present?
+      1. Blank disability certification form:
+         #{build_download_form_url}
+      2. Complete all required fields and sign the form
+      3. Secure certification upload link:
+         #{params[:secure_upload_url]}
+    TEXT
+
+    <<~TEXT.chomp
+      1. Blank disability certification form:
+         #{build_download_form_url}
       2. Complete all required fields
       3. Sign the form
       4. Return the completed form by fax to (410) 767-4276
@@ -196,13 +238,16 @@ class MedicalProviderMailer < ApplicationMailer
 
   def spanish_certification_submission_instructions
     return <<~TEXT.chomp if params[:secure_upload_url].present?
-      1. Descargue el formulario en: #{build_download_form_url}
+      1. Formulario de certificación de discapacidad en blanco:
+         #{build_download_form_url}
       2. Complete todos los campos obligatorios y firme el formulario
-      3. Suba el formulario completado de forma segura: #{params[:secure_upload_url]}
+      3. Enlace seguro para cargar la certificación:
+         #{params[:secure_upload_url]}
     TEXT
 
     <<~TEXT.chomp
-      1. Descargue el formulario en: #{build_download_form_url}
+      1. Formulario de certificación de discapacidad en blanco:
+         #{build_download_form_url}
       2. Complete todos los campos obligatorios
       3. Firme el formulario
       4. Devuelva el formulario completado por fax al (410) 767-4276
@@ -249,29 +294,31 @@ class MedicalProviderMailer < ApplicationMailer
   def send_approval_email(subject, body)
     application = params[:application]
 
-    mail(
-      to: application.medical_provider_email,
-      from: 'no_reply@mdmat.org',
-      reply_to: support_email,
-      subject: subject,
-      message_stream: 'outbound'
-    ) do |format|
-      format.text { render plain: body.to_s }
-    end
+    mail_with_text_body(
+      {
+        to: application.medical_provider_email,
+        from: 'no_reply@mdmat.org',
+        reply_to: support_email,
+        subject: subject,
+        message_stream: 'outbound'
+      },
+      body.to_s
+    )
   end
 
   def send_rejection_email(subject, body)
     application = params[:application]
 
-    mail(
-      to: application.medical_provider_email,
-      from: 'no_reply@mdmat.org',
-      reply_to: support_email,
-      subject: subject,
-      message_stream: 'outbound'
-    ) do |format|
-      format.text { render plain: body.to_s }
-    end
+    mail_with_text_body(
+      {
+        to: application.medical_provider_email,
+        from: 'no_reply@mdmat.org',
+        reply_to: support_email,
+        subject: subject,
+        message_stream: 'outbound'
+      },
+      body.to_s
+    )
   end
 
   def send_request_certification_email(subject, body)
@@ -281,9 +328,7 @@ class MedicalProviderMailer < ApplicationMailer
     mail_options = build_request_mail_options(application, subject)
     add_notification_tracking(mail_options, notification_id)
 
-    mail(mail_options) do |format|
-      format.text { render plain: body.to_s }
-    end
+    mail_with_text_body(mail_options, body.to_s)
   end
 
   def build_request_mail_options(application, subject)

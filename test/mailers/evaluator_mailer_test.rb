@@ -7,9 +7,7 @@ class EvaluatorMailerTest < ActionMailer::TestCase
   include EmailTemplateMockHelper
 
   setup do
-    # Per project strategy, HTML emails are not used. Only stub for :text format.
-    # If the mailer attempts to find_by!(format: :html), it should fail (e.g., RecordNotFound)
-    # as no HTML templates should be seeded for these, and we provide no stub.
+    # Stored templates remain text-only until explicit HTML template support is added.
 
     # Create specific mock templates for each mailer method
     new_evaluation_assigned_mock = mock_template(
@@ -56,17 +54,27 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_equal [@evaluator.email], email.to
     assert_equal 'New Evaluation Assigned', email.subject
 
-    # For non-multipart emails, we check the body directly
-    assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
-
     # Check that the email body contains expected text
+    body = decoded_text_part(email)
     expected_text = "Text body for evaluation assigned to #{@evaluator.full_name} for #{@constituent.full_name}"
-    assert_includes email.body.to_s, expected_text
-    assert_includes email.body.to_s, 'Contact: Text me'
-    assert_includes email.body.to_s, 'Language: English'
-    assert_includes email.body.to_s, 'Modality: ASL'
-    assert_includes email.body.to_s, 'Delivery: Email'
+    assert_includes body, expected_text
+    assert_includes body, 'Contact: Text me'
+    assert_includes body, 'Language: English'
+    assert_includes body, 'Modality: ASL'
+    assert_includes body, 'Delivery: Email'
+  end
+
+  test 'new_evaluation_assigned uses English template for Spanish locale evaluator' do
+    @evaluator.update!(locale: 'es')
+
+    emails = capture_emails do
+      EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+    assert_equal [@evaluator.email], email.to
+    assert_equal 'New Evaluation Assigned', email.subject
   end
 
   test 'evaluation_submission_confirmation' do
@@ -83,14 +91,11 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_equal [@constituent.email], email.to
     assert_equal 'Evaluation has been Submitted', email.subject
 
-    # For non-multipart emails, we check the body directly
-    assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
-
     # Check that the email body contains expected content from the mock
-    assert_includes email.body.to_s, "#{@alpha_product.name}\n#{@zeta_product.name}"
-    assert_not_includes email.body.to_s, "- #{@alpha_product.name}"
-    assert_not_includes email.body.to_s, 'equipment order'
+    body = decoded_text_part(email)
+    assert_includes body, "#{@alpha_product.name}\n#{@zeta_product.name}"
+    assert_not_includes body, "- #{@alpha_product.name}"
+    assert_not_includes body, 'equipment order'
   end
 
   test 'evaluation_submission_confirmation generates letter when preference is letter' do

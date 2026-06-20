@@ -372,7 +372,8 @@ es:
   application_notifications:
     provider_info_requested:
       email_instructions: |-
-        Use este enlace seguro para proporcionar la información de contacto del profesional certificador: %{secure_url}
+        Enlace seguro para información del profesional certificador:
+        %{secure_url}
 
         Este enlace seguro vence en %{hours} horas.
       letter_instructions: |-
@@ -386,7 +387,8 @@ es:
              %{office_address}
         online: |-
           CÓMO ENVIAR ESTE DOCUMENTO:
-          1. Use este enlace seguro para subir su %{proof_type_formatted}: %{secure_upload_url}
+          1. Enlace seguro para cargar su %{proof_type_formatted}:
+             %{secure_upload_url}
           2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
@@ -407,7 +409,8 @@ es:
              %{office_address}
         online: |-
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
-          1. Use este enlace seguro para subir una copia corregida de su %{proof_type_formatted}: %{secure_upload_url}
+          1. Enlace seguro para cargar una copia corregida de su %{proof_type_formatted}:
+             %{secure_upload_url}
           2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
@@ -415,10 +418,12 @@ es:
   vendor_notifications:
     w9_rejected:
       secure_upload_instructions: |-
-        1. Suba aquí su formulario W9 corregido de forma segura: %{secure_upload_url}
+        1. Enlace seguro para cargar el formulario W9:
+           %{secure_upload_url}
         2. Envíe el PDF corregido antes de que venza este enlace seguro.
       vendor_portal_instructions: |-
-        1. Inicie sesión en su cuenta de proveedor: %{vendor_portal_url}
+        1. Enlace al portal de proveedor:
+           %{vendor_portal_url}
         2. Vaya a la configuración de su perfil.
         3. Suba un formulario W9 corregido.
     w9_upload_requested:
@@ -428,7 +433,8 @@ es:
 
         El equipo de %{organization_name} le ha solicitado un formulario W9.
 
-        Suba su W9 de forma segura aquí: %{secure_upload_url}
+        Enlace seguro para cargar el formulario W9:
+        %{secure_upload_url}
 
         Este enlace seguro tiene vencimiento. Si tiene preguntas, comuníquese con %{support_email}.
   vendors:
@@ -453,23 +459,23 @@ es:
         submitted: "Gracias. Su formulario W9 fue enviado para revisión."
   document_signing:
     medical_certification_request:
-      submission_name: "Certificacion medica - %{constituent_full_name} (Solicitud %{application_id})"
-      subject: "Solicitud de certificacion de discapacidad para %{constituent_full_name}"
+      submission_name: "Certificación médica - %{constituent_full_name} (Solicitud %{application_id})"
+      subject: "Solicitud de certificación de discapacidad para %{constituent_full_name}"
       body: |
-        Por favor complete la solicitud de certificacion de discapacidad para %{constituent_full_name}.
+        Por favor complete la solicitud de certificación de discapacidad para %{constituent_full_name}.
 
-        Informacion del solicitante:
+        Información del solicitante:
         - Nombre: %{constituent_full_name}
         - Fecha de nacimiento: %{constituent_dob_formatted}
-        - Telefono: %{constituent_phone_formatted}
-        - Correo electronico: %{constituent_email}
-        - Direccion: %{constituent_address_formatted}
+        - Teléfono: %{constituent_phone_formatted}
+        - Correo electrónico: %{constituent_email}
+        - Dirección: %{constituent_address_formatted}
         - ID de solicitud: %{application_id}
 
-        Use el siguiente enlace de firma para revisar, completar y firmar la certificacion:
+        Enlace de firma de certificación médica:
         {{submitter.link}}
 
-        Si tiene preguntas, comuniquese con %{support_email}.
+        Si tiene preguntas, comuníquese con %{support_email}.
   date:
     formats:
       long: "%d de %B de %Y"
@@ -533,7 +539,7 @@ es:
         evaluator_mailer_evaluation_submission_confirmation: "Confirmación de envío de evaluación"
   secure_provider_info_forms:
     sms:
-      message: "MAT necesita información de contacto del profesional certificador. Envíela de forma segura aquí: %{secure_url} Este enlace vence en %{hours} horas."
+      message: "MAT necesita información de contacto del profesional certificador. Enlace seguro para información del profesional certificador: %{secure_url} Este enlace vence en %{hours} horas."
     show:
       title: "Información del Profesional Certificador"
       heading: "Proporcione información del profesional certificador"
@@ -577,13 +583,16 @@ es:
       heading: "Enlace seguro no disponible"
       body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
       contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+  passwords:
+    account_access_sms:
+      message: "Enlace de acceso a la cuenta MAT para establecer su contraseña: %{reset_url} Este enlace vence en 20 minutos."
   secure_proof_forms:
     proof_types:
       income: "comprobante de ingresos"
       residency: "comprobante de residencia en Maryland"
       id: "comprobante de identidad"
     sms:
-      message: "MAT necesita su %{proof_type}. Súbalo de forma segura aquí: %{secure_url} Este enlace vence en %{hours} horas."
+      message: "MAT necesita su %{proof_type}. Enlace seguro para cargar el comprobante solicitado: %{secure_url} Este enlace vence en %{hours} horas."
     show:
       title: "Carga Segura de Documentos"
       heading: "Suba %{proof_type}"

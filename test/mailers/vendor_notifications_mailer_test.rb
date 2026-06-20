@@ -34,9 +34,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     @invoice = create(:invoice, vendor: @vendor)
     @transactions = create_list(:voucher_transaction, 3, invoice: @invoice, vendor: @vendor)
 
-    # Per project strategy, HTML emails are not used. Only stub for :text format.
-    # If the mailer attempts to find_by!(format: :html), it should fail (e.g., RecordNotFound)
-    # as no HTML templates should be seeded for these, and we provide no stub.
+    # Stored templates remain text-only until explicit HTML template support is added.
 
     # Create specific mock templates for each mailer method
     rejected_template = mock_template(
@@ -165,14 +163,10 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [@vendor.email], email.to
     assert_equal 'W9 Form Requires Correction', email.subject
 
-    # For non-multipart emails, we check the body directly
-    assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
-
     # Check that the email body contains the secure-link instructions from the stored template
-    assert_includes email.body.to_s, review.rejection_reason
-    assert_includes email.body.to_s, secure_upload_url
-    assert_includes email.body.to_s, 'Upload your corrected W9 securely here'
+    assert_includes decoded_text_part(email), review.rejection_reason
+    assert_includes decoded_text_part(email), secure_upload_url
+    assert_includes decoded_text_part(email), 'Secure W9 upload link'
   end
 
   test 'w9_upload_requested' do
@@ -191,9 +185,8 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@vendor.email], email.to
     assert_equal "Secure W9 upload requested for #{@vendor.business_name}", email.subject
-    assert_includes email.content_type, 'text/plain'
-    assert_includes email.body.to_s, secure_upload_url
-    assert_includes email.body.to_s, 'has requested a W9 form from you'
+    assert_includes decoded_text_part(email), secure_upload_url
+    assert_includes decoded_text_part(email), 'has requested a W9 form from you'
   end
 
   test 'mailer error audit metadata redacts secure upload URLs' do
@@ -224,13 +217,53 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_includes variables_json, '[REDACTED_URL]'
   end
 
-  # Skip this test for now as it requires w9_expiration_date attribute
-  test 'w9_expiring_soon' do
-    skip 'Requires w9_expiration_date attribute on vendor'
+  test 'w9_expiring_soon renders stored template with required variables' do
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'vendor_notifications_w9_expiring_soon', format: :text).delete_all
+    load Rails.root.join('db/seeds/email_templates/vendor_notifications_w9_expiring_soon.rb')
+
+    expiration_date = 14.days.from_now.to_date
+    @vendor.stubs(:w9_expiration_date).returns(expiration_date)
+    @vendor.stubs(:associated?).returns(false)
+    VendorNotificationsMailer.any_instance.stubs(:resolve_vendor_portal_url).returns('https://example.test/vendor_portal')
+
+    emails = capture_emails do
+      VendorNotificationsMailer.with(vendor: @vendor).w9_expiring_soon.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    body = decoded_text_part(emails.first)
+
+    assert_includes body, @vendor.business_name
+    assert_includes body, expiration_date.strftime('%B %d, %Y')
+    assert_includes body, 'https://example.test/vendor_portal'
+    assert_includes body, 'Vendor portal link:'
+    assert_not_includes body, '%<status_box_warning_text>'
   end
 
-  # Skip this test for now as it requires vendor_root_url
-  test 'w9_expired' do
-    skip 'Requires vendor_root_url helper'
+  test 'w9_expired renders stored template with required variables' do
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'vendor_notifications_w9_expired', format: :text).delete_all
+    load Rails.root.join('db/seeds/email_templates/vendor_notifications_w9_expired.rb')
+
+    expiration_date = 7.days.ago.to_date
+    @vendor.stubs(:w9_expiration_date).returns(expiration_date)
+    @vendor.stubs(:associated?).returns(true)
+    VendorNotificationsMailer.any_instance.stubs(:resolve_vendor_portal_url).returns('https://example.test/vendor_portal')
+
+    emails = capture_emails do
+      VendorNotificationsMailer.with(vendor: @vendor).w9_expired.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    body = decoded_text_part(emails.first)
+
+    assert_includes body, @vendor.business_name
+    assert_includes body, expiration_date.strftime('%B %d, %Y')
+    assert_includes body, 'https://example.test/vendor_portal'
+    assert_includes body, 'Vendor portal link:'
+    assert_includes body, 'Association Requirement'
+    assert_not_includes body, '%<status_box_error_text>'
+    assert_not_includes body, '%<status_box_warning_text>'
   end
 end

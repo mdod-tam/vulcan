@@ -10,7 +10,10 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_security_key_r
 
     Su solicitud de recuperación de llave de seguridad ha sido aprobada. Sus llaves de seguridad existentes se han eliminado de su cuenta.
 
-    Inicie sesión y registre una nueva llave de seguridad: %<sign_in_url>s
+    Inicie sesión y registre una nueva llave de seguridad.
+
+    Enlace de inicio de sesión:
+    %<sign_in_url>s
 
     Si tiene preguntas o necesita ayuda, comuníquese con nuestro equipo a %<support_email>s.
 

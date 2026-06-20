@@ -21,7 +21,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_needs_re
 
     Please review these applications as soon as possible to ensure timely processing for our applicants.
 
-    You can access the admin dashboard to review all pending applications at:
+    Admin dashboard link:
     %<admin_dashboard_url>s
 
     %<footer_text>s

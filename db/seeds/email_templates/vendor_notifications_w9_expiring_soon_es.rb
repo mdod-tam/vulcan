@@ -18,9 +18,11 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', 
     Para garantizar un servicio ininterrumpido y el procesamiento de pagos, envíe un formulario W9 actualizado antes de la fecha de vencimiento.
 
     CÓMO ENVIAR SU W9 ACTUALIZADO:
-    1. Descargue el formulario W9 actual del sitio web del IRS: https://www.irs.gov/pub/irs-pdf/fw9.pdf
+    1. PDF W-9 del IRS:
+       https://www.irs.gov/pub/irs-pdf/fw9.pdf
     2. Complete y firme el formulario
-    3. Inicie sesión en su portal de proveedor en %<vendor_portal_url>s
+    3. Enlace al portal de proveedor:
+       %<vendor_portal_url>s
     4. Vaya a "Perfil" y cargue su nuevo formulario W9
 
     Si ya ha enviado un formulario W9 actualizado, ignore este mensaje.
