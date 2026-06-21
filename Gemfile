@@ -10,6 +10,8 @@ gem 'aws-sdk-s3', '~> 1.217'
 gem 'bcrypt', '~> 3.1.22'
 # reduces boot times through caching; required in config/boot.rb
 gem 'bootsnap', '~> 1.23', require: false
+# PNG parsing for system test screenshot blank-artifact detection
+gem 'chunky_png', '~> 1.4'
 # bundle and process CSS [https://github.com/rails/cssbundling-rails]
 gem 'cssbundling-rails', '~> 1.4', '>= 1.4.3'
 # DocuSeal API integration for digital document signing
