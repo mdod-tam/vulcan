@@ -978,7 +978,7 @@ module Admin
     end
 
     test 'reject_for_income is gated when income collection is disabled' do
-      FeatureFlag.find_by!(name: 'income_proof_required').update!(enabled: false)
+      FeatureFlag.enable!(:vouchers_enabled)
 
       post reject_for_income_admin_paper_applications_path, headers: default_headers, params: {
         first_name: 'John', last_name: 'Doe', email: 'john@example.com'
@@ -989,7 +989,7 @@ module Admin
     end
 
     test 'send_rejection_notification is gated when income collection is disabled' do
-      FeatureFlag.find_by!(name: 'income_proof_required').update!(enabled: false)
+      FeatureFlag.enable!(:vouchers_enabled)
 
       post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
         first_name: 'John', last_name: 'Doe', email: 'john@example.com',

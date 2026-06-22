@@ -434,7 +434,7 @@ module Applications
 
     def validate_income_threshold(application_attrs)
       return true if @skip_income_validation
-      return true unless FeatureFlag.enabled?(:income_proof_required)
+      return true unless FeatureFlag.income_proof_required?
       return true unless income_proof_action_requires_income_validation?
 
       household_size = application_attrs[:household_size]
@@ -479,7 +479,7 @@ module Applications
       residency_action = params[:residency_proof_action]
 
       # Only consider income action when income collection is enabled
-      if FeatureFlag.enabled?(:income_proof_required)
+      if FeatureFlag.income_proof_required?
         return :awaiting_proof if income_action.in?(%w[none reject]) || residency_action.in?(%w[none reject])
       elsif residency_action.in?(%w[none reject])
         return :awaiting_proof

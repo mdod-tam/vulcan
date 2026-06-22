@@ -165,7 +165,7 @@ module Admin
     helper_method :fpl_thresholds_json, :fpl_modifier_value
 
     def fpl_thresholds_json
-      return '{}' unless FeatureFlag.enabled?(:income_proof_required)
+      return '{}' unless FeatureFlag.income_proof_required?
 
       thresholds = (1..8).to_h do |size|
         result = IncomeThresholdCalculationService.call(size)
@@ -179,7 +179,7 @@ module Admin
     end
 
     def fpl_modifier_value
-      return 0 unless FeatureFlag.enabled?(:income_proof_required)
+      return 0 unless FeatureFlag.income_proof_required?
 
       result = IncomeThresholdCalculationService.call(1)
       if result.success?
@@ -190,7 +190,7 @@ module Admin
     end
 
     def reject_for_income
-      unless FeatureFlag.enabled?(:income_proof_required)
+      unless FeatureFlag.income_proof_required?
         redirect_to new_admin_paper_application_path, alert: 'Income rejection is not available when income collection is disabled.'
         return
       end
@@ -225,7 +225,7 @@ module Admin
     end
 
     def send_rejection_notification
-      unless FeatureFlag.enabled?(:income_proof_required)
+      unless FeatureFlag.income_proof_required?
         redirect_to admin_applications_path, alert: 'Income rejection is not available when income collection is disabled.'
         return
       end

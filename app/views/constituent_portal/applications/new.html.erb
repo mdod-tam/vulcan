@@ -23,7 +23,7 @@
         autosave_edit_form_url_value: constituent_portal_application_path(':id'),
         autosave_edit_autosave_url_value: autosave_field_constituent_portal_application_path(':id')
       }
-        if FeatureFlag.enabled?(:income_proof_required)
+        if FeatureFlag.income_proof_required?
           new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
           new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
           new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
@@ -229,7 +229,7 @@
         <fieldset class="space-y-6 p-4 bg-gray-50 rounded">
           <legend class="text-lg font-medium text-gray-900">Required Documentation</legend>
 
-          <% if FeatureFlag.enabled?(:income_proof_required) %>
+          <% if FeatureFlag.income_proof_required? %>
           <!-- Income Verification Subsection -->
           <div class="space-y-4">
             <h3 class="text-base font-medium text-gray-900">Income Verification</h3>

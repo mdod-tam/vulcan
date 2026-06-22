@@ -72,7 +72,7 @@
       "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']"
     }
     paper_form_data[:"applicant-type-adult-picker-outlet"] = "[data-controller='adult-picker']"
-    if FeatureFlag.enabled?(:income_proof_required)
+    if FeatureFlag.income_proof_required?
       paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
       paper_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
     else
@@ -774,7 +774,7 @@
           </div>
 
           <div class="p-6 space-y-8">
-            <% if FeatureFlag.enabled?(:income_proof_required) %>
+            <% if FeatureFlag.income_proof_required? %>
             <%# Income Proof Section %>
             <div data-controller="document-proof-handler" data-document-proof-handler-type-value="income">
               <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -1213,7 +1213,7 @@
           <%= link_to "Cancel", admin_applications_path,
               class: "inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
 
-          <% if FeatureFlag.enabled?(:income_proof_required) %>
+          <% if FeatureFlag.income_proof_required? %>
           <%= button_tag type: "button",
               id: "rejection-button",
               class: "hidden inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500",
@@ -1236,7 +1236,7 @@
     <% end %>
   </div>
 
-<% if FeatureFlag.enabled?(:income_proof_required) %>
+<% if FeatureFlag.income_proof_required? %>
 <%# ============================================================ %>
 <%# Rejection Modal %>
 <%# ============================================================ %>

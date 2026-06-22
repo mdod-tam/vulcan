@@ -10,7 +10,6 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     clear_enqueued_jobs
     clear_performed_jobs
     setup_paper_application_context
-    @income_flag = FeatureFlag.find_or_create_by!(name: 'income_proof_required') { |f| f.enabled = true }
     @vouchers_flag = FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
   end
 
@@ -94,7 +93,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   # --- ApplicationForm: conditional income validation ---
 
   test 'ApplicationForm validates annual_income on submission when income required' do
-    @income_flag.update!(enabled: true)
+    @vouchers_flag.update!(enabled: false)
     user = create(:constituent, :with_disabilities)
 
     form = ApplicationForm.new(
@@ -112,7 +111,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   end
 
   test 'ApplicationForm skips annual_income validation when income not required' do
-    @income_flag.update!(enabled: false)
+    @vouchers_flag.update!(enabled: true)
     user = create(:constituent, :with_disabilities)
 
     form = ApplicationForm.new(
@@ -129,7 +128,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   end
 
   test 'ApplicationForm uses persisted application income_proof_required for drafts' do
-    @income_flag.update!(enabled: true)
+    @vouchers_flag.update!(enabled: false)
     user = create(:constituent, :with_disabilities)
     app = create(:application, :draft, user: user)
     assert app.income_proof_required?
@@ -154,7 +153,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   # --- PaperApplicationService: income threshold skip ---
 
   test 'PaperApplicationService skips income threshold validation when flag is off' do
-    @income_flag.update!(enabled: false)
+    @vouchers_flag.update!(enabled: true)
     admin = create(:admin)
     setup_fpl_policies
 
@@ -187,7 +186,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   end
 
   test 'PaperApplicationService determine_initial_status ignores income when flag off' do
-    @income_flag.update!(enabled: false)
+    @vouchers_flag.update!(enabled: true)
     admin = create(:admin)
     setup_fpl_policies
 
@@ -240,7 +239,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   # --- PaperApplicationService: income proof processing skip ---
 
   test 'PaperApplicationService does not process income proof when flag is off' do
-    @income_flag.update!(enabled: false)
+    @vouchers_flag.update!(enabled: true)
     admin = create(:admin)
     setup_fpl_policies
 
