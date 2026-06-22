@@ -1,7 +1,7 @@
 <% dependent_application = local_assigns.fetch(:dependent_application, false) %>
 <% use_guardian_address = local_assigns.fetch(:use_guardian_address, false) %>
 
-<section aria-labelledby="address-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+<section class="space-y-4 p-4 bg-gray-50 rounded">
   <h2 id="address-section-title" class="text-lg font-medium text-gray-900">Address Information</h2>
 
   <% if dependent_application && local_assigns[:guardian_address].present? %>

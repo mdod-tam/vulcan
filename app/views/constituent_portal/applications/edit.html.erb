@@ -5,7 +5,7 @@
  </header>
 
  <% edit_form_data = {
-   controller: "currency-formatter autosave",
+   controller: "final-submit-gate currency-formatter autosave",
    autosave_target: "form",
    autosave_url_value: autosave_field_constituent_portal_application_path(@application),
    autosave_debounce_wait_value: 1000
@@ -25,7 +25,7 @@
    
    <!-- Autosave status indicator -->
    <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden"></div>
-   <div class="bg-white shadow sm:rounded-lg" aria-labelledby="application_form_heading">
+   <div class="bg-white shadow sm:rounded-lg">
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
 
     <% if @application.errors.any? %>
@@ -122,7 +122,7 @@
       <% end %>
 
         <!-- Applicant and Guardian Display -->
-        <section aria-labelledby="applicant-guardian-title" class="space-y-4 p-4 bg-gray-50 rounded">
+        <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="applicant-guardian-title" class="text-lg font-medium text-gray-900">Application Details</h2>
           <div>
             <p class="text-sm text-gray-700">
@@ -148,7 +148,7 @@
             use_guardian_address: @use_guardian_address %>
 
          <!-- Disability Section -->
-       <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+       <section class="space-y-4 p-4 bg-gray-50 rounded">
          <h2 id="disability-section-title" class="text-lg font-medium text-gray-900 required-label">Disability Information</h2>
          
          <div class="flex items-start">
@@ -165,8 +165,9 @@
            If you have a disability, please self-certify by checking the box above.
          </p>
 
-         <fieldset class="space-y-2">
-           <legend class="text-sm text-gray-700 font-medium">Select at least one disability that applies to you:</legend>
+         <fieldset class="space-y-2" data-requires-one-checkbox="true" aria-describedby="portal-edit-disability-type-help">
+           <legend class="text-sm text-gray-700 font-medium">Disability type</legend>
+           <p id="portal-edit-disability-type-help" class="text-xs text-gray-700">Select at least one disability that applies to the applicant.</p>
            
            <div class="grid sm:grid-cols-2 gap-4">
              <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
@@ -195,7 +196,7 @@
        <% end %>
 
         <!-- Alternate Contact Section (optional) -->
-        <section aria-labelledby="alternate-contact-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+        <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
           <p class="text-sm text-gray-700"><%= t("applications.alternate_contact.portal_help") %></p>
          
@@ -236,7 +237,7 @@
        </section>
 
        <!-- Document Upload Section -->
-       <section aria-labelledby="documents-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+       <section class="space-y-4 p-4 bg-gray-50 rounded">
          <h2 id="documents-section-title" class="text-lg font-medium text-gray-900">Required Documentation</h2>
 
          <div class="space-y-4">
@@ -321,14 +322,19 @@
 
       <%= f.submit "Save Application",
            name: "save_draft",
+           formnovalidate: true,
            class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
            "aria-label": "Save application draft" %>
 
-       <%= f.submit "Submit Application", 
+       <p id="portal-edit-submit-gate-status" class="sr-only" aria-live="polite" data-final-submit-gate-target="status"></p>
+
+       <%= f.submit "Submit Application",
            name: "submit_application",
-           class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
+           disabled: true,
+           class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed",
            "aria-label": "Submit final application",
-           data: { "income-validation-target": "submitButton" } %>
+           data: { final_submit_gate_target: "submitButton" },
+           aria: { describedby: "portal-edit-submit-gate-status" } %>
      </div>
    </div>
  <% end %>

@@ -75,6 +75,46 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'newuser@example.com', user.email
   end
 
+  def test_should_create_constituent_with_mm_dd_yyyy_date_of_birth
+    assert_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: 'newuser-mm-dd-yyyy@example.com',
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'User',
+        date_of_birth: '01/15/1990',
+        phone: '555-555-5565',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_redirected_to welcome_path
+    assert_equal Date.new(1990, 1, 15), User.find_by!(email: 'newuser-mm-dd-yyyy@example.com').date_of_birth
+  end
+
+  def test_should_reject_malformed_text_date_of_birth
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: 'newuser-bad-dob@example.com',
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'User',
+        date_of_birth: 'January 15 1990',
+        phone: '555-555-5566',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:date_of_birth], 'must be in MM/DD/YYYY format'
+  end
+
   # Renamed test to reflect correct behavior: disability is NOT required at registration
   def test_should_create_constituent_without_disabilities
     # User should be created successfully even without disability flags

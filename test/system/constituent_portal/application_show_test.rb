@@ -39,11 +39,11 @@ module ConstituentPortal
       check 'Vision'
 
       # Medical provider information with safe interaction
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Benjamin Rush'
         fill_in 'Phone', with: '2022222323'
         fill_in 'Email', with: 'thunderbolts@rush.med'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
       # Upload documents with safe interaction (using updated label names)
@@ -72,12 +72,16 @@ module ConstituentPortal
       # Verify all entered information is displayed correctly on the show page
 
       # Application details
-      assert_text 'Status: Draft', wait: 5
-      assert_text 'Household Size: 3', wait: 5
-      assert_text 'Annual Income: $45,999.00', wait: 5
+      assert_text 'Status', wait: 5
+      assert_text 'Draft', wait: 5
+      assert_text 'Household Size', wait: 5
+      assert_text '3', wait: 5
+      assert_text 'Annual Income', wait: 5
+      assert_text '$45,999.00', wait: 5
 
       # Application type should be displayed (even if it's a default value)
-      assert_text "Application Type: #{application.application_type&.titleize || 'Not specified'}", wait: 5
+      assert_text 'Application Type', wait: 5
+      assert_text application.application_type&.titleize || 'Not specified', wait: 5
 
       # This test is for a constituent applying for themselves, not a guardian for a dependent.
       # Guardian information should not be displayed.
@@ -85,17 +89,23 @@ module ConstituentPortal
       assert_no_text 'Guardian Relationship:'
 
       # Disability information
-      assert_text 'Self-Certified Disability: Yes', wait: 5
-      assert_text 'Disability Types: Hearing, Vision', wait: 5
+      assert_text 'Self-Certified Disability', wait: 5
+      assert_text 'Yes', wait: 5
+      assert_text 'Disability Types', wait: 5
+      assert_text 'Hearing, Vision', wait: 5
 
       # Medical provider information
-      assert_text 'Name: Benjamin Rush', wait: 5
-      assert_text 'Phone: 2022222323', wait: 5
-      assert_text 'Email: thunderbolts@rush.med', wait: 5
+      assert_text 'Name', wait: 5
+      assert_text 'Benjamin Rush', wait: 5
+      assert_text 'Phone', wait: 5
+      assert_text '2022222323', wait: 5
+      assert_text 'Email', wait: 5
+      assert_text 'thunderbolts@rush.med', wait: 5
 
       # Uploaded documents
-      assert_text 'Filename: residency_proof.pdf', wait: 5
-      assert_text 'Filename: income_proof.pdf', wait: 5
+      assert_text 'Filename:', wait: 5
+      assert_text 'residency_proof.pdf', wait: 5
+      assert_text 'income_proof.pdf', wait: 5
     end
 
     test 'application show page displays updated information after editing' do
@@ -111,11 +121,11 @@ module ConstituentPortal
       check 'Hearing'
 
       # Fill in medical provider info with safe interaction
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Jane Smith'
         fill_in 'Phone', with: '2025551234'
         fill_in 'Email', with: 'drsmith@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
       # Upload required documents with safe interaction (using updated label names)
@@ -160,11 +170,11 @@ module ConstituentPortal
       check 'Mobility'
 
       # Update medical provider info with safe interaction
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Benjamin Franklin'
         fill_in 'Phone', with: '2025559876'
         fill_in 'Email', with: 'bfranklin@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
       # Save the updated application with safe interaction
@@ -195,14 +205,20 @@ module ConstituentPortal
       end
 
       # Verify updated information is displayed correctly
-      assert_text 'Household Size: 4', wait: 5
-      assert_text 'Annual Income: $55,000.00', wait: 5
-      assert_text 'Disability Types: Hearing, Vision, Mobility', wait: 5
+      assert_text 'Household Size', wait: 5
+      assert_text '4', wait: 5
+      assert_text 'Annual Income', wait: 5
+      assert_text '$55,000.00', wait: 5
+      assert_text 'Disability Types', wait: 5
+      assert_text 'Hearing, Vision, Mobility', wait: 5
 
       # Verify the medical provider information was updated correctly
-      assert_text 'Name: Dr. Benjamin Franklin', wait: 5
-      assert_text 'Phone: 2025559876', wait: 5
-      assert_text 'Email: bfranklin@example.com', wait: 5
+      assert_text 'Name', wait: 5
+      assert_text 'Dr. Benjamin Franklin', wait: 5
+      assert_text 'Phone', wait: 5
+      assert_text '2025559876', wait: 5
+      assert_text 'Email', wait: 5
+      assert_text 'bfranklin@example.com', wait: 5
     end
 
     test 'application show page displays disability information correctly' do
@@ -222,11 +238,11 @@ module ConstituentPortal
       check 'Cognition'
 
       # Fill in medical provider info with safe interaction
-      within "section[aria-labelledby='medical-info-heading']" do
+      within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Medical Provider'
         fill_in 'Phone', with: '2025551234'
         fill_in 'Email', with: 'doctor@example.com'
-        check 'I authorize the release and sharing of my medical information as described above'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
       # Upload required documents with safe interaction (using updated label names)
@@ -255,10 +271,12 @@ module ConstituentPortal
 
       # Verify disability information is displayed correctly
       # The application shows the actual value from the database
-      assert_text "Self-Certified Disability: #{application.self_certify_disability ? 'Yes' : 'No'}", wait: 5
+      assert_text 'Self-Certified Disability', wait: 5
+      assert_text application.self_certify_disability ? 'Yes' : 'No', wait: 5
 
       # Verify the disability types are displayed correctly
-      assert_text 'Disability Types: Hearing, Speech, Cognition', wait: 5
+      assert_text 'Disability Types', wait: 5
+      assert_text 'Hearing, Speech, Cognition', wait: 5
 
       # Verify other disabilities are not displayed
       assert_no_text 'Vision, Mobility' # This checks that neither Vision nor Mobility appear

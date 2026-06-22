@@ -6,12 +6,12 @@ import { calculateThreshold as calculateThresholdUtil } from "../../services/inc
  * Income Validation Controller
  * 
  * Validates that annual income is within FPL (Federal Poverty Level) thresholds
- * for the given household size. Shows warnings and disables submission if income
- * exceeds the threshold.
+ * for the given household size. Shows warnings and dispatches validation state.
+ * Final submit button state is owned by the form-specific submit gate controllers.
  */
 class IncomeValidationController extends Controller {
   static targets = [
-    "householdSize", "annualIncome", "warningContainer", "submitButton", "incomeFieldsContainer", "noIncomeProvided"
+    "householdSize", "annualIncome", "warningContainer", "incomeFieldsContainer", "noIncomeProvided"
   ]
 
   static outlets = ["flash"] // Declare flash outlet
@@ -48,7 +48,7 @@ class IncomeValidationController extends Controller {
     this.element.dataset.fplLoaded = "true"
     this.element.classList.add("fpl-data-loaded")
     this.dispatch("fpl-data-loaded")
-    this.validateIncomeThreshold()
+    this.toggleIncomeRequirement()
   }
 
   disconnect() {
@@ -95,6 +95,11 @@ class IncomeValidationController extends Controller {
 
 
   validateIncomeThreshold() {
+    if (this.incomeActionDefersReview()) {
+      this.clearValidationState()
+      return
+    }
+
     const size = this.getHouseholdSize()
     const income = this.getAnnualIncome()
 
@@ -171,7 +176,6 @@ class IncomeValidationController extends Controller {
 
   updateValidationUI(exceedsThreshold, threshold) {
     this.updateWarningDisplay(exceedsThreshold, threshold)
-    this.updateSubmitButton(exceedsThreshold)
     this.updateIncomeFieldsContainerStyle(exceedsThreshold)
   }
 
@@ -216,23 +220,6 @@ class IncomeValidationController extends Controller {
         <p>Applications with income above the threshold are not eligible for this program.</p>
       </div>
     `
-  }
-
-  updateSubmitButton(exceedsThreshold) {
-    if (this.hasSubmitButtonTarget) {
-      const target = this.submitButtonTarget
-      const prev = target.disabled
-      if (prev === exceedsThreshold) return
-      target.disabled = exceedsThreshold
-
-      if (exceedsThreshold) {
-        target.classList.add("opacity-50", "cursor-not-allowed")
-        target.setAttribute("disabled", "disabled")
-      } else {
-        target.classList.remove("opacity-50", "cursor-not-allowed")
-        target.removeAttribute("disabled")
-      }
-    }
   }
 
   clearValidationState() {
@@ -297,15 +284,48 @@ class IncomeValidationController extends Controller {
   }
 
   toggleIncome() {
+    this.toggleIncomeRequirement()
+  }
+
+  toggleIncomeRequirement() {
+    if (!this.hasNoIncomeProvidedTarget || !this.hasIncomeFieldsContainerTarget) return
+
     const incomeMissing = this.noIncomeProvidedTarget.checked
+    const detailsRequired = this.incomeActionRequiresDetails() && !incomeMissing
+
     setVisible(this.incomeFieldsContainerTarget, !incomeMissing)
-    if (incomeMissing) {
-      this.householdSizeTarget.removeAttribute('required')
-      this.annualIncomeTarget.removeAttribute('required')
+    this.setIncomeFieldsRequired(detailsRequired)
+
+    if (detailsRequired) {
+      this.validateIncomeThreshold()
     } else {
-      this.householdSizeTarget.setAttribute('required', 'required')
-      this.annualIncomeTarget.setAttribute('required', 'required')
+      this.clearValidationState()
     }
+  }
+
+  incomeActionRequiresDetails() {
+    const selectedAction = this.element.querySelector('input[name="income_proof_action"]:checked')
+    return selectedAction?.value === 'accept'
+  }
+
+  incomeActionDefersReview() {
+    const selectedAction = this.element.querySelector('input[name="income_proof_action"]:checked')
+    return selectedAction?.value === 'upload_only'
+  }
+
+  setIncomeFieldsRequired(required) {
+    [
+      this.hasHouseholdSizeTarget ? this.householdSizeTarget : null,
+      this.hasAnnualIncomeTarget ? this.annualIncomeTarget : null
+    ].filter(Boolean).forEach((target) => {
+      if (required) {
+        target.setAttribute('required', 'required')
+        target.setAttribute('aria-required', 'true')
+      } else {
+        target.removeAttribute('required')
+        target.removeAttribute('aria-required')
+      }
+    })
   }
 
 }

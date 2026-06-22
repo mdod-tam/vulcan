@@ -126,14 +126,14 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'Vision'
 
     # Fill in medical provider info using name attributes for reliability
-    within "section[aria-labelledby='medical-info-heading']" do
+    within '#medical-provider-fields' do
       find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Test Provider')
       find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
       find('input[name="application[medical_provider_attributes][email]"]').set('test@example.com')
     end
 
     # Check the medical authorization checkbox
-    check 'I authorize the release and sharing of my medical information as described above'
+    check 'I authorize the release and sharing of my disability-related information as described above'
 
     # Save as draft using more specific button targeting
     find('input[type="submit"][name="save_draft"]').click
@@ -166,14 +166,14 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'Vision'
 
     # Fill in medical provider info
-    within "section[aria-labelledby='medical-info-heading']" do
+    within '#medical-provider-fields' do
       fill_in 'Name', with: 'Dr. Jane Smith'
       fill_in 'Phone', with: '2025551234'
       fill_in 'Email', with: 'drsmith@example.com'
     end
 
     # Intentionally leave a required field blank to cause validation failure
-    within "section[aria-labelledby='medical-info-heading']" do
+    within '#medical-provider-fields' do
       fill_in 'Name', with: ''
     end
 
@@ -192,7 +192,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_checked_field 'Vision'
 
     # Verify medical provider info is preserved (except the intentionally blanked field)
-    within "section[aria-labelledby='medical-info-heading']" do
+    within '#medical-provider-fields' do
       assert_field 'Phone', with: '2025551234'
       assert_field 'Email', with: 'drsmith@example.com'
     end
@@ -203,7 +203,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     system_test_sign_in(@user)
     assert_text 'Dashboard', wait: 10 # Verify we're signed in
 
-    visit new_constituent_portal_application_path
+    visit new_constituent_portal_application_path(user_id: @dependent.id, for_self: false)
     wait_for_turbo # Ensure page is fully loaded
 
     # Fill in all form fields
@@ -219,17 +219,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     select 'Maryland', from: 'State'
     find('input[name*="zip_code"]').set('').set('21201')
 
-    # Guardian information
-    # Wait for the dependent radio button to be visible
-    assert_selector 'input#apply_for_dependent', visible: true, wait: 10
-    # Click the radio button directly using its ID
-    find_by_id('apply_for_dependent').click
-
-    # Wait for the dependent section to become visible
-    assert_selector '#dependent-selection-fields', visible: true, wait: 10
-
-    # Select the dependent (using the actual name from the factory)
-    select @dependent.full_name, from: 'application[user_id]'
+    assert_selector 'h1#form-title', text: "New Application for #{@dependent.full_name}", wait: 10
 
     # Disability information
     check 'I certify that I have a disability that affects my ability to access telecommunications services'
@@ -238,14 +228,14 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'Mobility'
 
     # Medical provider information using correct nested attribute field names
-    within "section[aria-labelledby='medical-info-heading']" do
+    within '#medical-provider-fields' do
       find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Robert Johnson')
       find('input[name="application[medical_provider_attributes][phone]"]').set('').set('4105551234')
       find('input[name="application[medical_provider_attributes][fax]"]').set('').set('4105555678')
       find('input[name="application[medical_provider_attributes][email]"]').set('').set('dr.johnson@example.com')
     end
 
-    check 'I authorize the release and sharing of my medical information as described above'
+    check 'I authorize the release and sharing of my disability-related information as described above'
 
     # Upload documents (if the test environment supports it)
     attach_file 'Upload Residency Proof Document', @valid_image
@@ -312,7 +302,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     refute_checked_field 'Cognition'
 
     # Verify medical provider info with debugging and better waiting
-    within "section[aria-labelledby='medical-info-heading']" do
+    within '#medical-provider-fields' do
       # Wait for the form section to be fully rendered
       assert_selector 'input[name="application[medical_provider_attributes][name]"]', wait: 10
 
