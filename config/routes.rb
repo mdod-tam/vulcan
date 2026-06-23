@@ -112,8 +112,11 @@ Rails.application.routes.draw do
            controller: 'secure_proof_form_resends'
 
   namespace :admin do
-    get 'dashboard', to: 'dashboards#index', as: :dashboard
-    root to: 'dashboards#index'
+    resource :dashboard, only: [:show], controller: :dashboards
+    root to: 'dashboards#show'
+
+    resources :feature_flags, only: %i[index update]
+
 
     resources :guardian_relationships, only: %i[destroy]
 
@@ -331,6 +334,8 @@ Rails.application.routes.draw do
         post :request_additional_info
         post :schedule
         post :reschedule
+        post :cancel
+        post :no_show
       end
 
       collection do
@@ -394,10 +399,6 @@ Rails.application.routes.draw do
       get :report, on: :collection
     end
     resources :invoices, only: %i[index show]
-  end
-
-  namespace :admin do
-    resources :feature_flags, only: %i[index update]
   end
 
   # New constituent_portal namespace (replacing constituent)

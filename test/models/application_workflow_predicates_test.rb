@@ -214,6 +214,16 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_includes results, app
   end
 
+  test 'with_proofs_needing_review includes id not_reviewed proofs' do
+    app = create(:application, :in_progress, :income_not_required)
+    app.update_columns(
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:not_reviewed]
+    )
+
+    assert_includes Application.with_proofs_needing_review, app
+  end
+
   # --- VoucherManagement#can_create_voucher? ---
 
   test 'can_create_voucher? requires voucher fulfillment' do

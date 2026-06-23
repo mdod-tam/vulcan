@@ -65,6 +65,7 @@ jobs:
               password: password
               database: rails_test
               pool: 5
+              migrations_paths: db/queue_migrate
           EOF
 
       - name: Set up database

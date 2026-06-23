@@ -34,19 +34,19 @@ module ConstituentPortal
 
       # Test cases for different household sizes and incomes
       test_cases = [
-        { household_size: 1, income: 59_999, expected_disabled: false }, # Below threshold (15650*4=62600)
-        { household_size: 1, income: 65_000, expected_disabled: true },  # Above threshold
-        { household_size: 3, income: 99_999, expected_disabled: false }, # Below threshold (26650*4=106600)
-        { household_size: 3, income: 110_000, expected_disabled: true }, # Above threshold
-        { household_size: 8, income: 199_999, expected_disabled: false }, # Below threshold (54150*4=216600)
-        { household_size: 8, income: 220_000, expected_disabled: true } # Above threshold
+        { household_size: 1, income: 59_999, expected_warning: false }, # Below threshold (15650*4=62600)
+        { household_size: 1, income: 65_000, expected_warning: true },  # Above threshold
+        { household_size: 3, income: 99_999, expected_warning: false }, # Below threshold (26650*4=106600)
+        { household_size: 3, income: 110_000, expected_warning: true }, # Above threshold
+        { household_size: 8, income: 199_999, expected_warning: false }, # Below threshold (54150*4=216600)
+        { household_size: 8, income: 220_000, expected_warning: true } # Above threshold
       ]
 
       # Test each case with proper field clearing
       test_cases.each do |test_case|
         household_size = test_case[:household_size]
         income = test_case[:income]
-        expected_disabled = test_case[:expected_disabled]
+        expected_warning = test_case[:expected_warning]
 
         # Clear and set field values explicitly to avoid concatenation issues
         household_size_field = find('input[name*="household_size"]')
@@ -61,19 +61,15 @@ module ConstituentPortal
         household_size_field.trigger('change')
         income_field.trigger('change')
 
-        # Wait for validation to complete by checking expected button state
-        # Use CSS selectors with :disabled pseudo-class for proper Capybara waiting
-        if expected_disabled
-          # Wait for button to become disabled
-          assert_selector 'input[name="submit_application"]:disabled', wait: 10
-          # Wait for warning to become visible
+        # Income validation owns warning display; final submit remains disabled
+        # until every visible required control is valid.
+        assert_selector 'input[name="submit_application"]:disabled', wait: 10
+
+        if expected_warning
           assert_selector '#income-threshold-warning', visible: true, wait: 10,
                                                        text: /Income Exceeds Threshold/
-        else
-          # Wait for button to be enabled (not disabled)
-          assert_selector 'input[name="submit_application"]:not(:disabled)', wait: 10
-          # Check that warning element has the hidden class (properly hidden)
-          assert_selector '#income-threshold-warning.hidden', wait: 5 if page.has_selector?('#income-threshold-warning', wait: 3)
+        elsif page.has_selector?('#income-threshold-warning', wait: 3)
+          assert_selector '#income-threshold-warning.hidden', wait: 5
         end
       end
     end
@@ -98,10 +94,8 @@ module ConstituentPortal
       household_size_field.trigger('change')
       income_field.trigger('change')
 
-      # Use proper Capybara waiting - button should be enabled at threshold
-      submit_button = find('input[name="submit_application"]')
-      assert_not submit_button.disabled?,
-                 'Submit button should be enabled when income is exactly at the threshold'
+      # Income is valid at the threshold, but final submit is still gated by other required controls.
+      assert_selector 'input[name="submit_application"]:disabled', wait: 5
 
       # Warning should not be visible at threshold; check element exists with hidden attribute
       # The element exists in DOM but should have the hidden attribute when income is at/below threshold
@@ -118,9 +112,8 @@ module ConstituentPortal
       household_size_field.trigger('change')
       income_field.trigger('change')
 
-      # Button should be enabled for large household sizes below threshold
-      # Use CSS selector with :not(:disabled) for proper Capybara waiting
-      assert_selector 'input[name="submit_application"]:not(:disabled)', wait: 5
+      # Income is valid, but final submit is still gated by other required controls.
+      assert_selector 'input[name="submit_application"]:disabled', wait: 5
       # Warning element may exist in DOM but should be hidden. Check for hidden attribute or class
       if page.has_selector?('#income-threshold-warning', wait: 2)
         # Element exists but should be hidden

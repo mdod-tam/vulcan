@@ -1,8 +1,16 @@
 # frozen_string_literal: true
 
+# rubocop:disable Style/OneClassPerFile -- system test base co-locates helper modules by design.
+
 require 'test_helper'
+require 'json'
 require 'socket'
 require 'capybara/cuprite'
+begin
+  require 'chunky_png'
+rescue LoadError
+  # Blank screenshot detection is skipped when the PNG parser is unavailable.
+end
 begin
   require 'selenium/webdriver'
 rescue LoadError
@@ -452,22 +460,53 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     Application.skip_wait_period_validation = original_value
   end
 
-  # Override Rails' take_screenshot to provide logging and handle optional name parameter
-  def take_screenshot(_name = nil)
+  # Keep Rails 8 keyword support while preserving the repo's named screenshot calls.
+  def take_screenshot(name = nil, html: false, screenshot: nil)
     return nil unless page&.driver
 
-    # Use Rails' built-in screenshot functionality (ignores name parameter)
-    path = super()
-    puts "📸 Screenshot saved: #{path}" if path
+    @screenshot_artifact_label = name.presence
+    wait_for_meaningful_page_content(timeout: 3) if respond_to?(:wait_for_meaningful_page_content)
+
+    super(html: html, screenshot: screenshot)
+    path = image_path
+    write_screenshot_sidecar(path, label: @screenshot_artifact_label, html_saved: screenshot_html_enabled?(html))
+    puts screenshot_log_message(path)
     path
   rescue StandardError => e
     puts "Failed to take screenshot: #{e.message}"
     nil
+  ensure
+    @screenshot_artifact_label = nil
+  end
+
+  def take_failed_screenshot
+    return unless failed? && supports_screenshot? && Capybara::Session.instance_created?
+
+    unless browser_page_visited?
+      puts "Skipping failure screenshot for #{self.class.name}##{name}: no browser page was visited"
+      return
+    end
+
+    super
+  end
+
+  def capture_browser_recovery_diagnostics(reason, error: nil)
+    return if @capturing_browser_recovery_diagnostics
+
+    @capturing_browser_recovery_diagnostics = true
+    detail = error ? "#{reason}: #{error.class} - #{error.message}" : reason
+    puts "Capturing browser diagnostics before recovery: #{detail}" if ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+    take_screenshot("recovery-#{reason}", html: true)
+  rescue StandardError => e
+    puts "Failed to capture browser recovery diagnostics: #{e.message}" if ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+  ensure
+    @capturing_browser_recovery_diagnostics = false
   end
 
   # Helper to manually restart browser when tests detect issues
   def restart_browser!
     puts '🔄 Manually restarting browser...'
+    capture_browser_recovery_diagnostics('manual_restart')
     hard_restart
   end
 
@@ -552,6 +591,156 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
 
   private
+
+  # These methods intentionally extend Rails' private ScreenshotHelper internals
+  # so labels, sidecars, and Rails' own html:/screenshot: options share one artifact name.
+  def image_name
+    label = @screenshot_artifact_label
+    return super if label.blank?
+
+    sanitized_label = label.to_s.gsub(/[^\w]+/, '-').gsub(/^-|-$/, '').presence
+    "#{unique}_#{sanitized_label || method_name.gsub(/[^\w]+/, '-')}"[0...225]
+  end
+
+  def screenshot_html_enabled?(html_argument)
+    html_argument || ENV['RAILS_SYSTEM_TESTING_SCREENSHOT_HTML'] == '1'
+  end
+
+  def screenshot_sidecar_path
+    "#{absolute_path}.json"
+  end
+
+  def write_screenshot_sidecar(path, label:, html_saved:)
+    state = screenshot_browser_state
+    blank_analysis = analyze_screenshot_blankness(path)
+    unusable_reasons = screenshot_unusable_reasons(state, blank_analysis)
+
+    File.write(
+      screenshot_sidecar_path,
+      JSON.pretty_generate(
+        generated_at: Time.current.iso8601,
+        test_class: self.class.name,
+        test_name: name,
+        label: label,
+        artifact_usable_for_llm_qa: unusable_reasons.empty?,
+        unusable_reasons: unusable_reasons,
+        screenshot_path: path,
+        html_path: html_saved ? html_path : nil,
+        browser_state: state,
+        viewport_analysis: blank_analysis
+      )
+    )
+  rescue StandardError => e
+    puts "Failed to write screenshot sidecar: #{e.message}" if ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+  end
+
+  def screenshot_log_message(path)
+    sidecar = screenshot_sidecar_path
+    return "Screenshot saved: #{path} (sidecar: #{sidecar})" unless File.exist?(sidecar)
+
+    sidecar_json = JSON.parse(File.read(sidecar))
+    return "Screenshot saved: #{path} (sidecar: #{sidecar})" if sidecar_json['artifact_usable_for_llm_qa']
+
+    reasons = Array(sidecar_json['unusable_reasons']).join(', ')
+    "Screenshot saved but marked QA-unusable: #{path} (#{reasons}; sidecar: #{sidecar})"
+  rescue StandardError
+    "Screenshot saved: #{path}"
+  end
+
+  def screenshot_browser_state
+    page.evaluate_script(<<~JS, meaningful_page_content_selector)
+      (function(selector) {
+        var meaningfulMatches = [];
+        try {
+          meaningfulMatches = Array.prototype.slice.call(document.querySelectorAll(selector)).map(function(element) {
+            return {
+              tag: element.tagName.toLowerCase(),
+              id: element.id || null,
+              testid: element.getAttribute("data-testid"),
+              text: (element.innerText || element.textContent || "").trim().slice(0, 120)
+            };
+          }).slice(0, 10);
+        } catch (error) {}
+
+        return {
+          url: window.location.href,
+          path: window.location.pathname,
+          title: document.title,
+          ready_state: document.readyState,
+          has_body: !!document.body,
+          body_text_length: document.body ? (document.body.innerText || "").trim().length : 0,
+          meaningful_selector: selector,
+          meaningful_match_count: meaningfulMatches.length,
+          meaningful_matches: meaningfulMatches
+        };
+      })(arguments[0]);
+    JS
+  rescue StandardError => e
+    {
+      url: safe_current_browser_url,
+      path: nil,
+      title: nil,
+      ready_state: nil,
+      has_body: false,
+      body_text_length: 0,
+      meaningful_selector: meaningful_page_content_selector,
+      meaningful_match_count: 0,
+      meaningful_matches: [],
+      error: "#{e.class}: #{e.message}"
+    }
+  end
+
+  def screenshot_unusable_reasons(state, blank_analysis)
+    reasons = []
+    reasons << 'about_blank_url' if state[:url] == 'about:blank' || state['url'] == 'about:blank'
+    reasons << 'no_meaningful_content_anchor' if (state[:meaningful_match_count] || state['meaningful_match_count']).to_i.zero?
+    reasons << 'empty_body_text' if (state[:body_text_length] || state['body_text_length']).to_i.zero?
+    reasons << 'solid_color_viewport' if blank_analysis[:solid_color] || blank_analysis['solid_color']
+    reasons
+  end
+
+  def analyze_screenshot_blankness(path)
+    return { solid_color: nil, reason: 'image_missing' } if path.blank? || !File.exist?(path)
+    return { solid_color: nil, reason: 'chunky_png_unavailable' } unless defined?(ChunkyPNG)
+
+    image = ChunkyPNG::Image.from_file(path)
+    colors = sampled_png_colors(image)
+
+    {
+      solid_color: colors.size <= 2,
+      sampled_color_count: colors.size,
+      width: image.width,
+      height: image.height
+    }
+  rescue StandardError => e
+    { solid_color: nil, reason: "#{e.class}: #{e.message}" }
+  end
+
+  def sampled_png_colors(image)
+    x_step = [(image.width / 32.0).ceil, 1].max
+    y_step = [(image.height / 32.0).ceil, 1].max
+    colors = {}
+
+    (0...image.height).step(y_step) do |y|
+      (0...image.width).step(x_step) do |x|
+        colors[image[x, y]] = true
+        return colors if colors.size > 2
+      end
+    end
+
+    colors
+  end
+
+  def browser_page_visited?
+    url = safe_current_browser_url
+    url.present? && url != 'about:blank'
+  end
+
+  def safe_current_browser_url
+    page.current_url
+  rescue StandardError
+    nil
+  end
 
   # ============================================================================
   # CHROME PROCESS MANAGEMENT
@@ -722,8 +911,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     end
   end
 
-  def force_browser_restart(_reason)
+  def force_browser_restart(reason)
     # Minimal reset; do not kill external Chrome processes
+    capture_browser_recovery_diagnostics(reason)
     capybara_session_cleanup
   end
 end
+# rubocop:enable Style/OneClassPerFile

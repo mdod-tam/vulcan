@@ -14,12 +14,12 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     # Create specific mock templates for each mailer method
     new_evaluation_assigned_mock = mock_template(
       'New Evaluation Assigned',
-      'Text body for evaluation assigned to %<evaluator_full_name>s for %<constituent_full_name>s'
+      'Text body for evaluation assigned to %<evaluator_full_name>s for %<constituent_full_name>s. Contact: %<constituent_contact_method>s. Language: %<constituent_preferred_language>s. Modality: %<constituent_communication_modality>s. Delivery: %<constituent_delivery_preference>s. %<status_box_text>s %<footer_text>s'
     )
 
     evaluation_submission_mock = mock_template(
       'Evaluation has been Submitted',
-      'Text body for evaluation completed by %<evaluator_full_name>s'
+      'Recommended products: %<recommended_products_text_list>s. %<footer_text>s'
     )
 
     # Stub EmailTemplate.find_by! for text format only
@@ -35,6 +35,10 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     @evaluation = create(:evaluation)
     @evaluator = @evaluation.evaluator
     @constituent = @evaluation.constituent
+    @constituent.update!(phone_type: 'text', preferred_means_of_communication: 'ASL', communication_preference: 'email')
+    @alpha_product = create(:product, name: 'Alpha Communicator')
+    @zeta_product = create(:product, name: 'Zeta Tablet')
+    @evaluation.recommended_product_ids = [@zeta_product.id, @alpha_product.id]
     @application = @evaluation.application
   end
 
@@ -59,6 +63,10 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     # Check that the email body contains expected text
     expected_text = "Text body for evaluation assigned to #{@evaluator.full_name} for #{@constituent.full_name}"
     assert_includes email.body.to_s, expected_text
+    assert_includes email.body.to_s, 'Contact: Text me'
+    assert_includes email.body.to_s, 'Language: English'
+    assert_includes email.body.to_s, 'Modality: ASL'
+    assert_includes email.body.to_s, 'Delivery: Email'
   end
 
   test 'evaluation_submission_confirmation' do
@@ -80,8 +88,9 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
 
     # Check that the email body contains expected content from the mock
-    expected_text = "Text body for evaluation completed by #{@evaluator.full_name}"
-    assert_includes email.body.to_s, expected_text
+    assert_includes email.body.to_s, "#{@alpha_product.name}\n#{@zeta_product.name}"
+    assert_not_includes email.body.to_s, "- #{@alpha_product.name}"
+    assert_not_includes email.body.to_s, 'equipment order'
   end
 
   test 'evaluation_submission_confirmation generates letter when preference is letter' do

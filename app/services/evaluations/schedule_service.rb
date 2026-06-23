@@ -32,6 +32,7 @@ module Evaluations
     private
 
     def validate_params!
+      raise ArgumentError, 'Only requested evaluations can be scheduled.' unless @evaluation.status_requested?
       raise ArgumentError, 'evaluation_date is required' if @params[:evaluation_date].blank?
     end
 

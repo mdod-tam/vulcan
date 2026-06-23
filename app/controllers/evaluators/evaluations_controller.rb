@@ -6,7 +6,8 @@ module Evaluators
     before_action :require_evaluator!
     before_action :set_evaluation,
                   except: %i[index new create pending completed requested scheduled needs_followup filter]
-    before_action :authorize_evaluation_mutation!, only: %i[edit update schedule reschedule submit_report request_additional_info]
+    before_action :authorize_evaluation_mutation!,
+                  only: %i[edit update schedule reschedule submit_report cancel no_show request_additional_info]
 
     def index
       # Redirect to dashboard for main entry point
@@ -124,25 +125,20 @@ module Evaluators
     end
 
     def update
-      if completing_evaluation?
-        result = ::Evaluations::SubmissionService.new(@evaluation, params, actor: current_user).call
-
-        if result.success?
-          redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
-        else
-          prepare_show_context
-          flash.now[:alert] = "Failed to submit evaluation: #{result.message}"
-          render :show, status: :unprocessable_content
-        end
+      unless supplemental_notes_update?
+        prepare_show_context
+        flash.now[:alert] = 'This evaluation action must use the appropriate lifecycle control.'
+        render :show, status: :unprocessable_content
         return
       end
 
-      if @evaluation.update(evaluation_params)
+      if @evaluation.update(supplemental_notes_params)
         redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
       else
         # If updating from the show page forms, we want to re-render show with errors
         # rather than the generic edit page
         prepare_show_context
+        flash.now[:alert] = "Failed to update evaluation: #{@evaluation.errors.full_messages.to_sentence}"
         render :show, status: :unprocessable_content
       end
     end
@@ -151,8 +147,9 @@ module Evaluators
       result = ::Evaluations::ScheduleService.new(@evaluation, current_user, schedule_params).call
 
       if result.success?
-        redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation scheduled successfully.'
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
+        @evaluation.reload
         prepare_show_context
         flash.now[:alert] = "Failed to schedule evaluation: #{result.message}"
         render :show, status: :unprocessable_content
@@ -163,8 +160,9 @@ module Evaluators
       result = ::Evaluations::RescheduleService.new(@evaluation, current_user, reschedule_params).call
 
       if result.success?
-        redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation rescheduled successfully.'
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
+        @evaluation.reload
         prepare_show_context
         flash.now[:alert] = "Failed to reschedule evaluation: #{result.message}"
         render :show, status: :unprocessable_content
@@ -177,8 +175,36 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
+        @evaluation.reload
+        prepare_show_context
         flash.now[:alert] = "Failed to submit evaluation: #{result.message}"
-        render :edit, status: :unprocessable_content
+        render :show, status: :unprocessable_content
+      end
+    end
+
+    def cancel
+      result = ::Evaluations::CancelService.new(@evaluation, current_user, evaluation_params).call
+
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
+      else
+        @evaluation.reload
+        prepare_show_context
+        flash.now[:alert] = "Failed to cancel evaluation: #{result.message}"
+        render :show, status: :unprocessable_content
+      end
+    end
+
+    def no_show
+      result = ::Evaluations::NoShowService.new(@evaluation, current_user, evaluation_params).call
+
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
+      else
+        @evaluation.reload
+        prepare_show_context
+        flash.now[:alert] = "Failed to mark evaluation as no-show: #{result.message}"
+        render :show, status: :unprocessable_content
       end
     end
 
@@ -193,10 +219,6 @@ module Evaluators
       @can_manage_evaluation = assigned_evaluator?
       @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
       @available_products = Product.order(:name)
-    end
-
-    def completing_evaluation?
-      params.dig(:evaluation, :status).to_s == 'completed' && !@evaluation.status_completed?
     end
 
     def set_evaluation
@@ -228,6 +250,14 @@ module Evaluators
                        products_tried_field: [],
                        recommended_product_ids: [] }]
       )
+    end
+
+    def supplemental_notes_params
+      params.expect(evaluation: [:post_completion_notes])
+    end
+
+    def supplemental_notes_update?
+      params.fetch(:evaluation, {}).keys.map(&:to_s) == %w[post_completion_notes]
     end
 
     def schedule_params

@@ -66,22 +66,25 @@ module ConstituentPortal
       # Warning should not be visible (check for hidden attribute or hidden class)
       assert_selector '#income-threshold-warning[hidden]', visible: :all
 
-      # Submit button should be enabled
-      assert_no_selector "input[name='submit_application'][disabled]"
+      # Income is valid, but final submit remains gated until all visible required controls are complete.
+      assert_selector "input[name='submit_application'][disabled]"
 
       # Fill in remaining required fields
       attach_file 'Upload Residency Proof Document', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       attach_file 'Upload Income Proof Document', Rails.root.join('test/fixtures/files/income_proof.pdf')
+      attach_file 'Upload ID Proof Document', Rails.root.join('test/fixtures/files/residency_proof.pdf')
 
       # Fill in medical provider information
-      within('section', text: 'Medical Professional Information') do
+      within("[data-testid='medical-provider-fields']") do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '5551234567'
         fill_in 'Email', with: 'dr.smith@example.com'
       end
 
       # Medical authorization (required)
-      check 'I authorize the release and sharing of my medical information as described above'
+      check 'I authorize the release and sharing of my disability-related information as described above'
+      find_by_id('terms_accepted').check
+      find_by_id('information_verified').check
 
       # Verify the form is ready for submission (submit button should be enabled)
       assert_no_selector "input[name='submit_application'][disabled]"

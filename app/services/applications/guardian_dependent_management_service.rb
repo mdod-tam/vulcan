@@ -88,6 +88,8 @@ module Applications
     end
 
     def apply_email_strategy(data)
+      return if params[:email_strategy].nil?
+
       case params[:email_strategy]
       when 'guardian'
         if @guardian_user&.email.present?
@@ -118,6 +120,8 @@ module Applications
     end
 
     def apply_phone_strategy(data)
+      return if params[:phone_strategy].nil?
+
       case params[:phone_strategy]
       when 'guardian'
         data[:dependent_phone] = @guardian_user.phone
@@ -171,7 +175,7 @@ module Applications
 
     def failure(message)
       add_error?(message)
-      Result.new(success: false, errors: @errors)
+      Result.new(success: false, message: message, data: { errors: @errors })
     end
   end
 end

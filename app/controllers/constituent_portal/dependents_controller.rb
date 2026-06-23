@@ -34,7 +34,7 @@ module ConstituentPortal
 
     # POST /constituent_portal/dependents
     def create
-      dependent_attrs = dependent_attributes_with_guardian_contact_fallback
+      dependent_attrs = dependent_attributes_with_contact_strategies
 
       # Using UserServiceIntegration concern for consistent user creation
       # Portal always creates NEW users for dependents (skip_user_lookup: true)
@@ -74,8 +74,7 @@ module ConstituentPortal
 
     # PATCH/PUT /constituent_portal/dependents/:id
     def update
-      params_to_update = dependent_user_params
-      configure_uniqueness_validation(params_to_update)
+      params_to_update = dependent_attributes_with_contact_strategies
 
       if @dependent.update(params_to_update)
         redirect_after_successful_update
@@ -141,27 +140,60 @@ module ConstituentPortal
       Current.user = current_user
     end
 
-    def dependent_attributes_with_guardian_contact_fallback
+    def dependent_attributes_with_contact_strategies
       attrs = dependent_user_params.to_h
+      strategies = dependent_contact_strategy_params(attrs)
+      return attrs if strategies.values_at(:email_strategy, :phone_strategy).all?(&:nil?)
 
       Applications::GuardianDependentManagementService
-        .new(dependent_contact_strategy_params)
+        .new(strategies)
         .apply_contact_strategies_for(current_user, attrs)
     end
 
-    def dependent_contact_strategy_params
+    def dependent_contact_strategy_params(attrs)
       {
-        email_strategy: guardian_contact_strategy(:use_guardian_email, dependent_user_params[:email]),
-        phone_strategy: guardian_contact_strategy(:use_guardian_phone, dependent_user_params[:phone]),
+        email_strategy: contact_strategy_for(:email, :use_guardian_email, attrs),
+        phone_strategy: contact_strategy_for(:phone, :use_guardian_phone, attrs),
         address_strategy: 'dependent'
       }
     end
 
+    def contact_strategy_for(field, checkbox_param, attrs)
+      submitted = attrs.key?(field) || attrs.key?(field.to_s)
+      value = attrs[field] || attrs[field.to_s]
+
+      # Update only rewrites contact when the field was submitted; omitted keys preserve stored values.
+      if action_name == 'update'
+        return nil unless submitted
+      elsif !submitted
+        return guardian_contact_strategy(checkbox_param, nil)
+      end
+
+      guardian_contact_strategy(checkbox_param, value)
+    end
+
     def guardian_contact_strategy(param_name, dependent_value)
       return 'guardian' if ActiveModel::Type::Boolean.new.cast(params[param_name])
+      # Submitted blank contact on create/update applies guardian strategy and regenerates primary contact.
       return 'guardian' if dependent_value.blank?
+      return 'guardian' if matches_guardian_contact?(param_name, dependent_value)
 
       'dependent'
+    end
+
+    def matches_guardian_contact?(param_name, dependent_value)
+      case param_name
+      when :use_guardian_email
+        User.normalize_email(dependent_value) == User.normalize_email(current_user.email)
+      when :use_guardian_phone
+        normalized_phone_digits(dependent_value) == normalized_phone_digits(current_user.phone)
+      else
+        false
+      end
+    end
+
+    def normalized_phone_digits(phone)
+      phone.to_s.gsub(/\D/, '')
     end
 
     # Get recent profile changes for a user
@@ -191,18 +223,6 @@ module ConstituentPortal
 
       flash.now[:alert] = "Failed to create dependent: #{error_messages.join(', ')}"
       render :new, status: :unprocessable_content
-    end
-
-    def configure_uniqueness_validation(params_to_update)
-      should_skip_validation = should_skip_uniqueness_validation?(params_to_update)
-      @dependent.skip_contact_uniqueness_validation = true if should_skip_validation
-    end
-
-    def should_skip_uniqueness_validation?(params_to_update)
-      params_to_update[:email] == current_user.email ||
-        params_to_update[:phone] == current_user.phone ||
-        @dependent.email == current_user.email ||
-        @dependent.phone == current_user.phone
     end
 
     def redirect_after_successful_update

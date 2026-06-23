@@ -947,5 +947,6 @@ module ConstituentPortal
       assert_equal '999 Guardian Lane', guardian.physical_address_1, 'Guardian address should not be affected'
       assert_equal 'Bethesda', guardian.city, 'Guardian city should not be affected'
     end
+
   end
 end

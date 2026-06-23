@@ -94,6 +94,7 @@ module VendorPortal
           puts "Network error during visit, retry #{retries}/#{max_retries}: #{e.message}" if ENV['VERBOSE_TESTS']
 
           # Reset session and try again
+          capture_before_browser_recovery('vendor_invoice_visit_with_retry', e) if respond_to?(:capture_before_browser_recovery)
           Capybara.reset_sessions!
           # Re-authenticate since we reset the session
           begin

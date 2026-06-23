@@ -52,6 +52,50 @@ module ConstituentPortal
       assert_includes(@guardian.dependents, new_dependent)
     end
 
+    test 'should create dependent with MM/DD/YYYY date of birth' do
+      dependent_attributes = {
+        first_name: 'Date',
+        last_name: 'Dependent',
+        date_of_birth: '05/15/2010',
+        email: 'date.dependent@example.com',
+        phone: '5555551011',
+        hearing_disability: true
+      }
+
+      assert_difference ['User.count', 'GuardianRelationship.count'], 1 do
+        post constituent_portal_dependents_url, params: {
+          dependent: dependent_attributes,
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      new_dependent = User.find_by!(email: 'date.dependent@example.com')
+      assert_equal Date.new(2010, 5, 15), new_dependent.date_of_birth
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
+    test 'should reject dependent with malformed text date of birth' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(%r{Date of birth must be in MM/DD/YYYY format})).twice
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post constituent_portal_dependents_url, params: {
+          dependent: {
+            first_name: 'Bad',
+            last_name: 'Date',
+            date_of_birth: 'May 15 2010',
+            email: 'bad.date.dependent@example.com',
+            phone: '5555551012',
+            hearing_disability: true
+          },
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_match(%r{Date of birth must be in MM/DD/YYYY format}, response.body)
+    end
+
     test 'should create dependent with guardian email fallback when dependent email is blank' do
       dependent_attributes = {
         first_name: 'Fallback',
@@ -250,6 +294,68 @@ module ConstituentPortal
       assert_equal 'Updated Dependent', changes['first_name']['new']
       assert_equal 'New Last Name', changes['last_name']['new']
       assert_equal 'updated.dependent@example.com', changes['email']['new']
+    end
+
+    test 'should update dependent when submitted contact matches guardian contact' do
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: {
+          first_name: 'Shared Contact',
+          email: @guardian.email,
+          phone: @guardian.phone
+        }
+      }
+
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Dependent was successfully updated.', flash[:notice]
+
+      @dependent.reload
+      assert_equal 'Shared Contact', @dependent.first_name
+      assert_match(/\Adependent-.*@system\.matvulcan\.local\z/, @dependent.email)
+      assert_equal @guardian.email, @dependent.dependent_email
+      assert_equal @guardian.phone, @dependent.dependent_phone
+    end
+
+    test 'should preserve contact fields on partial update without submitted email or phone' do
+      original_email = @dependent.email
+      original_phone = @dependent.phone
+      original_dependent_email = @dependent.dependent_email
+      original_dependent_phone = @dependent.dependent_phone
+
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: {
+          first_name: 'Test Update'
+        }
+      }
+
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Dependent was successfully updated.', flash[:notice]
+
+      @dependent.reload
+      assert_equal 'Test Update', @dependent.first_name
+      assert_equal original_email, @dependent.email
+      assert_equal original_phone, @dependent.phone
+      assert_equal original_dependent_email, @dependent.dependent_email
+      assert_equal original_dependent_phone, @dependent.dependent_phone
+    end
+
+    test 'should preserve phone on partial update when only email is submitted' do
+      original_phone = @dependent.phone
+      original_dependent_phone = @dependent.dependent_phone
+      new_email = 'only.email.updated@example.com'
+
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: {
+          email: new_email
+        }
+      }
+
+      assert_redirected_to constituent_portal_dashboard_path
+
+      @dependent.reload
+      assert_equal new_email, @dependent.email
+      assert_equal new_email, @dependent.dependent_email
+      assert_equal original_phone, @dependent.phone
+      assert_equal original_dependent_phone, @dependent.dependent_phone
     end
 
     test 'should set Current.user before update' do

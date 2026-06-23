@@ -237,7 +237,7 @@ class Application < ApplicationRecord
 
   scope :with_proofs_needing_review, lambda {
     where(
-      'residency_proof_status = :nr OR (income_proof_required = TRUE AND income_proof_status = :nr)',
+      'residency_proof_status = :nr OR id_proof_status = :nr OR (income_proof_required = TRUE AND income_proof_status = :nr)',
       nr: residency_proof_statuses[:not_reviewed]
     )
   }
