@@ -21,7 +21,7 @@ No yml files for any user-facing content. Everything admin-controlled, versioned
 - Unique index on `(name, format, locale)` — both `html` and `text` variants exist for each template name.
 - `ApplicationNotificationsMailer#find_email_template` looks up by `(name, format, locale)` with English fallback.
 - `%{variable}` / `%<variable>s` interpolation in `body` and `subject`.
-- `version` integer increments on each `subject` or `body` change; admin edit history lives in `email_template_snapshots` (append-only). Legacy `previous_subject`/`previous_body` columns remain for show-page fallback but are no longer written on save.
+- `version` integer increments on each `subject` or `body` change; `previous_subject`/`previous_body` keep the immediately prior content version.
 - `locale` column exists (string, not null, default `'en'`). EN templates explicitly set `locale: 'en'` in seeds, and ES variants are seeded as EN copies when missing.
 - `locale_needs_sync` flag (renamed from the original `needs_sync` column): set on locale variants when a counterpart's body/subject changes; admin UI reads `locale_out_of_sync?`. Cleared on the same save when body/subject is updated, or via `mark_synced`.
 

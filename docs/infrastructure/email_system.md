@@ -13,7 +13,7 @@ MAT Vulcan delivers, receives, and even prints email content through one unified
 | Format | Records with `name`, `format` (`:html` / `:text`), `subject`, `body`, `description`, `version` |
 | Placeholders | `%{first_name}` or `%<amount>.2f` |
 | Validation | Required variables validated against `AVAILABLE_TEMPLATES` constant |
-| Versioning | `version` increments on subject/body edits; change history in `email_template_snapshots` (first tracked edit stores a `baseline` snapshot then `admin_edit`). Legacy `previous_subject`/`previous_body` remain as fallback on the show page until backfill. |
+| Versioning | `version` increments on subject/body edits; `previous_subject`/`previous_body` keep the immediately prior content version. |
 | Locale sync | `locale_needs_sync` flags counterpart locales out of date; admin UI uses `locale_out_of_sync?` |
 
 Seed/update:

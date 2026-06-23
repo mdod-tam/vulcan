@@ -134,58 +134,16 @@ module Admin
       assert_not template.locale_out_of_sync?
     end
 
-    test 'toggle_disabled records snapshot' do
+    test 'toggle_disabled updates enabled state' do
       template = create(:email_template, :text, enabled: true)
 
-      assert_difference -> { template.email_template_snapshots.count }, +2 do
-        patch toggle_disabled_admin_email_template_path(template), headers: default_headers
-      end
+      patch toggle_disabled_admin_email_template_path(template), headers: default_headers
 
-      prior = template.email_template_snapshots.order(:snapshot_number).first
-      snapshot = template.email_template_snapshots.order(:snapshot_number).last
-      assert_equal 'baseline', prior.change_source
-      assert_equal true, prior.enabled
-      assert_equal false, snapshot.enabled
-      assert_equal 'admin_edit', snapshot.change_source
+      assert_redirected_to admin_email_templates_path
+      assert_not template.reload.enabled
     end
 
-    test 'update records snapshot when resolving out-of-sync locale template' do
-      en_template = create(:email_template, :text,
-                           name: 'out_of_sync_snapshot_test',
-                           locale: 'en',
-                           subject: 'EN Subject',
-                           body: 'English body %<name>s',
-                           description: 'English description',
-                           locale_needs_sync: false)
-      es_template = create(:email_template, :text,
-                           name: en_template.name,
-                           format: en_template.format,
-                           locale: 'es',
-                           subject: 'ES Subject',
-                           body: 'Spanish body %<name>s',
-                           description: 'Spanish description',
-                           locale_needs_sync: true)
-
-      assert_difference -> { es_template.email_template_snapshots.count }, +2 do
-        patch admin_email_template_path(es_template), headers: default_headers, params: {
-          locale: 'es',
-          email_template: {
-            subject: 'Updated ES Subject',
-            body: 'Updated ES body %<name>s',
-            description: 'Updated ES description'
-          }
-        }
-      end
-
-      snapshot = es_template.email_template_snapshots.order(:snapshot_number).last
-      prior = es_template.email_template_snapshots.order(:snapshot_number).first
-      assert_equal 'baseline', prior.change_source
-      assert_equal 'ES Subject', prior.subject
-      assert_equal 'Updated ES Subject', snapshot.subject
-      assert_equal 'Updated ES body %<name>s', snapshot.body
-    end
-
-    test 'bulk_disable snapshots only templates that change enabled state' do
+    test 'bulk_disable updates only templates that change enabled state' do
       enabled_template = create(:email_template, :text, name: "bulk_disable_#{SecureRandom.hex(4)}", enabled: true)
       disabled_template = create(:email_template, :text, name: "bulk_disable_skip_#{SecureRandom.hex(4)}", enabled: false)
 
@@ -193,8 +151,6 @@ module Admin
 
       assert_not enabled_template.reload.enabled
       assert_not disabled_template.reload.enabled
-      assert enabled_template.email_template_snapshots.count >= 2
-      assert_not disabled_template.email_template_snapshots.exists?
     end
 
     test 'bulk_disable succeeds when a changed template is locale_needs_sync' do
@@ -208,10 +164,9 @@ module Admin
       end
 
       assert_not out_of_sync_template.reload.enabled
-      assert out_of_sync_template.email_template_snapshots.exists?
     end
 
-    test 'bulk_enable snapshots only templates that change enabled state' do
+    test 'bulk_enable updates only templates that change enabled state' do
       disabled_template = create(:email_template, :text, name: "bulk_enable_#{SecureRandom.hex(4)}", enabled: false)
       enabled_template = create(:email_template, :text, name: "bulk_enable_skip_#{SecureRandom.hex(4)}", enabled: true)
 
@@ -219,8 +174,6 @@ module Admin
 
       assert disabled_template.reload.enabled
       assert enabled_template.reload.enabled
-      assert disabled_template.email_template_snapshots.count >= 2
-      assert_not enabled_template.email_template_snapshots.exists?
     end
   end
 end

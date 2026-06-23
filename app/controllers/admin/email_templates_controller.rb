@@ -116,19 +116,9 @@ module Admin
         return
       end
 
-      saved = false
-      EmailTemplate.transaction do
-        target_template.with_lock do
-          target_template.reload
-          @original_values = capture_original_values(target_template)
-          saved = target_template.update(email_template_params.merge(updated_by: current_user))
-          raise ActiveRecord::Rollback unless saved
+      @original_values = capture_original_values(target_template)
 
-          record_template_snapshot_if_needed(target_template)
-        end
-      end
-
-      if saved
+      if target_template.update(email_template_params.merge(updated_by: current_user))
         @email_template = target_template
         log_template_update_event
         redirect_to edit_admin_email_template_path(target_template), notice: "#{target_locale} template updated."
@@ -165,33 +155,17 @@ module Admin
 
     # PATCH /admin/email_templates/:id/toggle_disabled
     def toggle_disabled
-      new_state = nil
+      new_state = !@email_template.enabled
 
-      begin
-        EmailTemplate.transaction do
-          @email_template.with_lock do
-            @email_template.reload
-            before_attributes = capture_original_values(@email_template)
-            new_state = !@email_template.enabled
-            @email_template.update!(enabled: new_state, updated_by: current_user)
-            EmailTemplateSnapshot.record!(
-              template: @email_template,
-              change_source: 'admin_edit',
-              actor: current_user,
-              before_attributes: before_attributes
-            )
-          end
-        end
-      rescue ActiveRecord::RecordInvalid
+      if @email_template.update(enabled: new_state, updated_by: current_user)
+        action = new_state ? 'enabled' : 'disabled'
+        log_audit_event('email_template_toggled', enabled: new_state)
+        redirect_to admin_email_templates_path,
+                    notice: "Email template '#{@email_template.name}' has been #{action}."
+      else
         redirect_to admin_email_templates_path,
                     alert: "Failed to update template: #{@email_template.errors.full_messages.join(', ')}"
-        return
       end
-
-      action = new_state ? 'enabled' : 'disabled'
-      log_audit_event('email_template_toggled', enabled: new_state)
-      redirect_to admin_email_templates_path,
-                  notice: "Email template '#{@email_template.name}' has been #{action}."
     end
 
     # PATCH /admin/email_templates/:id/mark_synced
@@ -263,7 +237,11 @@ module Admin
     private
 
     def capture_original_values(template)
-      template.snapshot_content_attributes
+      {
+        subject: template.subject,
+        body: template.body,
+        description: template.description
+      }
     end
 
     def log_template_update_event
@@ -279,37 +257,14 @@ module Admin
       changes.reject { |_key, change| change[:from] == change[:to] }
     end
 
-    def record_template_snapshot_if_needed(template)
-      return unless EmailTemplateSnapshot.render_relevant_change_between?(@original_values, template)
-
-      EmailTemplateSnapshot.record!(
-        template: template,
-        change_source: 'admin_edit',
-        actor: current_user,
-        before_attributes: @original_values
-      )
-    end
-
     def bulk_update_enabled_state(enabled:)
       scope = enabled ? EmailTemplate.disabled_templates : EmailTemplate.enabled
       count = 0
 
       EmailTemplate.transaction do
         scope.find_each do |template|
-          template.with_lock do
-            template.reload
-            next if template.enabled == enabled
-
-            before_attributes = capture_original_values(template)
-            template.update!(enabled: enabled, updated_by: current_user)
-            EmailTemplateSnapshot.record!(
-              template: template,
-              change_source: 'admin_edit',
-              actor: current_user,
-              before_attributes: before_attributes
-            )
-            count += 1
-          end
+          template.update!(enabled: enabled, updated_by: current_user)
+          count += 1
         end
       end
 

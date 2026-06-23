@@ -8,7 +8,6 @@ class EmailTemplate < ApplicationRecord
   enum :format, { html: 0, text: 1 }
 
   belongs_to :updated_by, class_name: 'User', optional: true
-  has_many :email_template_snapshots, dependent: :destroy
 
   scope :enabled, -> { where(enabled: true) }
   scope :disabled_templates, -> { where(enabled: false) }
@@ -24,6 +23,7 @@ class EmailTemplate < ApplicationRecord
   validate :validate_variables_in_body
   validate :counterpart_locales_are_synced, on: :update
 
+  before_update :store_previous_content
   before_update :increment_version
   before_update :clear_locale_sync_flags_when_content_changes,
                 if: -> { (body_changed? || subject_changed?) && locale_out_of_sync? }
@@ -116,23 +116,8 @@ class EmailTemplate < ApplicationRecord
     locale_needs_sync_before_last_save
   end
 
-  # Snapshots record post-edit state; the prior snapshot is the previous saved version.
-  def prior_snapshot
-    email_template_snapshots.ordered.offset(1).first
-  end
-
-  def legacy_previous_version?
+  def previous_version?
     version.to_i > 1 && (previous_subject.present? || previous_body.present?)
-  end
-
-  def snapshot_content_attributes
-    {
-      subject: subject,
-      body: body,
-      description: description,
-      enabled: enabled,
-      variables: (variables || {}).deep_dup
-    }
   end
 
   private
@@ -171,6 +156,13 @@ class EmailTemplate < ApplicationRecord
     return unless unauthorized_vars.any?
 
     errors.add(:body, "contains unauthorized variables: #{unauthorized_vars.join(', ')}. Only use: #{allowed.join(', ')}")
+  end
+
+  def store_previous_content
+    return unless subject_changed? || body_changed?
+
+    self.previous_subject = subject_was
+    self.previous_body = body_was
   end
 
   def increment_version

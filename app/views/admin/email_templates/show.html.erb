@@ -241,27 +241,8 @@
       </div>
     </section>
 
-    <%# Previous Version — from snapshot history (falls back to legacy previous_* until backfilled) %>
-    <% prior_snapshot = @email_template.prior_snapshot %>
-    <% if prior_snapshot %>
-      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="previous-version-title">
-        <h2 id="previous-version-title" class="text-xl font-semibold text-gray-900 mb-4">Previous Version (snapshot <%= prior_snapshot.snapshot_number %>)</h2>
-        <dl class="space-y-4">
-          <div>
-            <dt class="text-sm font-medium text-gray-500">Previous Subject</dt>
-            <dd class="mt-1 text-sm text-gray-900"><%= prior_snapshot.subject %></dd>
-          </div>
-          <div>
-            <dt class="text-sm font-medium text-gray-500">Previous Body</dt>
-            <dd class="mt-1">
-              <div class="prose max-w-none bg-gray-50 p-4 rounded border border-gray-200 overflow-x-auto">
-                <pre class="text-sm"><%= prior_snapshot.body %></pre>
-              </div>
-            </dd>
-          </div>
-        </dl>
-      </section>
-    <% elsif @email_template.legacy_previous_version? %>
+    <%# Previous Version Section (Conditional) %>
+    <% if @email_template.previous_version? %>
       <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="previous-version-title">
         <h2 id="previous-version-title" class="text-xl font-semibold text-gray-900 mb-4">Previous Version (v<%= @email_template.version - 1 %>)</h2>
         <dl class="space-y-4">

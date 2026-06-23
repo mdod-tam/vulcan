@@ -130,5 +130,16 @@ module Admin
       assert_includes error_message, 'bad_var_1'
       assert_includes error_message, 'bad_var_2'
     end
+
+    test 'content update stores the previous subject and body' do
+      @template_text.update!(
+        subject: 'Updated Subject',
+        body: 'Updated Body %<name>s'
+      )
+
+      assert_equal 'Text Subject', @template_text.previous_subject
+      assert_equal 'Text Body %<name>s', @template_text.previous_body
+      assert @template_text.previous_version?
+    end
   end
 end
