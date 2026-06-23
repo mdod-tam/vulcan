@@ -60,7 +60,7 @@ module NotificationPreloading
 
     ActiveRecord::Associations::Preloader.new(
       records: proof_resubmission_applications,
-      associations: :proof_reviews
+      associations: []
     ).call
   end
 
