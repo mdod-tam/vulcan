@@ -12,17 +12,17 @@ module Admin
       @admin = create(:admin, email: generate(:email))
       sign_in_for_integration_test(@admin)
 
-      # Use today's date so test apps appear on page 1 when sorted by application_date desc
-      today = Date.current
+      # Keep these rows ahead of seeded or leaked test data when the index paginates by application_date desc.
+      index_date = 10.years.from_now.to_date
 
       # Create applications in various statuses
-      @draft_app = create(:application, :draft, application_date: today,
+      @draft_app = create(:application, :draft, application_date: index_date,
                                                 user: create(:constituent, email: generate(:email)))
-      @in_progress_app = create(:application, :in_progress, application_date: today,
+      @in_progress_app = create(:application, :in_progress, application_date: index_date,
                                                             user: create(:constituent, email: generate(:email)))
 
       # For approved - create with proofs attached, then update status
-      @approved_app = create(:application, :in_progress, :with_all_proofs, application_date: today,
+      @approved_app = create(:application, :in_progress, :with_all_proofs, application_date: index_date,
                                                                            user: create(:constituent, email: generate(:email)))
       @approved_app.update_columns(
         status: Application.statuses[:approved],
@@ -32,12 +32,12 @@ module Admin
       )
 
       # For rejected - no proofs required
-      @rejected_app = create(:application, :rejected, application_date: today,
+      @rejected_app = create(:application, :rejected, application_date: index_date,
                                                       user: create(:constituent, email: generate(:email)))
 
       # For archived - create with proofs, then update status
       @archived_app = create(:application, :in_progress, :with_income_proof, :with_residency_proof,
-                             application_date: today,
+                             application_date: index_date,
                              user: create(:constituent, email: generate(:email)))
       @archived_app.update_columns(
         status: Application.statuses[:archived],
