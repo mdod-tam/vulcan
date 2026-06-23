@@ -35,8 +35,10 @@ module Admin
 
     def index
       # Determine what statuses to exclude from base scope
-      # When admin explicitly filters by a normally-excluded status, we need to include it
-      excluded_statuses = %i[draft rejected archived]
+      # Drafts are shown in the default ("All") view; only rejected and archived
+      # are excluded by default. When admin explicitly filters by a normally-excluded
+      # status, we remove it from exclusions so it can be shown.
+      excluded_statuses = %i[rejected archived]
       filtered_status = params[:status]&.to_sym || params[:filter]&.to_sym
 
       # Remove the filtered status from exclusions so it can be shown
