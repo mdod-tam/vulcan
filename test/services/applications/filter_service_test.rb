@@ -273,6 +273,34 @@ module Applications
       end
     end
 
+    test 'all_active status includes active and approved but excludes draft, rejected, and archived' do
+      with_mocked_attachments do
+        rejected_app = create(:application,
+                              status: :rejected,
+                              income_proof_status: :not_reviewed,
+                              residency_proof_status: :not_reviewed,
+                              skip_proofs: true,
+                              user: create(:constituent, email: 'rejected_all_active@example.com'))
+        archived_app = create(:application,
+                              status: :archived,
+                              income_proof_status: :not_reviewed,
+                              residency_proof_status: :not_reviewed,
+                              skip_proofs: true,
+                              user: create(:constituent, email: 'archived_all_active@example.com'))
+
+        service = FilterService.new(@scope, { status: 'all_active' })
+        service_result = service.apply_filters
+
+        assert service_result.success?, 'Expected service call to be successful'
+        result_data = service_result.data
+        assert_includes result_data, @active_app
+        assert_includes result_data, @approved_app
+        assert_not_includes result_data, @draft_app
+        assert_not_includes result_data, rejected_app
+        assert_not_includes result_data, archived_app
+      end
+    end
+
     test 'filters by date range' do
       with_mocked_attachments do
         # Set up applications with different dates

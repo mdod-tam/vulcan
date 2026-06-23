@@ -35,7 +35,13 @@ module Applications
     end
 
     def apply_conditional_explicit_status_filter(result)
-      params[:status].present? ? result.where(status: params[:status]) : result
+      return result if params[:status].blank?
+
+      # 'all_active' is a virtual status (everything except draft/rejected/archived),
+      # not a real enum value, so route it through apply_status_filter.
+      return apply_status_filter(result, 'all_active') if params[:status] == 'all_active'
+
+      result.where(status: params[:status])
     end
 
     def apply_conditional_date_range_filter(result)
@@ -58,6 +64,9 @@ module Applications
       case filter
       when 'active'
         scope.active
+      when 'all_active'
+        # Mimics the legacy "All" view: everything except draft, rejected, archived
+        scope.where.not(status: %i[draft rejected archived])
       when 'draft'
         scope.where(status: :draft)
       when 'in_progress'
