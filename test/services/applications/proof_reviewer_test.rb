@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class ProofReviewerTest < ActiveSupport::TestCase
+    include ProofResubmissionTestHelper
+
     setup do
       @application = create(:application, :in_progress)
       @admin = create(:admin)
@@ -77,7 +79,7 @@ module Applications
         code: 'address_mismatch_test',
         proof_type: 'income',
         locale: 'en',
-        body: 'The address must match %{address}.'
+        body: 'The address must match %<address>s.'
       )
 
       @reviewer.review(
@@ -125,16 +127,17 @@ module Applications
       assert_equal 'approved', status_event.metadata['new_status']
     end
 
-    test 're-rejection requests secure proof resubmission when not in paper context' do
+    test 'paper-context re-rejection still requests secure proof resubmission' do
       Current.paper_context = true
-      @reviewer.review(
-        proof_type: :income,
-        status: :rejected,
-        rejection_reason_code: 'missing_name',
-        rejection_reason: 'First rejected reason text'
-      )
 
-      Current.paper_context = false
+      without_auto_resubmission do
+        @reviewer.review(
+          proof_type: :income,
+          status: :rejected,
+          rejection_reason_code: 'missing_name',
+          rejection_reason: 'First rejected reason text'
+        )
+      end
       travel AuditEventService::DEDUP_WINDOW + 1.second
 
       result = BaseService::Result.new(success: true, message: 'sent', data: {})

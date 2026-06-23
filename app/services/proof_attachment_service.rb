@@ -95,15 +95,13 @@ class ProofAttachmentService
     }
 
     with_service_flow(context) do |result|
-      success = perform_rejection(application: application, proof_type: proof_type, admin: admin,
-                                  submission_method: submission_method, rejection_details: rejection_details)
-
-      if success
-        log_rejection_events(application: application, proof_type: proof_type, admin: admin,
-                             submission_method: submission_method, rejection_details: rejection_details)
-      end
-
-      result[:success] = success
+      # perform_rejection creates the ProofReview, which is the canonical owner of the
+      # rejection audit event (generic `proof_rejected`) and of constituent-facing
+      # resubmission delivery via Applications::RequestProofResubmission. We intentionally
+      # do not emit a typed `#{proof_type}_proof_rejected` event or notification here to
+      # avoid duplicate audit rows and duplicate delivery.
+      result[:success] = perform_rejection(application: application, proof_type: proof_type, admin: admin,
+                                           submission_method: submission_method, rejection_details: rejection_details)
     end
   end
 
@@ -484,36 +482,6 @@ class ProofAttachmentService
           submission_method: submission_method
         )
       end
-    end
-
-    def log_rejection_events(application:, proof_type:, admin:, submission_method:, rejection_details:)
-      reason = rejection_details.fetch(:reason, 'other')
-      metadata = rejection_details.fetch(:metadata, {})
-      audit_metadata = metadata.merge(
-        proof_type: proof_type,
-        submission_method: submission_method,
-        status: :rejected,
-        has_attachment: false,
-        rejection_reason: reason
-      )
-
-      AuditEventService.log(
-        action: "#{proof_type}_proof_rejected",
-        auditable: application,
-        actor: admin,
-        metadata: audit_metadata
-      )
-
-      # Skip notifications if this is a paper application context as PaperApplicationService handles notifications
-      return if Current.paper_context
-
-      NotificationService.create_and_deliver!(
-        type: "#{proof_type}_proof_rejected",
-        recipient: application.user,
-        actor: admin,
-        notifiable: application,
-        metadata: audit_metadata
-      )
     end
 
     def prepare_flow_data(params)

@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Admin
   class SecureRequestFormsTest < ActionDispatch::IntegrationTest
+    include ProofResubmissionTestHelper
+
     setup do
       @admin = create(:admin)
       sign_in_for_integration_test(@admin)
@@ -247,7 +249,7 @@ module Admin
 
     test 'show page offers secure proof upload link for rejected unattached income proof' do
       application = create(:application, :in_progress, income_proof_status: :rejected)
-      create_rejected_proof_review_without_auto_request(application: application, proof_type: :income, reason: 'Missing income details')
+      create_rejected_proof_review_without_auto_resubmission(application: application, admin: @admin, proof_type: :income, rejection_reason: 'Missing income details')
       application.income_proof.purge if application.income_proof.attached?
 
       get admin_application_path(application)
@@ -259,7 +261,7 @@ module Admin
 
     test 'show page offers secure proof upload link for rejected attached income proof' do
       application = create(:application, :in_progress, :with_income_proof, income_proof_status: :rejected)
-      create_rejected_proof_review_without_auto_request(application: application, proof_type: :income, reason: 'Missing income details')
+      create_rejected_proof_review_without_auto_resubmission(application: application, admin: @admin, proof_type: :income, rejection_reason: 'Missing income details')
 
       get admin_application_path(application)
 
@@ -270,7 +272,7 @@ module Admin
 
     test 'show page offers secure proof upload link for rejected unattached residency proof' do
       application = create(:application, :in_progress, residency_proof_status: :rejected)
-      create_rejected_proof_review_without_auto_request(application: application, proof_type: :residency, reason: 'Missing residency details')
+      create_rejected_proof_review_without_auto_resubmission(application: application, admin: @admin, proof_type: :residency, rejection_reason: 'Missing residency details')
       application.residency_proof.purge if application.residency_proof.attached?
 
       get admin_application_path(application)
@@ -629,22 +631,6 @@ module Admin
       assert_predicate target_form.reload, :status_revoked?
       assert_not_predicate sibling_form.reload, :status_revoked?,
                            'Revoking one recipient link must not revoke sibling links in the same batch'
-    end
-
-    private
-
-    def create_rejected_proof_review_without_auto_request(application:, proof_type:, reason:)
-      original_paper_context = Current.paper_context
-      Current.paper_context = true
-
-      create(:proof_review,
-             application: application,
-             admin: @admin,
-             proof_type: proof_type,
-             status: :rejected,
-             rejection_reason: reason)
-    ensure
-      Current.paper_context = original_paper_context
     end
   end
 end
