@@ -191,7 +191,7 @@ module ProofManageable
 
     # Check for attachment changes using Rails' built-in detection
     if respond_to?(:attachment_changes) && attachment_changes.present?
-      return (FeatureFlag.enabled?(:income_proof_required) && attachment_changes['income_proof'].present?) ||
+      return (FeatureFlag.income_proof_required? && attachment_changes['income_proof'].present?) ||
              attachment_changes['residency_proof'].present? ||
              attachment_changes['id_proof'].present?
     end
@@ -203,7 +203,7 @@ module ProofManageable
   def set_needs_review_timestamp
     return if @setting_review_timestamp
     return if Current.proof_attachment_service_context?
-    return unless (FeatureFlag.enabled?(:income_proof_required) && income_proof.attached?) || residency_proof.attached? || id_proof.attached?
+    return unless (FeatureFlag.income_proof_required? && income_proof.attached?) || residency_proof.attached? || id_proof.attached?
 
     @setting_review_timestamp = true
 

@@ -285,7 +285,7 @@ class ApplicationForm
     if application&.persisted?
       application.income_proof_required?
     else
-      FeatureFlag.enabled?(:income_proof_required)
+      FeatureFlag.income_proof_required?
     end
   end
 end
