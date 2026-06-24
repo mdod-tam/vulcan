@@ -167,8 +167,6 @@ es:
         panel:
           title: "Solicitudes seguras de información del proveedor"
           description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
-          recipients: "Destinatarios"
-          recipient_help: "Seleccione quién recibirá el enlace seguro."
           default_channel: "Canal predeterminado: %{channel}"
           email_override: "Enviar enlace seguro en línea por correo electrónico"
           submit: "Enviar solicitud segura"

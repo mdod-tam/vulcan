@@ -394,8 +394,6 @@ en:
         panel:
           title: "Secure provider information requests"
           description: "Send a secure link for entering certifying professional contact information."
-          recipients: "Recipients"
-          recipient_help: "Select who will receive the secure link."
           default_channel: "Default channel: %{channel}"
           email_override: "Send secure online link by email instead"
           submit: "Send secure request"

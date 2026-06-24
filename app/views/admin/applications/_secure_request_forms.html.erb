@@ -18,12 +18,6 @@
 <% elsif @provider_info_recipient_options.present? %>
   <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "mb-6 space-y-4" do |form| %>
     <fieldset>
-      <legend class="text-sm font-medium text-gray-900 mb-2">
-        <%= t('admin.applications.secure_request_forms.panel.recipients') %>
-      </legend>
-      <p class="text-xs text-gray-600 mb-3">
-        <%= t('admin.applications.secure_request_forms.panel.recipient_help') %>
-      </p>
 
       <div class="space-y-3">
         <% @provider_info_recipient_options.each do |option| %>
