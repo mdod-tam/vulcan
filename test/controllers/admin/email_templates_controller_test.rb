@@ -16,7 +16,7 @@ module Admin
                            subject: 'EN Subject',
                            body: 'English body %<name>s',
                            description: 'English description',
-                           needs_sync: false)
+                           locale_needs_sync: false)
       es_template = create(:email_template, :text,
                            name: en_template.name,
                            format: en_template.format,
@@ -24,7 +24,7 @@ module Admin
                            subject: 'ES Subject',
                            body: 'Spanish body %<name>s',
                            description: 'Spanish description',
-                           needs_sync: false)
+                           locale_needs_sync: false)
 
       patch admin_email_template_path(en_template), headers: default_headers, params: {
         locale: 'en',
@@ -41,7 +41,7 @@ module Admin
 
       assert_equal 'Updated EN Subject', en_template.subject
       assert_equal 'ES Subject', es_template.subject
-      assert es_template.needs_sync?
+      assert es_template.locale_needs_sync?
     end
 
     test 'update saves ES only and flags EN as needing sync' do
@@ -51,7 +51,7 @@ module Admin
                            subject: 'EN Subject',
                            body: 'English body %<name>s',
                            description: 'English description',
-                           needs_sync: false)
+                           locale_needs_sync: false)
       es_template = create(:email_template, :text,
                            name: en_template.name,
                            format: en_template.format,
@@ -59,7 +59,7 @@ module Admin
                            subject: 'ES Subject',
                            body: 'Spanish body %<name>s',
                            description: 'Spanish description',
-                           needs_sync: false)
+                           locale_needs_sync: false)
 
       patch admin_email_template_path(es_template), headers: default_headers, params: {
         locale: 'es',
@@ -76,7 +76,7 @@ module Admin
 
       assert_equal 'EN Subject', en_template.subject
       assert_equal 'Updated ES Subject', es_template.subject
-      assert en_template.needs_sync?
+      assert en_template.locale_needs_sync?
     end
 
     test 'create_counterpart creates missing ES template from EN' do
@@ -119,6 +119,60 @@ module Admin
 
       assert_redirected_to edit_admin_email_template_path(en_template)
       assert_equal 'ES template already exists.', flash[:notice]
+    end
+
+    test 'mark_synced clears locale sync flag' do
+      template = create(:email_template, :text,
+                        name: "mark_synced_#{SecureRandom.hex(4)}",
+                        locale_needs_sync: true)
+
+      patch mark_synced_admin_email_template_path(template), headers: default_headers
+
+      assert_redirected_to admin_email_template_path(template)
+      template.reload
+      assert_not template.locale_needs_sync?
+    end
+
+    test 'toggle_disabled updates enabled state' do
+      template = create(:email_template, :text, enabled: true)
+
+      patch toggle_disabled_admin_email_template_path(template), headers: default_headers
+
+      assert_redirected_to admin_email_templates_path
+      assert_not template.reload.enabled
+    end
+
+    test 'bulk_disable updates only templates that change enabled state' do
+      enabled_template = create(:email_template, :text, name: "bulk_disable_#{SecureRandom.hex(4)}", enabled: true)
+      disabled_template = create(:email_template, :text, name: "bulk_disable_skip_#{SecureRandom.hex(4)}", enabled: false)
+
+      patch bulk_disable_admin_email_templates_path, headers: default_headers
+
+      assert_not enabled_template.reload.enabled
+      assert_not disabled_template.reload.enabled
+    end
+
+    test 'bulk_disable succeeds when a changed template is locale_needs_sync' do
+      out_of_sync_template = create(:email_template, :text,
+                                    name: "bulk_disable_oos_#{SecureRandom.hex(4)}",
+                                    enabled: true,
+                                    locale_needs_sync: true)
+
+      assert_nothing_raised do
+        patch bulk_disable_admin_email_templates_path, headers: default_headers
+      end
+
+      assert_not out_of_sync_template.reload.enabled
+    end
+
+    test 'bulk_enable updates only templates that change enabled state' do
+      disabled_template = create(:email_template, :text, name: "bulk_enable_#{SecureRandom.hex(4)}", enabled: false)
+      enabled_template = create(:email_template, :text, name: "bulk_enable_skip_#{SecureRandom.hex(4)}", enabled: true)
+
+      patch bulk_enable_admin_email_templates_path, headers: default_headers
+
+      assert disabled_template.reload.enabled
+      assert enabled_template.reload.enabled
     end
   end
 end

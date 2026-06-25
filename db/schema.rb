@@ -185,8 +185,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_22_150000) do
     t.boolean "enabled", default: true, null: false
     t.integer "format", default: 0
     t.string "locale", default: "en", null: false
+    t.boolean "locale_needs_sync", default: false, null: false
     t.string "name", null: false
-    t.boolean "needs_sync", default: false, null: false
     t.text "previous_body"
     t.string "previous_subject"
     t.string "subject"
