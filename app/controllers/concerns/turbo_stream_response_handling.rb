@@ -7,9 +7,11 @@ module TurboStreamResponseHandling
   # @param message [String] The success message to display
   # @param updates [Hash] Hash of element_id => partial_name for updates
   # @param modals_to_remove [Array<String>] Array of modal IDs to remove
-  def handle_turbo_stream_success(message:, updates: {}, modals_to_remove: [])
+  # @param alert_message [String] Optional alert to display alongside the success message
+  def handle_turbo_stream_success(message:, updates: {}, modals_to_remove: [], alert_message: nil)
     prepare_turbo_stream_data if respond_to?(:prepare_turbo_stream_data, true)
     flash.now[:success] = message
+    flash.now[:alert] = alert_message if alert_message.present?
     streams = build_success_turbo_streams(updates, modals_to_remove)
     render turbo_stream: streams
   end
@@ -56,29 +58,41 @@ module TurboStreamResponseHandling
   # @param turbo_modals_to_remove [Array<String>] DEPRECATED: Modals to remove for Turbo Stream.
   #   Use 'modals' => 'modals' in turbo_updates to replace entire modal container.
   # @param turbo_redirect_path [String] Path to redirect for Turbo Stream (optional)
-  def handle_success_response(
+  # @param html_alert_message [String] Optional alert for HTML redirects
+  # @param turbo_alert_message [String] Optional alert for Turbo Stream responses
+  def handle_success_response( # rubocop:disable Metrics/ParameterLists
     html_redirect_path:,
     html_message:,
     turbo_message: nil,
     turbo_updates: {},
     turbo_modals_to_remove: [],
-    turbo_redirect_path: nil
+    turbo_redirect_path: nil,
+    html_alert_message: nil,
+    turbo_alert_message: nil
   )
     turbo_message ||= html_message
+    turbo_alert_message ||= html_alert_message
 
     respond_to do |format|
       # Keep traditional flash types for HTML redirects to avoid breaking existing tests.
-      format.html { redirect_to html_redirect_path, notice: html_message }
+      format.html do
+        redirect_options = { notice: html_message }
+        redirect_options[:alert] = html_alert_message if html_alert_message.present?
+        redirect_to html_redirect_path, redirect_options
+      end
 
       format.turbo_stream do
         if turbo_redirect_path.present?
           # Standard HTTP redirect – Turbo will convert this into a visit
-          redirect_to turbo_redirect_path, status: :see_other, notice: turbo_message
+          redirect_options = { status: :see_other, notice: turbo_message }
+          redirect_options[:alert] = turbo_alert_message if turbo_alert_message.present?
+          redirect_to turbo_redirect_path, redirect_options
         else
           handle_turbo_stream_success(
             message: turbo_message,
             updates: turbo_updates,
-            modals_to_remove: turbo_modals_to_remove
+            modals_to_remove: turbo_modals_to_remove,
+            alert_message: turbo_alert_message
           )
         end
       end

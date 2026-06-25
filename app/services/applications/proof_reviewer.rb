@@ -2,6 +2,8 @@
 
 module Applications
   class ProofReviewer
+    attr_reader :proof_review
+
     def initialize(application, admin)
       @application = application
       @admin = admin

@@ -57,7 +57,7 @@ module Admin
       ).call
 
       if result.success?
-        redirect_to admin_application_path(@application), notice: t('.proof_completed')
+        redirect_to admin_application_path(@application), flash: proof_review_success_flash(result)
       else
         @proof_type = proof_review_params[:proof_type]
         @proof_review = @application.proof_reviews.build(proof_review_params)
@@ -92,6 +92,19 @@ module Admin
 
     def proof_review_params
       params.expect(proof_review: %i[proof_type status rejection_reason])
+    end
+
+    def proof_review_success_flash(result)
+      flash_options = { notice: t('.proof_completed') }
+      flash_options[:alert] = t('.resubmission_not_delivered') if proof_resubmission_delivery_failed?(result)
+      flash_options
+    end
+
+    def proof_resubmission_delivery_failed?(result)
+      return false unless proof_review_params[:status].to_s == 'rejected'
+      return false unless result.data.is_a?(Hash)
+
+      result.data[:resubmission_delivered] == false
     end
 
     def next_proof_for_review

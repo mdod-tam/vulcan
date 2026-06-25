@@ -604,6 +604,7 @@ en:
         proof_not_available: "Proof file no longer available"
       create:
         proof_completed: "Proof review completed successfully"
+        resubmission_not_delivered: "Proof review completed, but the secure proof upload request could not be delivered. Review the secure upload link status and try resending."
       ensure_reviewable_status:
         app_not_reviewable: "Application is not in a reviewable state"
     recovery_requests:
