@@ -35,7 +35,13 @@ module Applications
     end
 
     def apply_conditional_explicit_status_filter(result)
-      params[:status].present? ? result.where(status: params[:status]) : result
+      return result if params[:status].blank?
+
+      # 'active' is a virtual status (everything except draft/rejected/archived),
+      # not a real enum value, so route it through apply_status_filter.
+      return apply_status_filter(result, 'active') if params[:status] == 'active'
+
+      result.where(status: params[:status])
     end
 
     def apply_conditional_date_range_filter(result)

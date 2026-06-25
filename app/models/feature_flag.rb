@@ -17,5 +17,11 @@ class FeatureFlag < ApplicationRecord
     def disable!(feature_name)
       find_or_initialize_by(name: feature_name.to_s).update!(enabled: false)
     end
+
+    # Income proof requirement is derived from the single `vouchers_enabled`
+    # flag. Income is required only when the voucher workflow is disabled.
+    def income_proof_required?
+      !enabled?(:vouchers_enabled)
+    end
   end
 end

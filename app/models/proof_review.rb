@@ -51,8 +51,6 @@ class ProofReview < ApplicationRecord
     end
 
     log_rejection_audit_event
-    return if Current.paper_context
-
     issue_proof_resubmission_form
   end
 
@@ -145,11 +143,6 @@ class ProofReview < ApplicationRecord
     # Skip if associations aren't loaded properly
     return unless application&.user.present? && admin.present?
 
-    if Current.paper_context
-      log_rejection_audit_event if status_rejected?
-      return
-    end
-
     status_rejected? ? request_proof_resubmission : send_approval_notification
   end
 
@@ -175,7 +168,12 @@ class ProofReview < ApplicationRecord
       action: 'proof_rejected',
       actor: admin,
       auditable: application,
-      metadata: { proof_type: proof_type, rejection_reason: rejection_reason }
+      metadata: {
+        proof_type: proof_type,
+        rejection_reason: rejection_reason,
+        submission_method: submission_method,
+        rejection_reason_code: rejection_reason_code
+      }.compact
     )
   end
 

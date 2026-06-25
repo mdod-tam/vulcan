@@ -193,7 +193,7 @@ module ConstituentPortal
     helper_method :fpl_thresholds_json, :fpl_modifier_value
 
     def fpl_thresholds_json
-      return '{}' unless FeatureFlag.enabled?(:income_proof_required)
+      return '{}' unless FeatureFlag.income_proof_required?
 
       thresholds = (1..8).to_h do |size|
         result = IncomeThresholdCalculationService.call(size)
@@ -207,7 +207,7 @@ module ConstituentPortal
     end
 
     def fpl_modifier_value
-      return 0 unless FeatureFlag.enabled?(:income_proof_required)
+      return 0 unless FeatureFlag.income_proof_required?
 
       result = IncomeThresholdCalculationService.call(1)
       if result.success?

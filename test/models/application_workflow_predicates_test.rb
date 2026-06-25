@@ -5,7 +5,6 @@ require 'test_helper'
 class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   def setup
     setup_paper_application_context
-    @income_flag = FeatureFlag.find_or_create_by!(name: 'income_proof_required') { |f| f.enabled = true }
     @vouchers_flag = FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
   end
 
@@ -13,7 +12,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   test 'stamp_workflow_defaults! sets equipment when vouchers_enabled is off' do
     @vouchers_flag.update!(enabled: false)
-    @income_flag.update!(enabled: true)
     app = create(:application, :in_progress)
     assert app.fulfillment_type_equipment?
     assert app.income_proof_required?
@@ -21,7 +19,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   test 'stamp_workflow_defaults! sets voucher when vouchers_enabled is on' do
     @vouchers_flag.update!(enabled: true)
-    @income_flag.update!(enabled: false)
     app = create(:application, :in_progress)
     assert app.fulfillment_type_voucher?
     assert_not app.income_proof_required?
@@ -29,8 +26,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   test 'stamp_workflow_defaults! is unconditional and overrides any pre-set values' do
     @vouchers_flag.update!(enabled: true)
-    @income_flag.update!(enabled: true)
-    app = Application.new(fulfillment_type: :equipment, income_proof_required: false)
+    app = Application.new(fulfillment_type: :equipment, income_proof_required: true)
     app.assign_attributes(
       user: create(:constituent, :with_disabilities),
       status: :in_progress,
@@ -43,27 +39,27 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     )
     app.save!
     assert app.fulfillment_type_voucher?, "Expected voucher, got #{app.fulfillment_type}"
-    assert app.income_proof_required?, 'Expected income_proof_required to be true'
+    assert_not app.income_proof_required?, 'Expected income_proof_required stamped false when vouchers enabled'
   end
 
   # --- scrub_income_fields ---
 
   test 'scrub_income_fields nils out income data on new record when income is off' do
-    @income_flag.update!(enabled: false)
+    @vouchers_flag.update!(enabled: true)
     app = create(:application, :in_progress)
     assert_nil app.annual_income
     assert_nil app.household_size
   end
 
   test 'scrub_income_fields preserves income data when income is on' do
-    @income_flag.update!(enabled: true)
+    @vouchers_flag.update!(enabled: false)
     app = create(:application, :in_progress)
     assert_not_nil app.annual_income
     assert_not_nil app.household_size
   end
 
   test 'scrub_income_fields works on draft status updates' do
-    @income_flag.update!(enabled: true)
+    @vouchers_flag.update!(enabled: false)
     app = create(:application, :draft)
     assert_not_nil app.household_size
 
@@ -78,7 +74,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   # --- income_collection_enabled? ---
 
   test 'income_collection_enabled? returns income_proof_required for persisted records' do
-    @income_flag.update!(enabled: true)
+    @vouchers_flag.update!(enabled: false)
     app = create(:application, :in_progress)
     assert app.income_collection_enabled?
 
@@ -88,11 +84,11 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   end
 
   test 'income_collection_enabled? checks feature flag for new records' do
-    @income_flag.update!(enabled: true)
+    @vouchers_flag.update!(enabled: false)
     app = Application.new
     assert app.income_collection_enabled?
 
-    @income_flag.update!(enabled: false)
+    @vouchers_flag.update!(enabled: true)
     assert_not app.income_collection_enabled?
   end
 
@@ -212,6 +208,16 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     results = Application.with_proofs_needing_review
     assert_includes results, app
+  end
+
+  test 'with_proofs_needing_review includes id not_reviewed proofs' do
+    app = create(:application, :in_progress, :income_not_required)
+    app.update_columns(
+      residency_proof_status: Application.residency_proof_statuses[:approved],
+      id_proof_status: Application.id_proof_statuses[:not_reviewed]
+    )
+
+    assert_includes Application.with_proofs_needing_review, app
   end
 
   # --- VoucherManagement#can_create_voucher? ---

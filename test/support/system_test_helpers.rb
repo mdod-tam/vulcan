@@ -6,6 +6,27 @@
 AuditEvent = Event unless defined?(AuditEvent)
 
 module SystemTestHelpers
+  def meaningful_page_content_selector
+    'main, [role="main"], h1, [data-testid], form[action], header nav'
+  end
+
+  # Wait for content that is useful in a screenshot, not just a non-empty DOM shell.
+  def wait_for_meaningful_page_content(timeout: 5, selector: meaningful_page_content_selector)
+    return false unless page&.driver
+    return false if page.current_url == 'about:blank'
+
+    wait_for_turbo(timeout: [timeout, 1].min)
+    page.has_selector?(selector, wait: timeout)
+  rescue StandardError
+    false
+  end
+
+  def capture_before_browser_recovery(reason, error = nil)
+    return unless respond_to?(:capture_browser_recovery_diagnostics, true)
+
+    capture_browser_recovery_diagnostics(reason, error: error)
+  end
+
   # Waits for Turbo and DOM to be stable.
   # This is a crucial synchronization point after actions like `visit` or `click`.
   def wait_for_page_stable(timeout: 10)
@@ -14,6 +35,7 @@ module SystemTestHelpers
     # Use Capybara's native wait mechanism - assert_selector already waits
     # Do NOT wrap in using_wait_time (causes double-waiting anti-pattern)
     assert_selector 'body', wait: timeout
+    wait_for_meaningful_page_content(timeout: [timeout, 3].min)
     true
   rescue Ferrum::NodeNotFoundError, Ferrum::DeadBrowserError => e
     puts "Warning: wait_for_page_stable failed due to browser corruption: #{e.message}"
@@ -45,7 +67,6 @@ module SystemTestHelpers
 
   # Waits for browser to be ready after session reset
   # Uses Capybara's native waiting instead of arbitrary sleeps
-  # rubocop:disable Naming/PredicateMethod -- this is a wait helper, not a predicate
   def wait_for_browser_ready(timeout: 2)
     deadline = Time.current + timeout
     while Time.current < deadline
@@ -60,7 +81,6 @@ module SystemTestHelpers
     end
     false
   end
-  # rubocop:enable Naming/PredicateMethod
 
   # Ensures Stimulus is loaded and ready before proceeding with tests
   # Uses Capybara's built-in waiting instead of manual retry loops
@@ -110,7 +130,6 @@ module SystemTestHelpers
   end
 
   # Wait for FPL data to load - compatibility for income validation
-  # rubocop:disable Naming/PredicateMethod -- this is a wait helper, not a predicate
   def wait_for_fpl_data_to_load(timeout: Capybara.default_max_wait_time)
     controller_selector = "[data-controller*='income-validation']"
     controller_present = page.has_selector?(controller_selector, wait: timeout)
@@ -127,7 +146,6 @@ module SystemTestHelpers
     assert thresholds_loaded, 'FPL thresholds never populated on income validation controller'
     true
   end
-  # rubocop:enable Naming/PredicateMethod
 
   # Wait for JavaScript animations to complete
   # Note: _timeout parameter kept for compatibility but not currently used
@@ -235,10 +253,15 @@ module SystemTestHelpers
   def wait_until_dom_stable(timeout: Capybara.default_max_wait_time)
     # Check readyState in a single call - browsers complete this quickly
     ready = page.evaluate_script('document.readyState === "complete"')
-    return true if ready
+    if ready
+      wait_for_meaningful_page_content(timeout: [timeout, 3].min)
+      return true
+    end
 
     # If not ready, use has_selector to wait for body (implies DOM is usable)
-    page.has_selector?('body', wait: timeout)
+    body_present = page.has_selector?('body', wait: timeout)
+    wait_for_meaningful_page_content(timeout: [timeout, 3].min) if body_present
+    body_present
   rescue Ferrum::NodeNotFoundError, Ferrum::DeadBrowserError => e
     puts "Warning: DOM stability check failed: #{e.message}" if ENV['VERBOSE_TESTS']
     false
@@ -635,6 +658,7 @@ module SystemTestHelpers
         puts "Navigation retry #{retries}/#{max_retries}: #{e.message}" if ENV['VERBOSE_TESTS']
 
         # Reset browser state
+        capture_before_browser_recovery('visit_admin_application_with_retry', e)
         Capybara.reset_sessions!
 
         # Wait for browser to be ready using idiomatic Capybara approach

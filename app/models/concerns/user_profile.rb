@@ -35,6 +35,7 @@ module UserProfile
     validate :phone_must_be_unique
     validate :phone_number_must_be_valid, if: :phone_changed?
     validate :dependent_phone_number_must_be_valid, if: :dependent_phone_changed?
+    validate :date_of_birth_must_be_valid
     validate :constituent_must_have_disability, if: :validate_constituent_disability?
     validate :validate_address_for_letter_preference
 
@@ -67,6 +68,12 @@ module UserProfile
       Rails.logger.warn "Invalid date format for user #{id}: #{raw_value}"
       nil
     end
+  end
+
+  def date_of_birth=(value)
+    normalized_date = DateInputNormalizer.normalize(value)
+    @invalid_date_of_birth = value.present? && normalized_date.blank?
+    super(normalized_date || value.presence)
   end
 
   def disabilities
@@ -120,6 +127,10 @@ module UserProfile
     digits = dependent_phone.gsub(/\D/, '')
     digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
     errors.add(:dependent_phone, 'must be a valid 10-digit US phone number') if digits.length != 10
+  end
+
+  def date_of_birth_must_be_valid
+    errors.add(:date_of_birth, 'must be in MM/DD/YYYY format') if @invalid_date_of_birth
   end
 
   def validate_address_for_letter_preference

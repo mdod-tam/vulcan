@@ -26,11 +26,11 @@ class EmailTemplate < ApplicationRecord
   before_update :store_previous_content
   before_update :increment_version
   before_update :clear_locale_sync_flags_when_content_changes,
-                if: -> { (body_changed? || subject_changed?) && locale_out_of_sync? }
+                if: -> { (body_changed? || subject_changed?) && locale_needs_sync? }
   # Flag other locales when this template's content changes (not when catching up a stale locale).
   after_update :flag_counterpart_locales_for_sync,
                if: lambda {
-                 (saved_change_to_body? || saved_change_to_subject?) && !locale_was_out_of_sync_before_save?
+                 (saved_change_to_body? || saved_change_to_subject?) && !locale_needs_sync_before_last_save
                }
 
   def self.render(template_name, **vars)
@@ -108,14 +108,6 @@ class EmailTemplate < ApplicationRecord
     required_variables + optional_variables
   end
 
-  def locale_out_of_sync?
-    locale_needs_sync?
-  end
-
-  def locale_was_out_of_sync_before_save?
-    locale_needs_sync_before_last_save
-  end
-
   def previous_version?
     version.to_i > 1 && (previous_subject.present? || previous_body.present?)
   end
@@ -182,7 +174,7 @@ class EmailTemplate < ApplicationRecord
   def counterpart_locales_are_synced
     # Block content/admin edits that leave stale body/subject untouched.
     # Operational saves (enabled, sync flags, updated_by) are allowed.
-    return unless locale_out_of_sync?
+    return unless locale_needs_sync?
     return if body_changed? || subject_changed?
     return unless stale_translation_content_changing?
 

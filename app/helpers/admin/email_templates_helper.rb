@@ -23,11 +23,11 @@ module Admin
     end
 
     def template_sync_status(template)
-      template&.locale_out_of_sync? ? 'Needs sync' : 'In sync'
+      template&.locale_needs_sync? ? 'Needs sync' : 'In sync'
     end
 
     def template_sync_badge_classes(template)
-      if template&.locale_out_of_sync?
+      if template&.locale_needs_sync?
         'inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800'
       else
         'inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800'

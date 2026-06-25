@@ -5,6 +5,7 @@ export default class extends Controller {
   static targets = [
     "submitButton",
     "rejectionButton",
+    "status",
     "applicantLocale",
     "languagePreferenceNotice",
     "rejectionFirstName",
@@ -29,15 +30,15 @@ export default class extends Controller {
     // Listen for income validation events from income_validation_controller
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this);
     this.element.addEventListener('income-validation:validated', this._boundHandleIncomeValidation);
-    this._boundSyncMedicalProviderRequirement = this.syncMedicalProviderRequirement.bind(this);
-    this.element.addEventListener('input', this._boundSyncMedicalProviderRequirement);
-    this.element.addEventListener('change', this._boundSyncMedicalProviderRequirement);
+    this._boundSyncFormState = this.syncFormState.bind(this);
+    this.element.addEventListener('input', this._boundSyncFormState);
+    this.element.addEventListener('change', this._boundSyncFormState);
 
     this.updateLanguagePreferenceNotices();
 
     // After sibling Stimulus controllers on this element finish connect (income validation, etc.)
     requestAnimationFrame(() => {
-      this.syncMedicalProviderRequirement();
+      this.syncFormState();
       this._applySubmitGating();
     });
   }
@@ -47,9 +48,9 @@ export default class extends Controller {
     if (this._boundHandleIncomeValidation) {
       this.element.removeEventListener('income-validation:validated', this._boundHandleIncomeValidation);
     }
-    if (this._boundSyncMedicalProviderRequirement) {
-      this.element.removeEventListener('input', this._boundSyncMedicalProviderRequirement);
-      this.element.removeEventListener('change', this._boundSyncMedicalProviderRequirement);
+    if (this._boundSyncFormState) {
+      this.element.removeEventListener('input', this._boundSyncFormState);
+      this.element.removeEventListener('change', this._boundSyncFormState);
     }
   }
 
@@ -104,15 +105,25 @@ export default class extends Controller {
   _applySubmitGating() {
     const incomeBlocks = !!this._incomeExceedsThreshold;
     const verifyBlocks = this._adultVerificationBlocksSubmit();
-    const disable = incomeBlocks || verifyBlocks;
+    const requiredControlBlocks = this._requiredControlsBlockSubmit();
+    const proofActionBlocks = this._requiredRadioGroupBlocksSubmit();
+    const checkboxGroupBlocks = this._checkboxGroupBlocksSubmit();
+    const disable = incomeBlocks || verifyBlocks || requiredControlBlocks || proofActionBlocks || checkboxGroupBlocks;
 
     if (this.hasSubmitButtonTarget) {
       this.submitButtonTarget.disabled = disable;
+      this.submitButtonTarget.setAttribute("aria-disabled", disable ? "true" : "false");
       if (disable) {
         this.submitButtonTarget.setAttribute("disabled", "disabled");
       } else {
         this.submitButtonTarget.removeAttribute("disabled");
       }
+    }
+
+    if (this.hasStatusTarget) {
+      this.statusTarget.textContent = disable
+        ? "Complete all required confirmations before submitting."
+        : "Paper application is ready to submit.";
     }
 
     if (this.hasRejectionButtonTarget) {
@@ -127,7 +138,12 @@ export default class extends Controller {
    * When "No medical provider information provided" is checked, hide fields and remove required
    */
   toggleMedicalProvider(event) {
+    this.syncFormState(event);
+  }
+
+  syncFormState(event = null) {
     this.syncMedicalProviderRequirement(event);
+    this._applySubmitGating();
   }
 
   syncMedicalProviderRequirement(event = null) {
@@ -189,6 +205,51 @@ export default class extends Controller {
         field.removeAttribute('aria-required');
       }
     });
+  }
+
+  _requiredControlsBlockSubmit() {
+    return this._enabledVisibleFields('input[type="checkbox"][required]')
+      .concat(this._enabledVisibleFields(
+        'input[required]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), select[required], textarea[required]'
+      ))
+      .some((field) => this._fieldInvalid(field));
+  }
+
+  _requiredRadioGroupBlocksSubmit() {
+    const radios = this._enabledVisibleFields('input[type="radio"][required]');
+    const names = [...new Set(radios.map((radio) => radio.name).filter(Boolean))];
+
+    return names.some((name) => {
+      const group = radios.filter((radio) => radio.name === name);
+      return group.length > 0 && !group.some((radio) => radio.checked);
+    });
+  }
+
+  _checkboxGroupBlocksSubmit() {
+    return Array.from(this.element.querySelectorAll("[data-requires-one-checkbox]"))
+      .filter((group) => this.elementIsVisible(group))
+      .some((group) => {
+        const checkboxes = Array.from(group.querySelectorAll('input[type="checkbox"]'))
+          .filter((field) => !field.disabled && this.elementIsVisible(field));
+        return checkboxes.length > 0 && !checkboxes.some((field) => field.checked);
+      });
+  }
+
+  _enabledVisibleFields(selector) {
+    return Array.from(this.element.querySelectorAll(selector))
+      .filter((field) => !field.disabled && this.elementIsVisible(field));
+  }
+
+  _fieldInvalid(field) {
+    if ((field.type || "").toLowerCase() === "file") {
+      return field.required && (!field.files || field.files.length === 0);
+    }
+
+    if (typeof field.checkValidity === "function") {
+      return !field.checkValidity();
+    }
+
+    return String(field.value || "").trim() === "";
   }
 
   /**

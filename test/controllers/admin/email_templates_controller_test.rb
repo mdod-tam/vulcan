@@ -131,7 +131,6 @@ module Admin
       assert_redirected_to admin_email_template_path(template)
       template.reload
       assert_not template.locale_needs_sync?
-      assert_not template.locale_out_of_sync?
     end
 
     test 'toggle_disabled updates enabled state' do

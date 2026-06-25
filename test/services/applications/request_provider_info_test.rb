@@ -111,10 +111,14 @@ module Applications
     end
 
     test 'sms request keeps NotificationService channel compatible while recording requested channel' do
-      @application.user.update!(phone_type: 'text')
+      @application.user.update!(phone_type: 'text', communication_preference: 'email')
       SmsService.stubs(:send_message).returns(true)
 
-      result = RequestProviderInfo.new(application: @application, actor: @actor).call
+      result = RequestProviderInfo.new(
+        application: @application,
+        actor: @actor,
+        channel_overrides: { @application.user_id => 'sms' }
+      ).call
 
       assert_predicate result, :success?
       secure_request_form = result.data.fetch(:secure_request_forms).first

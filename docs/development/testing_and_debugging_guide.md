@@ -104,7 +104,13 @@ safe_fill_in('Field Label', with: 'value')  # Clears field before filling
 # Debugging
 assert_notification(text, type: nil)
 take_screenshot
+take_screenshot('meaningful-step', html: true)
 ```
+
+System screenshots are saved under `tmp/capybara` with a JSON sidecar next to each PNG. The sidecar includes browser URL,
+title, readiness details, meaningful page anchors, blank/solid-color analysis, and `artifact_usable_for_llm_qa`.
+Use named screenshots for LLM QA checkpoints. `bin/run-test` enables Rails HTML companions with
+`RAILS_SYSTEM_TESTING_SCREENSHOT_HTML=1`.
 
 ## 5. Common Issues & Solutions
 ### Authentication Issues
@@ -372,7 +378,7 @@ end
 1. Run tests in isolation
 2. Enable verbose mode (`VERBOSE_TESTS=1`)
 3. Use visual browser (`HEADLESS=false`)
-4. Add screenshots before assertions
+4. Add named screenshots before assertions
 5. Verify authentication state
 6. Check browser dev tools for JS errors
 

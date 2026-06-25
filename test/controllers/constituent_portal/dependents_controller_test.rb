@@ -52,6 +52,50 @@ module ConstituentPortal
       assert_includes(@guardian.dependents, new_dependent)
     end
 
+    test 'should create dependent with MM/DD/YYYY date of birth' do
+      dependent_attributes = {
+        first_name: 'Date',
+        last_name: 'Dependent',
+        date_of_birth: '05/15/2010',
+        email: 'date.dependent@example.com',
+        phone: '5555551011',
+        hearing_disability: true
+      }
+
+      assert_difference ['User.count', 'GuardianRelationship.count'], 1 do
+        post constituent_portal_dependents_url, params: {
+          dependent: dependent_attributes,
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      new_dependent = User.find_by!(email: 'date.dependent@example.com')
+      assert_equal Date.new(2010, 5, 15), new_dependent.date_of_birth
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
+    test 'should reject dependent with malformed text date of birth' do
+      Rails.logger.stubs(:error)
+      Rails.logger.expects(:error).with(regexp_matches(%r{Date of birth must be in MM/DD/YYYY format})).twice
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post constituent_portal_dependents_url, params: {
+          dependent: {
+            first_name: 'Bad',
+            last_name: 'Date',
+            date_of_birth: 'May 15 2010',
+            email: 'bad.date.dependent@example.com',
+            phone: '5555551012',
+            hearing_disability: true
+          },
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_match(%r{Date of birth must be in MM/DD/YYYY format}, response.body)
+    end
+
     test 'should create dependent with guardian email fallback when dependent email is blank' do
       dependent_attributes = {
         first_name: 'Fallback',
