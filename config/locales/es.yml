@@ -170,8 +170,6 @@ es:
         panel:
           title: "Solicitudes seguras de información del proveedor"
           description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
-          recipients: "Destinatarios"
-          recipient_help: "El tutor principal, la persona dependiente/solicitante y los tutores registrados son relaciones autorizadas de la solicitud. El valor predeterminado sigue la ruta de correo efectiva de la persona dependiente; otros tutores registrados reciben enlaces seguros solo cuando se seleccionan explícitamente. Los contactos alternativos son solo informativos y no reciben enlaces seguros."
           default_channel: "Canal predeterminado: %{channel}"
           email_override: "Enviar enlace seguro en línea por correo electrónico"
           submit: "Enviar solicitud segura"
