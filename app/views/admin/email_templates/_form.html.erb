@@ -7,8 +7,12 @@
 <% editor_help_id = "body-help-#{locale_code.downcase}" %>
 <% variable_help_id = "variable-help-#{locale_code.downcase}" %>
 <% variable_select_id = "variable-insert-#{locale_code.downcase}" %>
+<% subject_variable_select_id = "subject-variable-insert-#{locale_code.downcase}" %>
+<% preview_frame_id = "template-preview-#{locale_code.downcase}" %>
+<% required_vars = email_template.required_variables || [] %>
+<% optional_vars = email_template.optional_variables || [] %>
 
-<%= form_with(model: [:admin, email_template], url: form_action_path, method: :patch, class: "space-y-4") do |form| %>
+<%= form_with(model: [:admin, email_template], url: form_action_path, method: :patch, class: "space-y-4", data: { controller: "protected-variables" }) do |form| %>
   <%= hidden_field_tag :locale, current_locale %>
 
   <% if email_template.locale_needs_sync? %>
@@ -37,10 +41,10 @@
 
   <% if email_template.errors.any? %>
     <div id="error_explanation_<%= locale_code.downcase %>" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-      <strong class="font-bold">Holy smokes!</strong>
+      <strong class="font-bold">Please review.</strong>
       <span class="block sm:inline"><%= pluralize(email_template.errors.count, "error") %> prohibited this email_template from being saved:</span>
       <ul class="mt-3 list-disc list-inside text-sm">
-        <% email_template.errors.full_messages.each do |message| %>
+        <% template_validation_error_messages(email_template.errors.full_messages).each do |message| %>
           <li><%= message %></li>
         <% end %>
       </ul>
@@ -57,10 +61,89 @@
 
   <div>
     <%= form.label :subject, "Email Subject (#{locale_code})", class: "block text-sm font-medium text-gray-700" %>
-    <%= form.text_field :subject, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+    <%= form.text_field :subject,
+        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+        data: { "protected-variables-target": "subjectInput" } %>
+    <div class="mt-2 max-w-sm">
+      <label for="<%= subject_variable_select_id %>" class="block text-sm font-medium text-gray-700 mb-2">
+        Insert Variable in Subject
+      </label>
+      <select id="<%= subject_variable_select_id %>"
+              class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:ring-1 text-sm"
+              data-protected-variables-target="subjectVariableSelect">
+        <option value="">-- Select a variable to insert --</option>
+        <% if required_vars.any? %>
+          <optgroup label="Required Variables">
+            <% required_vars.each do |var| %>
+              <option value="<%= variable_placeholder_for(email_template, var) %>"
+                      data-variable-name="<%= var %>"
+                      data-variable-kind="required"
+                      data-legacy-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :liquid) %>"
+                      data-legacy-label="<%= variable_option_label(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-label="<%= variable_option_label(email_template, var, syntax: :liquid) %>"><%= variable_option_label(email_template, var) %></option>
+            <% end %>
+          </optgroup>
+        <% end %>
+        <% if optional_vars.any? %>
+          <optgroup label="Optional (only if needed in message)">
+            <% optional_vars.each do |var| %>
+              <option value="<%= variable_placeholder_for(email_template, var) %>"
+                      data-variable-name="<%= var %>"
+                      data-variable-kind="optional"
+                      data-legacy-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :liquid) %>"
+                      data-legacy-label="<%= variable_option_label(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-label="<%= variable_option_label(email_template, var, syntax: :liquid) %>"><%= variable_option_label(email_template, var) %></option>
+            <% end %>
+          </optgroup>
+        <% end %>
+      </select>
+    </div>
   </div>
 
-  <div data-controller="protected-variables">
+  <div>
+    <%= form.label :syntax, "Placeholder Style (#{locale_code})", class: "block text-sm font-medium text-gray-700" %>
+    <%= form.select :syntax,
+        options_for_select(email_template_syntax_options(email_template), email_template.render_syntax),
+        {},
+        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+        data: { "protected-variables-target": "syntaxSelect" } %>
+    <div class="mt-2 space-y-2">
+      <p class="<%= standard_placeholder_style_help_classes(email_template) %>"
+         data-protected-variables-target="standardHelp">
+        Most templates should stay Standard. Use Insert Variable; do not type placeholders yourself.
+      </p>
+      <div class="<%= liquid_placeholder_style_help_classes(email_template) %>"
+           data-protected-variables-target="liquidHelp">
+        <p>
+          Liquid is an advanced placeholder style for templates that need exact-path variables. Use Insert Variable; do not type placeholders yourself.
+        </p>
+        <p class="mt-1 font-medium">
+          Liquid templates can only use Required Variables. Optional choices are Standard-only.
+        </p>
+      </div>
+    </div>
+    <% if !email_template.text? %>
+      <p class="mt-1 text-sm text-gray-500">Liquid is only available for text templates.</p>
+    <% elsif !email_template_liquid_enabled? && email_template.render_syntax != 'liquid' %>
+      <p class="mt-1 text-sm text-gray-500">Liquid templates are not enabled yet. Contact your administrator.</p>
+    <% end %>
+    <% if email_template.text? && (email_template_liquid_enabled? || email_template.render_syntax == 'liquid') %>
+      <div class="mt-3 hidden" data-protected-variables-target="convertPanel">
+        <button type="button"
+                class="inline-flex items-center rounded-md border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-800 hover:bg-cyan-100"
+                data-action="protected-variables#convertStandardPlaceholders">
+          Convert Standard Placeholders
+        </button>
+        <p class="mt-1 text-sm text-gray-500">
+          Replaces matching Standard placeholders in the subject and body with Liquid placeholders.
+        </p>
+      </div>
+    <% end %>
+  </div>
+
+  <div>
     <%= form.label :body, "Body (#{locale_code})", id: editor_label_id, class: "block text-sm font-medium text-gray-700" %>
     
     <!-- Hidden textarea that stores actual data -->
@@ -95,99 +178,76 @@
       }
     </style>
     
-    <div class="mt-2 flex items-start gap-4">
-      <div class="flex-1">
-
-    <!-- Insert Variable Dropdown -->
+    <div class="mt-2 space-y-2">
+      <div class="max-w-sm">
+        <!-- Insert Variable Dropdown -->
         <label for="<%= variable_select_id %>" class="block text-sm font-medium text-gray-700 mb-2">
-          Insert Variable
+          Insert Variable into Body
         </label>
         <select id="<%= variable_select_id %>" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:ring-1 text-sm" data-protected-variables-target="variableSelect">
         <option value="">-- Select a variable to insert --</option>
-        <% required_vars = email_template.required_variables || [] %>
-        <% optional_vars = email_template.optional_variables || [] %>
         <% if required_vars.any? %>
           <optgroup label="Required Variables">
             <% required_vars.each do |var| %>
-              <option value="%&lt;<%= var %>&gt;s"><%= var %></option>
+              <option value="<%= variable_placeholder_for(email_template, var) %>"
+                      data-variable-name="<%= var %>"
+                      data-variable-kind="required"
+                      data-legacy-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :liquid) %>"
+                      data-legacy-label="<%= variable_option_label(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-label="<%= variable_option_label(email_template, var, syntax: :liquid) %>"><%= variable_option_label(email_template, var) %></option>
             <% end %>
           </optgroup>
         <% end %>
         <% if optional_vars.any? %>
-          <optgroup label="Optional Variables">
+          <optgroup label="Optional (only if needed in message)">
             <% optional_vars.each do |var| %>
-              <option value="%&lt;<%= var %>&gt;s"><%= var %></option>
+              <option value="<%= variable_placeholder_for(email_template, var) %>"
+                      data-variable-name="<%= var %>"
+                      data-variable-kind="optional"
+                      data-legacy-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-placeholder="<%= variable_placeholder_for(email_template, var, syntax: :liquid) %>"
+                      data-legacy-label="<%= variable_option_label(email_template, var, syntax: :legacy_percent) %>"
+                      data-liquid-label="<%= variable_option_label(email_template, var, syntax: :liquid) %>"><%= variable_option_label(email_template, var) %></option>
             <% end %>
           </optgroup>
         <% end %>
       </select>
       </div>
-        <!-- Variable Help text -->
-        <p id="<%= variable_help_id %>" class="text-sm text-gray-500 flex-1">
-          Variables are highlighted in gray and cannot be edited.
-        </p>  
+      <!-- Variable Help text -->
+      <div id="<%= variable_help_id %>" class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+        <p>Inserted body variables are highlighted and cannot be edited.</p>
+        <p class="mt-1">Liquid disables optional choices because sends may omit them.</p>
+      </div>
     </div>
     <p id="<%= editor_help_id %>" class="mt-2 text-sm text-gray-500">
-      Use keyboard or mouse to edit message text. Use the variable dropdown to insert placeholders.
+      Edit message text in the body editor. Paste plain text when possible.
     </p>
   </div>
 
+  <%
+    begin
+      sample_data = sample_data_for_email_template(email_template, locale: email_template.locale, subject: email_template.subject)
+      rendered_subject, rendered_body = email_template.render(**sample_data)
+      preview_error = nil
+    rescue => e
+      rendered_subject = nil
+      rendered_body = nil
+      preview_error = template_render_error_message(e)
+    end
+  %>
+  <%= render 'admin/email_templates/draft_preview',
+      frame_id: preview_frame_id,
+      template: email_template,
+      rendered_subject: rendered_subject,
+      rendered_body: rendered_body,
+      error_message: preview_error %>
 
-
-  <%# Preview Section %>
-  <div class="mt-6 mb-6 p-4 border border-gray-200 rounded-md bg-white">
-    <h3 class="text-lg font-medium text-gray-700 mb-3">
-      Template Preview (<%= locale_code %>) with Sample Data
-    </h3>
-    
-    <% 
-      # Use sample data provided by controller - fallback to empty hash if not available
-      sample_data = @sample_data || {}
-      
-      # Render template with sample data
-      begin
-        # Create a temporary EmailTemplate object with current form values to preview unsaved changes
-        temp_template = EmailTemplate.new(
-          name: email_template.name,
-          format: email_template.format,
-          subject: email_template.subject,
-          body: email_template.body
-        )
-        rendered_subject, rendered_body = temp_template.render(**sample_data)
-      rescue => e
-        rendered_subject = "Error rendering subject: #{e.message}"
-        rendered_body = "Error rendering template: #{e.message}"
-      end
-    %>
-    
-    <div class="mb-4">
-      <h4 class="text-md font-medium text-gray-600 mb-2">
-        Subject Preview: <span class="font-normal"><%= rendered_subject %></span>
-      </h4>
-    </div>
-    
-    <div class="prose max-w-none mb-4">
-      <h4 class="text-md font-medium text-gray-600 mb-2">
-        Body Preview
-      </h4>
-      
-      <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white">
-        <% if email_template.format == 'html' %>
-          <div class="email-preview">
-            <%= raw rendered_body %>
-          </div>
-        <% else %>
-          <pre class="whitespace-pre-wrap text-sm"><%= rendered_body %></pre>
-        <% end %>
-      </div>
-    </div>
-    
-    <div class="text-sm text-gray-600 mt-2 italic">
-      <p>Preview uses sample data with placeholder values. All variables, headers, and footers are rendered.</p>
-    </div>
-  </div>
-
-  <div class="flex justify-end pt-4">
+  <div class="flex justify-end gap-3 pt-4">
+    <%= form.submit "Preview Draft",
+        formaction: preview_admin_email_template_path(email_template),
+        class: "inline-flex justify-center py-2 px-4 border border-indigo-300 shadow-sm text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+        data: { turbo_frame: preview_frame_id } %>
     <%= form.submit submit_label, class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
   </div>
 <% end %>

@@ -73,10 +73,14 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
 
   test 'voucher_expiring_soon' do
     # Override the generic stub from setup with a more specific one for this test
+    rendered_variables = nil
     specific_template = mock('specific_expiring')
     specific_template.stubs(:subject).returns('Voucher expiring soon')
     # Use a generic regex match for the body to avoid fragile date math in assertions
-    specific_template.stubs(:render).returns(['Voucher expiring soon', 'Text Your voucher will expire in 11 days'])
+    specific_template.define_singleton_method(:render) do |**vars|
+      rendered_variables = vars
+      ['Voucher expiring soon', 'Text Your voucher will expire in 11 days']
+    end
 
     EmailTemplate.stubs(:find_by!)
                  .with(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'en')
@@ -87,6 +91,12 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     assert_emails 1
     assert_equal 'Voucher expiring soon', email.subject
     assert_includes email.body.to_s, 'Text Your voucher will expire in 11 days'
+    assert_equal @user.full_name, rendered_variables[:vendor_business_name]
+    assert_equal rendered_variables[:days_remaining], rendered_variables[:days_until_expiry]
+    assert_includes rendered_variables[:status_box_warning_text], 'Voucher Expiring Soon'
+    assert_includes rendered_variables[:status_box_info_text], 'Next Step'
+    assert_match(/\$\d+/, rendered_variables[:remaining_value_formatted])
+    assert_equal '$10.00', rendered_variables[:minimum_redemption_amount_formatted]
   end
 
   test 'voucher_expired' do

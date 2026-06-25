@@ -5,6 +5,7 @@ require 'test_helper'
 module Letters
   class TextTemplateToPdfServiceTest < ActiveSupport::TestCase
     setup do
+      FeatureFlag.disable!(:email_template_liquid)
       @user = create(:constituent, email: "test-template-#{SecureRandom.hex(4)}@example.com")
       # Find existing template to avoid "Name has already been taken" error
       EmailTemplate.where(name: 'application_notifications_account_created').destroy_all
@@ -32,6 +33,10 @@ module Letters
         header_text: 'Header text for testing',
         footer_text: 'Footer text for testing'
       }
+    end
+
+    teardown do
+      FeatureFlag.disable!(:email_template_liquid)
     end
 
     test 'generates PDF from database template' do
@@ -74,6 +79,48 @@ module Letters
 
       # Verify there are no remaining placeholders
       assert_no_match(/%<\w+>s/, result)
+    end
+
+    test 'queue_for_printing raises before creating print queue item when required variables are missing' do
+      @template.update!(
+        subject: 'Missing variable notice',
+        body: 'Hello %<constituent_first_name>s. Code: %<missing_code>s.',
+        variables: { 'required' => %w[constituent_first_name missing_code], 'optional' => [] }
+      )
+
+      service = TextTemplateToPdfService.new(
+        template_name: 'application_notifications_account_created',
+        recipient: @user,
+        variables: { constituent_first_name: @user.first_name }
+      )
+
+      original_print_queue_count = PrintQueueItem.count
+      error = assert_raises(ArgumentError) { service.queue_for_printing }
+
+      assert_includes error.message, 'Missing required variables'
+      assert_includes error.message, 'missing_code'
+      assert_equal original_print_queue_count, PrintQueueItem.count
+    end
+
+    test 'renders Liquid templates through shared EmailTemplate renderer' do
+      FeatureFlag.enable!(:email_template_liquid)
+      template_name = "liquid_letter_#{SecureRandom.hex(4)}"
+      create(:email_template, :text,
+             name: template_name,
+             subject: 'Letter for {{ recipient.first_name }}',
+             body: 'Hello {{ recipient.first_name }}.',
+             variables: { 'required' => ['recipient.first_name'], 'optional' => [] },
+             syntax: :liquid,
+             locale: 'en')
+
+      service = TextTemplateToPdfService.new(
+        template_name: template_name,
+        recipient: @user,
+        variables: { recipient: { first_name: 'Alex' } }
+      )
+
+      assert_equal 'Hello Alex.', service.send(:render_template_with_variables)
+      assert_equal 'Letter for Alex', service.send(:determine_letter_title)
     end
 
     test 'returns nil when template not found' do

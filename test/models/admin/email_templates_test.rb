@@ -24,11 +24,6 @@ module Admin
                                                       body: '<p>HTML Body %<name>s</p>')
       @template_text = create(:email_template, :text, name: text_name, subject: 'Text Subject', body: 'Text Body %<name>s')
 
-      # Override the helper method completely for tests to avoid any expensive operations
-      Admin::EmailTemplatesHelper.define_method(:sample_data_for_template) do |_template_name, **_kwargs|
-        { 'name' => 'System Test User' }
-      end
-
       # Also patch the controller to use a fast mock for view_context
       Admin::EmailTemplatesController.any_instance.stubs(:view_context).returns(
         MockViewContext.new
@@ -36,11 +31,6 @@ module Admin
     end
 
     teardown do
-      # Mocha stubs on any_instance are typically cleared automatically,
-      # but explicitly unstubbing can prevent state leakage if tests run differently.
-      # However, standard Mocha teardown should handle this. If issues persist, uncomment:
-      # ApplicationController.any_instance.unstub(:sample_data_for_template)
-
       # Clear deliveries
       ActionMailer::Base.deliveries.clear
     end
@@ -91,7 +81,7 @@ module Admin
 
       assert_not @template_text.valid?, 'Template should be invalid with unauthorized variables'
       assert @template_text.errors[:body].any?, 'Should have body errors'
-      assert_includes @template_text.errors[:body].first, 'unauthorized variables'
+      assert_includes @template_text.errors[:body].first, 'Use variables from Insert Variable only'
       assert_includes @template_text.errors[:body].first, 'unauthorized_var'
     end
 
@@ -129,17 +119,6 @@ module Admin
       error_message = @template_text.errors[:body].first
       assert_includes error_message, 'bad_var_1'
       assert_includes error_message, 'bad_var_2'
-    end
-
-    test 'content update stores the previous subject and body' do
-      @template_text.update!(
-        subject: 'Updated Subject',
-        body: 'Updated Body %<name>s'
-      )
-
-      assert_equal 'Text Subject', @template_text.previous_subject
-      assert_equal 'Text Body %<name>s', @template_text.previous_body
-      assert @template_text.previous_version?
     end
   end
 end

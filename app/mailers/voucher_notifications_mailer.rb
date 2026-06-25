@@ -124,12 +124,28 @@ class VoucherNotificationsMailer < ApplicationMailer
     # Use Policy.get for configuration values
     expiration_date = voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months
     days_remaining = (expiration_date - Time.current).to_i / 1.day
+    minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0)
+    expiration_message = "Your voucher expires in #{days_remaining} days on #{expiration_date.strftime('%B %d, %Y')}."
 
     variables = {
       user_first_name: user.first_name,
+      vendor_business_name: user.full_name.presence || user.first_name,
       voucher_code: voucher.code,
       days_remaining: days_remaining,
+      days_until_expiry: days_remaining,
       expiration_date_formatted: expiration_date.strftime('%B %d, %Y'),
+      remaining_value_formatted: number_to_currency(voucher.remaining_value),
+      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted,
+      status_box_warning_text: status_box_text(
+        status: :warning,
+        title: 'Voucher Expiring Soon',
+        message: expiration_message
+      ),
+      status_box_info_text: status_box_text(
+        status: :info,
+        title: 'Next Step',
+        message: "Use at least #{minimum_redemption_amount_formatted} before the expiration date to avoid losing unused value."
+      ),
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
                                organization_name: organization_name, show_automated_message: footer_show_automated_message,
@@ -263,7 +279,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     raise e
   end
 
-  def voucher_redeemed # rubocop:disable Metrics/PerceivedComplexity
+  def voucher_redeemed # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
     transaction = params[:transaction]
     voucher = transaction.voucher
     user = voucher.application.user

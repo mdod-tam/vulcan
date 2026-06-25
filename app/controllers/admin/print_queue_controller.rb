@@ -22,7 +22,7 @@ module Admin
           if @letter.pdf_letter.attached?
             begin
               send_data @letter.pdf_letter.download,
-                        filename: "#{@letter.letter_type}_#{@letter.constituent.id}.pdf",
+                        filename: @letter.pdf_filename,
                         type: 'application/pdf',
                         disposition: 'inline'
             rescue ActiveStorage::FileNotFoundError => e
@@ -53,7 +53,7 @@ module Admin
       end
 
       # Update all selected letters to printed status
-      @letters.update_all(
+      @letters.update_all( # rubocop:disable Rails/SkipsModelValidations
         status: PrintQueueItem.statuses[:printed],
         printed_at: Time.current,
         admin_id: current_user.id
@@ -85,9 +85,8 @@ module Admin
     end
 
     def send_single_letter(letter)
-      filename = letter_filename(letter)
       send_data letter.pdf_letter.download,
-                filename: filename,
+                filename: letter.pdf_filename,
                 type: 'application/pdf',
                 disposition: 'attachment',
                 stream: true
@@ -118,8 +117,7 @@ module Admin
           next unless letter_item.pdf_letter.attached?
 
           # Add each PDF to the zip file
-          filename = letter_filename(letter_item)
-          zos.put_next_entry(filename)
+          zos.put_next_entry(letter_item.pdf_filename)
           zos.write letter_item.pdf_letter.download
         end
       end
@@ -131,10 +129,6 @@ module Admin
     def handle_zip_error(exception)
       Rails.logger.error("PDF batch download error: #{exception.message}")
       redirect_to admin_print_queue_index_path, alert: t(download_error)
-    end
-
-    def letter_filename(letter)
-      "#{letter.letter_type}_#{letter.constituent.id}.pdf"
     end
   end
 end

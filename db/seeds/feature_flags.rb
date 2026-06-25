@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# rubocop:disable Rails/Output
+
 def seed_feature_flags
   puts 'Seeding feature flags...'
 
@@ -7,7 +9,8 @@ def seed_feature_flags
   # Income proof requirement is derived from it: income is NOT required when
   # vouchers are enabled, and required when they are disabled.
   feature_flags = {
-    'vouchers_enabled' => false
+    'vouchers_enabled' => false,
+    'email_template_liquid' => false
   }
 
   feature_flags.each do |name, enabled|
@@ -19,3 +22,5 @@ def seed_feature_flags
 end
 
 seed_feature_flags
+
+# rubocop:enable Rails/Output
