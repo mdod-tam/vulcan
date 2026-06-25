@@ -10,7 +10,7 @@ module Admin
 
     def index
       # Attachment presence controls whether the W9 review action is actionable.
-      @vendors = Users::Vendor.with_attached_w9_form.order(:business_name)
+      @vendors = Users::Vendor.includes([:w9_form_attachment]).order(:business_name)
 
       # Filter by W9 status if provided
       return if params[:w9_status].blank?
