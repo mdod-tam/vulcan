@@ -13,12 +13,14 @@ MAT Vulcan delivers, receives, and even prints email content through one unified
 | Format | Records with `name`, `format` (`:html` / `:text`), `subject`, `body`, `description`, `version` |
 | Placeholders | `%{first_name}` or `%<amount>.2f` |
 | Validation | Required variables validated against `AVAILABLE_TEMPLATES` constant |
-| Versioning | Auto-increments `version` on content changes, stores `previous_subject`/`previous_body` |
+| Versioning | `version` increments on subject/body edits; `previous_subject`/`previous_body` keep the immediately prior content version. |
+| Locale sync | `locale_needs_sync` flags counterpart locales out of date; admin UI uses `locale_out_of_sync?` |
 
 Seed/update:
 
 ```bash
 bin/rails db:seed:email_templates   # or rake db:seed_manual_email_templates
+bin/rails email_templates:audit   # read-only: seeds + MAILER_MAP vs DB
 ```
 
 **Mailer pattern**

@@ -156,7 +156,8 @@ module Admin
     # PATCH /admin/email_templates/:id/toggle_disabled
     def toggle_disabled
       new_state = !@email_template.enabled
-      if @email_template.update(enabled: new_state)
+
+      if @email_template.update(enabled: new_state, updated_by: current_user)
         action = new_state ? 'enabled' : 'disabled'
         log_audit_event('email_template_toggled', enabled: new_state)
         redirect_to admin_email_templates_path,
@@ -169,7 +170,7 @@ module Admin
 
     # PATCH /admin/email_templates/:id/mark_synced
     def mark_synced
-      @email_template.update_column(:needs_sync, false) # rubocop:disable Rails/SkipsModelValidations
+      @email_template.update!(locale_needs_sync: false)
       log_audit_event('email_template_marked_synced')
       redirect_to admin_email_template_path(@email_template),
                   notice: 'Template marked as synced.'
@@ -209,7 +210,7 @@ module Admin
 
     # PATCH /admin/email_templates/bulk_disable
     def bulk_disable
-      count = EmailTemplate.update_all(enabled: false) # rubocop:disable Rails/SkipsModelValidations
+      count = bulk_update_enabled_state(enabled: false)
       AuditEventService.log(
         actor: current_user,
         action: 'email_templates_bulk_disabled',
@@ -222,7 +223,7 @@ module Admin
 
     # PATCH /admin/email_templates/bulk_enable
     def bulk_enable
-      count = EmailTemplate.update_all(enabled: true) # rubocop:disable Rails/SkipsModelValidations
+      count = bulk_update_enabled_state(enabled: true)
       AuditEventService.log(
         actor: current_user,
         action: 'email_templates_bulk_enabled',
@@ -238,7 +239,8 @@ module Admin
     def capture_original_values(template)
       {
         subject: template.subject,
-        body: template.body
+        body: template.body,
+        description: template.description
       }
     end
 
@@ -249,9 +251,24 @@ module Admin
     def template_changes
       changes = {
         subject: { from: @original_values[:subject], to: @email_template.subject },
-        body: { from: @original_values[:body], to: @email_template.body }
+        body: { from: @original_values[:body], to: @email_template.body },
+        description: { from: @original_values[:description], to: @email_template.description }
       }
       changes.reject { |_key, change| change[:from] == change[:to] }
+    end
+
+    def bulk_update_enabled_state(enabled:)
+      scope = enabled ? EmailTemplate.disabled_templates : EmailTemplate.enabled
+      count = 0
+
+      EmailTemplate.transaction do
+        scope.find_each do |template|
+          template.update!(enabled: enabled, updated_by: current_user)
+          count += 1
+        end
+      end
+
+      count
     end
 
     def set_template

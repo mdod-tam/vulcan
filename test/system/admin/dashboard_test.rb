@@ -148,6 +148,24 @@ module Admin
       assert_current_path admin_reports_path
     end
 
+    test 'immediate apply for constituent click navigates without blocking javascript errors' do
+      console_errors = []
+      if page.driver.respond_to?(:browser) && page.driver.browser.respond_to?(:on)
+        page.driver.browser.on(:console) do |message|
+          next unless message.respond_to?(:type) && message.type == :error
+
+          console_errors << message.text
+        end
+      end
+
+      visit admin_dashboard_path
+      click_on 'Apply for Constituent'
+
+      assert_current_path new_admin_paper_application_path
+      assert_selector 'h1', text: 'Apply for Constituent'
+      assert_empty console_errors.grep(/RangeError|Maximum call stack size exceeded|getComputedStyle/i)
+    end
+
     test 'admin can access core administrative functions' do
       visit admin_dashboard_path
 

@@ -29,7 +29,7 @@
     </div>
 
     <%# Out-of-sync warning %>
-    <% if @email_template.needs_sync? %>
+    <% if @email_template.locale_needs_sync? %>
       <div class="mb-6 rounded-md bg-amber-50 border border-amber-300 p-4" role="alert">
         <div class="flex">
           <div class="flex-shrink-0">
@@ -242,7 +242,7 @@
     </section>
 
     <%# Previous Version Section (Conditional) %>
-    <% if @email_template.version.to_i > 1 && (@email_template.previous_subject.present? || @email_template.previous_body.present?) %>
+    <% if @email_template.previous_version? %>
       <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="previous-version-title">
         <h2 id="previous-version-title" class="text-xl font-semibold text-gray-900 mb-4">Previous Version (v<%= @email_template.version - 1 %>)</h2>
         <dl class="space-y-4">

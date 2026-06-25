@@ -170,8 +170,6 @@ es:
         panel:
           title: "Solicitudes seguras de información del proveedor"
           description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
-          recipients: "Destinatarios"
-          recipient_help: "El tutor principal, la persona dependiente/solicitante y los tutores registrados son relaciones autorizadas de la solicitud. El valor predeterminado sigue la ruta de correo efectiva de la persona dependiente; otros tutores registrados reciben enlaces seguros solo cuando se seleccionan explícitamente. Los contactos alternativos son solo informativos y no reciben enlaces seguros."
           default_channel: "Canal predeterminado: %{channel}"
           email_override: "Enviar enlace seguro en línea por correo electrónico"
           submit: "Enviar solicitud segura"
@@ -415,6 +413,32 @@ es:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
       archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada. Puede volver a solicitar después del %{reapply_date}."
+  medical_provider_mailer:
+    certification_submission_instructions:
+      secure: |-
+        1. Formulario de certificación de discapacidad en blanco:
+           %{download_form_url}
+        2. Complete todos los campos obligatorios y firme el formulario
+        3. Enlace seguro para cargar la certificación:
+           %{secure_upload_url}
+      fax: |-
+        1. Formulario de certificación de discapacidad en blanco:
+           %{download_form_url}
+        2. Complete todos los campos obligatorios
+        3. Firme el formulario
+        4. Devuelva el formulario completado por fax al (410) 767-4276
+        5. Si no puede enviar fax, comuníquese con %{support_email} para solicitar un enlace de carga seguro
+    certification_resubmission_instructions:
+      secure: |-
+        1. Enlace seguro para cargar la certificación:
+           %{secure_upload_url}
+        2. Formulario de certificación de discapacidad en blanco:
+           %{download_form_url}
+        3. Fax: Envíe el formulario actualizado al 410-767-4276
+      fax: |-
+        1. Formulario de certificación de discapacidad en blanco:
+           %{download_form_url}
+        2. Fax: Envíe el formulario actualizado al 410-767-4276
   vendor_notifications:
     w9_rejected:
       secure_upload_instructions: |-

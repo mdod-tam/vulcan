@@ -16,14 +16,14 @@
       <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
 
       <% new_app_form_data = {
-        controller: "currency-formatter accessibility-announcer autosave",
+        controller: "final-submit-gate currency-formatter accessibility-announcer autosave",
         autosave_target: "form",
         autosave_url_value: autosave_field_constituent_portal_applications_path,
         autosave_debounce_wait_value: 1000,
         autosave_edit_form_url_value: constituent_portal_application_path(':id'),
         autosave_edit_autosave_url_value: autosave_field_constituent_portal_application_path(':id')
       }
-        if FeatureFlag.enabled?(:income_proof_required)
+        if FeatureFlag.income_proof_required?
           new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
           new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
           new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
@@ -34,8 +34,7 @@
       <%= form_with(model: [:constituent_portal, @application],
           local: true,
           class: "space-y-6",
-          html: { "aria-label": "Application form" },
-          "aria-labelledby": "form-title",
+          html: { "aria-labelledby": "form-title" },
           data: new_app_form_data) do |form| %>
 
         <!-- Autosave status indicator -->
@@ -76,7 +75,7 @@
         </div>
 
         <!-- Applicant Information Section -->
-        <section aria-labelledby="applicant-info-title" class="space-y-4 p-4 bg-gray-50 rounded">
+        <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="applicant-info-title" class="text-lg font-medium text-gray-900">Applicant</h2>
 
           <% if @applicant_type == 'dependent' && @selected_dependent_name.present? %>
@@ -108,7 +107,7 @@
         </section>
 
         <!-- Communication Preferences Section -->
-        <section aria-labelledby="communication-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+        <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="communication-section-title" class="text-lg font-medium text-gray-900">Communication Preferences</h2>
           <div>
             <%= label_tag "constituent_locale", "Preferred Language", class: "block text-sm font-medium text-gray-700" %>
@@ -140,12 +139,13 @@
           <h2 class="text-lg font-semibold text-gray-800 mb-4">Disability Certification</h2>
 
           <!-- Disability Information Section -->
-          <section aria-labelledby="disability-section-title" class="space-y-4 p-4 bg-white border border-gray-200 rounded mb-4">
+          <section class="space-y-4 p-4 bg-white border border-gray-200 rounded mb-4">
             <h3 id="disability-section-title" class="text-base font-medium text-gray-900 required-label">Disability Information</h3>
             <div class="flex items-start">
               <%= form.check_box :self_certify_disability,
                   {
                     class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                    required: true,
                     "aria-describedby": "disability-certification-description",
                     "aria-required": "true"
                   }, "1", "0" %>
@@ -156,8 +156,9 @@
             <p id="disability-certification-description" class="text-sm text-gray-700">
               If you have a disability, please self-certify by checking the box above.
             </p>
-            <fieldset class="space-y-2">
-              <legend class="text-sm text-gray-700 font-medium">Select at least one disability that applies to <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %>:</legend>
+            <fieldset class="space-y-2" data-requires-one-checkbox="true" aria-describedby="portal-disability-type-help">
+              <legend class="text-sm text-gray-700 font-medium">Disability type</legend>
+              <p id="portal-disability-type-help" class="text-xs text-gray-700">Select at least one disability that applies to <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %>.</p>
               <div class="grid sm:grid-cols-2 gap-4">
                 <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
                 <% disabilities.each do |disability| %>
@@ -184,7 +185,7 @@
         </div>
 
         <!-- Alternate Contact Section (optional) -->
-        <section aria-labelledby="alternate-contact-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
+        <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
           <p class="text-sm text-gray-700"><%= t("applications.alternate_contact.portal_help") %></p>
 
@@ -228,7 +229,7 @@
         <fieldset class="space-y-6 p-4 bg-gray-50 rounded">
           <legend class="text-lg font-medium text-gray-900">Required Documentation</legend>
 
-          <% if FeatureFlag.enabled?(:income_proof_required) %>
+          <% if FeatureFlag.income_proof_required? %>
           <!-- Income Verification Subsection -->
           <div class="space-y-4">
             <h3 class="text-base font-medium text-gray-900">Income Verification</h3>
@@ -403,14 +404,19 @@
 
           <%= form.submit "Save Application",
               name: "save_draft",
+              formnovalidate: true,
               class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
               "aria-label": "Save application draft" %>
 
+          <p id="portal-submit-gate-status" class="sr-only" aria-live="polite" data-final-submit-gate-target="status"></p>
+
           <%= form.submit "Submit Application",
               name: "submit_application",
-              class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
+              disabled: true,
+              class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed",
               "aria-label": "Submit final application",
-              data: { "income-validation-target": "submitButton" } %>
+              data: { final_submit_gate_target: "submitButton" },
+              aria: { describedby: "portal-submit-gate-status" } %>
         </div>
       <% end %>
     </div>

@@ -130,6 +130,126 @@ module Applications
       assert_equal 2, application.household_size, 'Household size should match'
     end
 
+    test 'creates application with MM/DD/YYYY date of birth' do
+      unique_email = generate(:email)
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_paper_phone, date_of_birth: '01/15/1980'),
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+
+      assert_equal Date.new(1980, 1, 15), Constituent.find_by!(email: unique_email).date_of_birth
+    end
+
+    test 'rejects malformed paper intake date of birth' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone, date_of_birth: 'January 15 1980'),
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert_not service.create
+      assert service.errors.any? { |error| error.include?('Date of birth must be in MM/DD/YYYY format') },
+             "Expected DOB format error, got: #{service.errors.inspect}"
+    end
+
+    test 'upload only attaches proofs for later review' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'upload_only',
+        income_proof: uploaded_pdf('income_proof.pdf'),
+        residency_proof_action: 'upload_only',
+        residency_proof: uploaded_pdf('residency_proof.pdf'),
+        id_proof_action: 'upload_only',
+        id_proof: uploaded_pdf('id_proof.pdf'),
+        medical_certification_action: 'upload_only',
+        medical_certification: uploaded_pdf('medical_certification_valid.pdf')
+      }
+
+      %i[income residency id].each do |proof_type|
+        ProofAttachmentService.expects(:attach_proof).with(
+          has_entries(
+            proof_type: proof_type,
+            status: :not_reviewed,
+            admin: @admin,
+            submission_method: :paper
+          )
+        ).returns({ success: true })
+      end
+      MedicalCertificationAttachmentService.expects(:attach_certification).with(
+        has_entries(
+          status: :received,
+          admin: @admin,
+          submission_method: :paper
+        )
+      ).returns({ success: true })
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_predicate service.application, :persisted?
+    end
+
+    test 'upload only does not require income details before sending proof for review' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params.except(:household_size, :annual_income),
+        income_proof_action: 'upload_only',
+        income_proof: uploaded_pdf('income_proof.pdf'),
+        residency_proof_action: 'upload_only',
+        residency_proof: uploaded_pdf('residency_proof.pdf'),
+        id_proof_action: 'upload_only',
+        id_proof: uploaded_pdf('id_proof.pdf')
+      }
+
+      %i[income residency id].each do |proof_type|
+        ProofAttachmentService.expects(:attach_proof).with(
+          has_entries(
+            proof_type: proof_type,
+            status: :not_reviewed,
+            admin: @admin,
+            submission_method: :paper
+          )
+        ).returns({ success: true })
+      end
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_nil service.application.household_size
+      assert_nil service.application.annual_income
+    end
+
+    test 'upload only requires an uploaded proof file' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'upload_only'
+      }
+
+      ProofAttachmentService.expects(:attach_proof).never
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert_not service.create
+      assert_includes service.errors, 'Please upload a file for income proof before sending it for review'
+    end
+
+    test 'upload only requires an uploaded medical certification file' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        medical_certification_action: 'upload_only'
+      }
+
+      MedicalCertificationAttachmentService.expects(:attach_certification).never
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert_not service.create
+      assert_includes service.errors, 'Please upload a file for medical certification before sending it for review'
+    end
+
     test 'existing self applicant disability flags are saved before application validation' do
       applicant = create(
         :constituent,
@@ -577,6 +697,111 @@ module Applications
       assert_equal 'es', dependent.locale
       assert_equal 'letter', dependent.communication_preference
       assert_equal 'asl', dependent.preferred_means_of_communication
+    end
+
+    test 'paper application suppresses account_created notice when vouchers are disabled' do
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'accept',
+        income_proof: uploaded_pdf
+      }
+
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_predicate service.application, :fulfillment_type_equipment?
+    end
+
+    test 'paper application sends account_created notice when vouchers are enabled' do
+      FeatureFlag.enable!(:vouchers_enabled)
+
+      service_params = {
+        constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
+        application: @application_params,
+        income_proof_action: 'accept',
+        income_proof: uploaded_pdf
+      }
+
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+      NotificationService.stubs(:create_and_deliver!).returns(true)
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).at_least_once
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_predicate service.application, :fulfillment_type_voucher?
+    ensure
+      FeatureFlag.disable!(:vouchers_enabled)
+    end
+
+    test 'voucher fulfillment does not send account_created notice when vouchers are disabled' do
+      application = build(:application, fulfillment_type: :voucher)
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@application, application)
+
+      FeatureFlag.disable!(:vouchers_enabled)
+
+      assert_not service.send(:send_account_created_notice?)
+    end
+
+    test 'medical certification not provided notice notifies constituent for none_provided review' do
+      constituent = create(:constituent, communication_preference: :email)
+      application = create(:application, :in_progress, skip_proofs: true, user: constituent)
+      %i[income residency].each do |proof_type|
+        application.public_send("#{proof_type}_proof").attach(
+          io: StringIO.new("#{proof_type} proof"),
+          filename: "#{proof_type}.pdf",
+          content_type: 'application/pdf'
+        )
+      end
+      create(:proof_review,
+             application: application,
+             admin: @admin,
+             proof_type: :medical_certification,
+             status: :rejected,
+             rejection_reason: 'none_provided',
+             rejection_reason_code: 'none_provided',
+             submission_method: :paper)
+
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@application, application)
+      service.instance_variable_set(:@constituent, constituent)
+
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'medical_certification_not_provided')).once
+
+      service.send(:send_medical_certification_not_provided_notice)
+    end
+
+    test 'append_proof_resubmission_delivery_warnings surfaces note when resubmission delivery failed' do
+      constituent = create(:constituent, communication_preference: :email)
+      application = create(:application, :in_progress, skip_proofs: true, user: constituent, income_proof_status: :rejected)
+      mailer_delivery = mock('proof-resubmission-mailer-delivery')
+      mailer_delivery.stubs(:deliver_now).raises(StandardError, 'smtp failed')
+      ApplicationNotificationsMailer.stubs(:proof_rejected).returns(mailer_delivery)
+
+      Current.paper_context = true
+      create(
+        :proof_review,
+        :rejected,
+        application: application,
+        admin: @admin,
+        proof_type: :income,
+        rejection_reason: 'Missing income details',
+        submission_method: :paper
+      )
+      Current.paper_context = false
+
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@application, application.reload)
+
+      service.send(:append_proof_resubmission_delivery_warnings)
+
+      assert_includes service.reconciliation_note,
+                      'Income proof resubmission form could not be automatically sent'
+      assert_includes service.reconciliation_note, 'You can send it from the application page.'
     end
   end
 end

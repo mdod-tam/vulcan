@@ -3,6 +3,7 @@
 module Applications
   # This service handles paper application submissions by administrators
   # It follows the same patterns as ConstituentPortal for file uploads
+  # rubocop:disable Metrics/ClassLength
   class PaperApplicationService < BaseService
     include Rails.application.routes.url_helpers
 
@@ -100,6 +101,7 @@ module Applications
 
     def handle_successful_application(operation = :create)
       send_notifications
+      append_proof_resubmission_delivery_warnings
       case operation
       when :create
         log_application_creation
@@ -284,7 +286,7 @@ module Applications
 
     def process_self_applicant(applicant_data)
       # Handle no email address scenario
-      no_email = params[:no_email_address].present? && params[:no_email_address] == "1"
+      no_email = params[:no_email_address].present? && params[:no_email_address] == '1'
       if no_email
         applicant_data = applicant_data.dup
         applicant_data.delete(:email)
@@ -432,7 +434,8 @@ module Applications
 
     def validate_income_threshold(application_attrs)
       return true if @skip_income_validation
-      return true unless FeatureFlag.enabled?(:income_proof_required)
+      return true unless FeatureFlag.income_proof_required?
+      return true unless income_proof_action_requires_income_validation?
 
       household_size = application_attrs[:household_size]
       annual_income = application_attrs[:annual_income]
@@ -447,6 +450,10 @@ module Applications
 
       add_error('Income exceeds the maximum threshold for the household size.')
       false
+    end
+
+    def income_proof_action_requires_income_validation?
+      params[:income_proof_action].to_s.in?(%w[accept approved])
     end
 
     def build_and_save_application(application_attrs)
@@ -472,7 +479,7 @@ module Applications
       residency_action = params[:residency_proof_action]
 
       # Only consider income action when income collection is enabled
-      if FeatureFlag.enabled?(:income_proof_required)
+      if FeatureFlag.income_proof_required?
         return :awaiting_proof if income_action.in?(%w[none reject]) || residency_action.in?(%w[none reject])
       elsif residency_action.in?(%w[none reject])
         return :awaiting_proof
@@ -521,9 +528,11 @@ module Applications
       action_key = type == :medical_certification ? "#{type}_action" : "#{type}_proof_action"
       action = params[action_key] || params[action_key.to_sym]
 
-      return true unless %w[accept reject approved rejected not_requested].include?(action)
+      return true unless %w[upload_only accept reject approved rejected not_requested].include?(action)
 
       case action
+      when 'upload_only'
+        process_upload_only_proof(type)
       when 'accept', 'approved'
         process_accept_proof(type)
       when 'reject', 'rejected'
@@ -531,6 +540,46 @@ module Applications
       when 'not_requested'
         true
       end
+    end
+
+    def process_upload_only_proof(type)
+      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
+      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
+      blob_or_file = params[file_key].presence || params[signed_id_key].presence
+
+      return add_error("Please upload a file for #{proof_upload_label(type)} before sending it for review") if blob_or_file.blank?
+
+      result = if type == :medical_certification
+                 MedicalCertificationAttachmentService.attach_certification(
+                   application: @application,
+                   blob_or_file: blob_or_file,
+                   status: :received,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               else
+                 ProofAttachmentService.attach_proof(
+                   application: @application,
+                   proof_type: type,
+                   blob_or_file: blob_or_file,
+                   status: :not_reviewed,
+                   admin: @admin,
+                   submission_method: :paper,
+                   metadata: {}
+                 )
+               end
+
+      unless result[:success]
+        add_error("Error processing #{proof_upload_label(type)}: #{result[:error]&.message}")
+        return false
+      end
+
+      true
+    end
+
+    def proof_upload_label(type)
+      type == :medical_certification ? 'medical certification' : "#{type} proof"
     end
 
     def process_accept_proof(type)
@@ -750,7 +799,7 @@ module Applications
     end
 
     def send_notifications
-      send_proof_rejection_notifications
+      send_medical_certification_not_provided_notice
       send_account_creation_notifications
     end
 
@@ -780,35 +829,29 @@ module Applications
       ].compact.join(' ')
     end
 
-    def send_proof_rejection_notifications
-      @application.proof_reviews.reload.each do |review|
-        next unless review.status_rejected?
+    # Income/residency/id proof rejections are delivered through ProofReview ->
+    # Applications::RequestProofResubmission, which owns the secure resubmission flow.
+    # The only constituent-facing rejection notice still sent directly from paper intake
+    # is the "medical certification not provided" notice, which has no resubmission form.
+    def send_medical_certification_not_provided_notice
+      not_provided = @application.proof_reviews.reload.rejections.find_by(
+        proof_type: :medical_certification,
+        rejection_reason_code: 'none_provided'
+      )
+      return unless not_provided
 
-        if review.proof_type == 'medical_certification' && review.rejection_reason_code == 'none_provided'
-          NotificationService.create_and_deliver!(
-            type: 'medical_certification_not_provided',
-            recipient: @constituent,
-            actor: @admin,
-            notifiable: @application,
-            channel: @constituent.communication_preference.to_sym
-          )
-          next
-        end
-
-        NotificationService.create_and_deliver!(
-          type: 'proof_rejected',
-          recipient: @constituent,
-          actor: @admin,
-          notifiable: review,
-          metadata: {
-            template_variables: proof_rejection_template_variables(review)
-          },
-          channel: @constituent.communication_preference.to_sym
-        )
-      end
+      NotificationService.create_and_deliver!(
+        type: 'medical_certification_not_provided',
+        recipient: @constituent,
+        actor: @admin,
+        notifiable: @application,
+        channel: @constituent.communication_preference.to_sym
+      )
     end
 
     def send_account_creation_notifications
+      return unless send_account_created_notice?
+
       new_user_accounts.each do |user|
         temp_password = @temp_passwords[user.id]
         next unless temp_password
@@ -825,6 +868,26 @@ module Applications
           },
           channel: user.communication_preference.to_sym
         )
+      end
+    end
+
+    # Account-created notices (and their printed letters) are voucher-only.
+    # Equipment-scope applicants and cert signers should use secure temporary
+    # form links for proof/cert uploads; announcing an account they cannot create
+    # or log in to would be misleading.
+    def send_account_created_notice?
+      FeatureFlag.enabled?(:vouchers_enabled)
+    end
+
+    def append_proof_resubmission_delivery_warnings
+      @application.proof_reviews.rejections
+                  .where(proof_type: ProofReview::REVIEWABLE_PROOF_TYPES)
+                  .find_each do |review|
+        next if Applications::RequestProofResubmission.delivery_confirmed_for_review?(review)
+
+        note = "#{review.proof_type.to_s.humanize} proof resubmission form could not be automatically sent. " \
+               'You can send it from the application page.'
+        @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
       end
     end
 
@@ -848,15 +911,6 @@ module Applications
       }
     end
 
-    def proof_rejection_template_variables(review)
-      {
-        constituent_full_name: @constituent.full_name,
-        organization_name: Policy.get('organization_name') || 'MAT Program',
-        proof_type_formatted: review.proof_type.humanize,
-        rejection_reason: review.rejection_reason || 'Document did not meet requirements'
-      }
-    end
-
     def attributes_present?(attrs)
       attrs.present? && attrs.values.any?(&:present?)
     end
@@ -871,4 +925,5 @@ module Applications
       Rails.logger.error exception.backtrace.join("\n") if exception.backtrace
     end
   end
+  # rubocop:enable Metrics/ClassLength
 end

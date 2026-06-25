@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
   include ActionDispatch::TestProcess::FixtureFile
 
   setup do

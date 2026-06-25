@@ -8,7 +8,7 @@
 module PaperApplicationsTestHelper
   # Helper methods for filling out paper application forms
 
-  def fill_in_applicant_information(first_name: 'John', last_name: 'Doe', email: nil, phone: '555-123-4567', date_of_birth: '1980-01-15')
+  def fill_in_applicant_information(first_name: 'John', last_name: 'Doe', email: nil, phone: '555-123-4567', date_of_birth: '01/15/1980')
     email ||= "#{first_name.downcase}.#{last_name.downcase}.#{Time.now.to_i}@example.com"
 
     within_applicant_fieldset do
@@ -19,6 +19,10 @@ module PaperApplicationsTestHelper
       find('input[name="constituent[phone]"]').set('').set(phone)
       # Date of birth is required
       find('input[name="constituent[date_of_birth]"]').set(date_of_birth)
+      find('input[name="constituent[physical_address_1]"]').set('').set('123 Main St')
+      find('input[name="constituent[city]"]').set('').set('Baltimore')
+      find('input[name="constituent[state]"]').set('').set('MD')
+      find('input[name="constituent[zip_code]"]').set('').set('21201')
     end
   end
 
@@ -54,24 +58,52 @@ module PaperApplicationsTestHelper
   end
 
   def attach_and_accept_proofs
+    attach_file 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+
     within_proof_documents_fieldset do
       # Income proof
-      choose 'accept_income_proof'
+      choose 'accept_income_proof', allow_label_click: true
       attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
       # Residency proof
-      choose 'accept_residency_proof'
+      choose 'accept_residency_proof', allow_label_click: true
       attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+
+      # ID proof
+      choose 'accept_id_proof', allow_label_click: true
+      attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
     end
+  end
+
+  def complete_paper_application_attestations
+    check 'application[terms_accepted]' if page.has_unchecked_field?('application[terms_accepted]', wait: 1)
+    check 'application[medical_release_authorized]' if page.has_unchecked_field?('application[medical_release_authorized]', wait: 1)
+    check 'application[information_verified]' if page.has_unchecked_field?('application[information_verified]', wait: 1)
+    sync_paper_submit_gate
+  end
+
+  def sync_paper_submit_gate
+    page.execute_script(<<~JS)
+      const form = document.querySelector('form[data-controller~="paper-application"]');
+      if (form) {
+        form.dispatchEvent(new CustomEvent('income-validation:validated', {
+          bubbles: true,
+          detail: { exceedsThreshold: false }
+        }));
+        form.dispatchEvent(new Event('change', { bubbles: true }));
+        form.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    JS
   end
 
   # Fieldset helper methods
   def within_applicant_fieldset(&)
-    within find('fieldset', text: "Applicant's Information"), &
+    reveal_adult_application_sections
+    within find_by_id('self-info-section'), &
   end
 
   def within_application_details_fieldset(&)
-    within find('fieldset', text: 'Proof Documents'), &
+    within_proof_documents_fieldset(&)
   end
 
   def within_disability_fieldset(&)
@@ -79,11 +111,12 @@ module PaperApplicationsTestHelper
   end
 
   def within_medical_provider_fieldset(&)
-    within find('fieldset', text: 'Medical Provider Information'), &
+    within find('fieldset', text: 'Certifying Professional Information'), &
   end
 
   def within_proof_documents_fieldset(&)
-    within find('fieldset', text: 'Proof Documents'), &
+    reveal_paper_application_common_sections
+    within find('section', text: 'Proof Documents'), &
   end
 
   # Utility methods for common test actions
@@ -105,6 +138,63 @@ module PaperApplicationsTestHelper
     yield
     elapsed = Time.current - start_time
     puts "#{description} took #{elapsed.round(2)} seconds" if ENV['VERBOSE_TESTS']
+  end
+
+  def reveal_adult_application_sections
+    click_button 'Create New Applicant' if page.has_button?('Create New Applicant', wait: 1)
+
+    reveal_paper_application_common_sections
+
+    page.execute_script(<<~JS)
+      const adultSearchSection = document.querySelector('[data-applicant-type-target="adultSearchSection"]');
+      const adultSection = document.querySelector('[data-applicant-type-target="adultSection"]');
+
+      [adultSearchSection, adultSection].forEach((section) => {
+        if (!section) return;
+        section.hidden = false;
+        section.classList.remove('hidden');
+        section.style.display = 'block';
+        section.querySelectorAll('input, select, textarea, button').forEach((field) => {
+          field.disabled = false;
+        });
+      });
+    JS
+  end
+
+  def reveal_paper_application_common_sections
+    page.execute_script(<<~JS)
+      const commonSections = document.querySelector('[data-applicant-type-target="commonSections"]');
+      const proofSection = document.querySelector('#proof-heading')?.closest('section');
+      const incomeFieldsContainer = document.querySelector('[data-income-validation-target="incomeFieldsContainer"]');
+
+      [commonSections, proofSection, incomeFieldsContainer].forEach((section) => {
+        if (!section) return;
+        section.hidden = false;
+        section.classList.remove('hidden');
+        section.style.display = 'block';
+        section.querySelectorAll('input, select, textarea, button').forEach((field) => {
+          field.disabled = false;
+        });
+      });
+
+      ['application[household_size]', 'application[annual_income]', 'income_proof', 'residency_proof', 'id_proof'].forEach((name) => {
+        const field = document.querySelector(`[name="${name}"]`);
+        let node = field;
+        while (node && node !== document.body) {
+          node.hidden = false;
+          node.classList?.remove('hidden');
+          if (node.style) node.style.display = node.tagName === 'INPUT' ? '' : 'block';
+          node = node.parentElement;
+        }
+        if (field) field.disabled = false;
+      });
+    JS
+  end
+
+  def assert_paper_submit_still_gated
+    assert_button 'Submit Paper Application', disabled: true
+    status = page.find('[data-paper-application-target="status"]', visible: :all).text
+    assert_match(/Complete all required confirmations before submitting/i, status)
   end
 
   # Simple field filling that tries multiple approaches with proper clearing

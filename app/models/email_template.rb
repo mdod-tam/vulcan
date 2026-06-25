@@ -25,12 +25,13 @@ class EmailTemplate < ApplicationRecord
 
   before_update :store_previous_content
   before_update :increment_version
-  # Flag other locales when this template's content changes
+  before_update :clear_locale_sync_flags_when_content_changes,
+                if: -> { (body_changed? || subject_changed?) && locale_needs_sync? }
+  # Flag other locales when this template's content changes (not when catching up a stale locale).
   after_update :flag_counterpart_locales_for_sync,
-               if: -> { (saved_change_to_body? || saved_change_to_subject?) && !needs_sync? }
-  # Clear flag after content update resolveing the out-of-sync state
-  after_update :clear_sync_flag,
-               if: -> { (saved_change_to_body? || saved_change_to_subject?) && needs_sync? }
+               if: lambda {
+                 (saved_change_to_body? || saved_change_to_subject?) && !locale_needs_sync_before_last_save
+               }
 
   def self.render(template_name, **vars)
     template = find_by!(name: template_name)
@@ -64,7 +65,7 @@ class EmailTemplate < ApplicationRecord
 
   def render_with_tracking(variables, current_user)
     validate_required_variables!(variables)
-    rendered_subject, rendered_body = render(variables)
+    rendered_subject, rendered_body = render(**variables)
 
     AuditEventService.log(
       actor: current_user,
@@ -107,6 +108,10 @@ class EmailTemplate < ApplicationRecord
     required_variables + optional_variables
   end
 
+  def previous_version?
+    version.to_i > 1 && (previous_subject.present? || previous_body.present?)
+  end
+
   private
 
   def set_default_version
@@ -146,7 +151,6 @@ class EmailTemplate < ApplicationRecord
   end
 
   def store_previous_content
-    # Only store if subject or body is changing
     return unless subject_changed? || body_changed?
 
     self.previous_subject = subject_was
@@ -160,19 +164,25 @@ class EmailTemplate < ApplicationRecord
 
   def flag_counterpart_locales_for_sync
     EmailTemplate.where(name: name, format: format).where.not(locale: locale)
-                 .update_all(needs_sync: true) # rubocop:disable Rails/SkipsModelValidations
+                 .update_all(locale_needs_sync: true) # rubocop:disable Rails/SkipsModelValidations
   end
 
-  def clear_sync_flag
-    update_column(:needs_sync, false) # rubocop:disable Rails/SkipsModelValidations
+  def clear_locale_sync_flags_when_content_changes
+    self.locale_needs_sync = false
   end
 
   def counterpart_locales_are_synced
-    # Block saves that don't change content
-    return unless needs_sync?
+    # Block content/admin edits that leave stale body/subject untouched.
+    # Operational saves (enabled, sync flags, updated_by) are allowed.
+    return unless locale_needs_sync?
     return if body_changed? || subject_changed?
+    return unless stale_translation_content_changing?
 
     errors.add(:base, 'This template is out of sync with another locale variant. ' \
                       'Update the body or subject to resolve it, or use "Mark Synced" to dismiss.')
+  end
+
+  def stale_translation_content_changing?
+    description_changed? || variables_changed?
   end
 end

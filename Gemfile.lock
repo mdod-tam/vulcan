@@ -518,6 +518,7 @@ DEPENDENCIES
   bullet
   byebug (~> 13.0)
   capybara (~> 3.40)
+  chunky_png (~> 1.4)
   cssbundling-rails (~> 1.4, >= 1.4.3)
   cuprite (~> 0.17)
   database_cleaner-active_record

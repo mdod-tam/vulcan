@@ -226,24 +226,27 @@ module Applications
     end
 
     def preferred_secure_request_delivery_channel(recipient, email:, phone:)
-      return :email if letter_to_email_override_allowed?(recipient, email)
+      override_channel = channel_from_override(recipient, email: email, phone: phone)
+      return override_channel if override_channel.present?
 
-      phone_type = phone_type_for(recipient)
-      preferred_channel = channel_for_phone_type(phone_type, email: email, phone: phone)
-      return preferred_channel if preferred_channel.present?
       return :letter if recipient_letter_preferred?(recipient) && mailing_address_present?(recipient)
       return :email if email.present?
 
       nil
     end
 
-    def letter_to_email_override_allowed?(recipient, email)
-      channel_overrides[recipient.id] == 'email' && email.present? && recipient_letter_preferred?(recipient)
-    end
+    def channel_from_override(recipient, email:, phone:)
+      override = channel_overrides[recipient.id]
+      return if override.blank?
 
-    def channel_for_phone_type(phone_type, email:, phone:)
-      return :sms if phone_type == 'text' && phone.present?
-      return :email if phone_type == 'email' && email.present?
+      case override
+      when 'email'
+        return :email if email.present?
+      when 'sms'
+        return :sms if phone.present?
+      when 'letter'
+        return :letter if mailing_address_present?(recipient)
+      end
 
       nil
     end
@@ -259,16 +262,6 @@ module Applications
         end
 
       preference.to_s == 'letter'
-    end
-
-    def phone_type_for(recipient)
-      if recipient.id == application.user_id && dependent_application?
-        application_contact_guardian&.phone_type || recipient.phone_type
-      elsif recipient.respond_to?(:effective_phone_type)
-        recipient.effective_phone_type
-      elsif recipient.respond_to?(:phone_type)
-        recipient.phone_type
-      end.to_s
     end
 
     def mailing_address_present?(recipient)

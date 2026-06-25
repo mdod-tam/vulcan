@@ -97,36 +97,11 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     %w[secure_provider_info_forms sms message],
     %w[secure_proof_forms sms message],
     %w[passwords account_access_sms message],
-    %w[document_signing medical_certification_request body]
-  ].freeze
-
-  # Mailer/controller Ruby snippets that embed URLs outside stored templates.
-  # When adding new generated plain-text copy with URLs, register the builder case here.
-  GENERATED_SNIPPET_CASES = [
-    [:medical_provider_certification_submission_instructions,
-     'medical_provider_mailer.certification_submission_instructions.en.secure',
-     { locale: 'en', secure_upload_url: 'https://example.test/secure_certification_form?token=abc' }],
-    [:medical_provider_certification_submission_instructions,
-     'medical_provider_mailer.certification_submission_instructions.en.fax',
-     { locale: 'en', secure_upload_url: nil }],
-    [:medical_provider_certification_submission_instructions,
-     'medical_provider_mailer.certification_submission_instructions.es.secure',
-     { locale: 'es', secure_upload_url: 'https://example.test/secure_certification_form?token=abc' }],
-    [:medical_provider_certification_submission_instructions,
-     'medical_provider_mailer.certification_submission_instructions.es.fax',
-     { locale: 'es', secure_upload_url: nil }],
-    [:medical_provider_certification_resubmission_instructions,
-     'medical_provider_mailer.certification_resubmission_instructions.en.secure',
-     { locale: 'en', secure_upload_url: 'https://example.test/secure_certification_form?token=abc' }],
-    [:medical_provider_certification_resubmission_instructions,
-     'medical_provider_mailer.certification_resubmission_instructions.en.fax',
-     { locale: 'en', secure_upload_url: nil }],
-    [:medical_provider_certification_resubmission_instructions,
-     'medical_provider_mailer.certification_resubmission_instructions.es.secure',
-     { locale: 'es', secure_upload_url: 'https://example.test/secure_certification_form?token=abc' }],
-    [:medical_provider_certification_resubmission_instructions,
-     'medical_provider_mailer.certification_resubmission_instructions.es.fax',
-     { locale: 'es', secure_upload_url: nil }]
+    %w[document_signing medical_certification_request body],
+    %w[medical_provider_mailer certification_submission_instructions secure],
+    %w[medical_provider_mailer certification_submission_instructions fax],
+    %w[medical_provider_mailer certification_resubmission_instructions secure],
+    %w[medical_provider_mailer certification_resubmission_instructions fax]
   ].freeze
 
   test 'stored text email template sources label URL-like lines with nearby purpose text' do
@@ -168,14 +143,6 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
         assert snippet.present?, "Expected #{locale}.#{path.join('.')} to be present"
         assert_accessible_url_lines("#{locale}.#{path.join('.')}", snippet)
       end
-    end
-  end
-
-  test 'mailer and controller-generated text snippets label URL-like lines with nearby purpose text' do
-    GENERATED_SNIPPET_CASES.each do |builder, source_name, options|
-      snippet = send(builder, **options)
-
-      assert_accessible_url_lines(source_name, snippet)
     end
   end
 
@@ -227,27 +194,6 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
 
   def locale_data_for(locale)
     YAML.safe_load_file(Rails.root.join('config/locales', "#{locale}.yml")).fetch(locale)
-  end
-
-  def medical_provider_certification_submission_instructions(locale:, secure_upload_url:)
-    user = Struct.new(:locale).new(locale)
-    application = Struct.new(:user).new(user)
-    mailer = MedicalProviderMailer.new
-    mailer.params = {
-      application: application,
-      secure_upload_url: secure_upload_url
-    }
-    mailer.stubs(:build_download_form_url).returns('https://example.test/medical_certification_form')
-
-    mailer.send(:certification_submission_instructions)
-  end
-
-  def medical_provider_certification_resubmission_instructions(locale:, secure_upload_url:)
-    mailer = MedicalProviderMailer.new
-    mailer.params = { secure_upload_url: secure_upload_url }
-    mailer.stubs(:build_download_form_url).returns('https://example.test/medical_certification_form')
-
-    mailer.send(:certification_resubmission_instructions, locale)
   end
 
   def assert_accessible_url_lines(source_name, text)

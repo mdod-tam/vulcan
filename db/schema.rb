@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_20_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_22_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -185,8 +185,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_120000) do
     t.boolean "enabled", default: true, null: false
     t.integer "format", default: 0
     t.string "locale", default: "en", null: false
+    t.boolean "locale_needs_sync", default: false, null: false
     t.string "name", null: false
-    t.boolean "needs_sync", default: false, null: false
     t.text "previous_body"
     t.string "previous_subject"
     t.string "subject"

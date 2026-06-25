@@ -237,7 +237,7 @@ class Application < ApplicationRecord
 
   scope :with_proofs_needing_review, lambda {
     where(
-      'residency_proof_status = :nr OR (income_proof_required = TRUE AND income_proof_status = :nr)',
+      'residency_proof_status = :nr OR id_proof_status = :nr OR (income_proof_required = TRUE AND income_proof_status = :nr)',
       nr: residency_proof_statuses[:not_reviewed]
     )
   }
@@ -602,7 +602,7 @@ class Application < ApplicationRecord
     if persisted?
       income_proof_required?
     else
-      FeatureFlag.enabled?(:income_proof_required)
+      FeatureFlag.income_proof_required?
     end
   end
 
@@ -746,7 +746,7 @@ class Application < ApplicationRecord
 
   def stamp_workflow_defaults!
     self.fulfillment_type = FeatureFlag.enabled?(:vouchers_enabled) ? :voucher : :equipment
-    self.income_proof_required = FeatureFlag.enabled?(:income_proof_required)
+    self.income_proof_required = FeatureFlag.income_proof_required?
   end
 
   def scrub_income_fields
