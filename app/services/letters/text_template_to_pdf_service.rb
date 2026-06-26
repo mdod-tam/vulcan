@@ -46,13 +46,13 @@ module Letters
       return nil unless @template
 
       # Render the template with the provided variables
-      rendered_content = render_template_with_variables
+      rendered_subject, rendered_content = rendered_template
 
       # Create a PDF document using the rendered content
       pdf = Prawn::Document.new do |doc|
         setup_document(doc)
         # Conditionally add header and footer based on template requirements
-        add_header(doc) unless template_requires_shared_partials?
+        add_header(doc, rendered_subject) unless template_requires_shared_partials?
         add_date(doc)
         add_address(doc)
         add_salutation(doc)
@@ -81,7 +81,7 @@ module Letters
       # Attach the PDF to the queue item
       print_queue_item.pdf_letter.attach(
         io: File.open(pdf_tempfile.path),
-        filename: "#{letter_type}_#{recipient.id}.pdf",
+        filename: print_queue_item.pdf_filename,
         content_type: 'application/pdf'
       )
 
@@ -104,7 +104,12 @@ module Letters
     end
 
     def render_template_with_variables
-      interpolate_template_text(template.body)
+      _rendered_subject, rendered_body = rendered_template
+      rendered_body
+    end
+
+    def rendered_template
+      @rendered_template ||= template.render(**variables)
     end
 
     def setup_document(pdf)
@@ -112,7 +117,7 @@ module Letters
       pdf.font 'Helvetica'
     end
 
-    def add_header(pdf)
+    def add_header(pdf, rendered_subject = nil)
       # Add logo if available
       logo_path = Rails.root.join('app/assets/images/mat_logo.png')
       pdf.image(logo_path.to_s, width: 150) if File.exist?(logo_path)
@@ -120,7 +125,7 @@ module Letters
       # Add title with template name stylized as a title
       pdf.move_down 20
       pdf.font_size 18
-      pdf.text determine_letter_title, style: :bold, align: :center
+      pdf.text determine_letter_title(rendered_subject), style: :bold, align: :center
       pdf.move_down 20
       pdf.font_size 11
     end
@@ -219,8 +224,8 @@ module Letters
       tempfile
     end
 
-    def determine_letter_title
-      subject_title = interpolate_template_text(template.subject).strip
+    def determine_letter_title(rendered_subject = nil)
+      subject_title = (rendered_subject || rendered_template.first).strip
       return subject_title if subject_title.present?
 
       default_title = DEFAULT_LETTER_TITLES.fetch(template_name, template_name.gsub('_', ' ').titleize)
@@ -276,15 +281,6 @@ module Letters
       return nil if candidate.empty?
 
       candidate.tr('_', '-').split('-').first.downcase
-    end
-
-    def interpolate_template_text(text)
-      rendered_text = text.to_s.dup
-      variables.each do |key, value|
-        rendered_text = rendered_text.gsub("%<#{key}>s", value.to_s)
-        rendered_text = rendered_text.gsub("%{#{key}}", value.to_s)
-      end
-      rendered_text
     end
   end
 end

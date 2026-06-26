@@ -4,8 +4,10 @@ module Admin
   class EmailTemplatesController < Admin::BaseController
     include Pagy::Backend # Include Pagy for pagination
 
-    before_action :set_template, only: %i[show edit update new_test_email send_test toggle_disabled mark_synced create_counterpart]
-    before_action :load_locale_templates, only: %i[show edit update]
+    before_action :set_template,
+                  only: %i[show edit update new_test_email send_test toggle_disabled mark_synced create_counterpart
+                           preview]
+    before_action :load_locale_templates, only: %i[show edit update preview]
 
     # GET /admin/email_templates
     def index
@@ -57,8 +59,9 @@ module Admin
         begin
           @en_rendered_subject, @en_rendered_body = @en_template.render(**@en_sample_data)
         rescue StandardError => e
-          @en_rendered_subject = "Error rendering subject: #{e.message}"
-          @en_rendered_body = "Error rendering template: #{e.message}"
+          friendly_error = helpers.template_render_error_message(e)
+          @en_rendered_subject = 'Preview unavailable'
+          @en_rendered_body = friendly_error
         end
       end
 
@@ -66,8 +69,9 @@ module Admin
         begin
           @es_rendered_subject, @es_rendered_body = @es_template.render(**@es_sample_data)
         rescue StandardError => e
-          @es_rendered_subject = "Error rendering subject: #{e.message}"
-          @es_rendered_body = "Error rendering template: #{e.message}"
+          friendly_error = helpers.template_render_error_message(e)
+          @es_rendered_subject = 'Preview unavailable'
+          @es_rendered_body = friendly_error
         end
       end
 
@@ -80,7 +84,12 @@ module Admin
       # @template_definition is set by before_action
 
       # Get sample data and render the template with it for preview
-      sample_data = view_context.sample_data_for_template(@email_template.name, format: @email_template.format)
+      sample_data = view_context.sample_data_for_template(
+        @email_template.name,
+        locale: @email_template.locale,
+        subject: @email_template.subject,
+        format: @email_template.format
+      )
       @rendered_subject, @rendered_body = @email_template.render(**sample_data)
 
       @test_email_form = ::Admin::TestEmailForm.new(
@@ -89,8 +98,13 @@ module Admin
       )
     rescue StandardError => e
       Rails.logger.error("Failed to render template preview: #{e.message}")
-      @rendered_subject = "Error rendering subject: #{e.message}"
-      @rendered_body = "Error rendering template: #{e.message}"
+      friendly_error = helpers.template_render_error_message(e)
+      @rendered_subject = 'Preview unavailable'
+      @rendered_body = friendly_error
+      @test_email_form = ::Admin::TestEmailForm.new(
+        email: current_user.email,
+        template_id: @email_template.id
+      )
     end
 
     # GET /admin/email_templates/:id/edit
@@ -116,25 +130,58 @@ module Admin
         return
       end
 
-      @original_values = capture_original_values(target_template)
-
-      if target_template.update(email_template_params.merge(updated_by: current_user))
+      if update_template(target_template)
         @email_template = target_template
         log_template_update_event
         redirect_to edit_admin_email_template_path(target_template), notice: "#{target_locale} template updated."
       else
-        if target_template.locale == 'en'
-          @en_template = target_template
-        else
-          @es_template = target_template
-        end
-
-        # Re-prepare sample data for form re-render on validation failure
-        @sample_data = view_context.sample_data_for_template(@email_template.name, format: @email_template.format)
-        @counterpart_template = counterpart_template
-        flash.now[:alert] = "Failed to update #{target_locale} template: #{target_template.errors.full_messages.join(', ')}"
-        render :edit, status: :unprocessable_content
+        render_update_failure(target_template, target_locale)
       end
+    rescue ArgumentError => e
+      raise unless invalid_syntax_argument?(e)
+
+      target_template ||= @email_template
+      target_locale ||= target_template.locale.to_s.upcase
+      target_template.errors.add(:syntax, 'Choose a valid placeholder style.')
+      render_update_failure(target_template, target_locale)
+    end
+
+    # PATCH /admin/email_templates/:id/preview
+    def preview
+      target_template = template_for_locale(params[:locale].presence || @email_template.locale)
+
+      unless target_template
+        render_draft_preview(template: @email_template,
+                             error_message: 'Could not find this locale template for preview.')
+        return
+      end
+
+      target_template.assign_attributes(email_template_params)
+
+      if target_template.valid?
+        sample_data = view_context.sample_data_for_email_template(target_template,
+                                                                  locale: target_template.locale,
+                                                                  subject: target_template.subject)
+        rendered_subject, rendered_body = target_template.render(**sample_data)
+        render_draft_preview(template: target_template,
+                             rendered_subject: rendered_subject,
+                             rendered_body: rendered_body)
+      else
+        render_draft_preview(template: target_template,
+                             error_message: helpers.template_render_error_message(target_template.errors.full_messages))
+      end
+    rescue ArgumentError => e
+      raise unless invalid_syntax_argument?(e)
+
+      target_template ||= @email_template
+      target_template.errors.add(:syntax, 'Choose a valid placeholder style.')
+      render_draft_preview(template: target_template,
+                           error_message: helpers.template_validation_error_messages(target_template.errors.full_messages).join(', '))
+    rescue StandardError => e
+      Rails.logger.error("Failed to render draft template preview: #{e.message}")
+      Rails.logger.error(e.backtrace.join("\n")) if e.backtrace
+      render_draft_preview(template: target_template || @email_template,
+                           error_message: helpers.template_render_error_message(e))
     end
 
     # POST /admin/email_templates/:id/send_test
@@ -194,6 +241,7 @@ module Admin
         subject: @email_template.subject,
         body: @email_template.body,
         description: @email_template.description,
+        syntax: @email_template.render_syntax,
         variables: @email_template.variables,
         enabled: @email_template.enabled,
         updated_by: current_user
@@ -240,8 +288,14 @@ module Admin
       {
         subject: template.subject,
         body: template.body,
-        description: template.description
+        description: template.description,
+        syntax: template.render_syntax
       }
+    end
+
+    def update_template(template)
+      @original_values = capture_original_values(template)
+      template.update(email_template_params.merge(updated_by: current_user))
     end
 
     def log_template_update_event
@@ -252,9 +306,43 @@ module Admin
       changes = {
         subject: { from: @original_values[:subject], to: @email_template.subject },
         body: { from: @original_values[:body], to: @email_template.body },
-        description: { from: @original_values[:description], to: @email_template.description }
+        description: { from: @original_values[:description], to: @email_template.description },
+        syntax: { from: @original_values[:syntax], to: @email_template.render_syntax }
       }
       changes.reject { |_key, change| change[:from] == change[:to] }
+    end
+
+    def render_draft_preview(template:, rendered_subject: nil, rendered_body: nil, error_message: nil)
+      locale_code = template.locale.to_s.downcase
+
+      render partial: 'admin/email_templates/draft_preview',
+             locals: {
+               frame_id: "template-preview-#{locale_code}",
+               template: template,
+               rendered_subject: rendered_subject,
+               rendered_body: rendered_body,
+               error_message: error_message
+             },
+             status: error_message.present? ? :unprocessable_content : :ok
+    end
+
+    def render_update_failure(target_template, target_locale)
+      if target_template.locale == 'en'
+        @en_template = target_template
+      else
+        @es_template = target_template
+      end
+
+      # Re-prepare sample data for form re-render on validation failure
+      @sample_data = view_context.sample_data_for_template(target_template.name, format: target_template.format)
+      @counterpart_template = counterpart_template
+      friendly_errors = helpers.template_validation_error_messages(target_template.errors.full_messages)
+      flash.now[:alert] = "Failed to update #{target_locale} template: #{friendly_errors.join(', ')}"
+      render :edit, status: :unprocessable_content
+    end
+
+    def invalid_syntax_argument?(error)
+      error.message.match?(/is not a valid syntax/)
     end
 
     def bulk_update_enabled_state(enabled:)
@@ -278,7 +366,7 @@ module Admin
     end
 
     def email_template_params
-      params.expect(email_template: %i[subject body description])
+      params.expect(email_template: %i[subject body description syntax])
     end
 
     def test_email_params
@@ -291,6 +379,7 @@ module Admin
         email_template_id: @email_template.id,
         email_template_name: @email_template.name,
         email_template_format: @email_template.format,
+        email_template_syntax: @email_template.render_syntax,
         timestamp: Time.current.iso8601
       }
 
@@ -303,7 +392,12 @@ module Admin
     end
 
     def send_test_email
-      sample_data = helpers.sample_data_for_template(@email_template.name, format: @email_template.format)
+      sample_data = helpers.sample_data_for_template(
+        @email_template.name,
+        locale: @email_template.locale,
+        subject: @email_template.subject,
+        format: @email_template.format
+      )
       rendered_subject, rendered_body = @email_template.render(**sample_data)
 
       AdminTestMailer.with(
@@ -333,8 +427,11 @@ module Admin
         email: params.dig(:admin_test_email_form, :email) || current_user.email,
         template_id: @email_template.id
       )
+      friendly_error = helpers.template_render_error_message(error)
+      @rendered_subject = 'Preview unavailable'
+      @rendered_body = friendly_error
 
-      flash.now[:alert] = "Failed to send test email: #{error.message}. Check sample data and template syntax."
+      flash.now[:alert] = "Failed to send test email: #{friendly_error}"
       render :new_test_email, status: :unprocessable_content
     end
 

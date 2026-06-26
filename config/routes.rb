@@ -117,7 +117,6 @@ Rails.application.routes.draw do
 
     resources :feature_flags, only: %i[index update]
 
-
     resources :guardian_relationships, only: %i[destroy]
 
     resources :recovery_requests, only: %i[index show] do
@@ -218,6 +217,7 @@ Rails.application.routes.draw do
         post :send_test
         patch :toggle_disabled
         patch :mark_synced
+        patch :preview
         post :create_counterpart
       end
       collection do

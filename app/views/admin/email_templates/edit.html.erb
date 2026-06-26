@@ -4,7 +4,7 @@
     <%# Header Section %>
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="edit-template-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
-        Edit Template: <%= @email_template.name %> (<%= @email_template.format.titleize %>)
+        Edit Template: <%= @email_template.name %> (<%= @email_template.format.titleize %>, <%= template_syntax_label(@email_template) %>)
       </h1>
       <div class="flex space-x-3">
         <%= link_to 'Cancel', admin_email_template_path(@email_template),

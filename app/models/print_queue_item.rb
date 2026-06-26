@@ -50,4 +50,8 @@ class PrintQueueItem < ApplicationRecord
   def mark_as_printed(admin)
     update(status: :printed, admin_id: admin.id, printed_at: Time.current)
   end
+
+  def pdf_filename
+    "#{letter_type}_#{constituent_id}.pdf"
+  end
 end

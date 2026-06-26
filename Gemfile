@@ -24,6 +24,7 @@ gem 'groupdate', '~> 6.7'
 gem 'jbuilder', '~> 2.14', '>= 2.14.1'
 # Deploy this application anywhere as a Docker container [https://kamal-deploy.org]
 gem 'kamal', '~> 2.11.0', require: false
+gem 'liquid', '~> 5.12'
 # pagination capability
 gem 'pagy', '~> 9.4'
 # use postgresql as the database for Active Record

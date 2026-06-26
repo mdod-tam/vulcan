@@ -2,10 +2,12 @@
 
 class EmailTemplate < ApplicationRecord
   before_validation :set_default_version
+  before_validation :set_default_syntax
 
   # Define enum for format before validations that might use it
   # html: 0, text: 1
   enum :format, { html: 0, text: 1 }
+  enum :syntax, { legacy_percent: 0, liquid: 1 }
 
   belongs_to :updated_by, class_name: 'User', optional: true
 
@@ -16,21 +18,26 @@ class EmailTemplate < ApplicationRecord
   validates :subject, presence: true
   validates :body, presence: true
   validates :format, presence: true
+  validates :syntax, presence: true, if: :syntax_column_available?
   validates :locale, presence: true
   validates :description, presence: true
   validates :version, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
-  validate :validate_body_uses_only_allowed_variables
-  validate :validate_variables_in_body
+  validate :validate_template_syntax, if: :syntax_column_available?
+  validate :validate_liquid_does_not_include_legacy_placeholders, if: :syntax_column_available?
+  validate :validate_liquid_uses_required_variables_only, if: :syntax_column_available?
+  validate :validate_template_uses_only_allowed_variables
+  validate :validate_variables_in_template
+  validate :validate_liquid_feature_enabled, if: :syntax_column_available?
   validate :counterpart_locales_are_synced, on: :update
 
   before_update :store_previous_content
   before_update :increment_version
   before_update :clear_locale_sync_flags_when_content_changes,
-                if: -> { (body_changed? || subject_changed?) && locale_needs_sync? }
+                if: -> { render_content_changed? && locale_out_of_sync? }
   # Flag other locales when this template's content changes (not when catching up a stale locale).
   after_update :flag_counterpart_locales_for_sync,
                if: lambda {
-                 (saved_change_to_body? || saved_change_to_subject?) && !locale_needs_sync_before_last_save
+                 saved_render_content_change? && !locale_was_out_of_sync_before_save?
                }
 
   def self.render(template_name, **vars)
@@ -39,32 +46,10 @@ class EmailTemplate < ApplicationRecord
   end
 
   def render(**vars)
-    validate_required_variables!(vars)
-
-    # Simple string substitution approach that works reliably with both formats
-    rendered_body = body.dup
-    rendered_subject = subject.dup
-
-    vars.each do |key, value|
-      # Handle both "%{key}" and "%<key>s" format strings
-      rendered_body = rendered_body.gsub("%{#{key}}", value.to_s)
-      rendered_body = rendered_body.gsub("%<#{key}>s", value.to_s)
-
-      rendered_subject = rendered_subject.gsub("%{#{key}}", value.to_s)
-      rendered_subject = rendered_subject.gsub("%<#{key}>s", value.to_s)
-
-      rendered_body = rendered_body.gsub("%<#{key}>", value.to_s)
-      rendered_subject = rendered_subject.gsub("%<#{key}>", value.to_s)
-    end
-
-    rendered_body = rendered_body.gsub(/%[<{]\w+[>}]s?/, '')
-    rendered_subject = rendered_subject.gsub(/%[<{]\w+[>}]s?/, '')
-
-    [rendered_subject, rendered_body]
+    EmailTemplates::Renderer.render(template: self, variables: vars)
   end
 
   def render_with_tracking(variables, current_user)
-    validate_required_variables!(variables)
     rendered_subject, rendered_body = render(**variables)
 
     AuditEventService.log(
@@ -93,7 +78,7 @@ class EmailTemplate < ApplicationRecord
 
   # Extract all variables used in the template body
   def extract_variables
-    body.scan(/%[{<](\w+)[}>]/).flatten.uniq
+    EmailTemplates::Renderer.extract_variables(subject: subject, body: body, syntax: render_syntax)
   end
 
   def required_variables
@@ -108,46 +93,118 @@ class EmailTemplate < ApplicationRecord
     required_variables + optional_variables
   end
 
+  def render_syntax
+    syntax_column_available? ? syntax.to_s : EmailTemplates::Renderer::LEGACY_SYNTAX
+  end
+
+  def locale_out_of_sync?
+    locale_needs_sync?
+  end
+
+  def locale_was_out_of_sync_before_save?
+    locale_needs_sync_before_last_save
+  end
+
   def previous_version?
     version.to_i > 1 && (previous_subject.present? || previous_body.present?)
   end
 
   private
 
+  def syntax_column_available?
+    has_attribute?(:syntax)
+  end
+
   def set_default_version
     self.version ||= 1
   end
 
-  def validate_variables_in_body
+  def set_default_syntax
+    return unless syntax_column_available?
+
+    self.syntax ||= EmailTemplates::Renderer::LEGACY_SYNTAX
+  end
+
+  def validate_template_syntax
+    EmailTemplates::Renderer.validate_template_syntax!(subject: subject, body: body, syntax: render_syntax)
+  rescue ArgumentError => e
+    errors.add(:base, e.message)
+  end
+
+  def validate_liquid_does_not_include_legacy_placeholders
+    return unless liquid?
+    return if legacy_placeholders_in_template.empty?
+
+    errors.add(:base,
+               'This template uses Liquid syntax but still has standard placeholders. ' \
+               'Re-insert variables from the dropdown, or switch back to Standard.')
+  end
+
+  def validate_liquid_uses_required_variables_only
+    return unless liquid?
+    return if legacy_placeholders_in_template.any?
+
+    optional_used = extract_variables & optional_variables
+    return if optional_used.empty?
+
+    errors.add(:body,
+               'Liquid templates can only use Required Variables. ' \
+               "Move #{optional_used.join(', ')} to Required Variables before using it, or remove it from the template.")
+  rescue ArgumentError
+    nil
+  end
+
+  def validate_variables_in_template
+    return if liquid? && legacy_placeholders_in_template.any?
+
+    current_vars = extract_variables
+
     required_variables.each do |variable|
-      unless body.to_s.include?("%{#{variable}}") || body.to_s.include?("%<#{variable}>")
-        errors.add(:body, "Must include the required variable %{#{variable}} or %<#{variable}>s")
-      end
+      next if current_vars.include?(variable)
+
+      errors.add(:body, "Must include the required variable #{placeholder_for(variable)} in the subject or body")
     end
+  rescue ArgumentError => e
+    errors.add(:base, e.message)
   end
 
-  def validate_required_variables!(vars)
-    provided_keys = vars.keys.map(&:to_s)
-    missing_vars = required_variables - provided_keys
-
-    return unless missing_vars.any?
-
-    raise ArgumentError, "Missing required variables for template '#{name}': #{missing_vars.join(', ')}"
-  end
-
-  def validate_body_uses_only_allowed_variables
-    # Get all variables currently written in the body string (e.g. ['name', 'bad_var'])
-    current_vars_in_body = extract_variables
-
-    # Get the allowed list from the database (e.g. ['name', 'footer_text'])
-    allowed = allowed_variables
-
-    # Find the difference
-    unauthorized_vars = current_vars_in_body - allowed
+  def validate_template_uses_only_allowed_variables
+    unauthorized_vars = extract_variables - allowed_variables
 
     return unless unauthorized_vars.any?
 
-    errors.add(:body, "contains unauthorized variables: #{unauthorized_vars.join(', ')}. Only use: #{allowed.join(', ')}")
+    errors.add(:body, unavailable_variables_message(unauthorized_vars))
+  rescue ArgumentError => e
+    errors.add(:base, e.message)
+  end
+
+  def placeholder_for(variable)
+    render_syntax == EmailTemplates::Renderer::LIQUID_SYNTAX ? "{{ #{variable} }}" : "%<#{variable}>s"
+  end
+
+  def legacy_placeholders_in_template
+    [subject, body].flat_map do |text|
+      text.to_s.scan(EmailTemplates::Renderer::LEGACY_PLACEHOLDER_PATTERN).flatten
+    end.uniq
+  end
+
+  def unavailable_variables_message(variable_names)
+    names = variable_names.join(', ')
+    verb = variable_names.one? ? 'is' : 'are'
+    "Use variables from Insert Variable only. #{names} #{verb} not available for this template."
+  end
+
+  def validate_liquid_feature_enabled
+    return unless liquid?
+
+    unless text?
+      errors.add(:syntax, 'Liquid email templates are only available for text templates')
+      return
+    end
+
+    return if FeatureFlag.enabled?(:email_template_liquid)
+
+    errors.add(:syntax, 'Liquid templates are not enabled yet. Contact your administrator.')
   end
 
   def store_previous_content
@@ -158,8 +215,15 @@ class EmailTemplate < ApplicationRecord
   end
 
   def increment_version
-    # Increment version only if subject or body changed
-    self.version += 1 if subject_changed? || body_changed?
+    self.version += 1 if render_content_changed?
+  end
+
+  def render_content_changed?
+    subject_changed? || body_changed? || (syntax_column_available? && syntax_changed?)
+  end
+
+  def saved_render_content_change?
+    saved_change_to_subject? || saved_change_to_body? || (syntax_column_available? && saved_change_to_syntax?)
   end
 
   def flag_counterpart_locales_for_sync
@@ -183,6 +247,6 @@ class EmailTemplate < ApplicationRecord
   end
 
   def stale_translation_content_changing?
-    description_changed? || variables_changed?
+    description_changed? || variables_changed? || (syntax_column_available? && syntax_changed?)
   end
 end

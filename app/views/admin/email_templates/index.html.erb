@@ -73,7 +73,9 @@
                           <%= full_description %>
                         </div>
                       </div>
-                      <div class="text-xs text-gray-500 mt-1"><%= template.format.titleize %></div>
+                      <div class="text-xs text-gray-500 mt-1">
+                        <%= template.format.titleize %> · <%= template_syntax_label(template) %>
+                      </div>
                     </th>
                     <td class="px-6 py-4 text-sm text-gray-600">
                       <div class="line-clamp-2">
@@ -134,7 +136,7 @@
                       <h3 class="text-sm font-semibold text-gray-900">
                         <%= truncate(full_description, length: 50) %>
                       </h3>
-                      <span class="text-xs text-gray-600"><%= template.format.titleize %></span>
+                      <span class="text-xs text-gray-600"><%= template.format.titleize %> · <%= template_syntax_label(template) %></span>
                     </div>
 
                     <p class="text-sm text-gray-700">

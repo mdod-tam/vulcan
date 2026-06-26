@@ -9,12 +9,12 @@ MAT Vulcan delivers, receives, and even prints email content through one unified
 | Aspect | Details |
 |--------|---------|
 | Storage | `email_templates` DB table |
-| Lookup constant | `EmailTemplate::AVAILABLE_TEMPLATES` |
-| Format | Records with `name`, `format` (`:html` / `:text`), `subject`, `body`, `description`, `version` |
-| Placeholders | `%{first_name}` or `%<amount>.2f` |
-| Validation | Required variables validated against `AVAILABLE_TEMPLATES` constant |
-| Versioning | `version` increments on subject/body edits; `previous_subject`/`previous_body` keep the immediately prior content version. |
+| Format | Records with `name`, `format` (`:html` / `:text`), `syntax` (`legacy_percent` / `liquid`), `subject`, `body`, `description`, `version` |
+| Placeholders | Legacy: `%{first_name}` or `%<first_name>s`. Liquid: `{{ exact.path }}` or trim output tags like `{{- exact.path -}}`. |
+| Validation | Required and optional variables are stored in each template's `variables` JSON. Subject/body variables must match those exact paths. Liquid templates may only reference required variables; optional variables remain Standard-only because Liquid rendering is strict. |
+| Versioning | `version` increments on subject/body/syntax edits. Subject/body edits store the prior content in `previous_subject`/`previous_body` for the show-page Previous Version panel. |
 | Locale sync | `locale_needs_sync` flags counterpart locales out of date; admin UI uses `locale_out_of_sync?` |
+| Liquid rollout | `email_template_liquid` is seeded off. Liquid templates cannot be saved or rendered while the flag is disabled. |
 
 Seed/update:
 
@@ -43,9 +43,11 @@ Admin UI lets staff **edit, preview, and send test mails** — no code deploys f
 
 **Available Services:**
 
-* `EmailTemplateRenderer.render(template_name, vars)` - Service with error handling and fallbacks.
+* `EmailTemplates::Renderer.render(template:, variables:)` - Shared strict renderer used by `EmailTemplate#render`.
+  * `legacy_percent` preserves `%{key}` and `%<key>s` interpolation.
+  * `liquid` supports output tags only, rejects `{% %}` tags and filters, and renders only exact allowlisted required paths.
 * `EmailTemplate.render_with_tracking(variables, current_user)` - Instance method with audit logging.
-* Admin helper: `sample_data_for_template(template_name)` - Provides realistic sample data.
+* Admin helper: `sample_data_for_template(template_name)` - Provides realistic sample data; Liquid previews omit optional variables so admins see strict-send failures before production.
 
 ---
 
@@ -103,7 +105,7 @@ Letters::TextTemplateToPdfService
 ```
 
 * Uses `EmailTemplate.find_by(name: template_name, format: :text)` for content.
-* Renders with same variable substitution as email (`%{key}` and `%<key>s`).
+* Renders through `EmailTemplate#render`, so printed letters share the same legacy/Liquid syntax behavior as email.
 * Creates `PrintQueueItem` → admin prints from `/admin/print_queue`.
 * PDF includes header, date, address, body content, and footer.
 
@@ -183,7 +185,7 @@ subj, body = tpl.render(first_name: 'Ada')
 | **Letter generation fails** | Text template exists? all variables supplied? `PrintQueueItem` created? |
 | **Wrong stream** | `message_stream` param in mailer (`outbound` vs `notifications`) |
 | **Email tracking issues** | `POSTMARK_API_TOKEN`, `UpdateEmailStatusJob` logs, `Notification` records |
-| **Variable validation fails** | Check `AVAILABLE_TEMPLATES` constant, required vs optional vars |
+| **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, syntax, and Liquid flag state. Liquid placeholders must come from required variables. |
 
 **Tools:** 
 * Postmark dashboard (delivery & webhooks)

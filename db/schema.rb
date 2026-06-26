@@ -190,6 +190,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_22_150000) do
     t.text "previous_body"
     t.string "previous_subject"
     t.string "subject"
+    t.integer "syntax", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "updated_by_id"
     t.jsonb "variables", default: {}
