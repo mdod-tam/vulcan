@@ -18,9 +18,11 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', 
     To ensure uninterrupted service and payment processing, please submit an updated W9 form before the expiration date.
 
     HOW TO SUBMIT YOUR UPDATED W9:
-    1. Download the current W9 form from the IRS website: https://www.irs.gov/pub/irs-pdf/fw9.pdf
+    1. IRS W-9 PDF:
+       https://www.irs.gov/pub/irs-pdf/fw9.pdf
     2. Complete and sign the form
-    3. Log in to your vendor portal at %<vendor_portal_url>s
+    3. Vendor portal link:
+       %<vendor_portal_url>s
     4. Navigate to "Profile" and upload your new W9 form
 
     If you have already submitted an updated W9 form, please disregard this message.
@@ -32,7 +34,8 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expiring_soon', 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text vendor_business_name status_box_warning_text days_until_expiry expiration_date_formatted vendor_portal_url status_box_info_text footer_text support_email],
+    'required' => %w[header_text vendor_business_name status_box_warning_text days_until_expiry
+                     expiration_date_formatted vendor_portal_url status_box_info_text footer_text support_email],
     'optional' => []
   }
   template.version = 1

@@ -24,9 +24,7 @@ template.body = <<~TEXT
 
   Please submit a new disability certification form using one of the following methods:
 
-  1. Upload the corrected form securely: %<secure_upload_url>s
-  2. Download a blank form if needed: %<download_form_url>s
-  3. Fax: Send the updated form to 410-767-4276
+  %<certification_resubmission_instructions>s
 
   Thank you for your assistance in helping the applicant access needed telecommunications services.
 
@@ -39,8 +37,8 @@ template.body = <<~TEXT
   Maryland Accessible Telecommunications (MAT) - Improving lives through accessible communication.
 TEXT
 template.variables = {
-  'required' => %w[constituent_full_name application_id rejection_reason download_form_url],
-  'optional' => %w[secure_upload_url]
+  'required' => %w[constituent_full_name application_id rejection_reason certification_resubmission_instructions],
+  'optional' => []
 }
 template.version = 2
 template.save! if template.new_record? || template.changed?

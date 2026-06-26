@@ -10,7 +10,10 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_security_key_r
 
     Your security key recovery request has been approved. Your existing security keys have been removed from your account.
 
-    Please sign in and register a new security key: %<sign_in_url>s
+    Please sign in and register a new security key.
+
+    Sign-in link:
+    %<sign_in_url>s
 
     If you have questions or need assistance, please contact our team at %<support_email>s.
 

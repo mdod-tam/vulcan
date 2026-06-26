@@ -15,6 +15,7 @@ class EvaluatorMailer < ApplicationMailer
   def new_evaluation_assigned
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_new_evaluation_assigned'
+    # Staff-only template; only English seed content is maintained.
     locale = 'en'
 
     text_template = load_email_template(template_name, locale: locale)

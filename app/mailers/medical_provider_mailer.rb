@@ -122,6 +122,7 @@ class MedicalProviderMailer < ApplicationMailer
       rejection_reason: rejection_reason,
       secure_upload_url: params[:secure_upload_url].to_s,
       download_form_url: build_download_form_url,
+      certification_resubmission_instructions: certification_resubmission_instructions(locale),
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     }.compact
   end
@@ -173,41 +174,29 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   def certification_submission_instructions
-    return spanish_certification_submission_instructions if provider_email_locale.to_s == 'es'
-
-    english_certification_submission_instructions
+    certification_instructions(
+      'medical_provider_mailer.certification_submission_instructions',
+      locale: provider_email_locale
+    )
   end
 
-  def english_certification_submission_instructions
-    return <<~TEXT.chomp if params[:secure_upload_url].present?
-      1. Download the form at: #{build_download_form_url}
-      2. Complete all required fields and sign the form
-      3. Upload the completed form securely: #{params[:secure_upload_url]}
-    TEXT
-
-    <<~TEXT.chomp
-      1. Download the form at: #{build_download_form_url}
-      2. Complete all required fields
-      3. Sign the form
-      4. Return the completed form by fax to (410) 767-4276
-      5. If fax is not available, contact #{support_email} to request a secure upload link
-    TEXT
+  def certification_resubmission_instructions(locale)
+    certification_instructions(
+      'medical_provider_mailer.certification_resubmission_instructions',
+      locale: locale
+    )
   end
 
-  def spanish_certification_submission_instructions
-    return <<~TEXT.chomp if params[:secure_upload_url].present?
-      1. Descargue el formulario en: #{build_download_form_url}
-      2. Complete todos los campos obligatorios y firme el formulario
-      3. Suba el formulario completado de forma segura: #{params[:secure_upload_url]}
-    TEXT
+  def certification_instructions(scope, locale:)
+    delivery_method = params[:secure_upload_url].present? ? 'secure' : 'fax'
 
-    <<~TEXT.chomp
-      1. Descargue el formulario en: #{build_download_form_url}
-      2. Complete todos los campos obligatorios
-      3. Firme el formulario
-      4. Devuelva el formulario completado por fax al (410) 767-4276
-      5. Si no puede enviar fax, comuníquese con #{support_email} para solicitar un enlace de carga seguro
-    TEXT
+    I18n.t(
+      "#{scope}.#{delivery_method}",
+      locale: locale,
+      download_form_url: build_download_form_url,
+      secure_upload_url: params[:secure_upload_url],
+      support_email: support_email
+    ).strip
   end
 
   def format_request_count_message(application)
@@ -249,29 +238,31 @@ class MedicalProviderMailer < ApplicationMailer
   def send_approval_email(subject, body)
     application = params[:application]
 
-    mail(
-      to: application.medical_provider_email,
-      from: 'no_reply@mdmat.org',
-      reply_to: support_email,
-      subject: subject,
-      message_stream: 'outbound'
-    ) do |format|
-      format.text { render plain: body.to_s }
-    end
+    mail_with_text_body(
+      {
+        to: application.medical_provider_email,
+        from: 'no_reply@mdmat.org',
+        reply_to: support_email,
+        subject: subject,
+        message_stream: 'outbound'
+      },
+      body.to_s
+    )
   end
 
   def send_rejection_email(subject, body)
     application = params[:application]
 
-    mail(
-      to: application.medical_provider_email,
-      from: 'no_reply@mdmat.org',
-      reply_to: support_email,
-      subject: subject,
-      message_stream: 'outbound'
-    ) do |format|
-      format.text { render plain: body.to_s }
-    end
+    mail_with_text_body(
+      {
+        to: application.medical_provider_email,
+        from: 'no_reply@mdmat.org',
+        reply_to: support_email,
+        subject: subject,
+        message_stream: 'outbound'
+      },
+      body.to_s
+    )
   end
 
   def send_request_certification_email(subject, body)
@@ -281,9 +272,7 @@ class MedicalProviderMailer < ApplicationMailer
     mail_options = build_request_mail_options(application, subject)
     add_notification_tracking(mail_options, notification_id)
 
-    mail(mail_options) do |format|
-      format.text { render plain: body.to_s }
-    end
+    mail_with_text_body(mail_options, body.to_s)
   end
 
   def build_request_mail_options(application, subject)

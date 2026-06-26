@@ -33,7 +33,7 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_a
                      constituent_phone_formatted constituent_address_formatted constituent_disabilities_text_list
                      constituent_language constituent_contact_method constituent_communication_modality
                      application_id footer_text],
-    'optional' => []
+    'optional' => %w[training_session_schedule_text]
   }
   template.version = 1
 end

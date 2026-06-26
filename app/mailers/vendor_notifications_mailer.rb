@@ -155,6 +155,7 @@ class VendorNotificationsMailer < ApplicationMailer
       fallback_header_title: 'W9 Form Expiring Soon',
       status_box_title: 'W9 Expiring Soon',
       status_box_message: warning_msg,
+      status_box_attribute: :status_box_warning_text,
       subject_variables: { days_until_expiry: days_until_expiry, expiration_date_formatted: expiration_date_formatted,
                            vendor_business_name: vendor.business_name },
       locale: locale
@@ -190,15 +191,17 @@ class VendorNotificationsMailer < ApplicationMailer
 
     variables = build_w9_variables(
       vendor,
-      status: :warning,
+      status: :error,
       template: text_template,
       fallback_header_title: 'W9 Form Has Expired - Action Required',
       status_box_title: 'W9 Expired',
       status_box_message: warning_msg,
+      status_box_attribute: :status_box_error_text,
       subject_variables: { expiration_date_formatted: expiration_date_formatted, vendor_business_name: vendor.business_name },
       locale: locale
     )
                 .merge(
+                  status_box_warning_text: w9_association_warning_text(association_msg),
                   status_box_info_text: status_box_text(status: :info, title: 'Action Required', message: info_msg),
                   expiration_date_formatted: expiration_date_formatted,
                   vendor_association_message: association_msg,
@@ -240,7 +243,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
   # rubocop:disable Metrics/ParameterLists
   def build_w9_variables(vendor, status:, template:, fallback_header_title:, status_box_title:, status_box_message:,
-                         subject_variables: {}, locale: nil)
+                         subject_variables: {}, locale: nil, status_box_attribute: :status_box_text)
     header_title = header_title_from_template_subject(
       template: template,
       subject_variables: subject_variables,
@@ -250,7 +253,7 @@ class VendorNotificationsMailer < ApplicationMailer
     {
       vendor_business_name: vendor.business_name,
       header_title: header_title,
-      status_box_text: status_box_text(status: status, title: status_box_title, message: status_box_message),
+      status_box_attribute => status_box_text(status: status, title: status_box_title, message: status_box_message),
       header_text: header_text(title: header_title, logo_url: logo_url, locale: locale),
       footer_text: footer_text(organization_name: org_name, contact_email: support_email, website_url: org_url, show_automated_message: true,
                                locale: locale),
@@ -279,13 +282,15 @@ class VendorNotificationsMailer < ApplicationMailer
   end
 
   def send_mail(to, subject, body, content_type: 'text/plain')
-    mail(
+    mail_options = {
       to: to,
       subject: subject,
-      message_stream: 'outbound',
-      body: body.to_s,
-      content_type: content_type
-    )
+      message_stream: 'outbound'
+    }
+
+    return mail(mail_options.merge(body: body.to_s, content_type: content_type)) unless content_type.to_s.start_with?('text/plain')
+
+    mail_with_text_body(mail_options, body.to_s)
   end
 
   def log_mail_error(error, user, template_name, variables)
@@ -347,6 +352,12 @@ class VendorNotificationsMailer < ApplicationMailer
 
   def resolve_vendor_portal_url
     defined?(vendor_portal_root_url) ? vendor_portal_root_url(host: default_url_options[:host]) : org_url
+  end
+
+  def w9_association_warning_text(association_msg)
+    return '' if association_msg.blank?
+
+    status_box_text(status: :warning, title: 'Association Requirement', message: association_msg)
   end
 
   # Updated to accept arguments instead of relying on instance variables

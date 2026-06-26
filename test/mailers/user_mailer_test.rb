@@ -20,20 +20,27 @@ class UserMailerTest < ActionMailer::TestCase
   end
 
   setup do
-    # Per user feedback, HTML emails are not used. Only stub for :text format.
-    # If the mailer attempts to find_by!(format: :html), it should fail (e.g., RecordNotFound)
-    # as no HTML templates should be seeded for these, and we provide no stub.
+    # Stored templates remain text-only until explicit HTML template support is added.
 
     # Stub EmailTemplate.find_by! to return mocks that respond to subject and body
     # Create template mocks with the expected rendered output (after substitution)
     password_reset_template = mock_template(
       'Password reset',
-      'Text Body with http://example.com/password/edit?token=test-password-reset-token'
+      "Password reset link:\nhttp://example.com/password/edit?token=test-password-reset-token"
     )
 
     email_verification_template = mock_template(
       'Email verification',
-      'Text Body with http://example.com/constituent_portal/applications/verify?token=test-email-verification-token'
+      "Email verification link:\nhttp://example.com/constituent_portal/applications/verify?token=test-email-verification-token"
+    )
+    spanish_password_reset_template = mock_template(
+      'Restablecer contrasena',
+      "Enlace de restablecimiento de contrasena:\nhttp://example.com/password/edit?token=test-password-reset-token"
+    )
+    spanish_email_verification_template = mock_template(
+      'Verificacion de correo electronico',
+      "Enlace de verificacion de correo electronico:\n" \
+      'http://example.com/constituent_portal/applications/verify?token=test-email-verification-token'
     )
 
     # Stub the find_by! calls to return our mocks
@@ -42,6 +49,12 @@ class UserMailerTest < ActionMailer::TestCase
 
     EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_email_verification', format: :text, locale: 'en')
                  .returns(email_verification_template)
+
+    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text, locale: 'es')
+                 .returns(spanish_password_reset_template)
+
+    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_email_verification', format: :text, locale: 'es')
+                 .returns(spanish_email_verification_template)
 
     # Stub the URL helpers that our mailer uses
     UserMailer.any_instance.stubs(:edit_password_url).returns('http://example.com/password/edit?token=test-password-reset-token')
@@ -68,13 +81,38 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal [user.email], email.to
     assert_equal 'Password reset', email.subject # Assert subject matches the mock template subject
 
-    # For non-multipart emails, we check the body directly
-    assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
-
     # Manually interpolate the expected body format string to compare with the main body
-    expected_body = 'Text Body with http://example.com/password/edit?token=test-password-reset-token'
-    assert_includes email.body.to_s, expected_body
+    reset_url = 'http://example.com/password/edit?token=test-password-reset-token'
+    expected_body = "Password reset link:\n#{reset_url}"
+    assert_includes decoded_text_part(email), expected_body
+  end
+
+  test 'password_reset uses Spanish template for Spanish locale constituent' do
+    user = create(:constituent, locale: 'es')
+    user.stubs(:generate_token_for).with(:password_reset).returns('test-password-reset-token')
+
+    emails = capture_emails do
+      UserMailer.with(user: user).password_reset.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+    assert_equal [user.email], email.to
+    assert_equal 'Restablecer contrasena', email.subject
+  end
+
+  test 'password_reset uses Spanish template for Spanish locale staff user when available' do
+    user = create(:admin, locale: 'es')
+    user.stubs(:generate_token_for).with(:password_reset).returns('test-password-reset-token')
+
+    emails = capture_emails do
+      UserMailer.with(user: user).password_reset.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+    assert_equal [user.email], email.to
+    assert_equal 'Restablecer contrasena', email.subject
   end
 
   test 'email_verification' do
@@ -97,12 +135,37 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal [user.email], email.to
     assert_equal 'Email verification', email.subject # Assert subject matches the mock template subject
 
-    # For non-multipart emails, we check the body directly
-    assert_equal 0, email.parts.size, 'Email should have no parts (non-multipart).'
-    assert_includes email.content_type, 'text/plain', 'Email should be text/plain (may include charset)'
-
     # Manually interpolate the expected body format string to compare with the main body
-    expected_body = 'Text Body with http://example.com/constituent_portal/applications/verify?token=test-email-verification-token'
-    assert_includes email.body.to_s, expected_body
+    verification_url = 'http://example.com/constituent_portal/applications/verify?token=test-email-verification-token'
+    expected_body = "Email verification link:\n#{verification_url}"
+    assert_includes decoded_text_part(email), expected_body
+  end
+
+  test 'email_verification uses Spanish template for Spanish locale constituent' do
+    user = create(:constituent, locale: 'es')
+    user.stubs(:generate_token_for).with(:email_verification).returns('test-email-verification-token')
+
+    emails = capture_emails do
+      UserMailer.with(user: user).email_verification.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+    assert_equal [user.email], email.to
+    assert_equal 'Verificacion de correo electronico', email.subject
+  end
+
+  test 'email_verification uses Spanish template for Spanish locale staff user when available' do
+    user = create(:evaluator, locale: 'es')
+    user.stubs(:generate_token_for).with(:email_verification).returns('test-email-verification-token')
+
+    emails = capture_emails do
+      UserMailer.with(user: user).email_verification.deliver_now
+    end
+
+    assert_equal 1, emails.size
+    email = emails.first
+    assert_equal [user.email], email.to
+    assert_equal 'Verificacion de correo electronico', email.subject
   end
 end
