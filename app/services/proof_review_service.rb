@@ -4,7 +4,7 @@
 # It handles parameter validation, calls the core ProofReviewer service,
 # logs errors, and returns a structured result.
 class ProofReviewService < BaseService
-  attr_reader :application, :admin_user, :params, :proof_type, :status
+  attr_reader :application, :admin_user, :params, :proof_type, :status, :proof_review
 
   # Initializes the service with the application, admin user, and request parameters.
   # @param application [Application] The application being reviewed.
@@ -37,9 +37,7 @@ class ProofReviewService < BaseService
 
     return failure('Invalid proof type') unless ProofReview.reviewable_proof_type?(proof_type)
 
-    if proof_type == 'income' && !application.income_proof_required?
-      return failure('Income proof review is not applicable for this application')
-    end
+    return failure('Income proof review is not applicable for this application') if proof_type == 'income' && !application.income_proof_required?
 
     return failure('Proof is not reviewable for this application') unless application.proof_type_reviewable?(proof_type)
 
@@ -57,7 +55,7 @@ class ProofReviewService < BaseService
     begin
       perform_review
       log_review_success
-      success(success_message)
+      success(success_message, review_result_data)
     rescue StandardError => e
       log_review_error(e)
       failure("Proof review failed: #{e.message}")
@@ -67,7 +65,9 @@ class ProofReviewService < BaseService
   # Performs the actual proof review by creating and calling the reviewer.
   def perform_review
     reviewer = Applications::ProofReviewer.new(application, admin_user)
-    reviewer.review(**review_params)
+    review_result = reviewer.review(**review_params)
+    @proof_review = reviewer.proof_review if reviewer.respond_to?(:proof_review)
+    @proof_review ||= review_result if review_result.is_a?(ProofReview)
   end
 
   # Returns the parameters needed for the review.
@@ -86,6 +86,21 @@ class ProofReviewService < BaseService
   # @return [String] Success message
   def success_message
     "#{proof_type.capitalize} proof #{status} successfully."
+  end
+
+  def review_result_data
+    data = { proof_review: proof_review }
+    return data unless proof_review&.status_rejected?
+
+    data.merge(
+      resubmission_delivered: proof_resubmission_delivered?
+    )
+  end
+
+  def proof_resubmission_delivered?
+    return true unless proof_review&.persisted? && proof_review.created_at.present?
+
+    Applications::RequestProofResubmission.delivery_confirmed_for_review?(proof_review)
   end
 
   # Logs the start of the review process.
