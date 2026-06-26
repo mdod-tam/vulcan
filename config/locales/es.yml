@@ -253,9 +253,6 @@ es:
         summary: "%{reserved} / %{max} sesiones reservadas, %{remaining} restantes"
         maximum_reached: "Esta persona ha alcanzado el número máximo de sesiones de capacitación reservadas (%{max})."
         maximum_reached_badge: "Máximo alcanzado"
-    proof_reviews:
-      create:
-        resubmission_not_delivered: "La revisión del documento se completó, pero no se pudo entregar la solicitud segura para subir documentos. Revise el estado del enlace seguro e intente reenviarlo."
     vendors:
       vendor_secure_request_forms:
         create:

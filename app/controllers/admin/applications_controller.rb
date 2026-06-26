@@ -213,29 +213,45 @@ module Admin
           html_redirect_path: admin_application_path(@application),
           html_message: message,
           turbo_redirect_path: admin_application_path(@application),
-          turbo_message: message,
-          html_alert_message: alert_message,
-          turbo_alert_message: alert_message
+          turbo_message: message
         )
+      elsif alert_message.present?
+        handle_successful_review_with_alert(message, alert_message)
       else
         handle_success_response(
           html_redirect_path: admin_application_path(@application),
           html_message: message,
-          html_alert_message: alert_message,
-          turbo_alert_message: alert_message,
-          turbo_updates: {
-            'attachments-section' => 'attachments',
-            'audit-logs' => 'audit_logs',
-            'modals' => 'modals'
-          }
+          turbo_updates: proof_review_turbo_updates
         )
       end
+    end
+
+    def handle_successful_review_with_alert(message, alert_message)
+      respond_to do |format|
+        format.html do
+          redirect_to admin_application_path(@application),
+                      flash: { notice: message, alert: alert_message }
+        end
+
+        format.turbo_stream do
+          flash.now[:alert] = alert_message
+          handle_turbo_stream_success(message: message, updates: proof_review_turbo_updates)
+        end
+      end
+    end
+
+    def proof_review_turbo_updates
+      {
+        'attachments-section' => 'attachments',
+        'audit-logs' => 'audit_logs',
+        'modals' => 'modals'
+      }
     end
 
     def proof_resubmission_delivery_alert(result)
       return unless proof_resubmission_delivery_failed?(result)
 
-      t('admin.proof_reviews.create.resubmission_not_delivered')
+      t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en)
     end
 
     def proof_resubmission_delivery_failed?(result)
