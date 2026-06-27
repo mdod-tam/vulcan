@@ -500,6 +500,14 @@ es:
       - oct
       - nov
       - dic
+  mailers:
+    voucher_notifications:
+      expiring_soon:
+        header_fallback: "Importante: su vale expirara pronto."
+        warning_title: "El vale expirara pronto"
+        expiration_message: "Su vale vence en %{days_remaining} dias el %{expiration_date}."
+        next_step_title: "Siguiente paso"
+        next_step_message: "Use al menos %{minimum_redemption_amount} antes de la fecha de vencimiento para evitar perder el valor no utilizado."
   time:
     formats:
       long: "%d de %B de %Y %H:%M"

@@ -156,7 +156,13 @@ class ApplicationMailer < ActionMailer::Base
   def header_title_from_template_subject(template:, subject_variables: {}, fallback: '')
     return fallback.to_s if template.blank?
 
-    rendered_subject = interpolate_template_text(template.subject, subject_variables).strip
+    rendered_subject =
+      if template.respond_to?(:render_subject) && template.respond_to?(:render_syntax)
+        template.render_subject(**subject_variables)
+      else
+        interpolate_template_text(template.subject, subject_variables)
+      end
+    rendered_subject = rendered_subject.to_s.strip
     rendered_subject.presence || fallback.to_s
   rescue StandardError
     fallback.to_s

@@ -2,11 +2,13 @@
   <div class="max-w-7xl mx-auto">
     <%= render 'admin/shared/communications_section_nav', current: :email_templates %>
     <%# Header Section %>
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-      <h1 id="template-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
-        Template: <%= @email_template.name %> (<%= @email_template.format.titleize %>, <%= template_syntax_label(@email_template) %>)
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <h1 id="template-title" class="text-3xl font-bold text-gray-900 min-w-0 max-w-full flex-1 break-words" style="min-width: 0; max-width: 100%; overflow-wrap: anywhere;">
+        <span>Template:</span>
+        <span class="break-all" style="overflow-wrap: anywhere; word-break: break-word;"><%= @email_template.name %></span>
+        <span class="whitespace-nowrap">(<%= @email_template.format.titleize %>, <%= template_syntax_label(@email_template) %>)</span>
       </h1>
-      <div class="flex space-x-3">
+      <div class="flex flex-wrap gap-3">
         <%= link_to admin_email_templates_path,
             class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
             aria: { label: "Return to email templates list" } do %>
@@ -58,7 +60,7 @@
       <dl class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
         <div>
           <dt class="text-sm font-medium text-gray-500">Template ID</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @email_template.name %></dd>
+          <dd class="mt-1 text-sm text-gray-900 break-all"><%= @email_template.name %></dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-500">Format</dt>
@@ -176,7 +178,7 @@
       %>
       <p class="mb-4 text-sm text-gray-500">
         <% if @email_template.render_syntax == 'liquid' %>
-          Liquid templates can only use Required Variables. Optional variables are Standard-only.
+          Liquid templates can only use Required Variables during send. Optional variables are shown below in Standard syntax for reference and cannot be inserted into Liquid templates because sends may omit them.
         <% else %>
           Optional variables are available for Standard templates when the message needs them.
         <% end %>

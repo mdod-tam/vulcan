@@ -264,6 +264,8 @@ module Admin
 
       assert_response :success
       assert_select 'turbo-frame#template-preview-en'
+      assert_select 'turbo-frame#template-preview-en[aria-live="polite"][aria-atomic="true"]'
+      assert_select 'turbo-frame#template-preview-en [role="status"]'
       assert_includes response.body, 'Draft Sample Name'
       assert_includes response.body, 'Draft body Sample Name'
       assert_includes response.body, 'Preview uses sample data and does not save changes.'
@@ -292,7 +294,10 @@ module Admin
 
       assert_response :unprocessable_content
       assert_select 'turbo-frame#template-preview-en'
+      assert_select 'turbo-frame#template-preview-en[aria-live="polite"][aria-atomic="true"]'
+      assert_select 'turbo-frame#template-preview-en [role="alert"]'
       assert_includes response.body, 'Use variables from Insert Variable only'
+      assert_equal 1, response.body.scan('Use variables from Insert Variable only').size
       assert_no_match(/Invalid Liquid syntax|Liquid render failed/i, response.body)
     end
 
@@ -431,6 +436,70 @@ module Admin
       assert_select 'option[value="liquid"]', count: 0
     end
 
+    test 'edit renders locale-scoped field ids and syntax help descriptions' do
+      FeatureFlag.enable!(:email_template_liquid)
+      template_name = "dual_locale_ids_#{SecureRandom.hex(4)}"
+      en_template = create(:email_template, :text,
+                           name: template_name,
+                           locale: 'en',
+                           syntax: :liquid,
+                           subject: 'Hello {{ name }}',
+                           body: 'Body {{ name }}',
+                           variables: { 'required' => ['name'], 'optional' => ['support_email'] })
+      create(:email_template, :text,
+             name: template_name,
+             format: en_template.format,
+             locale: 'es',
+             syntax: :liquid,
+             subject: 'Hola {{ name }}',
+             body: 'Cuerpo {{ name }}',
+             variables: { 'required' => ['name'], 'optional' => ['support_email'] })
+
+      get edit_admin_email_template_path(en_template), headers: default_headers
+
+      assert_response :success
+      %w[email_template_subject email_template_body email_template_description email_template_syntax locale].each do |legacy_id|
+        assert_select "##{legacy_id}", count: 0
+      end
+
+      %w[en es].each do |locale|
+        assert_select "#email-template-subject-#{locale}", count: 1
+        assert_select "#email-template-body-#{locale}", count: 1
+        assert_select "#email-template-description-#{locale}", count: 1
+        assert_select "#email-template-syntax-#{locale}", count: 1
+        assert_select "#email-template-locale-#{locale}", count: 1
+        assert_select "label[for=\"email-template-subject-#{locale}\"]", count: 1
+        assert_select "label[for=\"email-template-description-#{locale}\"]", count: 1
+        assert_select "label[for=\"email-template-syntax-#{locale}\"]", count: 1
+        assert_select "select#email-template-syntax-#{locale}[aria-describedby]" do |elements|
+          describedby = elements.first['aria-describedby']
+          assert_includes describedby, "syntax-help-#{locale}"
+          assert_includes describedby, "syntax-standard-help-#{locale}"
+          assert_includes describedby, "syntax-liquid-help-#{locale}"
+        end
+        assert_select "#syntax-help-#{locale}", text: /Standard: most templates/
+        assert_select "#syntax-standard-help-#{locale}", count: 1
+        assert_select "#syntax-liquid-help-#{locale}", count: 1
+      end
+    end
+
+    test 'edit and show headings expose break points for long template names' do
+      long_name = "very_long_email_template_name_without_breaks_#{'segment' * 8}"
+      template = create(:email_template, :text, name: long_name)
+
+      get edit_admin_email_template_path(template), headers: default_headers
+
+      assert_response :success
+      assert_select '#edit-template-title.min-w-0.max-w-full.flex-1.break-words'
+      assert_select '#edit-template-title .break-all', text: long_name
+
+      get admin_email_template_path(template), headers: default_headers
+
+      assert_response :success
+      assert_select '#template-title.min-w-0.max-w-full.flex-1.break-words'
+      assert_select '#template-title .break-all', text: long_name
+    end
+
     test 'update rejects liquid syntax for html templates' do
       FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :html,
@@ -470,6 +539,8 @@ module Admin
       assert_select 'section[aria-labelledby="template-body-title"] pre', text: /Layout placeholder: \{\{ header_text \}\}/
       assert_select 'section[aria-labelledby="template-body-title"] pre', text: /\{\{ confirmation_url \}\}/
       assert_select 'section[aria-labelledby="template-body-title"] pre', text: /Visible content/
+      assert_includes response.body, 'Liquid templates can only use Required Variables during send'
+      assert_includes response.body, 'cannot be inserted into Liquid templates because sends may omit them'
     end
 
     test 'preview sample data covers Liquid paths in subject and body' do
@@ -537,6 +608,46 @@ module Admin
 
       assert_response :unprocessable_content
       assert_includes response.body, 'Contact your administrator'
+    end
+
+    test 'existing liquid template operational updates work when Liquid flag is disabled' do
+      FeatureFlag.enable!(:email_template_liquid)
+      template = create(:email_template, :text,
+                        name: 'liquid_flag_off_operational_update_test',
+                        locale: 'en',
+                        locale_needs_sync: true,
+                        enabled: true,
+                        syntax: :liquid,
+                        subject: 'Hello {{ name }}',
+                        body: 'Body {{ name }}')
+      FeatureFlag.disable!(:email_template_liquid)
+
+      patch mark_synced_admin_email_template_path(template), headers: default_headers
+
+      assert_redirected_to admin_email_template_path(template)
+      assert_not template.reload.locale_needs_sync?
+
+      patch toggle_disabled_admin_email_template_path(template), headers: default_headers
+
+      assert_redirected_to admin_email_templates_path
+      assert_not template.reload.enabled?
+    end
+
+    test 'bulk_disable handles existing liquid templates when Liquid flag is disabled' do
+      FeatureFlag.enable!(:email_template_liquid)
+      template = create(:email_template, :text,
+                        name: 'liquid_flag_off_bulk_disable_test',
+                        locale: 'en',
+                        enabled: true,
+                        syntax: :liquid,
+                        subject: 'Hello {{ name }}',
+                        body: 'Body {{ name }}')
+      FeatureFlag.disable!(:email_template_liquid)
+
+      patch bulk_disable_admin_email_templates_path, headers: default_headers
+
+      assert_redirected_to admin_email_templates_path
+      assert_not template.reload.enabled?
     end
 
     test 'bulk_disable changes enabled templates and skips already disabled templates' do

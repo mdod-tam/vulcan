@@ -49,6 +49,10 @@ class EmailTemplate < ApplicationRecord
     EmailTemplates::Renderer.render(template: self, variables: vars)
   end
 
+  def render_subject(**vars)
+    EmailTemplates::Renderer.render_text(template: self, text: subject, variables: vars)
+  end
+
   def render_with_tracking(variables, current_user)
     rendered_subject, rendered_body = render(**variables)
 
@@ -203,6 +207,7 @@ class EmailTemplate < ApplicationRecord
     end
 
     return if FeatureFlag.enabled?(:email_template_liquid)
+    return if persisted? && !syntax_changed?
 
     errors.add(:syntax, 'Liquid templates are not enabled yet. Contact your administrator.')
   end

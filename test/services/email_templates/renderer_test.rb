@@ -217,6 +217,44 @@ module EmailTemplates
       assert_includes error.message, 'not enabled yet'
     end
 
+    test 'existing liquid templates remain savable when feature flag is off' do
+      FeatureFlag.enable!(:email_template_liquid)
+      template = create(
+        :email_template,
+        :text,
+        subject: 'Hello {{ name }}',
+        body: 'Body {{ name }}',
+        variables: { 'required' => ['name'], 'optional' => [] },
+        syntax: :liquid
+      )
+      FeatureFlag.disable!(:email_template_liquid)
+
+      assert_nothing_raised do
+        template.update!(description: 'Updated while Liquid flag is disabled')
+      end
+      assert_equal 'liquid', template.reload.syntax
+      assert_equal 'Updated while Liquid flag is disabled', template.description
+    end
+
+    test 'liquid render rejects optional variables even when a row bypassed save validation' do
+      FeatureFlag.enable!(:email_template_liquid)
+      template = build(
+        :email_template,
+        :text,
+        subject: 'Hello {{ name }}',
+        body: 'Body {{ optional_code }}',
+        variables: { 'required' => ['name'], 'optional' => ['optional_code'] },
+        syntax: :liquid
+      )
+
+      error = assert_raises(ArgumentError) do
+        template.render(name: 'Alex', optional_code: 'ABC123')
+      end
+
+      assert_includes error.message, 'optional_code'
+      assert_includes error.message, 'not available'
+    end
+
     test 'liquid validation explains standard placeholders left behind' do
       FeatureFlag.enable!(:email_template_liquid)
       template = build(

@@ -20,6 +20,10 @@ module EmailTemplates
       new(template: template, variables: variables).render
     end
 
+    def self.render_text(template:, text:, variables:)
+      new(template: template, variables: variables).render_text(text)
+    end
+
     def self.extract_variables(subject:, body:, syntax:)
       texts = [subject, body]
 
@@ -99,6 +103,22 @@ module EmailTemplates
       end
     end
 
+    def render_text(text)
+      validate_format!
+      validate_feature_flag!
+      validate_template_syntax!(subject: text, body: nil)
+      used_variables = extracted_variables_for(subject: text, body: nil)
+      validate_allowed_variables!(used_variables)
+      validate_present_variables!(used_variables) if syntax == LIQUID_SYNTAX
+
+      case syntax
+      when LIQUID_SYNTAX
+        render_liquid_text(text, liquid_assigns(paths: used_variables))
+      else
+        render_legacy_text(text)
+      end
+    end
+
     private
 
     def syntax
@@ -119,30 +139,34 @@ module EmailTemplates
       raise ArgumentError, 'Liquid templates are not enabled yet. Contact your administrator.'
     end
 
-    def validate_template_syntax!
-      self.class.validate_template_syntax!(subject: template.subject, body: template.body, syntax: syntax)
+    def validate_template_syntax!(subject: template.subject, body: template.body)
+      self.class.validate_template_syntax!(subject: subject, body: body, syntax: syntax)
     end
 
-    def validate_allowed_variables!
-      unauthorized = extracted_variables - template.allowed_variables
+    def validate_allowed_variables!(variables_to_validate = extracted_variables)
+      unauthorized = variables_to_validate - allowed_paths
       return if unauthorized.empty?
 
       raise ArgumentError, unavailable_variables_message(unauthorized)
     end
 
     def validate_required_variables!
-      missing_vars = template.required_variables.reject { |path| value_available?(path) }
+      validate_present_variables!(template.required_variables)
+    end
+
+    def validate_present_variables!(paths)
+      missing_vars = paths.reject { |path| value_available?(path) }
       return if missing_vars.empty?
 
       raise ArgumentError, "Missing required variables for template '#{template.name}': #{missing_vars.join(', ')}"
     end
 
     def extracted_variables
-      @extracted_variables ||= self.class.extract_variables(
-        subject: template.subject,
-        body: template.body,
-        syntax: syntax
-      )
+      @extracted_variables ||= extracted_variables_for(subject: template.subject, body: template.body)
+    end
+
+    def extracted_variables_for(subject:, body:)
+      self.class.extract_variables(subject: subject, body: body, syntax: syntax)
     end
 
     def render_legacy
@@ -188,8 +212,8 @@ module EmailTemplates
       "Use variables from Insert Variable only. #{names} #{verb} not available for this template."
     end
 
-    def liquid_assigns
-      allowed_paths.each_with_object({}) do |path, assigns|
+    def liquid_assigns(paths: allowed_paths)
+      paths.each_with_object({}) do |path, assigns|
         value = value_at_path(path)
         next if value.equal?(MISSING)
 
@@ -198,7 +222,7 @@ module EmailTemplates
     end
 
     def allowed_paths
-      template.allowed_variables
+      syntax == LIQUID_SYNTAX ? template.required_variables : template.allowed_variables
     end
 
     def value_available?(path)

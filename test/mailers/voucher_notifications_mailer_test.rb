@@ -99,6 +99,31 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     assert_equal '$10.00', rendered_variables[:minimum_redemption_amount_formatted]
   end
 
+  test 'voucher_expiring_soon localizes runtime status text for Spanish templates' do
+    @user.update!(locale: 'es')
+    rendered_variables = nil
+    specific_template = mock('specific_expiring_es')
+    specific_template.stubs(:subject).returns('Importante: Su Vale Expirara Pronto')
+    specific_template.define_singleton_method(:render) do |**vars|
+      rendered_variables = vars
+      ['Importante: Su Vale Expirara Pronto', 'Texto de vencimiento del vale']
+    end
+
+    EmailTemplate.stubs(:find_by!)
+                 .with(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'es')
+                 .returns(specific_template)
+
+    email = VoucherNotificationsMailer.with(voucher: @voucher).voucher_expiring_soon.deliver_now
+
+    assert_emails 1
+    assert_equal 'Importante: Su Vale Expirara Pronto', email.subject
+    assert_includes rendered_variables[:status_box_warning_text], 'El vale expirara pronto'
+    assert_includes rendered_variables[:status_box_warning_text], 'Su vale vence en'
+    assert_includes rendered_variables[:status_box_info_text], 'Siguiente paso'
+    assert_includes rendered_variables[:status_box_info_text], 'antes de la fecha de vencimiento'
+    assert_includes rendered_variables[:expiration_date_formatted], 'de'
+  end
+
   test 'voucher_expired' do
     email = VoucherNotificationsMailer.with(voucher: @voucher).voucher_expired.deliver_now
 

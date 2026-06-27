@@ -1,19 +1,29 @@
 <% current_locale = local_assigns[:locale].presence || email_template.locale %>
 <% locale_code = current_locale.to_s.upcase %>
+<% locale_suffix = locale_code.downcase %>
 <% submit_label = local_assigns[:submit_label].presence || "Save #{locale_code}" %>
 <% form_action_path = local_assigns[:form_action_path].presence || admin_email_template_path(email_template) %>
-<% editor_field_id = "body-editor-#{locale_code.downcase}" %>
-<% editor_label_id = "body-label-#{locale_code.downcase}" %>
-<% editor_help_id = "body-help-#{locale_code.downcase}" %>
-<% variable_help_id = "variable-help-#{locale_code.downcase}" %>
-<% variable_select_id = "variable-insert-#{locale_code.downcase}" %>
-<% subject_variable_select_id = "subject-variable-insert-#{locale_code.downcase}" %>
-<% preview_frame_id = "template-preview-#{locale_code.downcase}" %>
+<% locale_field_id = "email-template-locale-#{locale_suffix}" %>
+<% description_field_id = "email-template-description-#{locale_suffix}" %>
+<% subject_field_id = "email-template-subject-#{locale_suffix}" %>
+<% syntax_field_id = "email-template-syntax-#{locale_suffix}" %>
+<% syntax_help_id = "syntax-help-#{locale_suffix}" %>
+<% standard_help_id = "syntax-standard-help-#{locale_suffix}" %>
+<% liquid_help_id = "syntax-liquid-help-#{locale_suffix}" %>
+<% syntax_describedby = [syntax_help_id, standard_help_id, liquid_help_id].join(' ') %>
+<% body_textarea_id = "email-template-body-#{locale_suffix}" %>
+<% editor_field_id = "body-editor-#{locale_suffix}" %>
+<% editor_label_id = "body-label-#{locale_suffix}" %>
+<% editor_help_id = "body-help-#{locale_suffix}" %>
+<% variable_help_id = "variable-help-#{locale_suffix}" %>
+<% variable_select_id = "variable-insert-#{locale_suffix}" %>
+<% subject_variable_select_id = "subject-variable-insert-#{locale_suffix}" %>
+<% preview_frame_id = "template-preview-#{locale_suffix}" %>
 <% required_vars = email_template.required_variables || [] %>
 <% optional_vars = email_template.optional_variables || [] %>
 
 <%= form_with(model: [:admin, email_template], url: form_action_path, method: :patch, class: "space-y-4", data: { controller: "protected-variables" }) do |form| %>
-  <%= hidden_field_tag :locale, current_locale %>
+  <%= hidden_field_tag :locale, current_locale, id: locale_field_id %>
 
   <% if email_template.locale_needs_sync? %>
     <div class="rounded-md bg-amber-50 border border-amber-300 p-4" role="alert">
@@ -52,16 +62,21 @@
   <% end %>
 
   <div>
-    <%= form.label :description, "Template Purpose (#{locale_code})", class: "block text-sm font-medium text-gray-700" %>
-    <%= form.text_area :description, rows: 2, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm", placeholder: "Brief description of when this email is sent" %>
+    <%= form.label :description, "Template Purpose (#{locale_code})", for: description_field_id, class: "block text-sm font-medium text-gray-700" %>
+    <%= form.text_area :description,
+        rows: 2,
+        id: description_field_id,
+        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+        placeholder: "Brief description of when this email is sent" %>
     <p class="mt-2 text-sm text-gray-500">
       Explain when and why this email is sent (e.g., "Sent when a constituent registers a new account").
     </p>
   </div>
 
   <div>
-    <%= form.label :subject, "Email Subject (#{locale_code})", class: "block text-sm font-medium text-gray-700" %>
+    <%= form.label :subject, "Email Subject (#{locale_code})", for: subject_field_id, class: "block text-sm font-medium text-gray-700" %>
     <%= form.text_field :subject,
+        id: subject_field_id,
         class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
         data: { "protected-variables-target": "subjectInput" } %>
     <div class="mt-2 max-w-sm">
@@ -103,18 +118,25 @@
   </div>
 
   <div>
-    <%= form.label :syntax, "Placeholder Style (#{locale_code})", class: "block text-sm font-medium text-gray-700" %>
+    <%= form.label :syntax, "Placeholder Style (#{locale_code})", for: syntax_field_id, class: "block text-sm font-medium text-gray-700" %>
     <%= form.select :syntax,
         options_for_select(email_template_syntax_options(email_template), email_template.render_syntax),
         {},
+        id: syntax_field_id,
         class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+        aria: { describedby: syntax_describedby },
         data: { "protected-variables-target": "syntaxSelect" } %>
     <div class="mt-2 space-y-2">
-      <p class="<%= standard_placeholder_style_help_classes(email_template) %>"
+      <p id="<%= syntax_help_id %>" class="sr-only">
+        Standard: most templates should stay Standard. Liquid: advanced exact-path variables for text templates. Liquid templates can only use Required Variables.
+      </p>
+      <p id="<%= standard_help_id %>"
+         class="<%= standard_placeholder_style_help_classes(email_template) %>"
          data-protected-variables-target="standardHelp">
         Most templates should stay Standard. Use Insert Variable; do not type placeholders yourself.
       </p>
-      <div class="<%= liquid_placeholder_style_help_classes(email_template) %>"
+      <div id="<%= liquid_help_id %>"
+           class="<%= liquid_placeholder_style_help_classes(email_template) %>"
            data-protected-variables-target="liquidHelp">
         <p>
           Liquid is an advanced placeholder style for templates that need exact-path variables. Use Insert Variable; do not type placeholders yourself.
@@ -149,6 +171,7 @@
     <!-- Hidden textarea that stores actual data -->
     <%= form.text_area :body, 
         rows: 20, 
+        id: body_textarea_id,
         class: "hidden",
         data: { "protected-variables-target": "textarea" } %>
     

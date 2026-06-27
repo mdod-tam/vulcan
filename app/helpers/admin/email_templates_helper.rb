@@ -102,6 +102,7 @@ module Admin
     def template_render_error_message(error_or_messages)
       messages = Array(error_or_messages.respond_to?(:message) ? error_or_messages.message : error_or_messages)
                  .map(&:to_s)
+                 .uniq
       message = messages.join(', ')
 
       return message if admin_actionable_template_error?(message)
