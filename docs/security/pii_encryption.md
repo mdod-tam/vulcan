@@ -12,7 +12,6 @@ Rails 8 ActiveRecord Encryption protects all personally identifiable data in MAT
 |         | `password_digest` | No | Hash is already random; extra layer |
 |         | `physical_address_1/2`, `city`, `state`, `zip_code` | No | Not queried directly |
 | `totp_credentials` | `secret` | No | Never queried |
-| `sms_credentials` | `code_digest` | No | Never queried |
 | `webauthn_credentials` | `public_key` | No | Never queried |
 
 **Deterministic = identical plaintext → identical ciphertext → indexable.** Trade-off: slight leakage of equality; documented in security controls.
@@ -39,11 +38,6 @@ encrypts :zip_code
 # app/models/totp_credential.rb
 class TotpCredential < ApplicationRecord
   encrypts :secret
-end
-
-# app/models/sms_credential.rb  
-class SmsCredential < ApplicationRecord
-  encrypts :code_digest
 end
 
 # app/models/webauthn_credential.rb
@@ -187,7 +181,7 @@ Rails.application.config.filter_parameters += [
   /_encrypted\z/, /_encrypted_iv\z/,
   
   # Authentication credential secrets
-  :secret, :code_digest,
+  :secret,
   
   # Legacy broad filters
   /passw/, /\btoken\z/, /_key\z/, /crypt/, /salt/, /certificate/, /\botp\z/, /\bssn\z/, /cvv/, /cvc/
@@ -257,7 +251,6 @@ namespace :pii do
   task rotate_keys: :environment do
     User.find_each(&:save!)
     TotpCredential.find_each(&:save!)
-    SmsCredential.find_each(&:save!)
     WebauthnCredential.find_each(&:save!)
     puts 'Key rotation complete.'
   end

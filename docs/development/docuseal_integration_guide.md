@@ -1,27 +1,15 @@
-# Document Signing Integration for Medical Certification (DocuSeal)
+# Document Signing Integration for Disability Certification (DocuSeal)
 
-This guide describes the document e-signing integration (DocuSeal) for medical certification workflow. The architecture is service-agnostic, allowing swapping providers without breaking changes.
-
-## Remaining Tasks
-
-- [ ] Review modal: Add "Source: Document Signing" note when applicable
-- [ ] Rejection/resend: Admin rejection → `rejected`; keep file; show resend options
-- [ ] Provider editing: Inline "Edit/Change Provider" (name/phone/fax/email)
-- [ ] Notifications: Decide UI-only vs email; if email, extend MAILER_MAP
-- [ ] PDF print channel: Implement `MedicalCertificationPdfService`
-- [ ] UX polish: Tooltips for dual status; resend cooldown copy
-- [ ] Deployment: Configure webhook, verify S3
-
----
+This guide describes the document e-signing integration (DocuSeal) for the disability certification workflow. Code identifiers still use `medical_certification_*`, but user-facing prose should say disability certification.
 
 ## 1. Architecture Overview
 
-- **Default channel**: DocuSeal, with email and print (PDF) as backups.
+- **Default channel**: DocuSeal can be used for digital signing; secure upload, email, fax, and print/mail remain available operational paths.
 - **Dual Status System**:
   - `document_signing_status` tracks e-signature workflow: `not_sent`, `sent`, `opened`, `signed`, `declined`
   - `medical_certification_status` tracks admin approval: `not_requested`, `requested`, `received`, `approved`, `rejected`
 - **Workflow**: Provider signs → `document_signing_status: signed` → Admin reviews → `medical_certification_status: approved`
-- **Fallback**: Provider declines → admin can resend or use email/fax
+- **Fallback**: Provider declines or cannot use the signing link → admin can resend, use secure upload, fax/email follow-up, or print/mail.
 
 ---
 
@@ -66,9 +54,9 @@ encrypts :document_signing_document_url
 
 ---
 
-## 3. Auto-Approval Policy (Unchanged)
+## 3. Approval Policy
 
-Application auto-approval requires ALL three proof types to be approved. DocuSeal `signed` status does NOT fulfill auto-approval criteria.  An admin must still review and approve.
+Application approval requires required proofs and disability certification to be approved. DocuSeal `signed` status does not fulfill approval criteria by itself. An admin must still review and approve the certification.
 
 ```ruby
 # app/models/concerns/application_status_management.rb
@@ -174,7 +162,7 @@ module DocumentSigning
 
     def create_submission!
       ::Docuseal.create_submission({
-        name: "Medical Certification - App #{@application.id}",
+        name: "Disability Certification - App #{@application.id}",
         submitters: [{ role: 'Medical Provider', email: @application.medical_provider_email, name: @application.medical_provider_name }],
         send_email: true,
         completed_redirect_url: Rails.application.routes.url_helpers.admin_application_url(@application, host: Rails.application.config.action_mailer.default_url_options[:host])
@@ -314,12 +302,12 @@ end
 
 ## 7. Admin UI
 
-### Buttons (Medical Certification section)
+### Buttons (Disability Certification section)
 
 - `not_sent`: "Send DocuSeal Request (Default)"
 - `sent/opened`: "Resend DocuSeal (X days since sent)"
 - `declined`: "Resend DocuSeal (Provider Declined)"
-- `signed`: Show review button if medical cert not yet approved
+- `signed`: Show review button if disability certification is not yet approved
 
 ### Index Page
 
@@ -339,26 +327,15 @@ end
 
 ---
 
-## 8. Notifications (Optional)
+## 8. Notifications
 
-Start with UI-based visibility (index filter + badges). For email alerts:
-
-```ruby
-# app/services/notification_service.rb
-MAILER_MAP = MAILER_MAP.merge(
-  'document_signing_completed' => [ApplicationNotificationsMailer, :document_signing_admin_alert]
-).freeze
-```
+DocuSeal status changes are primarily operational signals for admins. Disability certification request and rejection communications should continue through the existing certification services and `MedicalProviderNotifier`; do not add a parallel `MAILER_MAP` path for provider rejection.
 
 ---
 
 ## 9. PDF Print Channel
 
-Use existing Prawn patterns from:
-- `app/services/letters/text_template_to_pdf_service.rb`
-- `app/services/medical_provider_notifier.rb`
-
-Create `MedicalCertificationPdfService` that queues to PrintQueue or streams directly.
+Print/mail certification requests use `Applications::MedicalCertificationPdfService`, `Letters::TextTemplateToPdfService`, and `PrintQueueItem`. Treat print/mail as another delivery channel for the same disability certification request workflow, not as a separate approval path.
 
 ---
 
@@ -409,7 +386,7 @@ Stub DocuSeal API calls with WebMock.
 ## 12. UX Guidelines
 
 - Use "Digitally Signed" (not "DocuSeal") in user-facing text
-- Show dual badges: primary (medical cert) + secondary (signing status)
+- Show dual badges: primary disability certification status + secondary signing status
 - Display "Last sent X days ago" for resend cooldown context
 - Tooltips explaining `signed` ≠ auto-approved
 

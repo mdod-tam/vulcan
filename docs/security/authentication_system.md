@@ -76,16 +76,16 @@ end
 
 ### Registration Flow
 
-1. **Generate Credential Options** (`WebAuthnCredentialsController#options`)
-2. **Store Challenge** with `TwoFactorAuth.store_challenge`
-3. **Create Credential** with browser API (`credential.js#create`)
+1. **Generate Credential Options** (`TwoFactorCredentialsController#webauthn_creation_options`)
+2. **Store Challenge** with `TwoFactorVerification#store_challenge`
+3. **Create Credential** with browser API (`credential.js#create`) via `TwoFactorCredentialsController#create_credential`
 4. **Verify Challenge** and save credential
 
 ### Authentication Flow
 
-1. **Generate Assertion Options** (`WebAuthnCredentialAuthenticationsController#options`)
-2. **Store Challenge** with `TwoFactorAuth.store_challenge`
-3. **Get Assertion** with browser API (`credential.js#get`)
+1. **Generate Assertion Options** (`TwoFactorAuthenticationsController#verification_options`)
+2. **Store Challenge** with `TwoFactorVerification#store_challenge`
+3. **Get Assertion** with browser API (`credential.js#get`) via `TwoFactorAuthenticationsController#process_verification`
 4. **Verify Challenge** and mark session as verified
 
 ### Backend Implementation
@@ -98,7 +98,8 @@ Stores user's WebAuthn credentials:
 - `sign_count`: Counter to prevent replay attacks
 
 #### Controllers
-- `TwoFactorAuthenticationsController`: Manages the overall 2FA flow, including WebAuthn, TOTP, and SMS. Specific WebAuthn credential creation and authentication logic is integrated within this controller or related generated components.
+- `TwoFactorAuthenticationsController`: Manages sign-in verification flows for WebAuthn, TOTP, and SMS (`verify_method`, `process_verification`, `verification_options`).
+- `TwoFactorCredentialsController`: Manages credential enrollment and removal (`new_credential`, `create_credential`, `webauthn_creation_options`, SMS pending verification).
 
 #### Example Controller Usage
 ```ruby
@@ -149,10 +150,10 @@ TOTP uses time-based codes that change every 30 seconds.
 
 ### Registration Flow
 
-1. **Generate TOTP Secret** (`TotpCredentialsController#new`)
-2. **Store Secret** in session with `TwoFactorAuth.store_challenge`
+1. **Generate TOTP Secret** (`TwoFactorCredentialsController#new_credential` with `type: 'totp'`)
+2. **Store Secret** in session with `TwoFactorVerification#store_challenge`
 3. **Display QR Code** for user to scan
-4. **Verify Initial Code** and save credential
+4. **Verify Initial Code** via `TwoFactorCredentialsController#create_credential` and save credential
 
 ### Authentication Flow
 
@@ -191,11 +192,11 @@ SMS sends verification codes to the user's phone.
 
 ### Registration Flow
 
-1. **Collect Phone Number** (`TwoFactorAuthenticationsController#create_credential`)
-2. **Create SMS Credential** with phone number validation
+1. **Collect Phone Number** (`TwoFactorCredentialsController#new_credential` with `type: 'sms'`)
+2. **Create SMS Credential** with phone number validation via `TwoFactorCredentialsController#create_credential`
 3. **Generate and Send Code** via `SmsService`
 4. **Store Code Digest** with expiration time
-5. **Verify Code** entered by user
+5. **Verify Code** entered by user (`verify_pending_sms_credential` / `confirm_pending_sms_credential`)
 
 ### Authentication Flow
 

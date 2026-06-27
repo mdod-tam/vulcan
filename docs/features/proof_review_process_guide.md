@@ -1,6 +1,6 @@
 # Proof Review Process Guide
 
-A comprehensive guide to the complete proof review lifecycle in MAT Vulcan - from submission through approval/rejection, resubmission, and integration with the medical certification workflow.
+A comprehensive guide to the complete proof review lifecycle in MAT Vulcan - from submission through approval/rejection, resubmission, and integration with the disability certification workflow.
 
 This guide includes canonical documentation for the **ProofAttachmentService**, the central service responsible for all proof attachment operations in the application.
 
@@ -20,7 +20,7 @@ The **ProofAttachmentService** is the single source of truth for all proof attac
 - **Audit Trails**: Creates comprehensive audit records for all attachment operations
 - **Context Management**: Handles `Current` attributes to coordinate with model callbacks
 - **Error Handling**: Provides detailed error reporting and recovery mechanisms
-- **Scope**: Handles income/residency proofs; medical certifications are processed via `MedicalCertificationMailbox` and document-signing flows
+- **Scope**: Handles income, residency, and ID proofs. Disability certification uses secure certification upload links, DocuSeal, fax/mail, or admin upload flows.
 
 ### 1.3 · Public API
 
@@ -29,9 +29,9 @@ The **ProofAttachmentService** is the single source of truth for all proof attac
 ```ruby
 ProofAttachmentService.attach_proof({
   application: application,           # [Application] (required) Target application
-  proof_type: :income,               # [Symbol] (required) :income or :residency
+  proof_type: :income,               # [Symbol] (required) :income, :residency, or :id
   blob_or_file: uploaded_file,       # [Mixed] (required) File to attach
-  submission_method: :web,           # [Symbol] (required) :paper, :web, :email
+  submission_method: :web,           # [Symbol] (required) :paper, :web, :secure_form, etc.
   status: :not_reviewed,             # [Symbol] (optional) Default: :not_reviewed
   admin: current_user,               # [User] (optional) Admin user if admin action
   metadata: { ip_address: '...' },   # [Hash] (optional) Additional metadata
@@ -76,7 +76,7 @@ Current.paper_context = true  # (for paper submissions only)
 Validation differs by submission channel:
 
 - **Web/Paper (ProofManageable)**: `application/pdf`, `image/jpeg`, `image/png`, `image/tiff`, `image/bmp` with a 5MB max
-- **Email (ProofAttachmentValidator)**: `application/pdf`, `image/jpeg`, `image/png` with a 1KB min and 10MB max, plus filename/content checks
+- **Secure temporary forms (ProofAttachmentValidator)**: `application/pdf`, `image/jpeg`, `image/png` with a 1KB min and 10MB max, plus filename/content checks
 
 ### 1.6 · Error Handling
 
@@ -92,9 +92,7 @@ unless result[:success]
 end
 ```
 
-**Audit events**: `create_processing_event` logs `proof_submission_received`, `ProofAttachmentService`
-logs `#{proof_type}_proof_submitted` for email submissions, and `notify_admin` logs
-`proof_submission_processed`.
+**Audit events**: `ProofAttachmentService` logs `#{proof_type}_proof_attached` for attachment submissions and `#{proof_type}_proof_rejected` for explicit rejection paths. Secure proof resubmission submission is logged by `Applications::SubmitProofResubmission` as `proof_submitted_via_secure_form`.
 
 **Common Error Scenarios**:
 - Invalid file types or sizes
@@ -134,24 +132,37 @@ def process_accept_proof(type)
 end
 ```
 
-#### With Action Mailbox
+#### With Secure Proof Resubmission
 ```ruby
-# Email Submission Processing
-def attach_proof(attachment, proof_type)
-  blob = create_blob_from_attachment(attachment)
-  
-  result = ProofAttachmentService.attach_proof({
-    application: application,
-    proof_type: proof_type,
-    blob_or_file: blob,
-    submission_method: :email,
-    metadata: {
-      email_subject: mail.subject,
-      email_from: mail.from.first
-    }
-  })
-  # Handle result...
-end
+# Issued after a proof is rejected or an admin requests more proof.
+Applications::RequestProofResubmission.new(
+  application: application,
+  actor: admin,
+  proof_type: :income
+).call
+
+# Public token submission path delegates to this service.
+Applications::SubmitProofResubmission.new(
+  application: application,
+  secure_request_form: secure_request_form,
+  file: params[:file]
+).call
+```
+
+`Applications::SubmitProofResubmission` validates the uploaded file with `ProofAttachmentValidator`, attaches it through:
+
+```ruby
+ProofAttachmentService.attach_proof({
+  application: application,
+  proof_type: :income,
+  blob_or_file: file,
+  submission_method: :secure_form,
+  status: :not_reviewed,
+  metadata: {
+    secure_request_form_id: secure_request_form.id,
+    request_batch_id: secure_request_form.request_batch_id
+  }
+})
 ```
 
 ### 1.8 · Event Creation
@@ -159,7 +170,7 @@ end
 The service creates standardized audit events:
 
 - **Attachment Events**: `#{proof_type}_proof_attached` (for :web and :paper)
-- **Email Events**: `#{proof_type}_proof_submitted` (for :email)
+- **Secure Form Events**: `proof_resubmission_requested`, `proof_submitted_via_secure_form`, `proof_resubmission_request_revoked`, `proof_resubmission_request_expired`
 - **Rejection Events**: `#{proof_type}_proof_rejected`
 - **Failure Events**: `#{proof_type}_proof_attachment_failed`
 
@@ -206,8 +217,8 @@ allow(ProofAttachmentService).to receive(:attach_proof).and_return({success: tru
 |-------|-------|---------------|-------------------|
 | **1. Submission** | Constituent/Admin | `ProofAttachmentService`, `ProofManageable` | `draft` → `in_progress` |
 | **2. Review** | Admin | `ProofReviewer`, `ProofReviewService` | `in_progress` → `approved`/`rejected` |
-| **3. Resubmission** | Constituent | `ProofSubmissionMailbox`, Portal UI | `proof_status` → `not_reviewed` |
-| **4. Auto-Approval** | System | `Applications::ProofReviewer` | Check for completion → `approved` |
+| **3. Resubmission** | Constituent | `SecureRequestForm`, `Applications::SubmitProofResubmission` | `proof_status` → `not_reviewed` |
+| **4. Reconciliation** | System | `Applications::ProofReviewer`, `Application#reconcile_workflow_state!` | Check for completion → `approved` when eligible |
 
 ---
 
@@ -219,8 +230,8 @@ allow(ProofAttachmentService).to receive(:attach_proof).and_return({success: tru
 |---------|---------|---------------|
 | **`ProofAttachmentService`** | Handle uploads, validation, audit trails | Used by both portal + paper workflows |
 | **`ProofReviewService`** | Orchestrate review process, parameter validation | Called by admin controllers |
-| **`Applications::ProofReviewer`** | Core review logic, status updates, auto-approval | Called by `ProofReviewService` |
-| **`ProofAttachmentValidator`** | File validation (size, type, content) | Called by `ProofSubmissionMailbox` |
+| **`Applications::ProofReviewer`** | Core review logic, `update!` status writes, workflow reconciliation | Called by `ProofReviewService` |
+| **`ProofAttachmentValidator`** | File validation (size, type, content) | Called by secure proof/certification upload services |
 
 ### 3.2 · Model Concerns
 
@@ -228,7 +239,7 @@ allow(ProofAttachmentService).to receive(:attach_proof).and_return({success: tru
 |---------|----------------|-------------|
 | **`ProofManageable`** | Proof lifecycle, attachment management | `all_proofs_approved?`, `set_needs_review_timestamp`, `purge_rejected_proof` |
 | **`ProofConsistencyValidation`** | Status consistency validation | `validate_proof_status_consistent_with_application_status` |
-| **`ApplicationStatusManagement`** | Status transitions, automated actions | Triggers medical cert requests |
+| **`ApplicationStatusManagement`** | Status transitions, automated actions | Coordinates approval state and disability certification requests |
 
 ---
 
@@ -309,45 +320,22 @@ end
 # - Selecting approve without a file returns a validation error surfaced via flash.
 ```
 
-### 4.3 · Email Submission via Action Mailbox
+### 4.3 · Secure Proof Resubmission
+
+Rejected or missing proofs are resubmitted through tokenized secure forms. `Applications::RequestProofResubmission` creates `SecureRequestForm` records and notifications; public upload controllers call `Applications::SubmitProofResubmission`.
 
 ```ruby
-# app/mailboxes/proof_submission_mailbox.rb
-def process
-  log_processing_start
-  create_processing_event
-  process_attachments
-  complete_processing
-end
+request_result = Applications::RequestProofResubmission.new(
+  application: application,
+  actor: admin,
+  proof_type: :income
+).call
 
-private
-
-def process_attachments
-  mail.attachments.each do |attachment|
-    proof_type = determine_proof_type(mail.subject, mail.body.decoded)
-    attach_proof(attachment, proof_type)
-  end
-end
-
-def attach_proof(attachment, proof_type)
-  blob = create_blob_from_attachment(attachment)
-
-  result = ProofAttachmentService.attach_proof({
-    application: application,
-    proof_type: proof_type,
-    blob_or_file: blob,
-    status: :not_reviewed,
-    admin: nil,
-    submission_method: :email,
-    metadata: {
-      email_subject: mail.subject,
-      email_from: mail.from.first,
-      inbound_email_id: inbound_email.id
-    }
-  })
-
-  raise "Failed to attach proof: #{result[:error]&.message}" unless result[:success]
-end
+submit_result = Applications::SubmitProofResubmission.new(
+  application: application,
+  secure_request_form: request_result.data.fetch(:secure_request_forms).first,
+  file: uploaded_file
+).call
 ```
 
 ---
@@ -394,82 +382,19 @@ end
 
 ### 5.3 · Core Review Logic
 
-```ruby
-# app/services/applications/proof_reviewer.rb
-def review(proof_type:, status:, rejection_reason: nil, notes: nil)
-  Rails.logger.info "Starting review with proof_type: #{proof_type.inspect}, status: #{status.inspect}"
-  @proof_type_key = proof_type.to_s
-  @status_key = status.to_s
+`ProofReviewService` is the controller-facing orchestrator. It validates the requested proof type and status, calls `Applications::ProofReviewer`, and returns a `BaseService::Result`.
 
-  ApplicationRecord.transaction do
-    # Create ProofReview record
-    @proof_review = @application.proof_reviews.find_or_initialize_by(
-      proof_type: @proof_type_key, status: @status_key
-    )
-    @proof_review.assign_attributes(admin: @admin, notes: notes, rejection_reason: rejection_reason)
-    # If the record is being updated, the `on: :create` `set_reviewed_at` callback
-    # does not run. `reviewed_at` is explicitly updated to reflect the new review action.
-    # If it's a new record, the `on: :create` callback sets the timestamp.
-    # `reviewed_at` is validated for presence, so it is always set before save!.
-    if @proof_review.new_record?
-      # The `set_reviewed_at` callback handles this via `before_validation :set_reviewed_at, on: :create`.
-    else
-      @proof_review.reviewed_at = Time.current
-    end
-    @proof_review.save!
+`Applications::ProofReviewer` owns the transaction:
 
-    # Update application proof status directly (bypasses callbacks)
-    update_application_status
+1. Resolve the rejection reason text from `RejectionReason` when a code is provided.
+2. Create or update the `ProofReview` record.
+3. Update the application proof status with `update!`, so validations and callbacks stay in play.
+4. Purge the rejected proof attachment when the review rejects the proof.
+5. Reconcile workflow state after approvals with `Application#reconcile_workflow_state!`.
 
-    # Explicitly purge attachment if proof was rejected, because `update_column` in `update_application_status` bypasses callbacks
-    purge_if_rejected
-  end
-  true # Indicate success
-rescue StandardError => e
-  Rails.logger.error "Proof review failed: #{e.message}"
-  raise # Re-raise to ensure errors are visible
-end
+Approvals do not manually set the application to approved. The reconciliation path checks the full application state and moves the application forward only when required proofs and disability certification are complete.
 
-private
-
-def update_application_status
-  # ... (validation for attachment presence if approving)
-
-  # Update the specific proof status column
-  column_name = "#{@proof_type_key}_proof_status"
-  status_enum_value = Application.send(column_name.pluralize.to_s).fetch(@status_key.to_sym)
-  @application.update_column(column_name, status_enum_value)
-
-  @application.reload # Reload to get latest state for auto-approval check
-
-  # Check if auto-approval is now possible
-  check_for_auto_approval
-end
-
-def check_for_auto_approval
-  # Only check for auto-approval if application is not already approved
-  return if @application.status_approved?
-
-  # Auto-approval requires all three: income, residency, AND medical certification approved
-  if @application.income_proof_status_approved? &&
-     @application.residency_proof_status_approved? &&
-     @application.medical_certification_status_approved?
-
-    # Update application status to approved and create audit event
-    @application.update_column(:status, Application.statuses[:approved])
-    Event.create!(
-      user: @admin,
-      action: 'application_auto_approved',
-      auditable: @application,
-      metadata: {
-        application_id: @application.id,
-        timestamp: Time.current.iso8601,
-        trigger: "proof_#{@proof_type_key}_approved"
-      }
-    )
-    Rails.logger.info "Application #{@application.id} auto-approved after all requirements met"
-  end
-```
+For rejected reviews, `ProofReviewService` includes `resubmission_delivered` in the result data. If review succeeds but secure proof upload request delivery fails, admin controllers still complete the review and show an alert so staff can resend or inspect the secure upload link.
 
 ---
 
@@ -481,7 +406,7 @@ def check_for_auto_approval
 |-------|---------|--------|
 | `income_proof_status` | Track income document review | `not_reviewed`, `approved`, `rejected` |
 | `residency_proof_status` | Track residency document review | `not_reviewed`, `approved`, `rejected` |
-| `medical_certification_status` | Track medical cert process | `not_requested`, `requested`, `received`, `approved`, `rejected` |
+| `medical_certification_status` | Track disability certification process | `not_requested`, `requested`, `received`, `approved`, `rejected` |
 
 ### 6.2 · Application Status Integration
 
@@ -554,14 +479,9 @@ def create_auto_approval_audit_event(previous_status)
 end
 ```
 
-**Post-review hook**: After `ProofReview` is created, `check_all_proofs_approved` sets
-`medical_certification_status` to `requested` and emails the provider when both income/residency
-proofs are approved and certification has not been requested.
+**Post-review hook**: After a proof is approved, workflow reconciliation checks whether the application can move forward. When reviewable proofs are complete, the application can move into disability certification. When required proofs and disability certification are all approved, reconciliation can approve the application.
 
-Medical certification email submissions are handled by `MedicalCertificationMailbox`
-(`app/mailboxes/medical_certification_mailbox.rb`), which attaches the certification file,
-creates a `medical_certification_received` event, and records a status change with
-`change_type: 'medical_certification'`.
+Disability certification submissions are handled through secure certification upload links, DocuSeal, fax/mail, or admin upload. Secure uploads call `Applications::SubmitCertificationUpload`, attach the certification file, create `cert_submitted_via_secure_form`, and record `submission_method: 'secure_form'` metadata.
 
 ---
 
@@ -582,24 +502,25 @@ def can_resubmit_proof?(application, proof_type, max_submissions)
 end
 ```
 
-### 7.2 · Email Resubmission
+### 7.2 · Secure Form Resubmission
 
 ```ruby
-# app/mailboxes/proof_submission_mailbox.rb
-before_processing :check_max_rejections
-before_processing :check_rate_limit
+# app/services/applications/request_proof_resubmission.rb
+Applications::RequestProofResubmission.new(
+  application: application,
+  actor: admin,
+  proof_type: :income
+).call
 
-def check_max_rejections
-  max_rejections = Policy.get('max_proof_rejections')
-  return unless max_rejections.present? && application.total_rejections.present?
-  return unless application.total_rejections >= max_rejections
-
-  bounce_with_notification(
-    :max_rejections_reached,
-    'Maximum number of proof submission attempts reached'
-  )
-end
+# app/services/applications/submit_proof_resubmission.rb
+Applications::SubmitProofResubmission.new(
+  application: application,
+  secure_request_form: secure_request_form,
+  file: uploaded_file
+).call
 ```
+
+When a rejected proof review requests resubmission, `Applications::RequestProofResubmission` creates tracking records and attempts delivery through the selected channel. If delivery fails, the proof review still succeeds; the failed delivery is surfaced to admins as an alert and staff can resend from the secure upload link workflow.
 
 ---
 
@@ -610,10 +531,8 @@ end
 ```ruby
 # app/services/proof_attachment_service.rb
 def log_audit_event(context, event_metadata)
-  action_suffix = context.submission_method.to_s == 'email' ? 'submitted' : 'attached'
-
   AuditEventService.log(
-    action: "#{context.proof_type}_proof_#{action_suffix}",
+    action: "#{context.proof_type}_proof_attached",
     auditable: context.application,
     actor: context.admin || context.application.user,
     metadata: event_metadata
@@ -623,58 +542,26 @@ end
 
 **Other audit sources**:
 
-- `ProofSubmissionMailbox` logs `proof_submission_received` / `proof_submission_processed` and bounce events.
+- `Applications::RequestProofResubmission` creates `proof_resubmission_requested` notifications and audit events.
+- `Applications::SubmitProofResubmission` logs `proof_submitted_via_secure_form`.
+- `SecureTokenizable` and `SecureFormExpirationRecorder` log secure form revocation and expiration events.
 - `ProofAttachmentService` logs `*_proof_attachment_failed` on errors.
 
 ### 8.2 · Review Audit Events
 
-```ruby
-# app/models/proof_review.rb
-private
+`ProofReview` callbacks own the post-review side effects:
 
-def handle_post_review_actions
-  # ... (status checks and transaction)
+- Approved proof reviews log `proof_approved` and create a record-only notification with `deliver: false`.
+- Rejected proof reviews log `proof_rejected` and call `Applications::RequestProofResubmission`.
+- Repeat rejections run extra side effects after the review transaction, so the application status, review record, and secure request state remain consistent.
 
-  # Send appropriate notification based on status
-  if status_rejected?
-    send_notification('proof_rejected', :proof_rejected,
-                      { proof_type: proof_type, rejection_reason: rejection_reason })
-  else
-    send_notification('proof_approved', :proof_approved, { proof_type: proof_type })
-  end
-end
-
-# Creates a notification record and sends the email using the new NotificationService
-# Notification failures don't interrupt the proof review process
-def send_notification(action_name, _mail_method, metadata)
-  # Log the audit event first
-  AuditEventService.log(
-    action: action_name,
-    actor: admin,
-    auditable: application,
-    metadata: metadata
-  )
-
-  # Then, send the notification without the audit flag
-  NotificationService.create_and_deliver!(
-    type: action_name,
-    recipient: application.user,
-    actor: admin,
-    notifiable: application,
-    metadata: metadata,
-    channel: :email
-  )
-rescue StandardError => e
-  Rails.logger.error "Failed to send #{action_name} notification via NotificationService: #{e.message}"
-  # Don't re-raise - notification errors shouldn't fail the whole operation
-end
-```
+`ProofReviewService` does not create audit events directly. It delegates to `Applications::ProofReviewer` and returns delivery metadata for the admin response.
 
 ---
 
-## 9 · Medical Certification Integration
+## 9 · Disability Certification Integration
 
-### 9.1 · Automatic Medical Cert Requests
+### 9.1 · Automatic Disability Certification Requests
 
 ```ruby
 # app/models/concerns/application_status_management.rb
@@ -683,7 +570,7 @@ after_save :handle_status_change, if: :saved_change_to_status?
 private
 
 # Handles transitions to specific statuses that trigger automated actions.
-# Currently triggers the auto-request for medical certification when transitioning to 'awaiting_dcf'.
+# Currently triggers the auto-request for disability certification when transitioning to 'awaiting_dcf'.
 def handle_status_change
   return unless status_previously_changed?(to: 'awaiting_dcf')
 
@@ -692,7 +579,7 @@ end
 
 # Triggered when the application status transitions to 'awaiting_dcf'.
 # Checks if income and residency proofs are approved.
-# If so, updates the medical certification status to 'requested' and sends an email to the medical provider.
+# If so, updates the medical_certification_status code field to 'requested' and sends an email to the certifying professional.
 def handle_awaiting_dcf_transition
   # Ensure income and residency proofs are approved
   return unless all_proofs_approved?
@@ -707,27 +594,24 @@ def handle_awaiting_dcf_transition
 end
 ```
 
-### 9.2 · Medical Cert as Proof Type
+### 9.2 · Disability Certification Status
 
 ```ruby
-# Medical certifications are treated as a special proof type
-# with their own status field and workflow integration
+# Disability certification has its own status field and workflow integration.
+# Code identifiers still use medical_certification_* names.
 
-# Check if medical certification is considered "complete" for application processing
-# This is typically checked by looking at the medical_certification_status field directly.
+# Check if disability certification is considered "complete" for application processing.
 # For example: application.medical_certification_status_received? || application.medical_certification_status_approved?
 
-# This method is used internally by ApplicationStatusManagement for auto-approval
-# It checks if all three required components (income, residency, medical cert) are approved
-# (See ApplicationStatusManagement#all_requirements_met?)
+# This method is used internally by ApplicationStatusManagement.
+# It checks whether required proofs and disability certification are approved.
 def all_requirements_met?
   income_proof_status_approved? &&
     residency_proof_status_approved? &&
     medical_certification_status_approved?
 end
 
-# Check if medical certification is not required (i.e., not yet requested)
-# This is typically checked by looking at the medical_certification_status field directly.
+# Check whether disability certification has not yet been requested.
 # For example: application.medical_certification_status_not_requested?
 ```
 
@@ -808,7 +692,8 @@ end
 ```javascript
 // app/javascript/controllers/reviews/proof_status_controller.js
 toggle(event) {
-  // Check for both "approved" and "accepted" values to support both proofs and medical certifications
+  // Check for both "approved" and "accepted" values because proof review and
+  // disability certification review use different status labels.
   const isApproved = event.target.value === "approved" || event.target.value === "accepted"
   
   // Use setVisible utility for consistent visibility management
@@ -833,12 +718,15 @@ test 'creates a ProofReview record and updates application status on success' do
 end
 
 test 'does not roll back ProofReview on notification failure' do
-  NotificationService.stub(:create_and_deliver!, ->(*) { raise StandardError }) do
+  Applications::RequestProofResubmission.any_instance.stub(:call, -> {
+    BaseService::Result.failure("delivery failed", data: { delivery_failed: true })
+  }) do
     assert_difference('ProofReview.count', 1) do
-      service.review(proof_type: 'income', status: 'approved')
+      service.review(proof_type: 'income', status: 'rejected')
     end
   end
-  assert @application.reload.income_proof_status_approved?
+  assert @application.reload.income_proof_status_rejected?
+  assert AdminAlert.where(alert_type: 'secure_upload_request_delivery_failed').exists?
 end
 
 test 'raises on critical database errors during review' do
@@ -857,14 +745,14 @@ end
 # Test complete workflows end-to-end
 test 'handles approval process from submission to admin review' do
   application = create(:application, :in_progress, user: constituent)
-  application.update_column(:medical_certification_status, Application.medical_certification_statuses[:approved])
+  application.update!(medical_certification_status: :approved)
 
   post resubmit_proof_document_constituent_portal_application_path(application, proof_type: 'income'),
        params: { income_proof_upload: fixture_file_upload('test_proof.pdf', 'application/pdf') }
   post resubmit_proof_document_constituent_portal_application_path(application, proof_type: 'residency'),
        params: { residency_proof_upload: fixture_file_upload('test_proof.pdf', 'application/pdf') }
 
-  assert_difference('Notification.count', 2) do
+  assert_difference('ProofReview.count', 2) do
     patch update_proof_status_admin_application_path(application),
           params: { proof_type: 'income', status: 'approved' }
     patch update_proof_status_admin_application_path(application),
@@ -872,7 +760,7 @@ test 'handles approval process from submission to admin review' do
   end
 
   assert application.reload.status_approved?
-  assert Event.where(action: 'application_auto_approved', auditable: application).exists?
+  assert ProofReview.where(application: application, status: 'approved').count >= 2
 end
 ```
 
@@ -887,18 +775,12 @@ end
 
 ```ruby
 # Fix inconsistent application (if proofs are approved but application status is not)
-# If an application's proof statuses (income, residency, medical certification) are all 'approved'
-# but the application status itself is not 'approved', you can trigger the auto-approval logic
-# by ensuring the relevant proof statuses are correctly set and then saving the application.
-# The `ApplicationStatusManagement#auto_approve_if_eligible` callback will then re-evaluate.
+# If an application's income, residency, ID, and disability certification statuses
+# are all approved but the application status itself is not approved, trigger the
+# same reconciliation path the review service uses.
 
-# Example: If income_proof_status was manually changed in DB and auto-approval didn't trigger
 app = Application.find(123)
-# Ensure all relevant proof statuses are correctly set to approved
-app.income_proof_status = :approved
-app.residency_proof_status = :approved
-app.medical_certification_status = :approved
-app.save! # This will trigger the `auto_approve_if_eligible` callback if conditions are met
+app.reconcile_workflow_state!
 
 # Alternatively, an administrator can manually approve the application via the UI or console:
 # app.approve!(user: User.find_by(email: 'admin@example.com'))
@@ -907,7 +789,7 @@ app.save! # This will trigger the `auto_approve_if_eligible` callback if conditi
 ### 13.2 · Missing Audit Trails
 
 **Problem**: Proof submissions not creating audit events  
-**Check**: `ProofAttachmentService` logging and `skip_audit_events` usage; mailbox-level events in `ProofSubmissionMailbox`
+**Check**: `ProofAttachmentService` logging and `skip_audit_events` usage; for secure resubmissions, check `Applications::SubmitProofResubmission#log_submission`
 
 ```ruby
 # app/services/proof_attachment_service.rb
@@ -915,7 +797,7 @@ def log_audit_event(context, event_metadata)
   return if context.skip_audit_events
 
   AuditEventService.log(
-    action: "#{context.proof_type}_proof_#{context.submission_method == :email ? 'submitted' : 'attached'}",
+    action: "#{context.proof_type}_proof_attached",
     actor: context.admin || context.application.user,
     auditable: context.application,
     metadata: event_metadata
@@ -923,10 +805,10 @@ def log_audit_event(context, event_metadata)
 end
 ```
 
-### 13.3 · Email Processing Failures
+### 13.3 · Secure Upload Failures
 
-**Problem**: Emailed proofs not being processed  
-**Debug**: Check `/rails/conductor/action_mailbox/inbound_emails` and mailbox routing logic
+**Problem**: Secure proof uploads are rejected or not attached
+**Debug**: Check `SecureRequestForm.active_for_public_use?`, controller form errors, `ProofAttachmentValidator`, and `Applications::SubmitProofResubmission`
 
 ---
 
@@ -944,4 +826,4 @@ end
 
 ---
 
-**Tools**: Admin dashboard (`/admin/applications`) · Mailbox conductor (`/rails/conductor/action_mailbox`) · Audit logs (`/admin/events`) · Background job monitoring (`/admin/jobs`)
+**Tools**: Admin dashboard (`/admin/applications`) · Secure form admin tables · Audit logs (`/admin/events`) · Background job monitoring (`/admin/jobs`)

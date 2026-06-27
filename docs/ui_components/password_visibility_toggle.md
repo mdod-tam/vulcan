@@ -23,8 +23,8 @@ The password visibility toggle component allows users to toggle the visibility o
 The component is implemented using:
 
 1. A Rails form helper (`password_field_with_toggle`)
-2. A JavaScript function (`togglePasswordVisibility`)
-3. CSS styles (`password_visibility.css`)
+2. The shared helper data builder (`password_visibility_data`)
+3. The Stimulus `visibility` controller (`app/javascript/controllers/ui/visibility_controller.js`)
 
 ## Usage
 
@@ -129,6 +129,6 @@ Here's an example of how to use the component in a registration form:
 If the password visibility toggle is not working:
 
 1. Make sure the JavaScript is properly loaded
-2. Check that the password field has the correct ID
-3. Verify that the toggle button has the correct onclick handler
+2. Check that the wrapper has the `visibility` Stimulus controller data attributes
+3. Verify that the input/button/status elements have the expected Stimulus targets
 4. Check the browser console for any JavaScript errors

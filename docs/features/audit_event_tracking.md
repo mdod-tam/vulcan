@@ -340,32 +340,38 @@ end
 |--------|-------------|---------------|
 | `income_proof_attached` | ProofAttachmentService (web/paper) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
 | `residency_proof_attached` | ProofAttachmentService (web/paper) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
-| `income_proof_submitted` | ProofAttachmentService (email) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
-| `residency_proof_submitted` | ProofAttachmentService (email) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
 | `income_proof_attachment_failed` | ProofAttachmentService | `proof_type`, `submission_method`, `error_class`, `error_message`, `success` |
 | `residency_proof_attachment_failed` | ProofAttachmentService | `proof_type`, `submission_method`, `error_class`, `error_message`, `success` |
-| `proof_submission_received` | ProofSubmissionMailbox | `application_id`, `inbound_email_id`, `email_subject`, `email_from`, `attachments_count` |
-| `proof_submission_processed` | ProofSubmissionMailbox | `application_id`, `inbound_email_id` |
-| `proof_submission_<error_type>` | ProofSubmissionMailbox bounce | `application_id`, `error`, `error_type`, `inbound_email_id`, `sender_email` |
-| `proof_approved` | Admin review (ProofReview) | `proof_type` |
-| `proof_rejected` | Admin review (ProofReview) | `proof_type`, `rejection_reason` |
+| `proof_resubmission_requested` | Applications::RequestProofResubmission | `secure_request_form_id`, `application_id`, `recipient_id`, `recipient_channel`, `request_batch_id`, `proof_type`, `expires_at` |
+| `proof_submitted_via_secure_form` | Applications::SubmitProofResubmission | `secure_request_form_id`, `recipient_user_id`, `recipient_role`, `request_batch_id`, `proof_type` |
+| `proof_resubmission_request_revoked` | SecureTokenizable | `secure_request_form_id`, `request_batch_id`, `recipient_id`, `recipient_channel`, `proof_type`, `reason` |
+| `proof_resubmission_request_expired` | SecureFormExpirationRecorder | `secure_request_form_id`, `request_batch_id`, `recipient_id`, `recipient_channel`, `proof_type`, `expires_at` |
+| `proof_approved` | `ProofReview` callback after admin approval | `proof_type` |
+| `proof_rejected` | `ProofReview` callback after admin rejection | `proof_type`, `rejection_reason`, `resubmission_delivered` |
 | `income_proof_rejected` | Explicit reject path without attachment | `proof_type`, `rejection_reason`, `submission_method` |
 
-### 6.3 · Medical Certification Events
+### 6.3 · Disability Certification Events
 
 | Action | Triggered By | Metadata Keys |
 |--------|-------------|---------------|
-| `medical_certification_requested` | Email, Mail, or DocuSeal request | `medical_provider_email`, `submission_method`, `provider_name`, `change_type` |
-| `medical_certification_received` | Email processing | `submission_method`, `email_from` |
+| `medical_certification_requested` | Email, mail, secure upload, or DocuSeal request | `medical_provider_email`, `submission_method`, `provider_name`, `change_type` |
+| `cert_upload_requested` | Applications::RequestCertificationUpload | `medical_provider_secure_request_form_id`, `application_id`, `request_batch_id`, `provider_name`, `provider_email`, `requested_channel`, `expires_at` |
+| `cert_submitted_via_secure_form` | Applications::SubmitCertificationUpload | `medical_provider_secure_request_form_id`, `request_batch_id`, `provider_email`, `additional_blob_id` |
+| `cert_upload_request_revoked` | SecureTokenizable | `medical_provider_secure_request_form_id`, `request_batch_id`, `provider_name`, `provider_email`, `reason` |
+| `cert_upload_request_expired` | SecureFormExpirationRecorder | `medical_provider_secure_request_form_id`, `request_batch_id`, `provider_name`, `provider_email`, `expires_at` |
+| `medical_certification_received` | Secure upload, admin upload, fax/mail manual upload, or DocuSeal | `submission_method`, `provider_email`, `request_batch_id` |
 | `medical_certification_approved` | Admin review | `admin_id`, `review_notes` |
 | `medical_certification_rejected` | Admin review | `rejection_reason`, `admin_id` |
 
-**Submission Method Tracking**: All medical certification requests include `submission_method` metadata to track the delivery channel:
+**Submission Method Tracking**: Disability certification requests include `submission_method` metadata to track the delivery channel. Code-level event names still use `medical_certification_*`.
 - `email` - Automated emails sent via `MedicalCertificationService`
+- `secure_form` - Provider uploads through `MedicalProviderSecureRequestForm`
 - `mail` - Paper letters queued for postal delivery via `MedicalCertificationPdfService`
 - `document_signing` - Electronic signatures via `DocumentSigning::SubmissionService` (DocuSeal)
 
-Audit logs display this as: "Medical certification requested from [Provider] (via Email/Mail/Document Signing)" providing clear visibility into the request delivery method.
+Audit logs display this as: "Disability certification requested from [Provider] (via Email/Mail/Document Signing)" providing clear visibility into the request delivery method.
+
+Proof rejection delivery has two steps: `ProofReview` records the rejection and calls `Applications::RequestProofResubmission`, which creates the `proof_resubmission_requested` tracking notification with `deliver: false` before attempting contact-channel delivery. If delivery fails, the review remains recorded, active secure forms can be revoked, and the service result includes failure data so the admin workflow can surface an alert such as "review succeeded but secure upload request was not delivered."
 
 ### 6.4 · User & Authentication Events
 
@@ -393,6 +399,9 @@ Note: These are examples of potential events. They are not currently emitted by 
 | `notification_<action>_created` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_attempted` |
 | `notification_<action>_sent` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_successful` |
 | `notification_<action>_failed` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_successful` |
+| `email_bounced` | Postmark bounce webhook (`Webhooks::EmailEventsController` → `EmailEventHandler`) | `notification_id`, `bounce_type`, `provider_email` |
+
+`email_bounced` is logged when a provider outbound email bounce is matched to a tracked `Notification` (`medical_certification_requested`, `cert_upload_requested`, or `medical_certification_rejected`). The handler also sets `Notification#delivery_status` to `error` and stores bounce details in `metadata['delivery_error']`. Spam-complaint webhooks update the notification delivery record but do not emit a separate audit event.
 
 ---
 

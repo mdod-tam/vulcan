@@ -17,8 +17,8 @@ The notification system is built around a service-oriented architecture with cle
 | **`NotificationService`** | Central notification orchestration | Used by all services and controllers |
 | **`NotificationComposer`** | Message content generation | Used by Notification model and mailers |
 | **`Notification` Model** | Notification record storage and tracking | Polymorphic associations to all notifiable entities |
-| **Specialized Mailers** | Email template rendering and delivery | Application, Vendor, Medical Provider, Training specific |
-| **Email Templates** | Database-stored email content | Dynamic template system with variable substitution |
+| **Specialized Mailers** | Email template rendering and delivery | Application, Vendor, Training, and provider-specific paths |
+| **Email Templates** | Database-stored email content | `legacy_percent` and `liquid` syntax with strict variable validation |
 
 ### 1.2 · Notification Flow Architecture
 
@@ -39,9 +39,9 @@ User Action → Service → NotificationService.create_and_deliver!()
 ### 1.3 · Key Features
 
 - **Unified API**: Single service interface for all notification types
-- **Template System**: Database-stored email templates with variable substitution
+- **Template System**: Database-stored email templates with `legacy_percent` and Liquid rendering
 - **Delivery Tracking**: Comprehensive tracking of delivery status and errors
-- **Single-Channel Today**: Only `:email` delivery is implemented; extension points exist
+- **Delivery Channels Today**: Email delivery is implemented; selected workflows can also queue printable letters.
 - **Error Recovery**: Robust error handling with retry mechanisms
 - **Rails Flash Integration**: Preference for accessible Rails flash messages over toast notifications
 
@@ -58,7 +58,7 @@ User Action → Service → NotificationService.create_and_deliver!()
 - **📧 Email Notifications**: Used for important communications that users need outside the application
   - Proof status changes (approved/rejected)
   - Account creation and security updates
-  - Medical certification requests
+  - Disability certification requests
   - Training assignments
 
 **Current State**: The application now uses Rails flash messages exclusively for in-app notifications. All JavaScript toast infrastructure has been removed.
@@ -426,6 +426,7 @@ Email templates are stored in the database via the `EmailTemplate` model, allowi
 ```ruby
 class EmailTemplate < ApplicationRecord
   enum :format, { html: 0, text: 1 }
+  enum :syntax, { legacy_percent: 0, liquid: 1 }
 
   validates :name, presence: true, uniqueness: { scope: :format }
   validates :subject, presence: true
@@ -434,26 +435,21 @@ class EmailTemplate < ApplicationRecord
   validates :description, presence: true
   validates :version, presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   
+  # Delegates to EmailTemplates::Renderer, which enforces syntax and variables.
   def render(**variables)
-    rendered_body = body.dup
-    rendered_subject = subject.dup
-
-    variables.each do |key, value|
-      rendered_body = rendered_body.gsub("%{#{key}}", value.to_s)
-      rendered_body = rendered_body.gsub("%<#{key}>s", value.to_s)
-
-      rendered_subject = rendered_subject.gsub("%{#{key}}", value.to_s)
-      rendered_subject = rendered_subject.gsub("%<#{key}>s", value.to_s)
-    end
-
-    [rendered_subject, rendered_body]
+    EmailTemplates::Renderer.render(template: self, variables: variables)
   end
 end
 ```
 
 ### 5.2 · Template Variable System
 
-Templates use `%{variable}` / `%<variable>s` interpolation:
+Templates support two syntax modes:
+
+- `legacy_percent`: `%{variable}` and `%<variable>s`
+- `liquid`: output tags such as `{{ application.id }}` or `{{- application.id -}}`
+
+Liquid rendering is current behavior when `email_template_liquid` is enabled. It is intentionally strict: templates can only reference exact required or optional variable paths declared on the template, and Liquid tags/filters are rejected.
 
 ```text
 <!-- Subject Template -->
@@ -479,21 +475,16 @@ The MAT Vulcan Team
 class ApplicationNotificationsMailer < ApplicationMailer
   def proof_rejected(application, proof_review)
     template_name = 'application_notifications_proof_rejected'
-    text_template = find_email_template(template_name)
-    
-    variables = build_proof_rejection_variables(application, proof_review)
-    send_email(application.user.email, text_template, variables)
-  end
-  
-  private
-  
-  def find_email_template(template_name)
-    EmailTemplate.find_by!(name: template_name, format: :text)
-  rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
-    raise "Email templates not found for #{template_name}"
+    locale        = resolve_template_locale(recipient: application.user)
+    text_template = find_text_template(template_name, locale: locale)
+
+    variables = build_proof_rejected_variables(application, proof_review)
+    send_email(recipient_email_for(application.user), text_template, variables)
   end
 end
+
+# find_text_template lives on ApplicationMailer — inherited by all mailers.
+# It looks up (name, format: :text, locale) and falls back to I18n.default_locale.
 ```
 
 ---
@@ -513,7 +504,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
     handle_proof_approved_letter(application, proof_review)
     
     template_name = 'application_notifications_proof_approved'
-    text_template = find_email_template(template_name)
+    locale        = resolve_template_locale(recipient: application.user)
+    text_template = find_text_template(template_name, locale: locale)
     variables = build_proof_approved_variables(application, proof_review)
     
     send_email(application.user.email, text_template, variables)
@@ -521,7 +513,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
   
   def proof_rejected(application, proof_review)
     template_name = 'application_notifications_proof_rejected'
-    text_template = find_email_template(template_name)
+    locale        = resolve_template_locale(recipient: application.user)
+    text_template = find_text_template(template_name, locale: locale)
     variables = build_proof_rejected_variables(application, proof_review)
     
     send_email(application.user.email, text_template, variables)
@@ -529,7 +522,8 @@ class ApplicationNotificationsMailer < ApplicationMailer
   
   def account_created(user, temp_password)
     template_name = 'application_notifications_account_created'
-    text_template = find_email_template(template_name)
+    locale        = resolve_template_locale(recipient: user)
+    text_template = find_text_template(template_name, locale: locale)
     variables = build_account_created_variables(user, temp_password)
     
     send_email(user.email, text_template, variables)
@@ -567,30 +561,16 @@ class VendorNotificationsMailer < ApplicationMailer
 end
 ```
 
-### 6.3 · MedicalProviderMailer
+### 6.3 · Disability Certification Provider Delivery
 
-Handles medical certification workflow notifications:
+Disability certification requests and rejection follow-up are provider-facing workflows. Code identifiers still use `medical_certification_*`, but user-facing prose should say disability certification.
 
-```ruby
-class MedicalProviderMailer < ApplicationMailer
-  def request_certification(application)
-    template_name = 'medical_provider_certification_request'
-    text_template = load_email_template(template_name)
-    variables = build_certification_request_variables(application)
-    
-    subject, body = text_template.render(**variables)
-    send_certification_email(application.medical_provider_email, subject, body)
-  end
-  
-  def certification_approved(application, notification)
-    template = load_email_template('medical_provider_certification_approved')
-    variables = build_approval_variables(application)
-    
-    subject, body = template.render(**variables)
-    send_approval_email(subject, body)
-  end
-end
-```
+Current provider rejection behavior:
+
+- A record-only constituent notification can be created for visibility.
+- Provider delivery is handled by `Applications::MedicalCertificationReviewer` and `MedicalProviderNotifier`, not by routing a `medical_certification_rejected` notification through `NotificationService::MAILER_MAP`.
+- `MedicalProviderNotifier` attempts the configured provider channel, including fax-first behavior where applicable and email fallback when available.
+- Notification failures should be surfaced to admins without undoing the underlying review record.
 
 ### 6.4 · TrainingSessionNotificationsMailer
 
@@ -622,23 +602,9 @@ class ProofReview < ApplicationRecord
 
   private
 
-  def send_notification(action_name, _mail_method, metadata)
-    AuditEventService.log(
-      action: action_name,
-      actor: admin,
-      auditable: application,
-      metadata: metadata
-    )
-
-    NotificationService.create_and_deliver!(
-      type: action_name,
-      recipient: application.user,
-      actor: admin,
-      notifiable: application,
-      metadata: metadata,
-      channel: :email
-    )
-  end
+  # Proof approval/rejection callbacks own audit and notification side effects.
+  # Rejections call Applications::RequestProofResubmission so the constituent
+  # receives a secure upload request instead of a generic proof email.
 end
 ```
 
@@ -690,8 +656,7 @@ end
 
 ### 7.4 · Background Job Integration
 
-Notifications are delivered via `ActionMailer#deliver_later` inside `NotificationService`.
-Email status tracking for medical certification requests is handled by `UpdateEmailStatusJob`.
+Notifications are delivered via `ActionMailer#deliver_later` inside `NotificationService` for mapped notification types. Disability certification request email status tracking is handled by `UpdateEmailStatusJob`.
 
 ---
 
@@ -721,7 +686,7 @@ end
 
 `UpdateEmailStatusJob` currently applies only to `medical_certification_requested` notifications.
 
-**Medical Certification Tracking**: Medical certification audit events (tracked via `AuditEventService.log()`) include `submission_method` metadata to identify the delivery channel: `email`, `mail` (postal), or `document_signing` (electronic). See [`docs/features/audit_event_tracking.md`](./audit_event_tracking.md) for complete details.
+**Disability Certification Tracking**: Disability certification audit events (tracked via `AuditEventService.log()`) include `submission_method` metadata to identify the delivery channel: `email`, `secure_form`, `mail` (postal), or `document_signing` (electronic). See [`docs/features/audit_event_tracking.md`](./audit_event_tracking.md) for complete details.
 
 ### 8.2 · Error Handling & Retry Logic
 
@@ -868,7 +833,7 @@ CREATE INDEX index_notifications_on_audited ON notifications (audited);
 
 ### 10.2 · Email Template Caching
 
-Templates are fetched directly from the database in mailers (e.g., `ApplicationNotificationsMailer#find_email_template`).
+Templates are fetched directly from the database in mailers via `ApplicationMailer#find_text_template` (inherited by `ApplicationNotificationsMailer` and other mailers).
 If caching is added, it should be keyed by template name + format and invalidated on update.
 
 ### 10.3 · Monitoring & Alerting
