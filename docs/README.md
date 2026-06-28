@@ -32,7 +32,6 @@ Deep-dive, code-facing docs for contributors.
 | `paper_application_architecture.md` | Admin paper-form flow, `Current.paper_context` bypass |
 | `user_management_features.md` | Phone/email dedup, `data-testid` naming, factory recipes |
 | `docuseal_integration_guide.md` | Digital document signing for disability certification |
-| `i18n_email_recommendations.md` | Email template locale sync, rejection reasons, mailer patterns |
 
 ### 📂 features/
 
