@@ -292,6 +292,39 @@ module Admin
       assert_no_match(/Invalid Liquid syntax|Liquid render failed/i, response.body)
     end
 
+    test 'edit renders EN and ES draft previews from prepared locals' do
+      template_name = "draft_preview_edit_#{SecureRandom.hex(4)}"
+      en_template = create(:email_template, :text,
+                           name: template_name,
+                           locale: 'en',
+                           syntax: :liquid,
+                           subject: 'EN {{ name }}',
+                           body: 'EN body {{ name }}',
+                           variables: { 'required' => ['name'], 'optional' => [] })
+      create(:email_template, :text,
+             name: template_name,
+             format: en_template.format,
+             locale: 'es',
+             syntax: :liquid,
+             subject: 'ES {{ name }}',
+             body: 'ES body {{ name }}',
+             variables: { 'required' => ['name'], 'optional' => [] })
+
+      get edit_admin_email_template_path(en_template), headers: default_headers
+
+      assert_response :success
+      assert_select 'turbo-frame#template-preview-en'
+      assert_select 'turbo-frame#template-preview-en[aria-live="polite"][aria-atomic="true"]'
+      assert_select 'turbo-frame#template-preview-en [role="status"]'
+      assert_select 'turbo-frame#template-preview-es'
+      assert_select 'turbo-frame#template-preview-es[aria-live="polite"][aria-atomic="true"]'
+      assert_select 'turbo-frame#template-preview-es [role="status"]'
+      assert_includes response.body, 'EN Sample Name'
+      assert_includes response.body, 'EN body Sample Name'
+      assert_includes response.body, 'ES Sample Name'
+      assert_includes response.body, 'ES body Sample Name'
+    end
+
     test 'update shows friendly validation error for malformed Liquid syntax' do
       template = create(:email_template, :text,
                         name: 'update_invalid_liquid_copy_test',

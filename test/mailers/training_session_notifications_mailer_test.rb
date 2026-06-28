@@ -188,4 +188,24 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     # Check that the email body contains expected text
     assert_includes email.body.to_s, expected_text
   end
+
+  test 'training_scheduled renders a real Liquid text template' do
+    EmailTemplate.unstub(:find_by!)
+    expected_date = @scheduled_for.strftime('%B %d, %Y')
+    create_real_text_email_template(
+      name: 'training_session_notifications_training_scheduled',
+      subject: 'Training {{ application_id }}',
+      body: '{{ constituent_name }} with {{ trainer_name }} on {{ scheduled_date }}',
+      required: %w[application_id constituent_name trainer_name scheduled_date]
+    )
+
+    email = TrainingSessionNotificationsMailer.training_scheduled(@training_session).deliver_now
+
+    assert_equal ['no_reply@mdmat.org'], email.from
+    assert_equal [@constituent.email], email.to
+    assert_equal "Training #{@application.id}", email.subject
+    assert_includes email.body.to_s, @constituent.full_name
+    assert_includes email.body.to_s, @trainer.full_name
+    assert_includes email.body.to_s, expected_date
+  end
 end

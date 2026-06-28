@@ -44,6 +44,7 @@
           <%= render 'form',
               email_template: @en_template,
               template_definition: @template_definition,
+              draft_preview_locals: @draft_preview_locals_by_locale.fetch('en'),
               locale: 'en',
               submit_label: 'Save EN',
               form_action_path: admin_email_template_path(@email_template) %>
@@ -85,6 +86,7 @@
           <%= render 'form',
               email_template: @es_template,
               template_definition: @template_definition,
+              draft_preview_locals: @draft_preview_locals_by_locale.fetch('es'),
               locale: 'es',
               submit_label: 'Save ES',
               form_action_path: admin_email_template_path(@email_template) %>

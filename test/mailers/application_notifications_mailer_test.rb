@@ -196,6 +196,28 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_nil email.cc
   end
 
+  test 'application_submitted queues letter from a real Liquid text template' do
+    EmailTemplate.unstub(:find_by!)
+    @user.update!(communication_preference: 'letter')
+    create_real_text_email_template(
+      name: 'application_notifications_application_submitted',
+      subject: 'Submitted {{ application_id }} on {{ submission_date_formatted }}',
+      body: 'Hello {{ user_first_name }}, application {{ application_id }} was submitted on {{ submission_date_formatted }}.',
+      required: %w[application_id submission_date_formatted user_first_name]
+    )
+
+    delivery = ApplicationNotificationsMailer.application_submitted(@application)
+
+    assert_difference -> { PrintQueueItem.count }, 1 do
+      assert_no_emails { delivery.deliver_now }
+    end
+
+    print_queue_item = PrintQueueItem.last
+    assert_equal @user, print_queue_item.constituent
+    assert_equal @application, print_queue_item.application
+    assert_predicate print_queue_item.pdf_letter, :attached?
+  end
+
   test 'proof_approved uses guardian locale and email when communications route to guardian' do
     guardian = create(:constituent,
                       email: "guardian.mailer.locale.#{SecureRandom.hex(3)}@example.com",

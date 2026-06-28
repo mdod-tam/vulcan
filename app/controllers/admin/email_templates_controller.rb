@@ -112,9 +112,8 @@ module Admin
       # @email_template is set by before_action
       # @template_definition is set by before_action
 
-      # Expensive computation done in controller for form preview
-      @sample_data = view_context.sample_data_for_template(@email_template.name, format: @email_template.format)
       @counterpart_template = counterpart_template
+      prepare_draft_preview_locals
     end
 
     # PATCH/PUT /admin/email_templates/:id
@@ -151,37 +150,39 @@ module Admin
       target_template = template_for_locale(params[:locale].presence || @email_template.locale)
 
       unless target_template
-        render_draft_preview(template: @email_template,
-                             error_message: 'Could not find this locale template for preview.')
+        render_draft_preview(**draft_preview_error_locals_for(
+          @email_template,
+          error_message: 'Could not find this locale template for preview.'
+        ))
         return
       end
 
       target_template.assign_attributes(email_template_params)
 
       if target_template.valid?
-        sample_data = view_context.sample_data_for_email_template(target_template,
-                                                                  locale: target_template.locale,
-                                                                  subject: target_template.subject)
-        rendered_subject, rendered_body = target_template.render(**sample_data)
-        render_draft_preview(template: target_template,
-                             rendered_subject: rendered_subject,
-                             rendered_body: rendered_body)
+        render_draft_preview(**draft_preview_locals_for(target_template))
       else
-        render_draft_preview(template: target_template,
-                             error_message: helpers.template_render_error_message(target_template.errors.full_messages))
+        render_draft_preview(**draft_preview_error_locals_for(
+          target_template,
+          error_message: helpers.template_render_error_message(target_template.errors.full_messages)
+        ))
       end
     rescue ArgumentError => e
       raise unless invalid_syntax_argument?(e)
 
       target_template ||= @email_template
       target_template.errors.add(:syntax, 'Choose a valid placeholder style.')
-      render_draft_preview(template: target_template,
-                           error_message: helpers.template_validation_error_messages(target_template.errors.full_messages).join(', '))
+      render_draft_preview(**draft_preview_error_locals_for(
+        target_template,
+        error_message: helpers.template_validation_error_messages(target_template.errors.full_messages).join(', ')
+      ))
     rescue StandardError => e
       Rails.logger.error("Failed to render draft template preview: #{e.message}")
       Rails.logger.error(e.backtrace.join("\n")) if e.backtrace
-      render_draft_preview(template: target_template || @email_template,
-                           error_message: helpers.template_render_error_message(e))
+      render_draft_preview(**draft_preview_error_locals_for(
+        target_template || @email_template,
+        error_message: helpers.template_render_error_message(e)
+      ))
     end
 
     # POST /admin/email_templates/:id/send_test
@@ -312,18 +313,55 @@ module Admin
       changes.reject { |_key, change| change[:from] == change[:to] }
     end
 
-    def render_draft_preview(template:, rendered_subject: nil, rendered_body: nil, error_message: nil)
-      locale_code = template.locale.to_s.downcase
-
+    def render_draft_preview(frame_id:, template:, rendered_subject: nil, rendered_body: nil, error_message: nil)
       render partial: 'admin/email_templates/draft_preview',
              locals: {
-               frame_id: "template-preview-#{locale_code}",
+               frame_id: frame_id,
                template: template,
                rendered_subject: rendered_subject,
                rendered_body: rendered_body,
                error_message: error_message
              },
              status: error_message.present? ? :unprocessable_content : :ok
+    end
+
+    def prepare_draft_preview_locals
+      @draft_preview_locals_by_locale = {}
+
+      [@en_template, @es_template].compact.each do |template|
+        @draft_preview_locals_by_locale[template.locale.to_s] = draft_preview_locals_for(template)
+      end
+    end
+
+    def draft_preview_locals_for(template)
+      sample_data = view_context.sample_data_for_email_template(template,
+                                                               locale: template.locale,
+                                                               subject: template.subject)
+      rendered_subject, rendered_body = template.render(**sample_data)
+
+      {
+        frame_id: draft_preview_frame_id(template),
+        template: template,
+        rendered_subject: rendered_subject,
+        rendered_body: rendered_body,
+        error_message: nil
+      }
+    rescue StandardError => e
+      draft_preview_error_locals_for(template, error_message: helpers.template_render_error_message(e))
+    end
+
+    def draft_preview_error_locals_for(template, error_message:)
+      {
+        frame_id: draft_preview_frame_id(template),
+        template: template,
+        rendered_subject: nil,
+        rendered_body: nil,
+        error_message: error_message
+      }
+    end
+
+    def draft_preview_frame_id(template)
+      "template-preview-#{template.locale.to_s.downcase}"
     end
 
     def render_update_failure(target_template, target_locale)
@@ -333,9 +371,8 @@ module Admin
         @es_template = target_template
       end
 
-      # Re-prepare sample data for form re-render on validation failure
-      @sample_data = view_context.sample_data_for_template(target_template.name, format: target_template.format)
       @counterpart_template = counterpart_template
+      prepare_draft_preview_locals
       friendly_errors = helpers.template_validation_error_messages(target_template.errors.full_messages)
       flash.now[:alert] = "Failed to update #{target_locale} template: #{friendly_errors.join(', ')}"
       render :edit, status: :unprocessable_content

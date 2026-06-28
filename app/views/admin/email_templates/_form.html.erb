@@ -1,3 +1,4 @@
+<%# locals: (email_template:, template_definition:, draft_preview_locals:, locale: nil, submit_label: nil, form_action_path: nil) -%>
 <% current_locale = local_assigns[:locale].presence || email_template.locale %>
 <% locale_code = current_locale.to_s.upcase %>
 <% locale_suffix = locale_code.downcase %>
@@ -18,7 +19,7 @@
 <% variable_help_id = "variable-help-#{locale_suffix}" %>
 <% variable_select_id = "variable-insert-#{locale_suffix}" %>
 <% subject_variable_select_id = "subject-variable-insert-#{locale_suffix}" %>
-<% preview_frame_id = "template-preview-#{locale_suffix}" %>
+<% preview_frame_id = draft_preview_locals.fetch(:frame_id) %>
 <% required_vars = email_template.required_variables || [] %>
 <% optional_vars = email_template.optional_variables || [] %>
 
@@ -246,23 +247,7 @@
     </p>
   </div>
 
-  <%
-    begin
-      sample_data = sample_data_for_email_template(email_template, locale: email_template.locale, subject: email_template.subject)
-      rendered_subject, rendered_body = email_template.render(**sample_data)
-      preview_error = nil
-    rescue => e
-      rendered_subject = nil
-      rendered_body = nil
-      preview_error = template_render_error_message(e)
-    end
-  %>
-  <%= render 'admin/email_templates/draft_preview',
-      frame_id: preview_frame_id,
-      template: email_template,
-      rendered_subject: rendered_subject,
-      rendered_body: rendered_body,
-      error_message: preview_error %>
+  <%= render partial: 'admin/email_templates/draft_preview', locals: draft_preview_locals %>
 
   <div class="flex justify-end gap-3 pt-4">
     <%= form.submit "Preview Draft",

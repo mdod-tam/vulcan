@@ -77,6 +77,27 @@ class UserMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_body
   end
 
+  test 'password_reset renders a real Liquid text template' do
+    EmailTemplate.unstub(:find_by!)
+    user = create(:user)
+    user.stubs(:generate_token_for).with(:password_reset).returns('test-password-reset-token')
+
+    create_real_text_email_template(
+      name: 'user_mailer_password_reset',
+      subject: 'Reset password for {{ user_email }}',
+      body: 'Reset link: {{ reset_url }} for {{ user_email }}',
+      required: %w[user_email reset_url]
+    )
+
+    email = UserMailer.with(user: user).password_reset.deliver_now
+
+    assert_equal ['no_reply@mdmat.org'], email.from
+    assert_equal [user.email], email.to
+    assert_equal "Reset password for #{user.email}", email.subject
+    assert_includes email.body.to_s, 'http://example.com/password/edit?token=test-password-reset-token'
+    assert_includes email.body.to_s, user.email
+  end
+
   test 'email_verification' do
     # Create unique user for this test
     user = create(:user)
