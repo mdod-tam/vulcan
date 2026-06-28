@@ -70,6 +70,31 @@ module Admin
       assert_turbo_stream action: 'update', target: 'attachments-section'
     end
 
+    test 'rejected proof turbo response shows alert when resubmission delivery is not confirmed' do
+      attach_income_proof!
+      stub_reviewable_proofs!
+
+      ProofReviewService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(
+          true,
+          'Income proof rejected successfully.',
+          { resubmission_delivered: false }
+        )
+      )
+
+      patch update_proof_status_admin_application_path(@application),
+            params: {
+              proof_type: 'income',
+              status: 'rejected',
+              rejection_reason: 'Income documentation is not acceptable.'
+            },
+            as: :turbo_stream
+
+      assert_response :success
+      assert_equal 'text/vnd.turbo-stream.html', response.media_type
+      assert_includes response.body, I18n.t('admin.proof_reviews.create.resubmission_not_delivered')
+    end
+
     test 'approve residency proof responds with turbo redirect when workflow state may change' do
       # Attach residency proof and keep income untouched
       @application.residency_proof.attach(io: StringIO.new('test content'), filename: 'residency.pdf', content_type: 'application/pdf')
