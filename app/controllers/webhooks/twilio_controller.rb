@@ -146,7 +146,7 @@ module Webhooks
     end
 
     def build_email_fallback_mail(notification, application, metadata)
-      rejection_reason = metadata['reason'] ||
+      rejection_reason = metadata['rejection_reason'] ||
                          application.medical_certification_rejection_reason ||
                          'Not specified'
       admin = notification.actor || User.admins.first || User.first

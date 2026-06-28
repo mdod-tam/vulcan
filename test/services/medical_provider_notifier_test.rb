@@ -23,7 +23,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                           actor: @admin,
                           notifiable: @application,
                           action: 'medical_certification_rejected',
-                          metadata: { 'reason' => 'Missing signature' })
+                          metadata: { 'rejection_reason' => 'Missing signature' })
 
     notifier = MedicalProviderNotifier.new(@application)
     notifier.stubs(:notify_by_email).returns(
@@ -53,14 +53,14 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                                    actor: @admin,
                                    notifiable: @application,
                                    action: 'medical_certification_rejected',
-                                   metadata: { 'reason' => 'Missing signature' })
+                                   metadata: { 'rejection_reason' => 'Missing signature' })
 
     newer_notification = create(:notification,
                                 recipient: @application.user,
                                 actor: @admin,
                                 notifiable: @application,
                                 action: 'medical_certification_rejected',
-                                metadata: { 'reason' => 'Different reason' })
+                                metadata: { 'rejection_reason' => 'Different reason' })
 
     notifier = MedicalProviderNotifier.new(@application)
     notifier.stubs(:notify_by_email).returns(
@@ -99,7 +99,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                           actor: @admin,
                           notifiable: @application,
                           action: 'medical_certification_rejected',
-                          metadata: { 'reason' => 'Missing signature' })
+                          metadata: { 'rejection_reason' => 'Missing signature' })
 
     notifier = MedicalProviderNotifier.new(@application)
     DocumentSigning::SubmissionService.expects(:new).never
@@ -154,7 +154,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                           actor: @admin,
                           notifiable: @application,
                           action: 'medical_certification_rejected',
-                          metadata: { 'reason' => 'Missing signature' })
+                          metadata: { 'rejection_reason' => 'Missing signature' })
     secure_upload_url = 'https://example.test/secure_certification_form?token=raw-secret-token'
     raw_error = "SMTP rejected message containing #{secure_upload_url}"
     mail = mock('certification_rejected_mail')
@@ -204,7 +204,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                           actor: @admin,
                           notifiable: @application,
                           action: 'medical_certification_rejected',
-                          metadata: { 'reason' => 'Missing signature' })
+                          metadata: { 'rejection_reason' => 'Missing signature' })
 
     notifier = MedicalProviderNotifier.new(@application)
     DocumentSigning::SubmissionService.expects(:new).never

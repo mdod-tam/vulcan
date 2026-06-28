@@ -183,7 +183,7 @@
                     when "medical_certification_approved"
                       "Disability certification approved"
                     when "medical_certification_rejected"
-                      reason = log.metadata['reason'].presence || log.metadata['rejection_reason'].presence
+                      reason = log.metadata['rejection_reason'].presence
                       "Disability certification rejected#{reason.present? ? " - #{reason}" : ''}"
                     when "review_requested"
                       "Staff follow-up requested by constituent"

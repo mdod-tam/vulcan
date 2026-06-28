@@ -149,18 +149,6 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert_match(%r{</a>\.$}, message)
   end
 
-  test 'generate message for medical_certification_rejected with reason' do
-    message = NotificationComposer.generate(
-      'medical_certification_rejected',
-      @application,
-      @admin,
-      { 'reason' => 'Missing signature' }
-    )
-    assert message.include?('Disability certification rejected for')
-    assert message.include?(@application.id.to_s)
-    assert message.include?('Missing signature')
-  end
-
   test 'generate message for medical_certification_rejected with rejection_reason' do
     message = NotificationComposer.generate(
       'medical_certification_rejected',

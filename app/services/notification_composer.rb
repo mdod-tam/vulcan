@@ -163,7 +163,7 @@ class NotificationComposer
   end
 
   def message_for_medical_certification_rejected
-    reason = metadata_value('reason') || metadata_value('rejection_reason')
+    reason = metadata_value('rejection_reason')
     reason_text = reason.present? ? " - #{reason}" : ''
     safe_join(['Disability certification rejected for ', sentence_application_reference, reason_text, '.'])
   end
