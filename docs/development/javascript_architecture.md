@@ -141,9 +141,9 @@ Form wiring:
 
 | Form | Income Controller Wiring |
 |------|--------------------------|
-| Constituent new application | Includes `income-validation` when `FeatureFlag.enabled?(:income_proof_required)` is true. |
+| Constituent new application | Includes `income-validation` when `FeatureFlag.income_proof_required?` is true. That predicate derives from `vouchers_enabled`; there is no separate `income_proof_required` feature-flag row. |
 | Constituent edit application | Includes `income-validation` when `@application.income_collection_enabled?` is true. |
-| Admin paper application | Includes `income-validation` when `FeatureFlag.enabled?(:income_proof_required)` is true. |
+| Admin paper application | Includes `income-validation` when `FeatureFlag.income_proof_required?` is true. |
 
 Warning containers render hidden by default. The constituent form uses `#income-threshold-warning`; the admin paper form uses `#admin-income-threshold-warning`. Tests should prefer `[data-income-validation-target="warningContainer"]` when the specific ID is not part of the behavior under test.
 

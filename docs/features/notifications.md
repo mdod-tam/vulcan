@@ -165,34 +165,27 @@ NotificationService.build
   .create_and_deliver!
 ```
 
-### 2.2 · Notification Types & Mailer Mapping
+### 2.2 · Delivery Routing
 
-```ruby
-MAILER_MAP = {
-  # Application notifications
-  'proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-  'proof_approved' => [ApplicationNotificationsMailer, :proof_approved],
-  'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-  'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-  'income_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-  'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-  'account_created' => [ApplicationNotificationsMailer, :account_created],
-  
-  # Vendor notifications
-  'w9_approved' => [VendorNotificationsMailer, :w9_approved],
-  'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
-  
-  # Training notifications
-  'training_requested' => [TrainingSessionNotificationsMailer, :trainer_assigned],
-  'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
-  
-  # Security notifications
-  'security_key_recovery_approved' => [ApplicationNotificationsMailer, :account_created]
-}.freeze
-```
+`NotificationService` resolves delivery through an explicit `MAILER_MAP`. It does not dynamically route every `medical_certification_*` action by suffix.
 
-Notifications with actions starting with `medical_certification_` are routed dynamically to
-`MedicalProviderMailer` based on the action suffix.
+| Action | Mailer method | Notes |
+|--------|---------------|-------|
+| `account_created` | `ApplicationNotificationsMailer.account_created` | Redacts `temp_password` metadata after delivery. |
+| `proof_rejected`, `id_proof_rejected`, `income_proof_rejected`, `residency_proof_rejected` | `ApplicationNotificationsMailer.proof_rejected` | Legacy/mailer-test delivery only; normal reviewable proof rejection delivery uses `Applications::RequestProofResubmission`. |
+| `id_proof_attached`, `income_proof_attached`, `residency_proof_attached` | `ApplicationNotificationsMailer.proof_received` | Resolves proof type from metadata or action name. |
+| `training_requested` | `ApplicationNotificationsMailer.training_requested` | Application-level training request notice. |
+| `trainer_assigned`, `training_scheduled`, `training_rescheduled`, `training_cancelled` | `TrainingSessionNotificationsMailer` matching status method | Training-session lifecycle delivery. |
+| `training_missed` | `TrainingSessionNotificationsMailer.no_show_notification` | No-show delivery path. |
+| `w9_approved`, `w9_rejected` | `VendorNotificationsMailer` matching W-9 method | Vendor W-9 status delivery. |
+| `security_key_recovery_approved` | `ApplicationNotificationsMailer.security_key_recovery_approved` | Account recovery approval notice. |
+| `medical_certification_requested` | `MedicalProviderMailer.requested` | Provider request email. |
+| `medical_certification_not_provided` | `ApplicationNotificationsMailer.medical_certification_not_provided` | Constituent-facing notification. |
+| `max_rejections_warning` | `ApplicationNotificationsMailer.max_rejections_reached` | Maximum proof-rejection warning. |
+
+Record-only actions are intentionally delivery no-ops: `medical_certification_received`, `documents_requested`, `proof_approved`, and `medical_certification_approved`. These can create `Notification` records for audit or dashboard visibility without logging a missing-mailer delivery error.
+
+Reviewable proof rejections are special: `NotificationService` blocks orphan delivery for `proof_rejected`, `id_proof_rejected`, `income_proof_rejected`, and `residency_proof_rejected` unless callers pass `metadata: { delivery_path: 'legacy' }`. The live admin review path should use `ProofReview` / `Applications::RequestProofResubmission`, which creates secure upload requests instead of generic proof-rejection email.
 
 ### 2.3 · Error Handling & Recovery
 
@@ -217,12 +210,13 @@ The service enforces contracts for specific notification types:
 ```ruby
 def enforce_delivery_contracts!(notification)
   case notification.action
-  when 'proof_rejected', 'proof_approved', 'income_proof_rejected', 'residency_proof_rejected'
+  when 'proof_rejected', 'id_proof_rejected', 'income_proof_rejected', 'residency_proof_rejected'
     # Accept both Application and ProofReview as valid notifiable types
     ensure_action_contract?(notification, notifiable_class: [Application, ProofReview], actor_presence: true)
   when 'account_created'
-    ensure_action_contract?(notification, recipient_class: User) &&
-    validate_account_created_temp_password?(notification)
+    ensure_action_contract?(notification, recipient_class: User)
+  when 'medical_certification_not_provided'
+    ensure_action_contract?(notification, notifiable_class: Application, actor_presence: true)
   else
     true # No specific contract for other actions
   end
@@ -691,43 +685,22 @@ end
 ### 8.2 · Error Handling & Retry Logic
 
 ```ruby
-def send_notification_email(notification, mailer_class, method_name)
-  case notification.action
-  when 'account_created'
-    temp_password = notification.metadata&.dig('temp_password')
-    mailer_class.public_send(method_name, notification.recipient, temp_password).deliver_later
-    redact_temp_password(notification)
-  when 'proof_rejected', 'proof_approved'
-    application = notification.notifiable
-    proof_review = find_proof_review(application, notification.metadata)
-    mailer_class.public_send(method_name, application, proof_review).deliver_later
-  else
-    # Generic notification handling
-    mailer_class.public_send(method_name, notification.notifiable, notification).deliver_later
-  end
-rescue StandardError => e
-  handle_delivery_error(notification, e, :email)
-  raise
-end
-
 def handle_delivery_error(notification, error, channel)
   error_metadata = {
     'delivery_error' => {
       'message' => error.message,
-      'class' => error.class.name,
-      'timestamp' => Time.current.iso8601,
-      'channel' => channel.to_s
+      'occurred_at' => Time.current.iso8601,
+      'channel' => channel.to_s,
+      'service' => 'NotificationService',
+      'retry_possible' => true
     }
   }
-  
-  notification.update!(
-    delivery_status: 'error',
-    metadata: notification.metadata.merge(error_metadata)
-  )
-  
-  Rails.logger.error "NotificationService: Delivery failed for #{notification.action} notification ##{notification.id}: #{error.message}"
+
+  notification.update(delivery_status: 'error', metadata: notification.metadata.merge(error_metadata))
 end
 ```
+
+Delivery failures mark the notification `error` and store sanitized delivery metadata. When validation prevents the normal update, `NotificationService` falls back to assigning the same metadata and saving without validations so the failure state is still visible for support.
 
 ### 8.3 · Batch Operations & Performance
 

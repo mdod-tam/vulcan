@@ -59,7 +59,7 @@ dependent = User.create!(
 
 ```ruby
 dependent = User.create!(
-  email:            'dependent-abc123@system.local', # system-generated unique
+  email:            'dependent-abc123@system.matvulcan.local', # system-generated unique
   phone:            '000-000-1234',
   dependent_email:  'guardian@example.com',
   dependent_phone:  '555-0002'
@@ -197,8 +197,10 @@ create(:guardian_relationship, :dependent_shares_contact)  # Shared contact info
 
 # User factory traits
 create(:constituent, :with_dependents)           # Guardian with dependents
-create(:constituent, :with_guardians)            # Dependent with guardians
+create(:constituent, :with_guardian)             # Dependent with a guardian
 ```
+
+`User.with_guardians` is a model scope for querying dependent users with guardians; it is not a FactoryBot trait.
 
 *Always*:
 
