@@ -28,10 +28,10 @@ priority_levels:
 #  Common file anchors
 # ──────────────────────────────────────────────────────────────────────────────
 file_paths:
-  user_model:        &user_model_path        { path: "app/models/user.rb",      purpose: "Core user model" }
-  session_model:     &session_model_path     { path: "app/models/session.rb",   purpose: "Session model" }
-  auth_js:           &auth_js_path           { path: "app/javascript/auth.js",  purpose: "Auth JS" }
-  event_model:       &event_model_path       { path: "app/models/event.rb",     purpose: "Security event model" }
+  user_model:        { path: "app/models/user.rb",      purpose: "Core user model" }
+  session_model:     { path: "app/models/session.rb",   purpose: "Session model" }
+  auth_js:           { path: "app/javascript/auth.js",  purpose: "Auth JS" }
+  event_model:       { path: "app/models/event.rb",     purpose: "Security event model" }
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Environment config
@@ -56,13 +56,13 @@ controls:
       nist_csf: ["PR.AC-1", "PR.AC-7"]
       nist_800_53: ["IA-5", "AC-7"]
       rails: ["ActiveModel::SecurePassword"]
-    priority: *priority_levels.critical
+    priority: { label: "Critical", value: 1 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: true, rails_builtin: true }
     threat: "Credential stuffing / brute-force"
     implementation:
       notes: "Spike Argon2id/PBKDF2 ≥ 310 k iter – due 2025-06-30"
-      files: [ *user_model_path, *session_model_path ]
+      files: [ { path: "app/models/user.rb", purpose: "Core user model" }, { path: "app/models/session.rb", purpose: "Session model" } ]
       details:
         - "bcrypt cost ≥ 12"
         - "constant-time password check via `authenticate_by`"
@@ -79,12 +79,12 @@ controls:
       doit: ["IA-2", "G21-1"]
       nist_csf: ["PR.AC-7"]
       nist_800_53: ["IA-2"]
-    priority: *priority_levels.critical
+    priority: { label: "Critical", value: 1 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: true }
     threat: "Account takeover via credential compromise"
     implementation:
-      files: [ *user_model_path, *auth_js_path ]
+      files: [ { path: "app/models/user.rb", purpose: "Core user model" }, { path: "app/javascript/auth.js", purpose: "Auth JS" } ]
       details:
         - "WebAuthn, TOTP & SMS supported"
         - "MFA enforced for all external users & admins"
@@ -96,11 +96,11 @@ controls:
   - id: "AUTH-003"
     name: "Password Policy"
     frameworks: { doit: ["PR.AC-1"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
-      files: [ *user_model_path ]
+      files: [ { path: "app/models/user.rb", purpose: "Core user model" } ]
       details:
         - "Min length ≥ 8"
         - "Complexity via custom validation (if enabled)"
@@ -111,12 +111,12 @@ controls:
     frameworks:
       doit: ["PR.AC-1"]
       nist_800_53: ["AC-12"]
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: true }
     threat: "Session hijacking"
     implementation:
-      files: [ *session_model_path, { path: "app/controllers/application_controller.rb", purpose: "reset_session" } ]
+      files: [ { path: "app/models/session.rb", purpose: "Session model" }, { path: "app/controllers/application_controller.rb", purpose: "reset_session" } ]
       details:
         - "Idle timeout 30 min"
         - "SameSite=Lax, Secure, HttpOnly cookies"
@@ -130,7 +130,7 @@ controls:
       doit: ["SC-13", "PR.DS-2"]
       nist_csf: ["PR.DS-1", "PR.DS-2"]
       rails: ["ActiveRecord::Encryption"]
-    priority: *priority_levels.critical
+    priority: { label: "Critical", value: 1 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: false }
     key_management:
@@ -138,9 +138,8 @@ controls:
       rotation: { enabled: true, cadence: "annual", next_rotation: "2026-05-31" }
     implementation:
       files:
-        - *user_model_path
+        - { path: "app/models/user.rb", purpose: "Core user model" }
         - { path: "app/models/totp_credential.rb", purpose: "TOTP secrets encryption" }
-        - { path: "app/models/sms_credential.rb", purpose: "SMS codes encryption" }
         - { path: "app/models/webauthn_credential.rb", purpose: "WebAuthn keys encryption" }
         - { path: "config/initializers/active_record_encryption.rb", purpose: "Encryption configuration" }
       details:
@@ -148,7 +147,7 @@ controls:
         - "All sensitive PII is encrypted via ActiveRecord `encrypts`."
         - "Deterministic encryption: email, phone, ssn_last4 (queryable)"
         - "Non-deterministic encryption: addresses, password_digest, credential secrets"
-        - "Encrypted columns: users.password_digest, users.ssn_last4, users.email, users.phone, users.date_of_birth, users.physical_address_1, users.physical_address_2, users.city, users.state, users.zip_code, totp_credentials.secret, sms_credentials.code_digest, webauthn_credentials.public_key"
+        - "Encrypted columns: users.password_digest, users.ssn_last4, users.email, users.phone, users.date_of_birth, users.physical_address_1, users.physical_address_2, users.city, users.state, users.zip_code, totp_credentials.secret, webauthn_credentials.public_key"
     audit:
       report: "https://audit.example.com/reports/2024-Q1/DATA-001.pdf"
       coverage: 0.95
@@ -157,7 +156,7 @@ controls:
   - id: "DATA-002"
     name: "Input Validation & Filtering"
     frameworks: { doit: ["SC-13", "IA-7"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
@@ -171,7 +170,7 @@ controls:
   - id: "DATA-003"
     name: "CSRF Protection"
     frameworks: { doit: ["PR.IP-9"], rails: ["RequestForgeryProtection"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
@@ -184,16 +183,16 @@ controls:
   - id: "AUTHZ-002"
     name: "Authorization Checks"
     frameworks: { doit: ["PR.AC-4"] }
-    priority: *priority_levels.critical
+    priority: { label: "Critical", value: 1 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
-      files: [ { path: "app/controllers/concerns/authentication.rb", purpose: "RBAC helpers" }, *user_model_path ]
+      files: [ { path: "app/controllers/concerns/authentication.rb", purpose: "RBAC helpers" }, { path: "app/models/user.rb", purpose: "Core user model" } ]
 
   - id: "AUTHZ-003"
     name: "API Security"
     frameworks: { doit: ["PR.AC-4"], rails: ["Rack::Attack"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: true }
     implementation:
@@ -208,7 +207,7 @@ controls:
   - id: "CONFIG-001"
     name: "Application Hardening & Secure Configuration"
     frameworks: { doit: ["SC-13", "IA-7"] }
-    priority: *priority_levels.critical
+    priority: { label: "Critical", value: 1 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: true }
     implementation:
@@ -227,10 +226,10 @@ controls:
   - id: "AUDIT-001"
     name: "Security Logging"
     frameworks: { doit: ["DE.AE-1/2"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     status: { implemented: true, tested: false, documented: true, audited: false }
     implementation:
-      files: [ *event_model_path, { path: "config/application.rb", purpose: "Log config" } ]
+      files: [ { path: "app/models/event.rb", purpose: "Security event model" }, { path: "config/application.rb", purpose: "Log config" } ]
       details:
         - "Logs → CloudWatch → SumoLogic"
         - "Retention ≥ 1 yr; auth anomaly alerts"
@@ -238,10 +237,10 @@ controls:
   - id: "AUDIT-002"
     name: "Audit Trail"
     frameworks: { doit: ["AU-3"] }
-    priority: *priority_levels.medium
+    priority: { label: "Medium", value: 3 }
     status: { implemented: true, tested: false, documented: true, audited: false }
     implementation:
-      files: [ *user_model_path ]
+      files: [ { path: "app/models/user.rb", purpose: "Core user model" } ]
       details: ["PaperTrail or equivalent on sensitive models"]
 
   # ── TESTING & VULN MGMT ────────────────────────────────────────────────────
@@ -250,7 +249,7 @@ controls:
   - id: "TEST-001"
     name: "Security Testing & Assessment"
     frameworks: { doit: ["CA-2.1", "RA-5", "SI-2"] }
-    priority: *priority_levels.critical
+    priority: { label: "Critical", value: 1 }
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
       tools: ["Brakeman", "bundler-audit", "Dependabot"]
@@ -262,7 +261,7 @@ controls:
   - id: "SCA-001"
     name: "Supply-Chain Security (SBOM & SCA)"
     frameworks: { doit: ["SI-2", "RA-5"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
       tools: ["cyclonedx", "Dependabot"]
@@ -271,7 +270,7 @@ controls:
   - id: "PATCH-001"
     name: "Patch Management (Ruby/Rails)"
     frameworks: { doit: ["RA-5"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
       details:
@@ -284,7 +283,7 @@ controls:
   - id: "ERROR-001"
     name: "Error Management & Exception Handling"
     frameworks: { doit: ["PR.DS-6"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     status: { implemented: true, tested: true, documented: true, audited: false }
     implementation:
       files:
@@ -300,7 +299,7 @@ controls:
   - id: "FILE-SEC-001"
     name: "Active Storage Validation"
     frameworks: { doit: ["SC-13", "IA-7"], rails: ["ActiveStorage::Validations"] }
-    priority: *priority_levels.high
+    priority: { label: "High", value: 2 }
     status: { implemented: true, tested: true, documented: true, audited: true }
     implementation:
       files: [ { path: "app/models/concerns/proof_manageable.rb", purpose: "Upload validation" } ]

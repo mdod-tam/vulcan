@@ -1,186 +1,139 @@
-# Paper Application Architecture (Rails)
+# Paper Application Architecture
 
-This document describes the current admin-only paper application workflow.
+This is the current admin-facing paper application flow.
 
-## 1 · High-Level Flow
+## Main Entry Points
+
+- Controller: `app/controllers/admin/paper_applications_controller.rb`
+- Service: `app/services/applications/paper_application_service.rb`
+- Related service: `app/services/applications/guardian_dependent_management_service.rb`
+- Related secure-request services:
+  - `app/services/applications/request_provider_info.rb`
+  - `app/services/applications/request_proof_resubmission.rb`
+  - `app/services/applications/request_certification_upload.rb`
+- Related proof services:
+  - `app/services/proof_attachment_service.rb`
+  - `app/services/medical_certification_attachment_service.rb`
+
+## Core Flow
 
 ```text
-Admin
-  -> Admin::PaperApplicationsController
+Admin::PaperApplicationsController
+  -> normalizes paper-form params
   -> Applications::PaperApplicationService
-  -> GuardianDependentManagementService / UserCreationService
-  -> Application
-  -> ProofAttachmentService / MedicalCertificationAttachmentService
-  -> NotificationService / Mailers / AuditEventService
+  -> constituent / guardian / dependent creation or reuse
+  -> Application write
+  -> proof and disability certification processing
+  -> notifications, audit events, and post-write reconciliation
 ```
 
-Paper intake uses `Current.paper_context = true` during the main service flow so paper-specific validation bypasses remain active while the application and proofs are created.
+## Current.paper_context
 
-## 2 · Main Entry Points
+`Applications::PaperApplicationService` activates `Current.paper_context` around the paper create/update work and re-enters that context around application/proof writes that need paper-specific validations or callbacks.
 
-### 2.1 Controller
+That flag matters because downstream proof-review and validation behavior changes when paper intake is in progress. Do not assume after-write notification or reconciliation code still has paper context; the service clears the flag in `ensure` blocks around the write phases.
+
+## What The Controller Owns
 
 `Admin::PaperApplicationsController` currently:
 
-- normalizes guardian/dependent/application/proof params
+- casts complex boolean params before create and update
+- normalizes service params for create and update
 - derives `email_strategy`, `phone_strategy`, and `address_strategy`
-- calls `Applications::PaperApplicationService` for create and update
-- sends a follow-up medical-certification notification in specific rejected/no-provider cases after a successful create
+- supports dependent form and recipient-preference lookup endpoints
+- has separate rejection-notification actions for income-threshold workflows
 
-### 2.2 Service
+The controller does not own the main paper-application side effects after create; those happen in `Applications::PaperApplicationService`.
+
+## What The Service Owns
 
 `Applications::PaperApplicationService` currently:
 
-- processes self-applicant, dependent, and existing-dependent scenarios
-- creates or reuses guardian/dependent users
-- creates the paper `Application`
+- handles existing self-applicant, existing dependent, new guardian/dependent, and new self-applicant scenarios
+- creates or updates the relevant users
+- creates or updates the `Application`
 - sets `submission_method` to `paper`
-- determines the initial application status
-- processes income, residency, and medical-certification proof actions
-- sends account-creation and proof-rejection notifications after successful completion
+- stamps `fulfillment_type` as `voucher` only when vouchers are enabled; otherwise paper applications remain equipment-fulfillment
+- processes income, residency, ID, and disability certification actions
+- sends account-creation and proof-rejection notifications after a successful create
+- logs `application_created` after create
+- performs reconciliation after the transaction commits
 
-## 3 · Current.paper_context
+## Applicant Matching And Dedup Branches
 
-The service wraps create/update flows like this:
+Paper intake deliberately branches before it writes the application:
 
-```ruby
-Current.paper_context = true
-begin
-  # create/update application and process proof actions
-ensure
-  Current.paper_context = nil
-end
-```
+| Branch | When it applies | Service behavior |
+|--------|-----------------|------------------|
+| Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
+| Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
+| New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
+| New self applicant | No existing applicant is selected. | Creates a constituent through `Applications::UserCreationService`, generates temporary account access, and writes the paper application. |
 
-This is the current mechanism used to bypass proof-related validations during paper processing.
+The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
-## 4 · Guardian and Dependent Handling
+Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
 
-Current dependent intake supports:
+## Provider-Info Follow-Up
 
-- selecting an existing guardian
-- creating a new guardian
-- selecting an existing dependent for a guardian
-- creating a new dependent
+When `params[:no_medical_provider_information]` is present during create, the service currently attempts to auto-send a secure provider-info request by calling `Applications::RequestProviderInfo` after the application write succeeds.
 
-Current relationship handling:
+If that follow-up fails, the application still persists and the admin gets a reconciliation note telling them to send it manually from the application page.
 
-- `GuardianRelationship` is created when needed
-- `Application#managing_guardian_id` is set for dependent applications
+## Proof Actions
 
-Current contact-strategy handling:
+### Income, residency, and ID
+
+Current paper-proof actions are:
+
+- `accept`
+- `reject`
+- `none`
+
+Accepted proofs go through `ProofAttachmentService`. Rejected proofs go through the explicit rejection path without requiring an attachment.
+
+### Disability certification
+
+Current disability certification actions are:
+
+- `approved`
+- `rejected`
+- `not_requested`
+
+Disability certification attachments and rejection handling go through `MedicalCertificationAttachmentService`.
+
+If the rejected disability certification has certifying-professional contact information available, the service routes through `Applications::MedicalCertificationReviewer` so provider follow-up behavior stays centralized. Otherwise it directly calls `MedicalCertificationAttachmentService.reject_certification`.
+
+## Contact Strategy Notes
+
+For dependent intake, the controller/service pair currently works with:
 
 - `email_strategy`
 - `phone_strategy`
 - `address_strategy`
 
-These strategies are resolved by the controller and applied by `Applications::GuardianDependentManagementService`.
+Those strategies are applied by `Applications::GuardianDependentManagementService`. Existing dependent reuse aliases submitted `dependent_email` and `dependent_phone` into the same strategy path so the final effective contact details are consistent with newly created dependents.
 
-## 5 · Current Proof Processing
+## Fulfillment Notes
 
-### 5.1 Income and residency
+Paper application create stamps fulfillment from the current feature state:
 
-Paper proof actions support:
+- `voucher` when `FeatureFlag.enabled?(:vouchers_enabled)` is true and the paper path is creating a voucher-fulfillment application
+- `equipment` when voucher fulfillment is disabled or not selected
 
-1. `accept` / `approved`
-2. `reject` / `rejected`
-3. `none`
+Voucher-only account-created messaging should not be sent for equipment-fulfillment applications. Approval reconciliation can approve either fulfillment type, but only voucher applications enqueue voucher issuance.
 
-Current service behavior:
-
-- accepted income/residency proofs use `ProofAttachmentService.attach_proof`
-- rejected income/residency proofs use `ProofAttachmentService.reject_proof_without_attachment`
-- approval requires a file or signed blob ID
-
-### 5.2 Medical certification
-
-Paper medical-certification actions support:
-
-1. `approved`
-2. `rejected`
-3. `not_requested`
-
-Current service behavior:
-
-- approval uses `MedicalCertificationAttachmentService.attach_certification`
-- rejection uses `MedicalCertificationAttachmentService.reject_certification`
-- status-only updates after creation are handled from the admin application show page
-
-## 6 · Initial Status Assignment
-
-`Applications::PaperApplicationService` currently sets the initial application status as follows:
-
-- `awaiting_proof` when medical-provider information is intentionally missing
-- `awaiting_proof` when either income or residency proof is rejected or marked as none
-- `in_progress` when the paper application includes the expected starting documentation
-
-## 7 · Front-End Pieces
-
-Current paper form controllers include:
-
-- `paper_application_controller`
-- `applicant_type_controller`
-- `dependent_fields_controller`
-- `guardian_picker_controller`
-- `document_proof_handler_controller`
-
-The dependent form currently includes checkbox-driven controls for using guardian email, phone, and address.
-
-## 8 · Parameter Shape
-
-The paper service currently works from a normalized parameter hash shaped like:
-
-```ruby
-{
-  applicant_type: "dependent",
-  relationship_type: "Parent",
-  guardian_id: 123,
-  dependent_id: 456,
-  email_strategy: "guardian",
-  phone_strategy: "guardian",
-  address_strategy: "guardian",
-  constituent: { ... },
-  application: { ... },
-  income_proof_action: "accept",
-  residency_proof_action: "reject",
-  medical_certification_action: "not_requested"
-}
-```
-
-Uploads can be sent as direct file params or signed blob IDs.
-
-## 9 · Notifications and Auditing
-
-Current paper-flow notifications include:
-
-- account-creation notifications for newly created users
-- proof-rejection notifications for rejected paper proofs
-- follow-up medical-certification notifications in specific rejected/no-provider cases
-
-Current paper-flow auditing includes:
-
-- `application_created` or `application_updated`
-- proof attachment/rejection audit events from the attachment services
-- any `ProofReview` or `ApplicationStatusChange` records created by the downstream services
-
-## 10 · Medical Certification Channels
-
-Current paper-related medical-certification handling includes:
-
-- email request delivery through `Applications::MedicalCertificationService`
-- digital signing requests through `DocumentSigning::SubmissionService`
-- fax-based provider rejection notices through `MedicalProviderNotifier`
-- admin upload/review from the application detail page
-
-Email and inbound fax automation are not yet fully working; consult TODOs for the remaining steps.
-
-## 11 · Testing Notes
-
-Current tests around this flow live primarily in:
+## Good Starting Tests
 
 - `test/controllers/admin/paper_applications_controller_test.rb`
 - `test/services/applications/paper_application_service_test.rb`
+- `test/services/applications/dependent_email_handling_test.rb`
 - `test/system/admin/paper_applications_test.rb`
 - `test/system/admin/paper_application_dependent_guardian_test.rb`
+- Add focused cases for existing self applicants, existing dependents, waiting-period blocking, `blocking_new_submission`, contact verification, contact strategies, and fulfillment stamping.
 
-When writing paper-flow tests, keep `Current.paper_context` behavior in mind.
+## Notes For Agents
+
+- Start with the exact controller action and service path the bug or change uses.
+- Keep `Current.paper_context` in mind before assuming proof-review callbacks behave like the portal flow.
+- Do not add parallel audit or notification paths when the service or downstream proof services already own them.

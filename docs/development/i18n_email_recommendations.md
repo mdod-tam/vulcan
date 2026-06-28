@@ -1,4 +1,6 @@
-# i18n, Rejection Reasons & Mailer Simplification Recommendations
+# i18n, Rejection Reasons & Mailer Simplification Notes
+
+This document mixes completed i18n/email-template work with remaining recommendations. Current behavior should be read through the Liquid-aware `EmailTemplate` renderer described below.
 
 ## Proposed Architecture
 
@@ -19,9 +21,10 @@ No yml files for any user-facing content. Everything admin-controlled, versioned
 
 - DB-stored, admin-editable via `Admin::EmailTemplatesController`.
 - Unique index on `(name, format, locale)` — both `html` and `text` variants exist for each template name.
-- `ApplicationNotificationsMailer#find_email_template` looks up by `(name, format, locale)` with English fallback.
-- `%{variable}` / `%<variable>s` interpolation in `body` and `subject`.
-- `version` integer increments on each `subject` or `body` change; `previous_subject`/`previous_body` keep the immediately prior content version.
+- `ApplicationMailer#find_text_template` looks up by `(name, format, locale)` with fallback to `I18n.default_locale`. All mailers inherit this helper.
+- `syntax` supports `legacy_percent` (`%{variable}` / `%<variable>s`) and `liquid` (`{{ exact.path }}` / `{{- exact.path -}}`) rendering.
+- Liquid rendering is handled by `EmailTemplates::Renderer`, requires `email_template_liquid`, rejects tags/filters, and only permits exact required/optional variable paths declared on the template.
+- `version` integer increments on each `subject` or `body` change; admin edit history lives in `email_template_snapshots` (append-only). Legacy `previous_subject`/`previous_body` columns remain for show-page fallback but are no longer written on save.
 - `locale` column exists (string, not null, default `'en'`). EN templates explicitly set `locale: 'en'` in seeds, and ES variants are seeded as EN copies when missing.
 - `locale_needs_sync` flag (renamed from the original `needs_sync` column): set on locale variants when a counterpart's body/subject changes; admin UI reads `locale_out_of_sync?`. Cleared on the same save when body/subject is updated, or via `mark_synced`.
 
@@ -34,7 +37,7 @@ The predefined reason strings live in two places today:
 1. **`app/views/admin/applications/_modals.html.erb`** — Ruby locals built with `h("...")` and passed as controller-level Stimulus `data-rejection-form-*-value` attributes. The strings only live here; `rejection_form_controller.js` reads them via the Stimulus values API (no hardcoding in JS).
 2. **`app/javascript/controllers/users/document_proof_handler_controller.js`** — hardcoded reason/instruction maps were removed. UI now reads reason text from server-provided `data-reason-text` attributes.
 
-`ProofReview.proof_type` is an enum with `income: 0`, `residency: 1`, and `medical_certification: 2` (prefixed). Medical certification rejections are stored on `proof_reviews` (proof_type: medical_certification), with backward-compatible read delegators on `Application` via `CertificationManagement`.
+`ProofReview.proof_type` is an enum with `income: 0`, `residency: 1`, and `medical_certification: 2` (prefixed). Disability certification rejections are stored on `proof_reviews` (proof_type: medical_certification), with backward-compatible read delegators on `Application` via `CertificationManagement`.
 
 The full set of predefined codes (source: `_modals.html.erb` and `rejection_form_controller.js`):
 
@@ -47,41 +50,36 @@ The full set of predefined codes (source: `_modals.html.erb` and `rejection_form
 | `missing_amount` | income only |
 | `exceeds_threshold` | income only |
 | `outdated_ss_award` | income only |
-| `missing_signature` | income, residency, medical cert |
-| `illegible` | income, residency, medical cert |
+| `missing_signature` | income, residency, disability certification |
+| `illegible` | income, residency, disability certification |
 | `incomplete_documentation` | income, residency |
-| `missing_provider_credentials` | medical cert |
-| `incomplete_disability_documentation` | medical cert |
-| `outdated_certification` | medical cert |
-| `missing_functional_limitations` | medical cert |
-| `incorrect_form_used` | medical cert |
+| `missing_provider_credentials` | disability certification |
+| `incomplete_disability_documentation` | disability certification |
+| `outdated_certification` | disability certification |
+| `missing_functional_limitations` | disability certification |
+| `incorrect_form_used` | disability certification |
 
 ### Known gaps to fix before i18n work is meaningful
 
-**Constituents do not receive email when a medical cert is rejected — this is intentional.** The certification is submitted by a healthcare provider (the signer), not the constituent. Rejection is the signer's problem to fix. The constituent tracks status via their dashboard and application show page.
+**Constituents do not receive provider-facing email when a disability certification is rejected — this is intentional.** The certification is submitted by a healthcare provider or other certifying professional, not the constituent. Rejection is the signer's problem to fix. The constituent tracks status via their dashboard and application show page.
 
 `'medical_certification_rejected'` is correctly absent from `NotificationService::MAILER_MAP`. The in-app `Notification` record (associated with the constituent) is sufficient for their visibility.
 
 **The provider email path — works correctly.** The full delivery chain when a cert is rejected:
 
 ```
-MedicalCertificationAttachmentService.send_rejection_notification
+Applications::MedicalCertificationReviewer
   → NotificationService.create_and_deliver!(
       type: 'medical_certification_rejected',
       recipient: application.user,          # constituent — notification record only
       metadata: { 'reason' => ..., ... })
-  → resolve_mailer: MAILER_MAP['medical_certification_rejected']
-      → [MedicalProviderMailer, :rejected]
-  → send_notification_email (else branch):
-      MedicalProviderMailer.public_send(:rejected, notifiable, notification).deliver_later
-  → MedicalProviderMailer#rejected (proxy):
-      self.class.with(application:,
-        rejection_reason: notification.metadata['reason'],
-        ...).certification_rejected
-  → certification_rejected: sends to application.medical_provider_email ✓
+  → MedicalProviderNotifier
+      attempts the configured provider channel
+      uses fax-first behavior where applicable
+      falls back to email when possible
 ```
 
-**Remaining gap: `MedicalProviderNotifier` implementation complete** ✅ — The fax/email-to-provider notification path is now fully wired and functional. See `docs/development/medical_provider_notification_implementation.md` for implementation details. This work was completed as part of Track C.
+`MedicalProviderNotifier` is the current provider delivery path for rejected disability certifications.
 
 ---
 
@@ -103,16 +101,18 @@ Existing records default to `'en'`. ES variants are seeded (or created via the a
 
 ### Mailer lookup ✅
 
-`ApplicationNotificationsMailer#find_email_template` now accepts a locale and falls back to English:
+`ApplicationMailer#find_text_template` accepts a locale and falls back to the default locale:
 
 ```ruby
-def find_email_template(template_name, locale: 'en')
-  EmailTemplate.find_by!(name: template_name, format: :text, locale: locale)
-rescue ActiveRecord::RecordNotFound => e
-  raise if locale == 'en'
+def find_text_template(template_name, locale: nil)
+  resolved_locale = normalize_locale(locale) || resolve_template_locale
+  EmailTemplate.find_by!(name: template_name, format: :text, locale: resolved_locale)
+rescue ActiveRecord::RecordNotFound
+  fallback_locale = I18n.default_locale.to_s
+  raise if resolved_locale == fallback_locale
 
-  Rails.logger.debug { "No #{locale} template for #{template_name}, falling back to English" }
-  find_email_template(template_name, locale: 'en')
+  Rails.logger.debug { "No #{resolved_locale} template for #{template_name}, falling back to #{fallback_locale}" }
+  EmailTemplate.find_by!(name: template_name, format: :text, locale: fallback_locale)
 end
 ```
 
@@ -120,8 +120,8 @@ Each public mailer method derives the locale from the recipient:
 
 ```ruby
 def proof_rejected(application, proof_review)
-  locale = application.user.locale.presence || 'en'
-  text_template = find_email_template(template_name, locale: locale)
+  locale = resolve_template_locale(recipient: application.user)
+  text_template = find_text_template(template_name, locale: locale)
   # ...
 end
 ```
@@ -185,7 +185,7 @@ create_table :rejection_reasons do |t|
 end
 ```
 
-Note: `proof_type` here is a plain string (not a foreign key to `ProofReview`'s integer enum). Use `"income"`, `"residency"`, and `"medical_certification"` as values so the medical cert track can share the same model.
+Note: `proof_type` here is a plain string (not a foreign key to `ProofReview`'s integer enum). Use `"income"`, `"residency"`, and `"medical_certification"` as values so the disability certification track can share the same model.
 
 ### Model
 
@@ -327,7 +327,7 @@ end
 ### Track A — Email Template Locale
 
 1. ✅ Add `locale` column + locale sync flag to `email_templates`; update unique index. PR 1 renames the original `needs_sync` flag to `locale_needs_sync`.
-2. ✅ Update `find_email_template` to accept and fall back on locale.
+2. ✅ Update `find_text_template` (on `ApplicationMailer`) to accept and fall back on locale.
 3. ✅ Add locale sync validation and callbacks to `EmailTemplate` (`locale_needs_sync`, `locale_out_of_sync?`).
 4. ✅ Surface out-of-sync state in admin UI (index, show, edit); add `mark_synced` action.
 5. ✅ Explicitly set `locale: 'en'` in all 36 seed files.
@@ -344,16 +344,16 @@ end
 6. ✅ Remove `document_proof_handler_controller.js` hardcoded string maps; pass text from server.
 7. ✅ Replace hardcoded admin modal rejection message bodies with `RejectionReason` DB lookups (shared helper + Stimulus data values unchanged).
 
-### Track C — Medical Cert
+### Track C — Disability Certification
 
-Constituents do not receive email for medical cert rejections — intentional. Only the medical provider (the signer) is notified. The constituent sees status in their dashboard.
+Constituents do not receive provider-facing email for disability certification rejections. The provider or certifying professional is notified through `MedicalProviderNotifier`; the constituent sees status in their dashboard.
 
-1. ✅ **Wire provider notification** — Provider fax/email notification fully implemented. See `docs/development/medical_provider_notification_implementation.md` for details.
+1. ✅ **Wire provider notification** — Provider fax/email notification is implemented through `MedicalProviderNotifier`.
    - `MedicalProviderNotifier` wired into `MedicalCertificationReviewer`
    - Fax-first delivery with automatic email fallback
    - Webhook-triggered blob cleanup
    - Error handling prevents notification failures from blocking rejections
-2. ✅ Unify medical cert rejection storage on `proof_reviews` (proof_type: medical_certification) instead of `applications`; delegators on `Application` preserve backward compatibility.
+2. ✅ Unify disability certification rejection storage on `proof_reviews` (proof_type: medical_certification) instead of `applications`; delegators on `Application` preserve backward compatibility.
 3. ✅ Seed `RejectionReason` records for `proof_type: 'medical_certification'`.
 4. ✅ Wire translation at send time for the provider email via `MedicalProviderMailer`.
    - `MedicalProviderMailer#certification_rejected` uses `RejectionReason.resolve` 
@@ -370,8 +370,7 @@ Constituents do not receive email for medical cert rejections — intentional. O
 
 ## What to Leave Alone
 
-- `EmailTemplate` `%{variable}` interpolation — good as-is.
-- `EmailTemplateRenderer` — small wrapper, leave it.
+- `EmailTemplates::Renderer` — shared syntax-aware renderer for email templates and printed letters.
 - `W9Review.rejection_reason_code` — already correct for its own domain.
 - `NotificationComposer` — already clean and well-structured.
 - `rejection_form_controller.js` Stimulus values wiring — already reads from ERB; no JS string duplication.

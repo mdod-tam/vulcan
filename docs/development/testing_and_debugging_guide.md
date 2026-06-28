@@ -104,13 +104,7 @@ safe_fill_in('Field Label', with: 'value')  # Clears field before filling
 # Debugging
 assert_notification(text, type: nil)
 take_screenshot
-take_screenshot('meaningful-step', html: true)
 ```
-
-System screenshots are saved under `tmp/capybara` with a JSON sidecar next to each PNG. The sidecar includes browser URL,
-title, readiness details, meaningful page anchors, blank/solid-color analysis, and `artifact_usable_for_llm_qa`.
-Use named screenshots for LLM QA checkpoints. `bin/run-test` enables Rails HTML companions with
-`RAILS_SYSTEM_TESTING_SCREENSHOT_HTML=1`.
 
 ## 5. Common Issues & Solutions
 ### Authentication Issues
@@ -252,24 +246,48 @@ browser_options: {
 }
 ```
 
-### ActionMailbox Testing
+### Secure Temporary Form Testing
 ```ruby
-# Configuration
-Rails.application.config.action_mailbox.ingress = :test
+# Issue a secure proof resubmission request.
+result = Applications::RequestProofResubmission.new(
+  application: application,
+  actor: admin,
+  proof_type: :income,
+  deliver_request: false
+).call
+form = result.data.fetch(:secure_request_forms).first
 
-# Email processing
-inbound_email = receive_inbound_email_from_mail(
-  to: 'inbox@example.com',
-  from: user.email,
-  subject: 'Test',
-  body: 'Content'
-) do |mail|
-  mail.attachments['file.pdf'] = 'PDF content'
-end
+# Submit through the same service used by the public controller.
+submit_result = Applications::SubmitProofResubmission.new(
+  application: application,
+  secure_request_form: form,
+  file: fixture_file_upload('test_proof.pdf', 'application/pdf')
+).call
 
-# Verify outcomes
-application.reload
-assert application.income_proof.attached?
+assert submit_result.success?
+assert form.reload.submitted?
+assert application.reload.income_proof.attached?
+```
+
+For disability certification uploads, use `Applications::RequestCertificationUpload` with `deliver_email: false`, then submit through `Applications::SubmitCertificationUpload`:
+
+```ruby
+request = Applications::RequestCertificationUpload.new(
+  application: application,
+  actor: admin,
+  deliver_email: false
+).call
+form = request.data.fetch(:medical_provider_secure_request_form)
+
+submit = Applications::SubmitCertificationUpload.new(
+  application: application,
+  medical_provider_secure_request_form: form,
+  file: fixture_file_upload('medical_certification.pdf', 'application/pdf')
+).call
+
+assert submit.success?
+assert form.reload.submitted?
+assert application.reload.medical_certification.attached?
 ```
 
 ### Service Testing Patterns
@@ -378,7 +396,7 @@ end
 1. Run tests in isolation
 2. Enable verbose mode (`VERBOSE_TESTS=1`)
 3. Use visual browser (`HEADLESS=false`)
-4. Add named screenshots before assertions
+4. Add screenshots before assertions
 5. Verify authentication state
 6. Check browser dev tools for JS errors
 
