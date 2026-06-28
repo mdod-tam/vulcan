@@ -24,6 +24,8 @@ namespace :db do
       'proof_submission_rate_limit_email' => 5,
       'proof_submission_rate_period' => 24,
       'max_proof_rejections' => 3,
+      'secure_form_link_expiration_hours' => 48,
+      'secure_form_resend_cooldown_hours' => 1,
       # Voucher policies
       'voucher_value_hearing_disability' => 500,
       'voucher_value_vision_disability' => 500,

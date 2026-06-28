@@ -261,7 +261,8 @@ en:
   application_notifications:
     provider_info_requested:
       email_instructions: |-
-        Please use this secure link to provide the certifying professional's contact information: %{secure_url}
+        Secure provider information link:
+        %{secure_url}
 
         This secure link expires in %{hours} hours.
       letter_instructions: |-
@@ -275,7 +276,8 @@ en:
              %{office_address}
         online: |-
           HOW TO SUBMIT THIS DOCUMENT:
-          1. Use this secure link to upload your %{proof_type_formatted}: %{secure_upload_url}
+          1. Secure proof upload link for your %{proof_type_formatted}:
+             %{secure_upload_url}
           2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
              %{office_address}
@@ -296,18 +298,47 @@ en:
              %{office_address}
         online: |-
           HOW TO SUBMIT A CORRECTED DOCUMENT:
-          1. Use this secure link to upload a corrected copy of your %{proof_type_formatted}: %{secure_upload_url}
+          1. Secure corrected proof upload link for your %{proof_type_formatted}:
+             %{secure_upload_url}
           2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
              %{office_address}
       archived_message: "Unfortunately, you have reached the maximum number of submission attempts for this application. Your application has been archived. You may apply again after %{reapply_date}."
+  medical_provider_mailer:
+    certification_submission_instructions:
+      secure: |-
+        1. Blank disability certification form:
+           %{download_form_url}
+        2. Complete all required fields and sign the form
+        3. Secure certification upload link:
+           %{secure_upload_url}
+      fax: |-
+        1. Blank disability certification form:
+           %{download_form_url}
+        2. Complete all required fields
+        3. Sign the form
+        4. Return the completed form by fax to (410) 767-4276
+        5. If fax is not available, contact %{support_email} to request a secure upload link
+    certification_resubmission_instructions:
+      secure: |-
+        1. Secure certification upload link:
+           %{secure_upload_url}
+        2. Blank disability certification form:
+           %{download_form_url}
+        3. Fax: Send the updated form to 410-767-4276
+      fax: |-
+        1. Blank disability certification form:
+           %{download_form_url}
+        2. Fax: Send the updated form to 410-767-4276
   vendor_notifications:
     w9_rejected:
       secure_upload_instructions: |-
-        1. Upload your corrected W9 securely here: %{secure_upload_url}
+        1. Secure W9 upload link:
+           %{secure_upload_url}
         2. Submit the corrected PDF before this secure link expires.
       vendor_portal_instructions: |-
-        1. Please log in to your vendor account: %{vendor_portal_url}
+        1. Vendor portal link:
+           %{vendor_portal_url}
         2. Navigate to your profile settings.
         3. Upload a corrected W9 form.
     w9_upload_requested:
@@ -317,7 +348,8 @@ en:
 
         The %{organization_name} team has requested a W9 form from you.
 
-        Upload your W9 securely here: %{secure_upload_url}
+        Secure W9 upload link:
+        %{secure_upload_url}
 
         This secure link is time-limited. If you have questions, contact %{support_email}.
   vendors:
@@ -367,7 +399,7 @@ en:
         - Address: %{constituent_address_formatted}
         - Application ID: %{application_id}
 
-        Use the signing link below to review, complete, and sign the certification:
+        Medical certification signing link:
         {{submitter.link}}
 
         If you have questions, please contact %{support_email}.
@@ -612,6 +644,7 @@ en:
         proof_not_available: "Proof file no longer available"
       create:
         proof_completed: "Proof review completed successfully"
+        resubmission_not_delivered: "Proof review completed, but the secure proof upload request could not be delivered. Review the secure upload link status and try resending."
       ensure_reviewable_status:
         app_not_reviewable: "Application is not in a reviewable state"
     recovery_requests:
@@ -695,7 +728,7 @@ en:
         evaluator_mailer_evaluation_submission_confirmation: "Evaluation Submission Confirmation"
   secure_provider_info_forms:
     sms:
-      message: "MAT needs certifying professional contact information. Submit it securely here: %{secure_url} This link expires in %{hours} hours."
+      message: "MAT needs certifying professional contact information. Secure provider information link: %{secure_url} This link expires in %{hours} hours."
     show:
       title: "Certifying Professional Information"
       heading: "Provide certifying professional information"
@@ -739,13 +772,16 @@ en:
       heading: "Secure link unavailable"
       body: "This secure link is no longer available. For help with this request, contact the MAT support team."
       contact_info: "Email %{email} or call %{phone}."
+  passwords:
+    account_access_sms:
+      message: "MAT account access link to set your password: %{reset_url} This link expires in 20 minutes."
   secure_proof_forms:
     proof_types:
       income: "income proof"
       residency: "proof of Maryland residency"
       id: "proof of identity"
     sms:
-      message: "MAT needs your %{proof_type}. Upload it securely here: %{secure_url} This link expires in %{hours} hours."
+      message: "MAT needs your %{proof_type}. Secure proof upload link: %{secure_url} This link expires in %{hours} hours."
     show:
       title: "Secure Proof Upload"
       heading: "Upload %{proof_type}"

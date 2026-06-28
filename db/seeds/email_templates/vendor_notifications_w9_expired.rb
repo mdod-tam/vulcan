@@ -19,9 +19,11 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expired', format
     To resume payment processing for voucher transactions, please submit an updated W9 form as soon as possible.
 
     HOW TO SUBMIT YOUR UPDATED W9:
-    1. Download the current W9 form from the IRS website: https://www.irs.gov/pub/irs-pdf/fw9.pdf
+    1. IRS W-9 PDF:
+       https://www.irs.gov/pub/irs-pdf/fw9.pdf
     2. Complete and sign the form
-    3. Log in to your vendor portal at %<vendor_portal_url>s
+    3. Vendor portal link:
+       %<vendor_portal_url>s
     4. Navigate to "Profile" and upload your new W9 form
 
     %<status_box_info_text>s
@@ -33,7 +35,8 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expired', format
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text vendor_business_name status_box_error_text status_box_warning_text expiration_date_formatted status_box_info_text vendor_portal_url footer_text support_email],
+    'required' => %w[header_text vendor_business_name status_box_error_text status_box_warning_text
+                     expiration_date_formatted status_box_info_text vendor_portal_url footer_text support_email],
     'optional' => []
   }
   template.version = 1

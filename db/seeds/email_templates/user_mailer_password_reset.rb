@@ -8,8 +8,9 @@ EmailTemplate.create_or_find_by!(name: 'user_mailer_password_reset', format: :te
 
     We received a request for account access or a password reset for %<user_email>s.
 
-    Use this secure link to set your password and access your account:
+    Use the password reset link to set your password and access your account.
 
+    Password reset link:
     %<reset_url>s
 
     This link expires in 20 minutes. If you did not request account access, you can safely ignore this email.

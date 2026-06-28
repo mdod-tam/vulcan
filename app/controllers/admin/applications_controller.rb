@@ -175,7 +175,7 @@ module Admin
 
       # Handle the result from the service
       if result.success?
-        handle_successful_review # This handles both HTML and Turbo Stream success
+        handle_successful_review(result) # This handles both HTML and Turbo Stream success
       else
         handle_error_response(
           error_message: result.message,
@@ -203,8 +203,9 @@ module Admin
     # Approved proof reviews get a full Turbo redirect because the reconciler may
     # change application status or medical_certification_status (self-healing path),
     # requiring a full page refresh. Non-approved reviews keep partial updates.
-    def handle_successful_review
+    def handle_successful_review(result)
       message = "#{params[:proof_type].capitalize} proof #{params[:status]} successfully."
+      alert_message = proof_resubmission_delivery_alert(result)
       @application.reload
 
       if params[:status] == 'approved'
@@ -214,17 +215,50 @@ module Admin
           turbo_redirect_path: admin_application_path(@application),
           turbo_message: message
         )
+      elsif alert_message.present?
+        handle_successful_review_with_alert(message, alert_message)
       else
         handle_success_response(
           html_redirect_path: admin_application_path(@application),
           html_message: message,
-          turbo_updates: {
-            'attachments-section' => 'attachments',
-            'audit-logs' => 'audit_logs',
-            'modals' => 'modals'
-          }
+          turbo_updates: proof_review_turbo_updates
         )
       end
+    end
+
+    def handle_successful_review_with_alert(message, alert_message)
+      respond_to do |format|
+        format.html do
+          redirect_to admin_application_path(@application),
+                      flash: { notice: message, alert: alert_message }
+        end
+
+        format.turbo_stream do
+          flash.now[:alert] = alert_message
+          handle_turbo_stream_success(message: message, updates: proof_review_turbo_updates)
+        end
+      end
+    end
+
+    def proof_review_turbo_updates
+      {
+        'attachments-section' => 'attachments',
+        'audit-logs' => 'audit_logs',
+        'modals' => 'modals'
+      }
+    end
+
+    def proof_resubmission_delivery_alert(result)
+      return unless proof_resubmission_delivery_failed?(result)
+
+      t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en)
+    end
+
+    def proof_resubmission_delivery_failed?(result)
+      return false unless params[:status].to_s == 'rejected'
+      return false unless result.data.is_a?(Hash)
+
+      result.data[:resubmission_delivered] == false
     end
 
     # Removed original process_application_status method - logic moved to concern

@@ -27,9 +27,7 @@ template.body = <<~TEXT
 
   Por favor envíe un nuevo formulario de certificación de discapacidad utilizando uno de los siguientes métodos:
 
-  1. Suba el formulario corregido de forma segura: %<secure_upload_url>s
-  2. Descargue un formulario en blanco si lo necesita: %<download_form_url>s
-  3. Fax: Envíe el formulario actualizado al 410-767-4276
+  %<certification_resubmission_instructions>s
 
   Gracias por su ayuda para que este solicitante acceda a los servicios de telecomunicaciones que necesita.
 
@@ -42,8 +40,8 @@ template.body = <<~TEXT
   Telecomunicaciones Accesibles de Maryland (MAT) - Mejorando vidas a través de la comunicación accesible.
 TEXT
 template.variables = {
-  'required' => %w[constituent_full_name application_id rejection_reason download_form_url],
-  'optional' => %w[secure_upload_url]
+  'required' => %w[constituent_full_name application_id rejection_reason certification_resubmission_instructions],
+  'optional' => []
 }
 template.version = 2
 template.save! if template.new_record? || template.changed?

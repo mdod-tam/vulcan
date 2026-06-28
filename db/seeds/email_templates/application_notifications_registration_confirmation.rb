@@ -48,7 +48,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_c
   TEXT
   template.variables = {
     'required' => %w[header_text user_full_name active_vendors_text_list footer_text support_email],
-    'optional' => %w[dashboard_url new_application_url]
+    'optional' => []
   }
   template.version = 1
 end

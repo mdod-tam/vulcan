@@ -4,14 +4,15 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'user_mailer_email_verification', format: :text, locale: 'es') do |template|
   template.subject = 'Por favor confirme su dirección de correo electrónico'
-  template.description = 'Enviado a un usuario para verificar su dirección de correo electrónico haciendo clic en un enlace de confirmación.'
+  template.description = 'Enviado a un usuario para verificar su dirección de correo electrónico usando el enlace de verificación.'
   template.body = <<~TEXT
     Hola,
 
     Esto es para confirmar que %<user_email>s es el correo electrónico que ha elegido usar en su cuenta. Si alguna vez pierde su contraseña, ahí es donde enviaremos un enlace de restablecimiento.
 
-    *Debe hacer clic en el enlace a continuación para confirmar que recibió este correo electrónico.*
+    Use el enlace de verificación de correo electrónico para confirmar que recibió este correo electrónico.
 
+    Enlace de verificación de correo electrónico:
     %<verification_url>s
 
     ---

@@ -85,6 +85,36 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test 'returns rejected proof review and resubmission delivery status' do
+    proof_review = build_stubbed(:proof_review,
+                                 application: @application,
+                                 admin: @admin,
+                                 proof_type: 'income',
+                                 status: 'rejected',
+                                 rejection_reason: 'Income documentation is not acceptable.')
+    reviewer = mock('proof_reviewer')
+    reviewer.stubs(:review).returns(true)
+    reviewer.stubs(:proof_review).returns(proof_review)
+    Applications::ProofReviewer.stubs(:new).returns(reviewer)
+    Applications::RequestProofResubmission.stubs(:delivery_confirmed_for_review?)
+                                          .with(proof_review)
+                                          .returns(false)
+
+    result = ProofReviewService.new(
+      @application,
+      @admin,
+      {
+        proof_type: 'income',
+        status: 'rejected',
+        rejection_reason: 'Income documentation is not acceptable.'
+      }
+    ).call
+
+    assert result.success?, result.message
+    assert_equal proof_review, result.data[:proof_review]
+    assert_equal false, result.data[:resubmission_delivered]
+  end
+
   test 'rejects proof review when the proof is not currently reviewable' do
     @application.update_columns(income_proof_status: Application.income_proof_statuses[:approved])
 

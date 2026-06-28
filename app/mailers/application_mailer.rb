@@ -46,12 +46,16 @@ class ApplicationMailer < ActionMailer::Base
       message_stream: 'notifications'
     }
 
-    mail(default_options.merge(mail_options)) do |format|
-      format.text { render plain: rendered_text_body }
-    end
+    mail_with_text_body(default_options.merge(mail_options), rendered_text_body)
   end
 
   private
+
+  def mail_with_text_body(mail_options, text_body)
+    mail(mail_options) do |format|
+      format.text { render plain: text_body.to_s }
+    end
+  end
 
   def noop_delivery(channel: nil, reason: nil)
     NoopDelivery.new(channel: channel, reason: reason)

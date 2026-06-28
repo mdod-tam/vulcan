@@ -23,11 +23,12 @@ class MedicalProviderRequestCertificationTemplateTest < ActionMailer::TestCase
       secure_upload_url: 'https://example.test/secure_certification_form?token=abc'
     ).request_certification
 
-    body = email.body.to_s
+    body = decoded_text_part(email)
 
     assert_includes body, 'DISABILITY CERTIFICATION FORM REQUEST'
     assert_includes body, 'Alex Smith'
-    assert_includes body, 'Upload the completed form securely'
+    assert_includes body, 'Secure certification upload link'
+    assert_includes body, 'https://example.test/secure_certification_form?token=abc'
     assert_not_includes body, 'and was sent on'
     assert_not_includes body, 'May 07, 2026'
   end

@@ -14,7 +14,8 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_account_create
 
     If you have any questions or need assistance, please contact our team at %<support_email>s or call (410) 767-6960.
 
-    Program website: %<program_website_url>s
+    MAT program website:
+    %<program_website_url>s
 
     %<footer_text>s
   TEXT

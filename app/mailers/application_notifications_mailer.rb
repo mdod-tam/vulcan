@@ -39,7 +39,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     with_mailer_error_handling("training_requested application=#{application&.id} notification=#{notification&.id}") do
       admin = notification.recipient
       template_name = 'application_notifications_training_requested'
-      locale        = resolve_template_locale(recipient: admin)
+      # Staff-only template; only English seed content is maintained.
+      locale        = 'en'
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_training_requested_variables(
         application,
@@ -185,7 +186,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       return handle_no_stale_reviews if stale_reviews.empty? && !Rails.env.test?
 
-      locale        = resolve_template_locale(recipient: admin)
+      # Staff-only template; only English seed content is maintained.
+      locale        = 'en'
       text_template = find_text_template('application_notifications_proof_needs_review_reminder', locale: locale)
       variables     = build_review_reminder_variables(admin, stale_reviews, template: text_template, locale: locale)
 

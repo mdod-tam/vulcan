@@ -155,7 +155,17 @@ class PasswordsController < ApplicationController
   def account_access_sms_body(user)
     token = user.generate_token_for(:password_reset)
     reset_url = edit_password_url(token: token, host: request.host, protocol: request.protocol)
-    "Use this MAT account access link to set your password: #{reset_url} This link expires in 20 minutes."
+    locale = account_access_sms_locale_for(user)
+
+    I18n.t('passwords.account_access_sms.message', locale: locale, reset_url: reset_url)
+  end
+
+  def account_access_sms_locale_for(user)
+    if user.respond_to?(:effective_locale)
+      user.effective_locale.presence || user.locale
+    else
+      user.locale
+    end.presence || I18n.default_locale
   end
 
   def update_password_from_token

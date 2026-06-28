@@ -13,7 +13,8 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   # Expects training_session passed via .with(training_session: ...)
   def trainer_assigned(training_session)
     trainer = training_session.trainer
-    locale = resolve_template_locale(recipient: trainer)
+    # Staff-only template; only English seed content is maintained.
+    locale = 'en'
     template_name = 'training_session_notifications_trainer_assigned'
     begin
       # Only find the text template as per project strategy
@@ -57,6 +58,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       constituent_communication_modality: format_constituent_communication_modality(constituent, locale),
       status_box_text: status_box_text(status: :info, title: 'Training Assignment', message: 'Please contact the constituent to schedule this training session.'),
       application_id: application.id,
+      training_session_schedule_text: training_session_schedule_text(training_session),
       # Shared partial variables (rendered content - text only for non-multipart emails)
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,

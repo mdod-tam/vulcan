@@ -31,7 +31,8 @@ Deep-dive, code-facing docs for contributors.
 | `javascript_architecture.md` | Stimulus target-first pattern, `rails_request` service, base controllers |
 | `paper_application_architecture.md` | Admin paper-form flow, `Current.paper_context` bypass |
 | `user_management_features.md` | Phone/email dedup, `data-testid` naming, factory recipes |
-| `docuseal_integration_guide.md` | Digital document signing for medical certifications |
+| `docuseal_integration_guide.md` | Digital document signing for disability certification |
+| `i18n_email_recommendations.md` | Email template locale sync, rejection reasons, mailer patterns |
 
 ### 📂 features/
 
@@ -52,7 +53,7 @@ Ops-level references.
 
 | File | Highlights |
 |------|------------|
-| `email_system.md` | Template DB workflow, inbound Action Mailbox, Postmark |
+| `email_system.md` | Template DB workflow, legacy/Liquid syntax, letters, Postmark |
 | `active_storage_s3_setup.md` | S3 file storage configuration |
 
 ### 📂 security/
@@ -115,8 +116,9 @@ Naming is grep-friendly: *feature names* mirror folder/file names, so `"guardian
 | **Current.paper_context** | Thread-local flag to bypass online-only validations in paper flows |
 | **Managing Guardian** | The guardian responsible for a dependent's application |
 | **EventDeduplicationService** | Removes duplicate events in 1-minute buckets for clean timelines |
-| **Proof Types** | `income`, `residency`, `medical_certification` (each tracked separately) |
-| **Document Signing Status** | Separate from medical certification status; tracks e-signature workflow |
+| **Proof Types** | `income`, `residency`, and `id` are the reviewable proof types |
+| **Disability Certification** | Separate from reviewable proof status; backed by code identifiers such as `medical_certification_status` |
+| **Document Signing Status** | Separate from disability certification approval; tracks e-signature workflow |
 | **BaseService::Result** | Standard result object with `success?`, `message`, `data` |
 
 ---
@@ -125,9 +127,9 @@ Naming is grep-friendly: *feature names* mirror folder/file names, so `"guardian
 
 | Type | Namespace | Primary Role |
 |------|-----------|--------------|
-| Constituent | `Users::Constituent` | Applies for vouchers |
+| Constituent | `Users::Constituent` | Applies for equipment or voucher fulfillment |
 | Administrator | `Users::Administrator` | Manages applications, users, vendors |
 | Evaluator | `Users::Evaluator` | Conducts evaluations |
 | Trainer | `Users::Trainer` | Provides training sessions |
 | Vendor | `Users::Vendor` | Redeems vouchers, manages transactions |
-| Medical Provider | `Users::MedicalProvider` | Provides medical certifications |
+| Medical Provider | `Users::MedicalProvider` | Provides disability certifications |

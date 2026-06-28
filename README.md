@@ -184,6 +184,7 @@ The links below point to tracked repository documentation intended to be availab
 
 ### Infrastructure, Security, and Compliance
 
+- [Email System](docs/infrastructure/email_system.md)
 - [Active Storage S3 Setup](docs/infrastructure/active_storage_s3_setup.md)
 - [Authentication System](docs/security/authentication_system.md)
 - [PII Encryption](docs/security/pii_encryption.md)
@@ -233,12 +234,6 @@ The links below point to tracked repository documentation intended to be availab
    ```
 
    Add the generated Active Record encryption keys under `active_record_encryption`. Do not commit `config/master.key`.
-
-4b. Seed feature flags:
-   ```bash
-   rake db:seed_feature_flags
-   ```
-   This command populates the `feature_flags` table with the default feature flags used by the application.
 
 ## Configuration
 
@@ -319,29 +314,30 @@ bin/rails db:migrate
 bin/rails db:seed
 ```
 
-`db:seed` is a development seed. It creates demo users, products, policies, feature flags, fixtures, email templates, rejection reasons, and sample attachments. It uses FactoryBot and clears existing local data.
+`db:seed` is for local development data. It clears existing local records, uses FactoryBot, loads products from `test/fixtures/products.yml`, creates demo users/applications/invoices, seeds policies, feature flags, email templates, rejection reasons, and attaches sample files. In production it intentionally skips the seed body.
 
-To refresh email templates only:
+Targeted seed tasks:
 
-```bash
-bin/rails db:seed_manual_email_templates
-```
+| Task | Use it for | Notes |
+| --- | --- | --- |
+| `bin/rails db:seed_policies` | Policy rows for FPL, proof limits, waiting period, training limits, secure form timing, and voucher values. | Production-safe. Updates existing rows when values differ. |
+| `bin/rails db:seed_feature_flags` | Default feature flags. | Currently seeds `vouchers_enabled` as disabled when the row is missing. |
+| `bin/rails db:seed_manual_email_templates` | Database-backed email templates from `db/seeds/email_templates/`. | Deletes existing `EmailTemplate` rows first, then reloads text/HTML templates. |
+| `bin/rails db:seed_rejection_reasons` | Rejection reasons for proof and disability certification review. | Uses `find_or_create_by!`; safe to rerun for missing rows. |
 
-To seed policy rows only:
-
-```bash
-bin/rails db:seed_policies
-```
+There is no standalone product seed task. Products are loaded by the development seed from fixtures; production product data should be entered through the product admin workflow or a purpose-built import if one is added.
 
 ### Production Seeding
 
-Do not run `bin/rails db:seed` in production. It is development-oriented and clears data.
+Do not use `bin/rails db:seed` for production setup. It is a development/demo seed and is written to avoid overwriting production data.
 
-For production, run only targeted seeds:
+For a new production environment, run the targeted seeds below. Re-run `db:seed_manual_email_templates` only when you mean to replace the current template rows with the seeded versions.
 
 ```bash
 bin/rails db:seed_policies
+bin/rails db:seed_feature_flags
 bin/rails db:seed_manual_email_templates
+bin/rails db:seed_rejection_reasons
 ```
 
 Create the first admin user through the Rails console:
@@ -459,11 +455,13 @@ ruby bin/pre-deploy-checks
    heroku run bin/rails db:migrate --app your-app-name
    ```
 
-4. Seed production-safe records:
+4. Seed baseline records:
 
    ```bash
    heroku run bin/rails db:seed_policies --app your-app-name
+   heroku run bin/rails db:seed_feature_flags --app your-app-name
    heroku run bin/rails db:seed_manual_email_templates --app your-app-name
+   heroku run bin/rails db:seed_rejection_reasons --app your-app-name
    ```
 
 5. Create an admin user through `heroku run bin/rails console`.
@@ -499,15 +497,57 @@ bin/kamal dbc
 
 ## Maintenance Tasks
 
-Useful targeted tasks:
+These are the custom tasks in this app. Run `bin/rails -T` when you need the full Rails task list.
+
+### Seeds
 
 ```bash
 bin/rails db:seed_policies
+bin/rails db:seed_feature_flags
 bin/rails db:seed_manual_email_templates
+bin/rails db:seed_rejection_reasons
+```
+
+### Feature Flags
+
+```bash
+bin/rails features:list
+bin/rails 'features:enable[vouchers_enabled]'
+bin/rails 'features:disable[vouchers_enabled]'
+```
+
+### Data Checks and Cleanup
+
+```bash
 bin/rails data_integrity:find_orphaned_applications
-bin/rails notification_tracking:check_all
-bin/rails notification_tracking:analyze[123]
+bin/rails 'data_integrity:fix_orphaned_applications[report]'
+bin/rails 'data_integrity:fix_orphaned_applications[assign,admin@example.org]'
+bin/rails 'data_integrity:fix_orphaned_applications[delete]'
+bin/rails data:update_status_names
+bin/rails 'maintenance:void_duplicate_phone[443-653-1927]'
+```
+
+Use the `delete` orphan cleanup only after reviewing the report. The phone cleanup keeps the lowest-ID user for the supplied phone number and clears that phone number from the rest.
+
+### Email, Letters, and Notifications
+
+```bash
+bin/rails email_templates:audit
 bin/rails letters:check_consistency
+bin/rails letters:check_email_letter_consistency
+bin/rails notification_tracking:check_all
+bin/rails 'notification_tracking:analyze[123]'
+bin/rails 'notification_tracking:fix_duplicates[123]'
+DRY_RUN=true bin/rails notification_tracking:backfill
+bin/rails 'notification_tracking:backfill[true,123]'
+```
+
+`notification_tracking:backfill` works on disability certification request notifications. Pass `DRY_RUN=true` to inspect duplicate candidates without writing changes.
+
+### Vouchers
+
+```bash
+bin/rails vouchers:report_missing
 ```
 
 Recurring work is configured in `config/recurring.yml` and processed by Solid Queue.

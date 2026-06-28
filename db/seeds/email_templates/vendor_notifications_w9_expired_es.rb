@@ -19,9 +19,11 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expired', format
     Para reanudar el procesamiento de pagos por transacciones de vales, envíe un formulario W9 actualizado lo antes posible.
 
     CÓMO ENVIAR SU W9 ACTUALIZADO:
-    1. Descargue el formulario W9 actual del sitio web del IRS: https://www.irs.gov/pub/irs-pdf/fw9.pdf
+    1. PDF W-9 del IRS:
+       https://www.irs.gov/pub/irs-pdf/fw9.pdf
     2. Complete y firme el formulario
-    3. Inicie sesión en su portal de proveedor en %<vendor_portal_url>s
+    3. Enlace al portal de proveedor:
+       %<vendor_portal_url>s
     4. Vaya a "Perfil" y cargue su nuevo formulario W9
 
     %<status_box_info_text>s

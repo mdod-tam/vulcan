@@ -1,6 +1,6 @@
 # Email System Guide
 
-MAT Vulcan delivers, receives, and even prints email content through one unified pipeline. This doc explains **where templates live, how inbound mail is routed, how letters are generated, and how Postmark is wired up**.
+MAT Vulcan sends email and generates printable letter content from shared templates. This doc explains **where templates live, how Liquid rendering works, how secure temporary forms collect documents, how letters are generated, and how Postmark is wired up**.
 
 ---
 
@@ -14,6 +14,7 @@ MAT Vulcan delivers, receives, and even prints email content through one unified
 | Validation | Required and optional variables are stored in each template's `variables` JSON. Subject/body variables must match those exact paths. Liquid templates may only reference required variables; optional variables remain Standard-only because Liquid rendering is strict. |
 | Versioning | `version` increments on subject/body/syntax edits. Subject/body edits store the prior content in `previous_subject`/`previous_body` for the show-page Previous Version panel. |
 | Locale sync | `locale_needs_sync` flags counterpart locales out of date; admin UI uses `locale_out_of_sync?` |
+| Liquid availability | Liquid syntax is available for text templates. |
 
 Seed/update:
 
@@ -33,8 +34,8 @@ mail(to: @user.email, subject: subj) { format.text { render plain: body } }
 **Alternative using class method:**
 
 ```ruby
-subj, body = EmailTemplate.render('user_mailer_password_reset', 
-                                  user_first_name: @user.first_name, 
+subj, body = EmailTemplate.render('user_mailer_password_reset',
+                                  user_first_name: @user.first_name,
                                   reset_url: ...)
 ```
 
@@ -50,44 +51,26 @@ Admin UI lets staff **edit, preview, and send test mails** — no code deploys f
 
 ---
 
-## 2 · Inbound Email
+## 2 · Secure Temporary Forms
 
-*Rails Action Mailbox + Postmark* handles attachments for proofs & medical certs.
+Incoming document collection now uses secure temporary forms, not inbound email routing.
 
-| ENV | Example |
-|-----|---------|
-| `INBOUND_EMAIL_PROVIDER` | `postmark` |
-| `INBOUND_EMAIL_ADDRESS` | `af7e…@inbound.postmarkapp.com` |
-| `RAILS_INBOUND_EMAIL_PASSWORD` | webhook token |
+| Need | Current path |
+|------|--------------|
+| Rejected or missing income/residency/ID proof | `Applications::RequestProofResubmission` creates a `SecureRequestForm` and delivery is attempted through the selected contact channel. |
+| Public proof upload | `Applications::SubmitProofResubmission` validates the token and file, then attaches the document through `ProofAttachmentService`. |
+| Disability certification upload option | `Applications::RequestCertificationUpload` creates a provider secure request form. |
+| Public disability certification upload | `Applications::SubmitCertificationUpload` validates the token and file, then attaches it through `MedicalCertificationAttachmentService`. |
 
-Routing (`ApplicationMailbox`):
+There is no live `ApplicationMailbox`, `ProofSubmissionMailbox`, or `MedicalCertificationMailbox` path in this checkout. Do not document users, providers, or admins as routing incoming emails for proof or disability certification collection unless those classes and routes are restored.
 
-```text
-disability_cert@mdmat.org → MedicalCertificationMailbox
-proof@mdmat.org → ProofSubmissionMailbox  
-inbound address (env var) → ProofSubmissionMailbox
-else → DefaultMailbox
-```
+Secure temporary forms centralize:
 
-Local test:
-
-```bash
-bin/test-inbound-emails
-ultrahook postmark 3000   # forwards webhooks in dev
-```
-
-What users do:
-
-* **Constituent proofs** – email docs to inbound address.  
-* **Providers** – email signed certification + app ID in subject.
-
-**Processing Details:**
-
-* `ProofSubmissionMailbox` - Validates constituent, application, rate limits, attachments.
-* `MedicalCertificationMailbox` - Validates medical provider, certification request, attachments.
-* Both use `before_processing` callbacks that can bounce emails with error notifications.
-* Successful processing creates audit events and attaches files to applications.
-* Failed processing bounces email and sends error notification to sender.
+* signed token lookup and expiration checks
+* revocation of superseded forms
+* upload validation through `ProofAttachmentValidator`
+* audit events for request, submission, revocation, and expiration
+* delivery failure reporting back to the calling workflow
 
 ---
 
@@ -127,8 +110,8 @@ mail(to: user.email, subject: 'Hi', message_stream: 'notifications')
 
 ### 4.2 Tracking & Webhooks
 
-* `track_opens: true` configured globally in `postmark_format.rb`.  
-* `UpdateEmailStatusJob` polls Postmark API to update `Notification` delivery status.  
+* `track_opens: true` configured globally in `postmark_format.rb`.
+* `UpdateEmailStatusJob` polls Postmark API to update `Notification` delivery status.
 * Bounce events handled by `EmailEventHandler` → creates audit events.
 * Webhook endpoint: `/webhooks/email_events` for bounce/complaint notifications.
 
@@ -149,7 +132,7 @@ Enable in `config/initializers/postmark_debugger.rb`.
 | Topic | How |
 |-------|-----|
 | Template render | Mock template → `template.render(**vars)` |
-| Inbound flow | `bin/test-inbound-emails`, Action Mailbox dashboard |
+| Secure form flow | Request-service tests plus token submission controller/service tests |
 | Letter PDF | Specs for `TextTemplateToPdfService` + `PrintQueueItem` |
 | Smoke send | Admin UI “Send test email” |
 
@@ -179,15 +162,14 @@ subj, body = tpl.render(first_name: 'Ada')
 | Symptom | Check |
 |---------|-------|
 | **"Template not found"** | Name/format mismatch in DB, run `rake db:seed_manual_email_templates` |
-| **Inbound mail ignored** | `RAILS_INBOUND_EMAIL_PASSWORD`, routing rules in `ApplicationMailbox` |
-| **Inbound mail bounced** | Check constituent exists, has active application, attachment validation |
+| **Secure form link rejected** | Token expired, revoked, already used, or not active for public use |
+| **Secure form upload rejected** | File type/size/content validation in `ProofAttachmentValidator` |
 | **Letter generation fails** | Text template exists? all variables supplied? `PrintQueueItem` created? |
 | **Wrong stream** | `message_stream` param in mailer (`outbound` vs `notifications`) |
 | **Email tracking issues** | `POSTMARK_API_TOKEN`, `UpdateEmailStatusJob` logs, `Notification` records |
 | **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, and syntax. Liquid placeholders must come from required variables. |
 
-**Tools:** 
+**Tools:**
 * Postmark dashboard (delivery & webhooks)
-* `/rails/conductor/action_mailbox/inbound_emails` (inbound email processing)
 * `/admin/print_queue` (letter generation)
 * `/admin/email_templates` (template management and testing)
