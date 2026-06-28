@@ -28,9 +28,9 @@ The audit system consists of multiple interconnected services and models that wo
 | System | Purpose | When to Use | Examples |
 |--------|---------|-------------|----------|
 | **🔍 Audit System** | Track what happened | Data changes, user actions, system events | `proof_approved`, `application_created`, `user_login` |
-| **📧 Notification System** | Communicate with users | Email alerts, status updates | Email when proof approved, account creation emails |
+| **📧 Notification System** | Communicate with users or keep persistent notification history | Email/letter delivery, secure request tracking, record-only notifications | Secure proof resubmission requests, account creation emails, record-only proof approvals |
 
-**Key Principle**: Audit events create permanent records for compliance and debugging. Notifications communicate important information to users. Some actions trigger both (e.g., proof approval creates an audit event AND sends an email notification).
+**Key Principle**: Audit events create permanent records for compliance and debugging. Notifications communicate important information to users or preserve notification history. Some actions trigger both, but they are not interchangeable; for example, proof approval logs `proof_approved` and creates a record-only `proof_approved` notification, while proof rejection logs `proof_rejected` and delegates delivery to secure proof-resubmission services.
 
 ### 1.3 · Event Flow Architecture
 
@@ -199,10 +199,10 @@ CREATE TABLE events (
 );
 
 -- Existing indexes
-CREATE INDEX events_action_auditable_idx ON events (action, auditable_type, auditable_id);
-CREATE INDEX events_auditable_idx ON events (auditable_type, auditable_id);
-CREATE INDEX events_user_id_idx ON events (user_id);
-CREATE INDEX events_metadata_gin_idx ON events USING GIN (metadata);
+CREATE INDEX index_events_on_action_and_auditable ON events (action, auditable_type, auditable_id);
+CREATE INDEX index_events_on_auditable ON events (auditable_type, auditable_id);
+CREATE INDEX index_events_on_user_id ON events (user_id);
+CREATE INDEX index_events_on_metadata ON events USING GIN (metadata);
 
 -- (Optional indexes, not currently present)
 -- CREATE INDEX CONCURRENTLY events_created_at_idx ON events (created_at);
@@ -331,41 +331,49 @@ end
 | Action | Triggered By | Metadata Keys |
 |--------|-------------|---------------|
 | `application_created` | Application submission | `submission_method`, `initial_status` |
-| `application_auto_approved` | System auto-approval | `old_status`, `new_status`, `trigger` |
-| `application_status_changed` | Admin status update | `old_status`, `new_status`, `notes` |
+| `application_status_changed` | `Application#transition_status!` for manual changes, submissions, rejection, and auto-approval | `old_status`, `new_status`, `notes`, `trigger` |
+
+Auto-approval is represented as `application_status_changed` with metadata such as `trigger: "auto_approval"`. The legacy `application_auto_approved` event is not emitted by current code.
 
 ### 6.2 · Proof Events
 
 | Action | Triggered By | Metadata Keys |
 |--------|-------------|---------------|
-| `income_proof_attached` | ProofAttachmentService (web/paper) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
-| `residency_proof_attached` | ProofAttachmentService (web/paper) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
-| `income_proof_submitted` | ProofAttachmentService (email) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
-| `residency_proof_submitted` | ProofAttachmentService (email) | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
-| `income_proof_attachment_failed` | ProofAttachmentService | `proof_type`, `submission_method`, `error_class`, `error_message`, `success` |
-| `residency_proof_attachment_failed` | ProofAttachmentService | `proof_type`, `submission_method`, `error_class`, `error_message`, `success` |
-| `proof_submission_received` | ProofSubmissionMailbox | `application_id`, `inbound_email_id`, `email_subject`, `email_from`, `attachments_count` |
-| `proof_submission_processed` | ProofSubmissionMailbox | `application_id`, `inbound_email_id` |
-| `proof_submission_<error_type>` | ProofSubmissionMailbox bounce | `application_id`, `error`, `error_type`, `inbound_email_id`, `sender_email` |
-| `proof_approved` | Admin review (ProofReview) | `proof_type` |
-| `proof_rejected` | Admin review (ProofReview) | `proof_type`, `rejection_reason` |
-| `income_proof_rejected` | Explicit reject path without attachment | `proof_type`, `rejection_reason`, `submission_method` |
+| `<proof_type>_proof_attached` | ProofAttachmentService non-email attachment path | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
+| `<proof_type>_proof_submitted` | ProofAttachmentService email attachment path | `proof_type`, `submission_method`, `blob_id`, `blob_size`, `filename`, `status`, `has_attachment` |
+| `<proof_type>_proof_attachment_failed` | ProofAttachmentService failure path | `proof_type`, `submission_method`, `error_class`, `error_message`, `success` |
+| `proof_submitted` | Portal direct upload, admin scanned proof, and paper proof handling paths | `proof_type`, `submission_method`, attachment metadata varies by caller |
+| `proof_resubmission_requested` | Applications::RequestProofResubmission | `secure_request_form_id`, `application_id`, `recipient_id`, `recipient_channel`, `request_batch_id`, `proof_type`, `expires_at` |
+| `proof_submitted_via_secure_form` | Applications::SubmitProofResubmission | `secure_request_form_id`, `recipient_user_id`, `recipient_role`, `request_batch_id`, `proof_type` |
+| `proof_resubmission_request_revoked` | SecureTokenizable | `secure_request_form_id`, `request_batch_id`, `recipient_id`, `recipient_channel`, `proof_type`, `reason` |
+| `proof_resubmission_request_expired` | SecureFormExpirationRecorder | `secure_request_form_id`, `request_batch_id`, `recipient_id`, `recipient_channel`, `proof_type`, `expires_at` |
+| `proof_approved` | `ProofReview` callback after admin approval | `proof_type` |
+| `proof_rejected` | `ProofReview` callback after admin rejection | `proof_type`, `rejection_reason`, `submission_method`, `rejection_reason_code` |
 
-### 6.3 · Medical Certification Events
+Typed proof-rejection notification actions such as `income_proof_rejected`, `residency_proof_rejected`, and `id_proof_rejected` exist for legacy mailer/test paths, but they are not the canonical audit event for reviewable proof rejections. The canonical audit event is the generic `proof_rejected`; secure upload request tracking is represented by `proof_resubmission_requested` notification/audit records.
+
+### 6.3 · Disability Certification Events
 
 | Action | Triggered By | Metadata Keys |
 |--------|-------------|---------------|
-| `medical_certification_requested` | Email, Mail, or DocuSeal request | `medical_provider_email`, `submission_method`, `provider_name`, `change_type` |
-| `medical_certification_received` | Email processing | `submission_method`, `email_from` |
+| `medical_certification_requested` | Email, mail, secure upload, or DocuSeal request | `medical_provider_email`, `submission_method`, `provider_name`, `change_type` |
+| `cert_upload_requested` | Applications::RequestCertificationUpload | `medical_provider_secure_request_form_id`, `application_id`, `request_batch_id`, `provider_name`, `provider_email`, `requested_channel`, `expires_at` |
+| `cert_submitted_via_secure_form` | Applications::SubmitCertificationUpload | `medical_provider_secure_request_form_id`, `request_batch_id`, `provider_email`, `additional_blob_id` |
+| `cert_upload_request_revoked` | SecureTokenizable | `medical_provider_secure_request_form_id`, `request_batch_id`, `provider_name`, `provider_email`, `reason` |
+| `cert_upload_request_expired` | SecureFormExpirationRecorder | `medical_provider_secure_request_form_id`, `request_batch_id`, `provider_name`, `provider_email`, `expires_at` |
+| `medical_certification_received` | Secure upload, admin upload, fax/mail manual upload, or DocuSeal | `submission_method`, `provider_email`, `request_batch_id` |
 | `medical_certification_approved` | Admin review | `admin_id`, `review_notes` |
 | `medical_certification_rejected` | Admin review | `rejection_reason`, `admin_id` |
 
-**Submission Method Tracking**: All medical certification requests include `submission_method` metadata to track the delivery channel:
+**Submission Method Tracking**: Disability certification requests include `submission_method` metadata to track the delivery channel. Code-level event names still use `medical_certification_*`.
 - `email` - Automated emails sent via `MedicalCertificationService`
+- `secure_form` - Provider uploads through `MedicalProviderSecureRequestForm`
 - `mail` - Paper letters queued for postal delivery via `MedicalCertificationPdfService`
 - `document_signing` - Electronic signatures via `DocumentSigning::SubmissionService` (DocuSeal)
 
-Audit logs display this as: "Medical certification requested from [Provider] (via Email/Mail/Document Signing)" providing clear visibility into the request delivery method.
+Audit logs display this as: "Disability certification requested from [Provider] (via Email/Mail/Document Signing)" providing clear visibility into the request delivery method.
+
+Proof rejection delivery has two steps: `ProofReview` records the rejection and calls `Applications::RequestProofResubmission`, which creates the `proof_resubmission_requested` tracking notification with `deliver: false` before attempting contact-channel delivery. If delivery fails, the review remains recorded, active secure forms can be revoked, and the service result includes failure data so the admin workflow can surface an alert such as "review succeeded but secure upload request was not delivered."
 
 ### 6.4 · User & Authentication Events
 
@@ -393,6 +401,9 @@ Note: These are examples of potential events. They are not currently emitted by 
 | `notification_<action>_created` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_attempted` |
 | `notification_<action>_sent` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_successful` |
 | `notification_<action>_failed` | NotificationService (audit: true) | `notification_id`, `recipient_id`, `channel`, `delivery_successful` |
+| `email_bounced` | Postmark bounce webhook (`Webhooks::EmailEventsController` → `EmailEventHandler`) | `notification_id`, `bounce_type`, `provider_email` |
+
+`email_bounced` is logged when a provider outbound email bounce is matched to a tracked `Notification` (`medical_certification_requested`, `cert_upload_requested`, or `medical_certification_rejected`). The handler also sets `Notification#delivery_status` to `error` and stores bounce details in `metadata['delivery_error']`. Spam-complaint webhooks update the notification delivery record but do not emit a separate audit event.
 
 ---
 
@@ -473,7 +484,9 @@ class Admin::ApplicationsController < Admin::BaseController
     result = ProofReviewService.new(@application, current_user, params).call
     
     if result.success?
-      # Audit event is created by the service
+      # ProofReview callbacks create proof_approved/proof_rejected events.
+      # For rejected reviews, result.data[:resubmission_delivered] tells the
+      # controller whether to show the secure-upload delivery warning.
       redirect_to admin_application_path(@application)
     else
       # Error handling
@@ -495,26 +508,16 @@ end
 ```ruby
 class ProofReviewService < BaseService
   def call
-    ActiveRecord::Base.transaction do
-      # Business logic
-      create_proof_review
-      update_application_status
-      
-      # Audit event
-      AuditEventService.log(
-        action: "#{@proof_type}_proof_#{@status}",
-        actor: @admin,
-        auditable: @application,
-        metadata: {
-          proof_type: @proof_type,
-          status: @status,
-          rejection_reason: @rejection_reason,
-          admin_notes: @notes
-        }
-      )
+    reviewer = Applications::ProofReviewer.new(application, admin_user)
+    reviewer.review(**review_params)
+
+    data = { proof_review: reviewer.proof_review }
+    if reviewer.proof_review&.status_rejected?
+      data[:resubmission_delivered] =
+        Applications::RequestProofResubmission.delivery_confirmed_for_review?(reviewer.proof_review)
     end
-    
-    success(message: "Proof review completed")
+
+    success(success_message, data)
   end
 end
 ```
@@ -523,33 +526,28 @@ end
 
 ```ruby
 class Application < ApplicationRecord
-  # Use callbacks sparingly - prefer service-layer auditing
-  after_update :log_status_change, if: :saved_change_to_status?
-  
-  private
-  
-  def log_status_change
-    # Skip if currently in a guard context to prevent recursive calls
-    return if @logging_status_change
+  # Status transitions go through this explicit API, not a generic after_update
+  # status callback. This keeps the status write, ApplicationStatusChange, audit
+  # event, and voucher enqueue in one locked operation.
+  def transition_status!(new_status, actor:, notes: nil, metadata: {})
+    with_lock do
+      old_status = status
+      update!(status: new_status)
 
-    acting_user = Current.user || user # Ensure a user is always present
-    return if acting_user.blank?
-    
-    @logging_status_change = true
-    
-    begin
+      status_changes.create!(
+        from_status: old_status,
+        to_status: status,
+        user: actor,
+        notes: notes,
+        metadata: metadata.reverse_merge(application_id: id)
+      )
+
       AuditEventService.log(
         action: 'application_status_changed',
-        actor: acting_user,
+        actor: actor,
         auditable: self,
-        metadata: {
-          old_status: status_before_last_save,
-          new_status: status,
-          change_source: 'model_callback'
-        }
+        metadata: metadata.reverse_merge(old_status: old_status, new_status: status)
       )
-    ensure
-      @logging_status_change = false
     end
   end
 end
@@ -700,7 +698,8 @@ failures = Event.with_metadata('success', false)
 ### 10.1 · Database Optimization
 
 ```sql
--- Essential indexes for performance
+-- Suggested additional indexes if event volume makes these query shapes hot.
+-- They are not present in the current schema.
 CREATE INDEX CONCURRENTLY events_auditable_action_idx 
 ON events (auditable_type, auditable_id, action);
 

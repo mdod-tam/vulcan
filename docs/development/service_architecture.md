@@ -1,28 +1,30 @@
 # Service Architecture
 
-Short, actionable reference for how our service objects work and how to build new ones.
+This document describes the current service-object patterns and the core service entry points in MAT Vulcan.
 
----
+## 1 · High-Level Flow
 
-## 1 · Philosophy
+```text
+Controller or model callback
+  -> service object
+  -> model writes / Active Storage / external delivery
+  -> AuditEventService and/or NotificationService when needed
+  -> job, mailer, or audit-log builder for async/display work
+```
 
-| Principle | In practice |
-|-----------|-------------|
-| **Encapsulate business logic** | One service ↔ one use-case. Keep controllers/models thin. |
-| **Consistent patterns** | All services inherit helpers from `BaseService`. |
-| **Transactional safety** | Wrap side-effect chains in DB transactions. |
-| **Clear result surface** | Return `true/false`, expose `errors`. Complex services may return a result hash. |
-
----
+Most services are plain Ruby objects under `app/services/`. Many inherit from `BaseService`, but some central services use class methods instead, including `ProofAttachmentService`, `MedicalCertificationAttachmentService`, `NotificationService`, `FaxService`, `SmsService`, and `TwilioVerifyService`.
 
 ## 2 · BaseService
 
+`BaseService` lives at `app/services/base_service.rb`. Key pieces:
+
 ```ruby
 class BaseService
+  include SecureErrorSanitizer
+
   attr_reader :errors
 
-  # Default result object returned by services
-  Result = Struct.new(:success, :message, :data, keyword_init: true) do
+  Result = Struct.new(:success, :message, :data) do
     def success?
       success == true
     end
@@ -36,287 +38,184 @@ class BaseService
     @errors = []
   end
 
-  # Returns a success result with optional message and data
   def success(message = nil, data = nil)
     Result.new(success: true, message: message, data: data)
   end
 
-  # Returns a failure result with optional message and data
   def failure(message = nil, data = nil)
     Result.new(success: false, message: message, data: data)
   end
 
   protected
 
-  # Add an error message to the errors array
-  def add_error?(message)
+  def add_error(message)
     @errors << message
     false
   end
 
-  # Log an error with optional context and add to errors array
-  def log_error(exception, context = nil)
-    error_message = if context.is_a?(String)
-                      "#{self.class.name}: #{context} - #{exception.message}"
-                    elsif context.is_a?(Hash)
-                      "#{self.class.name}: #{exception.message} | Context: #{context.inspect}"
-                    else
-                      "#{self.class.name}: #{exception.message}"
-                    end
-
-    Rails.logger.error error_message
-    Rails.logger.error exception.backtrace.join("\n") if exception.backtrace
-
-    add_error?(exception.message)
+  def add_error?(message)
+    add_error(message)
   end
 end
 ```
 
----
+Use `success?`, `failure?`, `message`, and `data` when a service returns `BaseService::Result`. Some legacy services still return booleans and expose `errors`; `Applications::PaperApplicationService#create` and `#update` are examples.
 
-## 3 · Core Services (examples)
+`BaseService` also provides `log_error(exception, context = nil)`, which logs the context/backtrace and appends the exception message to `errors`.
 
-### 3.1 · Applications::EventDeduplicationService
+## 3 · Main Entry Points
 
-```ruby
-deduped = Applications::EventDeduplicationService
-           .new.deduplicate(events)
+| Service | File | Current role | Result shape |
+|---------|------|--------------|--------------|
+| `AuditEventService` | `app/services/audit_event_service.rb` | Creates `Event` records and suppresses recent duplicates with a 5-second window. | `Event` or `nil` |
+| `NotificationService` | `app/services/notification_service.rb` | Creates `Notification` records, resolves mailers, stores delivery-route metadata, and optionally enqueues delivery. | `Notification` or `nil` |
+| `ProofAttachmentService` | `app/services/proof_attachment_service.rb` | Attaches income, residency, and ID proofs while preserving the caller's submission-method metadata. | Hash |
+| `ProofReviewService` | `app/services/proof_review_service.rb` | Validates admin proof-review params, delegates to `Applications::ProofReviewer`, and returns secure-resubmission delivery-warning data for rejected reviews. | `BaseService::Result` |
+| `MedicalCertificationAttachmentService` | `app/services/medical_certification_attachment_service.rb` | Attaches, rejects, or status-updates disability certifications. | Hash |
+| `Applications::PaperApplicationService` | `app/services/applications/paper_application_service.rb` | Creates and updates admin-entered paper applications. | Boolean plus `errors` / `reconciliation_note` |
+| `Applications::GuardianDependentManagementService` | `app/services/applications/guardian_dependent_management_service.rb` | Creates or links guardian/dependent users and applies contact strategies. | `BaseService::Result` on the success path |
+| `Applications::MedicalCertificationService` | `app/services/applications/medical_certification_service.rb` | Requests disability certification from a provider. | `BaseService::Result` |
+| `Applications::EventService` | `app/services/applications/event_service.rb` | Logs guardian/dependent application submission and update events. | `Event` or `nil` |
+| `Applications::EventDeduplicationService` | `app/services/applications/event_deduplication_service.rb` | Deduplicates timeline inputs for display. | Array |
+
+Related docs:
+
+- Paper intake: [`docs/development/paper_application_architecture.md`](paper_application_architecture.md)
+- Audit/event tracking: [`docs/features/audit_event_tracking.md`](../features/audit_event_tracking.md)
+- Notifications: [`docs/features/notifications.md`](../features/notifications.md)
+- Document signing: [`docs/development/docuseal_integration_guide.md`](docuseal_integration_guide.md)
+
+## 4 · Core Flows
+
+### 4.1 · Paper Applications
+
+```text
+Admin::PaperApplicationsController
+  -> Applications::PaperApplicationService
+  -> UserCreationService / GuardianDependentManagementService
+  -> Application
+  -> ProofAttachmentService / MedicalCertificationAttachmentService
+  -> AuditEventService / NotificationService / mailers
 ```
 
-* **Single source of truth** for event deduping.  
-* 1-minute buckets, priority: StatusChange > Event > Notification.  
-* Fingerprints events via `event_fingerprint(event)`.
+Routes:
 
-<details>
-<summary>Fingerprint snippet</summary>
+- `GET /admin/paper_applications/new`
+- `POST /admin/paper_applications`
+- collection helper routes such as `dependent_form`
 
-```ruby
-def event_fingerprint(event)
-  action  = generic_action(event)
-  details = case event
-            when ApplicationStatusChange
-              medical_certification_event?(event) ? nil :
-                "#{event.from_status}-#{event.to_status}"
-            when ->(e) { e.action&.include?('proof_submitted') }
-              "#{event.metadata['proof_type']}-#{event.metadata['submission_method']}"
-            end
-  [action, details].compact.join('_')
-end
-```
-</details>
+Current behavior:
 
----
+- `create` and `update` set `Current.paper_context = true` during service-owned work and reset it in `ensure`.
+- Self-applicant, existing self-applicant, existing dependent, and new guardian/dependent scenarios are handled in the service.
+- New guardian/dependent creation uses `Applications::GuardianDependentManagementService`; existing dependent relationships are created directly when missing.
+- Contact strategies are `email_strategy`, `phone_strategy`, and `address_strategy`.
+- Proof actions include `upload_only`, `accept` / `approved`, `reject` / `rejected`, and `not_requested`.
+- Income, residency, and ID proof attachments use `ProofAttachmentService`.
+- Medical certification attachments and rejections use `MedicalCertificationAttachmentService`, with provider-notification rejection paths delegated through `Applications::MedicalCertificationReviewer` when provider contact is available.
+- After a successful paper write, the service calls `Application#reconcile_workflow_state!`; failures are surfaced through `reconciliation_note` without rolling back the already saved application/proofs.
 
-### 3.2 · Applications::MedicalCertificationService
+Primary tests:
 
-```ruby
-service = Applications::MedicalCertificationService
-            .new(application: app, actor: current_user)
-result = service.request_certification
-# Returns BaseService::Result with success?, message, data
-```
+- `test/controllers/admin/paper_applications_controller_test.rb`
+- `test/services/applications/paper_application_service_test.rb`
+- `test/system/admin/paper_applications_test.rb`
 
-* Uses `update_columns` to avoid unrelated validations.  
-* Timestamps = audit trail.  
-* Background jobs for emails (`MedicalCertificationEmailJob`); graceful error capture.
-* Returns structured result object instead of boolean.
-
----
-
-### 3.3 · Applications::PaperApplicationService
-
-(See **Paper Application Architecture** doc for full details.)
-
-Key points:
-
-| Concern | How handled |
-|---------|-------------|
-| Validation bypass | `Current.paper_context = true` |
-| Self vs dependent | GuardianRelationship creation when needed |
-| Proofs | Accept / reject, uploads, audits |
-| Notifications | Triggered after success |
-
----
-
-### 3.4 · Applications::EventService
-
-```ruby
-service = Applications::EventService
-            .new(application: app, user: current_user)
-service.log_dependent_application_update(
-  dependent: dep, relationship_type: 'Parent'
-)
-```
-
-Centralises event + metadata logging.
-
----
-
-### 3.5 · ProofAttachmentService
+### 4.2 · Proof Attachments and Reviews
 
 ```ruby
 result = ProofAttachmentService.attach_proof(
-  application:        app,
-  proof_type:         :income,  # Symbol, not string
-  blob_or_file:       uploaded_file,
-  status:             :approved,
-  admin:              current_user,
-  submission_method:  :paper,
-  metadata:           { ip: request.remote_ip }
-)
-# Returns: { success: true/false, error: nil, duration_ms: 123, blob_size: 456 }
-```
-
-* **Single source of truth** for all proof attachments (web, paper, email, fax).  
-* Supports files **or** signed blob IDs.  
-* Auto-creates audits; honours `Current.paper_context`; returns hash result.
-* Includes metrics, timing, and error handling.
-* Also provides `reject_proof_without_attachment` for paper rejections.
-
----
-
-## 4 · Service Patterns & Helpers
-
-### 4.1 · CurrentAttributes
-
-```ruby
-Current.paper_context                    # bypass proof checks
-Current.skip_proof_validation           # broader bypass
-Current.force_notifications             # useful in tests
-Current.resubmitting_proof              # proof resubmission context
-Current.reviewing_single_proof          # targeted review operations
-Current.proof_attachment_service_context # prevent duplicate events
-Current.user                            # current user for request context
-Current.request_id                      # tracking and debugging
-```
-
-* Rails-native cleanup between requests.  
-* Test isolation with `Current.reset` in teardown.
-* Boolean helper methods: `paper_context?`, `resubmitting_proof?`, etc.
-
-### 4.2 · Standard Error Handling
-
-```ruby
-def perform_operation
-  ActiveRecord::Base.transaction do
-    return add_error('Validation failed') unless valid?
-
-    perform_core_logic
-    true
-  end
-rescue => e
-  log_error(e, 'perform_operation')
-  add_error(e.message)
-end
-```
-
-### 4.3 · Result Object Template
-
-**BaseService::Result (structured):**
-```ruby
-Result.new(success: true, message: 'Success message', data: { user: user })
-# Access via: result.success?, result.failure?, result.message, result.data
-```
-
-**Hash Result (for complex operations):**
-```ruby
-{ success: false, error: exception, duration_ms: 123, blob_size: 456 }
-```
-
-Use BaseService::Result for most services; hash results for complex operations like ProofAttachmentService.
-
----
-
-## 5 · Guardian / Dependent Logic (in services)
-
-```ruby
-# Modern pattern using GuardianDependentManagementService
-service = Applications::GuardianDependentManagementService.new(params)
-result = service.process_guardian_scenario(
-  guardian_id, new_guardian_attrs, applicant_data, relationship_type
-)
-
-if result.success?
-  guardian = result.data[:guardian]
-  dependent = result.data[:dependent]
-else
-  # Handle failure
-end
-
-# Direct relationship creation (legacy pattern still used)
-GuardianRelationship.create!(
-  guardian_user: guardian,
-  dependent_user: dependent,
-  relationship_type: relationship_type
+  application: application,
+  proof_type: :income,
+  blob_or_file: uploaded_file_or_signed_id,
+  status: :not_reviewed,
+  admin: current_user,
+  submission_method: :web,
+  metadata: {}
 )
 ```
 
----
+`ProofAttachmentService.attach_proof`:
 
-## 6 · Testing Services
+- accepts Active Storage blobs, signed blob IDs, and uploaded-file objects
+- tracks duration and blob size in a hash result
+- sets `Current.proof_attachment_service_context` while attaching to avoid duplicate model-callback events
+- creates typed attachment events such as `income_proof_attached`
+- sets proof status and `needs_review_since` for `not_reviewed` uploads
+- skips constituent-facing attachment notifications while `Current.paper_context` is true
 
-### 6.1 · Unit Test Skeleton
+`ProofReviewService` is the admin proof-review entry point. It delegates to `Applications::ProofReviewer`, which saves the `ProofReview`, updates the matching proof status column, purges rejected attachments, and reconciles workflow state after approvals. `ProofReviewService` returns `data[:resubmission_delivered]` for rejected reviews so controllers can warn admins when the secure upload request was not delivered.
+
+`ProofAttachmentService.reject_proof_without_attachment` is for paper/admin rejection without a file. It creates a `ProofReview`; the generic `proof_rejected` audit event and proof-resubmission delivery are owned by `ProofReview` and `Applications::RequestProofResubmission`, not by `ProofAttachmentService`.
+
+Primary entry points:
+
+- `ConstituentPortal::Proofs::ProofsController#resubmit`
+- `Admin::PaperApplicationsController#create`
+- `Admin::ScannedProofsController#create`
+- `Applications::SubmitProofResubmission#call`
+
+Primary tests:
+
+- `test/services/proof_attachment_service_test.rb`
+- `test/services/proof_attachment_service_callback_test.rb`
+- `test/services/applications/request_proof_resubmission_test.rb`
+
+### 4.3 · Disability Certification Requests
 
 ```ruby
-class FooServiceTest < ActiveSupport::TestCase
-  setup { @admin = create(:admin) }
-
-  test 'success' do
-    service = FooService.new(admin: @admin)
-    assert service.perform
-    assert_empty service.errors
-  end
-
-  test 'handles failure' do
-    Foo.stubs(:create!).raises(StandardError, 'boom')
-    service = FooService.new(admin: @admin)
-    assert_not service.perform
-    assert_includes service.errors, 'boom'
-  end
-end
+service = Applications::MedicalCertificationService.new(
+  application: application,
+  actor: current_user
+)
+result = service.request_certification
 ```
 
-### 6.2 · Integration Example
+Route:
 
-```ruby
-assert_difference ['Application.count', 'GuardianRelationship.count'] do
-  assert Applications::PaperApplicationService
-           .new(params: dep_params, admin: @admin).create
-end
-```
+- `POST /admin/applications/:id/resend_medical_certification`
 
----
+Current behavior:
 
-## 7 · When to Extract a Service
+- Requires `application.medical_provider_email`.
+- Uses `update_columns` for `medical_certification_*` timestamp/status/count updates and manually writes the related `ApplicationStatusChange` and `Event`. Treat this as current implementation behavior, not a pattern to copy into new services.
+- Creates a record-only `medical_certification_requested` notification through `NotificationService` with `deliver: false`.
+- Enqueues `MedicalCertificationEmailJob`, which sends the disability certification request email and updates notification delivery metadata on failure.
+- Returns `BaseService::Result`.
 
-* Logic spans **multiple models**.  
-* Needs **transaction** wrapping.  
-* Complex **error handling**.  
-* **Background job** orchestration.  
-* The controller/model would otherwise grow unwieldy.
+Primary tests:
 
----
+- `test/integration/application_lifecycle_flow_test.rb`
+- `test/integration/medical_certification_flow_test.rb`
+- `test/jobs/medical_certification_email_job_test.rb`
 
-## 8 · Additional Core Services
-
-### 8.1 · NotificationService
+### 4.4 · Notifications
 
 ```ruby
 NotificationService.create_and_deliver!(
-  type: 'proof_rejected',
+  type: 'medical_certification_not_provided',
   recipient: user,
   actor: admin,
-  notifiable: review,
-  metadata: { template_variables: ... },
+  notifiable: application,
+  metadata: {},
   channel: :email
 )
 ```
 
-* **Centralized notification creation** with builder pattern.
-* Supports fluent interface and direct call style.
-* Handles delivery, tracking, and error recovery.
+Current behavior:
 
-### 8.2 · AuditEventService
+- `channel` accepts `:email` and `:letter`; recipient-facing mailers decide the actual route for preference-routed messages.
+- `deliver: false` creates the `Notification` record without enqueuing delivery.
+- `NOOP_DELIVERY_ACTIONS` are record-only delivery no-ops, including `proof_approved`, `medical_certification_received`, and `medical_certification_approved`.
+- Normal proof-rejection delivery is blocked here. Reviewable proof rejections should use `Applications::RequestProofResubmission`; legacy mailer-only paths must pass `metadata: { delivery_path: 'legacy' }`.
+- By default, `NotificationService` creates notification records without audit events. When callers pass `audit: true`, it logs notification-created/sent/failed events through `AuditEventService`.
+
+Primary tests:
+
+- `test/services/notification_service_test.rb`
+- `test/services/printed_letter_delivery_integration_test.rb`
+
+### 4.5 · Audit Events and Timeline Deduplication
 
 ```ruby
 AuditEventService.log(
@@ -327,79 +226,77 @@ AuditEventService.log(
 )
 ```
 
-* **Single source** for audit event creation.
-* Automatic deduplication within 5-second window.
-* Structured metadata handling.
+`AuditEventService` writes `Event` records and suppresses recent duplicates for the same auditable record unless the action is excluded, such as `application_created`.
 
-### 8.3 · Training & Evaluation Services
+`Applications::EventDeduplicationService` is display-focused. It groups mixed timeline inputs in 1-minute buckets by fingerprint, then chooses the best representative. Current priority is:
 
-```ruby
-# TrainingSessions::UpdateStatusService
-# TrainingSessions::CompleteService
-# Evaluations::SchedulingService
-```
+1. `application_created`
+2. `ApplicationStatusChange`
+3. `ProofReview` or `Event`
+4. `Notification`
 
-* Status management with proper state transitions.
-* Notification orchestration.
-* Audit trail maintenance.
+It handles special fingerprints for disability certification status changes, proof submissions, proof reviews, provider-info requests, proof-resubmission requests, and secure-request revocations.
 
-## 9 · Future Service Candidates
+Primary tests:
 
-| Area | Why |
-|------|-----|
-| Voucher management | Multi-step issuance, expiry, audit trail |
-| Advanced reporting | Large data aggregation, formatting |
-| Document processing | OCR, validation, classification |
-| Integration services | External API coordination |
+- `test/services/applications/event_deduplication_service_test.rb`
+- `test/services/applications/audit_log_builder_test.rb`
 
----
+### 4.6 · Training and Evaluation Services
 
-## 10 · Service Testing Patterns
+Training services currently include:
 
-### 10.1 · Unit Test Example
+- `TrainingSessions::ScheduleService`
+- `TrainingSessions::RescheduleService`
+- `TrainingSessions::CompleteService`
+- `TrainingSessions::CancelService`
+- `TrainingSessions::UpdateStatusService`
+- `TrainingSessions::ScheduleFollowUpService`
+- `TrainingSessions::AuditLogBuilder`
 
-```ruby
-class ProofAttachmentServiceTest < ActiveSupport::TestCase
-  test 'successful attachment' do
-    application = create(:application)
-    file = fixture_file_upload('test.pdf', 'application/pdf')
-    
-    result = ProofAttachmentService.attach_proof(
-      application: application,
-      proof_type: :income,
-      blob_or_file: file,
-      submission_method: :web
-    )
-    
-    assert result[:success]
-    assert application.reload.income_proof.attached?
-  end
-end
-```
+Evaluation services currently in this checkout include:
 
-### 10.2 · Service with BaseService::Result
+- `Evaluations::ScheduleService`
+- `Evaluations::RescheduleService`
+- `Evaluations::SubmissionService`
+- `Evaluations::AuditLogBuilder`
 
-```ruby
-test 'medical certification service' do
-  service = Applications::MedicalCertificationService.new(
-    application: @application,
-    actor: @admin
-  )
-  
-  result = service.request_certification
-  assert result.success?
-  assert_equal 'Medical certification requested successfully.', result.message
-end
-```
+These services use `BaseService::Result`, wrap multi-record changes in transactions, and log lifecycle events through `AuditEventService`. Evaluator routes include member actions for `schedule`, `reschedule`, and `submit_report`.
 
-## 11 · Dos & Don'ts
+Primary tests:
 
-| Do | Don't |
-|----|-------|
-| Keep services PORO-ish | Render views |
-| Return structured results (BaseService::Result or hash) | Return raw booleans for complex operations |
-| Use Current attributes for context | Use Thread.current or global variables |
-| Log & collect errors with context | Log without meaningful context |
-| Maintain audits via AuditEventService | Create audit records directly |
-| Use transactions for multi-step operations | Skip transactions when data consistency matters |
-| Test with real data, not stubs for integration | Stub core service methods in integration tests |
+- `test/services/training_sessions/*_test.rb`
+- `test/services/evaluations/*_test.rb`
+- `test/controllers/evaluator/evaluations_controller_test.rb`
+- `test/controllers/trainers/training_sessions_controller_test.rb`
+
+## 5 · CurrentAttributes
+
+`Current` lives at `app/models/current.rb`.
+
+| Attribute | Verified use |
+|-----------|--------------|
+| `paper_context` | Paper intake and paper/scanned attachment validation bypasses. |
+| `resubmitting_proof` | Constituent proof resubmission validation context. |
+| `skip_proof_validation` | Tests and certification-upload service contexts. |
+| `reviewing_single_proof` | `Applications::ProofReviewer` targeted review operations. |
+| `proof_attachment_service_context` | Prevents duplicate proof events while `ProofAttachmentService` owns attachment writes. |
+| `force_notifications` | Test-only notification behavior. |
+| `test_user_id` | Test authentication helpers. |
+| `user`, `request_id`, `user_agent`, `ip_address` | Request context and audit metadata. |
+
+Use the predicate helpers (`paper_context?`, `resubmitting_proof?`, etc.) when checking booleans. Reset temporary values with `ensure` in services and `Current.reset` or local helpers in tests.
+
+## 6 · Service Testing Patterns
+
+This repo uses Rails Minitest under `test/`.
+
+Use focused service tests for service-owned behavior and integration/controller tests for entry-point behavior. Prefer real service calls for attachment and workflow integration; stubbing `ProofAttachmentService.attach_proof` in integration tests can produce false positives because the attachment is not actually persisted.
+
+Examples to copy before adding new coverage:
+
+- `test/services/proof_attachment_service_test.rb`
+- `test/services/applications/paper_application_service_test.rb`
+- `test/services/applications/request_proof_resubmission_test.rb`
+- `test/services/notification_service_test.rb`
+- `test/services/evaluations/schedule_service_test.rb`

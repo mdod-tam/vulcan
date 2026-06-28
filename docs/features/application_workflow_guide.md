@@ -27,9 +27,9 @@ All flows converge on **one Application record**, so every downstream service (e
 | **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; fires events & notifications |
 | **Applications::PaperApplicationService** | Admin data-entry path | Sets `Current.paper_context` to bypass online-only validations |
 | **Applications::EventDeduplicationService** | 1-min window, priority pick | Used by audit views, dashboards, certification timelines |
-| **NotificationService** | Email notifications | Postmark integration; uses MAILER_MAP for routing |
-| **ProofAttachmentService** | Upload / approve / reject | Unified for web, email, paper; handles blob validation |
-| **Applications::MedicalCertificationService** | Request & track med certs | Updates status, sends provider emails via MedicalProviderMailer |
+| **NotificationService** | Notification records and mapped delivery | Creates persistent notification rows, routes mapped email/letter delivery, and supports record-only notifications |
+| **ProofAttachmentService** | Upload / approve / reject | Unified for portal, secure form, and paper proof handling; handles blob validation |
+| **Applications::MedicalCertificationService** | Request and track disability certifications | Updates status and sends provider emails |
 | **VoucherManagement** | Issue & redeem vouchers | Model concern used by `IssueInitialVoucherJob` after approval commits |
 
 ---
@@ -65,7 +65,7 @@ end
 
 ## 3 · Event System (Why you care)
 
-* Admin timelines, user “Activity” tab, medical cert dashboard—all pull from **deduped event lists**.  
+* Admin timelines, user “Activity” tab, and disability certification dashboard all pull from **deduped event lists**.
 * Dedup key: `[fingerprint, minute_bucket]` → pick highest priority (StatusChange > Event > Notification).
 
 ```ruby
@@ -81,23 +81,25 @@ When adding a new event type, **just log it**—the service handles dedup for yo
 
 | Channel | Stack | Typical Use |
 |---------|-------|-------------|
-| Email   | Postmark + ActionMailer | Proof approved/rejected, account creation, cert requests |
+| Email   | Postmark + ActionMailer | Account creation, status notifications, certification requests |
+| Letter  | Text templates + print queue | Account creation and certification requests when postal delivery is selected |
 
-**Note:** Only email notifications are currently implemented. The service uses a MAILER_MAP to route notification types to specific mailer methods.
+**Note:** Proof rejection delivery uses secure proof resubmission request services. Those services create tracking records and then attempt delivery through the selected contact channel; if delivery fails, the review can still persist and the admin is alerted.
 
-Create and deliver:
+Create a notification directly only for notification-owned workflows:
 
 ```ruby
 NotificationService.create_and_deliver!(
-  type: 'proof_rejected',
+  type: 'medical_certification_not_provided',
   recipient: application.user,
   actor: admin,
-  notifiable: review,
-  metadata: { template_variables: { ... } }
+  notifiable: application,
+  metadata: { delivery_context: 'paper_rejection' },
+  channel: :email
 )
 ```
 
-Delivery metadata (bounce, spam status) is stored for audit & retries via Postmark webhooks.
+For reviewable proof rejections, do not call `NotificationService` directly. `ProofReview` delegates to `Applications::RequestProofResubmission`, which creates tracking notifications and attempts secure-link delivery. Delivery metadata (bounce, spam status) is stored for tracked provider/notification flows via Postmark webhooks.
 
 ---
 
@@ -106,29 +108,30 @@ Delivery metadata (bounce, spam status) is stored for audit & retries via Postma
 ```ruby
 # Upload (user or admin)
 ProofAttachmentService.attach_proof(...)
-# Review (approve or reject) - handled by ProofReview model callbacks
-ProofReview.create!(application: app, admin: admin, proof_type: :income, status: :approved)
+# Review (approve or reject)
+ProofReviewService.new(app, admin, proof_type: 'income', status: 'approved').call
 # Or use the service for rejection without attachment
 ProofAttachmentService.reject_proof_without_attachment(...)
 ```
 
-Approvals require an attachment; only rejections may proceed without a file. The ProofReview model handles post-review actions via callbacks.
+Approvals require an attachment; only rejections may proceed without a file. `Applications::ProofReviewer` updates the proof status column and creates or updates the `ProofReview`; `ProofReview` callbacks then log `proof_approved` or `proof_rejected`. Rejections issue secure resubmission requests. When delivery fails, the review still persists and the admin UI shows the secure-upload delivery warning.
 
 ---
 
-## 6 · Medical Certification Flow
+## 6 · Disability Certification Flow
 
-**Required Proofs:** `income` when required, `residency`, `id`, and `medical_certification` (each with separate status enums)
+**Requirements:** reviewable proofs are `income` when required, `residency`, and `id`. Disability certification is tracked separately through `medical_certification_status`.
 
 1. `Applications::MedicalCertificationService.new(application:, actor:).request_certification`  
-   * Updates `medical_certification_status` to 'requested', increments counter, creates audit events, sends email notification via MedicalProviderMailer.  
-2. Provider replies via **multiple channels**:
-   * **Email** → `MedicalCertificationMailbox` consumes → processes attachment and updates status to 'received'
-   * **Fax** → **PARTIALLY IMPLEMENTED**: Outbound sending works (`FaxService` + `MedicalProviderNotifier`), but inbound processing requires manual admin scan/upload via admin interface → updates status to 'received'
+   * Updates `medical_certification_status` to `requested`, increments counters, creates audit events, and sends the provider request through the configured delivery path.
+2. Provider certification is received via **multiple channels**:
+   * **Secure upload link** → `Applications::RequestCertificationUpload` issues a `MedicalProviderSecureRequestForm`; `Applications::SubmitCertificationUpload` attaches the file and updates status to 'received'
+   * **DocuSeal** → `DocumentSigning::SubmissionService` manages the e-signature flow and webhook completion
+   * **Fax** → **PARTIALLY IMPLEMENTED**: Outbound sending works (`FaxService` + `MedicalProviderNotifier`), but received faxes require manual admin scan/upload via admin interface → updates status to 'received'
    * **Snail Mail** → Admin scans and uploads via admin interface → updates status to 'received'
-3. Admin can **approve/reject** via UI; auto-approve logic checks if required proofs and medical certification are approved before voucher issuance.
+3. Admin can **approve/reject** via UI; workflow reconciliation checks that required proofs and disability certification are approved before the application can finish approval.
 
-**Key Difference:** Medical certification has its own workflow separate from income/residency proofs, with statuses: `not_requested`, `requested`, `received`, `approved`, `rejected`.
+**Key Difference:** Disability certification has its own workflow separate from income, residency, and ID proof review, with statuses: `not_requested`, `requested`, `received`, `approved`, `rejected`.
 
 ---
 
@@ -160,14 +163,14 @@ application.user              = dependent
 application.managing_guardian = guardian
 ```
 
-* Notifications for dependent apps go to **guardian**, not child.  
-* **TODO:** Dependent contact: `email_strategy` & `phone_strategy` to be implemented to decide whether to clone guardian info or use unique fields.
+* Notifications for dependent apps use the effective contact strategy for the dependent/guardian relationship.
+* Paper intake already supports `email_strategy`, `phone_strategy`, and `address_strategy` for dependent contact handling.
 
 ---
 
 ## 9 · Vouchers
 
-* Auto-issued by `IssueInitialVoucherJob` after a real `transition_status!(:approved)` commit, when application status, required proofs, and medical certification are all approved.  
+* Only voucher-fulfillment applications auto-issue vouchers. `IssueInitialVoucherJob` runs after a real `transition_status!(:approved)` commit when `FeatureFlag.enabled?(:vouchers_enabled)`, `fulfillment_type: voucher`, required proofs, and disability certification are all approved. Equipment-fulfillment applications do not create vouchers.
 * Stored in `vouchers` table with configurable expiry period (Policy-based).  
 * Vendor portal handles voucher redemption which creates `VoucherTransaction` records.  
 * Value calculated based on constituent's disability types and stored in `initial_value` field.
@@ -188,20 +191,20 @@ application.managing_guardian = guardian
 | Service | Endpoint / Job | Purpose |
 |---------|----------------|---------|
 | Postmark | `/webhooks/email_events` | Delivery / bounce / spam tracking |
-| ActionMailbox | `/rails/action_mailbox` | Inbound email processing |
-| Medical Cert Email | `MedicalCertificationMailbox` | Provider email replies |
+| Secure certification upload | `SecureCertificationFormsController` | Provider certification file upload |
+| Secure proof resubmission | `SecureProofFormsController` | Constituent proof resubmission upload |
+| DocuSeal | `Webhooks::DocusealController` | Document signing completion |
 | ActiveStorage   | background processing | File validation, metadata |
-| ProofSubmissionMailbox | Email routing | Proof document submissions via email |
 
 ---
 
 ## 12 · How to Extend
 
-* **New proof type?** Add enum to Application model, extend `ProofAttachmentService`, update mailbox routing in `determine_proof_type`, add ActiveStorage attachment.  
+* **New proof type?** Add enum to Application model, extend `ProofAttachmentService`, add the secure form/request path if constituents must resubmit it, and add ActiveStorage attachment.
 * **New notification?** Add to `NotificationService::MAILER_MAP` + template; call `NotificationService.create_and_deliver!`.  
 * **New status?** Update enum in Application model, update auto-approval logic in `ApplicationStatusManagement`, add to front-end filters.  
 * **New event?** Just log it with `AuditEventService.log`; `Applications::EventDeduplicationService` handles deduplication automatically.
-* **Medical cert channel?** For automated processing, extend mailbox routing; for manual processing, enhance admin upload interface in `admin/applications#show`.
+* **Disability certification channel?** Prefer a typed secure upload or provider integration path; for manual processing, enhance admin upload interface in `admin/applications#show`.
 
 ---
 
