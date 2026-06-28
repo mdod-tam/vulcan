@@ -34,16 +34,7 @@ Auto-approval runs through `Application#reconcile_workflow_state!` when all curr
 - Income proof is approved when `income_proof_required` is true for the application.
 - Disability certification is approved.
 
-Main code paths:
-
-| Path | Role |
-| --- | --- |
-| `app/controllers/constituent_portal/applications_controller.rb` | Online draft, edit, submit, autosave, and training request entry points. |
-| `app/forms/application_form.rb` | Validates portal application form data before persistence. |
-| `app/services/applications/application_creator.rb` | Creates or updates application records, attaches initial proofs, and logs creation/update events. |
-| `app/models/application.rb` | Owns status enums, proof predicates, guardian access, and voucher eligibility. |
-| `app/models/concerns/application_status_management.rb` | Reconciles workflow state, auto-approval, and DCF escalation. |
-| `app/controllers/admin/paper_applications_controller.rb` | Admin paper intake entry point. See `docs/development/paper_application_architecture.md`. |
+Key implementation owners are the constituent portal application controller, `ApplicationForm`, `Applications::ApplicationCreator`, `Application`, `ApplicationStatusManagement`, and the admin paper application controller. See `docs/development/paper_application_architecture.md` for paper intake details.
 
 ---
 
@@ -57,48 +48,15 @@ Reviewable proof types are income, residency, and ID. Disability certification h
 | Residency | `residency_proof_status` | `residency_proof` | Yes. |
 | ID | `id_proof_status` | `id_proof` | Yes. |
 
-`ProofAttachmentService` is the shared attachment service for portal proof resubmissions, admin scanned proof upload, paper intake, and secure proof form submissions. It accepts uploaded files, signed blob IDs, or existing blobs; writes attachment audit events unless the caller opts out; updates the proof status column; and returns a hash with `:success`, `:error`, `:duration_ms`, and `:blob_size` when available.
+`ProofAttachmentService` is the shared attachment service for portal proof resubmissions, admin scanned proof upload, paper intake, and secure proof form submissions. It handles uploaded files, signed blob IDs, and existing blobs; writes attachment audit events unless the caller opts out; updates proof status; and records review timing metadata when needed.
 
-```ruby
-ProofAttachmentService.attach_proof({
-  application: app,
-  proof_type: :income,
-  blob_or_file: file,
-  status: :approved,
-  admin: current_admin,
-  submission_method: :paper,
-  metadata: { ip_address: request.remote_ip }
-})
-```
-
-Paper rejection without a file is also routed through the service:
-
-```ruby
-ProofAttachmentService.reject_proof_without_attachment(
-  application: app,
-  proof_type: :income,
-  admin: current_admin,
-  submission_method: :paper,
-  reason: "invalid_document",
-  notes: "Document does not meet requirements"
-)
-```
+Paper rejection without a file is also routed through the shared proof attachment/review path so rejection history, audit events, and resubmission follow-up stay consistent.
 
 `ProofReviewService` is the admin-facing review entry point. It delegates to `Applications::ProofReviewer`, which updates the proof status column and creates or updates the canonical `ProofReview` record. Approved income, residency, and ID reviews log `proof_approved` and create record-only approval notifications. Rejections log a generic `proof_rejected` event and use `Applications::RequestProofResubmission` for constituent-facing resubmission delivery.
 
 If a rejection is saved but secure upload request delivery fails, the review remains recorded and admins receive an alert that the review succeeded but the secure upload request was not delivered.
 
-Main code paths:
-
-| Path | Role |
-| --- | --- |
-| `app/services/proof_attachment_service.rb` | Shared proof attachment and paper no-file rejection orchestration. |
-| `app/services/proof_review_service.rb` | Admin proof-review orchestration and delivery-warning result data. |
-| `app/services/applications/proof_reviewer.rb` | Admin review workflow for proof approval/rejection. |
-| `app/models/proof_review.rb` | Review records, rejection side effects, and approval/rejection audit behavior. |
-| `app/controllers/constituent_portal/proofs/proofs_controller.rb` | Constituent proof resubmission and direct upload setup. |
-| `app/controllers/admin/scanned_proofs_controller.rb` | Admin scanned income/residency proof upload. |
-| `app/controllers/secure_proof_forms_controller.rb` | Tokenized secure proof upload form submission. |
+Start with `docs/features/proof_review_process_guide.md` for the current proof-review map. The main implementation owners are `ProofAttachmentService`, `ProofReviewService`, `Applications::ProofReviewer`, `ProofReview`, the constituent proof controller, scanned proof intake, and secure proof forms.
 
 ---
 
@@ -139,14 +97,6 @@ Important distinction: DocuSeal `signed` means the provider completed the signin
 ## 4. Guardian and Dependent Applications
 
 A managing guardian is the adult user responsible for a dependent's application. The relationship is stored in `GuardianRelationship`; the specific application owner is still the dependent constituent.
-
-```ruby
-GuardianRelationship.create!(
-  guardian_user: guardian,
-  dependent_user: dependent,
-  relationship_type: "Parent"
-)
-```
 
 | Helper or scope | Meaning |
 | --- | --- |
@@ -192,15 +142,7 @@ Vendor redemption flow:
 4. `Voucher#redeem!` creates a `VoucherTransaction`, updates remaining value, and logs `voucher_redeemed`.
 5. Invoice generation uses completed, uninvoiced voucher transactions.
 
-Main code paths:
-
-| Path | Role |
-| --- | --- |
-| `app/models/concerns/voucher_management.rb` | Voucher eligibility and assignment. |
-| `app/jobs/issue_initial_voucher_job.rb` | After-commit initial voucher assignment. |
-| `app/models/voucher.rb` | Voucher state, redemption, expiration, and audit hooks. |
-| `app/models/voucher_transaction.rb` | Redemption transaction records and invoice scopes. |
-| `app/controllers/vendor_portal/vouchers_controller.rb` | Vendor verification and redemption UI. |
+Key implementation owners are `VoucherManagement`, `IssueInitialVoucherJob`, `Voucher`, `VoucherTransaction`, and the vendor portal voucher controller.
 
 ---
 
@@ -222,35 +164,13 @@ Training assignment is admin-driven from an approved application. `Application#a
 
 Evaluation assignment is also admin-driven from an approved application. `Application#request_evaluation!` marks an application as needing evaluation; `Application#assign_evaluator!` creates an `Evaluation`. Evaluators schedule, reschedule, and submit reports through `Evaluations::ScheduleService`, `Evaluations::RescheduleService`, and `Evaluations::SubmissionService`.
 
-Main code paths:
-
-| Path | Role |
-| --- | --- |
-| `app/models/training_session.rb` | Training associations, validations, open-session rules, notification callbacks. |
-| `app/models/evaluation.rb` | Evaluation associations, validations, report completion rules, notification callbacks. |
-| `app/models/concerns/status_management.rb` | Shared training/evaluation status enum and predicates. |
-| `app/models/concerns/training_management.rb` | Application-level trainer assignment and quota checks. |
-| `app/models/concerns/evaluation_management.rb` | Application-level evaluator assignment. |
-| `app/services/training_sessions/` | Training lifecycle services. |
-| `app/services/evaluations/` | Evaluation schedule, reschedule, and submission services. |
+Key implementation owners are `TrainingSession`, `Evaluation`, `StatusManagement`, `TrainingManagement`, `EvaluationManagement`, and the `TrainingSessions::*` and `Evaluations::*` service namespaces.
 
 ---
 
 ## 7. Notifications and Letters
 
 `NotificationService` creates `Notification` rows and, when delivery is enabled, routes configured actions to mailers. The requested channel is `:email` or `:letter`; recipient-facing mailers can route letter-preference recipients into `PrintQueueItem`.
-
-```ruby
-NotificationService.create_and_deliver!(
-  type: "proof_approved",
-  recipient: user,
-  actor: admin,
-  notifiable: application,
-  metadata: { proof_type: "income" },
-  channel: :email,
-  deliver: false
-)
-```
 
 Important distinctions:
 
@@ -260,17 +180,6 @@ Important distinctions:
 - Email templates support `legacy_percent` and `liquid` syntax through `EmailTemplates::Renderer`; Liquid templates use exact required/optional variable paths and are gated by `email_template_liquid`.
 - `UpdateEmailStatusJob` only polls Postmark for `medical_certification_requested` notifications with a `message_id`.
 
-Main code paths:
-
-| Path | Role |
-| --- | --- |
-| `app/services/notification_service.rb` | Notification record creation, delivery routing, optional audit events. |
-| `app/models/notification.rb` | Notification state, read tracking, email tracking helpers. |
-| `app/controllers/notifications_controller.rb` | Notification list, mark-read, and email-status check actions. |
-| `app/jobs/update_email_status_job.rb` | Postmark status polling for disability certification request notifications. |
-| `app/services/postmark_email_tracker.rb` | Postmark API wrapper. |
-| `app/models/print_queue_item.rb` | Letter queue records. |
-
 Related docs: `docs/features/notifications.md` and `docs/infrastructure/email_system.md`.
 
 ---
@@ -278,15 +187,6 @@ Related docs: `docs/features/notifications.md` and `docs/infrastructure/email_sy
 ## 8. Audit and Events
 
 Business events are stored as `Event` rows through `AuditEventService.log`.
-
-```ruby
-AuditEventService.log(
-  action: "proof_approved",
-  actor: admin,
-  auditable: application,
-  metadata: { proof_type: "income" }
-)
-```
 
 Common event families:
 
