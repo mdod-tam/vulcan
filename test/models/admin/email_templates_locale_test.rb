@@ -88,7 +88,6 @@ module Admin
     end
 
     test 'out-of-sync template blocks syntax-only update' do
-      FeatureFlag.enable!(:email_template_liquid)
       @template_text.update_columns(locale_needs_sync: true, subject: 'Plain subject', body: 'Plain body',
                                     variables: { 'required' => [], 'optional' => [] })
       @template_text.reload
@@ -96,8 +95,6 @@ module Admin
 
       assert_not @template_text.valid?
       assert_includes @template_text.errors[:base].join, 'out of sync'
-    ensure
-      FeatureFlag.disable!(:email_template_liquid)
     end
 
     test 'locale_out_of_sync? reflects renamed sync flag' do

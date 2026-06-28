@@ -90,7 +90,6 @@ module EmailTemplates
 
     def render
       validate_format!
-      validate_feature_flag!
       validate_template_syntax!
       validate_allowed_variables!
       validate_required_variables!
@@ -105,7 +104,6 @@ module EmailTemplates
 
     def render_text(text)
       validate_format!
-      validate_feature_flag!
       validate_template_syntax!(subject: text, body: nil)
       used_variables = extracted_variables_for(subject: text, body: nil)
       validate_allowed_variables!(used_variables)
@@ -130,13 +128,6 @@ module EmailTemplates
       return if template.respond_to?(:text?) && template.text?
 
       raise ArgumentError, 'Liquid email template rendering is only available for text templates'
-    end
-
-    def validate_feature_flag!
-      return unless syntax == LIQUID_SYNTAX
-      return if FeatureFlag.enabled?(:email_template_liquid)
-
-      raise ArgumentError, 'Liquid templates are not enabled yet. Contact your administrator.'
     end
 
     def validate_template_syntax!(subject: template.subject, body: template.body)

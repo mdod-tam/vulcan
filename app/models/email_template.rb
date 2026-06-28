@@ -27,7 +27,7 @@ class EmailTemplate < ApplicationRecord
   validate :validate_liquid_uses_required_variables_only, if: :syntax_column_available?
   validate :validate_template_uses_only_allowed_variables
   validate :validate_variables_in_template
-  validate :validate_liquid_feature_enabled, if: :syntax_column_available?
+  validate :validate_liquid_template_configuration, if: :syntax_column_available?
   validate :counterpart_locales_are_synced, on: :update
 
   before_update :store_previous_content
@@ -198,18 +198,10 @@ class EmailTemplate < ApplicationRecord
     "Use variables from Insert Variable only. #{names} #{verb} not available for this template."
   end
 
-  def validate_liquid_feature_enabled
+  def validate_liquid_template_configuration
     return unless liquid?
 
-    unless text?
-      errors.add(:syntax, 'Liquid email templates are only available for text templates')
-      return
-    end
-
-    return if FeatureFlag.enabled?(:email_template_liquid)
-    return if persisted? && !syntax_changed?
-
-    errors.add(:syntax, 'Liquid templates are not enabled yet. Contact your administrator.')
+    errors.add(:syntax, 'Liquid email templates are only available for text templates') unless text?
   end
 
   def store_previous_content

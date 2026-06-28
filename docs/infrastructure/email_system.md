@@ -14,7 +14,6 @@ MAT Vulcan delivers, receives, and even prints email content through one unified
 | Validation | Required and optional variables are stored in each template's `variables` JSON. Subject/body variables must match those exact paths. Liquid templates may only reference required variables; optional variables remain Standard-only because Liquid rendering is strict. |
 | Versioning | `version` increments on subject/body/syntax edits. Subject/body edits store the prior content in `previous_subject`/`previous_body` for the show-page Previous Version panel. |
 | Locale sync | `locale_needs_sync` flags counterpart locales out of date; admin UI uses `locale_out_of_sync?` |
-| Liquid rollout | `email_template_liquid` is seeded off. Liquid templates cannot be saved or rendered while the flag is disabled. |
 
 Seed/update:
 
@@ -185,7 +184,7 @@ subj, body = tpl.render(first_name: 'Ada')
 | **Letter generation fails** | Text template exists? all variables supplied? `PrintQueueItem` created? |
 | **Wrong stream** | `message_stream` param in mailer (`outbound` vs `notifications`) |
 | **Email tracking issues** | `POSTMARK_API_TOKEN`, `UpdateEmailStatusJob` logs, `Notification` records |
-| **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, syntax, and Liquid flag state. Liquid placeholders must come from required variables. |
+| **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, and syntax. Liquid placeholders must come from required variables. |
 
 **Tools:** 
 * Postmark dashboard (delivery & webhooks)

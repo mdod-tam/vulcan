@@ -4,14 +4,6 @@ require 'test_helper'
 
 module EmailTemplates
   class RendererTest < ActiveSupport::TestCase
-    setup do
-      FeatureFlag.disable!(:email_template_liquid)
-    end
-
-    teardown do
-      FeatureFlag.disable!(:email_template_liquid)
-    end
-
     test 'legacy percent rendering preserves existing placeholder behavior' do
       # rubocop:disable Style/FormatStringToken
       template = create(
@@ -31,7 +23,6 @@ module EmailTemplates
     end
 
     test 'liquid renders exact allowed paths without passing root objects through' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(
         :email_template,
         :text,
@@ -53,7 +44,6 @@ module EmailTemplates
     end
 
     test 'liquid does not traverse arbitrary object roots' do
-      FeatureFlag.enable!(:email_template_liquid)
       user = create(:constituent, first_name: 'Alex')
       template = create(
         :email_template,
@@ -72,7 +62,6 @@ module EmailTemplates
     end
 
     test 'liquid rejects variables outside the exact allowlist' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :text,
@@ -87,7 +76,6 @@ module EmailTemplates
     end
 
     test 'liquid rejects tags and filters' do
-      FeatureFlag.enable!(:email_template_liquid)
       tagged = build(
         :email_template,
         :text,
@@ -112,7 +100,6 @@ module EmailTemplates
     end
 
     test 'liquid rejects malformed syntax on save' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :text,
@@ -127,7 +114,6 @@ module EmailTemplates
     end
 
     test 'liquid invalid path message points admins to Insert Variable' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :text,
@@ -143,7 +129,6 @@ module EmailTemplates
     end
 
     test 'liquid supports trim output delimiters' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(
         :email_template,
         :text,
@@ -161,7 +146,6 @@ module EmailTemplates
     end
 
     test 'liquid rendering raises on missing referenced variables' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(
         :email_template,
         :text,
@@ -179,7 +163,6 @@ module EmailTemplates
     end
 
     test 'liquid save rejects optional variables in the template' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :text,
@@ -194,31 +177,7 @@ module EmailTemplates
       assert_includes template.errors[:body].join, 'optional_code'
     end
 
-    test 'liquid save and render are blocked when feature flag is off' do
-      template = build(
-        :email_template,
-        :text,
-        subject: 'Hello {{ name }}',
-        body: 'Body {{ name }}',
-        variables: { 'required' => ['name'], 'optional' => [] },
-        syntax: :liquid
-      )
-
-      assert_not template.valid?
-      assert_includes template.errors[:syntax].join, 'not enabled yet'
-
-      FeatureFlag.enable!(:email_template_liquid)
-      template.save!
-      FeatureFlag.disable!(:email_template_liquid)
-
-      error = assert_raises(ArgumentError) do
-        template.render(name: 'Alex')
-      end
-      assert_includes error.message, 'not enabled yet'
-    end
-
-    test 'existing liquid templates remain savable when feature flag is off' do
-      FeatureFlag.enable!(:email_template_liquid)
+    test 'existing liquid templates remain savable for operational updates' do
       template = create(
         :email_template,
         :text,
@@ -227,17 +186,15 @@ module EmailTemplates
         variables: { 'required' => ['name'], 'optional' => [] },
         syntax: :liquid
       )
-      FeatureFlag.disable!(:email_template_liquid)
 
       assert_nothing_raised do
-        template.update!(description: 'Updated while Liquid flag is disabled')
+        template.update!(description: 'Updated description')
       end
       assert_equal 'liquid', template.reload.syntax
-      assert_equal 'Updated while Liquid flag is disabled', template.description
+      assert_equal 'Updated description', template.description
     end
 
     test 'liquid render rejects optional variables even when a row bypassed save validation' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :text,
@@ -256,7 +213,6 @@ module EmailTemplates
     end
 
     test 'liquid validation explains standard placeholders left behind' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :text,
@@ -272,7 +228,6 @@ module EmailTemplates
     end
 
     test 'liquid save is blocked for html templates' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :html,
@@ -292,7 +247,6 @@ module EmailTemplates
     end
 
     test 'liquid does not fall back to percent interpolation' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = build(
         :email_template,
         :text,

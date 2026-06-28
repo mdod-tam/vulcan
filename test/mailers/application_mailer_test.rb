@@ -43,7 +43,6 @@ class ApplicationMailerTest < ActionMailer::TestCase
   end
 
   test 'header title renders Liquid subject without requiring body variables' do
-    FeatureFlag.enable!(:email_template_liquid)
     template = create(
       :email_template,
       :text,
@@ -62,7 +61,5 @@ class ApplicationMailerTest < ActionMailer::TestCase
     )
 
     assert_equal 'Hello Alex', title
-  ensure
-    FeatureFlag.disable!(:email_template_liquid)
   end
 end

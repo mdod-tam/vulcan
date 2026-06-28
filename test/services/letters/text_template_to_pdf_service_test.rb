@@ -5,7 +5,6 @@ require 'test_helper'
 module Letters
   class TextTemplateToPdfServiceTest < ActiveSupport::TestCase
     setup do
-      FeatureFlag.disable!(:email_template_liquid)
       @user = create(:constituent, email: "test-template-#{SecureRandom.hex(4)}@example.com")
       # Find existing template to avoid "Name has already been taken" error
       EmailTemplate.where(name: 'application_notifications_account_created').destroy_all
@@ -33,10 +32,6 @@ module Letters
         header_text: 'Header text for testing',
         footer_text: 'Footer text for testing'
       }
-    end
-
-    teardown do
-      FeatureFlag.disable!(:email_template_liquid)
     end
 
     test 'generates PDF from database template' do
@@ -103,7 +98,6 @@ module Letters
     end
 
     test 'renders Liquid templates through shared EmailTemplate renderer' do
-      FeatureFlag.enable!(:email_template_liquid)
       template_name = "liquid_letter_#{SecureRandom.hex(4)}"
       create(:email_template, :text,
              name: template_name,

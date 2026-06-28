@@ -7,11 +7,6 @@ module Admin
     setup do
       @admin = create(:admin)
       sign_in_for_integration_test(@admin)
-      FeatureFlag.disable!(:email_template_liquid)
-    end
-
-    teardown do
-      FeatureFlag.disable!(:email_template_liquid)
     end
 
     test 'update saves EN only and flags ES as needing sync' do
@@ -106,7 +101,6 @@ module Admin
     end
 
     test 'create_counterpart copies syntax from source template' do
-      FeatureFlag.enable!(:email_template_liquid)
       en_template = create(:email_template, :text,
                            name: 'create_counterpart_syntax_test',
                            locale: 'en',
@@ -217,8 +211,7 @@ module Admin
       assert_not_includes response.body, 'Restore'
     end
 
-    test 'update permits syntax changes when Liquid flag is enabled' do
-      FeatureFlag.enable!(:email_template_liquid)
+    test 'update permits syntax changes to Liquid for text templates' do
       template = create(:email_template, :text,
                         name: 'syntax_update_test',
                         locale: 'en',
@@ -241,7 +234,6 @@ module Admin
     end
 
     test 'preview renders unsaved draft with selected Liquid syntax without persisting changes' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :text,
                         name: 'draft_preview_liquid_test',
                         locale: 'en',
@@ -272,7 +264,6 @@ module Admin
     end
 
     test 'preview returns friendly placeholder error for invalid Liquid draft' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :text,
                         name: 'draft_preview_invalid_liquid_test',
                         locale: 'en',
@@ -302,7 +293,6 @@ module Admin
     end
 
     test 'update shows friendly validation error for malformed Liquid syntax' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :text,
                         name: 'update_invalid_liquid_copy_test',
                         locale: 'en',
@@ -351,7 +341,6 @@ module Admin
     end
 
     test 'syntax-only update increments version and flags counterpart locale' do
-      FeatureFlag.enable!(:email_template_liquid)
       en_template = create(:email_template, :text,
                            name: 'syntax_only_update_test',
                            locale: 'en',
@@ -391,42 +380,17 @@ module Admin
       assert es_template.reload.locale_needs_sync?
     end
 
-    test 'update rejects liquid syntax when Liquid flag is disabled' do
-      template = create(:email_template, :text,
-                        name: 'syntax_update_flag_off_test',
-                        locale: 'en',
-                        subject: 'Legacy %<name>s',
-                        body: 'Legacy body %<name>s',
-                        description: 'Legacy description')
-
-      patch admin_email_template_path(template), headers: default_headers, params: {
-        locale: 'en',
-        email_template: {
-          subject: 'Updated {{ name }}',
-          body: 'Updated body {{ name }}',
-          description: 'Updated description',
-          syntax: 'liquid'
-        }
-      }
-
-      assert_response :unprocessable_content
-      assert_equal 'legacy_percent', template.reload.syntax
-      assert_includes response.body, 'Contact your administrator'
-    end
-
-    test 'edit hides liquid option for legacy template when Liquid flag is disabled' do
+    test 'edit shows liquid option for text templates' do
       template = create(:email_template, :text, name: "syntax_hidden_#{SecureRandom.hex(4)}")
 
       get edit_admin_email_template_path(template), headers: default_headers
 
       assert_response :success
       assert_select 'option[value="legacy_percent"]'
-      assert_select 'option[value="liquid"]', count: 0
-      assert_includes response.body, 'Liquid templates are not enabled yet. Contact your administrator'
+      assert_select 'option[value="liquid"]'
     end
 
-    test 'edit hides liquid option for html template when Liquid flag is enabled' do
-      FeatureFlag.enable!(:email_template_liquid)
+    test 'edit hides liquid option for html templates' do
       template = create(:email_template, :html, name: "syntax_html_hidden_#{SecureRandom.hex(4)}")
 
       get edit_admin_email_template_path(template), headers: default_headers
@@ -437,7 +401,6 @@ module Admin
     end
 
     test 'edit renders locale-scoped field ids and syntax help descriptions' do
-      FeatureFlag.enable!(:email_template_liquid)
       template_name = "dual_locale_ids_#{SecureRandom.hex(4)}"
       en_template = create(:email_template, :text,
                            name: template_name,
@@ -501,7 +464,6 @@ module Admin
     end
 
     test 'update rejects liquid syntax for html templates' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :html,
                         name: 'syntax_update_html_test',
                         locale: 'en',
@@ -525,7 +487,6 @@ module Admin
     end
 
     test 'show labels layout placeholder lines and keeps normal placeholder lines visible' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :text,
                         name: 'liquid_show_placeholder_lines_test',
                         syntax: :liquid,
@@ -544,7 +505,6 @@ module Admin
     end
 
     test 'preview sample data covers Liquid paths in subject and body' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :text,
                         name: 'liquid_preview_paths_test',
                         locale: 'en',
@@ -564,7 +524,6 @@ module Admin
     end
 
     test 'preview rejects optional variables in Liquid drafts' do
-      FeatureFlag.enable!(:email_template_liquid)
       template = create(:email_template, :text,
                         name: 'liquid_preview_optional_rejected_test',
                         locale: 'en',
@@ -589,29 +548,7 @@ module Admin
       assert_includes response.body, 'optional_code'
     end
 
-    test 'send_test surfaces render error for existing Liquid row when flag is disabled' do
-      FeatureFlag.enable!(:email_template_liquid)
-      template = create(:email_template, :text,
-                        name: 'liquid_send_flag_off_test',
-                        locale: 'en',
-                        syntax: :liquid,
-                        subject: 'Hello {{ name }}',
-                        body: 'Body {{ name }}')
-      FeatureFlag.disable!(:email_template_liquid)
-
-      post send_test_admin_email_template_path(template), headers: default_headers, params: {
-        admin_test_email_form: {
-          email: @admin.email,
-          template_id: template.id
-        }
-      }
-
-      assert_response :unprocessable_content
-      assert_includes response.body, 'Contact your administrator'
-    end
-
-    test 'existing liquid template operational updates work when Liquid flag is disabled' do
-      FeatureFlag.enable!(:email_template_liquid)
+    test 'existing liquid template operational updates work' do
       template = create(:email_template, :text,
                         name: 'liquid_flag_off_operational_update_test',
                         locale: 'en',
@@ -620,7 +557,6 @@ module Admin
                         syntax: :liquid,
                         subject: 'Hello {{ name }}',
                         body: 'Body {{ name }}')
-      FeatureFlag.disable!(:email_template_liquid)
 
       patch mark_synced_admin_email_template_path(template), headers: default_headers
 
@@ -633,8 +569,7 @@ module Admin
       assert_not template.reload.enabled?
     end
 
-    test 'bulk_disable handles existing liquid templates when Liquid flag is disabled' do
-      FeatureFlag.enable!(:email_template_liquid)
+    test 'bulk_disable handles existing liquid templates' do
       template = create(:email_template, :text,
                         name: 'liquid_flag_off_bulk_disable_test',
                         locale: 'en',
@@ -642,7 +577,6 @@ module Admin
                         syntax: :liquid,
                         subject: 'Hello {{ name }}',
                         body: 'Body {{ name }}')
-      FeatureFlag.disable!(:email_template_liquid)
 
       patch bulk_disable_admin_email_templates_path, headers: default_headers
 

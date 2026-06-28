@@ -36,10 +36,6 @@ module Admin
       end
     end
 
-    def email_template_liquid_enabled?
-      FeatureFlag.enabled?(:email_template_liquid)
-    end
-
     def template_syntax_label(template_or_syntax)
       syntax = template_or_syntax.respond_to?(:render_syntax) ? template_or_syntax.render_syntax : template_or_syntax.to_s
 
@@ -63,7 +59,7 @@ module Admin
       options = [['Standard (%<name>s)', 'legacy_percent']]
       return options unless template&.text?
 
-      options << ['Liquid ({{ name }})', 'liquid'] if email_template_liquid_enabled? || template&.render_syntax == 'liquid'
+      options << ['Liquid ({{ name }})', 'liquid']
       options
     end
 
@@ -182,7 +178,6 @@ module Admin
       message.include?('Use variables from Insert Variable only') ||
         message.include?('Liquid templates can only use Required Variables') ||
         message.include?('still has standard placeholders') ||
-        message.include?('not enabled yet') ||
         message.include?('only available for text templates')
     end
 
