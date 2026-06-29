@@ -222,7 +222,7 @@ module Applications
     end
 
     def placeholder_phone?(phone)
-      normalized_phone(phone).start_with?('000000')
+      User.synthetic_dependent_phone?(phone)
     end
 
     def preferred_secure_request_delivery_channel(recipient, email:, phone:)

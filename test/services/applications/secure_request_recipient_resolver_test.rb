@@ -170,6 +170,32 @@ module Applications
       assert_not_equal other_guardian.email, dependent_candidate.email
     end
 
+    test 'does not use expanded synthetic dependent phone for explicit sms override' do
+      guardian = create(:constituent, phone: '410-555-0100')
+      dependent_email = "dependent.sms.#{SecureRandom.hex(3)}@example.com"
+      dependent = create(
+        :constituent,
+        email: dependent_email,
+        phone: '000-123-4567',
+        dependent_email: dependent_email,
+        dependent_phone: guardian.phone
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      candidate = SecureRequestRecipientResolver
+                  .new(application: application,
+                       recipient_ids: [dependent.id],
+                       channel_overrides: { dependent.id => 'sms' })
+                  .resolve
+                  .first
+
+      assert_equal dependent, candidate.recipient
+      assert_nil candidate.phone
+      assert_equal :email, candidate.channel
+      assert_equal dependent_email, candidate.email
+    end
+
     test 'does not include alternate contact as a known or default recipient' do
       application = create(
         :application,

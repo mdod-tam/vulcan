@@ -35,6 +35,10 @@ module ConstituentPortal
     # POST /constituent_portal/dependents
     def create
       dependent_attrs = dependent_attributes_with_contact_strategies
+      unless dependent_attrs
+        handle_creation_failure(contact_strategy_errors)
+        return
+      end
 
       # Using UserServiceIntegration concern for consistent user creation
       # Portal always creates NEW users for dependents (skip_user_lookup: true)
@@ -75,6 +79,12 @@ module ConstituentPortal
     # PATCH/PUT /constituent_portal/dependents/:id
     def update
       params_to_update = dependent_attributes_with_contact_strategies
+      unless params_to_update
+        contact_strategy_errors.each { |error| @dependent.errors.add(:base, error) }
+        setup_edit_template_variables
+        render :edit, status: :unprocessable_content
+        return
+      end
 
       if @dependent.update(params_to_update)
         redirect_after_successful_update
@@ -142,12 +152,21 @@ module ConstituentPortal
 
     def dependent_attributes_with_contact_strategies
       attrs = dependent_user_params.to_h
+      # Portal contact strategies snapshot the submitted choice into User fields.
+      # Omitted contact keys preserve existing contact on partial updates.
       strategies = dependent_contact_strategy_params(attrs)
       return attrs if strategies.values_at(:email_strategy, :phone_strategy).all?(&:nil?)
 
       Applications::GuardianDependentManagementService
         .new(strategies)
+        .tap { |service| @contact_strategy_service = service }
         .apply_contact_strategies_for(current_user, attrs)
+    ensure
+      @contact_strategy_errors = @contact_strategy_service&.errors if @contact_strategy_service&.errors&.any?
+    end
+
+    def contact_strategy_errors
+      @contact_strategy_errors.presence || ['Unable to apply dependent contact strategy']
     end
 
     def dependent_contact_strategy_params(attrs)

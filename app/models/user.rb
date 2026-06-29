@@ -28,6 +28,10 @@ class User < ApplicationRecord
     phone_value.to_s
   end
 
+  def self.synthetic_dependent_phone?(phone_value)
+    normalize_phone(phone_value).to_s.gsub(/\D/, '').start_with?('000')
+  end
+
   def self.system_user
     if @system_user.nil? || !system_user_valid?(@system_user)
       @system_user = find_by_email('system@mdmat.org')

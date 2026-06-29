@@ -3,6 +3,9 @@
 module Applications
   # Handles guardian/dependent user management for paper applications
   class GuardianDependentManagementService < BaseService
+    SYNTHETIC_PHONE_RANDOM_SPACE = 10_000_000
+    SYNTHETIC_PHONE_MAX_ATTEMPTS = 25
+
     attr_reader :params, :guardian_user, :dependent_user, :errors
 
     def initialize(params)
@@ -17,7 +20,7 @@ module Applications
       return failure('Failed to setup guardian') unless setup_guardian(guardian_id, new_guardian_attrs)
 
       applicant_data = applicant_data.deep_dup
-      apply_contact_strategies(applicant_data)
+      return failure('Failed to apply contact strategies') unless apply_contact_strategies(applicant_data)
 
       return failure('Failed to create dependent') unless create_dependent?(applicant_data)
       return failure('Failed to create relationship') unless create_relationship(relationship_type)
@@ -26,17 +29,21 @@ module Applications
     end
 
     def apply_contact_strategies(applicant_data)
-      return unless @guardian_user
+      return true unless @guardian_user
 
-      apply_email_strategy(applicant_data)
-      apply_phone_strategy(applicant_data)
+      # Strategies snapshot request-time contact choices into User fields.
+      return false unless apply_email_strategy(applicant_data)
+      return false unless apply_phone_strategy(applicant_data)
+
       apply_address_strategy(applicant_data)
+      true
     end
 
     def apply_contact_strategies_for(guardian_user, applicant_data)
       @guardian_user = guardian_user
       data = applicant_data.to_h.with_indifferent_access
-      apply_contact_strategies(data)
+      return unless apply_contact_strategies(data)
+
       data
     end
 
@@ -88,7 +95,7 @@ module Applications
     end
 
     def apply_email_strategy(data)
-      return if params[:email_strategy].nil?
+      return true if params[:email_strategy].nil?
 
       case params[:email_strategy]
       when 'guardian'
@@ -101,43 +108,46 @@ module Applications
           data[:dependent_email] = data[:email]
         end
       when 'dependent'
-        # Paper-app flow passes the dependent's email in :dependent_email; portal flow
-        # passes it in :email.  Normalise both into :email first, then mirror back.
+        # Paper passes :dependent_email; portal passes :email. Mirror the submitted contact.
         data[:email] = data[:dependent_email] if data[:email].blank? && data[:dependent_email].present?
         if data[:email].present?
           data[:dependent_email] = data[:email]
         else
-          apply_email_strategy_with('guardian', data)
+          return apply_email_strategy_with('guardian', data)
         end
       else
-        apply_email_strategy_with('guardian', data)
+        return apply_email_strategy_with('guardian', data)
       end
 
       # Final safety check: ensure email is always set
-      return if data[:email].present?
+      return true if data[:email].present?
 
       data[:email] = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
+      true
     end
 
     def apply_phone_strategy(data)
-      return if params[:phone_strategy].nil?
+      return true if params[:phone_strategy].nil?
 
       case params[:phone_strategy]
       when 'guardian'
         data[:dependent_phone] = @guardian_user.phone
-        data[:phone] = "000-000-#{rand(1000..9999)}"
+        phone = unique_synthetic_phone
+        return false if phone.blank?
+
+        data[:phone] = phone
       when 'dependent'
-        # Paper-app flow passes the dependent's phone in :dependent_phone; portal flow
-        # passes it in :phone.  Normalise both into :phone first, then mirror back.
+        # Paper passes :dependent_phone; portal passes :phone. Mirror the submitted contact.
         data[:phone] = data[:dependent_phone] if data[:phone].blank? && data[:dependent_phone].present?
         if data[:phone].present?
           data[:dependent_phone] = data[:phone]
         else
-          apply_phone_strategy_with('guardian', data)
+          return apply_phone_strategy_with('guardian', data)
         end
       else
-        apply_phone_strategy_with('guardian', data)
+        return apply_phone_strategy_with('guardian', data)
       end
+      true
     end
 
     def apply_address_strategy(data)
@@ -158,6 +168,22 @@ module Applications
     def apply_phone_strategy_with(strategy, data)
       @params[:phone_strategy] = strategy
       apply_phone_strategy(data)
+    end
+
+    def unique_synthetic_phone
+      SYNTHETIC_PHONE_MAX_ATTEMPTS.times do
+        candidate = synthetic_phone_candidate
+        return candidate unless User.exists_with_phone?(candidate)
+      end
+
+      add_error?('Unable to generate unique synthetic dependent phone')
+      nil
+    end
+
+    def synthetic_phone_candidate
+      value = SecureRandom.random_number(SYNTHETIC_PHONE_RANDOM_SPACE)
+      digits = format('%07d', value)
+      "000-#{digits[0, 3]}-#{digits[3, 4]}"
     end
 
     def attributes_present?(attrs)

@@ -121,6 +121,33 @@ module ConstituentPortal
       assert_redirected_to constituent_portal_dashboard_url
     end
 
+    test 'should render create form when guardian phone synthetic generation fails' do
+      create(:constituent, phone: '000-000-0000')
+      SecureRandom
+        .stubs(:random_number)
+        .with(Applications::GuardianDependentManagementService::SYNTHETIC_PHONE_RANDOM_SPACE)
+        .returns(*Array.new(Applications::GuardianDependentManagementService::SYNTHETIC_PHONE_MAX_ATTEMPTS, 0))
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post constituent_portal_dependents_url, params: {
+          dependent: {
+            first_name: 'Fallback',
+            last_name: 'Dependent',
+            date_of_birth: '2010-05-15',
+            email: '',
+            phone: '',
+            hearing_disability: true
+          },
+          guardian_relationship: { relationship_type: 'Parent' },
+          use_guardian_email: '1',
+          use_guardian_phone: '1'
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_match(/Unable to generate unique synthetic dependent phone/, response.body)
+    end
+
     test 'should not create dependent if attributes are invalid' do
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/Failed to create dependent user:/)).once

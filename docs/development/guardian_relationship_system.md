@@ -57,10 +57,13 @@ dependent = User.create!(
 
 **Shared contact info**
 
+Guardian-contact sharing snapshots guardian contact into dependent fields plus
+system-generated primary email and `000-` phone values when needed.
+
 ```ruby
 dependent = User.create!(
   email:            'dependent-abc123@system.matvulcan.local', # system-generated unique
-  phone:            '000-000-1234',
+  phone:            '000-000-0042',
   dependent_email:  'guardian@example.com',
   dependent_phone:  '555-0002'
 )
@@ -150,7 +153,7 @@ ensure
 end
 ```
 
-Supports new guardians, existing guardians, new dependents, and existing dependents selected with `dependent_id`. `PaperApplicationService` owns application creation and dedup eligibility checks; `GuardianDependentManagementService` owns dependent/guardian setup and contact strategies (`email_strategy`, `phone_strategy`, `address_strategy`).
+Supports new guardians, existing guardians, new dependents, and existing dependents selected with `dependent_id`. `PaperApplicationService` owns application creation and dedup eligibility checks; `GuardianDependentManagementService` owns dependent/guardian setup and request-time contact strategy snapshots (`email_strategy`, `phone_strategy`, `address_strategy`).
 
 Existing dependent reuse should preserve the current relationship when possible, set `managing_guardian_id` explicitly on the new application, and still respect waiting-period or `blocking_new_submission` checks from the paper applicant lookup.
 
