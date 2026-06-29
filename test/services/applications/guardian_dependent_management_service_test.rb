@@ -114,5 +114,32 @@ module Applications
       assert result.success?, "Expected dependent creation to succeed: #{result.data[:errors]}"
       assert_equal '000-000-0001', result.data[:dependent].phone
     end
+
+    test 'guardian phone strategy returns failure when synthetic phone attempts are exhausted' do
+      create(:constituent, phone: '000-000-0000')
+      SecureRandom
+        .stubs(:random_number)
+        .with(GuardianDependentManagementService::SYNTHETIC_PHONE_RANDOM_SPACE)
+        .returns(*Array.new(GuardianDependentManagementService::SYNTHETIC_PHONE_MAX_ATTEMPTS, 0))
+
+      service = GuardianDependentManagementService.new(
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        address_strategy: 'dependent'
+      )
+
+      assert_no_difference 'User.count' do
+        result = service.process_guardian_scenario(
+          @guardian.id,
+          {},
+          { first_name: 'Child', last_name: 'User', date_of_birth: '2015-01-01', hearing_disability: true },
+          'Parent'
+        )
+
+        assert_not result.success?
+        assert_equal 'Failed to apply contact strategies', result.message
+        assert_includes result.data[:errors], 'Unable to generate unique synthetic dependent phone'
+      end
+    end
   end
 end

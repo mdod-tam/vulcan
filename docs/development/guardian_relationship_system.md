@@ -58,7 +58,7 @@ dependent = User.create!(
 **Shared contact info**
 
 Guardian-contact sharing snapshots guardian contact into dependent fields plus
-generated primary values when needed.
+system-generated primary email and `000-` phone values when needed.
 
 ```ruby
 dependent = User.create!(

@@ -72,7 +72,7 @@ The test suite covers the contact strategy implementation through factory patter
   - Address strategy handling
   - Proper encryption and validation of dependent contact fields
   - Fallback logic for when dependent contact information is left blank
-  - System-generated unique emails for constraint avoidance
+  - System-generated unique primary emails and synthetic primary phones for constraint avoidance
 
 ## Usage Patterns
 
@@ -113,7 +113,7 @@ The system currently implements:
 - ✅ Contact strategy handling in `GuardianDependentManagementService`
 - ✅ `effective_email`, `effective_phone`, `effective_phone_type`, `effective_communication_preference` methods
 - ✅ Factory patterns for testing different contact scenarios
-- ✅ Proper uniqueness constraint handling with system-generated fallback emails
+- ✅ Proper uniqueness constraint handling with system-generated fallback emails and synthetic phones
 
 ## Current Boundaries
 
