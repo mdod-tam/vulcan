@@ -55,9 +55,8 @@ module Authentication
   def find_production_session
     return if cookies.signed[:session_token].blank?
 
-    # Only include the user without eager loading role_capabilities
-    Session.includes(:user)
-           .find_by(session_token: cookies.signed[:session_token])
+    # Load session without eager loading user; association is loaded on demand when needed.
+    Session.find_by(session_token: cookies.signed[:session_token])
   end
 
   def find_test_session
@@ -99,13 +98,13 @@ module Authentication
   def find_signed_cookie_session
     return if cookies.signed[:session_token].blank?
 
-    Session.includes(:user).find_by(session_token: cookies.signed[:session_token])
+    Session.find_by(session_token: cookies.signed[:session_token])
   end
 
   def find_unsigned_cookie_session
     return if cookies[:session_token].blank?
 
-    Session.includes(:user).find_by(session_token: cookies[:session_token])
+    Session.find_by(session_token: cookies[:session_token])
   end
 
   # Redirects unauthenticated users to the sign-in page with an alert message

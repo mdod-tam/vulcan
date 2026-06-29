@@ -16,16 +16,16 @@ class SessionsController < ApplicationController
   end
 
   def create
-    user = User.find_by_email(params[:email])
+    user = User.find_by_login_identifier(login_contact_param)
 
     if user&.account_locked?
-      @errors = { email: invalid_credentials_message }
+      @errors = { contact: invalid_credentials_message }
       return render_form_errors
     end
 
     unless user&.authenticate(params[:password])
       user&.record_failed_login!
-      @errors = { email: invalid_credentials_message }
+      @errors = { contact: invalid_credentials_message }
       return render_form_errors
     end
 
@@ -36,19 +36,15 @@ class SessionsController < ApplicationController
   end
 
   def destroy
-    # Clean up any temporary 2FA state without marking the session verified.
     TwoFactorAuth.abort_authentication(session)
 
-    # Find and destroy the current session if it exists
     if current_user&.sessions
       session_to_destroy = current_user.sessions.find_by(session_token: cookies.signed[:session_token])
       session_to_destroy&.destroy
     end
 
-    # Always clear the session cookie
     cookies.delete(:session_token)
 
-    # Handle different response formats appropriately
     respond_to do |format|
       format.html { redirect_to sign_in_path, notice: 'Signed out successfully' }
       format.turbo_stream { redirect_to sign_in_path, notice: 'Signed out successfully' }
@@ -57,22 +53,19 @@ class SessionsController < ApplicationController
 
   private
 
+  def login_contact_param
+    params[:contact].presence || params[:email].presence
+  end
+
   def render_form_errors
     respond_to do |format|
       format.turbo_stream do
         render turbo_stream: turbo_stream.replace('sign_in_form', partial: 'sessions/form')
       end
       format.html do
-        redirect_to sign_in_path(email_hint: params[:email]), alert: invalid_credentials_message
+        redirect_to sign_in_path, alert: invalid_credentials_message
       end
     end
-  end
-
-  def handle_invalid_credentials
-    # Add user feedback for failed login attempts if User model supports it
-    # user = User.find_by_email(params[:email])
-    # user&.track_failed_attempt!(request.remote_ip) if user # Assuming track_failed_attempt! exists
-    redirect_to sign_in_path(email_hint: params[:email]), alert: invalid_credentials_message
   end
 
   def invalid_credentials_message
@@ -80,10 +73,9 @@ class SessionsController < ApplicationController
   end
 
   def setup_two_factor_session(user)
-    cookies.delete(:session_token) # Ensure no old session interferes
-    TwoFactorAuth.clear_challenge(session) # Clear any stale challenge
+    cookies.delete(:session_token)
+    TwoFactorAuth.clear_challenge(session)
     TwoFactorAuth.store_temp_user_id(session, user.id)
-    # Only store return path if it's not the sign-in page or root path
     return_path = session[:return_to]
     return_path = nil if return_path&.include?('sign_in') || return_path == '/'
     TwoFactorAuth.store_return_path(session, return_path)
@@ -135,7 +127,7 @@ class SessionsController < ApplicationController
                   notice: TwoFactor::SmsLoginChallenge::DUPLICATE_SEND_MESSAGE
     else
       TwoFactorAuth.abort_authentication(session)
-      redirect_to sign_in_path(email_hint: user.email),
+      redirect_to sign_in_path,
                   alert: 'Could not send verification code. Please try again.'
     end
   end

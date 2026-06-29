@@ -16,12 +16,12 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
   test 'recovery link appears on webauthn authentication page' do
     # Start sign in process (first password step)
     visit sign_in_path
-    fill_in 'email', with: @user.email
-    fill_in 'password', with: 'password123'
+    fill_in 'contact-input', with: @user.email
+    fill_in 'password-input', with: 'password123'
     click_button 'Sign In'
 
     # Should be on WebAuthn page now
-    assert_text 'Use your registered security key to complete sign-in.'
+    assert_text 'Use your device (fingerprint or face) or a physical security key to complete sign-in.'
 
     # Check for recovery link
     assert_link "I've lost my security key"
@@ -125,8 +125,8 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
 
     # User should now be able to sign in without WebAuthn
     visit sign_in_path
-    fill_in 'email', with: @user.email
-    fill_in 'password', with: 'password123'
+    fill_in 'contact-input', with: @user.email
+    fill_in 'password-input', with: 'password123'
     click_button 'Sign In'
 
     # Should be logged in without 2FA prompt

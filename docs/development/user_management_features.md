@@ -48,9 +48,10 @@ Email and phone are stored with deterministic Rails encryption so exact lookups 
 - matching email or phone renders the signup page with an account-access prompt instead of creating another user
 - matching email can offer an account-access link by email
 - matching text-capable phone can offer an account-access link by SMS
+- `PasswordsController#create` applies the same text-capable rule: account-access SMS is sent only when the matched user's `phone_type` is `text`
 - conflicting matches, where email and phone belong to different users, show a support-contact prompt
 
-`UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and non-null `users.phone`.
+`UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
 
 Blank phone numbers are allowed. Non-blank phones must normalize to a 10-digit US number when the phone changes.
 

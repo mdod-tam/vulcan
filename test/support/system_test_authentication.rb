@@ -96,7 +96,7 @@ module SystemTestAuthentication
     assert_selector('form[action="/sign_in"]', wait: 10)
 
     within('form[action="/sign_in"]') do
-      fill_in 'email-input', with: user.email
+      fill_in 'contact-input', with: user.email
       fill_in 'password-input', with: 'password123'
       click_button 'Sign In'
     end
@@ -117,7 +117,7 @@ module SystemTestAuthentication
         # Success: 2FA sign-in has reached the expected verification step.
       elsif dashboard_path_reached?(user, wait: 8)
         # Success! Continue to dashboard verification below
-      elsif page.has_text?('Invalid email or password', wait: 2)
+      elsif page.has_text?(I18n.t('controllers.sessions.invalid_credentials'), wait: 2)
         # Clear authentication failure
         take_screenshot
         raise "❌ Sign-in failed for #{user.email} - invalid credentials detected."
@@ -183,7 +183,7 @@ module SystemTestAuthentication
     wait_for_stimulus_controller('visibility')
 
     within('form[action="/sign_in"]') do
-      fill_in 'email-input', with: user.email
+      fill_in 'contact-input', with: user.email
       fill_in 'password-input', with: 'password123'
       click_button 'Sign In'
     end

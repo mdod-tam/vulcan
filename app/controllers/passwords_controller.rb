@@ -91,14 +91,23 @@ class PasswordsController < ApplicationController
   end
 
   def find_user_for_account_access
-    contact = account_access_contact
-    email_user = User.find_by_email(contact)
-    return [email_user, :email] if email_user.present?
+    contact = account_access_contact.to_s.strip.presence
+    return [nil, nil] if contact.blank?
+
+    if User.login_identifier_looks_like_email?(contact)
+      return [nil, nil] unless User.login_identifier_valid_email?(contact)
+
+      email_user = User.find_by_email(contact)
+      return [nil, nil] if email_user.blank? || User.system_generated_email?(email_user.email)
+
+      return [email_user, :email]
+    end
 
     phone_user = User.find_by_phone(contact)
-    return [phone_user, :sms] if phone_user.present?
+    return [nil, nil] if phone_user.blank? || User.placeholder_phone?(phone_user.phone)
+    return [nil, nil] unless phone_user.phone_type.to_s == 'text'
 
-    [nil, nil]
+    [phone_user, :sms]
   end
 
   def account_access_contact

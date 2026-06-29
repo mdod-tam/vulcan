@@ -1,5 +1,4 @@
 <div id="sign_in_form">
-  <%# Error Summary Block - from main page for better accessibility %>
   <% if @errors&.any? %>
     <div id="signin-error-summary"
          role="alert"
@@ -22,25 +21,25 @@
                 aria: { labelledby: "signin-heading" },
                 data: { controller: "visibility" } do |form| %>
 
-  <div class="space-y-1" role="group" aria-labelledby="email-input-label">
-    <%= form.label :email, "Email Address",
-        for: "email-input",
-        id: "email-input-label",
+  <div class="space-y-1" role="group" aria-labelledby="contact-input-label">
+    <%= form.label :contact, t("sessions.form.contact_label"),
+        for: "contact-input",
+        id: "contact-input-label",
         class: "block text-sm font-medium text-gray-700" %>
-    <%= form.email_field :email,
-        id: "email-input",
+    <%= form.text_field :contact,
+        id: "contact-input",
         class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-        value: params[:email_hint] || "",
+        value: params[:email_hint].presence || "",
         required: true,
-        autocomplete: "email",
+        autocomplete: "username",
         autofocus: true,
         "aria-required": "true",
-        "aria-invalid": (@errors&.include?(:email) ? "true" : "false"),
-        "aria-describedby": (["email-hint", (@errors&.include?(:email) ? "email-error" : nil)].compact.join(" ")) %>
-    <p id="email-hint" class="text-xs text-gray-500">Enter the email address associated with your account</p>
-    <% if @errors&.include?(:email) %>
-      <p id="email-error" class="mt-1 text-sm text-red-600">
-        <%= @errors[:email] %>
+        "aria-invalid": (@errors&.include?(:contact) ? "true" : "false"),
+        "aria-describedby": (["contact-hint", (@errors&.include?(:contact) ? "contact-error" : nil)].compact.join(" ")) %>
+    <p id="contact-hint" class="text-xs text-gray-500"><%= t("sessions.form.contact_hint") %></p>
+    <% if @errors&.include?(:contact) %>
+      <p id="contact-error" class="mt-1 text-sm text-red-600">
+        <%= @errors[:contact] %>
       </p>
     <% end %>
   </div>

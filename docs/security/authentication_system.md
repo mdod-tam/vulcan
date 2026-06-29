@@ -10,13 +10,16 @@ Password sign-in starts in `SessionsController#create`.
 
 The controller:
 
-- looks up users through `User.find_by_email`, which normalizes email and works with encrypted email storage
+- looks up users through `User.find_by_login_identifier`, which accepts email or phone, normalizes input, rejects malformed `@` input, synthetic dependent emails, and placeholder phones, and works with encrypted email storage
+- does not change portal registration rules; signup still requires both email and phone in the public UI
 - checks account lock state before password authentication
 - records failed password attempts
 - signs the user in immediately when no second factor is enabled
 - starts the MFA flow when the user has any second factor
 
 User password/session behavior lives in `UserAuthentication`.
+
+Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses parallel contact lookup logic in `find_user_for_account_access` with the same malformed-`@`, synthetic-email, placeholder-phone, and text-capable SMS rules as sign-in, but it does not call `User.find_by_login_identifier` directly. WebAuthn recovery in `AccountRecoveryController` is still email-only.
 
 Current account-lock behavior:
 
@@ -200,6 +203,7 @@ When changing authentication:
 - Use `TwoFactorAuth` session keys instead of inventing new session state.
 - Do not count unverified SMS credentials as enabled.
 - Do not store SMS codes in our database.
-- Do not bypass `User.find_by_email` for login lookup.
+- Use `User.find_by_login_identifier` for password sign-in lookup instead of calling `User.find_by_email` or `User.find_by_phone` directly.
+- Keep account-access lookup aligned with the same contact guards even if it remains in `PasswordsController#find_user_for_account_access` for now.
 - Do not add role-based MFA exceptions without updating tests.
 - Be careful with direct column writes in auth bookkeeping; the existing uses are narrow and documented in code.

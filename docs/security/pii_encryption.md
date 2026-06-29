@@ -67,10 +67,17 @@ Use the helper methods on `User` for contact lookup:
 
 - `User.find_by_email(value)`
 - `User.find_by_phone(value)`
+- `User.find_by_login_identifier(value)` — password sign-in lookup in `SessionsController`; treats any `@` input as email-shaped, rejects malformed email strings without falling back to phone, and blocks synthetic dependent contacts
 - `User.exists_with_email?(value, excluding_id: nil)`
 - `User.exists_with_phone?(value, excluding_id: nil)`
 
-These helpers normalize email and phone values before querying and rescue lookup failures with a warning. They are used by login, registration, password/account recovery, and paper intake paths.
+These helpers normalize email and phone values before querying and rescue lookup failures with a warning.
+
+Current adoption by path:
+
+- `User.find_by_login_identifier` — `SessionsController` sign-in only
+- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, WebAuthn recovery, and other existing lookup paths
+- `PasswordsController#find_user_for_account_access` — parallel account-access lookup with equivalent guards, but not yet routed through `find_by_login_identifier`
 
 Direct Rails equality queries on deterministic encrypted fields can work, but new code should use the helpers where contact lookup or uniqueness is the point. That keeps normalization and failure behavior consistent.
 
@@ -101,7 +108,7 @@ Sensitive request parameters are filtered in `config/initializers/filter_paramet
 Currently filtered categories include:
 
 - password fields
-- user contact and address fields
+- user contact and address fields, including unified auth `contact`
 - date of birth and SSN fields
 - SMS phone number params
 - medical provider contact fields

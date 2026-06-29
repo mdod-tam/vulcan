@@ -70,6 +70,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_send_account_access_sms_for_existing_phone
+    @user.update!(phone_type: 'text')
+
     SmsService.expects(:send_message)
               .with(@user.phone,
                     regexp_matches(%r{MAT account access link to set your password: https?://\S+ This link expires in 20 minutes\.}))
@@ -85,6 +87,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_return_generic_confirmation_when_sms_delivery_fails
+    @user.update!(phone_type: 'text')
+
     SmsService.expects(:send_message).raises(StandardError, 'invalid number')
 
     assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', user: @user).count }, 1 do
@@ -97,6 +101,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_rate_limit_repeated_account_access_sms_requests
+    @user.update!(phone_type: 'text')
+
     old_cache = Rails.cache
     Rails.cache = ActiveSupport::Cache::MemoryStore.new
 
@@ -244,6 +250,161 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     # Verify password was not changed
     @user.reload
     assert_equal @original_password_digest, @user.password_digest
+  end
+
+
+  def test_system_email_does_not_fall_through_to_phone_for_account_access
+    sign_out if respond_to?(:sign_out)
+
+    user = create(:constituent,
+                  email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local",
+                  phone: '410-555-0166',
+                  password: 'password123',
+                  password_confirmation: 'password123')
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: user.email }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+  end
+
+  def test_placeholder_phone_does_not_receive_account_access_sms
+    sign_out if respond_to?(:sign_out)
+
+    user = create(:constituent,
+                  phone: '000-000-4321',
+                  email: "real.#{SecureRandom.hex(3)}@example.com",
+                  password: 'password123',
+                  password_confirmation: 'password123')
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: user.phone }
+    end
+
+    assert_redirected_to sign_in_path
+  end
+
+  def test_guardian_generated_synthetic_phone_does_not_receive_account_access_sms
+    sign_out if respond_to?(:sign_out)
+
+    user = create(:constituent,
+                  phone: '000-345-6789',
+                  email: "real.#{SecureRandom.hex(3)}@example.com",
+                  password: 'password123',
+                  password_confirmation: 'password123')
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: '0003456789' }
+    end
+
+    assert_redirected_to sign_in_path
+  end
+
+  def test_account_access_accepts_email_with_surrounding_whitespace
+    sign_out if respond_to?(:sign_out)
+
+    assert_enqueued_emails 1 do
+      post password_path, params: { contact: "  #{@user.email}  " }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+  end
+
+  def test_voice_phone_does_not_receive_account_access_sms
+    sign_out if respond_to?(:sign_out)
+
+    user = create(:constituent,
+                  phone: '410-555-0144',
+                  phone_type: 'voice',
+                  email: "voice.#{SecureRandom.hex(3)}@example.com",
+                  password: 'password123',
+                  password_confirmation: 'password123')
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: user.phone }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+  end
+
+  def test_malformed_email_shaped_account_access_does_not_fall_through_to_phone
+    sign_out if respond_to?(:sign_out)
+
+    phone = '410-555-0164'
+    Current.paper_context = true
+    user = nil
+    begin
+      user = Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'OnlyMalformedAccess',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: '4105550164@' }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+    assert_equal user, User.find_by_phone(phone)
+  end
+
+  def test_email_shaped_account_access_does_not_fall_through_to_phone
+    sign_out if respond_to?(:sign_out)
+
+    phone = '410-555-0165'
+    Current.paper_context = true
+    user = nil
+    begin
+      user = Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'OnlyAccess',
+        phone: phone,
+        phone_type: 'voice',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: '4105550165@example.com' }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+    assert_equal user, User.find_by_phone(phone)
+  end
+
+  def account_access_confirmation_message
+    'If the information you entered matches an account, we sent account access instructions to the contact information on record.'
   end
 
   private
