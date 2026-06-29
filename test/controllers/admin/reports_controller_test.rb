@@ -7,6 +7,7 @@ module Admin
     def setup
       @admin = create(:admin)
       sign_in_for_integration_test(@admin)
+      FeatureFlag.disable!(:vouchers_enabled)
     end
 
     test 'index includes simplified fiscal year report copy' do
@@ -51,6 +52,8 @@ module Admin
     end
 
     test 'voucher statistics count vouchers by issued_at' do
+      FeatureFlag.enable!(:vouchers_enabled)
+
       travel_to Time.zone.local(2026, 5, 1, 12, 0, 0) do
         application = create_reviewed_application(user: create(:constituent))
         create(:voucher,
@@ -69,7 +72,123 @@ module Admin
       end
     end
 
+    test 'index hides voucher-only report sections when vouchers are disabled' do
+      get admin_reports_path
+      assert_response :success
+
+      assert_select '#voucher-statistics-heading', count: 0
+      assert_select '#vendor-activity-heading', count: 0
+      assert_no_match(/Voucher Statistics Comparison/, response.body)
+      assert_no_match(/Vouchers issued during FY/, response.body)
+    end
+
+    test 'index renders voucher report sections when vouchers are enabled' do
+      FeatureFlag.enable!(:vouchers_enabled)
+
+      get admin_reports_path
+      assert_response :success
+
+      assert_select '#voucher-statistics-heading', text: 'Voucher Statistics'
+      assert_select '#vendor-activity-heading', text: 'Vendor Activity'
+      assert_match(/Vouchers issued during FY/, response.body)
+    end
+
+    test 'equipment by type defaults to current fiscal year and counts PO-sent recommendations' do
+      travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
+        tablet = create(:product, name: 'FY Tablet', device_types: ['Tablet'])
+        phone = create(:product, name: 'FY Phone', device_types: ['Smartphone'])
+        multi_type = create(:product, name: 'FY Combo', device_types: ['Tablet', 'Smartphone'])
+
+        create_po_sent_equipment_application(product: multi_type, po_sent_at: Time.zone.local(2026, 6, 10, 12, 0, 0))
+        create_po_sent_equipment_application(product: tablet, po_sent_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
+        create_po_sent_equipment_application(product: phone, po_sent_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
+
+        get admin_reports_path
+        assert_response :success
+
+        assert_select '#equipment-period-heading', text: 'FY26'
+        assert_equipment_row 'Tablet', non_voucher_count: 2
+        assert_equipment_row 'Smartphone', non_voucher_count: 2
+      end
+    end
+
+    test 'equipment by type filters current month and current fiscal quarter' do
+      travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
+        tablet = create(:product, name: 'Quarter Tablet', device_types: ['Tablet'])
+        phone = create(:product, name: 'Quarter Phone', device_types: ['Smartphone'])
+        multi_type = create(:product, name: 'Quarter Combo', device_types: ['Tablet', 'Smartphone'])
+
+        create_po_sent_equipment_application(product: multi_type, po_sent_at: Time.zone.local(2026, 6, 10, 12, 0, 0))
+        create_po_sent_equipment_application(product: tablet, po_sent_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
+        create_po_sent_equipment_application(product: phone, po_sent_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
+
+        get admin_reports_path(equipment_period: 'current_month')
+        assert_response :success
+        assert_select '#equipment-period-heading', text: 'June 2026'
+        assert_equipment_row 'Tablet', non_voucher_count: 1
+        assert_equipment_row 'Smartphone', non_voucher_count: 1
+
+        get admin_reports_path(equipment_period: 'current_quarter')
+        assert_response :success
+        assert_select '#equipment-period-heading', text: 'Q4 FY26'
+        assert_equipment_row 'Tablet', non_voucher_count: 2
+        assert_equipment_row 'Smartphone', non_voucher_count: 1
+      end
+    end
+
+    test 'equipment by type counts completed voucher redemption quantities when vouchers are enabled' do
+      FeatureFlag.enable!(:vouchers_enabled)
+
+      travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
+        product = create(:product, name: 'Voucher Tablet', device_types: ['Tablet'])
+        application = create(:application, :approved, fulfillment_type: :voucher)
+        voucher = create(:voucher, application: application)
+        transaction = create(:voucher_transaction,
+                             voucher: voucher,
+                             vendor: create(:vendor),
+                             processed_at: Time.zone.local(2026, 6, 10, 12, 0, 0),
+                             status: :transaction_completed,
+                             transaction_type: :redemption)
+        VoucherTransactionProduct.create!(
+          voucher_transaction: transaction,
+          product: product,
+          quantity: 3
+        )
+
+        get admin_reports_path(equipment_period: 'current_month')
+        assert_response :success
+
+        assert_equipment_row 'Tablet', non_voucher_count: 0, voucher_count: 3
+      end
+    end
+
+    test 'equipment by type reports unavailable state instead of empty data on service failure' do
+      Reports::EquipmentByTypeReport.any_instance.stubs(:call).returns(
+        BaseService::Result.new(
+          success: false,
+          message: Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE,
+          data: {
+            selected_period: 'current_fy',
+            period_options: { 'current_fy' => 'Current Fiscal Year (FY26)' },
+            period_label: 'FY26',
+            rows: [],
+            chart_data: { non_voucher: {}, voucher: {} },
+            error_message: Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
+          }
+        )
+      )
+
+      get admin_reports_path
+      assert_response :success
+
+      equipment_section = css_select('#equipment-by-type-heading').first.ancestors('section').first
+      assert_includes equipment_section.text, Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
+      assert_no_match(/No equipment recorded for this period/, equipment_section.text)
+    end
+
     test 'MFR section table cell values match chart JSON payload' do
+      FeatureFlag.enable!(:vouchers_enabled)
+
       travel_to Date.new(2026, 8, 1) do
         admin = create(:admin)
         fy_time = Date.new(2025, 8, 1)
@@ -112,6 +231,20 @@ module Admin
       end
     end
 
+    test 'MFR section omits voucher rows and chart payload when vouchers are disabled' do
+      travel_to Date.new(2026, 8, 1) do
+        get admin_reports_path
+        assert_response :success
+
+        assert_no_match(/Vouchers issued during FY/, response.body)
+
+        mfr_section = css_select('#mfr-data-heading').first.ancestors('section').first
+        chart_element = mfr_section.at_css('[data-reports-chart-title-value="MFR throughput comparison"]')
+        parsed_chart = JSON.parse(chart_element['data-reports-chart-current-data-value'])
+        assert_not parsed_chart.key?('Vouchers issued during FY')
+      end
+    end
+
     private
 
     def assert_status_row(table, label, current_fy:, previous_fy:)
@@ -133,6 +266,25 @@ module Admin
       assert_equal value, term.parent.css('dd').first.text.strip
     end
 
+    def assert_equipment_row(device_type, non_voucher_count:, voucher_count: nil)
+      section = css_select('#equipment-by-type-heading').first.ancestors('section').first
+      row = section.css('tbody tr').find { |tr| tr.css('th').first.text.strip == device_type }
+      assert_not_nil row, "expected equipment row for #{device_type}"
+      assert_equal non_voucher_count.to_s, row.css('td')[0].text.strip
+      assert_equal voucher_count.to_s, row.css('td')[1].text.strip if voucher_count
+    end
+
+    def create_po_sent_equipment_application(product:, po_sent_at:)
+      application = create_reviewed_application(user: create(:constituent))
+      application.update!(fulfillment_type: :equipment, equipment_po_sent_at: po_sent_at)
+      evaluation = create(:evaluation, :completed, application: application, constituent: application.user)
+      evaluation.update!(
+        recommended_product_ids: [product.id],
+        products_tried: [{ 'product_id' => product.id.to_s, 'reaction' => 'Recorded during evaluation' }]
+      )
+      application
+    end
+
     def create_reviewed_application(user:)
       application = create(:application, skip_proofs: true, user: user, status: :in_progress)
       application.income_proof.attach(
@@ -145,10 +297,16 @@ module Admin
         filename: 'residency.pdf',
         content_type: 'application/pdf'
       )
+      application.id_proof.attach(
+        io: StringIO.new('id proof content'),
+        filename: 'id.pdf',
+        content_type: 'application/pdf'
+      )
       application.update_columns(
         status: Application.statuses[:approved],
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
+        id_proof_status: Application.id_proof_statuses[:approved],
         medical_certification_status: Application.medical_certification_statuses[:approved],
         updated_at: Time.current
       )

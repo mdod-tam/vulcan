@@ -24,9 +24,14 @@
       <h2>Quick Navigation</h2>
       <ul>
         <li><a href="#applications-overview-heading">Applications Overview</a></li>
-        <li><a href="#voucher-statistics-heading">Voucher Statistics</a></li>
+        <li><a href="#equipment-by-type-heading">Equipment by Type</a></li>
+        <% if @vouchers_enabled %>
+          <li><a href="#voucher-statistics-heading">Voucher Statistics</a></li>
+        <% end %>
         <li><a href="#services-overview-heading">Services Overview</a></li>
-        <li><a href="#vendor-activity-heading">Vendor Activity</a></li>
+        <% if @vouchers_enabled %>
+          <li><a href="#vendor-activity-heading">Vendor Activity</a></li>
+        <% end %>
         <li><a href="#mfr-data-heading">MFR Data</a></li>
         <li><a href="#referral-origin-heading">Referral Origin</a></li>
       </ul>
@@ -214,9 +219,19 @@
         </div>
       </div>
     </section>
+
+    <%= render 'equipment_by_type_section',
+               vouchers_enabled: @vouchers_enabled,
+               period: @equipment_period,
+               period_options: @equipment_period_options,
+               period_label: @equipment_period_label,
+               rows: @equipment_by_type_rows,
+               chart_data: @equipment_by_type_chart_data,
+               error_message: @equipment_by_type_error %>
     
     <%# Voucher Statistics Section %>
-    <section aria-labelledby="voucher-statistics-heading" class="bg-white rounded-lg shadow p-6 mb-8">
+    <% if @vouchers_enabled %>
+      <section aria-labelledby="voucher-statistics-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="voucher-statistics-heading" class="text-xl font-bold mb-4">Voucher Statistics</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
@@ -332,7 +347,8 @@
           </div>
         </div>
       </div>
-    </section>
+      </section>
+    <% end %>
     
     <%# Services Overview Section %>
     <section aria-labelledby="services-overview-heading" class="bg-white rounded-lg shadow p-6 mb-8">
@@ -493,7 +509,8 @@
     </section>
     
     <%# Vendor Activity Section %>
-    <section aria-labelledby="vendor-activity-heading" class="bg-white rounded-lg shadow p-6 mb-8">
+    <% if @vouchers_enabled %>
+      <section aria-labelledby="vendor-activity-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="vendor-activity-heading" class="text-xl font-bold mb-4">Vendor Activity</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
@@ -547,7 +564,8 @@
           </div>
         </div>
       </div>
-    </section>
+      </section>
+    <% end %>
     
     <%= render 'mfr_section' %>
 

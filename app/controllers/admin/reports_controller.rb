@@ -5,14 +5,19 @@ module Admin
     include DashboardMetricsLoading
 
     def index
+      @vouchers_enabled = FeatureFlag.enabled?(:vouchers_enabled)
+
       load_fiscal_year_data
       load_fiscal_year_application_counts
-      load_fiscal_year_voucher_counts
+      load_fiscal_year_voucher_counts if @vouchers_enabled
       load_fiscal_year_service_counts
-      load_vendor_data
-      load_chart_data
+      load_vendor_data if @vouchers_enabled
+      load_applications_chart_data
+      load_vouchers_chart_data if @vouchers_enabled
+      load_services_chart_data
       load_disability_type_data
       load_referral_source_data
+      load_equipment_by_type_data
       load_mfr_reports_data
     end
 
@@ -26,8 +31,49 @@ module Admin
 
     private
 
+    def load_equipment_by_type_data
+      result = Reports::EquipmentByTypeReport.new(
+        period: params[:equipment_period],
+        include_voucher_counts: @vouchers_enabled
+      ).call
+
+      payload = equipment_by_type_payload(result)
+
+      @equipment_period = payload[:selected_period]
+      @equipment_period_options = payload[:period_options]
+      @equipment_period_label = payload[:period_label]
+      @equipment_by_type_rows = payload[:rows]
+      @equipment_by_type_chart_data = payload[:chart_data]
+      @equipment_by_type_error = payload[:error_message]
+    end
+
+    def equipment_by_type_payload(result)
+      return result.data if result.is_a?(BaseService::Result) && result.success?
+
+      default_payload = empty_equipment_by_type_payload
+      return default_payload unless result.is_a?(BaseService::Result)
+
+      result_payload = result.data.presence || {}
+      default_payload.merge(result_payload).merge(
+        error_message: result_payload[:error_message].presence || Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
+      )
+    end
+
+    def empty_equipment_by_type_payload
+      {
+        selected_period: 'current_fy',
+        period_options: {},
+        period_label: '',
+        rows: [],
+        chart_data: { non_voucher: {}, voucher: {} },
+        error_message: Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
+      }
+    end
+
     def load_mfr_reports_data
-      result = Applications::ReportingService.new.generate_mfr_reports_data
+      result = Applications::ReportingService.new.generate_mfr_reports_data(
+        include_voucher_metrics: @vouchers_enabled
+      )
       unless result.is_a?(BaseService::Result) && result.success?
         @mfr_most_recent = empty_mfr_fy_payload
         @mfr_preceding = empty_mfr_fy_payload
