@@ -72,13 +72,19 @@ module Applications
     end
 
     # C — MFR throughput: lifecycle status transitions during completed fiscal years.
-    def generate_mfr_reports_data
+    def generate_mfr_reports_data(include_voucher_metrics: true)
       current_start_year = current_fiscal_year
       most_recent_start_year = current_start_year - 1
       preceding_start_year = current_start_year - 2
 
-      most_recent = build_mfr_fy_payload(most_recent_start_year)
-      preceding = build_mfr_fy_payload(preceding_start_year)
+      most_recent = build_mfr_fy_payload(
+        most_recent_start_year,
+        include_voucher_metrics: include_voucher_metrics
+      )
+      preceding = build_mfr_fy_payload(
+        preceding_start_year,
+        include_voucher_metrics: include_voucher_metrics
+      )
 
       success(nil, {
                 most_recent_fy: most_recent,
@@ -103,7 +109,7 @@ module Applications
       end.symbolize_keys
     end
 
-    def build_mfr_fy_payload(fy_start_year)
+    def build_mfr_fy_payload(fy_start_year, include_voucher_metrics: true)
       fy_start = FiscalYear.start_date_for(fy_start_year)
       fy_end = FiscalYear.end_date_for(fy_start_year)
       event_range = FiscalYear.time_range(fy_start, fy_end)
@@ -119,9 +125,9 @@ module Applications
 
       chart_data = {
         'Approved (status changed during FY)' => summary['Status changed to approved during FY'],
-        'Rejected (status changed during FY)' => summary['Status changed to rejected during FY'],
-        'Vouchers issued during FY' => Voucher.where(issued_at: issued_range).count
+        'Rejected (status changed during FY)' => summary['Status changed to rejected during FY']
       }
+      chart_data['Vouchers issued during FY'] = Voucher.where(issued_at: issued_range).count if include_voucher_metrics
 
       {
         fy_start_year: fy_start_year,

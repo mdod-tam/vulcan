@@ -251,15 +251,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                                            .distinct.count)
   end
 
-  # === Comprehensive Chart Data Loading ===
-
-  # Loads operational chart data for reports (MFR uses ReportingService#generate_mfr_reports_data).
-  def load_chart_data
-    load_applications_chart_data
-    load_vouchers_chart_data
-    load_services_chart_data
-  end
-
   # Disability type breakdown from submitted applications by fiscal year
   # Users can have multiple disabilities
   def load_disability_type_data
@@ -303,7 +294,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     # Define time period ranges - reusing existing @current_fy_start/@previous_fy_start
     time_periods = {
       month: { start: current_date.beginning_of_month, end: current_date.end_of_month },
-      quarter: { start: calculate_fiscal_quarter_start(current_date), end: calculate_fiscal_quarter_end(current_date) },
+      quarter: { start: FiscalYear.quarter_start_date(current_date), end: FiscalYear.quarter_end_date(current_date) },
       ytd: { start: @current_fy_start, end: current_date },
       prior_year: { start: @previous_fy_start, end: @previous_fy_end }
     }
@@ -321,19 +312,11 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
     # Store labels for display (use ending year short form: FY26, FY25)
     safe_assign(:referral_month_label, current_date.strftime('%B %Y'))
-    safe_assign(:referral_quarter_label, "Q#{fiscal_quarter(current_date)} #{@current_fy_label}")
+    safe_assign(:referral_quarter_label, "Q#{FiscalYear.quarter_for(current_date)} #{@current_fy_label}")
     safe_assign(:referral_ytd_label, "#{@current_fy_label} YTD")
     safe_assign(:referral_prior_year_label, @previous_fy_label)
     safe_assign(:show_prior_year_referral, full_prior_year_data?)
   end
-
-  # Fiscal quarter boundaries for fiscal year (July 1 - June 30)
-  FISCAL_QUARTERS = {
-    1 => { months: [7, 8, 9], start: [0, 7, 1], end: [0, 9, 30] },
-    2 => { months: [10, 11, 12], start: [0, 10, 1], end: [0, 12, 31] },
-    3 => { months: [1, 2, 3], start: [1, 1, 1], end: [1, 3, 31] },
-    4 => { months: [4, 5, 6], start: [1, 4, 1], end: [1, 6, 30] }
-  }.freeze
 
   private
 
@@ -421,25 +404,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                         .group("COALESCE(NULLIF(referral_source, ''), 'Not Specified')")
                         .count
     referral_data.transform_keys { |k| k || 'Not Specified' }
-  end
-
-  # Returns fiscal quarter (1-4) for a given date
-  def fiscal_quarter(date)
-    FISCAL_QUARTERS.find { |_, v| v[:months].include?(date.month) }&.first
-  end
-
-  # Returns start date of fiscal quarter for a given date
-  def calculate_fiscal_quarter_start(date)
-    fy = current_fiscal_year
-    year_offset, month, day = FISCAL_QUARTERS[fiscal_quarter(date)][:start]
-    Date.new(fy + year_offset, month, day)
-  end
-
-  # Returns end date of fiscal quarter for a given date
-  def calculate_fiscal_quarter_end(date)
-    fy = current_fiscal_year
-    year_offset, month, day = FISCAL_QUARTERS[fiscal_quarter(date)][:end]
-    Date.new(fy + year_offset, month, day)
   end
 
   # Checks if we have at least one full prior fiscal year of data
