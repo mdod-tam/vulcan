@@ -28,20 +28,6 @@ class MedicalProviderMailer < ApplicationMailer
     ).certification_approved
   end
 
-  def rejected(notifiable, notification)
-    # Map to certification_rejected method
-    # Note: MedicalCertificationAttachmentService stores rejection data as 'reason'
-    self.class.with(
-      application: notifiable,
-      rejection_reason: notification.metadata['reason'] ||
-        notification.metadata['rejection_reason'] ||
-        notifiable.medical_certification_rejection_reason ||
-        'Not specified',
-      admin: notification.actor,
-      secure_upload_url: notification.metadata['secure_upload_url']
-    ).certification_rejected
-  end
-
   # New method for approved certifications
   def certification_approved
     locale = provider_email_locale

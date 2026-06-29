@@ -6,13 +6,14 @@ module Webhooks
   class TwilioControllerTest < ActionDispatch::IntegrationTest
     setup do
       @application = create(:application)
+      @admin = create(:admin)
       @notification = create(
         :notification,
         recipient: @application.user,
-        actor: create(:admin),
+        actor: @admin,
         notifiable: @application,
         action: 'medical_certification_rejected',
-        metadata: { 'fax_sid' => 'FX_TEST_123', 'reason' => 'Missing signature' }
+        metadata: { 'fax_sid' => 'FX_TEST_123', 'rejection_reason' => 'Missing signature' }
       )
     end
 
@@ -49,7 +50,11 @@ module Webhooks
 
       mailer_proxy = mock('mailer_proxy')
       mailer_proxy.stubs(:certification_rejected).returns(mail)
-      MedicalProviderMailer.expects(:with).once.returns(mailer_proxy)
+      MedicalProviderMailer.expects(:with).with(
+        application: @application,
+        rejection_reason: 'Missing signature',
+        admin: @admin
+      ).once.returns(mailer_proxy)
 
       2.times do
         post webhooks_twilio_fax_status_path, params: {
