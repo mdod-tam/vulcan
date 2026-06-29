@@ -110,7 +110,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
-      fallback: 'Important: Your voucher is expiring soon.'
+      fallback: I18n.t('mailers.voucher_notifications.expiring_soon.header_fallback', locale: locale)
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
@@ -124,12 +124,39 @@ class VoucherNotificationsMailer < ApplicationMailer
     # Use Policy.get for configuration values
     expiration_date = voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months
     days_remaining = (expiration_date - Time.current).to_i / 1.day
+    expiration_date_formatted = I18n.l(expiration_date.to_date, format: :long, locale: locale)
+    minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0,
+                                                             locale: locale)
+    expiration_message = I18n.t(
+      'mailers.voucher_notifications.expiring_soon.expiration_message',
+      locale: locale,
+      days_remaining: days_remaining,
+      expiration_date: expiration_date_formatted
+    )
 
     variables = {
       user_first_name: user.first_name,
+      vendor_business_name: user.full_name.presence || user.first_name,
       voucher_code: voucher.code,
       days_remaining: days_remaining,
-      expiration_date_formatted: expiration_date.strftime('%B %d, %Y'),
+      days_until_expiry: days_remaining,
+      expiration_date_formatted: expiration_date_formatted,
+      remaining_value_formatted: number_to_currency(voucher.remaining_value, locale: locale),
+      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted,
+      status_box_warning_text: status_box_text(
+        status: :warning,
+        title: I18n.t('mailers.voucher_notifications.expiring_soon.warning_title', locale: locale),
+        message: expiration_message
+      ),
+      status_box_info_text: status_box_text(
+        status: :info,
+        title: I18n.t('mailers.voucher_notifications.expiring_soon.next_step_title', locale: locale),
+        message: I18n.t(
+          'mailers.voucher_notifications.expiring_soon.next_step_message',
+          locale: locale,
+          minimum_redemption_amount: minimum_redemption_amount_formatted
+        )
+      ),
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
                                organization_name: organization_name, show_automated_message: footer_show_automated_message,
@@ -263,7 +290,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     raise e
   end
 
-  def voucher_redeemed # rubocop:disable Metrics/PerceivedComplexity
+  def voucher_redeemed # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
     transaction = params[:transaction]
     voucher = transaction.voucher
     user = voucher.application.user

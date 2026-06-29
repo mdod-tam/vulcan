@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# rubocop:disable Rails/Output
+
 def seed_feature_flags
   puts 'Seeding feature flags...'
 
@@ -19,3 +21,5 @@ def seed_feature_flags
 end
 
 seed_feature_flags
+
+# rubocop:enable Rails/Output

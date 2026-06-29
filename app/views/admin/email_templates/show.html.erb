@@ -2,11 +2,13 @@
   <div class="max-w-7xl mx-auto">
     <%= render 'admin/shared/communications_section_nav', current: :email_templates %>
     <%# Header Section %>
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-      <h1 id="template-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
-        Template: <%= @email_template.name %> (<%= @email_template.format.titleize %>)
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <h1 id="template-title" class="text-3xl font-bold text-gray-900 min-w-0 max-w-full flex-1 break-words" style="min-width: 0; max-width: 100%; overflow-wrap: anywhere;">
+        <span>Template:</span>
+        <span class="break-all" style="overflow-wrap: anywhere; word-break: break-word;"><%= @email_template.name %></span>
+        <span class="whitespace-nowrap">(<%= @email_template.format.titleize %>, <%= template_syntax_label(@email_template) %>)</span>
       </h1>
-      <div class="flex space-x-3">
+      <div class="flex flex-wrap gap-3">
         <%= link_to admin_email_templates_path,
             class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
             aria: { label: "Return to email templates list" } do %>
@@ -58,11 +60,19 @@
       <dl class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
         <div>
           <dt class="text-sm font-medium text-gray-500">Template ID</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @email_template.name %></dd>
+          <dd class="mt-1 text-sm text-gray-900 break-all"><%= @email_template.name %></dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-500">Format</dt>
           <dd class="mt-1 text-sm text-gray-900"><%= @email_template.format.titleize %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Placeholder Style</dt>
+          <dd class="mt-1">
+            <span class="<%= template_syntax_badge_classes(@email_template) %>">
+              <%= template_syntax_label(@email_template) %>
+            </span>
+          </dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-500">Locale</dt>
@@ -89,30 +99,12 @@
       
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <% [@en_template, @es_template].compact.each do |template| %>
-          <% 
-            # Parse body to separate variable placeholders at the top from actual content
-            body_lines = template.body.split("\n")
-            variable_lines = []
-            content_lines = []
-            
-            body_lines.each do |line|
-              if line.strip.match?(/^%\{[a-z_]+\}$/)
-                variable_lines << line
-              else
-                content_lines << line
-              end
-            end
-            
-            # Join content lines back together, starting from the first non-variable line
-            cleaned_body = content_lines.join("\n")
-          %>
-          
           <div class="mb-4">
             <h3 class="text-lg font-medium text-gray-900 mb-2">
               Template Content (<%= template.locale.upcase %>)
             </h3>
             <div class="prose max-w-none bg-gray-50 p-4 rounded border border-gray-200 overflow-x-auto h-full">
-              <pre class="whitespace-pre-wrap text-sm"><%= cleaned_body %></pre>
+              <pre class="whitespace-pre-wrap text-sm"><%= display_template_body(template) %></pre>
             </div>
           </div>
         <% end %>
@@ -170,7 +162,7 @@
       </div>
       
       <div class="text-sm text-gray-600 mt-2 italic">
-        <p>Preview uses sample data with placeholder values. All variables, headers, and footers are rendered.</p>
+        <p>Rendered preview uses sample data with placeholder values.</p>
       </div>
     </section>
 
@@ -178,30 +170,19 @@
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="variables-title">
       <h2 id="variables-title" class="text-xl font-semibold text-gray-900 mb-4">Available Variables</h2>
       
-      <% 
-        # Parse body to separate variable placeholders at the top from actual content for the active template
-        body_lines = @email_template.body.split("\n")
-        variable_lines = []
-        body_lines.each do |line|
-          variable_lines << line if line.strip.match?(/^%\{[a-z_]+\}$/)
-        end
-
-        # Extract variable names from variable_lines
-        detected_vars = variable_lines.map do |line|
-          line.strip.match(/%\{([a-z_]+)\}/) ? $1 : nil
-        end.compact
-        
-        # Combine detected variables with those from the template definition
+      <%
+        detected_vars = @email_template.extract_variables
         required_vars = @email_template.required_variables || []
         optional_vars = @email_template.optional_variables || []
-        
-        # Add any detected variables not in required/optional to required list (if not empty)
-        detected_vars.each do |var|
-          unless required_vars.include?(var) || optional_vars.include?(var)
-            required_vars << var
-          end
-        end
+        optional_placeholder_syntax = @email_template.render_syntax == 'liquid' ? :legacy_percent : nil
       %>
+      <p class="mb-4 text-sm text-gray-500">
+        <% if @email_template.render_syntax == 'liquid' %>
+          Liquid templates can only use Required Variables during send. Optional variables are shown below in Standard syntax for reference and cannot be inserted into Liquid templates because sends may omit them.
+        <% else %>
+          Optional variables are available for Standard templates when the message needs them.
+        <% end %>
+      </p>
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -210,9 +191,10 @@
             <ul class="list-disc list-inside space-y-1">
               <% required_vars.each do |var| %>
                 <li class="text-sm">
-                  <code class="text-sm bg-gray-100 px-1 py-0.5 rounded"><%= var %></code>
+                  <span class="font-medium text-gray-800"><%= variable_display_label(var) %></span>
+                  <code class="ml-1 text-xs bg-gray-100 px-1 py-0.5 rounded"><%= variable_placeholder_for(@email_template, var) %></code>
                   <% if detected_vars.include?(var) %>
-                    <span class="text-xs text-indigo-600">(detected in template)</span>
+                    <span class="text-xs text-indigo-600">Used</span>
                   <% end %>
                 </li>
               <% end %>
@@ -222,14 +204,17 @@
           <% end %>
         </div>
         <div>
-          <h3 class="text-lg font-medium text-gray-700 mb-2">Optional Variables</h3>
+          <h3 class="text-lg font-medium text-gray-700 mb-2">
+            Optional Variables (<%= @email_template.render_syntax == 'liquid' ? 'Standard Only' : 'Only If Needed' %>)
+          </h3>
           <% if optional_vars.any? %>
             <ul class="list-disc list-inside space-y-1">
               <% optional_vars.each do |var| %>
                 <li class="text-sm">
-                  <code class="text-sm bg-gray-100 px-1 py-0.5 rounded"><%= var %></code>
+                  <span class="font-medium text-gray-800"><%= variable_display_label(var) %></span>
+                  <code class="ml-1 text-xs bg-gray-100 px-1 py-0.5 rounded"><%= variable_placeholder_for(@email_template, var, syntax: optional_placeholder_syntax) %></code>
                   <% if detected_vars.include?(var) %>
-                    <span class="text-xs text-indigo-600">(detected in template)</span>
+                    <span class="text-xs text-indigo-600">Used</span>
                   <% end %>
                 </li>
               <% end %>
@@ -241,7 +226,6 @@
       </div>
     </section>
 
-    <%# Previous Version Section (Conditional) %>
     <% if @email_template.previous_version? %>
       <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="previous-version-title">
         <h2 id="previous-version-title" class="text-xl font-semibold text-gray-900 mb-4">Previous Version (v<%= @email_template.version - 1 %>)</h2>

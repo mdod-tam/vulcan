@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 module Admin
-  module EmailTemplatesHelper
+  module EmailTemplatesHelper # rubocop:disable Metrics/ModuleLength
+    LAYOUT_PLACEHOLDER_NAMES = %w[header_text footer_text header_html footer_html].freeze
+
     def template_locale_label(locale)
       case locale.to_s
       when 'en' then 'English (EN)'
@@ -34,19 +36,232 @@ module Admin
       end
     end
 
+    def template_syntax_label(template_or_syntax)
+      syntax = template_or_syntax.respond_to?(:render_syntax) ? template_or_syntax.render_syntax : template_or_syntax.to_s
+
+      case syntax
+      when 'liquid'
+        'Liquid'
+      else
+        'Standard'
+      end
+    end
+
+    def template_syntax_badge_classes(template)
+      if template&.render_syntax == 'liquid'
+        'inline-flex items-center rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-800'
+      else
+        'inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800'
+      end
+    end
+
+    def email_template_syntax_options(template)
+      options = [['Standard (%<name>s)', 'legacy_percent']]
+      return options unless template&.text?
+
+      options << ['Liquid ({{ name }})', 'liquid']
+      options
+    end
+
+    def variable_placeholder_for(template, variable, syntax: nil)
+      selected_syntax = syntax.presence || template.render_syntax
+      selected_syntax.to_s == 'liquid' ? "{{ #{variable} }}" : "%<#{variable}>s"
+    end
+
+    def variable_display_label(variable)
+      variable.to_s.tr('._', ' ').squish.titleize
+    end
+
+    def variable_option_label(template, variable, syntax: nil)
+      "#{variable_display_label(variable)} - #{variable_placeholder_for(template, variable, syntax: syntax)}"
+    end
+
+    def placeholder_style_help_classes(style, template)
+      visible = template.render_syntax == style.to_s
+      classes = ['rounded-md border px-3 py-2 text-sm']
+      classes.unshift('hidden') unless visible
+      classes.join(' ')
+    end
+
+    def standard_placeholder_style_help_classes(template)
+      "#{placeholder_style_help_classes(:legacy_percent, template)} border-gray-200 bg-gray-50 text-gray-600"
+    end
+
+    def liquid_placeholder_style_help_classes(template)
+      "#{placeholder_style_help_classes(:liquid, template)} border-cyan-200 bg-cyan-50 text-cyan-900"
+    end
+
+    def display_template_body(template)
+      template.body.to_s.lines.map { |line| display_template_body_line(line) }.join
+    end
+
+    def template_render_error_message(error_or_messages)
+      messages = Array(error_or_messages.respond_to?(:message) ? error_or_messages.message : error_or_messages)
+                 .map(&:to_s)
+                 .uniq
+      message = messages.join(', ')
+
+      return message if admin_actionable_template_error?(message)
+
+      return 'This template has a placeholder problem. Use Insert Variable, then preview again.' if template_placeholder_error?(message)
+
+      'This template could not be previewed. Check the placeholders and try again.'
+    end
+
+    def template_validation_error_messages(messages)
+      Array(messages).map { |message| template_validation_error_message(message) }.uniq
+    end
+
+    def template_validation_error_message(message)
+      cleaned_message = message.to_s.sub(/\A(?:Base|Body|Subject|Syntax) /, '')
+
+      return 'This template has a placeholder problem. Use Insert Variable, then save again.' if invalid_liquid_syntax_error?(cleaned_message)
+
+      if (match = cleaned_message.match(/\AMust include the required variable (.+) in the subject or body\z/))
+        return "Add the required variable #{match[1]} using Insert Variable."
+      end
+
+      cleaned_message
+    end
+
     # Provides sample data for rendering email template previews or tests.
     # Auto-extracts variables from the template body and generates generic sample values.
-    def sample_data_for_template(template_name, locale: 'en', subject: nil, format: :text)
+    def sample_data_for_template(template_name, locale: 'en', subject: nil, format: :text,
+                                 include_optional_variables: nil)
       template = EmailTemplate.find_by(name: template_name, format: format, locale: locale) ||
                  EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
       return base_sample_data(locale: locale, subject: subject) unless template
 
-      # Auto-generate sample data for extracted variables
-      generated = template.extract_variables.index_with { |var| "Sample #{var.humanize}" }
-      generated.merge(base_sample_data(locale: locale, subject: subject || template.subject))
+      sample_data_for_email_template(template,
+                                     locale: locale,
+                                     subject: subject || template.subject,
+                                     include_optional_variables: include_optional_variables)
+    end
+
+    def sample_data_for_email_template(template, locale: template.locale, subject: nil, include_optional_variables: nil)
+      include_optional_variables = !template.liquid? if include_optional_variables.nil?
+      base = base_sample_data(locale: locale, subject: subject || template.subject)
+      base = remove_sample_paths(base, optional_only_variables(template)) unless include_optional_variables
+      generated = generated_sample_data_for(template, base, include_optional_variables: include_optional_variables)
+      base.deep_merge(generated)
     end
 
     private
+
+    def display_template_body_line(line)
+      placeholder_name = layout_placeholder_line_name(line)
+      return line unless placeholder_name
+
+      "[Layout placeholder: #{placeholder_for_line(line)}]\n"
+    end
+
+    def layout_placeholder_line_name(line)
+      stripped = line.to_s.strip
+      legacy_placeholder_name(stripped) || liquid_placeholder_name(stripped)
+    end
+
+    def legacy_placeholder_name(stripped)
+      name = stripped.match(/\A%[<{]([a-zA-Z_]\w*)[>}]s?\z/)&.captures&.first
+      LAYOUT_PLACEHOLDER_NAMES.include?(name) ? name : nil
+    end
+
+    def liquid_placeholder_name(stripped)
+      name = stripped.match(/\A\{\{-?\s*([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)\s*-?\}\}\z/)&.captures&.first
+      LAYOUT_PLACEHOLDER_NAMES.include?(name) ? name : nil
+    end
+
+    def placeholder_for_line(line)
+      line.to_s.strip
+    end
+
+    def admin_actionable_template_error?(message)
+      message.include?('Use variables from Insert Variable only') ||
+        message.include?('Liquid templates can only use Required Variables') ||
+        message.include?('still has standard placeholders') ||
+        message.include?('only available for text templates')
+    end
+
+    def template_placeholder_error?(message)
+      message.match?(/Liquid|placeholder|syntax|variable|required|render/i)
+    end
+
+    def invalid_liquid_syntax_error?(message)
+      message.match?(/Invalid Liquid syntax|Liquid syntax error/i)
+    end
+
+    def optional_only_variables(template)
+      template.optional_variables.map(&:to_s) - template.required_variables.map(&:to_s)
+    end
+
+    def remove_sample_paths(sample_data, variable_paths)
+      sample_data = sample_data.deep_dup
+      variable_paths.each { |variable_path| delete_sample_path(sample_data, variable_path) }
+      sample_data
+    end
+
+    def delete_sample_path(sample_data, variable_path)
+      sample_data.delete(variable_path)
+      sample_data.delete(variable_path.to_sym)
+
+      segments = variable_path.to_s.split('.')
+      final_segment = segments.pop
+      cursor = sample_data
+
+      segments.each do |segment|
+        cursor = cursor[segment] || cursor[segment.to_sym]
+        cursor = nil unless cursor.is_a?(Hash)
+        break unless cursor
+      end
+      return unless cursor
+
+      cursor.delete(final_segment)
+      cursor.delete(final_segment.to_sym)
+    end
+
+    def generated_sample_data_for(template, base, include_optional_variables:)
+      omitted_paths = include_optional_variables ? [] : optional_only_variables(template)
+
+      template.extract_variables.each_with_object({}) do |variable_path, generated|
+        next if omitted_paths.include?(variable_path)
+        next if sample_data_path_available?(base, variable_path)
+
+        assign_sample_path(generated, variable_path, "Sample #{variable_path.tr('.', ' ').humanize.titleize}")
+      end
+    end
+
+    def sample_data_path_available?(sample_data, variable_path)
+      return true if sample_data.key?(variable_path)
+      return true if sample_data.key?(variable_path.to_sym)
+
+      cursor = sample_data
+      variable_path.to_s.split('.').all? do |segment|
+        case cursor
+        when Hash
+          if cursor.key?(segment)
+            cursor = cursor[segment]
+          elsif cursor.key?(segment.to_sym)
+            cursor = cursor[segment.to_sym]
+          else
+            false
+          end
+        else
+          false
+        end
+      end
+    end
+
+    def assign_sample_path(sample_data, variable_path, value)
+      segments = variable_path.to_s.split('.')
+      final_segment = segments.pop
+      cursor = sample_data
+
+      segments.each do |segment|
+        cursor[segment] ||= {}
+        cursor = cursor[segment]
+      end
+
+      cursor[final_segment] = value
+    end
 
     # Base sample data shared across all templates
     def base_sample_data(locale: 'en', subject: nil) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity

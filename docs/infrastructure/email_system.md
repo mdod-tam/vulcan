@@ -11,10 +11,10 @@ MAT Vulcan sends email and generates printable letter content from shared templa
 | Storage | `email_templates` DB table |
 | Format | Records with `name`, `format` (`:html` / `:text`), `syntax` (`legacy_percent` / `liquid`), `subject`, `body`, `description`, `version` |
 | Placeholders | Legacy: `%{first_name}` or `%<first_name>s`. Liquid: `{{ exact.path }}` or trim output tags like `{{- exact.path -}}`. |
-| Validation | Required and optional variables are stored in each template's `variables` JSON. Subject/body variables must match those exact paths. |
-| Versioning | `version` increments on subject/body edits; change history in `email_template_snapshots` captures render-relevant fields including `syntax` (first tracked edit stores a `baseline` snapshot then `admin_edit`). Legacy `previous_subject`/`previous_body` remain as fallback on the show page until backfill. |
+| Validation | Required and optional variables are stored in each template's `variables` JSON. Subject/body variables must match those exact paths. Liquid templates may only reference required variables; optional variables remain Standard-only because Liquid rendering is strict. |
+| Versioning | `version` increments on subject/body/syntax edits. Subject/body edits store the prior content in `previous_subject`/`previous_body` for the show-page Previous Version panel. |
 | Locale sync | `locale_needs_sync` flags counterpart locales out of date; admin UI uses `locale_out_of_sync?` |
-| Liquid rollout | `email_template_liquid` is seeded off. Liquid templates cannot be saved or rendered while the flag is disabled. |
+| Liquid availability | Liquid syntax is available for text templates. |
 
 Seed/update:
 
@@ -34,8 +34,8 @@ mail(to: @user.email, subject: subj) { format.text { render plain: body } }
 **Alternative using class method:**
 
 ```ruby
-subj, body = EmailTemplate.render('user_mailer_password_reset', 
-                                  user_first_name: @user.first_name, 
+subj, body = EmailTemplate.render('user_mailer_password_reset',
+                                  user_first_name: @user.first_name,
                                   reset_url: ...)
 ```
 
@@ -45,9 +45,9 @@ Admin UI lets staff **edit, preview, and send test mails** — no code deploys f
 
 * `EmailTemplates::Renderer.render(template:, variables:)` - Shared strict renderer used by `EmailTemplate#render`.
   * `legacy_percent` preserves `%{key}` and `%<key>s` interpolation.
-  * `liquid` supports output tags only, rejects `{% %}` tags and filters, and renders only exact allowlisted paths from `variables["required"] + variables["optional"]`.
+  * `liquid` supports output tags only, rejects `{% %}` tags and filters, and renders only exact allowlisted required paths.
 * `EmailTemplate.render_with_tracking(variables, current_user)` - Instance method with audit logging.
-* Admin helper: `sample_data_for_template(template_name)` - Provides realistic sample data.
+* Admin helper: `sample_data_for_template(template_name)` - Provides realistic sample data; Liquid previews omit optional variables so admins see strict-send failures before production.
 
 ---
 
@@ -110,8 +110,8 @@ mail(to: user.email, subject: 'Hi', message_stream: 'notifications')
 
 ### 4.2 Tracking & Webhooks
 
-* `track_opens: true` configured globally in `postmark_format.rb`.  
-* `UpdateEmailStatusJob` polls Postmark API to update `Notification` delivery status.  
+* `track_opens: true` configured globally in `postmark_format.rb`.
+* `UpdateEmailStatusJob` polls Postmark API to update `Notification` delivery status.
 * Bounce events handled by `EmailEventHandler` → creates audit events.
 * Webhook endpoint: `/webhooks/email_events` for bounce/complaint notifications.
 
@@ -167,9 +167,9 @@ subj, body = tpl.render(first_name: 'Ada')
 | **Letter generation fails** | Text template exists? all variables supplied? `PrintQueueItem` created? |
 | **Wrong stream** | `message_stream` param in mailer (`outbound` vs `notifications`) |
 | **Email tracking issues** | `POSTMARK_API_TOKEN`, `UpdateEmailStatusJob` logs, `Notification` records |
-| **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, syntax, and Liquid flag state |
+| **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, and syntax. Liquid placeholders must come from required variables. |
 
-**Tools:** 
+**Tools:**
 * Postmark dashboard (delivery & webhooks)
 * `/admin/print_queue` (letter generation)
 * `/admin/email_templates` (template management and testing)

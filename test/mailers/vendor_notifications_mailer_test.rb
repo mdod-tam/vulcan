@@ -107,6 +107,24 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
+  test 'payment_issued renders a real Liquid text template' do
+    EmailTemplate.unstub(:find_by!)
+    create_real_text_email_template(
+      name: 'vendor_notifications_payment_issued',
+      subject: 'Payment {{ invoice_number }}',
+      body: 'Paid {{ invoice_number }} for {{ vendor_business_name }} totaling {{ total_amount_formatted }}',
+      required: %w[invoice_number vendor_business_name total_amount_formatted]
+    )
+
+    email = VendorNotificationsMailer.with(invoice: @invoice).payment_issued.deliver_now
+
+    assert_equal ['no_reply@mdmat.org'], email.from
+    assert_equal [@vendor.email], email.to
+    assert_equal "Payment #{@invoice.invoice_number}", email.subject
+    assert_includes email.body.to_s, @invoice.invoice_number
+    assert_includes email.body.to_s, @vendor.business_name
+  end
+
   test 'w9_approved' do
     # Create a specific stub for this test
     expected_text = 'Mock W9 Approved Body'

@@ -41,4 +41,25 @@ class ApplicationMailerTest < ActionMailer::TestCase
       assert_equal I18n.default_locale.to_s, resolved
     end
   end
+
+  test 'header title renders Liquid subject without requiring body variables' do
+    template = create(
+      :email_template,
+      :text,
+      subject: 'Hello {{ user.first_name }}',
+      body: 'Body {{ body_only }}',
+      variables: { 'required' => ['user.first_name', 'body_only'], 'optional' => [] },
+      syntax: :liquid
+    )
+    mailer = ApplicationMailer.new
+
+    title = mailer.send(
+      :header_title_from_template_subject,
+      template: template,
+      subject_variables: { user: { first_name: 'Alex' } },
+      fallback: 'Fallback title'
+    )
+
+    assert_equal 'Hello Alex', title
+  end
 end

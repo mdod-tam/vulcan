@@ -87,11 +87,21 @@ module Admin
       assert @template_text.errors[:base].any?
     end
 
-    test 'locale_needs_sync? reflects renamed sync flag' do
+    test 'out-of-sync template blocks syntax-only update' do
+      @template_text.update_columns(locale_needs_sync: true, subject: 'Plain subject', body: 'Plain body',
+                                    variables: { 'required' => [], 'optional' => [] })
+      @template_text.reload
+      @template_text.syntax = :liquid
+
+      assert_not @template_text.valid?
+      assert_includes @template_text.errors[:base].join, 'out of sync'
+    end
+
+    test 'locale_out_of_sync? reflects renamed sync flag' do
       @template_text.update_columns(locale_needs_sync: true)
       @template_text.reload
 
-      assert @template_text.locale_needs_sync?
+      assert @template_text.locale_out_of_sync?
     end
 
     test 'render_with_tracking renders hash variables' do

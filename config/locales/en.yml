@@ -376,6 +376,14 @@ en:
     formats:
       long: "%B %d, %Y"
       month_day: "%B %-d"
+  mailers:
+    voucher_notifications:
+      expiring_soon:
+        header_fallback: "Important: Your voucher is expiring soon."
+        warning_title: "Voucher Expiring Soon"
+        expiration_message: "Your voucher expires in %{days_remaining} days on %{expiration_date}."
+        next_step_title: "Next Step"
+        next_step_message: "Use at least %{minimum_redemption_amount} before the expiration date to avoid losing unused value."
   document_signing:
     medical_certification_request:
       submission_name: "Medical Certification - %{constituent_full_name} (Application %{application_id})"

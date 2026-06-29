@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_22_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_27_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -190,6 +190,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_22_150000) do
     t.text "previous_body"
     t.string "previous_subject"
     t.string "subject"
+    t.integer "syntax", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "updated_by_id"
     t.jsonb "variables", default: {}

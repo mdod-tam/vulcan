@@ -123,6 +123,10 @@ class PrintQueueItemTest < ActiveSupport::TestCase
     assert_not_nil @pending_letter.printed_at
   end
 
+  test 'pdf_filename uses letter type and constituent id' do
+    assert_equal "registration_confirmation_#{@constituent.id}.pdf", @pending_letter.pdf_filename
+  end
+
   # Helper method to set up mock attachments for all PrintQueueItems
   def setup_attachment_mocks_for_print_queue
     PrintQueueItem.find_each do |item|

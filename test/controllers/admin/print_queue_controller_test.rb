@@ -69,6 +69,7 @@ module Admin
       assert_response :success
       assert_equal 'application/pdf', response.content_type
       assert_match(/^inline/, response.headers['Content-Disposition'])
+      assert_includes response.headers['Content-Disposition'], @pending_letter.pdf_filename
     end
 
     def test_should_download_single_letter
@@ -76,6 +77,7 @@ module Admin
       assert_response :success
       assert_equal 'application/pdf', response.content_type
       assert_match(/attachment/, response.headers['Content-Disposition'])
+      assert_includes response.headers['Content-Disposition'], @pending_letter.pdf_filename
     end
 
     def test_should_download_multiple_letters_as_zip
