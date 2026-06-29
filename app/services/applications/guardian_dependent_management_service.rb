@@ -3,6 +3,9 @@
 module Applications
   # Handles guardian/dependent user management for paper applications
   class GuardianDependentManagementService < BaseService
+    SYNTHETIC_PHONE_RANDOM_SPACE = 10_000_000
+    SYNTHETIC_PHONE_MAX_ATTEMPTS = 25
+
     attr_reader :params, :guardian_user, :dependent_user, :errors
 
     def initialize(params)
@@ -28,6 +31,7 @@ module Applications
     def apply_contact_strategies(applicant_data)
       return unless @guardian_user
 
+      # Strategies snapshot request-time contact choices into User fields.
       apply_email_strategy(applicant_data)
       apply_phone_strategy(applicant_data)
       apply_address_strategy(applicant_data)
@@ -101,8 +105,7 @@ module Applications
           data[:dependent_email] = data[:email]
         end
       when 'dependent'
-        # Paper-app flow passes the dependent's email in :dependent_email; portal flow
-        # passes it in :email.  Normalise both into :email first, then mirror back.
+        # Paper passes :dependent_email; portal passes :email. Mirror the submitted contact.
         data[:email] = data[:dependent_email] if data[:email].blank? && data[:dependent_email].present?
         if data[:email].present?
           data[:dependent_email] = data[:email]
@@ -125,10 +128,9 @@ module Applications
       case params[:phone_strategy]
       when 'guardian'
         data[:dependent_phone] = @guardian_user.phone
-        data[:phone] = "000-000-#{rand(1000..9999)}"
+        data[:phone] = unique_synthetic_phone
       when 'dependent'
-        # Paper-app flow passes the dependent's phone in :dependent_phone; portal flow
-        # passes it in :phone.  Normalise both into :phone first, then mirror back.
+        # Paper passes :dependent_phone; portal passes :phone. Mirror the submitted contact.
         data[:phone] = data[:dependent_phone] if data[:phone].blank? && data[:dependent_phone].present?
         if data[:phone].present?
           data[:dependent_phone] = data[:phone]
@@ -158,6 +160,21 @@ module Applications
     def apply_phone_strategy_with(strategy, data)
       @params[:phone_strategy] = strategy
       apply_phone_strategy(data)
+    end
+
+    def unique_synthetic_phone
+      SYNTHETIC_PHONE_MAX_ATTEMPTS.times do
+        candidate = synthetic_phone_candidate
+        return candidate unless User.exists_with_phone?(candidate)
+      end
+
+      raise ActiveRecord::RecordNotUnique, 'Unable to generate unique synthetic dependent phone'
+    end
+
+    def synthetic_phone_candidate
+      value = SecureRandom.random_number(SYNTHETIC_PHONE_RANDOM_SPACE)
+      digits = format('%07d', value)
+      "000-#{digits[0, 3]}-#{digits[3, 4]}"
     end
 
     def attributes_present?(attrs)

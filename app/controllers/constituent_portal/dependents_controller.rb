@@ -142,6 +142,8 @@ module ConstituentPortal
 
     def dependent_attributes_with_contact_strategies
       attrs = dependent_user_params.to_h
+      # Portal contact strategies snapshot the submitted choice into User fields.
+      # Omitted contact keys preserve existing contact on partial updates.
       strategies = dependent_contact_strategy_params(attrs)
       return attrs if strategies.values_at(:email_strategy, :phone_strategy).all?(&:nil?)
 

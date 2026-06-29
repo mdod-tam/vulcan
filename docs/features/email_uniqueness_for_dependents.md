@@ -49,8 +49,8 @@ The implementation provides a clear and secure way to handle different contact s
 The paper application controller derives contact strategy parameters (`email_strategy`, `phone_strategy`, `address_strategy`) and passes them to the paper application services. New dependent creation runs through `GuardianDependentManagementService`; existing dependent reuse is handled by `Applications::PaperApplicationService` and feeds the same effective contact expectations into the application write.
 
 - **Strategy-Based Logic**: The service checks the strategy parameters in `apply_contact_strategies` method:
-  - If the strategy is `'guardian'`, the dependent is assigned the guardian's contact information, and a system-generated unique primary email/phone is created to satisfy database constraints (e.g., `dependent-{uuid}@system.matvulcan.local`).
-  - If the strategy is `'dependent'`, the service uses the provided dependent-specific contact information.
+  - If the strategy is `'guardian'`, the dependent snapshots the guardian's current contact information into the dependent contact fields, and a system-generated unique primary email/phone is created to satisfy database constraints (e.g., `dependent-{uuid}@system.matvulcan.local`, `000-000-0042`).
+  - If the strategy is `'dependent'`, the service uses the provided dependent-owned contact information.
   - If a recognized strategy is not supplied, the service defaults to guardian strategy with fallback logic. Nil strategy values are handled before this defaulting so callers can preserve existing data when appropriate.
 - **Address Strategy**: Also handles address information copying from guardian to dependent.
 - **Existing Dependent Reuse**: Existing dependent params alias `dependent_email` to email and `dependent_phone` to phone for contact verification and strategy handling.
@@ -96,7 +96,7 @@ dependent.effective_phone  # => "555-0001"
 dependent = User.create!(
   first_name: "Child",
   email: "dependent-abc123@system.matvulcan.local",  # System-generated
-  phone: "000-000-1234",                             # System-generated
+  phone: "000-000-0042",                             # System-generated
   dependent_email: "guardian@example.com",           # Guardian's email
   dependent_phone: "555-0002"                        # Guardian's phone
 )
