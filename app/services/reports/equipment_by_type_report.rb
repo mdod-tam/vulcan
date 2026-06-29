@@ -3,6 +3,7 @@
 module Reports
   class EquipmentByTypeReport < BaseService
     PERIODS = %w[current_month current_quarter current_fy].freeze
+    UNAVAILABLE_MESSAGE = 'Equipment by Type is temporarily unavailable. Please try again later.'
 
     def initialize(period:, include_voucher_counts:, current_date: Date.current)
       super()
@@ -35,9 +36,8 @@ module Reports
                 }
               })
     rescue StandardError => e
-      Rails.logger.error "Error generating equipment by type report: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
-      failure("Error generating equipment by type report: #{e.message}", empty_payload)
+      report_error(e)
+      failure(UNAVAILABLE_MESSAGE, empty_payload.merge(error_message: UNAVAILABLE_MESSAGE))
     end
 
     private
@@ -132,6 +132,16 @@ module Reports
         rows: [],
         chart_data: { non_voucher: {}, voucher: {} }
       }
+    end
+
+    def report_error(error)
+      context = {
+        period: period,
+        include_voucher_counts: include_voucher_counts,
+        current_date: current_date
+      }
+      Rails.error.report(error, handled: true, context: context) if Rails.respond_to?(:error)
+      log_error(error, context)
     end
 
   end

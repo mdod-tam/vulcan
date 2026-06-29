@@ -162,6 +162,30 @@ module Admin
       end
     end
 
+    test 'equipment by type reports unavailable state instead of empty data on service failure' do
+      Reports::EquipmentByTypeReport.any_instance.stubs(:call).returns(
+        BaseService::Result.new(
+          success: false,
+          message: Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE,
+          data: {
+            selected_period: 'current_fy',
+            period_options: { 'current_fy' => 'Current Fiscal Year (FY26)' },
+            period_label: 'FY26',
+            rows: [],
+            chart_data: { non_voucher: {}, voucher: {} },
+            error_message: Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
+          }
+        )
+      )
+
+      get admin_reports_path
+      assert_response :success
+
+      equipment_section = css_select('#equipment-by-type-heading').first.ancestors('section').first
+      assert_includes equipment_section.text, Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
+      assert_no_match(/No equipment recorded for this period/, equipment_section.text)
+    end
+
     test 'MFR section table cell values match chart JSON payload' do
       FeatureFlag.enable!(:vouchers_enabled)
 
