@@ -12,8 +12,10 @@
 <% submitted = (@paper_application[:submitted_params] || {}).with_indifferent_access %>
 <% no_email_checked = submitted[:no_email_address].to_s == '1' %>
 <% no_phone_checked = submitted[:no_phone_number].to_s == '1' %>
+<% address_only_contact = no_email_checked && no_phone_checked %>
 
   <%= fields_for :constituent, @paper_application[:constituent] do |c| %>
+    <% delivery_preference = address_only_contact || no_email_checked ? 'letter' : (c.object&.email.present? ? 'email' : 'letter') %>
     <%# ================================================================ %>
     <%# SECTION 1: Personal Identification %>
     <%# ================================================================ %>
@@ -125,30 +127,32 @@
 
       <%# Email and Phone row %>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div data-contact-feedback-target="emailWrapper">
-          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700 required-label" %>
-          <%= c.email_field :email, 
-              required: true,
+        <div data-contact-feedback-target="emailWrapper" class="<%= 'hidden' if no_email_checked %>">
+          <%= c.label :email, "Email Address", class: "block text-sm font-medium text-gray-700#{' required-label' unless no_email_checked}" %>
+          <%= c.email_field :email,
+              required: !no_email_checked,
+              disabled: no_email_checked,
               autocomplete: "email",
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
-              "aria-required": "true",
+              "aria-required": no_email_checked ? "false" : "true",
               "aria-labelledby": "email_label email_required_indicator",
               data: { contact_feedback_target: "email" } %>
         </div>
-        <div data-contact-feedback-target="phoneWrapper">
-          <%= c.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700 required-label" %>
-          <%= c.telephone_field :phone, 
-              required: true,
+        <div data-contact-feedback-target="phoneWrapper" class="<%= 'hidden' if no_phone_checked %>">
+          <%= c.label :phone, "Phone Number", class: "block text-sm font-medium text-gray-700#{' required-label' unless no_phone_checked}" %>
+          <%= c.telephone_field :phone,
+              required: !no_phone_checked,
+              disabled: no_phone_checked,
               autocomplete: "tel",
               placeholder: "XXX-XXX-XXXX",
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
-              "aria-required": "true",
+              "aria-required": no_phone_checked ? "false" : "true",
               data: { contact_feedback_target: "phone" } %>
         </div>
       </div>
 
       <%# Preferred Contact Method %>
-      <fieldset data-contact-feedback-target="phoneTypeFieldset" class="mb-4" aria-describedby="constituent_contact_method_help constituent_contact_method_feedback">
+      <fieldset data-contact-feedback-target="phoneTypeFieldset" class="mb-4<%= ' hidden' if no_phone_checked %>" aria-describedby="constituent_contact_method_help constituent_contact_method_feedback">
         <legend class="text-sm font-medium text-gray-700 mb-2">Contact method</legend>
         <p id="constituent_contact_method_help" class="text-xs text-gray-500 mb-2">How would you like us to contact you if we have any questions?</p>
         <div class="flex flex-wrap gap-4">
@@ -172,6 +176,21 @@
                 class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
                 data: { action: "change->contact-feedback#updateFeedback" } %>
             <%= c.label :phone_type_videophone, "Call me using ASL (videophone)", for: "constituent_phone_type_videophone", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= c.radio_button :phone_type, "email",
+                id: "constituent_phone_type_email",
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateFeedback" } %>
+            <%= c.label :phone_type_email, "Email me", for: "constituent_phone_type_email", class: "ml-2 text-sm text-gray-700" %>
+          </div>
+          <div class="flex items-center">
+            <%= c.radio_button :phone_type, "letter",
+                id: "constituent_phone_type_letter",
+                checked: address_only_contact ? true : nil,
+                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
+                data: { action: "change->contact-feedback#updateFeedback" } %>
+            <%= c.label :phone_type_letter, "Send me a letter in the mail", for: "constituent_phone_type_letter", class: "ml-2 text-sm text-gray-700" %>
           </div>
         </div>
         <%# Live feedback for contact method %>
@@ -292,7 +311,7 @@
       </div>
 
       <%# Official Document Delivery Preference - Hidden, defaults to email unless no email address %>
-      <%= c.hidden_field :communication_preference, value: c.object&.email.present? ? "email" : "letter" %>
+      <%= c.hidden_field :communication_preference, value: delivery_preference %>
 
       <%# Newsletter Signup %>
       <div class="mt-6 flex items-start">

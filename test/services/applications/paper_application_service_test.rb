@@ -771,6 +771,132 @@ module Applications
       assert_includes service.send(:new_user_accounts), guardian
     end
 
+    test 'process_self_applicant applies no-contact flags when reusing existing user by phone' do
+      phone = unique_paper_phone
+      existing = create(:constituent, email: "reuse-#{SecureRandom.hex(4)}@example.com", phone: phone)
+
+      service_params = {
+        no_email_address: '1',
+        constituent: @constituent_params.merge(
+          first_name: existing.first_name,
+          last_name: existing.last_name,
+          email: existing.email,
+          phone: phone,
+          physical_address_1: '300 Letter Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201'
+        ),
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+
+      existing.reload
+      assert_equal existing.id, service.constituent.id
+      assert_nil existing.email
+      assert_equal phone, existing.phone
+      assert existing.deliver_via_letter?
+    end
+
+    test 'process_self_applicant does not mutate reused user when active application blocks submission' do
+      phone = unique_paper_phone
+      original_email = "blocked-reuse-#{SecureRandom.hex(4)}@example.com"
+      existing = create(:constituent, email: original_email, phone: phone)
+      original_skip = Application.skip_wait_period_validation
+      Application.skip_wait_period_validation = true
+      begin
+        create(:application, :in_progress, user: existing)
+
+        service_params = {
+          no_email_address: '1',
+          constituent: @constituent_params.merge(
+            first_name: existing.first_name,
+            last_name: existing.last_name,
+            email: existing.email,
+            phone: phone,
+            physical_address_1: '500 Letter Lane',
+            city: 'Baltimore',
+            state: 'MD',
+            zip_code: '21201'
+          ),
+          application: @application_params
+        }
+
+        service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+        assert_not service.create
+        assert(service.errors.any? { |error| error.include?('active') || error.include?('pending') })
+      ensure
+        Application.skip_wait_period_validation = original_skip
+      end
+
+      existing.reload
+      assert_equal original_email, existing.email
+    end
+
+    test 'process_self_applicant reusing existing user logs constituent_contact_updated audit event' do
+      phone = unique_paper_phone
+      existing = create(:constituent, email: "reuse-audit-#{SecureRandom.hex(4)}@example.com", phone: phone)
+
+      service_params = {
+        no_email_address: '1',
+        constituent: @constituent_params.merge(
+          first_name: existing.first_name,
+          last_name: existing.last_name,
+          email: existing.email,
+          phone: phone,
+          physical_address_1: '400 Letter Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201'
+        ),
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+
+      assert_difference -> { Event.where(action: 'constituent_contact_updated').count }, 1 do
+        assert service.create, "Service creation failed: #{service.errors.inspect}"
+      end
+
+      contact_event = Event.where(action: 'constituent_contact_updated').order(:id).last
+      assert_equal @admin, contact_event.user
+      assert_equal 'paper_application', contact_event.metadata['source']
+      assert contact_event.metadata['changes'].key?('email')
+    end
+
+    test 'new_user_accounts excludes existing user with force_password_change but no submission handoff' do
+      existing = create(:constituent, phone: unique_paper_phone, force_password_change: true)
+
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@constituent, existing)
+
+      assert_not_includes service.send(:new_user_accounts), existing
+    end
+
+    test 'send_account_creation_notifications still delivers notice when temp password cache is missing' do
+      guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true, communication_preference: :email)
+      application = create(:application, user: guardian)
+
+      service = PaperApplicationService.new(
+        params: {},
+        admin: @admin,
+        quick_create_handoff_user_ids: [guardian.id]
+      )
+      service.instance_variable_set(:@application, application)
+      service.instance_variable_set(:@guardian_user_for_app, guardian)
+
+      FeatureFlag.enable!(:vouchers_enabled)
+      begin
+        NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).once
+        service.send(:send_account_creation_notifications)
+        assert_includes service.reconciliation_note, 'quick-create handoff expired'
+      ensure
+        FeatureFlag.disable!(:vouchers_enabled)
+      end
+    end
+
     test 'medical certification not provided notice notifies constituent for none_provided review' do
       constituent = create(:constituent, communication_preference: :email)
       application = create(:application, :in_progress, skip_proofs: true, user: constituent)

@@ -90,6 +90,59 @@ module Applications
       assert_not_equal existing, result.data[:user]
     end
 
+    test 'find_existing_user returns existing user without creating duplicate' do
+      phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      existing = create(:constituent, email: "existing-#{SecureRandom.hex(4)}@example.com", phone: phone)
+
+      Current.paper_context = true
+      begin
+        result = UserCreationService.new(
+          {
+            first_name: 'Other',
+            last_name: 'Person',
+            email: existing.email,
+            phone: existing.phone,
+            physical_address_1: '123 Main St',
+            city: 'Baltimore',
+            state: 'MD',
+            zip_code: '21201',
+            hearing_disability: '1'
+          },
+          is_managing_adult: true
+        ).call
+      ensure
+        Current.reset
+      end
+
+      assert result.success?
+      assert result.data[:existing_user]
+      assert_equal existing.id, result.data[:user].id
+      assert_nil result.data[:temp_password]
+    end
+
+    test 'reusing phone-only existing user requires explicit no_email_address flag' do
+      phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      Current.paper_context = true
+      begin
+        existing = UserCreationService.new(
+          phone_only_attrs(phone),
+          is_managing_adult: true,
+          skip_email_validation: true,
+          skip_user_lookup: true
+        ).call.data[:user]
+
+        result = UserCreationService.new(
+          phone_only_attrs(phone).merge(first_name: existing.first_name, last_name: existing.last_name),
+          is_managing_adult: true
+        ).call
+
+        assert_not result.success?
+        assert_includes result.message, 'Email is required'
+      ensure
+        Current.reset
+      end
+    end
+
     test 'creates portal-eligible phone-only user with temp password' do
       phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
 

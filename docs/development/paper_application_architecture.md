@@ -78,11 +78,12 @@ Contact verification matters for existing adults because paper intake can change
 
 Paper intake routes are `new` and `create` only (`config/routes.rb`). Quick-create temp-password handoff is wired through `PaperApplicationsController#create` and cleared after a successful create.
 
-When vouchers are enabled and the application is voucher scope, `PaperApplicationService` may send `account_created` notices for portal-eligible users created in the same submission. Temp passwords come from inline `UserCreationService` creation or from a quick-create handoff:
+When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for portal-eligible users created or reused in the same submission. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
 
-- Quick-create stores the secret in `Rails.cache` and keeps only a per-user token in the admin session (30-minute TTL).
+Temp passwords for inline creation are used to set `force_password_change` portal access before the notice goes out. Quick-create handoff stores the secret in `Rails.cache` with only a per-user token in the admin session (30-minute TTL):
+
 - On create, resolved passwords and pending handoff user ids are passed into the service.
-- If the cache entry is missing at submit time, the user is still included in the notice candidate set and a reconciliation note tells the admin to reset the password manually.
+- If the cache entry is missing at submit time, the notice still sends when the user is portal-eligible; a reconciliation note tells the admin to reset the password manually before sharing login access.
 
 Equipment-fulfillment applications skip account-created messaging even when a portal-eligible user is created.
 

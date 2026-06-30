@@ -302,9 +302,38 @@ module Applications
       if result.success?
         @constituent = result.data[:user]
         store_temp_password(@constituent, result.data[:temp_password])
-        validate_no_active_application('constituent')
+
+        return false unless validate_no_active_application('constituent')
+        return false unless waiting_period_eligible?(@constituent)
+
+        return false if result.data[:existing_user] && !update_reused_self_applicant!(@constituent)
+
+        true
       else
         @errors.concat(result.data[:errors] || [result.message])
+        false
+      end
+    end
+
+    def update_reused_self_applicant!(user)
+      attrs = params[:constituent]
+      return true if attrs.blank?
+
+      return false unless persist_adult_contact_updates!(user, attrs)
+
+      flagged = apply_no_contact_flags!(attrs.deep_dup, scope: :constituent)
+      extra_updates = build_disability_updates(flagged)
+
+      %i[first_name last_name middle_initial date_of_birth].each do |field|
+        extra_updates[field] = flagged[field] if flagged[field].present?
+      end
+
+      return true if extra_updates.empty?
+
+      if user.update(extra_updates)
+        true
+      else
+        add_error("Failed to update applicant information: #{user.errors.full_messages.join(', ')}")
         false
       end
     end
@@ -428,35 +457,45 @@ module Applications
     end
 
     def update_existing_adult_contact_info(user)
-      attrs = params[:constituent]
-      return true if attrs.blank?
+      persist_adult_contact_updates!(user, params[:constituent])
+    end
 
-      attrs = apply_no_contact_flags!(attrs.deep_dup, scope: :constituent)
-      updates = build_adult_contact_updates(attrs)
+    def persist_adult_contact_updates!(user, constituent_attrs)
+      return true if constituent_attrs.blank?
+
+      flagged = apply_no_contact_flags!(constituent_attrs.deep_dup, scope: :constituent)
+      updates = build_adult_contact_updates(flagged)
       return true if updates.empty?
 
-      changed_fields = updates.each_with_object({}) do |(key, new_val), changes|
-        old_val = user.read_attribute(key)
-        changes[key] = { from: old_val, to: new_val } if old_val.to_s != new_val.to_s
-      end
-
+      changed_fields = contact_field_changes(user, updates)
       return true if changed_fields.empty?
 
       if user.update(updates)
-        AuditEventService.log(
-          action: 'constituent_contact_updated',
-          actor: @admin,
-          auditable: user,
-          metadata: {
-            source: 'paper_application',
-            changes: changed_fields
-          }
-        )
+        log_constituent_contact_updated!(user, changed_fields)
         true
       else
         add_error("Failed to update applicant information: #{user.errors.full_messages.join(', ')}")
         false
       end
+    end
+
+    def contact_field_changes(user, updates)
+      updates.each_with_object({}) do |(key, new_val), changes|
+        old_val = user.read_attribute(key)
+        changes[key] = { from: old_val, to: new_val } if old_val.to_s != new_val.to_s
+      end
+    end
+
+    def log_constituent_contact_updated!(user, changed_fields)
+      AuditEventService.log(
+        action: 'constituent_contact_updated',
+        actor: @admin,
+        auditable: user,
+        metadata: {
+          source: 'paper_application',
+          changes: changed_fields
+        }
+      )
     end
 
     def build_adult_contact_updates(attrs)
@@ -924,12 +963,11 @@ module Applications
         next unless user.portal_access_eligible?
 
         temp_password = @temp_passwords[user.id]
-        unless temp_password
+        if temp_password
+          ensure_user_password(user, temp_password)
+        elsif @quick_create_handoff_user_ids.include?(user.id.to_s)
           append_account_creation_handoff_warning(user)
-          next
         end
-
-        ensure_user_password(user, temp_password)
 
         NotificationService.create_and_deliver!(
           type: 'account_created',
@@ -965,8 +1003,8 @@ module Applications
     end
 
     def append_account_creation_handoff_warning(user)
-      note = "Account created notice for #{user.full_name} could not include login credentials " \
-             'because the quick-create handoff expired. Reset their password from the user profile.'
+      note = "Portal password for #{user.full_name} was not available at submission time because the " \
+             'quick-create handoff expired. Reset their password from the user profile before sharing login access.'
       @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
     end
 
@@ -977,6 +1015,8 @@ module Applications
     end
 
     def account_created_notice_candidate?(user)
+      return false unless user.portal_access_eligible?
+
       @temp_passwords.key?(user.id) || @quick_create_handoff_user_ids.include?(user.id.to_s)
     end
 

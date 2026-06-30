@@ -153,4 +153,12 @@ class UserContactPredicatesTest < ActiveSupport::TestCase
     assert_not user.update(email: 'not-an-email')
     assert_includes user.errors[:email], 'is invalid'
   end
+
+  test 'email_optional? is false for persisted address-only staff users' do
+    staff = create(:admin, email: generate(:email), phone: '410-555-0188')
+    staff.update_columns(email: nil, phone: nil)
+
+    assert staff.send(:address_only_contact?)
+    assert_not staff.send(:email_optional?)
+  end
 end

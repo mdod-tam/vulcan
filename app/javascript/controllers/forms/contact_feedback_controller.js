@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { setVisible } from "../../utils/visibility"
+import { setVisible, hide, show } from "../../utils/visibility"
 
 /**
  * Contact Feedback Controller
@@ -50,9 +50,11 @@ export default class ContactFeedbackController extends Controller {
     // Store bound method references for cleanup
     this._boundUpdateFeedback = this.updateFeedback.bind(this)
     this._boundUpdateDeliveryFeedback = this.updateDeliveryFeedback.bind(this)
+    this._boundNoContactCheckboxEvent = this._handleNoContactCheckboxEvent.bind(this)
     
     // Set up listeners on input fields for real-time updates
     this._setupInputListeners()
+    this._setupNoContactCheckboxListeners()
     
     // Restore no-contact checkbox UI after validation failure re-render
     this._syncNoContactCheckboxState()
@@ -64,6 +66,7 @@ export default class ContactFeedbackController extends Controller {
 
   disconnect() {
     this._teardownInputListeners()
+    this._teardownNoContactCheckboxListeners()
   }
 
   /**
@@ -77,17 +80,23 @@ export default class ContactFeedbackController extends Controller {
     if (!emailInput || !emailWrapper) return
 
     if (checkbox.checked) {
-      emailWrapper.classList.add('hidden')
+      hide(emailWrapper)
       emailInput.required = false
       emailInput.removeAttribute('aria-required')
       emailInput.value = ''
-      emailInput.disabled = true
-      this._selectLetterDelivery()
+      this._suppressContactField(emailInput)
+      this._toggleRequiredLabel(emailWrapper, false)
+      this._setCommunicationPreference('letter')
     } else {
-      emailWrapper.classList.remove('hidden')
+      show(emailWrapper)
       emailInput.required = true
       emailInput.setAttribute('aria-required', 'true')
-      emailInput.disabled = false
+      this._restoreContactField(emailInput)
+      this._toggleRequiredLabel(emailWrapper, true)
+    }
+
+    if (this._noPhoneChecked()) {
+      this._applyNoPhoneContactType()
     }
 
     this.updateFeedback()
@@ -106,22 +115,24 @@ export default class ContactFeedbackController extends Controller {
     if (!phoneInput || !phoneWrapper) return
 
     if (checkbox.checked) {
-      phoneWrapper.classList.add('hidden')
+      hide(phoneWrapper)
       phoneInput.required = false
       phoneInput.removeAttribute('aria-required')
       phoneInput.value = ''
-      phoneInput.disabled = true
-      if (phoneTypeFieldset) phoneTypeFieldset.classList.add('hidden')
+      this._suppressContactField(phoneInput)
+      this._toggleRequiredLabel(phoneWrapper, false)
+      if (phoneTypeFieldset) hide(phoneTypeFieldset)
       this._applyNoPhoneContactType()
       if (this._shouldUseLetterDelivery()) {
-        this._selectLetterDelivery()
+        this._setCommunicationPreference('letter')
       }
     } else {
-      phoneWrapper.classList.remove('hidden')
+      show(phoneWrapper)
       phoneInput.required = true
       phoneInput.setAttribute('aria-required', 'true')
-      phoneInput.disabled = false
-      if (phoneTypeFieldset) phoneTypeFieldset.classList.remove('hidden')
+      this._restoreContactField(phoneInput)
+      this._toggleRequiredLabel(phoneWrapper, true)
+      if (phoneTypeFieldset) show(phoneTypeFieldset)
       this._restorePhoneTypeSelection()
     }
 
@@ -142,7 +153,7 @@ export default class ContactFeedbackController extends Controller {
     }
 
     if (checkbox.checked) {
-      this._selectLetterDelivery()
+      this._setCommunicationPreference('letter')
     }
 
     this.updateFeedback()
@@ -150,12 +161,37 @@ export default class ContactFeedbackController extends Controller {
   }
 
   _selectLetterDelivery() {
-    const letterRadio = this.element.querySelector('input[name="constituent[communication_preference]"][value="letter"]') ||
-      this.element.querySelector('input[name="guardian_attributes[communication_preference]"][value="letter"]')
-    if (letterRadio) {
-      letterRadio.checked = true
-      this.updateDeliveryFeedback()
-    }
+    this._setCommunicationPreference('letter')
+  }
+
+  _setCommunicationPreference(value) {
+    const radioNames = [
+      'constituent[communication_preference]',
+      'guardian_attributes[communication_preference]'
+    ]
+
+    radioNames.forEach((name) => {
+      const radio = this.element.querySelector(`input[name="${name}"][value="${value}"]`)
+      if (radio) {
+        radio.checked = true
+      }
+    })
+
+    const hiddenField = this.element.querySelector('input[type="hidden"][name="constituent[communication_preference]"]')
+    if (hiddenField) hiddenField.value = value
+
+    this.updateDeliveryFeedback()
+  }
+
+  _addressOnlyContact() {
+    return this._noEmailChecked() && this._noPhoneChecked()
+  }
+
+  _toggleRequiredLabel(wrapper, required) {
+    const label = wrapper?.querySelector('label')
+    if (!label) return
+
+    label.classList.toggle('required-label', required)
   }
 
   _shouldUseLetterDelivery() {
@@ -200,6 +236,80 @@ export default class ContactFeedbackController extends Controller {
 
     const voiceRadio = this.element.querySelector(`input[name="${radioName}"][value="voice"]`)
     if (voiceRadio) voiceRadio.checked = true
+  }
+
+  _setupNoContactCheckboxListeners() {
+    this.element.addEventListener('change', this._boundNoContactCheckboxEvent)
+    this.element.addEventListener('click', this._boundNoContactCheckboxEvent)
+  }
+
+  _teardownNoContactCheckboxListeners() {
+    this.element.removeEventListener('change', this._boundNoContactCheckboxEvent)
+    this.element.removeEventListener('click', this._boundNoContactCheckboxEvent)
+  }
+
+  _handleNoContactCheckboxEvent(event) {
+    const checkbox = this._resolveNoContactCheckbox(event.target)
+    if (!checkbox) return
+
+    const applyToggle = () => {
+      if (this._isNoEmailCheckbox(checkbox)) {
+        this.toggleEmailField({ target: checkbox })
+      } else if (this._isNoPhoneCheckbox(checkbox)) {
+        this.togglePhoneField({ target: checkbox })
+      }
+    }
+
+    if (event.type === 'click') {
+      requestAnimationFrame(applyToggle)
+      return
+    }
+
+    applyToggle()
+  }
+
+  _resolveNoContactCheckbox(target) {
+    if (!(target instanceof Element)) return null
+
+    if (target.matches('input[type="checkbox"]') && this._isNoContactCheckboxName(target.name)) {
+      return target
+    }
+
+    const label = target.closest('label')
+    if (!label || !this.element.contains(label)) return null
+
+    return label.querySelector('input[type="checkbox"][name="no_email_address"], input[type="checkbox"][name="no_phone_number"], input[type="checkbox"][name="guardian_no_email_address"], input[type="checkbox"][name="guardian_no_phone_number"]')
+  }
+
+  _isNoContactCheckboxName(name) {
+    return ['no_email_address', 'no_phone_number', 'guardian_no_email_address', 'guardian_no_phone_number'].includes(name)
+  }
+
+  _isNoEmailCheckbox(checkbox) {
+    return checkbox.name === 'no_email_address' || checkbox.name === 'guardian_no_email_address'
+  }
+
+  _isNoPhoneCheckbox(checkbox) {
+    return checkbox.name === 'no_phone_number' || checkbox.name === 'guardian_no_phone_number'
+  }
+
+  _suppressContactField(field) {
+    field.disabled = true
+    field.dataset.contactFeedbackSuppressed = 'true'
+  }
+
+  _restoreContactField(field) {
+    field.disabled = false
+    delete field.dataset.contactFeedbackSuppressed
+  }
+
+  /**
+   * Called when outer form sections re-enable fields after being hidden.
+   */
+  resyncNoContactState() {
+    this._syncNoContactCheckboxState()
+    this.updateFeedback()
+    this.updateDeliveryFeedback()
   }
 
   _syncNoContactCheckboxState() {
@@ -318,6 +428,11 @@ export default class ContactFeedbackController extends Controller {
    */
   updateFeedback() {
     if (!this.hasFeedbackTarget) return
+
+    if (this._addressOnlyContact()) {
+      setVisible(this.feedbackTarget, false)
+      return
+    }
     
     const selectedMethod = this._getSelectedContactMethod()
     if (!selectedMethod) {

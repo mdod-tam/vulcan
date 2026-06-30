@@ -241,8 +241,8 @@ module UserProfile
   # Address-only users store NULL email/phone and remain editable outside paper context.
   def email_optional?
     paper_context_no_email? ||
-      (persisted? && portal_phone_only_without_email?) ||
-      (persisted? && address_only_contact?)
+      (persisted? && constituent_user_type? && portal_phone_only_without_email?) ||
+      (persisted? && constituent_user_type? && address_only_contact?)
   end
 
   def portal_phone_only_without_email?
@@ -254,7 +254,11 @@ module UserProfile
   end
 
   def validate_admin_contact_update?
-    !Current.paper_context && type == 'Users::Constituent'
+    !Current.paper_context && constituent_user_type?
+  end
+
+  def constituent_user_type?
+    Users::FilterService::CONSTITUENT_TYPE_VALUES.include?(type)
   end
 
   def email_delivery_requires_real_email

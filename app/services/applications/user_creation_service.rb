@@ -19,7 +19,22 @@ module Applications
     end
 
     def call
-      user = skip_user_lookup ? create_new_user : (find_existing_user || create_new_user)
+      unless skip_user_lookup
+        existing = find_existing_user
+        if existing
+          prepare_attributes
+          validate_email_presence
+          validate_phone_presence
+          return Result.new(success: false, message: @errors.join(', '), data: { errors: @errors }) if @errors.any?
+
+          return Result.new(
+            success: true,
+            data: { user: existing, temp_password: nil, existing_user: true }
+          )
+        end
+      end
+
+      user = create_new_user
 
       if user&.persisted?
         Result.new(success: true, data: { user: user, temp_password: @temp_password })

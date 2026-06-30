@@ -176,6 +176,9 @@ export default class extends Controller {
       if (this.hasAdultSectionTarget) {
         setVisible(this.adultSectionTarget, showAdultInfo);
         this._toggleFormFieldsDisabled(this.adultSectionTarget, !showAdultInfo);
+        if (showAdultInfo) {
+          this._resyncContactFeedback(this.adultSectionTarget);
+        }
       }
 
       // Disable radio buttons if a guardian is chosen and add title
@@ -248,6 +251,8 @@ export default class extends Controller {
     const formFields = section.querySelectorAll('input, select, textarea');
 
     formFields.forEach(field => {
+      if (field.dataset.contactFeedbackSuppressed === 'true') return
+
       if (disabled) {
         field.disabled = true;
         field.setAttribute('disabled', 'disabled');
@@ -256,6 +261,15 @@ export default class extends Controller {
         field.removeAttribute('disabled');
       }
     });
+  }
+
+  _resyncContactFeedback(section) {
+    if (!section) return
+
+    section.querySelectorAll('[data-controller~="contact-feedback"]').forEach((element) => {
+      const controller = this.application.getControllerForElementAndIdentifier(element, 'contact-feedback')
+      controller?.resyncNoContactState?.()
+    })
   }
 
   /**
