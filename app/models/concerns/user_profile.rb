@@ -7,6 +7,7 @@ module UserProfile
   included do
     # Callbacks
     before_validation :normalize_email_fields
+    before_validation :normalize_communication_preference_for_undeliverable_email
     before_validation :format_phone_number
     before_save :format_phone_number, if: :phone_changed?
     after_save :log_profile_changes, if: :saved_changes_to_profile_fields?
@@ -102,6 +103,14 @@ module UserProfile
   def normalize_email_fields
     self.email = email.present? ? User.normalize_email(email) : nil
     self.dependent_email = dependent_email.present? ? User.normalize_email(dependent_email) : nil
+  end
+
+  def normalize_communication_preference_for_undeliverable_email
+    return if real_email?
+    return if dependent_with_deliverable_contact_email?
+    return unless deliver_via_email?
+
+    self.communication_preference = :letter
   end
 
   def format_phone_number
@@ -264,8 +273,16 @@ module UserProfile
     true
   end
 
+  def dependent_with_deliverable_contact_phone?
+    return false if dependent_phone.blank?
+
+    User.new(phone: dependent_phone).real_phone?
+  end
+
   def admin_contact_update_must_remain_reachable
     return if real_email? || real_phone?
+    return if dependent_with_deliverable_contact_email?
+    return if dependent_with_deliverable_contact_phone?
 
     unless deliver_via_letter?
       errors.add(:communication_preference, 'must be letter when no email or phone is on file')
