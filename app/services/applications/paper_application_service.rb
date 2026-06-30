@@ -294,7 +294,8 @@ module Applications
       result = UserCreationService.new(
         applicant_data,
         is_managing_adult: true,
-        skip_email_validation: no_email_address?(:constituent)
+        skip_email_validation: no_email_address?(:constituent),
+        skip_phone_validation: no_phone_number?(:constituent)
       ).call
 
       if result.success?
@@ -914,7 +915,10 @@ module Applications
         next unless user.portal_access_eligible?
 
         temp_password = @temp_passwords[user.id]
-        next unless temp_password
+        unless temp_password
+          append_account_creation_handoff_warning(user)
+          next
+        end
 
         ensure_user_password(user, temp_password)
 
@@ -949,6 +953,12 @@ module Applications
                'You can send it from the application page.'
         @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
       end
+    end
+
+    def append_account_creation_handoff_warning(user)
+      note = "Account created notice for #{user.full_name} could not include login credentials " \
+             'because the quick-create handoff expired. Reset their password from the user profile.'
+      @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
     end
 
     def new_user_accounts

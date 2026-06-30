@@ -3,15 +3,18 @@
 module Applications
   # Handles user creation and lookup for paper applications
   class UserCreationService < BaseService
-    attr_reader :attrs, :is_managing_adult, :errors, :skip_user_lookup, :skip_email_validation
+    attr_reader :attrs, :is_managing_adult, :errors, :skip_user_lookup, :skip_email_validation,
+                :skip_phone_validation
 
-    def initialize(attrs, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false, skip_email_validation: false)
+    def initialize(attrs, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false,
+                   skip_email_validation: false, skip_phone_validation: false)
       super()
       @attrs = attrs.with_indifferent_access
       @is_managing_adult = is_managing_adult
       @skip_user_lookup = skip_user_lookup
       @require_disability_validation = require_disability_validation
       @skip_email_validation = skip_email_validation
+      @skip_phone_validation = skip_phone_validation
       @errors = []
     end
 
@@ -48,6 +51,7 @@ module Applications
     def create_new_user
       prepare_attributes
       validate_email_presence
+      validate_phone_presence
 
       return nil if @errors.any?
 
@@ -76,6 +80,14 @@ module Applications
 
       context = is_managing_adult ? 'guardian' : 'dependent'
       @errors << "Failed to create #{context}: Email is required."
+    end
+
+    def validate_phone_presence
+      return if skip_phone_validation
+      return if attrs[:phone].present?
+
+      context = is_managing_adult ? 'guardian' : 'dependent'
+      @errors << "Failed to create #{context}: Phone number is required."
     end
 
     def build_user

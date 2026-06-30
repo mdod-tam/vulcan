@@ -1395,6 +1395,42 @@ module Admin
       assert user.force_password_change?
     end
 
+    test 'rejects self-applicant when no_email is set but phone is missing and no_phone is not set' do
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+
+      assert_no_difference ['Application.count', 'User.count'] do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          no_email_address: '1',
+          constituent: {
+            first_name: 'Missing',
+            last_name: 'Phone',
+            email: 'ignored@example.com',
+            phone: '',
+            physical_address_1: '300 Phone Path',
+            city: 'Baltimore',
+            state: 'MD',
+            zip_code: '21201',
+            hearing_disability: '1',
+            communication_preference: 'letter'
+          },
+          application: {
+            household_size: 1,
+            annual_income: 10_000,
+            maryland_resident: '1',
+            self_certify_disability: '1',
+            medical_provider_name: 'Dr. Phone',
+            medical_provider_phone: '555-111-3333',
+            medical_provider_email: 'phone@example.com'
+          },
+          income_proof_action: 'not_provided',
+          residency_proof_action: 'not_provided'
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_match(/Phone number is required/i, response.body)
+    end
+
     test 're-render preserves no-contact checkbox state after validation failure' do
       post admin_paper_applications_path, headers: default_headers, params: {
         no_email_address: '1',

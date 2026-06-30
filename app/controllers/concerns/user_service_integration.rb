@@ -12,7 +12,8 @@ module UserServiceIntegration
   # @param require_disability_validation [Boolean] If true, validates at least one disability is selected
   # @return [BaseService::Result] The service result
   def create_user_with_service(user_params, is_managing_adult: false, skip_user_lookup: false,
-                               require_disability_validation: false, skip_email_validation: false)
+                               require_disability_validation: false, skip_email_validation: false,
+                               skip_phone_validation: false)
     # Convert ActionController::Parameters to hash if needed
     attrs = user_params.respond_to?(:to_h) ? user_params.to_h : user_params
 
@@ -20,7 +21,8 @@ module UserServiceIntegration
                                                     is_managing_adult: is_managing_adult,
                                                     skip_user_lookup: skip_user_lookup,
                                                     require_disability_validation: require_disability_validation,
-                                                    skip_email_validation: skip_email_validation)
+                                                    skip_email_validation: skip_email_validation,
+                                                    skip_phone_validation: skip_phone_validation)
     service.call
   end
 

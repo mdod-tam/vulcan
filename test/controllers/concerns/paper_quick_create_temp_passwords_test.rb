@@ -15,6 +15,11 @@ class PaperQuickCreateTempPasswordsTest < ActiveSupport::TestCase
 
   setup do
     @controller = DummyController.new
+    Rails.cache.clear
+  end
+
+  teardown do
+    Rails.cache.clear
   end
 
   test 'read preserves session until clear' do
@@ -22,6 +27,7 @@ class PaperQuickCreateTempPasswordsTest < ActiveSupport::TestCase
 
     assert_equal({ '42' => 'secret123' }, @controller.quick_create_temp_passwords)
     assert_equal({ '42' => 'secret123' }, @controller.quick_create_temp_passwords)
+    assert_not_includes @controller.session[:paper_quick_create_temp_passwords]['42'].values, 'secret123'
 
     @controller.clear_quick_create_temp_passwords!
     assert_empty @controller.quick_create_temp_passwords

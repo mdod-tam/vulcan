@@ -70,10 +70,12 @@ module Applications
         return add_error?('Guardian not found') unless @guardian_user
       elsif attributes_present?(new_guardian_attrs)
         skip_email = no_email_address_flag?
+        skip_phone = no_phone_number_flag?
         result = UserCreationService.new(
           new_guardian_attrs,
           is_managing_adult: true,
-          skip_email_validation: skip_email
+          skip_email_validation: skip_email,
+          skip_phone_validation: skip_phone
         ).call
         return false unless result.success?
 
@@ -206,6 +208,10 @@ module Applications
 
     def no_email_address_flag?
       params[:guardian_no_email_address].present? && params[:guardian_no_email_address].to_s == '1'
+    end
+
+    def no_phone_number_flag?
+      params[:guardian_no_phone_number].present? && params[:guardian_no_phone_number].to_s == '1'
     end
 
     def add_error?(message)

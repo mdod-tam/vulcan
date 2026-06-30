@@ -150,5 +150,7 @@ class UserContactPredicatesTest < ActiveSupport::TestCase
     assert user.send(:address_only_contact?)
     assert user.send(:email_optional?)
     assert user.update(first_name: 'Updated')
+    assert_not user.update(email: 'not-an-email')
+    assert_includes user.errors[:email], 'is invalid'
   end
 end

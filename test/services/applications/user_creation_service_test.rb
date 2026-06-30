@@ -143,6 +143,7 @@ module Applications
           address_only_attrs,
           is_managing_adult: true,
           skip_email_validation: true,
+          skip_phone_validation: true,
           skip_user_lookup: true
         ).call
       ensure
@@ -157,6 +158,39 @@ module Applications
       assert_nil result.data[:temp_password]
       assert_not user.force_password_change?
       assert user.deliver_via_letter?
+    end
+
+    test 'requires phone for managing adult when no_phone flag is not set' do
+      Current.paper_context = true
+      begin
+        result = UserCreationService.new(
+          address_only_attrs.merge(email: "phone-required-#{SecureRandom.hex(4)}@example.com"),
+          is_managing_adult: true,
+          skip_user_lookup: true
+        ).call
+      ensure
+        Current.reset
+      end
+
+      assert_not result.success?
+      assert_includes result.data[:errors].join, 'Phone number is required'
+    end
+
+    test 'requires phone when no_email flag is set but no_phone flag is not' do
+      Current.paper_context = true
+      begin
+        result = UserCreationService.new(
+          address_only_attrs,
+          is_managing_adult: true,
+          skip_email_validation: true,
+          skip_user_lookup: true
+        ).call
+      ensure
+        Current.reset
+      end
+
+      assert_not result.success?
+      assert_includes result.data[:errors].join, 'Phone number is required'
     end
 
     private

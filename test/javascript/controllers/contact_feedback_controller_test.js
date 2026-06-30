@@ -124,4 +124,42 @@ describe("ContactFeedbackController", () => {
     expect(phoneInput.required).toBe(false)
     expect(fixture.querySelector('[data-contact-feedback-target="phoneTypeFieldset"]').classList.contains('hidden')).toBe(true)
   })
+
+  it("togglePhoneField keeps email delivery when email is present", () => {
+    document.body.innerHTML = `
+      <div id="contact-feedback">
+        <div data-contact-feedback-target="emailWrapper">
+          <input data-contact-feedback-target="email" id="email" type="email" value="user@example.com" required />
+        </div>
+        <div data-contact-feedback-target="phoneWrapper">
+          <input data-contact-feedback-target="phone" id="phone" type="tel" value="4105550100" required />
+        </div>
+        <fieldset data-contact-feedback-target="phoneTypeFieldset"></fieldset>
+        <input type="radio" name="constituent[communication_preference]" value="email" checked />
+        <input type="radio" name="constituent[communication_preference]" value="letter" />
+        <input type="checkbox" id="no_phone" />
+      </div>
+    `
+
+    fixture = document.querySelector('#contact-feedback')
+    controller = new ContactFeedbackController()
+    Object.defineProperty(controller, 'element', { value: fixture, configurable: true })
+    Object.defineProperty(controller, 'emailTarget', { value: fixture.querySelector('[data-contact-feedback-target="email"]'), configurable: true })
+    Object.defineProperty(controller, 'hasEmailTarget', { value: true, configurable: true })
+    Object.defineProperty(controller, 'phoneTarget', { value: fixture.querySelector('[data-contact-feedback-target="phone"]'), configurable: true })
+    Object.defineProperty(controller, 'hasPhoneTarget', { value: true, configurable: true })
+    Object.defineProperty(controller, 'phoneWrapperTarget', { value: fixture.querySelector('[data-contact-feedback-target="phoneWrapper"]'), configurable: true })
+    Object.defineProperty(controller, 'hasPhoneWrapperTarget', { value: true, configurable: true })
+    Object.defineProperty(controller, 'phoneTypeFieldsetTarget', { value: fixture.querySelector('[data-contact-feedback-target="phoneTypeFieldset"]'), configurable: true })
+    Object.defineProperty(controller, 'hasPhoneTypeFieldsetTarget', { value: true, configurable: true })
+
+    const checkbox = fixture.querySelector('#no_phone')
+    checkbox.checked = true
+    controller.togglePhoneField({ target: checkbox })
+
+    const emailDelivery = fixture.querySelector('input[name="constituent[communication_preference]"][value="email"]')
+    const letterDelivery = fixture.querySelector('input[name="constituent[communication_preference]"][value="letter"]')
+    expect(emailDelivery.checked).toBe(true)
+    expect(letterDelivery.checked).toBe(false)
+  })
 })

@@ -441,6 +441,53 @@ module Admin
       assert_nil user.phone
     end
 
+    test 'admin update rejects malformed email for address-only user' do
+      user = nil
+      internal_password = SecureRandom.hex(32)
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'Letter', last_name: 'Only',
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: 'Letter',
+          last_name: 'Only',
+          email: 'not-an-email',
+          phone: '',
+          physical_address_1: '100 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          communication_preference: 'letter'
+        }
+      }
+
+      assert_response :unprocessable_content
+      user.reload
+      assert_nil user.email
+    end
+
+    test 'constituents list includes legacy Constituent STI rows' do
+      legacy = create(:constituent, email: generate(:email), first_name: 'LegacyInactive')
+      legacy.update_column(:type, 'Constituent')
+      create(:application, :archived, user: legacy)
+
+      get constituents_admin_users_path
+
+      assert_response :success
+      assert_match 'LegacyInactive', response.body
+    end
+
     test 'constituents list shows no email on file for address-only users' do
       internal_password = SecureRandom.hex(32)
       user = nil

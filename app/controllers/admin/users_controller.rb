@@ -216,11 +216,13 @@ module Admin
       Current.paper_context = true
       attrs = apply_quick_create_contact_flags(user_create_params.to_h)
       skip_email = quick_create_no_email?
+      skip_phone = quick_create_no_phone?
 
       result = create_user_with_service(
         attrs,
         is_managing_adult: true,
-        skip_email_validation: skip_email
+        skip_email_validation: skip_email,
+        skip_phone_validation: skip_phone
       )
 
       if result.success?
@@ -489,7 +491,8 @@ module Admin
 
     def constituents
       @q = params[:q]
-      scope = Users::Constituent.joins(:applications)
+      scope = User.where(type: Users::FilterService::CONSTITUENT_TYPE_VALUES)
+                  .joins(:applications)
                   .where(applications: { status: [Application.statuses[:rejected], Application.statuses[:archived]] })
                   .group('users.id')
 

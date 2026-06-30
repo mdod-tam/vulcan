@@ -112,7 +112,9 @@ export default class ContactFeedbackController extends Controller {
       phoneInput.value = ''
       phoneInput.disabled = true
       if (phoneTypeFieldset) phoneTypeFieldset.classList.add('hidden')
-      this._selectLetterDelivery()
+      if (this._shouldUseLetterDelivery()) {
+        this._selectLetterDelivery()
+      }
     } else {
       phoneWrapper.classList.remove('hidden')
       phoneInput.required = true
@@ -152,6 +154,15 @@ export default class ContactFeedbackController extends Controller {
       letterRadio.checked = true
       this.updateDeliveryFeedback()
     }
+  }
+
+  _shouldUseLetterDelivery() {
+    if (this._noEmailChecked()) return true
+
+    const emailInput = this._emailInput()
+    if (!emailInput) return true
+
+    return emailInput.disabled || !emailInput.value?.trim()
   }
 
   _syncNoContactCheckboxState() {
