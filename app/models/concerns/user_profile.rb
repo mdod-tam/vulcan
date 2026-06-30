@@ -250,8 +250,18 @@ module UserProfile
   def email_delivery_requires_real_email
     return unless deliver_via_email?
     return if real_email?
+    return if dependent_with_deliverable_contact_email?
 
     errors.add(:communication_preference, 'requires an email address on file')
+  end
+
+  def dependent_with_deliverable_contact_email?
+    return false unless User.system_generated_email?(email)
+    return false if dependent_email.blank?
+    return false unless dependent_email.to_s.match?(URI::MailTo::EMAIL_REGEXP)
+    return false if User.system_generated_email?(dependent_email)
+
+    true
   end
 
   def admin_contact_update_must_remain_reachable

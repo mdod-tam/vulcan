@@ -472,9 +472,7 @@ module Applications
       end
 
       updates[:phone] = nil if no_phone_number?(:constituent)
-      if no_phone_number?(:constituent)
-        updates[:phone_type] = preferred_contact_method_without_phone(updates)
-      end
+      updates[:phone_type] = preferred_contact_method_without_phone(updates) if no_phone_number?(:constituent)
 
       updates[:communication_preference] = 'letter' if no_email_address?(:constituent) && no_phone_number?(:constituent)
 

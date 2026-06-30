@@ -123,6 +123,7 @@ module Applications
           data[:email] = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
           data[:dependent_email] = data[:email]
         end
+        data[:communication_preference] = @guardian_user&.communication_preference
       when 'dependent'
         # Paper passes :dependent_email; portal passes :email. Mirror the submitted contact.
         data[:email] = data[:dependent_email] if data[:email].blank? && data[:dependent_email].present?

@@ -6,14 +6,14 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
   test 'find_by_login_identifier matches email' do
     user = create(:constituent, email: "login.email.#{SecureRandom.hex(3)}@example.com")
 
-    assert_equal user, User.find_by(login_identifier: user.email)
+    assert_equal user, User.find_by_login_identifier(user.email)
   end
 
   test 'find_by_login_identifier matches normalized phone' do
     user = create(:constituent, phone: '410-555-0198')
 
-    assert_equal user, User.find_by(login_identifier: '4105550198')
-    assert_equal user, User.find_by(login_identifier: user.phone)
+    assert_equal user, User.find_by_login_identifier('4105550198')
+    assert_equal user, User.find_by_login_identifier(user.phone)
   end
 
   test 'email_shaped_identifier_does_not_fall_back_to_phone' do
@@ -36,8 +36,8 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
     end
 
     assert_nil user.email
-    assert_nil User.find_by(login_identifier: '4105550197@example.com')
-    assert_equal user, User.find_by(login_identifier: phone)
+    assert_nil User.find_by_login_identifier('4105550197@example.com')
+    assert_equal user, User.find_by_login_identifier(phone)
   end
 
   test 'login_identifier_looks_like_email? treats any at sign as email shaped' do
@@ -70,8 +70,8 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
     end
 
     assert_nil user.email
-    assert_nil User.find_by(login_identifier: '4105550195@')
-    assert_equal user, User.find_by(login_identifier: phone)
+    assert_nil User.find_by_login_identifier('4105550195@')
+    assert_equal user, User.find_by_login_identifier(phone)
   end
 
   test 'find_by_login_identifier rejects placeholder phone' do
@@ -79,7 +79,7 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
                                 email: "placeholder.#{SecureRandom.hex(3)}@example.com")
 
     assert User.placeholder_phone?(user.phone)
-    assert_nil User.find_by(login_identifier: user.phone)
+    assert_nil User.find_by_login_identifier(user.phone)
   end
 
   test 'find_by_login_identifier rejects guardian generated synthetic phone' do
@@ -88,17 +88,18 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
 
     assert User.synthetic_dependent_phone?(user.phone)
     assert User.placeholder_phone?(user.phone)
-    assert_nil User.find_by(login_identifier: user.phone)
-    assert_nil User.find_by(login_identifier: '0001234567')
+    assert_nil User.find_by_login_identifier(user.phone)
+    assert_nil User.find_by_login_identifier('0001234567')
   end
 
   test 'find_by_login_identifier rejects system generated email' do
     user = create(:constituent,
                   email: "dependent.#{SecureRandom.hex(3)}@system.matvulcan.local",
-                  phone: '410-555-0196')
+                  phone: '410-555-0196',
+                  communication_preference: :letter)
 
     assert User.system_generated_email?(user.email)
-    assert_nil User.find_by(login_identifier: user.email)
+    assert_nil User.find_by_login_identifier(user.email)
   end
 
   test 'find_by_login_identifier rejects dependent synthetic contacts but not guardian real contacts' do
@@ -107,13 +108,14 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
                        email: "dependent.#{SecureRandom.hex(3)}@system.matvulcan.local",
                        phone: '000-456-7890',
                        dependent_email: guardian.email,
-                       dependent_phone: guardian.phone)
+                       dependent_phone: guardian.phone,
+                       communication_preference: :email)
 
     assert_not dependent.portal_access_eligible?
-    assert_equal guardian, User.find_by(login_identifier: guardian.email)
-    assert_equal guardian, User.find_by(login_identifier: guardian.phone)
-    assert_nil User.find_by(login_identifier: dependent.email)
-    assert_nil User.find_by(login_identifier: dependent.phone)
+    assert_equal guardian, User.find_by_login_identifier(guardian.email)
+    assert_equal guardian, User.find_by_login_identifier(guardian.phone)
+    assert_nil User.find_by_login_identifier(dependent.email)
+    assert_nil User.find_by_login_identifier(dependent.phone)
   end
 
   test 'placeholder_phone? handles nil and blank' do
