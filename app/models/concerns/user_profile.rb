@@ -106,6 +106,7 @@ module UserProfile
   end
 
   def normalize_communication_preference_for_undeliverable_email
+    return unless new_record?
     return if real_email?
     return if dependent_with_deliverable_contact_email?
     return unless deliver_via_email?
