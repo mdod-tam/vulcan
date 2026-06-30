@@ -68,7 +68,7 @@ Paper intake deliberately branches before it writes the application:
 | Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
 | Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
 | New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
-| New self applicant | No existing applicant is selected. | Creates a constituent through `Applications::UserCreationService`. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users receive temporary account access; address-only users do not. No-phone intake clears stored phone and sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
+| New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Reuse an existing adult only through the explicit existing-applicant branch. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users receive temporary account access; address-only users do not. No-phone intake clears stored phone and sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
 
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
@@ -78,7 +78,7 @@ Contact verification matters for existing adults because paper intake can change
 
 Paper intake routes are `new` and `create` only (`config/routes.rb`). Quick-create temp-password handoff is wired through `PaperApplicationsController#create` and cleared after a successful create.
 
-When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for portal-eligible users created or reused in the same submission. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
+When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for portal-eligible users created in the same submission or explicitly selected existing applicants with a temp-password handoff. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
 
 Temp passwords for inline creation are used to set `force_password_change` portal access before the notice goes out. Quick-create handoff stores the secret in `Rails.cache` with only a per-user token in the admin session (30-minute TTL):
 
@@ -125,7 +125,7 @@ For dependent intake, the controller/service pair currently works with:
 - `phone_strategy`
 - `address_strategy`
 
-Those strategies are applied by `Applications::GuardianDependentManagementService`. Existing dependent reuse aliases submitted `dependent_email` and `dependent_phone` into the same strategy path so the final effective contact details are consistent with newly created dependents.
+Those strategies are applied by `Applications::GuardianDependentManagementService`. Existing dependent reuse runs the same strategy application through `PaperApplicationService#apply_dependent_contact_strategies!` before persisting contact updates so guardian/no-contact choices overwrite stale direct contact data.
 
 ## Fulfillment Notes
 

@@ -114,7 +114,7 @@ Current paper candidate behavior includes:
 - `paper_applicant_candidate?` marks users that can be considered by the paper intake flow.
 - Admin paper search decorates candidates with waiting-period and `blocking_new_submission` state so the UI and service can block ineligible submissions.
 - Existing adult self-applications require contact verification before the service writes a new application.
-- Existing dependent submissions can reuse the dependent and guardian relationship while still checking contact strategy, waiting-period eligibility, and `blocking_new_submission`.
+- Existing dependent submissions reuse the dependent and guardian relationship, apply the selected contact strategies before persisting contact updates, and still check waiting-period eligibility and `blocking_new_submission`.
 - `adult_application_context` exposes on-file contact, eligibility, last application, income, and provider details so paper intake can prefill without silently changing verified contact information.
 
 ## 4 · Admin User Management

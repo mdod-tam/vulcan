@@ -57,7 +57,7 @@ The paper application controller derives contact strategy parameters (`email_str
   - If the strategy is `'dependent'`, the service uses the provided dependent-owned contact information.
   - If a recognized strategy is not supplied, the service defaults to guardian strategy with fallback logic. Nil strategy values are handled before this defaulting so callers can preserve existing data when appropriate.
 - **Address Strategy**: Also handles address information copying from guardian to dependent.
-- **Existing Dependent Reuse**: Existing dependent params alias `dependent_email` to email and `dependent_phone` to phone for contact verification and strategy handling.
+- **Existing Dependent Reuse**: Existing dependent updates run through `GuardianDependentManagementService#apply_contact_strategies_for` before `PaperApplicationService` writes contact changes, so guardian/no-contact UI choices replace stale direct contact data instead of only aliasing submitted `dependent_email` / `dependent_phone`.
 - **Search**: Admin lookup can find dependents by direct dependent email tokens and, when needed, guardian fallback contact tokens.
 - **Maintainability**: This design results in cleaner, more maintainable code with clear fallback logic and proper error handling.
 

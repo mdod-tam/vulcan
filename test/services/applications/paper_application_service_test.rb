@@ -771,16 +771,17 @@ module Applications
       assert_includes service.send(:new_user_accounts), guardian
     end
 
-    test 'process_self_applicant applies no-contact flags when reusing existing user by phone' do
+    test 'process_self_applicant rejects duplicate phone instead of reusing existing user' do
       phone = unique_paper_phone
-      existing = create(:constituent, email: "reuse-#{SecureRandom.hex(4)}@example.com", phone: phone)
+      original_email = "dup-reuse-#{SecureRandom.hex(4)}@example.com"
+      existing = create(:constituent, email: original_email, phone: phone)
 
       service_params = {
         no_email_address: '1',
         constituent: @constituent_params.merge(
-          first_name: existing.first_name,
-          last_name: existing.last_name,
-          email: existing.email,
+          first_name: 'Different',
+          last_name: 'Person',
+          email: "other-#{SecureRandom.hex(4)}@example.com",
           phone: phone,
           physical_address_1: '300 Letter Lane',
           city: 'Baltimore',
@@ -791,16 +792,15 @@ module Applications
       }
 
       service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
-      assert service.create, "Service creation failed: #{service.errors.inspect}"
+      assert_not service.create
+      assert(service.errors.any? { |error| error.match?(/phone|taken|create user/i) })
 
       existing.reload
-      assert_equal existing.id, service.constituent.id
-      assert_nil existing.email
-      assert_equal phone, existing.phone
-      assert existing.deliver_via_letter?
+      assert_equal original_email, existing.email
+      assert_not_equal 'Different', existing.first_name
     end
 
-    test 'process_self_applicant does not mutate reused user when active application blocks submission' do
+    test 'process_self_applicant does not attach application when duplicate contact blocks creation' do
       phone = unique_paper_phone
       original_email = "blocked-reuse-#{SecureRandom.hex(4)}@example.com"
       existing = create(:constituent, email: original_email, phone: phone)
@@ -826,44 +826,52 @@ module Applications
 
         service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
         assert_not service.create
-        assert(service.errors.any? { |error| error.include?('active') || error.include?('pending') })
+        assert(service.errors.any? { |error| error.match?(/phone|taken|create user/i) })
       ensure
         Application.skip_wait_period_validation = original_skip
       end
 
       existing.reload
       assert_equal original_email, existing.email
+      assert_equal 1, existing.applications.count
     end
 
-    test 'process_self_applicant reusing existing user logs constituent_contact_updated audit event' do
-      phone = unique_paper_phone
-      existing = create(:constituent, email: "reuse-audit-#{SecureRandom.hex(4)}@example.com", phone: phone)
+    test 'process_existing_dependent applies guardian contact strategies on reuse' do
+      guardian = create(:constituent,
+                        email: "guardian-strategy-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      dependent = create(:constituent,
+                         email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local",
+                         dependent_email: "old-dependent-#{SecureRandom.hex(4)}@example.com",
+                         phone: '000-000-0001',
+                         dependent_phone: '410-555-0200')
+      create(:guardian_relationship,
+             guardian_user: guardian,
+             dependent_user: dependent,
+             relationship_type: 'Parent')
 
       service_params = {
-        no_email_address: '1',
-        constituent: @constituent_params.merge(
-          first_name: existing.first_name,
-          last_name: existing.last_name,
-          email: existing.email,
-          phone: phone,
-          physical_address_1: '400 Letter Lane',
-          city: 'Baltimore',
-          state: 'MD',
-          zip_code: '21201'
-        ),
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        constituent: {
+          locale: 'en',
+          communication_preference: 'email'
+        },
         application: @application_params
       }
 
       service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
 
-      assert_difference -> { Event.where(action: 'constituent_contact_updated').count }, 1 do
-        assert service.create, "Service creation failed: #{service.errors.inspect}"
-      end
-
-      contact_event = Event.where(action: 'constituent_contact_updated').order(:id).last
-      assert_equal @admin, contact_event.user
-      assert_equal 'paper_application', contact_event.metadata['source']
-      assert contact_event.metadata['changes'].key?('email')
+      dependent.reload
+      assert_equal guardian.email, dependent.dependent_email
+      assert_equal guardian.phone, dependent.dependent_phone
+      assert User.system_generated_email?(dependent.email)
+      assert dependent.phone.start_with?('000-')
     end
 
     test 'new_user_accounts excludes existing user with force_password_change but no submission handoff' do

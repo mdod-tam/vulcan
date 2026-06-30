@@ -295,6 +295,7 @@ module Applications
       result = UserCreationService.new(
         applicant_data,
         is_managing_adult: true,
+        skip_user_lookup: true,
         skip_email_validation: no_email_address?(:constituent),
         skip_phone_validation: no_phone_number?(:constituent)
       ).call
@@ -306,34 +307,9 @@ module Applications
         return false unless validate_no_active_application('constituent')
         return false unless waiting_period_eligible?(@constituent)
 
-        return false if result.data[:existing_user] && !update_reused_self_applicant!(@constituent)
-
         true
       else
         @errors.concat(result.data[:errors] || [result.message])
-        false
-      end
-    end
-
-    def update_reused_self_applicant!(user)
-      attrs = params[:constituent]
-      return true if attrs.blank?
-
-      return false unless persist_adult_contact_updates!(user, attrs)
-
-      flagged = apply_no_contact_flags!(attrs.deep_dup, scope: :constituent)
-      extra_updates = build_disability_updates(flagged)
-
-      %i[first_name last_name middle_initial date_of_birth].each do |field|
-        extra_updates[field] = flagged[field] if flagged[field].present?
-      end
-
-      return true if extra_updates.empty?
-
-      if user.update(extra_updates)
-        true
-      else
-        add_error("Failed to update applicant information: #{user.errors.full_messages.join(', ')}")
         false
       end
     end
@@ -408,6 +384,9 @@ module Applications
       attrs = params[:constituent]
       return true if attrs.blank?
 
+      attrs = apply_dependent_contact_strategies!(attrs, dependent: dependent)
+      return false if attrs.nil?
+
       updates = build_dependent_contact_updates(attrs)
       return true if updates.empty?
 
@@ -448,12 +427,56 @@ module Applications
       build_contact_updates(
         attrs,
         fields: %i[
+          email phone dependent_email dependent_phone
           physical_address_1 physical_address_2 city state zip_code
           locale communication_preference preferred_means_of_communication
           phone_type referral_source
-        ],
-        aliases: { dependent_email: :email, dependent_phone: :phone }
+        ]
       )
+    end
+
+    def apply_dependent_contact_strategies!(attrs, dependent: nil)
+      guardian = guardian_for_dependent_contact_update
+      return attrs.deep_dup if guardian.blank?
+
+      strategy_service = GuardianDependentManagementService.new(params)
+      merged = merge_existing_dependent_contact(attrs, dependent)
+      applied = strategy_service.apply_contact_strategies_for(guardian, merged)
+      if applied
+        applied
+      else
+        @errors.concat(strategy_service.errors)
+        nil
+      end
+    end
+
+    def merge_existing_dependent_contact(attrs, dependent)
+      data = attrs.deep_dup.with_indifferent_access
+      return data unless dependent
+
+      if data[:dependent_email].blank? && data[:email].blank?
+        if dependent.dependent_email.present?
+          data[:dependent_email] = dependent.dependent_email
+        elsif dependent.real_email?
+          data[:email] = dependent.email
+          data[:dependent_email] = dependent.email
+        end
+      end
+
+      if data[:dependent_phone].blank? && data[:phone].blank?
+        if dependent.dependent_phone.present?
+          data[:dependent_phone] = dependent.dependent_phone
+        elsif dependent.real_phone?
+          data[:phone] = dependent.phone
+          data[:dependent_phone] = dependent.phone
+        end
+      end
+
+      data
+    end
+
+    def guardian_for_dependent_contact_update
+      @guardian_user_for_app || User.find_by(id: params[:guardian_id])
     end
 
     def update_existing_adult_contact_info(user)
