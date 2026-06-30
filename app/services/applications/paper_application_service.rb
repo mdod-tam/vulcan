@@ -10,7 +10,7 @@ module Applications
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false,
-                   quick_create_temp_passwords: {})
+                   quick_create_temp_passwords: {}, quick_create_handoff_user_ids: [])
       super()
       @params = params.with_indifferent_access
       @admin = admin
@@ -20,6 +20,7 @@ module Applications
       @errors = []
       @temp_passwords = {}
       @quick_create_temp_passwords = quick_create_temp_passwords.to_h.stringify_keys
+      @quick_create_handoff_user_ids = quick_create_handoff_user_ids.map(&:to_s)
       @reconciliation_note = nil
       @skip_income_validation = skip_income_validation
       @skip_proof_processing = skip_proof_processing
@@ -315,7 +316,7 @@ module Applications
       end
 
       if no_phone_number?(scope)
-        data.delete(:phone)
+        clear_phone_contact!(data)
         data[:communication_preference] = 'letter' if data[:email].blank?
       end
 
@@ -344,6 +345,15 @@ module Applications
 
     def truthy_param?(key)
       params[key].present? && params[key].to_s == '1'
+    end
+
+    def clear_phone_contact!(data)
+      data.delete(:phone)
+      data[:phone_type] = preferred_contact_method_without_phone(data)
+    end
+
+    def preferred_contact_method_without_phone(data)
+      data[:email].present? ? 'email' : 'letter'
     end
 
     def store_temp_password(user, password = nil)
@@ -462,10 +472,11 @@ module Applications
       end
 
       updates[:phone] = nil if no_phone_number?(:constituent)
-
-      if no_email_address?(:constituent) && no_phone_number?(:constituent)
-        updates[:communication_preference] = 'letter'
+      if no_phone_number?(:constituent)
+        updates[:phone_type] = preferred_contact_method_without_phone(updates)
       end
+
+      updates[:communication_preference] = 'letter' if no_email_address?(:constituent) && no_phone_number?(:constituent)
 
       updates
     end
@@ -963,8 +974,12 @@ module Applications
 
     def new_user_accounts
       [@guardian_user_for_app, @constituent].compact.uniq.select do |user|
-        user.present? && @temp_passwords.key?(user.id)
+        user.present? && account_created_notice_candidate?(user)
       end
+    end
+
+    def account_created_notice_candidate?(user)
+      @temp_passwords.key?(user.id) || @quick_create_handoff_user_ids.include?(user.id.to_s)
     end
 
     def ensure_user_password(user, temp_password)

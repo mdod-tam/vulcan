@@ -1191,7 +1191,7 @@ module Admin
 
     test 'self-application should not use guardian_attributes when constituent data is missing' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Failed to create guardian: Email is required\.; Constituent processing failed/)).once
+      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Failed to create guardian: Email is required\./)).once
 
       # This test verifies that disability_attrs from applicant_attributes are NOT incorrectly
       # merged with guardian_attributes when creating a self-application.
@@ -1347,6 +1347,7 @@ module Admin
       assert user.constituent?
       assert_nil user.email
       assert_nil user.phone
+      assert_predicate user, :contact_letter?
       assert user.deliver_via_letter?
       assert_not user.portal_access_eligible?
       assert_not user.force_password_change?

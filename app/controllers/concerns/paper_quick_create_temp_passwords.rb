@@ -32,6 +32,11 @@ module PaperQuickCreateTempPasswords
     end
   end
 
+  def quick_create_handoff_user_ids
+    prune_stale_quick_create_temp_passwords!
+    (session[:paper_quick_create_temp_passwords] || {}).keys
+  end
+
   def clear_quick_create_temp_passwords!
     entries = session[:paper_quick_create_temp_passwords] || {}
     entries.each_value { |entry| delete_cached_quick_create_temp_password(entry) }

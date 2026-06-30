@@ -6,7 +6,7 @@ module Admin
     include TurboStreamResponseHandling
     include PaperQuickCreateTempPasswords
 
-    before_action :cast_complex_boolean_params, only: %i[create update]
+    before_action :cast_complex_boolean_params, only: %i[create]
 
     USER_BASE_FIELDS = %i[
       first_name middle_initial last_name email phone phone_type
@@ -58,7 +58,8 @@ module Admin
       service = Applications::PaperApplicationService.new(
         params: service_params,
         admin: current_user,
-        quick_create_temp_passwords: quick_create_temp_passwords
+        quick_create_temp_passwords: quick_create_temp_passwords,
+        quick_create_handoff_user_ids: quick_create_handoff_user_ids
       )
 
       service_result = service.create
@@ -94,42 +95,6 @@ module Admin
         else
           handle_service_failure(service)
         end
-      end
-    end
-
-    def update
-      log_file_and_form_params
-      service_params = paper_application_processing_params # Use the new method
-      Rails.logger.debug { "Service params for update: #{service_params.inspect}" }
-
-      application = Application.find(params[:id])
-      # ... (logging from original update can be kept or removed as needed)
-
-      service = Applications::PaperApplicationService.new(
-        params: service_params,
-        admin: current_user,
-        quick_create_temp_passwords: quick_create_temp_passwords
-      )
-
-      if service.update(application)
-        clear_quick_create_temp_passwords!
-        update_message = generate_success_message(application)
-        if service.reconciliation_note.present?
-          handle_reconciliation_warning_response(
-            application: application,
-            success_message: update_message,
-            warning_message: service.reconciliation_note
-          )
-        else
-          handle_success_response(
-            html_redirect_path: admin_application_path(application),
-            html_message: update_message,
-            turbo_message: update_message,
-            turbo_redirect_path: admin_application_path(application)
-          )
-        end
-      else
-        handle_service_failure(service, application)
       end
     end
 

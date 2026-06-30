@@ -39,6 +39,8 @@ module UserProfile
     validate :date_of_birth_must_be_valid
     validate :constituent_must_have_disability, if: :validate_constituent_disability?
     validate :validate_address_for_letter_preference
+    validate :email_delivery_requires_real_email
+    validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
 
     # Enums
     enum :status, { inactive: 0, active: 1, suspended: 2 }, default: :active
@@ -239,5 +241,36 @@ module UserProfile
 
   def address_only_contact?
     !real_email? && !real_phone?
+  end
+
+  def validate_admin_contact_update?
+    !Current.paper_context && type == 'Users::Constituent'
+  end
+
+  def email_delivery_requires_real_email
+    return unless deliver_via_email?
+    return if real_email?
+
+    errors.add(:communication_preference, 'requires an email address on file')
+  end
+
+  def admin_contact_update_must_remain_reachable
+    return if real_email? || real_phone?
+
+    unless deliver_via_letter?
+      errors.add(:communication_preference, 'must be letter when no email or phone is on file')
+      return
+    end
+
+    return if was_address_only_contact?
+
+    errors.add(:base, 'Cannot clear all contact information outside paper intake.')
+  end
+
+  def was_address_only_contact?
+    return true if new_record?
+
+    prior = User.new(email: attribute_in_database(:email), phone: attribute_in_database(:phone))
+    !prior.real_email? && !prior.real_phone?
   end
 end

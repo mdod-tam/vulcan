@@ -15,11 +15,13 @@ class PaperQuickCreateTempPasswordsTest < ActiveSupport::TestCase
 
   setup do
     @controller = DummyController.new
+    @original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
     Rails.cache.clear
   end
 
   teardown do
-    Rails.cache.clear
+    Rails.cache = @original_cache
   end
 
   test 'read preserves session until clear' do

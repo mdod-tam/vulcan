@@ -112,6 +112,7 @@ export default class ContactFeedbackController extends Controller {
       phoneInput.value = ''
       phoneInput.disabled = true
       if (phoneTypeFieldset) phoneTypeFieldset.classList.add('hidden')
+      this._applyNoPhoneContactType()
       if (this._shouldUseLetterDelivery()) {
         this._selectLetterDelivery()
       }
@@ -121,6 +122,7 @@ export default class ContactFeedbackController extends Controller {
       phoneInput.setAttribute('aria-required', 'true')
       phoneInput.disabled = false
       if (phoneTypeFieldset) phoneTypeFieldset.classList.remove('hidden')
+      this._restorePhoneTypeSelection()
     }
 
     this.updateFeedback()
@@ -163,6 +165,41 @@ export default class ContactFeedbackController extends Controller {
     if (!emailInput) return true
 
     return emailInput.disabled || !emailInput.value?.trim()
+  }
+
+  _phoneTypeRadioNames() {
+    return ['constituent[phone_type]', 'guardian_attributes[phone_type]']
+  }
+
+  _activePhoneTypeRadioName() {
+    return this._phoneTypeRadioNames().find((name) => this.element.querySelector(`input[name="${name}"]`))
+  }
+
+  _applyNoPhoneContactType() {
+    const phoneTypeValue = this._shouldUseLetterDelivery() ? 'letter' : 'email'
+    const radioName = this._activePhoneTypeRadioName()
+    if (!radioName) return
+
+    this.element.querySelectorAll(`input[name="${radioName}"]`).forEach((radio) => {
+      const selected = radio.value === phoneTypeValue
+      radio.checked = selected
+      radio.disabled = !selected
+    })
+  }
+
+  _restorePhoneTypeSelection() {
+    const radioName = this._activePhoneTypeRadioName()
+    if (!radioName) return
+
+    this.element.querySelectorAll(`input[name="${radioName}"]`).forEach((radio) => {
+      radio.disabled = false
+    })
+
+    const checked = this.element.querySelector(`input[name="${radioName}"]:checked`)
+    if (checked) return
+
+    const voiceRadio = this.element.querySelector(`input[name="${radioName}"][value="voice"]`)
+    if (voiceRadio) voiceRadio.checked = true
   }
 
   _syncNoContactCheckboxState() {

@@ -309,14 +309,15 @@ module Admin
 
     test 'should handle validation errors' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with(regexp_matches(/Failed to create user in admin interface: Failed to create user:/)).once
+      Rails.logger.expects(:error).with(regexp_matches(/Failed to create user in admin interface:/)).once
 
       assert_no_difference('Users::Constituent.count') do
         post admin_users_path, params: {
           # Missing required fields
           first_name: '',
           last_name: '',
-          email: 'invalid-email'
+          email: 'invalid-email',
+          phone: '555-555-5555'
         }, as: :json
       end
 
@@ -439,6 +440,51 @@ module Admin
       assert_equal 'Updated', user.first_name
       assert_nil user.email
       assert_nil user.phone
+    end
+
+    test 'admin cannot clear all contact information outside paper intake' do
+      user = create(:constituent, email: generate(:email), phone: '410-555-0100')
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: '',
+          phone: '',
+          communication_preference: 'letter',
+          physical_address_1: user.physical_address_1,
+          city: user.city,
+          state: user.state,
+          zip_code: user.zip_code
+        }
+      }
+
+      assert_response :unprocessable_content
+      user.reload
+      assert user.real_email?
+      assert user.real_phone?
+    end
+
+    test 'admin cannot set email delivery without email on file' do
+      user = create(:constituent, email: generate(:email), phone: '410-555-0100')
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: '',
+          phone: user.phone,
+          communication_preference: 'email',
+          physical_address_1: user.physical_address_1,
+          city: user.city,
+          state: user.state,
+          zip_code: user.zip_code
+        }
+      }
+
+      assert_response :unprocessable_content
+      user.reload
+      assert user.real_email?
     end
 
     test 'admin update rejects malformed email for address-only user' do

@@ -20,8 +20,7 @@ module Admin
       :has_active_app,
       :eligible_date,
       :eligible_now,
-      :relationship_types,
-      keyword_init: true
+      :relationship_types
     )
 
     # Define the mapping from expected demodulized names to full namespaced names.
@@ -677,6 +676,7 @@ module Admin
       if quick_create_no_phone?
         attrs.delete(:phone)
         attrs.delete('phone')
+        attrs[:phone_type] = attrs[:email].present? || attrs['email'].present? ? 'email' : 'letter'
         attrs[:communication_preference] = 'letter' if attrs[:email].blank? && attrs['email'].blank?
       end
 
@@ -760,7 +760,7 @@ module Admin
 
     # Enhance constituent users with relationship data to avoid N+1 queries
     def enhance_constituent_users(users)
-      constituent_ids = users.select { |user| user.is_a?(Users::Constituent) }.map(&:id)
+      constituent_ids = users.grep(Users::Constituent).map(&:id)
       return unless constituent_ids.any?
 
       constituent_records = load_enhanced_constituents(constituent_ids)
@@ -784,10 +784,10 @@ module Admin
     def load_relationship_data(constituent_ids)
       {
         dependents_counts: GuardianRelationship.where(guardian_id: constituent_ids)
-                                               .group(:guardian_id)
+                           .group(:guardian_id)
                                                .count,
         has_guardian: GuardianRelationship.where(dependent_id: constituent_ids)
-                                          .distinct
+                      .distinct
                                           .pluck(:dependent_id)
       }
     end

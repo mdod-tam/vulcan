@@ -758,6 +758,19 @@ module Applications
       assert_includes service.send(:new_user_accounts), guardian
     end
 
+    test 'new_user_accounts includes quick-create handoff user when cache password is missing' do
+      guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true)
+
+      service = PaperApplicationService.new(
+        params: {},
+        admin: @admin,
+        quick_create_handoff_user_ids: [guardian.id]
+      )
+      service.instance_variable_set(:@guardian_user_for_app, guardian)
+
+      assert_includes service.send(:new_user_accounts), guardian
+    end
+
     test 'medical certification not provided notice notifies constituent for none_provided review' do
       constituent = create(:constituent, communication_preference: :email)
       application = create(:application, :in_progress, skip_proofs: true, user: constituent)

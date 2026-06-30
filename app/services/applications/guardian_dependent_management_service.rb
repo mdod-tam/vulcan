@@ -126,11 +126,10 @@ module Applications
       when 'dependent'
         # Paper passes :dependent_email; portal passes :email. Mirror the submitted contact.
         data[:email] = data[:dependent_email] if data[:email].blank? && data[:dependent_email].present?
-        if data[:email].present?
-          data[:dependent_email] = data[:email]
-        else
-          return apply_email_strategy_with('guardian', data)
-        end
+        return apply_email_strategy_with('guardian', data) if data[:email].blank?
+
+        data[:dependent_email] = data[:email]
+
       else
         return apply_email_strategy_with('guardian', data)
       end
@@ -155,11 +154,10 @@ module Applications
       when 'dependent'
         # Paper passes :dependent_phone; portal passes :phone. Mirror the submitted contact.
         data[:phone] = data[:dependent_phone] if data[:phone].blank? && data[:dependent_phone].present?
-        if data[:phone].present?
-          data[:dependent_phone] = data[:phone]
-        else
-          return apply_phone_strategy_with('guardian', data)
-        end
+        return apply_phone_strategy_with('guardian', data) if data[:phone].blank?
+
+        data[:dependent_phone] = data[:phone]
+
       else
         return apply_phone_strategy_with('guardian', data)
       end

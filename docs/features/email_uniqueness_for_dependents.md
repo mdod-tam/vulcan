@@ -34,10 +34,8 @@ The `User` model includes logic to manage dependent-specific contact information
 - **Encryption**: The `dependent_email` and `dependent_phone` fields are encrypted using `encrypts` (implemented in `UserProfile` concern).
 - **Validation**: The model validates the format of `dependent_email` and `dependent_phone` (implemented in `UserProfile` concern).
 - **Helper Methods** (implemented in `UserGuardianship` concern):
-  - `effective_email`: Returns the dependent's own email if present, otherwise falls back to the guardian's email via `guardian_for_contact`.
-  - `effective_phone`: Returns the dependent's own phone if present, otherwise falls back to the guardian's phone via `guardian_for_contact`.
-  - `effective_phone_type`: Handles phone type logic for dependents.
-  - `effective_communication_preference`: Uses guardian's preference if user is a dependent.
+  - `effective_email`, `effective_phone`, `effective_phone_type`, and `effective_communication_preference` are **communication-only** helpers for notifications, mailers, and admin display. They prefer dependent-owned fields, then guardian fallback, then the user's own fields.
+  - Portal sign-in and password recovery still use primary `email`/`phone` through `User.find_by_login_identifier`; synthetic dependent primaries are excluded from those auth paths even when effective contact resolves to a guardian address.
   - `guardian_for_contact`: Returns the primary guardian for contact purposes.
 
 - **Contact predicates** (implemented in `UserContactPredicates` concern):

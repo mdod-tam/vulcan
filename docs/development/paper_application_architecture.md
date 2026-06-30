@@ -68,11 +68,23 @@ Paper intake deliberately branches before it writes the application:
 | Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
 | Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
 | New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
-| New self applicant | No existing applicant is selected. | Creates a constituent through `Applications::UserCreationService`. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users receive temporary account access; address-only users do not. |
+| New self applicant | No existing applicant is selected. | Creates a constituent through `Applications::UserCreationService`. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users receive temporary account access; address-only users do not. No-phone intake clears stored phone and sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
 
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
 Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
+
+## Account-Created Notices And Temp-Password Handoff
+
+Paper intake routes are `new` and `create` only (`config/routes.rb`). Quick-create temp-password handoff is wired through `PaperApplicationsController#create` and cleared after a successful create.
+
+When vouchers are enabled and the application is voucher scope, `PaperApplicationService` may send `account_created` notices for portal-eligible users created in the same submission. Temp passwords come from inline `UserCreationService` creation or from a quick-create handoff:
+
+- Quick-create stores the secret in `Rails.cache` and keeps only a per-user token in the admin session (30-minute TTL).
+- On create, resolved passwords and pending handoff user ids are passed into the service.
+- If the cache entry is missing at submit time, the user is still included in the notice candidate set and a reconciliation note tells the admin to reset the password manually.
+
+Equipment-fulfillment applications skip account-created messaging even when a portal-eligible user is created.
 
 ## Provider-Info Follow-Up
 

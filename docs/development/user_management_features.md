@@ -69,11 +69,19 @@ Blank phone numbers are allowed. Non-blank phones must normalize to a 10-digit U
 
 Paper/admin intake supports:
 
-- **Phone-only adults** — `no_email_address=1` strips email; user remains portal-eligible when a real phone is stored.
-- **Address-only adults** — `no_email_address=1` and `no_phone_number=1` store NULL email/phone, force letter delivery, and create users without exposed/temp passwords or portal access.
-- **Dependents** — synthetic primary email/phone remain dependent-only placeholders; adults never receive synthetic contacts when NULL is valid.
+- **Phone-only adults** — `no_email_address=1` strips email; user remains portal-eligible when a real phone is stored. Preferred contact method stays on voice/text/videophone.
+- **Address-only adults** — `no_email_address=1` and `no_phone_number=1` store NULL email/phone, force letter delivery, set `phone_type` to `letter`, and create users without exposed/temp passwords or portal access.
+- **Dependents** — synthetic primary email/phone remain dependent-only placeholders; adults never receive synthetic contacts when NULL is valid. Notifications and display use **effective contact** helpers (`effective_email`, `effective_phone`, `effective_phone_type`, `effective_communication_preference`), which prefer dependent-owned contact fields and fall back to the managing guardian for communication only—not for portal login identifiers.
 
 Admin display helpers (`display_contact_email`, `display_contact_phone`) hide synthetic values and show “No email on file” / “No phone on file”.
+
+### 3.1.2 Account-created notices and temp-password handoff
+
+Voucher-gated `account_created` notices are sent only when `FeatureFlag.enabled?(:vouchers_enabled)` and the paper application is voucher-fulfillment scope. Equipment-scope paper intake does not announce portal accounts the applicant cannot use.
+
+Portal-eligible users created during paper intake may receive a temporary password through `Applications::UserCreationService`. When an admin quick-creates a guardian in the same browser session, the temp password is stored in `Rails.cache` under a one-time token; the session holds only the token keyed by user id (30-minute TTL). `PaperApplicationsController#create` passes resolved passwords plus pending handoff user ids into `PaperApplicationService`. If the cache entry expires before submit, the application still saves and a reconciliation note tells the admin to reset the password manually.
+
+Persisted address-only constituents remain editable in admin user edit (name, address, letter preference) without requiring email. Normal admin edit cannot clear all contact information or keep email delivery without a real email; those transitions are reserved for paper intake with explicit no-contact flags.
 
 Public portal self-registration still requires both email and phone until a later PR changes that UI.
 
@@ -172,7 +180,7 @@ Deletion follows the model associations. For example, constituent applications a
 - `managed_applications`
 - `guardian?` and `dependent?`
 - `editable_by_guardian`, `accessible_by_guardian`, and matching predicate helpers
-- effective contact helpers that prefer dependent contact fields, then guardian fallback, then the user's own fields
+- effective contact helpers that prefer dependent contact fields, then guardian fallback, then the user's own fields. These helpers are for communication routing and display only; portal auth continues to use primary stored contacts with synthetic-value guards.
 
 Applications for dependents use `Application#managing_guardian_id` to record the managing guardian. Paper application details live in `docs/development/paper_application_architecture.md`.
 

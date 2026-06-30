@@ -162,4 +162,43 @@ describe("ContactFeedbackController", () => {
     expect(emailDelivery.checked).toBe(true)
     expect(letterDelivery.checked).toBe(false)
   })
+
+  it("togglePhoneField clears voice phone_type and selects letter when address-only", () => {
+    document.body.innerHTML = `
+      <div id="contact-feedback">
+        <input type="checkbox" name="no_email_address" checked />
+        <div data-contact-feedback-target="phoneWrapper">
+          <input data-contact-feedback-target="phone" id="phone" type="tel" value="4105550100" required />
+        </div>
+        <fieldset data-contact-feedback-target="phoneTypeFieldset">
+          <input type="radio" name="guardian_attributes[phone_type]" value="voice" checked />
+          <input type="radio" name="guardian_attributes[phone_type]" value="text" />
+          <input type="radio" name="guardian_attributes[phone_type]" value="letter" />
+        </fieldset>
+        <input type="checkbox" id="no_phone" />
+      </div>
+    `
+
+    fixture = document.querySelector('#contact-feedback')
+    controller = new ContactFeedbackController()
+    Object.defineProperty(controller, 'element', { value: fixture, configurable: true })
+    Object.defineProperty(controller, 'phoneTarget', { value: fixture.querySelector('[data-contact-feedback-target="phone"]'), configurable: true })
+    Object.defineProperty(controller, 'hasPhoneTarget', { value: true, configurable: true })
+    Object.defineProperty(controller, 'phoneWrapperTarget', { value: fixture.querySelector('[data-contact-feedback-target="phoneWrapper"]'), configurable: true })
+    Object.defineProperty(controller, 'hasPhoneWrapperTarget', { value: true, configurable: true })
+    Object.defineProperty(controller, 'phoneTypeFieldsetTarget', { value: fixture.querySelector('[data-contact-feedback-target="phoneTypeFieldset"]'), configurable: true })
+    Object.defineProperty(controller, 'hasPhoneTypeFieldsetTarget', { value: true, configurable: true })
+    Object.defineProperty(controller, 'hasEmailTarget', { value: false, configurable: true })
+
+    const checkbox = fixture.querySelector('#no_phone')
+    checkbox.checked = true
+    controller.togglePhoneField({ target: checkbox })
+
+    const voiceRadio = fixture.querySelector('input[value="voice"]')
+    const letterRadio = fixture.querySelector('input[value="letter"]')
+    expect(voiceRadio.checked).toBe(false)
+    expect(voiceRadio.disabled).toBe(true)
+    expect(letterRadio.checked).toBe(true)
+    expect(letterRadio.disabled).toBe(false)
+  })
 })
