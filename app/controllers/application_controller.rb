@@ -117,7 +117,7 @@ class ApplicationController < ActionController::Base
     if session_record
       redirect_to after_sign_in_path_for(user), notice: t('controllers.application.sign_in.signin_pass')
     else
-      redirect_to sign_in_path(email_hint: user.email), alert: t('alerts.session_fail')
+      redirect_to sign_in_path, alert: t('alerts.session_fail')
     end
   end
 

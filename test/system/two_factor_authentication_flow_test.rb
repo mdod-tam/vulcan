@@ -483,7 +483,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     # Sign in - capture a screenshot of the page after sign-in
     # to help diagnose what options are actually visible
     visit sign_in_path
-    find_by_id('email-input').send_keys(@user.email)
+    find_by_id('contact-input').send_keys(@user.email)
     find_by_id('password-input').send_keys('password123')
     click_button 'Sign In'
 
@@ -512,7 +512,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
     # Sign in to trigger 2FA flow
     visit sign_in_path
-    find_by_id('email-input').send_keys(@user.email)
+    find_by_id('contact-input').send_keys(@user.email)
     find_by_id('password-input').send_keys('password123')
     click_button 'Sign In'
 

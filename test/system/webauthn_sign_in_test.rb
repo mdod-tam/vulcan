@@ -101,7 +101,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     wait_for_network_idle
 
     within('form[action="/sign_in"]') do
-      fill_in 'email-input', with: user.email
+      fill_in 'contact-input', with: user.email
       fill_in 'password-input', with: 'password123'
       click_button 'Sign In'
     end
@@ -114,7 +114,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     # Verify the WebAuthn verification page displays correctly
     assert_text 'Device or Security Key Verification'
-    assert_text 'Use your registered security key to complete sign-in'
+    assert_text 'Use your device (fingerprint or face) or a physical security key to complete sign-in.'
 
     # Test stops here - we don't try to complete actual WebAuthn verification
     # That would require real hardware tokens or platform authenticators

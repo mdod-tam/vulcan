@@ -78,6 +78,45 @@ class User < ApplicationRecord
     nil
   end
 
+  def self.login_identifier_looks_like_email?(contact)
+    contact.to_s.strip.include?('@')
+  end
+
+  def self.login_identifier_valid_email?(contact)
+    normalized = contact.to_s.strip
+    normalized.match?(URI::MailTo::EMAIL_REGEXP)
+  end
+
+  def self.find_by_login_identifier(contact)
+    normalized = contact.to_s.strip.presence
+    return nil if normalized.blank?
+
+    if login_identifier_looks_like_email?(normalized)
+      return nil unless login_identifier_valid_email?(normalized)
+
+      user = find_by_email(normalized)
+      return nil if user.blank? || system_generated_email?(user.email)
+
+      return user
+    end
+
+    phone_user = find_by_phone(normalized)
+    return nil if phone_user.blank?
+    return nil if placeholder_phone?(phone_user.phone)
+
+    phone_user
+  end
+
+  def self.placeholder_phone?(phone)
+    synthetic_dependent_phone?(phone)
+  end
+
+  def self.system_generated_email?(email)
+    return false if email.blank?
+
+    normalize_email(email).to_s.end_with?('@system.matvulcan.local')
+  end
+
   def self.exists_with_email?(email_value, excluding_id: nil)
     normalized_email = normalize_email(email_value)
     return false if normalized_email.blank?

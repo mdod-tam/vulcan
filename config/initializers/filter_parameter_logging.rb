@@ -10,7 +10,7 @@ Rails.application.config.filter_parameters += [
   :password, :password_confirmation, :current_password, :password_digest,
 
   # PII fields (plaintext) - User model
-  :email, :phone, :ssn_last4, :date_of_birth,
+  :email, :phone, :contact, :ssn_last4, :date_of_birth,
   :physical_address_1, :physical_address_2, :city, :state, :zip_code,
 
   # SMS credential specific field

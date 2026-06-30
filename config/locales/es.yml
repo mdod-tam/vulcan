@@ -6,6 +6,10 @@ es:
     toggle:
       show: "Mostrar contraseña"
       hide: "Ocultar contraseña"
+  sessions:
+    form:
+      contact_label: "Correo electrónico o número de teléfono"
+      contact_hint: "Ingrese el correo electrónico o número de teléfono asociado con su cuenta"
   activerecord:
     errors:
       models:
@@ -747,7 +751,7 @@ es:
       contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
   controllers:
     sessions:
-      invalid_credentials: "Correo electrónico o contraseña inválidos"
+      invalid_credentials: "Correo electrónico, número de teléfono o contraseña inválidos"
     application:
       check_password_change_required:
         password_security_change: "Por razones de seguridad, debe cambiar su contraseña antes de continuar."

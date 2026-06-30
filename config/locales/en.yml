@@ -35,6 +35,10 @@ en:
     toggle:
       show: "Show password"
       hide: "Hide password"
+  sessions:
+    form:
+      contact_label: "Email Address or Phone Number"
+      contact_hint: "Enter the email address or phone number associated with your account"
   activerecord:
     errors:
       models:
@@ -692,7 +696,7 @@ en:
           not_active: "This secure W9 upload link is not active."
   controllers:
     sessions:
-      invalid_credentials: "Invalid email or password"
+      invalid_credentials: "Invalid email, phone number, or password"
     application:
       check_password_change_required:
         password_security_change: "For security reasons, you must change your password before continuing."
