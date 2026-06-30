@@ -7,8 +7,15 @@
       <h2 class="text-xl font-medium text-gray-900">Applicant Information</h2>
       <div class="mt-2 space-y-1">
         <p><strong>Full Name:</strong> <%= @user.full_name %></p>
-        <p><strong>Email:</strong> <%= mail_to @user.email %></p>
-        <p><strong>Phone:</strong> <%= @user.phone.presence || "N/A" %></p>
+        <p><strong>Email:</strong>
+          <% email_display = display_contact_email(@user) %>
+          <% if displayable_contact_email?(@user) %>
+            <%= mail_to email_display, email_display %>
+          <% else %>
+            <%= email_display %>
+          <% end %>
+        </p>
+        <p><strong>Phone:</strong> <%= display_contact_phone(@user) %></p>
         <p><strong>Street Address:</strong> <%= @user.physical_address_1.presence || "N/A" %></p>
         <p><strong>Suite Number:</strong> <%= @user.physical_address_2.presence || "N/A" %></p>
         <p><strong>City:</strong> <%= @user.city.presence || "N/A" %></p>

@@ -1308,5 +1308,125 @@ module Admin
       assert_not applicant.mobility_disability, 'Applicant should not have mobility disability'
       assert_not applicant.cognition_disability, 'Applicant should not have cognition disability'
     end
+
+    test 'creates address-only self-applicant with null contacts and letter preference' do
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+      ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
+
+      assert_difference ['Application.count', 'User.count'], 1 do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          no_email_address: '1',
+          no_phone_number: '1',
+          constituent: {
+            first_name: 'Address',
+            last_name: 'Only',
+            email: 'ignored@example.com',
+            phone: '555-000-9999',
+            physical_address_1: '200 Letter Lane',
+            city: 'Baltimore',
+            state: 'MD',
+            zip_code: '21201',
+            hearing_disability: '1',
+            communication_preference: 'letter'
+          },
+          application: {
+            household_size: 1,
+            annual_income: 10_000,
+            maryland_resident: '1',
+            self_certify_disability: '1',
+            medical_provider_name: 'Dr. Letter',
+            medical_provider_phone: '555-111-2222',
+            medical_provider_email: 'letter@example.com'
+          },
+          income_proof_action: 'not_provided',
+          residency_proof_action: 'not_provided'
+        }
+      end
+
+      user = User.order(:created_at).last
+      assert user.constituent?
+      assert_nil user.email
+      assert_nil user.phone
+      assert user.deliver_via_letter?
+      assert_not user.portal_access_eligible?
+      assert_not user.force_password_change?
+    end
+
+    test 'creates phone-only self-applicant without email' do
+      unique_phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+      ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
+
+      assert_difference ['Application.count', 'User.count'], 1 do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          no_email_address: '1',
+          constituent: {
+            first_name: 'Phone',
+            last_name: 'Only',
+            email: 'ignored@example.com',
+            phone: unique_phone,
+            phone_type: 'voice',
+            physical_address_1: '300 Phone Path',
+            city: 'Baltimore',
+            state: 'MD',
+            zip_code: '21201',
+            hearing_disability: '1',
+            communication_preference: 'letter'
+          },
+          application: {
+            household_size: 1,
+            annual_income: 10_000,
+            maryland_resident: '1',
+            self_certify_disability: '1',
+            medical_provider_name: 'Dr. Phone',
+            medical_provider_phone: '555-111-3333',
+            medical_provider_email: 'phone@example.com'
+          },
+          income_proof_action: 'not_provided',
+          residency_proof_action: 'not_provided'
+        }
+      end
+
+      user = User.find_by(phone: User.normalize_phone(unique_phone))
+      assert user, 'Expected phone-only user to be created'
+      assert_nil user.email
+      assert user.portal_access_eligible?
+      assert user.deliver_via_letter?
+      assert user.force_password_change?
+    end
+
+    test 're-render preserves no-contact checkbox state after validation failure' do
+      post admin_paper_applications_path, headers: default_headers, params: {
+        no_email_address: '1',
+        no_phone_number: '1',
+        constituent: {
+          first_name: '',
+          last_name: 'Only',
+          email: 'ignored@example.com',
+          phone: '555-000-9999',
+          physical_address_1: '200 Letter Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          hearing_disability: '1',
+          communication_preference: 'letter'
+        },
+        application: {
+          household_size: 1,
+          annual_income: 10_000,
+          maryland_resident: '1',
+          self_certify_disability: '1',
+          medical_provider_name: 'Dr. Letter',
+          medical_provider_phone: '555-111-2222',
+          medical_provider_email: 'letter@example.com'
+        },
+        income_proof_action: 'not_provided',
+        residency_proof_action: 'not_provided'
+      }
+
+      assert_response :unprocessable_content
+      assert_select 'input[name=?][checked]', 'no_email_address'
+      assert_select 'input[name=?][checked]', 'no_phone_number'
+    end
   end
 end

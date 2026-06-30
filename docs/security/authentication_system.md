@@ -10,7 +10,7 @@ Password sign-in starts in `SessionsController#create`.
 
 The controller:
 
-- looks up users through `User.find_by_login_identifier`, which accepts email or phone, normalizes input, rejects malformed `@` input, synthetic dependent emails, and placeholder phones, and works with encrypted email storage
+- looks up users through `User.find_by_login_identifier`, which accepts email or phone, normalizes input, rejects malformed `@` input, and rejects users whose stored contact fails `real_email?` or `real_phone?` (covering synthetic dependent emails and placeholder phones), and works with encrypted email storage
 - does not change portal registration rules; signup still requires both email and phone in the public UI
 - checks account lock state before password authentication
 - records failed password attempts
@@ -19,7 +19,7 @@ The controller:
 
 User password/session behavior lives in `UserAuthentication`.
 
-Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses parallel contact lookup logic in `find_user_for_account_access` with the same malformed-`@`, synthetic-email, placeholder-phone, and text-capable SMS rules as sign-in, but it does not call `User.find_by_login_identifier` directly. WebAuthn recovery in `AccountRecoveryController` is still email-only.
+Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses parallel contact lookup logic in `find_user_for_account_access` with the same malformed-`@` guards plus instance predicates (`real_email?`, `real_phone?`, `sms_capable_phone?`), but it does not call `User.find_by_login_identifier` directly. WebAuthn recovery in `AccountRecoveryController` is email-only.
 
 Current account-lock behavior:
 

@@ -69,24 +69,25 @@
         <div>
           <dt class="text-sm font-medium text-gray-700">Email</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            <% effective = @user.effective_email %>
-            <% if effective.present? %>
-              <%= mail_to effective, effective, class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+            <% email_display = display_contact_email(@user) %>
+            <% if displayable_contact_email?(@user) %>
+              <%= mail_to email_display, email_display, class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
             <% else %>
-              <span class="text-gray-700">No email provided</span>
+              <span class="text-gray-700"><%= email_display %></span>
             <% end %>
           </dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-700">Phone</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            <% if @user.phone.present? %>
-              <%= @user.phone %>
+            <% phone_display = display_contact_phone(@user) %>
+            <% if phone_display != ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE %>
+              <%= phone_display %>
               <% if @user.phone_type.present? %>
                 <span class="text-gray-700">(<%= @user.phone_type %>)</span>
               <% end %>
             <% else %>
-              <span class="text-gray-700">Not provided</span>
+              <span class="text-gray-700"><%= phone_display %></span>
             <% end %>
           </dd>
         </div>
@@ -274,19 +275,25 @@
                     <div class="mt-3 p-3 bg-white rounded border border-gray-200">
                       <p class="text-xs font-medium text-gray-700 mb-1">Contact Information</p>
                       <p class="text-sm text-gray-900">
-                        <span class="text-gray-700">Email:</span> 
-                        <%= mail_to guardian.effective_email, guardian.effective_email, 
-                            class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+                        <span class="text-gray-700">Email:</span>
+                        <% guardian_email_display = display_contact_email(guardian) %>
+                        <% if displayable_contact_email?(guardian) %>
+                          <%= mail_to guardian_email_display, guardian_email_display,
+                              class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+                        <% else %>
+                          <span class="text-gray-700"><%= guardian_email_display %></span>
+                        <% end %>
                       </p>
                       <p class="text-sm text-gray-900">
-                        <span class="text-gray-700">Phone:</span> 
-                        <% if guardian.phone.present? %>
-                          <%= guardian.phone %>
+                        <span class="text-gray-700">Phone:</span>
+                        <% guardian_phone_display = display_contact_phone(guardian) %>
+                        <% if guardian_phone_display != ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE %>
+                          <%= guardian_phone_display %>
                           <% if guardian.phone_type.present? %>
                             <span class="text-gray-700">(<%= guardian.phone_type %>)</span>
                           <% end %>
                         <% else %>
-                          <span class="text-gray-700">Not provided</span>
+                          <span class="text-gray-700"><%= guardian_phone_display %></span>
                         <% end %>
                       </p>
                     </div>

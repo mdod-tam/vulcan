@@ -374,5 +374,122 @@ module Admin
       assert potential_duplicates.exists?, 'Expected user to be flagged for duplicate review'
       assert potential_duplicates.include?(first_user), 'Should find the first user as a potential duplicate'
     end
+
+    test 'quick create guardian without email or phone succeeds for address-only intake' do
+      assert_difference 'User.count', 1 do
+        post admin_users_path, params: {
+          first_name: 'Letter',
+          last_name: 'Guardian',
+          guardian_no_email_address: '1',
+          guardian_no_phone_number: '1',
+          no_email_address: '1',
+          no_phone_number: '1',
+          email: 'ignored@example.com',
+          phone: '555-000-9999',
+          physical_address_1: '100 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          date_of_birth: '01/01/1980',
+          communication_preference: 'letter'
+        }, as: :json
+      end
+
+      assert_response :success
+      user = User.order(:created_at).last
+      assert_nil user.email
+      assert_nil user.phone
+      assert user.deliver_via_letter?
+      assert_not user.portal_access_eligible?
+    end
+
+    test 'admin can update address-only user profile without email' do
+      user = nil
+      internal_password = SecureRandom.hex(32)
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'Letter', last_name: 'Only',
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: 'Updated',
+          last_name: 'Only',
+          email: '',
+          phone: '',
+          physical_address_1: '200 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          communication_preference: 'letter'
+        }
+      }
+
+      assert_redirected_to admin_user_path(user)
+      user.reload
+      assert_equal 'Updated', user.first_name
+      assert_nil user.email
+      assert_nil user.phone
+    end
+
+    test 'constituents list shows no email on file for address-only users' do
+      internal_password = SecureRandom.hex(32)
+      user = nil
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'Inactive', last_name: 'LetterOnly',
+          status: :inactive,
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      create(:application, :archived, user: user)
+
+      get constituents_admin_users_path
+
+      assert_response :success
+      assert_match ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE, response.body
+    end
+
+    test 'history shows display helpers for address-only users' do
+      user = nil
+      internal_password = SecureRandom.hex(32)
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'History', last_name: 'LetterOnly',
+          status: :inactive,
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      get history_admin_user_path(user)
+
+      assert_response :success
+      assert_match ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE, response.body
+      assert_match ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE, response.body
+    end
   end
 end

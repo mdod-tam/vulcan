@@ -98,14 +98,16 @@ class PasswordsController < ApplicationController
       return [nil, nil] unless User.login_identifier_valid_email?(contact)
 
       email_user = User.find_by_email(contact)
-      return [nil, nil] if email_user.blank? || User.system_generated_email?(email_user.email)
+      return [nil, nil] if email_user.blank?
+      return [nil, nil] unless email_user.real_email?
 
       return [email_user, :email]
     end
 
     phone_user = User.find_by_phone(contact)
-    return [nil, nil] if phone_user.blank? || User.placeholder_phone?(phone_user.phone)
-    return [nil, nil] unless phone_user.phone_type.to_s == 'text'
+    return [nil, nil] if phone_user.blank?
+    return [nil, nil] unless phone_user.real_phone?
+    return [nil, nil] unless phone_user.sms_capable_phone?
 
     [phone_user, :sms]
   end

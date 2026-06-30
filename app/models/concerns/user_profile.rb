@@ -29,11 +29,11 @@ module UserProfile
     validates :first_name, presence: true, length: { maximum: 50 }
     validates :last_name, presence: true, length: { maximum: 50 }
     validates :middle_initial, length: { maximum: 1 }, allow_blank: true
-    validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: :paper_context_no_email?
+    validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: :email_optional?
     validates :dependent_email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
     validate :email_must_be_unique
     validate :phone_must_be_unique
-    validate :phone_number_must_be_valid, if: :phone_changed?
+    validate :phone_number_must_be_valid, if: :phone_changed?, unless: :paper_context_no_phone?
     validate :dependent_phone_number_must_be_valid, if: :dependent_phone_changed?
     validate :date_of_birth_must_be_valid
     validate :constituent_must_have_disability, if: :validate_constituent_disability?
@@ -97,11 +97,12 @@ module UserProfile
   private
 
   def normalize_email_fields
-    self.email = User.normalize_email(email) if email.present?
-    self.dependent_email = User.normalize_email(dependent_email) if dependent_email.present?
+    self.email = email.present? ? User.normalize_email(email) : nil
+    self.dependent_email = dependent_email.present? ? User.normalize_email(dependent_email) : nil
   end
 
   def format_phone_number
+    self.phone = nil if phone.blank?
     return if phone.blank?
 
     digits = phone.gsub(/\D/, '')
@@ -213,9 +214,29 @@ module UserProfile
     Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
   end
 
-    # Check if we're in a paper context where email is not required
+  # Check if we're in a paper context where email is not required
   def paper_context_no_email?
     Current.paper_context && email.blank?
   end
 
+  # Check if we're in a paper context where phone is not required
+  def paper_context_no_phone?
+    Current.paper_context && phone.blank?
+  end
+
+  # Phone-only portal users store NULL email; password/profile saves must not require email.
+  # Address-only users store NULL email/phone and remain editable outside paper context.
+  def email_optional?
+    paper_context_no_email? ||
+      (persisted? && portal_phone_only_without_email?) ||
+      (persisted? && address_only_contact?)
+  end
+
+  def portal_phone_only_without_email?
+    email.blank? && real_phone?
+  end
+
+  def address_only_contact?
+    !real_email? && !real_phone?
+  end
 end

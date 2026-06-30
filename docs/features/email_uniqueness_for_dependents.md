@@ -40,6 +40,12 @@ The `User` model includes logic to manage dependent-specific contact information
   - `effective_communication_preference`: Uses guardian's preference if user is a dependent.
   - `guardian_for_contact`: Returns the primary guardian for contact purposes.
 
+- **Contact predicates** (implemented in `UserContactPredicates` concern):
+  - `real_email?`, `real_phone?`, `sms_capable_phone?`, and `portal_access_eligible?` express stored contact truth.
+  - Synthetic primary values (`@system.matvulcan.local`, `000-…` phones) are never `real_*` and are blocked from auth lookup.
+  - Adults use NULL email/phone for address-only paper intake; synthetic placeholders are reserved for dependent uniqueness constraints only.
+  - Admin display uses `display_contact_email` / `display_contact_phone` to hide synthetic values.
+
 **Note**: The `has_own_contact_info?` and `uses_guardian_contact_info?` methods mentioned in earlier documentation are not currently implemented in the codebase.
 
 The implementation provides a clear and secure way to handle different contact scenarios for dependents.

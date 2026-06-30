@@ -4,6 +4,7 @@ module Admin
   class PaperApplicationsController < Admin::BaseController
     include ParamCasting
     include TurboStreamResponseHandling
+    include PaperQuickCreateTempPasswords
 
     before_action :cast_complex_boolean_params, only: %i[create update]
 
@@ -56,12 +57,14 @@ module Admin
 
       service = Applications::PaperApplicationService.new(
         params: service_params,
-        admin: current_user
+        admin: current_user,
+        quick_create_temp_passwords: quick_create_temp_passwords
       )
 
       service_result = service.create
 
       if service_result
+        clear_quick_create_temp_passwords!
         success_message = generate_success_message(service.application)
         if service.reconciliation_note.present?
           handle_reconciliation_warning_response(
@@ -104,10 +107,12 @@ module Admin
 
       service = Applications::PaperApplicationService.new(
         params: service_params,
-        admin: current_user
+        admin: current_user,
+        quick_create_temp_passwords: quick_create_temp_passwords
       )
 
       if service.update(application)
+        clear_quick_create_temp_passwords!
         update_message = generate_success_message(application)
         if service.reconciliation_note.present?
           handle_reconciliation_warning_response(
@@ -361,6 +366,8 @@ module Admin
       params.permit(
         :applicant_type, :relationship_type, :guardian_id, :dependent_id,
         :existing_constituent_id, :contact_info_mode, :contact_info_verified,
+        :no_email_address, :no_phone_number,
+        :guardian_no_email_address, :guardian_no_phone_number,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         application: APPLICATION_FIELDS,
@@ -424,6 +431,9 @@ module Admin
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         :no_email_address,
+        :no_phone_number,
+        :guardian_no_email_address,
+        :guardian_no_phone_number,
         :income_proof_action, :income_proof, :income_proof_signed_id,
         :income_proof_rejection_reason, :income_proof_custom_rejection_reason,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
@@ -443,7 +453,9 @@ module Admin
     def base_params_from(permitted)
       base = permitted.slice(
         :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
-        :existing_constituent_id, :contact_info_mode, :contact_info_verified, :no_email_address
+        :existing_constituent_id, :contact_info_mode, :contact_info_verified,
+        :no_email_address, :no_phone_number,
+        :guardian_no_email_address, :guardian_no_phone_number
       )
       base[:applicant_type] = compute_applicant_type(permitted)
       base

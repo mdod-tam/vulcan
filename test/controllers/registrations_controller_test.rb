@@ -147,6 +147,25 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_not user.disability_selected?, 'User should not have any disability flags set at registration'
   end
 
+  def test_should_not_create_phone_only_user_without_email
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Phone',
+        last_name: 'Only',
+        date_of_birth: '1990-01-01',
+        phone: '555-555-5555',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:email], "can't be blank"
+  end
+
   def test_should_not_create_user_with_invalid_phone
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {

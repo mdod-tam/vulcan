@@ -105,19 +105,16 @@
         <%= t("applications.dependent_contact.strategy_help") %>
       </p>
       
-      <%# No Email Checkbox %>
+      <%# Dependent no-email: UI-only; selects guardian email strategy (not a shared top-level flag) %>
       <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
         <label class="flex items-start cursor-pointer">
-          <%= hidden_field_tag :no_email_address, "0", id: nil %>
-          <input type="checkbox" 
-                 name="no_email_address" 
-                 value="1" 
-                 id="no_email_address_dependent"
+          <input type="checkbox"
+                 id="dependent_no_email_address"
                  class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                 data-action="change->contact-feedback#toggleEmailField">
+                 data-action="change->contact-feedback#toggleDependentNoEmail">
           <span class="ml-3">
             <span class="block text-sm font-medium text-gray-700">Dependent does not have an email address</span>
-            <span class="block text-xs text-gray-500 mt-1">If checked, official documents will be sent by printed letter. Email field will be optional.</span>
+            <span class="block text-xs text-gray-500 mt-1">Uses guardian email strategy; official documents will be sent by printed letter unless the dependent has their own email.</span>
           </span>
         </label>
       </div>

@@ -6,6 +6,7 @@ module Admin
   class UsersController < BaseController # rubocop:disable Metrics/ClassLength
     include ParamCasting
     include UserServiceIntegration
+    include PaperQuickCreateTempPasswords
 
     DependentSummary = Struct.new(
       :id,
@@ -212,14 +213,22 @@ module Admin
 
     # Create action for creating a new guardian from the paper application form
     def create
-      # Using UserServiceIntegration concern for consistent user creation
-      # Flow: create_user_with_service(params, is_managing_adult: true) -> handles password generation, validation, etc.
-      result = create_user_with_service(user_create_params, is_managing_adult: true)
+      Current.paper_context = true
+      attrs = apply_quick_create_contact_flags(user_create_params.to_h)
+      skip_email = quick_create_no_email?
+
+      result = create_user_with_service(
+        attrs,
+        is_managing_adult: true,
+        skip_email_validation: skip_email
+      )
 
       if result.success?
         user = result.data[:user]
-        # Check for duplicates and set flag (UserCreationService handles basic creation, we add our admin-specific logic)
         user.update!(needs_duplicate_review: true) if potential_duplicate_found?(user)
+
+        temp_password = result.data[:temp_password]
+        store_quick_create_temp_password!(user.id, temp_password) if temp_password.present?
 
         render json: {
           success: true,
@@ -233,6 +242,8 @@ module Admin
           errors: format_validation_errors(result.data[:errors] || [result.message])
         }, status: :unprocessable_content
       end
+    ensure
+      Current.reset
     end
 
     # Dedicated search endpoint for user search (used by paper application form)
@@ -478,8 +489,7 @@ module Admin
 
     def constituents
       @q = params[:q]
-      scope = User.where(type: 'Constituent')
-                  .joins(:applications)
+      scope = Users::Constituent.joins(:applications)
                   .where(applications: { status: [Application.statuses[:rejected], Application.statuses[:archived]] })
                   .group('users.id')
 
@@ -614,8 +624,8 @@ module Admin
         first_name: user.first_name,
         middle_initial: user.try(:middle_initial),
         last_name: user.last_name,
-        email: user.email,
-        phone: user.phone,
+        email: prefill_contact_email(user),
+        phone: prefill_contact_phone(user),
         date_of_birth: user.date_of_birth,
         physical_address_1: user.physical_address_1,
         physical_address_2: user.physical_address_2,
@@ -628,6 +638,53 @@ module Admin
         locale: user.locale,
         referral_source: user.try(:referral_source)
       }
+    end
+
+    def prefill_contact_email(user)
+      email = user.email
+      return nil if email.blank? || User.system_generated_email?(email)
+
+      email
+    end
+
+    def prefill_contact_phone(user)
+      phone = user.phone
+      return nil if phone.blank? || User.synthetic_dependent_phone?(phone)
+
+      phone
+    end
+
+    def quick_create_no_email?
+      truthy_param?(:no_email_address) || truthy_param?(:guardian_no_email_address)
+    end
+
+    def quick_create_no_phone?
+      truthy_param?(:no_phone_number) || truthy_param?(:guardian_no_phone_number)
+    end
+
+    def apply_quick_create_contact_flags(attrs)
+      attrs = attrs.deep_dup
+
+      if quick_create_no_email?
+        attrs.delete(:email)
+        attrs.delete('email')
+        attrs[:communication_preference] = 'letter'
+      end
+
+      if quick_create_no_phone?
+        attrs.delete(:phone)
+        attrs.delete('phone')
+        attrs[:communication_preference] = 'letter' if attrs[:email].blank? && attrs['email'].blank?
+      end
+
+      attrs[:communication_preference] = 'letter' if attrs[:email].blank? && attrs['email'].blank? &&
+                                                     attrs[:phone].blank? && attrs['phone'].blank?
+
+      attrs
+    end
+
+    def truthy_param?(key)
+      params[key].present? && params[key].to_s == '1'
     end
 
     # Build DependentSummary objects for a guardian's dependents

@@ -55,7 +55,7 @@ The controller does not own the main paper-application side effects after create
 - sets `submission_method` to `paper`
 - stamps `fulfillment_type` as `voucher` only when vouchers are enabled; otherwise paper applications remain equipment-fulfillment
 - processes income, residency, ID, and disability certification actions
-- sends account-creation and proof-rejection notifications after a successful create
+- sends account-creation notifications after a successful create for portal-eligible users only (`portal_access_eligible?`)
 - logs `application_created` after create
 - performs reconciliation after the transaction commits
 
@@ -68,7 +68,7 @@ Paper intake deliberately branches before it writes the application:
 | Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
 | Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
 | New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
-| New self applicant | No existing applicant is selected. | Creates a constituent through `Applications::UserCreationService`, generates temporary account access, and writes the paper application. |
+| New self applicant | No existing applicant is selected. | Creates a constituent through `Applications::UserCreationService`. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users receive temporary account access; address-only users do not. |
 
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 

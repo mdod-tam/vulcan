@@ -28,11 +28,16 @@ module Applications
     private
 
     def find_existing_user
-      return nil unless attrs[:email].present? && attrs[:email].exclude?('@system.matvulcan.local')
+      if attrs[:email].present? && !User.system_generated_email?(attrs[:email])
+        user = User.find_by_email(attrs[:email])
+        return user if user
+      end
 
-      user = User.find_by_email(attrs[:email])
-      user ||= find_by_phone if attrs[:phone].present?
-      user
+      # Dependents with guardian email strategy store synthetic primary email; phone lookup
+      # would match unrelated users sharing the dependent's real phone.
+      return if attrs[:email].present? && User.system_generated_email?(attrs[:email])
+
+      find_by_phone if attrs[:phone].present?
     end
 
     def find_by_phone
@@ -49,7 +54,7 @@ module Applications
       user = build_user
 
       if user.save
-        Rails.logger.info { "Created user #{user.id} with email #{user.email}" }
+        Rails.logger.info { "Created user #{user.id} (portal_eligible=#{user.portal_access_eligible?})" }
         user
       else
         @errors << "Failed to create user: #{user.errors.full_messages.join(', ')}"
@@ -58,6 +63,7 @@ module Applications
     end
 
     def prepare_attributes
+      normalize_contact_attrs!
       # Only auto-assign disability for paper applications, not portal (which validates)
       ensure_disability_selection unless is_managing_adult || @require_disability_validation
       attrs.delete(:notification_method)
@@ -73,15 +79,36 @@ module Applications
     end
 
     def build_user
-      @temp_password = SecureRandom.hex(8)
+      user = Users::Constituent.new(attrs)
+      user.verified = true
+      user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
 
-      Users::Constituent.new(attrs).tap do |user|
+      if portal_eligible_from_attrs?
+        @temp_password = SecureRandom.hex(8)
         user.password = @temp_password
         user.password_confirmation = @temp_password
-        user.verified = true
         user.force_password_change = true
-        user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
+      else
+        @temp_password = nil
+        internal_password = SecureRandom.hex(32)
+        user.password = internal_password
+        user.password_confirmation = internal_password
+        user.force_password_change = false
       end
+
+      user
+    end
+
+    def portal_eligible_from_attrs?
+      User.new(email: attrs[:email], phone: attrs[:phone], phone_type: attrs[:phone_type]).portal_access_eligible?
+    end
+
+    def normalize_contact_attrs!
+      attrs[:email] = User.normalize_email(attrs[:email]) if attrs[:email].present?
+      return if attrs[:phone].blank?
+
+      normalized_phone = User.normalize_phone(attrs[:phone])
+      attrs[:phone] = normalized_phone if normalized_phone.present?
     end
 
     def ensure_disability_selection

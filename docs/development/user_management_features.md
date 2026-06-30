@@ -27,14 +27,15 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Routes | `config/routes.rb` | Defines `sign_up`, profile/password routes, `admin/users`, and member routes such as `mfa_tokens_admin_user_path`, `update_role_admin_user_path`, and `history_admin_user_path`. |
 | Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, blocks exact email/phone duplicates with an account-access prompt, flags name+DOB matches for review, creates the session, and sends registration confirmation. |
 | Admin users | `app/controllers/admin/users_controller.rb` | Lists, filters, shows, edits, creates, role-converts, capability-updates, deletes MFA tokens, deletes users, and serves guardian/dependent helper endpoints. |
-| User model | `app/models/user.rb` | Base STI model. Includes authentication, roles/capabilities, profile validation, guardian/dependent logic, and email search tokens. |
-| Profile concern | `app/models/concerns/user_profile.rb` | Normalizes email and phone, declares encrypted fields, validates contact uniqueness and phone format, and logs profile changes. |
+| User model | `app/models/user.rb` | Base STI model. Includes authentication, roles/capabilities, profile validation, contact predicates, guardian/dependent logic, and email search tokens. |
+| Contact predicates | `app/models/concerns/user_contact_predicates.rb` | Canonical contact truth: `real_email?`, `real_phone?`, `sms_capable_phone?`, `portal_access_eligible?`. Portal eligibility is computed from stored contact, not faked with synthetic values. |
+| Profile concern | `app/models/concerns/user_profile.rb` | Normalizes email and phone, declares encrypted fields, validates contact uniqueness and phone format, allows NULL email/phone in paper context, and logs profile changes. |
 | Authentication concern | `app/models/concerns/user_authentication.rb` | Owns password/session behavior and WebAuthn, TOTP, and SMS credential associations. |
 | Guardian concern | `app/models/concerns/user_guardianship.rb` | Owns guardian/dependent associations, effective contact methods, and guardian access checks. |
 | Email search concern | `app/models/concerns/user_email_search.rb` | Stores HMAC email-search tokens for admin search, including dependent email and guardian fallback email search. |
 | Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and a create-time name+DOB duplicate check. |
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
-| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows, generates temporary passwords, and marks new service-created users as verified with forced password change. |
+| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Portal-eligible users receive temporary passwords and `force_password_change`; address-only users are created without exposed/temp passwords (internal password only). Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
 
 ## 3 · Signup And Duplicate Handling
@@ -54,6 +55,27 @@ Email and phone are stored with deterministic Rails encryption so exact lookups 
 `UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
 
 Blank phone numbers are allowed. Non-blank phones must normalize to a 10-digit US number when the phone changes.
+
+### 3.1.1 Contact predicates and paper intake paths
+
+`UserContactPredicates` defines the shared vocabulary:
+
+| Method | Meaning |
+|--------|---------|
+| `real_email?` | Present, valid format, not `@system.matvulcan.local` |
+| `real_phone?` | Present, valid 10-digit US, not synthetic `000-…` prefix |
+| `sms_capable_phone?` | `real_phone?` and `phone_type == 'text'` |
+| `portal_access_eligible?` | `real_email?` or `real_phone?` |
+
+Paper/admin intake supports:
+
+- **Phone-only adults** — `no_email_address=1` strips email; user remains portal-eligible when a real phone is stored.
+- **Address-only adults** — `no_email_address=1` and `no_phone_number=1` store NULL email/phone, force letter delivery, and create users without exposed/temp passwords or portal access.
+- **Dependents** — synthetic primary email/phone remain dependent-only placeholders; adults never receive synthetic contacts when NULL is valid.
+
+Admin display helpers (`display_contact_email`, `display_contact_phone`) hide synthetic values and show “No email on file” / “No phone on file”.
+
+Public portal self-registration still requires both email and phone until a later PR changes that UI.
 
 ### 3.2 Name and DOB review flag
 
@@ -102,12 +124,14 @@ Email search uses `UserEmailSearchToken` rows. The tokens are HMAC digests, not 
 The admin user show page displays:
 
 - basic encrypted profile fields
-- effective email, stored phone, and relationship contact details
+- display contact email/phone (hides synthetic values)
 - guardian/dependent relationships
 - application history for the selected user
 - edit, delete MFA tokens, and delete user actions
 
-Admin-created users go through `UserServiceIntegration#create_user_with_service`, which calls `Applications::UserCreationService`. New service-created constituents get a generated temporary password, `verified: true`, and `force_password_change: true`.
+Admin-created users go through `UserServiceIntegration#create_user_with_service`, which calls `Applications::UserCreationService`. Portal-eligible service-created constituents get a generated temporary password, `verified: true`, and `force_password_change: true`. Address-only users are created without exposed temp passwords. Phone-only users store NULL email and remain portal-eligible via `real_phone?`.
+
+The admin user show page displays contact through `display_contact_email` and `display_contact_phone`, which hide synthetic values and show “No email on file” / “No phone on file” when appropriate.
 
 ## 5 · MFA And Destructive Admin Actions
 

@@ -747,6 +747,17 @@ module Applications
       assert_not service.send(:send_account_created_notice?)
     end
 
+    test 'new_user_accounts includes quick-created guardian when temp password is present beyond five minutes' do
+      guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true)
+      guardian.update_column(:created_at, 10.minutes.ago)
+
+      service = PaperApplicationService.new(params: {}, admin: @admin)
+      service.instance_variable_set(:@guardian_user_for_app, guardian)
+      service.send(:store_temp_password, guardian, 'quickcreate1')
+
+      assert_includes service.send(:new_user_accounts), guardian
+    end
+
     test 'medical certification not provided notice notifies constituent for none_provided review' do
       constituent = create(:constituent, communication_preference: :email)
       application = create(:application, :in_progress, skip_proofs: true, user: constituent)

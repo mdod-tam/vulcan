@@ -81,23 +81,33 @@
         <div>
           <dt class="text-sm font-medium text-gray-500">Email</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            <% if @application.user&.effective_email.present? %>
-              <%= mail_to @application.user.effective_email, class: "text-indigo-600 hover:text-indigo-500" %>
+            <% if @application.user.present? %>
+              <% email_display = display_contact_email(@application.user) %>
+              <% if displayable_contact_email?(@application.user) %>
+                <%= mail_to email_display, email_display, class: "text-indigo-600 hover:text-indigo-500" %>
+              <% else %>
+                <%= email_display %>
+              <% end %>
             <% else %>
-              No email provided
+              <%= ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE %>
             <% end %>
           </dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-500">Phone</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            <% if @application.user&.phone.present? %>
-              <%= @application.user.phone %>
-              <% if @application.user.phone_type.present? %>
-                (<%= @application.user.phone_type %>)
+            <% if @application.user.present? %>
+              <% phone_display = display_contact_phone(@application.user) %>
+              <% if phone_display != ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE %>
+                <%= phone_display %>
+                <% if @application.user.phone_type.present? %>
+                  (<%= @application.user.phone_type %>)
+                <% end %>
+              <% else %>
+                <%= phone_display %>
               <% end %>
             <% else %>
-              Not provided
+              <%= ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE %>
             <% end %>
           </dd>
         </div>

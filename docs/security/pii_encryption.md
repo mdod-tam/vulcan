@@ -93,7 +93,7 @@ Important behavior:
 
 - email is normalized to lowercase before validation
 - phone is normalized to `XXX-XXX-XXXX` when it has a valid 10-digit US shape
-- email is required unless paper context allows a no-email paper flow
+- email is required unless paper context allows a no-email paper flow or the user is a phone-only portal user (`email_optional?` — NULL email with `real_phone?`)
 - phone and dependent phone must be valid 10-digit US numbers when present
 - dependent email/phone are encrypted too
 

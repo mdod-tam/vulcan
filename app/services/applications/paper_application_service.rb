@@ -9,7 +9,8 @@ module Applications
 
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
 
-    def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false)
+    def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false,
+                   quick_create_temp_passwords: {})
       super()
       @params = params.with_indifferent_access
       @admin = admin
@@ -18,6 +19,7 @@ module Applications
       @guardian_user_for_app = nil
       @errors = []
       @temp_passwords = {}
+      @quick_create_temp_passwords = quick_create_temp_passwords.to_h.stringify_keys
       @reconciliation_note = nil
       @skip_income_validation = skip_income_validation
       @skip_proof_processing = skip_proof_processing
@@ -266,6 +268,8 @@ module Applications
     end
 
     def process_guardian_dependent(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
+      new_guardian_attrs = apply_no_contact_flags!(new_guardian_attrs.deep_dup, scope: :guardian) if new_guardian_attrs.present?
+
       service = GuardianDependentManagementService.new(params)
       result = service.process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
 
@@ -273,9 +277,9 @@ module Applications
         @guardian_user_for_app = result.data[:guardian]
         @constituent = result.data[:dependent]
 
-        # Store temp passwords if created
-        store_temp_password(@guardian_user_for_app) if @guardian_user_for_app
-        store_temp_password(@constituent) if @constituent
+        store_temp_password(@guardian_user_for_app, result.data[:guardian_temp_password])
+        store_temp_password(@guardian_user_for_app, @quick_create_temp_passwords[@guardian_user_for_app.id.to_s])
+        store_temp_password(@constituent, result.data[:dependent_temp_password])
 
         validate_no_active_application('dependent')
       else
@@ -285,15 +289,13 @@ module Applications
     end
 
     def process_self_applicant(applicant_data)
-      # Handle no email address scenario
-      no_email = params[:no_email_address].present? && params[:no_email_address] == '1'
-      if no_email
-        applicant_data = applicant_data.dup
-        applicant_data.delete(:email)
-        applicant_data[:communication_preference] = 'letter'
-      end
+      applicant_data = apply_no_contact_flags!(applicant_data.deep_dup, scope: :constituent)
 
-      result = UserCreationService.new(applicant_data, is_managing_adult: true, skip_email_validation: no_email).call
+      result = UserCreationService.new(
+        applicant_data,
+        is_managing_adult: true,
+        skip_email_validation: no_email_address?(:constituent)
+      ).call
 
       if result.success?
         @constituent = result.data[:user]
@@ -303,6 +305,44 @@ module Applications
         @errors.concat(result.data[:errors] || [result.message])
         false
       end
+    end
+
+    def apply_no_contact_flags!(data, scope:)
+      if no_email_address?(scope)
+        data.delete(:email)
+        data[:communication_preference] = 'letter'
+      end
+
+      if no_phone_number?(scope)
+        data.delete(:phone)
+        data[:communication_preference] = 'letter' if data[:email].blank?
+      end
+
+      data[:communication_preference] = 'letter' if data[:email].blank? && data[:phone].blank?
+
+      data
+    end
+
+    def no_email_address?(scope = :constituent)
+      case scope
+      when :guardian
+        truthy_param?(:guardian_no_email_address)
+      else
+        truthy_param?(:no_email_address)
+      end
+    end
+
+    def no_phone_number?(scope = :constituent)
+      case scope
+      when :guardian
+        truthy_param?(:guardian_no_phone_number)
+      else
+        truthy_param?(:no_phone_number)
+      end
+    end
+
+    def truthy_param?(key)
+      params[key].present? && params[key].to_s == '1'
     end
 
     def store_temp_password(user, password = nil)
@@ -380,6 +420,7 @@ module Applications
       attrs = params[:constituent]
       return true if attrs.blank?
 
+      attrs = apply_no_contact_flags!(attrs.deep_dup, scope: :constituent)
       updates = build_adult_contact_updates(attrs)
       return true if updates.empty?
 
@@ -408,7 +449,24 @@ module Applications
     end
 
     def build_adult_contact_updates(attrs)
-      build_contact_updates(attrs, fields: ADULT_CONTACT_FIELDS)
+      updates = build_contact_updates(attrs, fields: ADULT_CONTACT_FIELDS)
+      apply_contact_clear_flags!(updates)
+      updates
+    end
+
+    def apply_contact_clear_flags!(updates)
+      if no_email_address?(:constituent)
+        updates[:email] = nil
+        updates[:communication_preference] = 'letter'
+      end
+
+      updates[:phone] = nil if no_phone_number?(:constituent)
+
+      if no_email_address?(:constituent) && no_phone_number?(:constituent)
+        updates[:communication_preference] = 'letter'
+      end
+
+      updates
     end
 
     def build_contact_updates(attrs, fields:, aliases: {})
@@ -853,6 +911,8 @@ module Applications
       return unless send_account_created_notice?
 
       new_user_accounts.each do |user|
+        next unless user.portal_access_eligible?
+
         temp_password = @temp_passwords[user.id]
         next unless temp_password
 
@@ -893,7 +953,7 @@ module Applications
 
     def new_user_accounts
       [@guardian_user_for_app, @constituent].compact.uniq.select do |user|
-        user.present? && user.created_at >= 5.minutes.ago && @temp_passwords.key?(user.id)
+        user.present? && @temp_passwords.key?(user.id)
       end
     end
 

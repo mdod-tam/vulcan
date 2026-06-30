@@ -101,6 +101,21 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
     assert_nil User.find_by_login_identifier(user.email)
   end
 
+  test 'find_by_login_identifier rejects dependent synthetic contacts but not guardian real contacts' do
+    guardian = create(:constituent, email: "guardian.#{SecureRandom.hex(3)}@example.com", phone: '410-555-0200')
+    dependent = create(:constituent,
+                       email: "dependent.#{SecureRandom.hex(3)}@system.matvulcan.local",
+                       phone: '000-456-7890',
+                       dependent_email: guardian.email,
+                       dependent_phone: guardian.phone)
+
+    assert_not dependent.portal_access_eligible?
+    assert_equal guardian, User.find_by_login_identifier(guardian.email)
+    assert_equal guardian, User.find_by_login_identifier(guardian.phone)
+    assert_nil User.find_by_login_identifier(dependent.email)
+    assert_nil User.find_by_login_identifier(dependent.phone)
+  end
+
   test 'placeholder_phone? handles nil and blank' do
     assert_not User.placeholder_phone?(nil)
     assert_not User.placeholder_phone?('')

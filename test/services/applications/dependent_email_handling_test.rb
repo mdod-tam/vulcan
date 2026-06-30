@@ -130,5 +130,49 @@ module Applications
       assert_equal dependent_email, dependent.effective_email,
                    'Dependent effective_email should return their own email'
     end
+
+    test 'mixed guardian email and dependent phone strategy does not reuse existing phone owner' do
+      shared_phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      existing = create(:constituent, phone: shared_phone, phone_type: 'voice')
+
+      service = PaperApplicationService.new(
+        params: {
+          applicant_type: 'dependent',
+          guardian_id: @guardian.id,
+          email_strategy: 'guardian',
+          phone_strategy: 'dependent',
+          relationship_type: 'Parent',
+          constituent: {
+            first_name: 'Mixed',
+            last_name: 'Strategy',
+            date_of_birth: '2015-01-01',
+            dependent_phone: shared_phone,
+            hearing_disability: '1'
+          },
+          application: {
+            household_size: 2,
+            annual_income: 18_000,
+            maryland_resident: true,
+            medical_provider_name: 'Dr. Test',
+            medical_provider_phone: '555-123-4567',
+            medical_provider_email: 'doctor@example.com',
+            self_certify_disability: true
+          },
+          income_proof_action: 'accept',
+          income_proof: fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf'),
+          residency_proof_action: 'accept',
+          residency_proof: fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
+        },
+        admin: @admin
+      )
+
+      ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
+      ProofAttachmentService.stubs(:reject_proof_without_attachment).returns({ success: true })
+
+      assert_not service.create, 'Expected duplicate primary phone to fail without reusing existing user'
+      assert_not_equal existing, service.constituent
+      assert service.errors.any? { |error| error.match?(/phone|Failed to create/i) },
+             "Expected phone or creation error, got: #{service.errors.join('; ')}"
+    end
   end
 end

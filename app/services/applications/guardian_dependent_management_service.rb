@@ -13,6 +13,8 @@ module Applications
       @params = params.with_indifferent_access
       @guardian_user = nil
       @dependent_user = nil
+      @guardian_temp_password = nil
+      @dependent_temp_password = nil
       @errors = []
     end
 
@@ -25,7 +27,12 @@ module Applications
       return failure('Failed to create dependent') unless create_dependent?(applicant_data)
       return failure('Failed to create relationship') unless create_relationship(relationship_type)
 
-      success(guardian: @guardian_user, dependent: @dependent_user)
+      success(
+        guardian: @guardian_user,
+        dependent: @dependent_user,
+        guardian_temp_password: @guardian_temp_password,
+        dependent_temp_password: @dependent_temp_password
+      )
     end
 
     def apply_contact_strategies(applicant_data)
@@ -62,10 +69,16 @@ module Applications
         @guardian_user = User.find_by(id: guardian_id)
         return add_error?('Guardian not found') unless @guardian_user
       elsif attributes_present?(new_guardian_attrs)
-        result = UserCreationService.new(new_guardian_attrs, is_managing_adult: true).call
+        skip_email = no_email_address_flag?
+        result = UserCreationService.new(
+          new_guardian_attrs,
+          is_managing_adult: true,
+          skip_email_validation: skip_email
+        ).call
         return false unless result.success?
 
         @guardian_user = result.data[:user]
+        @guardian_temp_password = result.data[:temp_password]
       else
         return add_error?('Guardian information missing')
       end
@@ -77,6 +90,7 @@ module Applications
       return false unless result.success?
 
       @dependent_user = result.data[:user]
+      @dependent_temp_password = result.data[:temp_password]
       true
     end
 
@@ -188,6 +202,10 @@ module Applications
 
     def attributes_present?(attrs)
       attrs.present? && attrs.values.any?(&:present?)
+    end
+
+    def no_email_address_flag?
+      params[:guardian_no_email_address].present? && params[:guardian_no_email_address].to_s == '1'
     end
 
     def add_error?(message)

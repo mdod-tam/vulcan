@@ -7,6 +7,7 @@ class User < ApplicationRecord
   include UserAuthentication
   include UserRolesAndCapabilities
   include UserProfile
+  include UserContactPredicates
   include UserGuardianship
   include UserEmailSearch
 
@@ -95,14 +96,15 @@ class User < ApplicationRecord
       return nil unless login_identifier_valid_email?(normalized)
 
       user = find_by_email(normalized)
-      return nil if user.blank? || system_generated_email?(user.email)
+      return nil if user.blank?
+      return nil unless user.real_email?
 
       return user
     end
 
     phone_user = find_by_phone(normalized)
     return nil if phone_user.blank?
-    return nil if placeholder_phone?(phone_user.phone)
+    return nil unless phone_user.real_phone?
 
     phone_user
   end

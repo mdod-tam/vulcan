@@ -79,18 +79,18 @@
           <td class="px-2 py-2 text-sm text-gray-900 hidden sm:table-cell whitespace-nowrap overflow-hidden" role="cell">
             <div class="truncate">
               <% if application.user.present? %>
-                <%= application.user.phone || "No phone" %>
+                <%= display_contact_phone(application.user) %>
               <% else %>
-                No phone
+                <%= ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE %>
               <% end %>
             </div>
           </td>
           <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
-            <div class="truncate" title="<%= application.user&.effective_email || 'No email' %>">
+            <div class="truncate" title="<%= application.user.present? ? display_contact_email(application.user) : ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE %>">
               <% if application.user.present? %>
-                <%= application.user.effective_email || "No email" %>
+                <%= display_contact_email(application.user) %>
               <% else %>
-                No email
+                <%= ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE %>
               <% end %>
             </div>
           </td>
