@@ -132,19 +132,23 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
 
   test 'paper application service properly handles invalid signed_ids' do
     # This test verifies the service doesn't crash when given invalid signed_ids
+    contact = unique_paper_contact
 
     # Attempt to create application with invalid signed_id
-    post admin_paper_applications_path, params: {
-      constituent: paper_self_applicant_params,
-      application: paper_application_params,
-      income_proof_action: 'accept',
-      income_proof_signed_id: 'invalid-signed-id-that-doesnt-exist', # Invalid signed_id
-      residency_proof_action: 'reject',
-      residency_proof_rejection_reason: 'missing_name'
-    }
+    assert_no_difference ['User.count', 'Application.count'] do
+      post admin_paper_applications_path, params: {
+        constituent: paper_self_applicant_params(contact),
+        application: paper_application_params,
+        income_proof_action: 'accept',
+        income_proof_signed_id: 'invalid-signed-id-that-doesnt-exist', # Invalid signed_id
+        residency_proof_action: 'reject',
+        residency_proof_rejection_reason: 'missing_name'
+      }
+    end
 
-    # Should fail gracefully with an alert; the persisted paper application redirects to its admin page
-    assert_response :redirect
-    assert_match(/mismatched digest|Error processing proof/i, flash[:alert])
+    # Should fail gracefully without stranding a user or partially persisted application.
+    assert_response :unprocessable_content
+    assert_match(/mismatched digest|Error processing proof|Proof upload failed/i, response.body)
+    assert_nil User.find_by(email: contact[:email])
   end
 end
