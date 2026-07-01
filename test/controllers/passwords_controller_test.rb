@@ -65,8 +65,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
-    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
-                 flash[:notice]
+    assert_equal account_access_confirmation_message, flash[:notice]
   end
 
   def test_should_send_account_access_sms_for_existing_phone
@@ -96,8 +95,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
-    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
-                 flash[:notice]
+    assert_equal account_access_confirmation_message, flash[:notice]
   end
 
   def test_should_rate_limit_repeated_account_access_sms_requests
@@ -125,8 +123,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
-    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
-                 flash[:notice]
+    assert_equal account_access_confirmation_message, flash[:notice]
   end
 
   def test_should_update_password_with_valid_token_without_current_password
@@ -252,6 +249,35 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal @original_password_digest, @user.password_digest
   end
 
+  def test_phone_only_record_does_not_receive_account_access
+    sign_out if respond_to?(:sign_out)
+
+    phone = '410-555-0177'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'OnlyAccess',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: phone }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+  end
 
   def test_system_email_does_not_fall_through_to_phone_for_account_access
     sign_out if respond_to?(:sign_out)
@@ -293,11 +319,11 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   def test_guardian_generated_synthetic_phone_does_not_receive_account_access_sms
     sign_out if respond_to?(:sign_out)
 
-    user = create(:constituent,
-                  phone: '000-345-6789',
-                  email: "real.#{SecureRandom.hex(3)}@example.com",
-                  password: 'password123',
-                  password_confirmation: 'password123')
+    create(:constituent,
+           phone: '000-345-6789',
+           email: "real.#{SecureRandom.hex(3)}@example.com",
+           password: 'password123',
+           password_confirmation: 'password123')
 
     SmsService.expects(:send_message).never
 
@@ -404,7 +430,10 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def account_access_confirmation_message
-    'If the information you entered matches an account, we sent account access instructions to the contact information on record.'
+    support_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    "If you need help signing in, contact the MAT Team at #{support_email}. " \
+      'Portal accounts require an email address on file. If the information you entered matches such an account, ' \
+      'account access instructions may have been sent when email or text-capable phone delivery is available.'
   end
 
   private

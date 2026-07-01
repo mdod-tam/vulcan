@@ -75,9 +75,9 @@ These helpers normalize email and phone values before querying and rescue lookup
 
 Current adoption by path:
 
-- `User.find_by_login_identifier` — `SessionsController` sign-in only
-- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, WebAuthn recovery, and other existing lookup paths
-- `PasswordsController#find_user_for_account_access` — parallel account-access lookup with equivalent guards, but not yet routed through `find_by_login_identifier`
+- `User.find_by_login_identifier` — public sign-in and account recovery (email-backed portal accounts only; phone lookup requires `real_email?` and `real_phone?` on the matched user)
+- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, and other existing lookup paths
+- `User.find_for_account_access` — account-access identity lookup plus separate delivery selection in `PasswordsController#create`
 
 Direct Rails equality queries on deterministic encrypted fields can work, but new code should use the helpers where contact lookup or uniqueness is the point. That keeps normalization and failure behavior consistent.
 
@@ -93,7 +93,7 @@ Important behavior:
 
 - email is normalized to lowercase before validation
 - phone is normalized to `XXX-XXX-XXXX` when it has a valid 10-digit US shape
-- email is required unless paper context allows a no-email paper flow, the user is a phone-only portal user (`email_optional?` — NULL email with `real_phone?`), or the user is a persisted address-only constituent (`real_email?` and `real_phone?` both false with letter delivery)
+- email is required unless paper context allows a no-email paper flow, the user is a persisted phone-only record (`email_optional?` — NULL email with `real_phone?`, not an email-backed portal account), or the user is a persisted address-only constituent (`real_email?` and `real_phone?` both false with letter delivery)
 - phone and dependent phone must be valid 10-digit US numbers when present
 - dependent email/phone are encrypted too
 

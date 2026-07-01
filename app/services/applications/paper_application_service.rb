@@ -286,7 +286,7 @@ module Applications
         @guardian_user_for_app = result.data[:guardian]
         @constituent = result.data[:dependent]
 
-        track_portal_eligible_created_user_ids(result.data[:portal_eligible_created_user_ids])
+        track_email_backed_portal_created_user_ids(result.data[:email_backed_portal_created_user_ids])
 
         validate_no_active_application('dependent')
       else
@@ -309,7 +309,7 @@ module Applications
 
       if result.success?
         @constituent = result.data[:user]
-        track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
+        track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
 
         return false unless validate_no_active_application('constituent')
         return false unless waiting_period_eligible?(@constituent)
@@ -333,11 +333,11 @@ module Applications
       Applications::PaperContactFlags.new(params, scope: scope)
     end
 
-    def track_portal_eligible_created_user_ids(user_ids)
-      Array(user_ids).each { |user_id| track_portal_eligible_created_user_id(user_id) }
+    def track_email_backed_portal_created_user_ids(user_ids)
+      Array(user_ids).each { |user_id| track_email_backed_portal_created_user_id(user_id) }
     end
 
-    def track_portal_eligible_created_user_id(user_id)
+    def track_email_backed_portal_created_user_id(user_id)
       @created_portal_user_ids << user_id.to_s if user_id.present?
     end
 
@@ -949,7 +949,7 @@ module Applications
       return unless send_account_created_notice?
 
       new_user_accounts.each do |user|
-        next unless user.portal_access_eligible?
+        next unless user.email_backed_portal_account?
 
         append_account_access_warning(user) if quick_created_portal_user?(user)
 
@@ -999,7 +999,7 @@ module Applications
     end
 
     def account_created_notice_candidate?(user)
-      return false unless user.portal_access_eligible?
+      return false unless user.email_backed_portal_account?
       return false unless account_access_instructions_deliverable?(user)
 
       @created_portal_user_ids.include?(user.id.to_s) || quick_created_portal_user?(user)

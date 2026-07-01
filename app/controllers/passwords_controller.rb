@@ -19,7 +19,7 @@ class PasswordsController < ApplicationController
 
   def create
     user, delivery_method = find_user_for_account_access
-    handle_account_access_request(user, delivery_method) if user.present?
+    attempt_account_access_delivery(user, delivery_method)
 
     redirect_to sign_in_path, notice: account_access_confirmation_message
   end
@@ -94,36 +94,29 @@ class PasswordsController < ApplicationController
     contact = account_access_contact.to_s.strip.presence
     return [nil, nil] if contact.blank?
 
-    if User.login_identifier_looks_like_email?(contact)
-      return [nil, nil] unless User.login_identifier_valid_email?(contact)
-
-      email_user = User.find_by_email(contact)
-      return [nil, nil] if email_user.blank?
-      return [nil, nil] unless email_user.real_email?
-
-      return [email_user, :email]
-    end
-
-    phone_user = User.find_by_phone(contact)
-    return [nil, nil] if phone_user.blank?
-    return [nil, nil] unless phone_user.real_phone?
-    return [nil, nil] unless phone_user.sms_capable_phone?
-
-    [phone_user, :sms]
+    User.find_for_account_access(contact)
   end
 
   def account_access_contact
     params[:contact].presence || params[:email].presence || params[:phone].presence
   end
 
+  def attempt_account_access_delivery(user, delivery_method)
+    return false unless user.present? && delivery_method.present?
+
+    handle_account_access_request(user, delivery_method)
+  end
+
   def handle_account_access_request(user, delivery_method)
     if account_access_rate_limited?(user)
       log_account_access_attempt(user, delivery_method, 'rate_limited')
-      return
+      return false
     end
 
-    send_account_access_instructions(user, delivery_method)
+    return false unless send_account_access_instructions(user, delivery_method)
+
     log_account_access_attempt(user, delivery_method, 'sent')
+    true
   end
 
   def account_access_rate_limited?(user)
@@ -158,9 +151,11 @@ class PasswordsController < ApplicationController
     else
       UserMailer.with(user: user).password_reset.deliver_later
     end
+    true
   rescue StandardError => e
     log_account_access_attempt(user, delivery_method, 'delivery_failed')
     Rails.logger.warn("Unable to send account access instructions for user #{user.id}: #{e.class}: #{e.message}")
+    false
   end
 
   def account_access_sms_body(user)
@@ -197,6 +192,12 @@ class PasswordsController < ApplicationController
   end
 
   def account_access_confirmation_message
-    'If the information you entered matches an account, we sent account access instructions to the contact information on record.'
+    "If you need help signing in, contact the MAT Team at #{account_access_support_email}. " \
+      'Portal accounts require an email address on file. If the information you entered matches such an account, ' \
+      'account access instructions may have been sent when email or text-capable phone delivery is available.'
+  end
+
+  def account_access_support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
   end
 end

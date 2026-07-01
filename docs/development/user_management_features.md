@@ -35,7 +35,7 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Email search concern | `app/models/concerns/user_email_search.rb` | Stores HMAC email-search tokens for admin search, including dependent email and guardian fallback email search. |
 | Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and a create-time name+DOB duplicate check. |
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
-| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Portal-eligible users get internal forced-change account setup, but raw passwords are not returned; address-only users get internal passwords only and no portal access. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
+| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
 
 ## 3 · Signup And Duplicate Handling
@@ -46,10 +46,10 @@ Email and phone are stored with deterministic Rails encryption so exact lookups 
 
 `RegistrationsController#create` calls `duplicate_account_match?` before saving:
 
-- matching email or phone renders the signup page with an account-access prompt instead of creating another user
-- matching email can offer an account-access link by email
-- matching text-capable phone can offer an account-access link by SMS
-- `PasswordsController#create` applies the same text-capable rule: account-access SMS is sent only when the matched user's `phone_type` is `text`
+- matching email or phone on an **email-backed** existing account renders the signup page with an account-access prompt instead of creating another user
+- matching email can offer an account-access link by email when the existing account is email-backed
+- matching text-capable phone can offer an account-access link by SMS only when the existing account is email-backed and `sms_capable_phone?`
+- `PasswordsController#create` uses the same email-backed resolver: SMS is sent only when the matched account has `real_email?` and `sms_capable_phone?`; all outcomes show the same public confirmation (delivery details stay in audit logs only)
 - conflicting matches, where email and phone belong to different users, show a support-contact prompt
 
 `UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
@@ -65,11 +65,12 @@ Blank phone numbers are allowed. Non-blank phones must normalize to a 10-digit U
 | `real_email?` | Present, valid format, not `@system.matvulcan.local` |
 | `real_phone?` | Present, valid 10-digit US, not synthetic `000-…` prefix |
 | `sms_capable_phone?` | `real_phone?` and `phone_type == 'text'` |
-| `portal_access_eligible?` | `real_email?` or `real_phone?` |
+| `portal_access_eligible?` | `real_email?` or `real_phone?` (PR2 stored-contact truth) |
+| `email_backed_portal_account?` | `real_email?` only — required for public portal sign-in, account access, and paper/admin portal setup markers |
 
 Paper/admin intake supports:
 
-- **Phone-only adults** — `no_email_address=1` strips email; user remains portal-eligible when a real phone is stored. Preferred contact method stays on voice/text/videophone.
+- **Phone-only adults** — `no_email_address=1` strips email; user may still be `portal_access_eligible?` for record truth, but is **not** an email-backed portal account. No forced-change portal setup, quick-create markers, or account-created notices.
 - **Address-only adults** — `no_email_address=1` and `no_phone_number=1` store NULL email/phone, force letter delivery, set `phone_type` to `letter`, and create users without exposed/temp passwords or portal access.
 - **Dependents** — synthetic primary email/phone remain dependent-only placeholders; adults never receive synthetic contacts when NULL is valid. Notifications and display use **effective contact** helpers (`effective_email`, `effective_phone`, `effective_phone_type`, `effective_communication_preference`), which prefer dependent-owned contact fields and fall back to the managing guardian for communication only—not for portal login identifiers.
 
@@ -79,17 +80,18 @@ Admin display helpers (`display_contact_email`, `display_contact_phone`) hide sy
 
 | Concept | Source of truth |
 | --- | --- |
-| Login identity | `portal_access_eligible?` from real email/phone predicates |
+| Stored contact truth (PR2) | `portal_access_eligible?` from `real_email?` / `real_phone?` |
+| Email-backed portal account (PR3) | `email_backed_portal_account?` (`real_email?`) for sign-in, account access, paper portal setup, and account-created notices |
 | Delivery route | `communication_preference` plus effective contact fallback for dependents |
 | Record truth | Stored email/phone values and explicit paper no-contact flags |
 
 Voucher-gated `account_created` notices are sent only when `FeatureFlag.enabled?(:vouchers_enabled)` and the paper application is voucher-fulfillment scope. Equipment-scope paper intake does not announce portal accounts the applicant cannot use.
 
-Portal-eligible users created during paper intake get an internal initial password and `force_password_change`, but the raw password is not returned, cached, or stored in session. When an admin quick-creates a guardian in the same browser session, the session stores only a short-lived quick-created portal-eligible user id marker. `PaperApplicationsController#create` passes those user ids into `PaperApplicationService`; if a constituent needs help signing in, staff should use the existing account access link flow.
+Email-backed portal users created during paper intake get an internal initial password and `force_password_change`, but the raw password is not returned, cached, or stored in session. When an admin quick-creates a guardian in the same browser session, the session stores only a short-lived quick-created **email-backed** portal user id marker. `PaperApplicationsController#create` passes those user ids into `PaperApplicationService`; if a constituent needs help signing in, staff should use the existing account access link flow.
 
 Persisted address-only constituents remain editable in admin user edit (name, address, letter preference) without requiring email. Normal admin edit cannot clear all contact information or keep email delivery without a real email; those transitions are reserved for paper intake with explicit no-contact flags.
 
-Public portal self-registration still requires both email and phone until a later PR changes that UI.
+Public portal self-registration requires a real email address; phone is optional and may serve as an alternate login identifier when also on file.
 
 ### 3.2 Name and DOB review flag
 
@@ -143,7 +145,7 @@ The admin user show page displays:
 - application history for the selected user
 - edit, delete MFA tokens, and delete user actions
 
-Admin-created users go through `UserServiceIntegration#create_user_with_service`, which calls `Applications::UserCreationService`. Portal-eligible service-created constituents get internal forced-change account setup, `verified: true`, and `force_password_change: true`; raw passwords are not returned or stored for handoff. Address-only users get internal passwords only and no portal access. Phone-only users store NULL email and remain portal-eligible via `real_phone?`.
+Admin-created users go through `UserServiceIntegration#create_user_with_service`, which calls `Applications::UserCreationService`. Email-backed portal constituents get internal forced-change account setup, `verified: true`, and `force_password_change: true`; raw passwords are not returned or stored for handoff. Address-only and phone-only users get internal passwords only and no email-backed portal account setup. Phone-only users may still be `portal_access_eligible?` for record truth but cannot use public portal sign-in or account access without a real email.
 
 The admin user show page displays contact through `display_contact_email` and `display_contact_phone`, which hide synthetic values and show “No email on file” / “No phone on file” when appropriate.
 

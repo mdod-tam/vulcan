@@ -38,7 +38,7 @@ en:
   sessions:
     form:
       contact_label: "Email Address or Phone Number"
-      contact_hint: "Enter the email address or phone number associated with your account"
+      contact_hint: "Portal accounts require an email address on file. Enter that email, or the phone number on the same account."
   activerecord:
     errors:
       models:

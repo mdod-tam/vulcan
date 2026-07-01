@@ -16,7 +16,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
 
     # Check that the form contains the necessary fields
     assert_select 'form'
-    assert_select 'input[type=email]'
+    assert_select 'input[name=?]', 'contact'
     assert_select 'textarea' # For details field
     # Form submission could be either button or input
     assert(css_select('button[type=submit]').any? || css_select('input[type=submit]').any?,
@@ -26,7 +26,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   test 'should create recovery request for existing user' do
     assert_difference('RecoveryRequest.count', 1) do
       post request_security_key_reset_path, params: {
-        email: @user.email,
+        contact: @user.email,
         details: 'I lost my security key during travel'
       }
     end
@@ -43,10 +43,57 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_not_nil recovery_request.user_agent
   end
 
+  test 'should create recovery request for email-backed user via phone contact' do
+    assert @user.real_email?
+    assert @user.real_phone?
+
+    assert_difference('RecoveryRequest.count', 1) do
+      post request_security_key_reset_path, params: {
+        contact: @user.phone,
+        details: 'Lost key; submitting phone on file for email-backed account'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+
+    recovery_request = RecoveryRequest.last
+    assert_equal @user.id, recovery_request.user_id
+    assert_equal 'pending', recovery_request.status
+    assert_equal 'Lost key; submitting phone on file for email-backed account', recovery_request.details
+  end
+
+  test 'should not create recovery request for phone-only record' do
+    phone = '410-555-0210'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'OnlyRecovery',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    assert_no_difference('RecoveryRequest.count') do
+      post request_security_key_reset_path, params: {
+        contact: phone,
+        details: 'Lost key'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+  end
+
   test 'should still redirect to confirmation page for non-existent user' do
     assert_no_difference('RecoveryRequest.count') do
       post request_security_key_reset_path, params: {
-        email: 'nonexistent@example.com',
+        contact: 'nonexistent@example.com',
         details: 'Test details'
       }
     end
@@ -60,7 +107,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
       assert_difference -> { Notification.where(action: 'security_key_recovery_requested', recipient: @admin).count }, 1 do
         post request_security_key_reset_path, params: {
-          email: @user.email,
+          contact: @user.email,
           details: 'Test notification'
         }
       end
@@ -70,13 +117,14 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_equal RecoveryRequest.last, notification.notifiable
     assert_equal @user, notification.actor
     assert_equal RecoveryRequest.last.id, notification.metadata['recovery_request_id']
+    assert_equal @user.mfa_account_name, notification.metadata['requester_identifier']
     assert_nil notification.delivery_status
   end
 
   test 'should not create admin notification for non-existent user' do
     assert_no_difference -> { Notification.where(action: 'security_key_recovery_requested').count } do
       post request_security_key_reset_path, params: {
-        email: 'nonexistent@example.com',
+        contact: 'nonexistent@example.com',
         details: 'Test notification'
       }
     end
@@ -91,14 +139,25 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_select 'a[href=?]', sign_in_path
   end
 
-  test 'should handle missing email parameter' do
+  test 'should handle missing contact parameter' do
     assert_no_difference('RecoveryRequest.count') do
       post request_security_key_reset_path, params: {
-        details: 'Missing email parameter test'
+        details: 'Missing contact parameter test'
       }
     end
 
     # Should still redirect to confirmation page
+    assert_redirected_to account_recovery_confirmation_path
+  end
+
+  test 'ignores legacy email parameter without contact' do
+    assert_no_difference('RecoveryRequest.count') do
+      post request_security_key_reset_path, params: {
+        email: @user.email,
+        details: 'Legacy email param'
+      }
+    end
+
     assert_redirected_to account_recovery_confirmation_path
   end
 
@@ -109,7 +168,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
 
     # Verify that unauthenticated users can submit recovery request
     post request_security_key_reset_path, params: {
-      email: @user.email,
+      contact: @user.email,
       details: 'Unauthenticated access test'
     }
     assert_redirected_to account_recovery_confirmation_path
