@@ -13,6 +13,7 @@ module Applications
       @params = params.with_indifferent_access
       @guardian_user = nil
       @dependent_user = nil
+      @portal_eligible_created_user_ids = []
       @errors = []
     end
 
@@ -25,7 +26,11 @@ module Applications
       return failure('Failed to create dependent') unless create_dependent?(applicant_data)
       return failure('Failed to create relationship') unless create_relationship(relationship_type)
 
-      success(guardian: @guardian_user, dependent: @dependent_user)
+      success(
+        guardian: @guardian_user,
+        dependent: @dependent_user,
+        portal_eligible_created_user_ids: @portal_eligible_created_user_ids
+      )
     end
 
     def apply_contact_strategies(applicant_data)
@@ -62,10 +67,19 @@ module Applications
         @guardian_user = User.find_by(id: guardian_id)
         return add_error?('Guardian not found') unless @guardian_user
       elsif attributes_present?(new_guardian_attrs)
-        result = UserCreationService.new(new_guardian_attrs, is_managing_adult: true).call
+        contact_flags = Applications::PaperContactFlags.new(params, scope: :guardian)
+        guardian_attrs = contact_flags.apply_to(new_guardian_attrs)
+        result = UserCreationService.new(
+          guardian_attrs,
+          is_managing_adult: true,
+          skip_user_lookup: true,
+          skip_email_validation: contact_flags.skip_email_validation?,
+          skip_phone_validation: contact_flags.skip_phone_validation?
+        ).call
         return false unless result.success?
 
         @guardian_user = result.data[:user]
+        track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
       else
         return add_error?('Guardian information missing')
       end
@@ -73,10 +87,11 @@ module Applications
     end
 
     def create_dependent?(applicant_data)
-      result = UserCreationService.new(applicant_data, is_managing_adult: false).call
+      result = UserCreationService.new(applicant_data, is_managing_adult: false, skip_user_lookup: true).call
       return false unless result.success?
 
       @dependent_user = result.data[:user]
+      track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
       true
     end
 
@@ -107,14 +122,14 @@ module Applications
           data[:email] = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
           data[:dependent_email] = data[:email]
         end
+        data[:communication_preference] = @guardian_user&.communication_preference
       when 'dependent'
         # Paper passes :dependent_email; portal passes :email. Mirror the submitted contact.
         data[:email] = data[:dependent_email] if data[:email].blank? && data[:dependent_email].present?
-        if data[:email].present?
-          data[:dependent_email] = data[:email]
-        else
-          return apply_email_strategy_with('guardian', data)
-        end
+        return apply_email_strategy_with('guardian', data) if data[:email].blank?
+
+        data[:dependent_email] = data[:email]
+
       else
         return apply_email_strategy_with('guardian', data)
       end
@@ -139,11 +154,10 @@ module Applications
       when 'dependent'
         # Paper passes :dependent_phone; portal passes :phone. Mirror the submitted contact.
         data[:phone] = data[:dependent_phone] if data[:phone].blank? && data[:dependent_phone].present?
-        if data[:phone].present?
-          data[:dependent_phone] = data[:phone]
-        else
-          return apply_phone_strategy_with('guardian', data)
-        end
+        return apply_phone_strategy_with('guardian', data) if data[:phone].blank?
+
+        data[:dependent_phone] = data[:phone]
+
       else
         return apply_phone_strategy_with('guardian', data)
       end
@@ -188,6 +202,10 @@ module Applications
 
     def attributes_present?(attrs)
       attrs.present? && attrs.values.any?(&:present?)
+    end
+
+    def track_portal_eligible_created_user_id(user_id)
+      @portal_eligible_created_user_ids << user_id.to_s if user_id.present?
     end
 
     def add_error?(message)

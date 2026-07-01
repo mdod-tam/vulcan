@@ -77,10 +77,9 @@ dependent.effective_phone  # prefers dependent_phone, falls back to guardian's p
 dependent.effective_phone_type  # handles phone type logic for dependents
 dependent.effective_communication_preference  # uses guardian's preference if dependent
 dependent.guardian_for_contact  # returns primary guardian for contact purposes
-
-# Note: has_own_contact_info? and uses_guardian_contact_info? methods
-# are mentioned in docs but not currently implemented in the codebase
 ```
+
+These effective-contact helpers are for communication, display, and notification routing. They are not login identifiers; auth and password recovery use `real_email?`, `real_phone?`, and `User.find_by_login_identifier`.
 
 *Avoids uniqueness violations and supports real-world family setups.*
 

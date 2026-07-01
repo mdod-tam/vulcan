@@ -42,7 +42,7 @@ module ConstituentPortal
 
       # Using UserServiceIntegration concern for consistent user creation
       # Portal always creates NEW users for dependents (skip_user_lookup: true)
-      # Paper applications may find/reuse existing users (skip_user_lookup: false, default)
+      # Paper intake creates new guardians and self applicants with skip_user_lookup; explicit search selects existing users
       # Require disability validation for portal-created dependents
       result = create_user_with_service(dependent_attrs,
                                         is_managing_adult: false,

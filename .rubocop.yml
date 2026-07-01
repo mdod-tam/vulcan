@@ -72,6 +72,7 @@ Rails/DynamicFindBy:
   AllowedMethods:
     - find_by_email
     - find_by_phone
+    - find_by_login_identifier
     - find_by_token_for
 
 # Disable variable number naming enforcement (allow physical_address_1 instead of physical_address1)

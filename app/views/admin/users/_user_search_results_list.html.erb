@@ -7,6 +7,8 @@
     <% users.each do |user| %>
       <% is_constituent_search = role == 'constituent' %>
       <% ineligible = is_constituent_search && user.respond_to?(:eligible_now) && !user.eligible_now %>
+      <% email_display = display_contact_email(user) %>
+      <% phone_display = display_contact_phone(user) %>
       <li class="p-3 <%= ineligible ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hoverable-user-item' %>"
           <% if ineligible %>
           tabindex="-1"
@@ -17,13 +19,13 @@
           <% end %>
           data-user-id="<%= user.id %>"
           data-user-name="<%= user.full_name %>"
-          data-user-email="<%= user.email %>"
+          data-user-email="<%= displayable_contact_email?(user) ? email_display : '' %>"
           data-user-address-1="<%= user.physical_address_1 %>"
           data-user-address-2="<%= user.physical_address_2 %>"
           data-user-city="<%= user.city %>"
           data-user-state="<%= user.state %>"
           data-user-zip="<%= user.zip_code %>"
-          data-user-phone="<%= user.phone %>"
+          data-user-phone="<%= phone_display == ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE ? '' : phone_display %>"
           data-user-dob="<%= user.date_of_birth %>"
           <% if is_constituent_search && user.respond_to?(:eligible_now) %>
           data-user-eligible="<%= user.eligible_now %>"
@@ -51,12 +53,12 @@
               <% end %>
             <% end %>
           </div>
-          <div class="text-xs text-gray-500"><%= user.email %></div>
+          <div class="text-xs text-gray-500"><%= email_display %></div>
 
           <% if is_constituent_search && user.date_of_birth.present? %>
             <div class="text-xs text-gray-500 mt-1">DOB: <%= user.date_of_birth.strftime('%m/%d/%Y') %></div>
           <% end %>
-          
+
           <% if user.physical_address_1.present? %>
             <div class="text-xs text-gray-500 mt-1">
               <%= user.physical_address_1 %>
@@ -66,9 +68,9 @@
               <%= " #{user.zip_code}" if user.zip_code.present? %>
             </div>
           <% end %>
-          
-          <% if user.phone.present? %>
-            <div class="text-xs text-gray-500">Phone: <%= user.phone %></div>
+
+          <% if phone_display != ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE %>
+            <div class="text-xs text-gray-500">Phone: <%= phone_display %></div>
           <% end %>
 
           <% if is_constituent_search && user.respond_to?(:ineligible_reason) && user.ineligible_reason.present? %>

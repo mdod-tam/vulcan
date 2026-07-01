@@ -10,7 +10,7 @@
               <div class="flex items-center justify-between">
                 <div>
                   <h3 class="text-lg font-medium text-gray-900"><%= request.user.full_name %></h3>
-                  <p class="text-sm text-gray-500"><%= request.user.email %></p>
+                  <p class="text-sm text-gray-500"><%= display_contact_email(request.user) %></p>
                 </div>
                 <div class="text-sm text-gray-500">
                   Requested: <%= request.created_at.strftime("%B %d, %Y at %I:%M %p") %>

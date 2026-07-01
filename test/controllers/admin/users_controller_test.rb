@@ -305,18 +305,22 @@ module Admin
       assert user.present?
       assert user.force_password_change?
       assert user.verified?
+
+      markers = session[PaperQuickCreatePortalMarkers::SESSION_KEY]
+      assert_equal ['stored_at'], markers[user.id.to_s].keys
     end
 
     test 'should handle validation errors' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with(regexp_matches(/Failed to create user in admin interface: Failed to create user:/)).once
+      Rails.logger.expects(:error).with(regexp_matches(/Failed to create user in admin interface:/)).once
 
       assert_no_difference('Users::Constituent.count') do
         post admin_users_path, params: {
           # Missing required fields
           first_name: '',
           last_name: '',
-          email: 'invalid-email'
+          email: 'invalid-email',
+          phone: '555-555-5555'
         }, as: :json
       end
 
@@ -373,6 +377,288 @@ module Admin
 
       assert potential_duplicates.exists?, 'Expected user to be flagged for duplicate review'
       assert potential_duplicates.include?(first_user), 'Should find the first user as a potential duplicate'
+    end
+
+    test 'quick create guardian rejects duplicate phone instead of reusing existing user' do
+      existing = create(:constituent, phone: "410-555-#{SecureRandom.random_number(9000) + 1000}")
+
+      assert_no_difference 'User.count' do
+        post admin_users_path, params: {
+          first_name: 'Different',
+          last_name: 'Guardian',
+          email: "quick-create-#{SecureRandom.hex(4)}@example.com",
+          phone: existing.phone,
+          physical_address_1: '100 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          date_of_birth: '01/01/1980',
+          communication_preference: 'email'
+        }, as: :json
+      end
+
+      assert_response :unprocessable_content
+      body = response.parsed_body
+      assert_not body['success']
+      assert(body['errors'].values.join(' ').match?(/phone|taken/i))
+    end
+
+    test 'quick create guardian without email or phone succeeds for address-only intake' do
+      assert_difference 'User.count', 1 do
+        post admin_users_path, params: {
+          first_name: 'Letter',
+          last_name: 'Guardian',
+          guardian_no_email_address: '1',
+          guardian_no_phone_number: '1',
+          no_email_address: '1',
+          no_phone_number: '1',
+          email: 'ignored@example.com',
+          phone: '555-000-9999',
+          physical_address_1: '100 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          date_of_birth: '01/01/1980',
+          communication_preference: 'letter'
+        }, as: :json
+      end
+
+      assert_response :success
+      user = User.order(:created_at).last
+      assert_nil user.email
+      assert_nil user.phone
+      assert user.deliver_via_letter?
+      assert_not user.portal_access_eligible?
+      assert_empty(session[PaperQuickCreatePortalMarkers::SESSION_KEY] || {})
+    end
+
+    test 'admin can update address-only user profile without email' do
+      user = nil
+      internal_password = SecureRandom.hex(32)
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'Letter', last_name: 'Only',
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: 'Updated',
+          last_name: 'Only',
+          email: '',
+          phone: '',
+          physical_address_1: '200 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          communication_preference: 'letter'
+        }
+      }
+
+      assert_redirected_to admin_user_path(user)
+      user.reload
+      assert_equal 'Updated', user.first_name
+      assert_nil user.email
+      assert_nil user.phone
+    end
+
+    test 'admin cannot clear all contact information outside paper intake' do
+      user = create(:constituent, email: generate(:email), phone: '410-555-0100')
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: '',
+          phone: '',
+          communication_preference: 'letter',
+          physical_address_1: user.physical_address_1,
+          city: user.city,
+          state: user.state,
+          zip_code: user.zip_code
+        }
+      }
+
+      assert_response :unprocessable_content
+      user.reload
+      assert user.real_email?
+      assert user.real_phone?
+    end
+
+    test 'legacy Constituent STI rows cannot clear all contact information outside paper intake' do
+      user = create(:constituent, email: generate(:email), phone: '410-555-0101')
+      user.update_column(:type, 'Constituent')
+      legacy = User.find(user.id)
+
+      patch admin_user_path(legacy), params: {
+        user: {
+          first_name: legacy.first_name,
+          last_name: legacy.last_name,
+          email: '',
+          phone: '',
+          communication_preference: 'letter',
+          physical_address_1: legacy.physical_address_1,
+          city: legacy.city,
+          state: legacy.state,
+          zip_code: legacy.zip_code
+        }
+      }
+
+      assert_response :unprocessable_content
+      legacy = User.find(user.id)
+      assert legacy.real_email?
+      assert legacy.real_phone?
+    end
+
+    test 'admin cannot set email delivery without email on file' do
+      user = create(:constituent, email: generate(:email), phone: '410-555-0100')
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: '',
+          phone: user.phone,
+          communication_preference: 'email',
+          physical_address_1: user.physical_address_1,
+          city: user.city,
+          state: user.state,
+          zip_code: user.zip_code
+        }
+      }
+
+      assert_response :unprocessable_content
+      user.reload
+      assert user.real_email?
+    end
+
+    test 'staff users cannot be made address-only through admin edit' do
+      staff = create(:admin, email: generate(:email), phone: '410-555-0199')
+
+      patch admin_user_path(staff), params: {
+        user: {
+          first_name: staff.first_name,
+          last_name: staff.last_name,
+          email: '',
+          phone: '',
+          communication_preference: 'letter',
+          physical_address_1: staff.physical_address_1,
+          city: staff.city,
+          state: staff.state,
+          zip_code: staff.zip_code
+        }
+      }
+
+      assert_response :unprocessable_content
+      staff.reload
+      assert staff.real_email?
+      assert staff.real_phone?
+    end
+
+    test 'admin update rejects malformed email for address-only user' do
+      user = nil
+      internal_password = SecureRandom.hex(32)
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'Letter', last_name: 'Only',
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      patch admin_user_path(user), params: {
+        user: {
+          first_name: 'Letter',
+          last_name: 'Only',
+          email: 'not-an-email',
+          phone: '',
+          physical_address_1: '100 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          communication_preference: 'letter'
+        }
+      }
+
+      assert_response :unprocessable_content
+      user.reload
+      assert_nil user.email
+    end
+
+    test 'constituents list includes legacy Constituent STI rows' do
+      legacy = create(:constituent, email: generate(:email), first_name: 'LegacyInactive')
+      legacy.update_column(:type, 'Constituent')
+      create(:application, :archived, user: legacy)
+
+      get constituents_admin_users_path
+
+      assert_response :success
+      assert_match 'LegacyInactive', response.body
+    end
+
+    test 'constituents list shows no email on file for address-only users' do
+      internal_password = SecureRandom.hex(32)
+      user = nil
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'Inactive', last_name: 'LetterOnly',
+          status: :inactive,
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      create(:application, :archived, user: user)
+
+      get constituents_admin_users_path
+
+      assert_response :success
+      assert_match ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE, response.body
+    end
+
+    test 'history shows display helpers for address-only users' do
+      user = nil
+      internal_password = SecureRandom.hex(32)
+      Current.paper_context = true
+      begin
+        user = Users::Constituent.create!(
+          first_name: 'History', last_name: 'LetterOnly',
+          status: :inactive,
+          communication_preference: :letter,
+          physical_address_1: '100 Mail Lane', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          date_of_birth: Date.new(1960, 1, 1),
+          password: internal_password, password_confirmation: internal_password,
+          hearing_disability: true
+        )
+      ensure
+        Current.reset
+      end
+
+      get history_admin_user_path(user)
+
+      assert_response :success
+      assert_match ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE, response.body
+      assert_match ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE, response.body
     end
   end
 end

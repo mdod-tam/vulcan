@@ -106,7 +106,12 @@
             
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm text-gray-500 truncate max-w-xs">
-                <%= mail_to user.effective_email, class: "hover:text-indigo-600 block", title: user.effective_email %>
+                <% email_display = display_contact_email(user) %>
+                <% if displayable_contact_email?(user) %>
+                  <%= mail_to email_display, email_display, class: "hover:text-indigo-600 block", title: email_display %>
+                <% else %>
+                  <span class="text-gray-500"><%= email_display %></span>
+                <% end %>
               </div>
             </td>
 

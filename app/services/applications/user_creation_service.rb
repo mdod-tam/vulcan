@@ -3,23 +3,51 @@
 module Applications
   # Handles user creation and lookup for paper applications
   class UserCreationService < BaseService
-    attr_reader :attrs, :is_managing_adult, :errors, :skip_user_lookup, :skip_email_validation
+    attr_reader :attrs, :is_managing_adult, :errors, :skip_user_lookup, :skip_email_validation,
+                :skip_phone_validation
 
-    def initialize(attrs, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false, skip_email_validation: false)
+    def initialize(attrs, is_managing_adult: false, skip_user_lookup: false, require_disability_validation: false,
+                   skip_email_validation: false, skip_phone_validation: false)
       super()
       @attrs = attrs.with_indifferent_access
       @is_managing_adult = is_managing_adult
       @skip_user_lookup = skip_user_lookup
       @require_disability_validation = require_disability_validation
       @skip_email_validation = skip_email_validation
+      @skip_phone_validation = skip_phone_validation
       @errors = []
     end
 
     def call
-      user = skip_user_lookup ? create_new_user : (find_existing_user || create_new_user)
+      unless skip_user_lookup
+        existing = find_existing_user
+        if existing
+          prepare_attributes
+          validate_email_presence
+          validate_phone_presence
+          return Result.new(success: false, message: @errors.join(', '), data: { errors: @errors }) if @errors.any?
+
+          return Result.new(
+            success: true,
+            data: {
+              user: existing,
+              portal_eligible_created_user_id: nil,
+              existing_user: true
+            }
+          )
+        end
+      end
+
+      user = create_new_user
 
       if user&.persisted?
-        Result.new(success: true, data: { user: user, temp_password: @temp_password })
+        Result.new(
+          success: true,
+          data: {
+            user: user,
+            portal_eligible_created_user_id: portal_eligible_created_user_id(user)
+          }
+        )
       else
         Result.new(success: false, message: @errors.join(', '), data: { errors: @errors })
       end
@@ -28,11 +56,16 @@ module Applications
     private
 
     def find_existing_user
-      return nil unless attrs[:email].present? && attrs[:email].exclude?('@system.matvulcan.local')
+      if attrs[:email].present? && !User.system_generated_email?(attrs[:email])
+        user = User.find_by_email(attrs[:email])
+        return user if user
+      end
 
-      user = User.find_by_email(attrs[:email])
-      user ||= find_by_phone if attrs[:phone].present?
-      user
+      # Dependents with guardian email strategy store synthetic primary email; phone lookup
+      # would match unrelated users sharing the dependent's real phone.
+      return if attrs[:email].present? && User.system_generated_email?(attrs[:email])
+
+      find_by_phone if attrs[:phone].present?
     end
 
     def find_by_phone
@@ -43,13 +76,14 @@ module Applications
     def create_new_user
       prepare_attributes
       validate_email_presence
+      validate_phone_presence
 
       return nil if @errors.any?
 
       user = build_user
 
       if user.save
-        Rails.logger.info { "Created user #{user.id} with email #{user.email}" }
+        Rails.logger.info { "Created user #{user.id} (portal_eligible=#{user.portal_access_eligible?})" }
         user
       else
         @errors << "Failed to create user: #{user.errors.full_messages.join(', ')}"
@@ -58,6 +92,7 @@ module Applications
     end
 
     def prepare_attributes
+      normalize_contact_attrs!
       # Only auto-assign disability for paper applications, not portal (which validates)
       ensure_disability_selection unless is_managing_adult || @require_disability_validation
       attrs.delete(:notification_method)
@@ -72,16 +107,48 @@ module Applications
       @errors << "Failed to create #{context}: Email is required."
     end
 
-    def build_user
-      @temp_password = SecureRandom.hex(8)
+    def validate_phone_presence
+      return if skip_phone_validation
+      return if attrs[:phone].present?
 
-      Users::Constituent.new(attrs).tap do |user|
-        user.password = @temp_password
-        user.password_confirmation = @temp_password
-        user.verified = true
+      context = is_managing_adult ? 'guardian' : 'dependent'
+      @errors << "Failed to create #{context}: Phone number is required."
+    end
+
+    def build_user
+      user = Users::Constituent.new(attrs)
+      user.verified = true
+      user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
+
+      if portal_eligible_from_attrs?
+        initial_password = SecureRandom.hex(8)
+        user.password = initial_password
+        user.password_confirmation = initial_password
         user.force_password_change = true
-        user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
+      else
+        internal_password = SecureRandom.hex(32)
+        user.password = internal_password
+        user.password_confirmation = internal_password
+        user.force_password_change = false
       end
+
+      user
+    end
+
+    def portal_eligible_created_user_id(user)
+      user.portal_access_eligible? ? user.id : nil
+    end
+
+    def portal_eligible_from_attrs?
+      User.new(email: attrs[:email], phone: attrs[:phone], phone_type: attrs[:phone_type]).portal_access_eligible?
+    end
+
+    def normalize_contact_attrs!
+      attrs[:email] = User.normalize_email(attrs[:email]) if attrs[:email].present?
+      return if attrs[:phone].blank?
+
+      normalized_phone = User.normalize_phone(attrs[:phone])
+      attrs[:phone] = normalized_phone if normalized_phone.present?
     end
 
     def ensure_disability_selection

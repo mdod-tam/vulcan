@@ -19,8 +19,8 @@
       <div>
         <h2 class="text-lg font-medium mb-2">Constituent Details</h2>
         <p><strong>Name:</strong> <%= @letter.constituent.full_name %></p>
-        <p><strong>Email:</strong> <%= @letter.constituent.email || "N/A" %></p>
-        <p><strong>Phone:</strong> <%= @letter.constituent.phone || "N/A" %></p>
+        <p><strong>Email:</strong> <%= display_contact_email(@letter.constituent) %></p>
+        <p><strong>Phone:</strong> <%= display_contact_phone(@letter.constituent) %></p>
         <p><strong>Address:</strong>
           <br><%= @letter.constituent.physical_address_1 %>
           <% if @letter.constituent.physical_address_2.present? %>

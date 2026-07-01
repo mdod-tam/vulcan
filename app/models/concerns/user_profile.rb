@@ -7,6 +7,7 @@ module UserProfile
   included do
     # Callbacks
     before_validation :normalize_email_fields
+    before_validation :normalize_communication_preference_for_undeliverable_email
     before_validation :format_phone_number
     before_save :format_phone_number, if: :phone_changed?
     after_save :log_profile_changes, if: :saved_changes_to_profile_fields?
@@ -29,15 +30,18 @@ module UserProfile
     validates :first_name, presence: true, length: { maximum: 50 }
     validates :last_name, presence: true, length: { maximum: 50 }
     validates :middle_initial, length: { maximum: 1 }, allow_blank: true
-    validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP }, unless: :paper_context_no_email?
+    validates :email, presence: true, unless: :email_optional?
+    validates :email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
     validates :dependent_email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
     validate :email_must_be_unique
     validate :phone_must_be_unique
-    validate :phone_number_must_be_valid, if: :phone_changed?
+    validate :phone_number_must_be_valid, if: :phone_changed?, unless: :paper_context_no_phone?
     validate :dependent_phone_number_must_be_valid, if: :dependent_phone_changed?
     validate :date_of_birth_must_be_valid
     validate :constituent_must_have_disability, if: :validate_constituent_disability?
     validate :validate_address_for_letter_preference
+    validate :email_delivery_requires_real_email
+    validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
 
     # Enums
     enum :status, { inactive: 0, active: 1, suspended: 2 }, default: :active
@@ -97,11 +101,21 @@ module UserProfile
   private
 
   def normalize_email_fields
-    self.email = User.normalize_email(email) if email.present?
-    self.dependent_email = User.normalize_email(dependent_email) if dependent_email.present?
+    self.email = email.present? ? User.normalize_email(email) : nil
+    self.dependent_email = dependent_email.present? ? User.normalize_email(dependent_email) : nil
+  end
+
+  def normalize_communication_preference_for_undeliverable_email
+    return unless new_record?
+    return if real_email?
+    return if dependent_with_deliverable_contact_email?
+    return unless deliver_via_email?
+
+    self.communication_preference = :letter
   end
 
   def format_phone_number
+    self.phone = nil if phone.blank?
     return if phone.blank?
 
     digits = phone.gsub(/\D/, '')
@@ -213,9 +227,74 @@ module UserProfile
     Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
   end
 
-    # Check if we're in a paper context where email is not required
+  # Check if we're in a paper context where email is not required
   def paper_context_no_email?
     Current.paper_context && email.blank?
   end
 
+  # Check if we're in a paper context where phone is not required
+  def paper_context_no_phone?
+    Current.paper_context && phone.blank?
+  end
+
+  # Phone-only portal users store NULL email; password/profile saves must not require email.
+  # Address-only users store NULL email/phone and remain editable outside paper context.
+  def email_optional?
+    paper_context_no_email? ||
+      (persisted? && constituent_user_type? && portal_phone_only_without_email?) ||
+      (persisted? && constituent_user_type? && address_only_contact?)
+  end
+
+  def validate_admin_contact_update?
+    !Current.paper_context && constituent_user_type?
+  end
+
+  def constituent_user_type?
+    Users::FilterService::CONSTITUENT_TYPE_VALUES.include?(type)
+  end
+
+  def email_delivery_requires_real_email
+    return unless deliver_via_email?
+    return if real_email?
+    return if dependent_with_deliverable_contact_email?
+
+    errors.add(:communication_preference, 'requires an email address on file')
+  end
+
+  def dependent_with_deliverable_contact_email?
+    return false unless User.system_generated_email?(email)
+    return false if dependent_email.blank?
+    return false unless dependent_email.to_s.match?(URI::MailTo::EMAIL_REGEXP)
+    return false if User.system_generated_email?(dependent_email)
+
+    true
+  end
+
+  def dependent_with_deliverable_contact_phone?
+    return false if dependent_phone.blank?
+
+    User.new(phone: dependent_phone).real_phone?
+  end
+
+  def admin_contact_update_must_remain_reachable
+    return if real_email? || real_phone?
+    return if dependent_with_deliverable_contact_email?
+    return if dependent_with_deliverable_contact_phone?
+
+    unless deliver_via_letter?
+      errors.add(:communication_preference, 'must be letter when no email or phone is on file')
+      return
+    end
+
+    return if was_address_only_contact?
+
+    errors.add(:base, 'Cannot clear all contact information outside paper intake.')
+  end
+
+  def was_address_only_contact?
+    return true if new_record?
+
+    prior = User.new(email: attribute_in_database(:email), phone: attribute_in_database(:phone))
+    !prior.real_email? && !prior.real_phone?
+  end
 end

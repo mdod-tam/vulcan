@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import { setVisible } from "../../utils/visibility"
+import { setVisible, hide, show } from "../../utils/visibility"
 
 /**
  * Contact Feedback Controller
@@ -20,6 +20,9 @@ export default class ContactFeedbackController extends Controller {
   static targets = [
     "phone",           // Phone number input
     "email",           // Email input
+    "emailWrapper",    // Wrapper around email field (scoped per controller instance)
+    "phoneWrapper",    // Wrapper around phone field
+    "phoneTypeFieldset", // Preferred contact method fieldset
     "address1",        // Street address line 1
     "address2",        // Street address line 2 (optional)
     "city",            // City
@@ -47,10 +50,15 @@ export default class ContactFeedbackController extends Controller {
     // Store bound method references for cleanup
     this._boundUpdateFeedback = this.updateFeedback.bind(this)
     this._boundUpdateDeliveryFeedback = this.updateDeliveryFeedback.bind(this)
+    this._boundNoContactCheckboxEvent = this._handleNoContactCheckboxEvent.bind(this)
     
     // Set up listeners on input fields for real-time updates
     this._setupInputListeners()
+    this._setupNoContactCheckboxListeners()
     
+    // Restore no-contact checkbox UI after validation failure re-render
+    this._syncNoContactCheckboxState()
+
     // Initial update - show feedback on page load
     this.updateFeedback()
     this.updateDeliveryFeedback()
@@ -58,6 +66,7 @@ export default class ContactFeedbackController extends Controller {
 
   disconnect() {
     this._teardownInputListeners()
+    this._teardownNoContactCheckboxListeners()
   }
 
   /**
@@ -65,45 +74,315 @@ export default class ContactFeedbackController extends Controller {
    */
   toggleEmailField(event) {
     const checkbox = event.target
-    const emailInput = this.hasEmailTarget ? this.emailTarget : null
-    const emailWrapper = document.querySelector('#email_field_wrapper')
-    
+    const emailInput = this._emailInput()
+    const emailWrapper = this._emailWrapper()
+
     if (!emailInput || !emailWrapper) return
-    
+
     if (checkbox.checked) {
-      emailWrapper.classList.add('hidden')
+      hide(emailWrapper)
       emailInput.required = false
       emailInput.removeAttribute('aria-required')
       emailInput.value = ''
-      emailInput.disabled = true
-      // Auto-select letter delivery when no email
-      const letterRadio = this.element.querySelector('input[name="constituent[communication_preference]"][value="letter"]')
-      if (letterRadio) {
-        letterRadio.checked = true
-        this.updateDeliveryFeedback()
-      }
+      this._suppressContactField(emailInput)
+      this._toggleRequiredLabel(emailWrapper, false)
+      this._setCommunicationPreference('letter')
     } else {
-      emailWrapper.classList.remove('hidden')
+      show(emailWrapper)
       emailInput.required = true
       emailInput.setAttribute('aria-required', 'true')
-      emailInput.disabled = false
+      this._restoreContactField(emailInput)
+      this._toggleRequiredLabel(emailWrapper, true)
     }
+
+    if (this._noPhoneChecked()) {
+      this._applyNoPhoneContactType()
+    }
+
+    this.updateFeedback()
+    this.updateDeliveryFeedback()
+  }
+
+  /**
+   * Toggle phone field visibility when "no phone" checkbox is checked
+   */
+  togglePhoneField(event) {
+    const checkbox = event.target
+    const phoneInput = this._phoneInput()
+    const phoneWrapper = this._phoneWrapper()
+    const phoneTypeFieldset = this._phoneTypeFieldset()
+
+    if (!phoneInput || !phoneWrapper) return
+
+    if (checkbox.checked) {
+      hide(phoneWrapper)
+      phoneInput.required = false
+      phoneInput.removeAttribute('aria-required')
+      phoneInput.value = ''
+      this._suppressContactField(phoneInput)
+      this._toggleRequiredLabel(phoneWrapper, false)
+      if (phoneTypeFieldset) hide(phoneTypeFieldset)
+      this._applyNoPhoneContactType()
+      if (this._shouldUseLetterDelivery()) {
+        this._setCommunicationPreference('letter')
+      }
+    } else {
+      show(phoneWrapper)
+      phoneInput.required = true
+      phoneInput.setAttribute('aria-required', 'true')
+      this._restoreContactField(phoneInput)
+      this._toggleRequiredLabel(phoneWrapper, true)
+      if (phoneTypeFieldset) show(phoneTypeFieldset)
+      this._restorePhoneTypeSelection()
+    }
+
+    this.updateFeedback()
+    this.updateDeliveryFeedback()
+  }
+
+  /**
+   * Dependent form: no-email checkbox selects guardian email strategy
+   */
+  toggleDependentNoEmail(event) {
+    const checkbox = event.target
+    const useGuardianEmail = this.element.querySelector('#use_guardian_email_checkbox')
+
+    if (useGuardianEmail) {
+      useGuardianEmail.checked = checkbox.checked
+      useGuardianEmail.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    if (checkbox.checked) {
+      this._setCommunicationPreference('letter')
+    }
+
+    this.updateFeedback()
+    this.updateDeliveryFeedback()
+  }
+
+  _selectLetterDelivery() {
+    this._setCommunicationPreference('letter')
+  }
+
+  _setCommunicationPreference(value) {
+    const radioNames = [
+      'constituent[communication_preference]',
+      'guardian_attributes[communication_preference]'
+    ]
+
+    radioNames.forEach((name) => {
+      const radio = this.element.querySelector(`input[name="${name}"][value="${value}"]`)
+      if (radio) {
+        radio.checked = true
+      }
+    })
+
+    const hiddenField = this.element.querySelector('input[type="hidden"][name="constituent[communication_preference]"]')
+    if (hiddenField) hiddenField.value = value
+
+    this.updateDeliveryFeedback()
+  }
+
+  _addressOnlyContact() {
+    return this._noEmailChecked() && this._noPhoneChecked()
+  }
+
+  _toggleRequiredLabel(wrapper, required) {
+    const label = wrapper?.querySelector('label')
+    if (!label) return
+
+    label.classList.toggle('required-label', required)
+  }
+
+  _shouldUseLetterDelivery() {
+    if (this._noEmailChecked()) return true
+
+    const emailInput = this._emailInput()
+    if (!emailInput) return true
+
+    return emailInput.disabled || !emailInput.value?.trim()
+  }
+
+  _phoneTypeRadioNames() {
+    return ['constituent[phone_type]', 'guardian_attributes[phone_type]']
+  }
+
+  _activePhoneTypeRadioName() {
+    return this._phoneTypeRadioNames().find((name) => this.element.querySelector(`input[name="${name}"]`))
+  }
+
+  _applyNoPhoneContactType() {
+    const phoneTypeValue = this._shouldUseLetterDelivery() ? 'letter' : 'email'
+    const radioName = this._activePhoneTypeRadioName()
+    if (!radioName) return
+
+    this.element.querySelectorAll(`input[name="${radioName}"]`).forEach((radio) => {
+      const selected = radio.value === phoneTypeValue
+      radio.checked = selected
+      radio.disabled = !selected
+    })
+  }
+
+  _restorePhoneTypeSelection() {
+    const radioName = this._activePhoneTypeRadioName()
+    if (!radioName) return
+
+    this.element.querySelectorAll(`input[name="${radioName}"]`).forEach((radio) => {
+      radio.disabled = false
+    })
+
+    const checked = this.element.querySelector(`input[name="${radioName}"]:checked`)
+    if (checked) return
+
+    const voiceRadio = this.element.querySelector(`input[name="${radioName}"][value="voice"]`)
+    if (voiceRadio) voiceRadio.checked = true
+  }
+
+  _setupNoContactCheckboxListeners() {
+    this.element.addEventListener('change', this._boundNoContactCheckboxEvent)
+    this.element.addEventListener('click', this._boundNoContactCheckboxEvent)
+  }
+
+  _teardownNoContactCheckboxListeners() {
+    this.element.removeEventListener('change', this._boundNoContactCheckboxEvent)
+    this.element.removeEventListener('click', this._boundNoContactCheckboxEvent)
+  }
+
+  _handleNoContactCheckboxEvent(event) {
+    const checkbox = this._resolveNoContactCheckbox(event.target)
+    if (!checkbox) return
+
+    const applyToggle = () => {
+      if (this._isNoEmailCheckbox(checkbox)) {
+        this.toggleEmailField({ target: checkbox })
+      } else if (this._isNoPhoneCheckbox(checkbox)) {
+        this.togglePhoneField({ target: checkbox })
+      }
+    }
+
+    if (event.type === 'click') {
+      requestAnimationFrame(applyToggle)
+      return
+    }
+
+    applyToggle()
+  }
+
+  _resolveNoContactCheckbox(target) {
+    if (!(target instanceof Element)) return null
+
+    if (target.matches('input[type="checkbox"]') && this._isNoContactCheckboxName(target.name)) {
+      return target
+    }
+
+    const label = target.closest('label')
+    if (!label || !this.element.contains(label)) return null
+
+    return label.querySelector('input[type="checkbox"][name="no_email_address"], input[type="checkbox"][name="no_phone_number"], input[type="checkbox"][name="guardian_no_email_address"], input[type="checkbox"][name="guardian_no_phone_number"]')
+  }
+
+  _isNoContactCheckboxName(name) {
+    return ['no_email_address', 'no_phone_number', 'guardian_no_email_address', 'guardian_no_phone_number'].includes(name)
+  }
+
+  _isNoEmailCheckbox(checkbox) {
+    return checkbox.name === 'no_email_address' || checkbox.name === 'guardian_no_email_address'
+  }
+
+  _isNoPhoneCheckbox(checkbox) {
+    return checkbox.name === 'no_phone_number' || checkbox.name === 'guardian_no_phone_number'
+  }
+
+  _suppressContactField(field) {
+    field.disabled = true
+    field.dataset.contactFeedbackSuppressed = 'true'
+  }
+
+  _restoreContactField(field) {
+    field.disabled = false
+    delete field.dataset.contactFeedbackSuppressed
+  }
+
+  /**
+   * Called when outer form sections re-enable fields after being hidden.
+   */
+  resyncNoContactState() {
+    this._syncNoContactCheckboxState()
+    this.updateFeedback()
+    this.updateDeliveryFeedback()
+  }
+
+  _syncNoContactCheckboxState() {
+    const noEmailCheckbox = this._noEmailCheckbox()
+    if (noEmailCheckbox?.checked) {
+      this.toggleEmailField({ target: noEmailCheckbox })
+    }
+
+    const noPhoneCheckbox = this._noPhoneCheckbox()
+    if (noPhoneCheckbox?.checked) {
+      this.togglePhoneField({ target: noPhoneCheckbox })
+    }
+  }
+
+  _emailInput() {
+    if (this.hasEmailTarget) return this.emailTarget
+    return this.element.querySelector('[data-contact-feedback-target="email"]')
+  }
+
+  _phoneInput() {
+    if (this.hasPhoneTarget) return this.phoneTarget
+    return this.element.querySelector('[data-contact-feedback-target="phone"]')
+  }
+
+  _emailWrapper() {
+    if (this.hasEmailWrapperTarget) return this.emailWrapperTarget
+    return this.element.querySelector('[data-contact-feedback-target="emailWrapper"]')
+  }
+
+  _phoneWrapper() {
+    if (this.hasPhoneWrapperTarget) return this.phoneWrapperTarget
+    return this.element.querySelector('[data-contact-feedback-target="phoneWrapper"]')
+  }
+
+  _phoneTypeFieldset() {
+    if (this.hasPhoneTypeFieldsetTarget) return this.phoneTypeFieldsetTarget
+    return this.element.querySelector('[data-contact-feedback-target="phoneTypeFieldset"]')
+  }
+
+  _noEmailCheckbox() {
+    return this.element.querySelector('input[type="checkbox"][name="no_email_address"]') ||
+      this.element.querySelector('input[type="checkbox"][name="guardian_no_email_address"]')
+  }
+
+  _noPhoneCheckbox() {
+    return this.element.querySelector('input[type="checkbox"][name="no_phone_number"]') ||
+      this.element.querySelector('input[type="checkbox"][name="guardian_no_phone_number"]')
+  }
+
+  _noEmailChecked() {
+    return this._noEmailCheckbox()?.checked === true
+  }
+
+  _noPhoneChecked() {
+    return this._noPhoneCheckbox()?.checked === true
   }
 
   /**
    * Listeners on phone/email/address inputs for real-time feedback updates
    */
   _setupInputListeners() {
-    if (this.hasPhoneTarget) {
-      this.phoneTarget.addEventListener("input", this._boundUpdateFeedback)
-      this.phoneTarget.addEventListener("change", this._boundUpdateFeedback)
+    const phoneInput = this._phoneInput()
+    if (phoneInput) {
+      phoneInput.addEventListener("input", this._boundUpdateFeedback)
+      phoneInput.addEventListener("change", this._boundUpdateFeedback)
     }
     
-    if (this.hasEmailTarget) {
-      this.emailTarget.addEventListener("input", this._boundUpdateFeedback)
-      this.emailTarget.addEventListener("change", this._boundUpdateFeedback)
-      this.emailTarget.addEventListener("input", this._boundUpdateDeliveryFeedback)
-      this.emailTarget.addEventListener("change", this._boundUpdateDeliveryFeedback)
+    const emailInput = this._emailInput()
+    if (emailInput) {
+      emailInput.addEventListener("input", this._boundUpdateFeedback)
+      emailInput.addEventListener("change", this._boundUpdateFeedback)
+      emailInput.addEventListener("input", this._boundUpdateDeliveryFeedback)
+      emailInput.addEventListener("change", this._boundUpdateDeliveryFeedback)
     }
     
     // Set up listeners for address fields to update delivery feedback
@@ -118,16 +397,18 @@ export default class ContactFeedbackController extends Controller {
   }
 
   _teardownInputListeners() {
-    if (this.hasPhoneTarget) {
-      this.phoneTarget.removeEventListener("input", this._boundUpdateFeedback)
-      this.phoneTarget.removeEventListener("change", this._boundUpdateFeedback)
+    const phoneInput = this._phoneInput()
+    if (phoneInput) {
+      phoneInput.removeEventListener("input", this._boundUpdateFeedback)
+      phoneInput.removeEventListener("change", this._boundUpdateFeedback)
     }
     
-    if (this.hasEmailTarget) {
-      this.emailTarget.removeEventListener("input", this._boundUpdateFeedback)
-      this.emailTarget.removeEventListener("change", this._boundUpdateFeedback)
-      this.emailTarget.removeEventListener("input", this._boundUpdateDeliveryFeedback)
-      this.emailTarget.removeEventListener("change", this._boundUpdateDeliveryFeedback)
+    const emailInput = this._emailInput()
+    if (emailInput) {
+      emailInput.removeEventListener("input", this._boundUpdateFeedback)
+      emailInput.removeEventListener("change", this._boundUpdateFeedback)
+      emailInput.removeEventListener("input", this._boundUpdateDeliveryFeedback)
+      emailInput.removeEventListener("change", this._boundUpdateDeliveryFeedback)
     }
     
     // Remove listeners from address fields
@@ -147,6 +428,11 @@ export default class ContactFeedbackController extends Controller {
    */
   updateFeedback() {
     if (!this.hasFeedbackTarget) return
+
+    if (this._addressOnlyContact()) {
+      setVisible(this.feedbackTarget, false)
+      return
+    }
     
     const selectedMethod = this._getSelectedContactMethod()
     if (!selectedMethod) {
@@ -247,8 +533,10 @@ export default class ContactFeedbackController extends Controller {
    * @returns {Object|null} Object with html and className, or null if no feedback
    */
   _buildContactFeedback(method) {
-    const phone = this.hasPhoneTarget ? this._formatPhone(this.phoneTarget.value) : null
-    const email = this.hasEmailTarget ? this.emailTarget.value : null
+    const phoneInput = this._phoneInput()
+    const emailInput = this._emailInput()
+    const phone = phoneInput ? this._formatPhone(phoneInput.value) : null
+    const email = emailInput ? emailInput.value : null
     
     // Base classes for feedback - accessible, visually distinct
     const baseClassName = "mt-2 p-3 rounded-md text-sm font-medium flex items-center gap-2"
@@ -271,6 +559,12 @@ export default class ContactFeedbackController extends Controller {
     
     switch (method) {
       case 'voice':
+        if (this._noPhoneChecked()) {
+          return {
+            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
+            className: successClassName
+          }
+        }
         if (phone) {
           return {
             html: `${checkIcon}<span>${this.callMessageValue} <strong>${phone}</strong></span>`,
@@ -284,6 +578,12 @@ export default class ContactFeedbackController extends Controller {
         }
         
       case 'text':
+        if (this._noPhoneChecked()) {
+          return {
+            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
+            className: successClassName
+          }
+        }
         if (phone) {
           return {
             html: `${checkIcon}<span>${this.textMessageValue} <strong>${phone}</strong></span>`,
@@ -297,6 +597,12 @@ export default class ContactFeedbackController extends Controller {
         }
         
       case 'videophone':
+        if (this._noPhoneChecked()) {
+          return {
+            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
+            className: successClassName
+          }
+        }
         if (phone) {
           return {
             html: `${checkIcon}<span>${this.videophoneMessageValue} <strong>${phone}</strong></span>`,
@@ -310,6 +616,12 @@ export default class ContactFeedbackController extends Controller {
         }
         
       case 'email':
+        if (this._noEmailChecked()) {
+          return {
+            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
+            className: successClassName
+          }
+        }
         if (email) {
           return {
             html: `${checkIcon}<span>${this.emailMessageValue} <strong>${email}</strong></span>`,
@@ -342,7 +654,8 @@ export default class ContactFeedbackController extends Controller {
    * @returns {Object|null} Object with html and className, or null if no feedback
    */
   _buildDeliveryFeedback(method) {
-    const email = this.hasEmailTarget ? this.emailTarget.value : null
+    const emailInput = this._emailInput()
+    const email = emailInput ? emailInput.value : null
     const address = this._buildFullAddress()
     
     const baseClassName = "mt-2 p-3 rounded-md text-sm font-medium flex items-start gap-2"
@@ -356,6 +669,14 @@ export default class ContactFeedbackController extends Controller {
     
     switch (method) {
       case 'email':
+        if (this._noEmailChecked()) {
+          if (address) {
+            return {
+              html: `${mailIcon}<div><div class="mb-1">${this.deliveryMailMessageValue}:</div><strong class="block">${address}</strong></div>`,
+              className: successClassName
+            }
+          }
+        }
         if (email) {
           return {
             html: `${mailIcon}<span>${this.deliveryEmailMessageValue} <strong>${email}</strong></span>`,

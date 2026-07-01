@@ -59,7 +59,7 @@ class BaseService
 end
 ```
 
-Use `success?`, `failure?`, `message`, and `data` when a service returns `BaseService::Result`. Some legacy services still return booleans and expose `errors`; `Applications::PaperApplicationService#create` and `#update` are examples.
+Use `success?`, `failure?`, `message`, and `data` when a service returns `BaseService::Result`. Some legacy services still return booleans and expose `errors`; the routed admin paper-intake path uses `Applications::PaperApplicationService#create`.
 
 `BaseService` also provides `log_error(exception, context = nil)`, which logs the context/backtrace and appends the exception message to `errors`.
 
@@ -71,7 +71,7 @@ Use `success?`, `failure?`, `message`, and `data` when a service returns `BaseSe
 | `NotificationService` | `app/services/notification_service.rb` | Creates `Notification` records, resolves mailers, stores delivery-route metadata, and optionally enqueues delivery. | `Notification` or `nil` |
 | `ProofAttachmentService` | `app/services/proof_attachment_service.rb` | Attaches income, residency, and ID proofs while preserving the caller's submission-method metadata. | Hash |
 | `MedicalCertificationAttachmentService` | `app/services/medical_certification_attachment_service.rb` | Attaches, rejects, or status-updates disability certifications. | Hash |
-| `Applications::PaperApplicationService` | `app/services/applications/paper_application_service.rb` | Creates and updates admin-entered paper applications. | Boolean plus `errors` / `reconciliation_note` |
+| `Applications::PaperApplicationService` | `app/services/applications/paper_application_service.rb` | Creates admin-entered paper applications through the `new`/`create` admin intake route. | Boolean plus `errors` / `reconciliation_note` |
 | `Applications::GuardianDependentManagementService` | `app/services/applications/guardian_dependent_management_service.rb` | Creates or links guardian/dependent users and applies contact strategies. | `BaseService::Result` on the success path |
 | `Applications::MedicalCertificationService` | `app/services/applications/medical_certification_service.rb` | Requests disability certification from a provider. | `BaseService::Result` |
 | `Applications::EventService` | `app/services/applications/event_service.rb` | Logs guardian/dependent application submission and update events. | `Event` or `nil` |
@@ -105,7 +105,7 @@ Routes:
 
 Current behavior:
 
-- `create` and `update` set `Current.paper_context = true` during service-owned work and reset it in `ensure`.
+- `create` sets `Current.paper_context = true` during service-owned work and resets it in `ensure`; routed admin paper intake is `new`/`create` only.
 - Self-applicant, existing self-applicant, existing dependent, and new guardian/dependent scenarios are handled in the service.
 - New guardian/dependent creation uses `Applications::GuardianDependentManagementService`; existing dependent relationships are created directly when missing.
 - Contact strategies are `email_strategy`, `phone_strategy`, and `address_strategy`.

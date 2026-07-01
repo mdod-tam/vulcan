@@ -4,8 +4,9 @@ module Admin
   class PaperApplicationsController < Admin::BaseController
     include ParamCasting
     include TurboStreamResponseHandling
+    include PaperQuickCreatePortalMarkers
 
-    before_action :cast_complex_boolean_params, only: %i[create update]
+    before_action :cast_complex_boolean_params, only: %i[create]
 
     USER_BASE_FIELDS = %i[
       first_name middle_initial last_name email phone phone_type
@@ -52,16 +53,17 @@ module Admin
     def create
       log_file_and_form_params
       service_params = paper_application_processing_params # Use the new method
-      Rails.logger.debug { "Service params before service call: #{service_params.inspect}" }
 
       service = Applications::PaperApplicationService.new(
         params: service_params,
-        admin: current_user
+        admin: current_user,
+        quick_created_portal_user_ids: quick_created_portal_user_ids
       )
 
       service_result = service.create
 
       if service_result
+        clear_quick_created_portal_user_markers!
         success_message = generate_success_message(service.application)
         if service.reconciliation_note.present?
           handle_reconciliation_warning_response(
@@ -91,40 +93,6 @@ module Admin
         else
           handle_service_failure(service)
         end
-      end
-    end
-
-    def update
-      log_file_and_form_params
-      service_params = paper_application_processing_params # Use the new method
-      Rails.logger.debug { "Service params for update: #{service_params.inspect}" }
-
-      application = Application.find(params[:id])
-      # ... (logging from original update can be kept or removed as needed)
-
-      service = Applications::PaperApplicationService.new(
-        params: service_params,
-        admin: current_user
-      )
-
-      if service.update(application)
-        update_message = generate_success_message(application)
-        if service.reconciliation_note.present?
-          handle_reconciliation_warning_response(
-            application: application,
-            success_message: update_message,
-            warning_message: service.reconciliation_note
-          )
-        else
-          handle_success_response(
-            html_redirect_path: admin_application_path(application),
-            html_message: update_message,
-            turbo_message: update_message,
-            turbo_redirect_path: admin_application_path(application)
-          )
-        end
-      else
-        handle_service_failure(service, application)
       end
     end
 
@@ -361,6 +329,8 @@ module Admin
       params.permit(
         :applicant_type, :relationship_type, :guardian_id, :dependent_id,
         :existing_constituent_id, :contact_info_mode, :contact_info_verified,
+        :no_email_address, :no_phone_number,
+        :guardian_no_email_address, :guardian_no_phone_number,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         application: APPLICATION_FIELDS,
@@ -408,7 +378,6 @@ module Admin
       merge_user_params!(service_params, permitted, disability_attrs)
       add_proof_params_from!(service_params, permitted)
 
-      Rails.logger.debug { "Final service params: #{service_params.inspect}" }
       service_params
     end
 
@@ -424,6 +393,9 @@ module Admin
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         :no_email_address,
+        :no_phone_number,
+        :guardian_no_email_address,
+        :guardian_no_phone_number,
         :income_proof_action, :income_proof, :income_proof_signed_id,
         :income_proof_rejection_reason, :income_proof_custom_rejection_reason,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
@@ -443,7 +415,9 @@ module Admin
     def base_params_from(permitted)
       base = permitted.slice(
         :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
-        :existing_constituent_id, :contact_info_mode, :contact_info_verified, :no_email_address
+        :existing_constituent_id, :contact_info_mode, :contact_info_verified,
+        :no_email_address, :no_phone_number,
+        :guardian_no_email_address, :guardian_no_phone_number
       )
       base[:applicant_type] = compute_applicant_type(permitted)
       base

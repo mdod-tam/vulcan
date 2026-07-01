@@ -145,6 +145,18 @@ class UserSearchController extends BaseFormController {
       }
     })
 
+    // Top-level guardian contact flags (outside guardian_attributes[...])
+    const noEmailCheckbox = this.element.querySelector('input[type="checkbox"][name="guardian_no_email_address"]')
+    const noPhoneCheckbox = this.element.querySelector('input[type="checkbox"][name="guardian_no_phone_number"]')
+    if (noEmailCheckbox?.checked) {
+      formData.append('guardian_no_email_address', '1')
+      formData.append('no_email_address', '1')
+    }
+    if (noPhoneCheckbox?.checked) {
+      formData.append('guardian_no_phone_number', '1')
+      formData.append('no_phone_number', '1')
+    }
+
     // Clear any previous errors
     this.clearFieldErrors()
 
@@ -328,17 +340,34 @@ class UserSearchController extends BaseFormController {
     const firstName = data instanceof FormData ? data.get('first_name') : data.first_name
     const lastName = data instanceof FormData ? data.get('last_name') : data.last_name
     const email = data instanceof FormData ? data.get('email') : data.email
+    const phone = data instanceof FormData ? data.get('phone') : data.phone
+    const noEmail = this.element.querySelector('input[type="checkbox"][name="guardian_no_email_address"]')?.checked === true
+    const noPhone = this.element.querySelector('input[type="checkbox"][name="guardian_no_phone_number"]')?.checked === true
 
-    if (!firstName || !lastName || !email) {
+    if (!firstName || !lastName) {
       return {
         valid: false,
         errors: {
           first_name: !firstName ? 'First name is required' : null,
-          last_name: !lastName ? 'Last name is required' : null,
-          email: !email ? 'Email is required' : null
+          last_name: !lastName ? 'Last name is required' : null
         }
       }
     }
+
+    if (!noEmail && !email) {
+      return {
+        valid: false,
+        errors: { email: 'Email is required' }
+      }
+    }
+
+    if (!noPhone && !phone) {
+      return {
+        valid: false,
+        errors: { phone: 'Phone is required' }
+      }
+    }
+
     return { valid: true }
   }
 

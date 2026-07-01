@@ -161,4 +161,51 @@ module UserGuardianship
     # Alias for consistency with Application model and Rails authorization patterns
     accessible_by_guardian?(guardian_user)
   end
+
+  # Paper intake displays dependent-owned contact separately from synthetic primary fields.
+  def paper_intake_own_email(guardian: nil)
+    return unless dependent?
+
+    guardian ||= guardian_for_contact
+    candidate = paper_intake_email_candidate
+    return if candidate.blank?
+    return if guardian && User.normalize_email(candidate) == User.normalize_email(guardian.email)
+
+    candidate
+  end
+
+  def paper_intake_own_phone(guardian: nil)
+    return unless dependent?
+
+    guardian ||= guardian_for_contact
+    candidate = paper_intake_phone_candidate
+    return if candidate.blank?
+    return if guardian && normalized_phone_for_guardianship(candidate) == normalized_phone_for_guardianship(guardian.phone)
+
+    candidate
+  end
+
+  def paper_intake_uses_guardian_email?(guardian: nil)
+    dependent? && paper_intake_own_email(guardian: guardian).blank?
+  end
+
+  def paper_intake_uses_guardian_phone?(guardian: nil)
+    dependent? && paper_intake_own_phone(guardian: guardian).blank?
+  end
+
+  def paper_intake_email_candidate
+    if dependent_email.present? && !User.system_generated_email?(dependent_email)
+      dependent_email
+    elsif real_email?
+      email
+    end
+  end
+
+  def paper_intake_phone_candidate
+    if dependent_phone.present? && User.new(phone: dependent_phone).real_phone?
+      dependent_phone
+    elsif real_phone?
+      phone
+    end
+  end
 end

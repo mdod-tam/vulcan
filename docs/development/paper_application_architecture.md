@@ -55,7 +55,7 @@ The controller does not own the main paper-application side effects after create
 - sets `submission_method` to `paper`
 - stamps `fulfillment_type` as `voucher` only when vouchers are enabled; otherwise paper applications remain equipment-fulfillment
 - processes income, residency, ID, and disability certification actions
-- sends account-creation and proof-rejection notifications after a successful create
+- sends account-creation notifications after a successful create for portal-eligible users only (`portal_access_eligible?`)
 - logs `application_created` after create
 - performs reconciliation after the transaction commits
 
@@ -68,11 +68,24 @@ Paper intake deliberately branches before it writes the application:
 | Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
 | Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
 | New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
-| New self applicant | No existing applicant is selected. | Creates a constituent through `Applications::UserCreationService`, generates temporary account access, and writes the paper application. |
+| New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Reuse an existing adult only through the explicit existing-applicant branch. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users get internal forced-change account setup; address-only users do not get portal access. No-phone intake clears stored phone and sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
 
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
 Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
+
+## Account-Created Notices And Quick-Create Markers
+
+Paper intake routes are `new` and `create` only (`config/routes.rb`). Quick-created portal-eligible user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
+
+When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for portal-eligible users created in the same submission or quick-created in the same browser session. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
+
+`Applications::UserCreationService` sets an internal initial password and `force_password_change` for portal-eligible users, but does not return the raw password. Quick-create markers store only user ids plus timestamps in the admin session (30-minute TTL):
+
+- On create, quick-created portal-eligible user ids are passed into the service.
+- For marked users, the admin warning reminds staff that no temporary password is retained and account help should use the existing account access link flow.
+
+Equipment-fulfillment applications skip account-created messaging even when a portal-eligible user is created.
 
 ## Provider-Info Follow-Up
 
@@ -112,7 +125,7 @@ For dependent intake, the controller/service pair currently works with:
 - `phone_strategy`
 - `address_strategy`
 
-Those strategies are applied by `Applications::GuardianDependentManagementService`. Existing dependent reuse aliases submitted `dependent_email` and `dependent_phone` into the same strategy path so the final effective contact details are consistent with newly created dependents.
+Those strategies are applied by `Applications::GuardianDependentManagementService`. Existing dependent reuse runs the same strategy application through `PaperApplicationService#apply_dependent_contact_strategies!` before persisting contact updates so guardian/no-contact choices overwrite stale direct contact data.
 
 ## Fulfillment Notes
 

@@ -40,7 +40,14 @@
                 <div class="text-sm font-medium text-gray-900"><%= user.full_name %></div>
               </td>
               <td class="px-6 py-4">
-                <div class="text-sm text-gray-500"><%= mail_to user.email, class: "hover:text-indigo-600" %></div>
+                <% email_display = display_contact_email(user) %>
+                <div class="text-sm text-gray-500">
+                  <% if displayable_contact_email?(user) %>
+                    <%= mail_to email_display, email_display, class: "hover:text-indigo-600" %>
+                  <% else %>
+                    <%= email_display %>
+                  <% end %>
+                </div>
               </td>
               <td class="px-6 py-4">
                 <% if latest_app.present? %>

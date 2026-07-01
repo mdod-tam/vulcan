@@ -34,11 +34,15 @@ The `User` model includes logic to manage dependent-specific contact information
 - **Encryption**: The `dependent_email` and `dependent_phone` fields are encrypted using `encrypts` (implemented in `UserProfile` concern).
 - **Validation**: The model validates the format of `dependent_email` and `dependent_phone` (implemented in `UserProfile` concern).
 - **Helper Methods** (implemented in `UserGuardianship` concern):
-  - `effective_email`: Returns the dependent's own email if present, otherwise falls back to the guardian's email via `guardian_for_contact`.
-  - `effective_phone`: Returns the dependent's own phone if present, otherwise falls back to the guardian's phone via `guardian_for_contact`.
-  - `effective_phone_type`: Handles phone type logic for dependents.
-  - `effective_communication_preference`: Uses guardian's preference if user is a dependent.
+  - `effective_email`, `effective_phone`, `effective_phone_type`, and `effective_communication_preference` are **communication-only** helpers for notifications, mailers, and admin display. They prefer dependent-owned fields, then guardian fallback, then the user's own fields.
+  - Portal sign-in and password recovery still use primary `email`/`phone` through `User.find_by_login_identifier`; synthetic dependent primaries are excluded from those auth paths even when effective contact resolves to a guardian address.
   - `guardian_for_contact`: Returns the primary guardian for contact purposes.
+
+- **Contact predicates** (implemented in `UserContactPredicates` concern):
+  - `real_email?`, `real_phone?`, `sms_capable_phone?`, and `portal_access_eligible?` express stored contact truth.
+  - Synthetic primary values (`@system.matvulcan.local`, `000-…` phones) are never `real_*` and are blocked from auth lookup.
+  - Adults use NULL email/phone for address-only paper intake; synthetic placeholders are reserved for dependent uniqueness constraints only.
+  - Admin display uses `display_contact_email` / `display_contact_phone` to hide synthetic values.
 
 **Note**: The `has_own_contact_info?` and `uses_guardian_contact_info?` methods mentioned in earlier documentation are not currently implemented in the codebase.
 
@@ -53,7 +57,7 @@ The paper application controller derives contact strategy parameters (`email_str
   - If the strategy is `'dependent'`, the service uses the provided dependent-owned contact information.
   - If a recognized strategy is not supplied, the service defaults to guardian strategy with fallback logic. Nil strategy values are handled before this defaulting so callers can preserve existing data when appropriate.
 - **Address Strategy**: Also handles address information copying from guardian to dependent.
-- **Existing Dependent Reuse**: Existing dependent params alias `dependent_email` to email and `dependent_phone` to phone for contact verification and strategy handling.
+- **Existing Dependent Reuse**: Existing dependent updates run through `GuardianDependentManagementService#apply_contact_strategies_for` before `PaperApplicationService` writes contact changes, so guardian/no-contact UI choices replace stale direct contact data instead of only aliasing submitted `dependent_email` / `dependent_phone`.
 - **Search**: Admin lookup can find dependents by direct dependent email tokens and, when needed, guardian fallback contact tokens.
 - **Maintainability**: This design results in cleaner, more maintainable code with clear fallback logic and proper error handling.
 
