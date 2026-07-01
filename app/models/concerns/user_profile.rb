@@ -245,14 +245,6 @@ module UserProfile
       (persisted? && constituent_user_type? && address_only_contact?)
   end
 
-  def portal_phone_only_without_email?
-    email.blank? && real_phone?
-  end
-
-  def address_only_contact?
-    !real_email? && !real_phone?
-  end
-
   def validate_admin_contact_update?
     !Current.paper_context && constituent_user_type?
   end

@@ -305,6 +305,9 @@ module Admin
       assert user.present?
       assert user.force_password_change?
       assert user.verified?
+
+      markers = session[PaperQuickCreatePortalMarkers::SESSION_KEY]
+      assert_equal ['stored_at'], markers[user.id.to_s].keys
     end
 
     test 'should handle validation errors' do
@@ -376,6 +379,30 @@ module Admin
       assert potential_duplicates.include?(first_user), 'Should find the first user as a potential duplicate'
     end
 
+    test 'quick create guardian rejects duplicate phone instead of reusing existing user' do
+      existing = create(:constituent, phone: "410-555-#{SecureRandom.random_number(9000) + 1000}")
+
+      assert_no_difference 'User.count' do
+        post admin_users_path, params: {
+          first_name: 'Different',
+          last_name: 'Guardian',
+          email: "quick-create-#{SecureRandom.hex(4)}@example.com",
+          phone: existing.phone,
+          physical_address_1: '100 Mail Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          date_of_birth: '01/01/1980',
+          communication_preference: 'email'
+        }, as: :json
+      end
+
+      assert_response :unprocessable_content
+      body = response.parsed_body
+      assert_not body['success']
+      assert(body['errors'].values.join(' ').match?(/phone|taken/i))
+    end
+
     test 'quick create guardian without email or phone succeeds for address-only intake' do
       assert_difference 'User.count', 1 do
         post admin_users_path, params: {
@@ -402,6 +429,7 @@ module Admin
       assert_nil user.phone
       assert user.deliver_via_letter?
       assert_not user.portal_access_eligible?
+      assert_empty(session[PaperQuickCreatePortalMarkers::SESSION_KEY] || {})
     end
 
     test 'admin can update address-only user profile without email' do

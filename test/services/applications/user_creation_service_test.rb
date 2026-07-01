@@ -117,7 +117,8 @@ module Applications
       assert result.success?
       assert result.data[:existing_user]
       assert_equal existing.id, result.data[:user].id
-      assert_nil result.data[:temp_password]
+      assert_nil result.data[:portal_eligible_created_user_id]
+      assert_not_includes result.data, :temp_password
     end
 
     test 'reusing phone-only existing user requires explicit no_email_address flag' do
@@ -143,7 +144,7 @@ module Applications
       end
     end
 
-    test 'creates portal-eligible phone-only user with temp password' do
+    test 'creates portal-eligible phone-only user with created portal marker' do
       phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
 
       Current.paper_context = true
@@ -163,7 +164,8 @@ module Applications
       assert_nil user.email
       assert user.phone.present?
       assert user.portal_access_eligible?
-      assert result.data[:temp_password].present?
+      assert_equal user.id, result.data[:portal_eligible_created_user_id]
+      assert_not_includes result.data, :temp_password
       assert user.force_password_change?
     end
 
@@ -186,7 +188,8 @@ module Applications
       user = result.data[:user]
       assert_equal email.strip.downcase, user.email
       assert user.portal_access_eligible?
-      assert result.data[:temp_password].present?
+      assert_equal user.id, result.data[:portal_eligible_created_user_id]
+      assert_not_includes result.data, :temp_password
     end
 
     test 'creates address-only user without temp password' do
@@ -208,7 +211,8 @@ module Applications
       assert_nil user.email
       assert_nil user.phone
       assert_not user.portal_access_eligible?
-      assert_nil result.data[:temp_password]
+      assert_nil result.data[:portal_eligible_created_user_id]
+      assert_not_includes result.data, :temp_password
       assert_not user.force_password_change?
       assert user.deliver_via_letter?
     end

@@ -4,7 +4,7 @@ module Admin
   class PaperApplicationsController < Admin::BaseController
     include ParamCasting
     include TurboStreamResponseHandling
-    include PaperQuickCreateTempPasswords
+    include PaperQuickCreatePortalMarkers
 
     before_action :cast_complex_boolean_params, only: %i[create]
 
@@ -53,19 +53,17 @@ module Admin
     def create
       log_file_and_form_params
       service_params = paper_application_processing_params # Use the new method
-      Rails.logger.debug { "Service params before service call: #{service_params.inspect}" }
 
       service = Applications::PaperApplicationService.new(
         params: service_params,
         admin: current_user,
-        quick_create_temp_passwords: quick_create_temp_passwords,
-        quick_create_handoff_user_ids: quick_create_handoff_user_ids
+        quick_created_portal_user_ids: quick_created_portal_user_ids
       )
 
       service_result = service.create
 
       if service_result
-        clear_quick_create_temp_passwords!
+        clear_quick_created_portal_user_markers!
         success_message = generate_success_message(service.application)
         if service.reconciliation_note.present?
           handle_reconciliation_warning_response(
@@ -380,7 +378,6 @@ module Admin
       merge_user_params!(service_params, permitted, disability_attrs)
       add_proof_params_from!(service_params, permitted)
 
-      Rails.logger.debug { "Final service params: #{service_params.inspect}" }
       service_params
     end
 

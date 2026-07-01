@@ -7,10 +7,12 @@ module Applications
   class PaperApplicationService < BaseService
     include Rails.application.routes.url_helpers
 
+    class TransactionFailure < StandardError; end
+
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false,
-                   quick_create_temp_passwords: {}, quick_create_handoff_user_ids: [])
+                   quick_created_portal_user_ids: [])
       super()
       @params = params.with_indifferent_access
       @admin = admin
@@ -18,9 +20,8 @@ module Applications
       @constituent = nil
       @guardian_user_for_app = nil
       @errors = []
-      @temp_passwords = {}
-      @quick_create_temp_passwords = quick_create_temp_passwords.to_h.stringify_keys
-      @quick_create_handoff_user_ids = quick_create_handoff_user_ids.map(&:to_s)
+      @created_portal_user_ids = []
+      @quick_created_portal_user_ids = quick_created_portal_user_ids.map(&:to_s)
       @reconciliation_note = nil
       @skip_income_validation = skip_income_validation
       @skip_proof_processing = skip_proof_processing
@@ -31,9 +32,9 @@ module Applications
       application_created = false
 
       ActiveRecord::Base.transaction do
-        return failure('Constituent processing failed') unless process_constituent
-        return failure('Application creation failed') unless create_application
-        return failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
+        rollback_failure('Constituent processing failed') unless process_constituent
+        rollback_failure('Application creation failed') unless create_application
+        rollback_failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
 
         application_created = @application.persisted?
       end
@@ -52,6 +53,8 @@ module Applications
       end
 
       application_created
+    rescue TransactionFailure
+      false
     rescue StandardError => e
       log_error(e, 'Failed to create paper application')
       @errors << e.message
@@ -68,8 +71,8 @@ module Applications
         @application = application
         @constituent = application.user
 
-        return failure('Application update failed') unless update_application_attributes
-        return failure('Proof upload failed') unless process_proof_uploads
+        rollback_failure('Application update failed') unless update_application_attributes
+        rollback_failure('Proof upload failed') unless process_proof_uploads
 
         update_succeeded = true
       end
@@ -77,6 +80,8 @@ module Applications
       reconcile_after_paper_write(:paper_application_updated) if update_succeeded
 
       update_succeeded
+    rescue TransactionFailure
+      false
     rescue StandardError => e
       log_error(e, 'Failed to update paper application')
       @errors << e.message
@@ -100,6 +105,11 @@ module Applications
     def failure(message)
       @errors << message
       false
+    end
+
+    def rollback_failure(message)
+      failure(message)
+      raise TransactionFailure, message
     end
 
     def handle_successful_application(operation = :create)
@@ -269,8 +279,6 @@ module Applications
     end
 
     def process_guardian_dependent(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
-      new_guardian_attrs = apply_no_contact_flags!(new_guardian_attrs.deep_dup, scope: :guardian) if new_guardian_attrs.present?
-
       service = GuardianDependentManagementService.new(params)
       result = service.process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
 
@@ -278,9 +286,7 @@ module Applications
         @guardian_user_for_app = result.data[:guardian]
         @constituent = result.data[:dependent]
 
-        store_temp_password(@guardian_user_for_app, result.data[:guardian_temp_password])
-        store_temp_password(@guardian_user_for_app, @quick_create_temp_passwords[@guardian_user_for_app.id.to_s])
-        store_temp_password(@constituent, result.data[:dependent_temp_password])
+        track_portal_eligible_created_user_ids(result.data[:portal_eligible_created_user_ids])
 
         validate_no_active_application('dependent')
       else
@@ -290,19 +296,20 @@ module Applications
     end
 
     def process_self_applicant(applicant_data)
-      applicant_data = apply_no_contact_flags!(applicant_data.deep_dup, scope: :constituent)
+      contact_flags = paper_contact_flags(:constituent)
+      applicant_data = contact_flags.apply_to(applicant_data)
 
       result = UserCreationService.new(
         applicant_data,
         is_managing_adult: true,
         skip_user_lookup: true,
-        skip_email_validation: no_email_address?(:constituent),
-        skip_phone_validation: no_phone_number?(:constituent)
+        skip_email_validation: contact_flags.skip_email_validation?,
+        skip_phone_validation: contact_flags.skip_phone_validation?
       ).call
 
       if result.success?
         @constituent = result.data[:user]
-        store_temp_password(@constituent, result.data[:temp_password])
+        track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
 
         return false unless validate_no_active_application('constituent')
         return false unless waiting_period_eligible?(@constituent)
@@ -314,57 +321,24 @@ module Applications
       end
     end
 
-    def apply_no_contact_flags!(data, scope:)
-      if no_email_address?(scope)
-        data.delete(:email)
-        data[:communication_preference] = 'letter'
-      end
-
-      if no_phone_number?(scope)
-        clear_phone_contact!(data)
-        data[:communication_preference] = 'letter' if data[:email].blank?
-      end
-
-      data[:communication_preference] = 'letter' if data[:email].blank? && data[:phone].blank?
-
-      data
-    end
-
     def no_email_address?(scope = :constituent)
-      case scope
-      when :guardian
-        truthy_param?(:guardian_no_email_address)
-      else
-        truthy_param?(:no_email_address)
-      end
+      paper_contact_flags(scope).no_email?
     end
 
     def no_phone_number?(scope = :constituent)
-      case scope
-      when :guardian
-        truthy_param?(:guardian_no_phone_number)
-      else
-        truthy_param?(:no_phone_number)
-      end
+      paper_contact_flags(scope).no_phone?
     end
 
-    def truthy_param?(key)
-      params[key].present? && params[key].to_s == '1'
+    def paper_contact_flags(scope)
+      Applications::PaperContactFlags.new(params, scope: scope)
     end
 
-    def clear_phone_contact!(data)
-      data.delete(:phone)
-      data[:phone_type] = preferred_contact_method_without_phone(data)
+    def track_portal_eligible_created_user_ids(user_ids)
+      Array(user_ids).each { |user_id| track_portal_eligible_created_user_id(user_id) }
     end
 
-    def preferred_contact_method_without_phone(data)
-      data[:email].present? ? 'email' : 'letter'
-    end
-
-    def store_temp_password(user, password = nil)
-      return unless user && password
-
-      @temp_passwords[user.id] = password
+    def track_portal_eligible_created_user_id(user_id)
+      @created_portal_user_ids << user_id.to_s if user_id.present?
     end
 
     def validate_no_active_application(user_type)
@@ -424,15 +398,22 @@ module Applications
     end
 
     def build_dependent_contact_updates(attrs)
-      build_contact_updates(
-        attrs,
-        fields: %i[
-          email phone dependent_email dependent_phone
-          physical_address_1 physical_address_2 city state zip_code
-          locale communication_preference preferred_means_of_communication
-          phone_type referral_source
-        ]
-      )
+      data = attrs.with_indifferent_access
+      updates = {}
+
+      %i[email phone dependent_email dependent_phone].each do |field|
+        updates[field] = data[field] if data.key?(field)
+      end
+
+      %i[
+        physical_address_1 physical_address_2 city state zip_code
+        locale communication_preference preferred_means_of_communication
+        phone_type referral_source
+      ].each do |field|
+        updates[field] = data[field] if data[field].present?
+      end
+
+      updates
     end
 
     def apply_dependent_contact_strategies!(attrs, dependent: nil)
@@ -486,7 +467,7 @@ module Applications
     def persist_adult_contact_updates!(user, constituent_attrs)
       return true if constituent_attrs.blank?
 
-      flagged = apply_no_contact_flags!(constituent_attrs.deep_dup, scope: :constituent)
+      flagged = paper_contact_flags(:constituent).apply_to(constituent_attrs)
       updates = build_adult_contact_updates(flagged)
       return true if updates.empty?
 
@@ -523,22 +504,7 @@ module Applications
 
     def build_adult_contact_updates(attrs)
       updates = build_contact_updates(attrs, fields: ADULT_CONTACT_FIELDS)
-      apply_contact_clear_flags!(updates)
-      updates
-    end
-
-    def apply_contact_clear_flags!(updates)
-      if no_email_address?(:constituent)
-        updates[:email] = nil
-        updates[:communication_preference] = 'letter'
-      end
-
-      updates[:phone] = nil if no_phone_number?(:constituent)
-      updates[:phone_type] = preferred_contact_method_without_phone(updates) if no_phone_number?(:constituent)
-
-      updates[:communication_preference] = 'letter' if no_email_address?(:constituent) && no_phone_number?(:constituent)
-
-      updates
+      paper_contact_flags(:constituent).apply_clear_flags_to(updates)
     end
 
     def build_contact_updates(attrs, fields:, aliases: {})
@@ -985,12 +951,7 @@ module Applications
       new_user_accounts.each do |user|
         next unless user.portal_access_eligible?
 
-        temp_password = @temp_passwords[user.id]
-        if temp_password
-          ensure_user_password(user, temp_password)
-        elsif @quick_create_handoff_user_ids.include?(user.id.to_s)
-          append_account_creation_handoff_warning(user)
-        end
+        append_account_access_warning(user) if quick_created_portal_user?(user)
 
         NotificationService.create_and_deliver!(
           type: 'account_created',
@@ -1025,9 +986,9 @@ module Applications
       end
     end
 
-    def append_account_creation_handoff_warning(user)
-      note = "Portal password for #{user.full_name} was not available at submission time because the " \
-             'quick-create handoff expired. Reset their password from the user profile before sharing login access.'
+    def append_account_access_warning(user)
+      note = "No temporary portal password is retained for #{user.full_name}. " \
+             'Use the existing account access link flow if they need help signing in.'
       @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
     end
 
@@ -1039,14 +1000,17 @@ module Applications
 
     def account_created_notice_candidate?(user)
       return false unless user.portal_access_eligible?
+      return false unless account_access_instructions_deliverable?(user)
 
-      @temp_passwords.key?(user.id) || @quick_create_handoff_user_ids.include?(user.id.to_s)
+      @created_portal_user_ids.include?(user.id.to_s) || quick_created_portal_user?(user)
     end
 
-    def ensure_user_password(user, temp_password)
-      return if user.password_digest.present?
+    def account_access_instructions_deliverable?(user)
+      user.real_email? || user.sms_capable_phone?
+    end
 
-      user.update(password: temp_password, password_confirmation: temp_password)
+    def quick_created_portal_user?(user)
+      @quick_created_portal_user_ids.include?(user.id.to_s)
     end
 
     def account_creation_template_variables(user)

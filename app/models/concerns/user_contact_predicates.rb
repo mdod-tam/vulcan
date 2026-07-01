@@ -28,4 +28,12 @@ module UserContactPredicates
   def portal_access_eligible?
     real_email? || real_phone?
   end
+
+  def portal_phone_only_without_email?
+    email.blank? && real_phone?
+  end
+
+  def address_only_contact?
+    !real_email? && !real_phone?
+  end
 end

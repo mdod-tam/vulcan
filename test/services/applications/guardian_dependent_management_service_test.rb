@@ -141,5 +141,39 @@ module Applications
         assert_includes result.data[:errors], 'Unable to generate unique synthetic dependent phone'
       end
     end
+
+    test 'new dependent creation does not silently reuse existing user by submitted contact' do
+      existing_dependent = create(
+        :constituent,
+        email: "existing-dependent-#{SecureRandom.hex(4)}@example.com",
+        phone: "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      )
+
+      service = GuardianDependentManagementService.new(
+        email_strategy: 'dependent',
+        phone_strategy: 'dependent',
+        address_strategy: 'dependent'
+      )
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        result = service.process_guardian_scenario(
+          @guardian.id,
+          {},
+          {
+            first_name: 'New',
+            last_name: 'Dependent',
+            dependent_email: existing_dependent.email,
+            dependent_phone: "410-555-#{SecureRandom.random_number(9000) + 1000}",
+            date_of_birth: '2015-01-01',
+            hearing_disability: true
+          },
+          'Parent'
+        )
+
+        assert_not result.success?
+        assert_equal 'Failed to create dependent', result.message
+        assert_not_equal existing_dependent, service.dependent_user
+      end
+    end
   end
 end

@@ -6,7 +6,7 @@ module Admin
   class UsersController < BaseController # rubocop:disable Metrics/ClassLength
     include ParamCasting
     include UserServiceIntegration
-    include PaperQuickCreateTempPasswords
+    include PaperQuickCreatePortalMarkers
 
     DependentSummary = Struct.new(
       :id,
@@ -213,23 +213,22 @@ module Admin
     # Create action for creating a new guardian from the paper application form
     def create
       Current.paper_context = true
-      attrs = apply_quick_create_contact_flags(user_create_params.to_h)
-      skip_email = quick_create_no_email?
-      skip_phone = quick_create_no_phone?
+      contact_flags = quick_create_contact_flags
+      attrs = contact_flags.apply_to(user_create_params.to_h)
 
       result = create_user_with_service(
         attrs,
         is_managing_adult: true,
-        skip_email_validation: skip_email,
-        skip_phone_validation: skip_phone
+        skip_user_lookup: true,
+        skip_email_validation: contact_flags.skip_email_validation?,
+        skip_phone_validation: contact_flags.skip_phone_validation?
       )
 
       if result.success?
         user = result.data[:user]
         user.update!(needs_duplicate_review: true) if potential_duplicate_found?(user)
 
-        temp_password = result.data[:temp_password]
-        store_quick_create_temp_password!(user.id, temp_password) if temp_password.present?
+        store_quick_created_portal_user_marker!(user)
 
         render json: {
           success: true,
@@ -656,38 +655,16 @@ module Admin
       phone
     end
 
-    def quick_create_no_email?
-      truthy_param?(:no_email_address) || truthy_param?(:guardian_no_email_address)
+    def quick_create_contact_flags
+      Applications::PaperContactFlags.new(params, scope: quick_create_contact_scope)
     end
 
-    def quick_create_no_phone?
-      truthy_param?(:no_phone_number) || truthy_param?(:guardian_no_phone_number)
-    end
-
-    def apply_quick_create_contact_flags(attrs)
-      attrs = attrs.deep_dup
-
-      if quick_create_no_email?
-        attrs.delete(:email)
-        attrs.delete('email')
-        attrs[:communication_preference] = 'letter'
+    def quick_create_contact_scope
+      if params.key?(:guardian_no_email_address) || params.key?(:guardian_no_phone_number)
+        :guardian
+      else
+        :constituent
       end
-
-      if quick_create_no_phone?
-        attrs.delete(:phone)
-        attrs.delete('phone')
-        attrs[:phone_type] = attrs[:email].present? || attrs['email'].present? ? 'email' : 'letter'
-        attrs[:communication_preference] = 'letter' if attrs[:email].blank? && attrs['email'].blank?
-      end
-
-      attrs[:communication_preference] = 'letter' if attrs[:email].blank? && attrs['email'].blank? &&
-                                                     attrs[:phone].blank? && attrs['phone'].blank?
-
-      attrs
-    end
-
-    def truthy_param?(key)
-      params[key].present? && params[key].to_s == '1'
     end
 
     # Build DependentSummary objects for a guardian's dependents

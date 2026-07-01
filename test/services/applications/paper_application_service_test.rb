@@ -620,6 +620,25 @@ module Applications
              'Expected error message about income threshold'
     end
 
+    test 'failed create after user creation rolls back the new user' do
+      unique_email = "rollback-user-#{SecureRandom.hex(4)}@example.com"
+      unique_phone = unique_paper_phone
+
+      service_params = {
+        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone)
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin)
+
+      assert_no_difference ['User.count', 'Application.count'] do
+        assert_not service.create
+      end
+
+      assert_includes service.errors, 'Application params missing'
+      assert_includes service.errors, 'Application creation failed'
+      assert_nil User.find_by(email: unique_email)
+    end
+
     test 'handles multiple proof types together' do
       # Test with multiple proof types
       test_timestamp = Time.now.to_i
@@ -747,24 +766,24 @@ module Applications
       assert_not service.send(:send_account_created_notice?)
     end
 
-    test 'new_user_accounts includes quick-created guardian when temp password is present beyond five minutes' do
+    test 'new_user_accounts includes inline-created portal-eligible guardian beyond five minutes' do
       guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true)
       guardian.update_column(:created_at, 10.minutes.ago)
 
       service = PaperApplicationService.new(params: {}, admin: @admin)
       service.instance_variable_set(:@guardian_user_for_app, guardian)
-      service.send(:store_temp_password, guardian, 'quickcreate1')
+      service.send(:track_portal_eligible_created_user_id, guardian.id)
 
       assert_includes service.send(:new_user_accounts), guardian
     end
 
-    test 'new_user_accounts includes quick-create handoff user when cache password is missing' do
+    test 'new_user_accounts includes quick-created portal marker user' do
       guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true)
 
       service = PaperApplicationService.new(
         params: {},
         admin: @admin,
-        quick_create_handoff_user_ids: [guardian.id]
+        quick_created_portal_user_ids: [guardian.id]
       )
       service.instance_variable_set(:@guardian_user_for_app, guardian)
 
@@ -874,6 +893,42 @@ module Applications
       assert dependent.phone.start_with?('000-')
     end
 
+    test 'process_existing_dependent clears stale dependent_phone when guardian has no phone' do
+      guardian = create(:constituent,
+                        email: "guardian-nophone-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      guardian.update_columns(phone: nil)
+
+      stale_phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      dependent = create(:constituent,
+                         email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local",
+                         dependent_email: guardian.email,
+                         phone: '000-000-0001',
+                         dependent_phone: stale_phone)
+      create(:guardian_relationship,
+             guardian_user: guardian,
+             dependent_user: dependent,
+             relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        constituent: { locale: 'en' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert service.create, "Service creation failed: #{service.errors.inspect}"
+
+      dependent.reload
+      assert_nil dependent.dependent_phone
+      assert dependent.phone.start_with?('000-')
+    end
+
     test 'new_user_accounts excludes existing user with force_password_change but no submission handoff' do
       existing = create(:constituent, phone: unique_paper_phone, force_password_change: true)
 
@@ -883,14 +938,14 @@ module Applications
       assert_not_includes service.send(:new_user_accounts), existing
     end
 
-    test 'send_account_creation_notifications still delivers notice when temp password cache is missing' do
+    test 'send_account_creation_notifications delivers notice and account-access warning for quick-created marker' do
       guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true, communication_preference: :email)
       application = create(:application, user: guardian)
 
       service = PaperApplicationService.new(
         params: {},
         admin: @admin,
-        quick_create_handoff_user_ids: [guardian.id]
+        quick_created_portal_user_ids: [guardian.id]
       )
       service.instance_variable_set(:@application, application)
       service.instance_variable_set(:@guardian_user_for_app, guardian)
@@ -899,7 +954,37 @@ module Applications
       begin
         NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).once
         service.send(:send_account_creation_notifications)
-        assert_includes service.reconciliation_note, 'quick-create handoff expired'
+        assert_includes service.reconciliation_note, 'No temporary portal password is retained'
+        assert_includes service.reconciliation_note, 'account access link flow'
+      ensure
+        FeatureFlag.disable!(:vouchers_enabled)
+      end
+    end
+
+    test 'send_account_creation_notifications skips voice-only phone user without account access delivery' do
+      guardian = create(
+        :constituent,
+        email: nil,
+        phone: unique_paper_phone,
+        phone_type: :voice,
+        communication_preference: :letter,
+        force_password_change: true
+      )
+      application = create(:application, user: guardian)
+
+      service = PaperApplicationService.new(
+        params: {},
+        admin: @admin,
+        quick_created_portal_user_ids: [guardian.id]
+      )
+      service.instance_variable_set(:@application, application)
+      service.instance_variable_set(:@guardian_user_for_app, guardian)
+
+      FeatureFlag.enable!(:vouchers_enabled)
+      begin
+        NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
+        service.send(:send_account_creation_notifications)
+        assert_not_includes service.reconciliation_note.to_s, 'account access link flow'
       ensure
         FeatureFlag.disable!(:vouchers_enabled)
       end

@@ -13,8 +13,7 @@ module Applications
       @params = params.with_indifferent_access
       @guardian_user = nil
       @dependent_user = nil
-      @guardian_temp_password = nil
-      @dependent_temp_password = nil
+      @portal_eligible_created_user_ids = []
       @errors = []
     end
 
@@ -30,8 +29,7 @@ module Applications
       success(
         guardian: @guardian_user,
         dependent: @dependent_user,
-        guardian_temp_password: @guardian_temp_password,
-        dependent_temp_password: @dependent_temp_password
+        portal_eligible_created_user_ids: @portal_eligible_created_user_ids
       )
     end
 
@@ -69,18 +67,19 @@ module Applications
         @guardian_user = User.find_by(id: guardian_id)
         return add_error?('Guardian not found') unless @guardian_user
       elsif attributes_present?(new_guardian_attrs)
-        skip_email = no_email_address_flag?
-        skip_phone = no_phone_number_flag?
+        contact_flags = Applications::PaperContactFlags.new(params, scope: :guardian)
+        guardian_attrs = contact_flags.apply_to(new_guardian_attrs)
         result = UserCreationService.new(
-          new_guardian_attrs,
+          guardian_attrs,
           is_managing_adult: true,
-          skip_email_validation: skip_email,
-          skip_phone_validation: skip_phone
+          skip_user_lookup: true,
+          skip_email_validation: contact_flags.skip_email_validation?,
+          skip_phone_validation: contact_flags.skip_phone_validation?
         ).call
         return false unless result.success?
 
         @guardian_user = result.data[:user]
-        @guardian_temp_password = result.data[:temp_password]
+        track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
       else
         return add_error?('Guardian information missing')
       end
@@ -88,11 +87,11 @@ module Applications
     end
 
     def create_dependent?(applicant_data)
-      result = UserCreationService.new(applicant_data, is_managing_adult: false).call
+      result = UserCreationService.new(applicant_data, is_managing_adult: false, skip_user_lookup: true).call
       return false unless result.success?
 
       @dependent_user = result.data[:user]
-      @dependent_temp_password = result.data[:temp_password]
+      track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
       true
     end
 
@@ -205,12 +204,8 @@ module Applications
       attrs.present? && attrs.values.any?(&:present?)
     end
 
-    def no_email_address_flag?
-      params[:guardian_no_email_address].present? && params[:guardian_no_email_address].to_s == '1'
-    end
-
-    def no_phone_number_flag?
-      params[:guardian_no_phone_number].present? && params[:guardian_no_phone_number].to_s == '1'
+    def track_portal_eligible_created_user_id(user_id)
+      @portal_eligible_created_user_ids << user_id.to_s if user_id.present?
     end
 
     def add_error?(message)

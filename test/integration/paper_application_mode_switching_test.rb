@@ -17,43 +17,53 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     @residency_proof_file = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
   end
 
-  test 'paper application service properly handles mode switching between accept and reject' do
-    # Create a test constituent using factory with unique email to avoid uniqueness constraint errors
-    @constituent = create(:constituent,
-                          email: "paper-app-test-#{SecureRandom.hex(4)}@example.com",
-                          phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
+  def unique_paper_contact
+    suffix = SecureRandom.hex(4)
+    {
+      email: "paper-app-test-#{suffix}@example.com",
+      phone: "410-555-#{SecureRandom.random_number(9000) + 1000}"
+    }
+  end
 
+  def paper_self_applicant_params(contact = unique_paper_contact)
+    {
+      first_name: 'Paper',
+      last_name: 'Applicant',
+      email: contact[:email],
+      phone: contact[:phone],
+      physical_address_1: '123 Test St',
+      city: 'Baltimore',
+      state: 'MD',
+      zip_code: '21201',
+      hearing_disability: '1',
+      vision_disability: '0',
+      speech_disability: '0',
+      mobility_disability: '0',
+      cognition_disability: '0'
+    }
+  end
+
+  def paper_application_params
+    {
+      household_size: 2,
+      annual_income: 20_000,
+      maryland_resident: true,
+      self_certify_disability: true,
+      medical_provider_name: 'Dr. Smith',
+      medical_provider_phone: '555-123-4567',
+      medical_provider_fax: '555-123-4568',
+      medical_provider_email: 'dr.smith@example.com',
+      terms_accepted: true,
+      information_verified: true,
+      medical_release_authorized: true
+    }
+  end
+
+  test 'paper application service properly handles mode switching between accept and reject' do
     # Step 1: First create application with income proof attached but residency proof rejected
     post admin_paper_applications_path, params: {
-      # Pass constituent attributes instead of just ID
-      constituent: {
-        first_name: @constituent.first_name,
-        last_name: @constituent.last_name,
-        email: @constituent.email,
-        phone: @constituent.phone,
-        physical_address_1: @constituent.physical_address_1,
-        city: @constituent.city,
-        state: @constituent.state,
-        zip_code: @constituent.zip_code,
-        hearing_disability: @constituent.hearing_disability,
-        vision_disability: @constituent.vision_disability,
-        speech_disability: @constituent.speech_disability,
-        mobility_disability: @constituent.mobility_disability,
-        cognition_disability: @constituent.cognition_disability
-      },
-      application: {
-        household_size: 2,
-        annual_income: 20_000,
-        maryland_resident: true,
-        self_certify_disability: true,
-        medical_provider_name: 'Dr. Smith',
-        medical_provider_phone: '555-123-4567',
-        medical_provider_fax: '555-123-4568',
-        medical_provider_email: 'dr.smith@example.com',
-        terms_accepted: true,
-        information_verified: true,
-        medical_release_authorized: true
-      },
+      constituent: paper_self_applicant_params,
+      application: paper_application_params,
       income_proof_action: 'accept',
       income_proof: @income_proof_file, # Use fixture file directly
       residency_proof_action: 'reject',
@@ -123,42 +133,10 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
   test 'paper application service properly handles invalid signed_ids' do
     # This test verifies the service doesn't crash when given invalid signed_ids
 
-    # Create a test constituent using factory with unique email to avoid uniqueness constraint errors
-    @constituent = create(:constituent,
-                          email: "paper-app-invalid-#{SecureRandom.hex(4)}@example.com",
-                          phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
-
     # Attempt to create application with invalid signed_id
     post admin_paper_applications_path, params: {
-      # Pass constituent attributes instead of just ID
-      constituent: {
-        first_name: @constituent.first_name,
-        last_name: @constituent.last_name,
-        email: @constituent.email,
-        phone: @constituent.phone,
-        physical_address_1: @constituent.physical_address_1,
-        city: @constituent.city,
-        state: @constituent.state,
-        zip_code: @constituent.zip_code,
-        hearing_disability: @constituent.hearing_disability,
-        vision_disability: @constituent.vision_disability,
-        speech_disability: @constituent.speech_disability,
-        mobility_disability: @constituent.mobility_disability,
-        cognition_disability: @constituent.cognition_disability
-      },
-      application: {
-        household_size: 2,
-        annual_income: 20_000,
-        maryland_resident: true,
-        self_certify_disability: true,
-        medical_provider_name: 'Dr. Smith',
-        medical_provider_phone: '555-123-4567',
-        medical_provider_fax: '555-123-4568',
-        medical_provider_email: 'dr.smith@example.com',
-        terms_accepted: true,
-        information_verified: true,
-        medical_release_authorized: true
-      },
+      constituent: paper_self_applicant_params,
+      application: paper_application_params,
       income_proof_action: 'accept',
       income_proof_signed_id: 'invalid-signed-id-that-doesnt-exist', # Invalid signed_id
       residency_proof_action: 'reject',

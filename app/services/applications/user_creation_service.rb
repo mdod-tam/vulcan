@@ -29,7 +29,11 @@ module Applications
 
           return Result.new(
             success: true,
-            data: { user: existing, temp_password: nil, existing_user: true }
+            data: {
+              user: existing,
+              portal_eligible_created_user_id: nil,
+              existing_user: true
+            }
           )
         end
       end
@@ -37,7 +41,13 @@ module Applications
       user = create_new_user
 
       if user&.persisted?
-        Result.new(success: true, data: { user: user, temp_password: @temp_password })
+        Result.new(
+          success: true,
+          data: {
+            user: user,
+            portal_eligible_created_user_id: portal_eligible_created_user_id(user)
+          }
+        )
       else
         Result.new(success: false, message: @errors.join(', '), data: { errors: @errors })
       end
@@ -111,12 +121,11 @@ module Applications
       user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
 
       if portal_eligible_from_attrs?
-        @temp_password = SecureRandom.hex(8)
-        user.password = @temp_password
-        user.password_confirmation = @temp_password
+        initial_password = SecureRandom.hex(8)
+        user.password = initial_password
+        user.password_confirmation = initial_password
         user.force_password_change = true
       else
-        @temp_password = nil
         internal_password = SecureRandom.hex(32)
         user.password = internal_password
         user.password_confirmation = internal_password
@@ -124,6 +133,10 @@ module Applications
       end
 
       user
+    end
+
+    def portal_eligible_created_user_id(user)
+      user.portal_access_eligible? ? user.id : nil
     end
 
     def portal_eligible_from_attrs?

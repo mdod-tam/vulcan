@@ -68,22 +68,22 @@ Paper intake deliberately branches before it writes the application:
 | Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
 | Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
 | New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
-| New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Reuse an existing adult only through the explicit existing-applicant branch. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users receive temporary account access; address-only users do not. No-phone intake clears stored phone and sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
+| New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Reuse an existing adult only through the explicit existing-applicant branch. Supports phone-only (`no_email_address`) and address-only (`no_email_address` + `no_phone_number`) adults with NULL stored contacts when appropriate. Portal-eligible users get internal forced-change account setup; address-only users do not get portal access. No-phone intake clears stored phone and sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
 
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
 Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
 
-## Account-Created Notices And Temp-Password Handoff
+## Account-Created Notices And Quick-Create Markers
 
-Paper intake routes are `new` and `create` only (`config/routes.rb`). Quick-create temp-password handoff is wired through `PaperApplicationsController#create` and cleared after a successful create.
+Paper intake routes are `new` and `create` only (`config/routes.rb`). Quick-created portal-eligible user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
 
-When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for portal-eligible users created in the same submission or explicitly selected existing applicants with a temp-password handoff. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
+When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for portal-eligible users created in the same submission or quick-created in the same browser session. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
 
-Temp passwords for inline creation are used to set `force_password_change` portal access before the notice goes out. Quick-create handoff stores the secret in `Rails.cache` with only a per-user token in the admin session (30-minute TTL):
+`Applications::UserCreationService` sets an internal initial password and `force_password_change` for portal-eligible users, but does not return the raw password. Quick-create markers store only user ids plus timestamps in the admin session (30-minute TTL):
 
-- On create, resolved passwords and pending handoff user ids are passed into the service.
-- If the cache entry is missing at submit time, the notice still sends when the user is portal-eligible; a reconciliation note tells the admin to reset the password manually before sharing login access.
+- On create, quick-created portal-eligible user ids are passed into the service.
+- For marked users, the admin warning reminds staff that no temporary password is retained and account help should use the existing account access link flow.
 
 Equipment-fulfillment applications skip account-created messaging even when a portal-eligible user is created.
 

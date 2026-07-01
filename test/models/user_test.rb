@@ -382,6 +382,38 @@ class UserTest < ActiveSupport::TestCase
     assert_equal '123 Main St', changes['physical_address_1']['new']
   end
 
+  test 'paper_intake contact helpers treat guardian-routed synthetic primary contact as no owned email' do
+    guardian = create(:constituent, email: "guardian-#{@test_run_id}@example.com")
+    dependent = create(:constituent,
+                       email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local",
+                       dependent_email: guardian.email,
+                       phone: '000-000-0001',
+                       dependent_phone: guardian.phone)
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+
+    assert dependent.paper_intake_uses_guardian_email?
+    assert dependent.paper_intake_uses_guardian_phone?
+    assert_nil dependent.paper_intake_own_email
+    assert_nil dependent.paper_intake_own_phone
+  end
+
+  test 'paper_intake contact helpers expose dependent-owned contact when present' do
+    guardian = create(:constituent, email: "guardian-own-#{@test_run_id}@example.com")
+    own_email = "dependent-owned-#{@test_run_id}@example.com"
+    own_phone = "777-888-#{4000 + (@test_run_id.to_i(16) % 6000)}"
+    dependent = create(:constituent,
+                       email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local",
+                       dependent_email: own_email,
+                       phone: '000-000-0002',
+                       dependent_phone: own_phone)
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+
+    assert_not dependent.paper_intake_uses_guardian_email?
+    assert_not dependent.paper_intake_uses_guardian_phone?
+    assert_equal own_email, dependent.paper_intake_own_email
+    assert_equal own_phone, dependent.paper_intake_own_phone
+  end
+
   teardown do
     # Clean up Current.user to avoid affecting other tests
     Current.user = nil

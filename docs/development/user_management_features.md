@@ -35,7 +35,7 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Email search concern | `app/models/concerns/user_email_search.rb` | Stores HMAC email-search tokens for admin search, including dependent email and guardian fallback email search. |
 | Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and a create-time name+DOB duplicate check. |
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
-| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Portal-eligible users receive temporary passwords and `force_password_change`; address-only users are created without exposed/temp passwords (internal password only). Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
+| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Portal-eligible users get internal forced-change account setup, but raw passwords are not returned; address-only users get internal passwords only and no portal access. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
 
 ## 3 · Signup And Duplicate Handling
@@ -75,11 +75,17 @@ Paper/admin intake supports:
 
 Admin display helpers (`display_contact_email`, `display_contact_phone`) hide synthetic values and show “No email on file” / “No phone on file”.
 
-### 3.1.2 Account-created notices and temp-password handoff
+### 3.1.2 Contact concepts and account-created notices
+
+| Concept | Source of truth |
+| --- | --- |
+| Login identity | `portal_access_eligible?` from real email/phone predicates |
+| Delivery route | `communication_preference` plus effective contact fallback for dependents |
+| Record truth | Stored email/phone values and explicit paper no-contact flags |
 
 Voucher-gated `account_created` notices are sent only when `FeatureFlag.enabled?(:vouchers_enabled)` and the paper application is voucher-fulfillment scope. Equipment-scope paper intake does not announce portal accounts the applicant cannot use.
 
-Portal-eligible users created during paper intake may receive a temporary password through `Applications::UserCreationService`. When an admin quick-creates a guardian in the same browser session, the temp password is stored in `Rails.cache` under a one-time token; the session holds only the token keyed by user id (30-minute TTL). `PaperApplicationsController#create` passes resolved passwords plus pending handoff user ids into `PaperApplicationService`. If the cache entry expires before submit, the application still saves and a reconciliation note tells the admin to reset the password manually.
+Portal-eligible users created during paper intake get an internal initial password and `force_password_change`, but the raw password is not returned, cached, or stored in session. When an admin quick-creates a guardian in the same browser session, the session stores only a short-lived quick-created portal-eligible user id marker. `PaperApplicationsController#create` passes those user ids into `PaperApplicationService`; if a constituent needs help signing in, staff should use the existing account access link flow.
 
 Persisted address-only constituents remain editable in admin user edit (name, address, letter preference) without requiring email. Normal admin edit cannot clear all contact information or keep email delivery without a real email; those transitions are reserved for paper intake with explicit no-contact flags.
 
@@ -137,7 +143,7 @@ The admin user show page displays:
 - application history for the selected user
 - edit, delete MFA tokens, and delete user actions
 
-Admin-created users go through `UserServiceIntegration#create_user_with_service`, which calls `Applications::UserCreationService`. Portal-eligible service-created constituents get a generated temporary password, `verified: true`, and `force_password_change: true`. Address-only users are created without exposed temp passwords. Phone-only users store NULL email and remain portal-eligible via `real_phone?`.
+Admin-created users go through `UserServiceIntegration#create_user_with_service`, which calls `Applications::UserCreationService`. Portal-eligible service-created constituents get internal forced-change account setup, `verified: true`, and `force_password_change: true`; raw passwords are not returned or stored for handoff. Address-only users get internal passwords only and no portal access. Phone-only users store NULL email and remain portal-eligible via `real_phone?`.
 
 The admin user show page displays contact through `display_contact_email` and `display_contact_phone`, which hide synthetic values and show “No email on file” / “No phone on file” when appropriate.
 
