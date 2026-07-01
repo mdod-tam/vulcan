@@ -10,8 +10,9 @@
     
     <%= form_with url: request_security_key_reset_path, local: true, class: "space-y-6" do |form| %>
       <div class="space-y-1">
-        <%= form.label :email, "Email Address", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.email_field :email, class: "mt-1 block w-full px-4 py-2 border rounded-md", required: true %>
+        <%= form.label :contact, "Email Address or Phone Number", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.text_field :contact, class: "mt-1 block w-full px-4 py-2 border rounded-md", required: true, autofocus: true %>
+        <p class="text-xs text-gray-500">Portal accounts require an email address on file. Enter that email, or the phone number on the same account.</p>
       </div>
       
       <div class="space-y-1">

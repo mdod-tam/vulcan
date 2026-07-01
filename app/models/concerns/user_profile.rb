@@ -42,6 +42,7 @@ module UserProfile
     validate :validate_address_for_letter_preference
     validate :email_delivery_requires_real_email
     validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
+    validate :portal_self_registration_requires_email_backed_account, if: :portal_self_registration?
 
     # Enums
     enum :status, { inactive: 0, active: 1, suspended: 2 }, default: :active
@@ -237,7 +238,8 @@ module UserProfile
     Current.paper_context && phone.blank?
   end
 
-  # Phone-only portal users store NULL email; password/profile saves must not require email.
+  # Phone-only paper records store NULL email; password/profile saves must not require email.
+  # They are not email-backed portal accounts and cannot use public portal sign-in.
   # Address-only users store NULL email/phone and remain editable outside paper context.
   def email_optional?
     paper_context_no_email? ||
@@ -289,6 +291,19 @@ module UserProfile
     return if was_address_only_contact?
 
     errors.add(:base, 'Cannot clear all contact information outside paper intake.')
+  end
+
+  def portal_self_registration?
+    portal_self_registration == true
+  end
+
+  def portal_self_registration_requires_email_backed_account
+    return if real_email?
+
+    errors.add(
+      :base,
+      'A portal account requires an email address. If you do not have email, please contact MAT for assistance with a paper application.'
+    )
   end
 
   def was_address_only_contact?

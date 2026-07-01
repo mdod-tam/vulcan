@@ -772,7 +772,7 @@ module Applications
 
       service = PaperApplicationService.new(params: {}, admin: @admin)
       service.instance_variable_set(:@guardian_user_for_app, guardian)
-      service.send(:track_portal_eligible_created_user_id, guardian.id)
+      service.send(:track_email_backed_portal_created_user_id, guardian.id)
 
       assert_includes service.send(:new_user_accounts), guardian
     end

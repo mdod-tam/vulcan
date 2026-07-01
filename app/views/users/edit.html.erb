@@ -35,6 +35,7 @@
 
     <div>
       <%= f.label :email, class: "block text-sm font-medium text-gray-700" %>
+      <p class="text-sm text-gray-600 mb-1">On file: <%= display_contact_email(@user) %></p>
       <%= f.email_field :email,
             class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500",
             'aria-invalid': @user.errors[:email].any?,
@@ -43,6 +44,7 @@
 
     <div>
       <%= f.label :phone, class: "block text-sm font-medium text-gray-700" %>
+      <p class="text-sm text-gray-600 mb-1">On file: <%= display_contact_phone(@user) %></p>
       <%= f.telephone_field :phone,
             class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500",
             placeholder: "555-555-5555",

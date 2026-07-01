@@ -13,7 +13,7 @@ module Applications
       @params = params.with_indifferent_access
       @guardian_user = nil
       @dependent_user = nil
-      @portal_eligible_created_user_ids = []
+      @email_backed_portal_created_user_ids = []
       @errors = []
     end
 
@@ -29,7 +29,7 @@ module Applications
       success(
         guardian: @guardian_user,
         dependent: @dependent_user,
-        portal_eligible_created_user_ids: @portal_eligible_created_user_ids
+        email_backed_portal_created_user_ids: @email_backed_portal_created_user_ids
       )
     end
 
@@ -79,7 +79,7 @@ module Applications
         return false unless result.success?
 
         @guardian_user = result.data[:user]
-        track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
+        track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
       else
         return add_error?('Guardian information missing')
       end
@@ -91,7 +91,7 @@ module Applications
       return false unless result.success?
 
       @dependent_user = result.data[:user]
-      track_portal_eligible_created_user_id(result.data[:portal_eligible_created_user_id])
+      track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
       true
     end
 
@@ -204,8 +204,8 @@ module Applications
       attrs.present? && attrs.values.any?(&:present?)
     end
 
-    def track_portal_eligible_created_user_id(user_id)
-      @portal_eligible_created_user_ids << user_id.to_s if user_id.present?
+    def track_email_backed_portal_created_user_id(user_id)
+      @email_backed_portal_created_user_ids << user_id.to_s if user_id.present?
     end
 
     def add_error?(message)

@@ -9,7 +9,7 @@ es:
   sessions:
     form:
       contact_label: "Correo electrónico o número de teléfono"
-      contact_hint: "Ingrese el correo electrónico o número de teléfono asociado con su cuenta"
+      contact_hint: "Las cuentas del portal requieren un correo electrónico registrado. Ingrese ese correo o el número de teléfono de la misma cuenta."
   activerecord:
     errors:
       models:

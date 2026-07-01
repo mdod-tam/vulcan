@@ -8,8 +8,7 @@ class AccountRecoveryController < ApplicationController
   end
 
   def create
-    # Find user by email
-    @user = User.find_by_email(params[:email])
+    @user = User.find_by_login_identifier(account_recovery_contact)
 
     if @user.present?
       # Create a recovery request record
@@ -29,6 +28,10 @@ class AccountRecoveryController < ApplicationController
   end
 
   private
+
+  def account_recovery_contact
+    params[:contact].presence
+  end
 
   def create_recovery_request(user)
     # Record the recovery request in the database
@@ -52,7 +55,7 @@ class AccountRecoveryController < ApplicationController
         notifiable: recovery_request,
         metadata: {
           recovery_request_id: recovery_request.id,
-          requester_email: recovery_request.user.email
+          requester_identifier: recovery_request.user.mfa_account_name
         },
         deliver: false
       )

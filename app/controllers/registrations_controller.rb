@@ -21,6 +21,7 @@ class RegistrationsController < ApplicationController
   def create
     build_user
     return render_duplicate_account_prompt if duplicate_account_match?
+    return render_non_email_backed_phone_match_prompt if phone_matches_non_email_backed_record?
 
     # Check for potential duplicates based on Name + DOB and flag for admin review
     @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
@@ -69,11 +70,12 @@ class RegistrationsController < ApplicationController
     @user = User.new(registration_params)
     @user.type = 'Users::Constituent'
     @user.force_password_change = false
+    @user.portal_self_registration = true
   end
 
   def duplicate_account_match?
-    email_user = User.find_by_email(registration_params[:email])
-    phone_user = User.find_by_phone(registration_params[:phone])
+    email_user = email_backed_duplicate_for(registration_params[:email])
+    phone_user = phone_duplicate_for_email_backed_account(registration_params[:phone])
 
     if email_user.present? && phone_user.present? && email_user.id != phone_user.id
       @account_access_conflict = true
@@ -86,6 +88,38 @@ class RegistrationsController < ApplicationController
     @account_access_contact = account_access_contact_for(@account_access_user, @account_access_match_type)
     @account_access_available = @account_access_contact.present?
     @account_access_user.present?
+  end
+
+  def email_backed_duplicate_for(email)
+    return nil if email.blank?
+
+    user = User.find_by_email(email)
+    return nil unless user&.real_email?
+
+    user
+  end
+
+  def phone_duplicate_for_email_backed_account(phone)
+    return nil if phone.blank?
+
+    user = User.find_by_phone(phone)
+    return nil unless user&.real_email? && user.real_phone?
+
+    user
+  end
+
+  def phone_matches_non_email_backed_record?
+    phone = registration_params[:phone]
+    return false if phone.blank?
+
+    user = User.find_by_phone(phone)
+    user.present? && !user.real_email?
+  end
+
+  def render_non_email_backed_phone_match_prompt
+    @registration_requires_mat_help = true
+    @support_email = support_email
+    render :new, status: :unprocessable_content
   end
 
   def render_duplicate_account_prompt
@@ -137,9 +171,9 @@ class RegistrationsController < ApplicationController
   end
 
   def account_access_contact_for(user, match_type)
-    return nil unless user
+    return nil unless user&.real_email?
     return user.email if match_type == 'email'
-    return user.phone if user.phone_type.to_s == 'text'
+    return user.phone if user.sms_capable_phone?
 
     @support_email = support_email
     nil

@@ -10,8 +10,9 @@ Password sign-in starts in `SessionsController#create`.
 
 The controller:
 
-- looks up users through `User.find_by_login_identifier`, which accepts email or phone, normalizes input, rejects malformed `@` input, and rejects users whose stored contact fails `real_email?` or `real_phone?` (covering synthetic dependent emails and placeholder phones), and works with encrypted email storage
-- does not change portal registration rules; signup still requires both email and phone in the public UI
+- looks up users through `User.find_by_login_identifier`, which accepts email or phone for **email-backed portal accounts** (`real_email?` required; phone match also requires `real_phone?` on the same user), normalizes input, rejects malformed `@` input, rejects synthetic dependent emails and placeholder phones, and works with encrypted email storage
+- **does not** treat phone-only or address-only records as portal accounts — those truthful paper/admin records do not match public sign-in, account access, or WebAuthn recovery
+- public self-registration requires a real email address; phone is optional and adds an alternate login identifier when present
 - checks account lock state before password authentication
 - records failed password attempts
 - signs the user in immediately when no second factor is enabled
@@ -19,7 +20,7 @@ The controller:
 
 User password/session behavior lives in `UserAuthentication`.
 
-Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses parallel contact lookup logic in `find_user_for_account_access` with the same malformed-`@` guards plus instance predicates (`real_email?`, `real_phone?`, `sms_capable_phone?`), but it does not call `User.find_by_login_identifier` directly. WebAuthn recovery in `AccountRecoveryController` is email-only.
+Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses `User.find_for_account_access`, which delegates identity lookup to `find_by_login_identifier` and selects delivery separately: email for email-shaped contact on an email-backed account, SMS only when the same account has `sms_capable_phone?` and phone-shaped contact was entered. Every outcome returns the same public confirmation; delivery attempts are recorded in audit logs only. WebAuthn recovery in `AccountRecoveryController` uses the same email-backed login lookup via a contact field.
 
 Current account-lock behavior:
 

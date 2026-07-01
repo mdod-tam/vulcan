@@ -102,7 +102,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_sign_in_with_normalized_phone
-    user = create(:constituent, phone: '410-555-0100')
+    create(:constituent, phone: '410-555-0100')
 
     post sign_in_path, params: { contact: '4105550100', password: 'password123' }
 
@@ -117,7 +117,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to constituent_portal_dashboard_path
   end
 
-  def test_paper_no_email_user_signs_in_with_phone
+  def test_paper_no_email_user_cannot_sign_in_with_phone
     user = nil
     Current.paper_context = true
     begin
@@ -137,10 +137,12 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
     post sign_in_path, params: { contact: user.phone, password: 'password123' }
 
-    assert_redirected_to constituent_portal_dashboard_path
+    assert_redirected_to sign_in_path
+    follow_redirect!
+    assert_match I18n.t('controllers.sessions.invalid_credentials'), flash[:alert]
   end
 
-  def test_paper_no_email_user_signs_in_with_phone_then_sms_2fa
+  def test_paper_no_email_user_cannot_start_sms_2fa_by_phone
     user = nil
     Current.paper_context = true
     begin
@@ -164,12 +166,11 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
       verified_at: Time.current
     )
 
-    SessionsController.any_instance.stubs(:ensure_sms_challenge_for_user).returns(:sending)
-
     post sign_in_path, params: { contact: user.phone, password: 'password123' }
 
-    assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
-    assert_equal user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
+    assert_redirected_to sign_in_path
+    follow_redirect!
+    assert_match I18n.t('controllers.sessions.invalid_credentials'), flash[:alert]
   end
 
   def test_failed_login_by_phone_increments_failed_attempts
@@ -203,7 +204,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_guardian_generated_synthetic_phone_cannot_sign_in
-    user = create(:constituent, phone: '000-234-5678', email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local")
+    create(:constituent, phone: '000-234-5678', email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local")
 
     post sign_in_path, params: { contact: '0002345678', password: 'password123' }
 

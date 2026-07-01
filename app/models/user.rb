@@ -13,6 +13,7 @@ class User < ApplicationRecord
 
   # Ensure duplicate review flag is accessible
   attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')
+  attr_accessor :portal_self_registration
 
   # Class methods
   def self.normalize_email(email_value)
@@ -104,10 +105,32 @@ class User < ApplicationRecord
 
     phone_user = find_by_phone(normalized)
     return nil if phone_user.blank?
+    return nil unless phone_user.real_email?
     return nil unless phone_user.real_phone?
 
     phone_user
   end
+
+  def self.find_for_account_access(contact)
+    user = find_by_login_identifier(contact)
+    return [nil, nil] unless user&.real_email?
+
+    [user, account_access_delivery_method_for(user, contact)]
+  end
+
+  def self.account_access_delivery_method_for(user, contact)
+    normalized = contact.to_s.strip.presence
+    return nil if normalized.blank?
+
+    if login_identifier_looks_like_email?(normalized)
+      return :email if user.real_email?
+    elsif user.sms_capable_phone?
+      return :sms
+    end
+
+    nil
+  end
+  private_class_method :account_access_delivery_method_for
 
   def self.placeholder_phone?(phone)
     synthetic_dependent_phone?(phone)

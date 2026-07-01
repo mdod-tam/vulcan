@@ -33,7 +33,7 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
 
     # Check for form elements
     assert_selector 'h1', text: 'Security Key Recovery'
-    assert_field 'email'
+    assert_field 'contact'
     assert_field 'details'
     assert_button 'Submit Recovery Request'
   end
@@ -78,7 +78,7 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
     visit lost_security_key_path
 
     # Fill out the form
-    fill_in 'email', with: @user.email
+    fill_in 'contact', with: @user.email
     fill_in 'details', with: 'I lost my security key during travel.'
     click_button 'Submit Recovery Request'
 

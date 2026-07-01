@@ -29,6 +29,22 @@ module UserContactPredicates
     real_email? || real_phone?
   end
 
+  # PR3 public portal self-service: user-facing portal accounts require stored real email.
+  def email_backed_portal_account?
+    real_email?
+  end
+
+  def mfa_account_name
+    return email if real_email?
+
+    return phone if real_phone?
+
+    name = full_name.presence
+    return name if name.present?
+
+    "user-#{id || 'new'}"
+  end
+
   def portal_phone_only_without_email?
     email.blank? && real_phone?
   end
