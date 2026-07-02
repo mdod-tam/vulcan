@@ -117,6 +117,8 @@ Currently filtered categories include:
 
 Do not add new PII fields without updating both encryption declarations and parameter filtering.
 
+Reset URLs, verification URLs, and secure upload URLs are bearer delivery artifacts, not durable record truth. Mailer and SMS failure logs must pass exception messages and backtraces through `SecureErrorSanitizer`; SMS paths carrying those links must also use `sensitive: true` so message bodies and full phone numbers are not written to logs.
+
 ---
 
 ## 7. Testing

@@ -23,6 +23,17 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
            'Form must have a submit button or input')
   end
 
+  test 'recovery form uses request locale and recovery-specific copy' do
+    get lost_security_key_path(locale: 'es')
+
+    assert_response :success
+    assert_select 'strong', I18n.t('portal_self_service.account_recovery.note_label', locale: :es)
+    assert_includes response.body, I18n.t('portal_self_service.account_recovery.contact_hint', locale: :es)
+    assert_includes response.body, I18n.t('portal_self_service.account_recovery.remember_key_prompt', locale: :es)
+    assert_select 'input[name=?][value=?]', 'locale', 'es'
+    assert_not_includes response.body, I18n.t('sessions.form.contact_hint', locale: :es)
+  end
+
   test 'should create recovery request for existing user' do
     assert_difference('RecoveryRequest.count', 1) do
       post request_security_key_reset_path, params: {
@@ -41,6 +52,22 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'I lost my security key during travel', recovery_request.details
     assert_not_nil recovery_request.ip_address
     assert_not_nil recovery_request.user_agent
+  end
+
+  test 'recovery request preserves request locale through confirmation' do
+    assert_difference('RecoveryRequest.count', 1) do
+      post request_security_key_reset_path, params: {
+        contact: @user.email,
+        details: 'I lost my security key during travel',
+        locale: 'es'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path(locale: 'es')
+
+    follow_redirect!
+    assert_select 'h1', I18n.t('portal_self_service.account_recovery.confirmation_title', locale: :es)
+    assert_includes response.body, I18n.t('portal_self_service.account_recovery.confirmation_body', locale: :es)
   end
 
   test 'should create recovery request for email-backed user via phone contact' do

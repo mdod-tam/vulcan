@@ -137,34 +137,49 @@
               <p id="phone-error" role="alert" class="mt-1 text-sm text-red-600"><%= @user.errors[:phone].join(", ") %></p>
             <% end %>
           </div>
-          <div class="mb-4 <%= 'hidden' if @user.phone.blank? %>"
-               data-optional-phone-type-target="phoneTypeFields"
-               aria-hidden="<%= @user.phone.blank? %>">
-            <%= form.label :phone_type, t("portal_self_service.registrations.phone_type_label"), id: "phone-type-legend", class: "block text-sm font-medium text-gray-700 mb-1" %>
+          <% phone_type_describedby = ["phone-type-hint"] %>
+          <% phone_type_describedby << "phone-type-error" if @user.errors[:phone_type].any? %>
+          <fieldset class="mb-4 <%= 'hidden' if @user.phone.blank? %>"
+                    data-optional-phone-type-target="phoneTypeFields"
+                    aria-hidden="<%= @user.phone.blank? %>"
+                    aria-describedby="<%= phone_type_describedby.join(' ') %>"
+                    aria-invalid="<%= @user.errors[:phone_type].any? %>">
+            <legend id="phone-type-legend" class="block text-sm font-medium text-gray-700 mb-1 required-label">
+              <%= t("portal_self_service.registrations.phone_type_label") %>
+            </legend>
+            <p id="phone-type-hint" class="text-xs text-gray-700 mb-2">
+              <%= t("portal_self_service.registrations.phone_type_required") %>
+            </p>
             <div class="space-y-2">
               <div class="flex items-center">
                 <%= form.radio_button :phone_type, "voice", id: "phone_type_voice",
                        class: "h-4 w-4 focus:ring-indigo-500",
-                       disabled: @user.phone.blank? %>
+                       disabled: @user.phone.blank?,
+                       required: @user.phone.present?,
+                       aria: { required: @user.phone.present?.to_s } %>
                 <%= form.label :phone_type_voice, "Voice", for: "phone_type_voice", class: "ml-3 text-sm text-gray-700" %>
               </div>
-                          <div class="flex items-center">
-              <%= form.radio_button :phone_type, "videophone", id: "phone_type_videophone",
-                     class: "h-4 w-4 focus:ring-indigo-500",
-                     disabled: @user.phone.blank? %>
-              <%= form.label :phone_type_videophone, "Videophone", for: "phone_type_videophone", class: "ml-3 text-sm text-gray-700" %>
-            </div>
-            <div class="flex items-center">
-              <%= form.radio_button :phone_type, "text", id: "phone_type_text",
-                     class: "h-4 w-4 focus:ring-indigo-500",
-                     disabled: @user.phone.blank? %>
-              <%= form.label :phone_type_text, "Text/SMS", for: "phone_type_text", class: "ml-3 text-sm text-gray-700" %>
-            </div>
+              <div class="flex items-center">
+                <%= form.radio_button :phone_type, "videophone", id: "phone_type_videophone",
+                       class: "h-4 w-4 focus:ring-indigo-500",
+                       disabled: @user.phone.blank?,
+                       required: @user.phone.present?,
+                       aria: { required: @user.phone.present?.to_s } %>
+                <%= form.label :phone_type_videophone, "Videophone", for: "phone_type_videophone", class: "ml-3 text-sm text-gray-700" %>
+              </div>
+              <div class="flex items-center">
+                <%= form.radio_button :phone_type, "text", id: "phone_type_text",
+                       class: "h-4 w-4 focus:ring-indigo-500",
+                       disabled: @user.phone.blank?,
+                       required: @user.phone.present?,
+                       aria: { required: @user.phone.present?.to_s } %>
+                <%= form.label :phone_type_text, "Text/SMS", for: "phone_type_text", class: "ml-3 text-sm text-gray-700" %>
+              </div>
             </div>
             <% if @user.errors[:phone_type].any? %>
               <p id="phone-type-error" role="alert" class="mt-1 text-sm text-red-600"><%= @user.errors[:phone_type].join(", ") %></p>
             <% end %>
-          </div>
+          </fieldset>
         </fieldset>
         </div>
 

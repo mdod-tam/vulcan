@@ -6,6 +6,7 @@ class RegistrationsController < ApplicationController
 
   # Set the current user for actions that require authentication
   before_action :set_user, only: %i[edit update destroy]
+  around_action :with_public_request_locale, only: %i[new create]
 
   # GET /sign_up
   def new

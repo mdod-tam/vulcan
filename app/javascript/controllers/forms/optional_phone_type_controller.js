@@ -36,6 +36,8 @@ export default class extends Controller {
     const radios = this.phoneTypeFieldsTarget.querySelectorAll('input[type="radio"]')
     radios.forEach((input) => {
       input.disabled = !hasPhone
+      input.required = hasPhone
+      input.setAttribute("aria-required", hasPhone.toString())
     })
 
     if (!hasPhone) {

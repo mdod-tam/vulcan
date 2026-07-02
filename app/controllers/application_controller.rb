@@ -14,7 +14,8 @@ class ApplicationController < ActionController::Base
   # Include our helpers
   helper PasswordFieldHelper
   helper EmailStatusHelper
-  helper_method :dashboard_path_for_current_user, :mfa_required_for_current_user?
+  helper_method :dashboard_path_for_current_user, :mfa_required_for_current_user?,
+                :public_request_locale_param
 
   before_action :check_password_change_required
   before_action :enforce_required_mfa_enrollment
@@ -65,6 +66,29 @@ class ApplicationController < ActionController::Base
 
   def mfa_required_for_role?(user)
     user.admin? || user.evaluator? || user.trainer? || user.vendor?
+  end
+
+  # Public neutral auth flows should use only request-selected locale, not a
+  # matched account's locale, so translations do not become an existence signal.
+  def with_public_request_locale(&)
+    I18n.with_locale(public_request_locale, &)
+  end
+
+  def public_request_locale
+    public_locale_from(params[:locale]) ||
+      public_locale_from(params.dig(:user, :locale)) ||
+      I18n.default_locale
+  end
+
+  def public_request_locale_param
+    public_locale_from(params[:locale])
+  end
+
+  def public_locale_from(value)
+    locale = value.to_s
+    return if locale.blank?
+
+    locale if I18n.available_locales.map(&:to_s).include?(locale)
   end
 
   def after_sign_in_path_for(user)

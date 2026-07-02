@@ -20,11 +20,14 @@ es:
       confirmation: "Si necesita ayuda para iniciar sesión, comuníquese con el equipo MAT en %{support_email}. Las cuentas del portal requieren un correo electrónico registrado. Si la información ingresada coincide con dicha cuenta, es posible que se hayan enviado instrucciones de acceso por correo electrónico o por teléfono con capacidad de texto."
     account_recovery:
       title: "Recuperación de llave de seguridad"
+      note_label: "Nota:"
       note: "Las llaves de seguridad perdidas no se pueden recuperar. Un administrador deberá verificar su identidad y restablecer su inscripción de 2FA."
+      contact_hint: "Use el correo electrónico o número de teléfono de su cuenta del portal para que un administrador pueda identificar la cuenta para revisión. Esto no envía un enlace de acceso a la cuenta."
       details_label: "Detalles adicionales"
       details_placeholder: "Proporcione detalles que ayuden a verificar su identidad (por ejemplo, motivo del restablecimiento, cuándo accedió por última vez al sistema, etc.)."
       submit: "Enviar solicitud de recuperación"
       back_to_sign_in: "Volver a iniciar sesión"
+      remember_key_prompt: "¿Recuerda su llave de seguridad?"
       confirmation_title: "Solicitud de recuperación enviada"
       confirmation_body: "Un administrador revisará su solicitud y se comunicará con usted usando la información registrada en su cuenta."
     registrations:

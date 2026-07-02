@@ -49,11 +49,14 @@ en:
       confirmation: "If you need help signing in, contact the MAT Team at %{support_email}. Portal accounts require an email address on file. If the information you entered matches such an account, account access instructions may have been sent when email or text-capable phone delivery is available."
     account_recovery:
       title: "Security Key Recovery"
+      note_label: "Note:"
       note: "Lost security keys cannot be recovered. An administrator will need to verify your identity and reset your 2FA enrollment."
+      contact_hint: "Use the email address or phone number on your portal account so an administrator can identify the account for review. This does not send an account access link."
       details_label: "Additional Details"
       details_placeholder: "Please provide any details that will help verify your identity (e.g., reason for reset, when you last accessed the system, etc.)"
       submit: "Submit Recovery Request"
       back_to_sign_in: "Back to sign in"
+      remember_key_prompt: "Remember your security key?"
       confirmation_title: "Recovery Request Submitted"
       confirmation_body: "An administrator will review your request and contact you using the information on file for your account."
     registrations:

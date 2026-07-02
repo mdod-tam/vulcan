@@ -131,10 +131,18 @@ class RegistrationsTest < ApplicationSystemTestCase
 
     phone_type_fields = find('[data-optional-phone-type-target="phoneTypeFields"]', visible: :all)
     assert phone_type_fields[:class].include?('hidden')
+    assert_equal 'true', phone_type_fields['aria-hidden']
+    assert_not page.evaluate_script("document.getElementById('phone_type_voice').required")
+    assert_equal 'false', find_by_id('phone_type_voice', visible: :all)['aria-required']
 
     find_by_id('user_phone').set('4105550123')
 
     assert_no_selector('[data-optional-phone-type-target="phoneTypeFields"].hidden', wait: 5)
+    assert_selector '#phone-type-hint', text: I18n.t('portal_self_service.registrations.phone_type_required')
+    assert_equal 'false', find('[data-optional-phone-type-target="phoneTypeFields"]')['aria-hidden']
+    assert_includes find('[data-optional-phone-type-target="phoneTypeFields"]')['aria-describedby'], 'phone-type-hint'
+    assert page.evaluate_script("document.getElementById('phone_type_voice').required")
+    assert_equal 'true', find_by_id('phone_type_voice', visible: :all)['aria-required']
     assert_not find_by_id('phone_type_voice', visible: :all)[:disabled]
     assert_not find_by_id('phone_type_text', visible: :all)[:disabled]
     assert_not find_by_id('phone_type_voice', visible: :all)[:checked]

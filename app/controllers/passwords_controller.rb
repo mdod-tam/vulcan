@@ -2,6 +2,8 @@
 
 # Handles password reset and forced password change functionality
 class PasswordsController < ApplicationController
+  include SecureErrorSanitizer
+
   ACCOUNT_ACCESS_RATE_LIMIT = 5
   ACCOUNT_ACCESS_RATE_LIMIT_WINDOW = 1.hour
 
@@ -9,6 +11,7 @@ class PasswordsController < ApplicationController
   skip_before_action :enforce_required_mfa_enrollment
   before_action :set_user_from_token, only: %i[edit]
   before_action :require_password_change_authorization, only: %i[edit update]
+  around_action :with_public_request_locale, only: %i[new create]
 
   def new; end
 
@@ -164,7 +167,9 @@ class PasswordsController < ApplicationController
     true
   rescue StandardError => e
     log_account_access_attempt(user, delivery_method, 'delivery_failed')
-    Rails.logger.warn("Unable to send account access instructions for user #{user.id}: #{e.class}: #{e.message}")
+    Rails.logger.warn(
+      "Unable to send account access instructions for user #{user.id}: #{e.class}: #{sanitize_secure_error_message(e.message)}"
+    )
     false
   end
 

@@ -100,6 +100,34 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal account_access_confirmation_message, flash[:notice]
   end
 
+  def test_sms_delivery_failure_logs_redact_account_access_reset_url
+    @user.update!(phone_type: 'text')
+    reset_url = 'https://example.test/password/edit?token=secret-reset-token'
+
+    SmsService.expects(:send_message).raises(StandardError.new("provider echoed #{reset_url}"))
+
+    logs = capture_rails_logs do
+      assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', user: @user).count }, 1 do
+        post password_path, params: { contact: @user.phone }
+      end
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+    assert_includes logs, '[REDACTED_URL]'
+    assert_not_includes logs, reset_url
+    assert_not_includes logs, 'secret-reset-token'
+  end
+
+  def test_account_access_confirmation_uses_request_locale
+    sign_out if respond_to?(:sign_out)
+
+    post password_path, params: { contact: 'unknown@example.com', locale: 'es' }
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message(locale: :es), flash[:notice]
+  end
+
   def test_should_rate_limit_repeated_account_access_sms_requests
     @user.update!(phone_type: 'text')
 
@@ -433,9 +461,10 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal user, User.find_by_phone(phone)
   end
 
-  def account_access_confirmation_message
+  def account_access_confirmation_message(locale: I18n.locale)
     I18n.t(
       'portal_self_service.account_access.confirmation',
+      locale: locale,
       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
     )
   end
