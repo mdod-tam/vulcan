@@ -385,6 +385,53 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'input#phone_type_voice[checked=checked]', count: 0
   end
 
+  def test_requires_explicit_phone_type_when_phone_is_present
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "missing-phone-type-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Phone',
+        last_name: 'Type',
+        date_of_birth: '1990-01-01',
+        phone: '555-555-7788',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:phone_type],
+                    I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
+    assert_nil assigns(:user).phone_type
+    assert_select 'input#phone_type_voice[checked=checked]', count: 0
+  end
+
+  def test_rejects_blank_phone_type_when_phone_is_present
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "blank-phone-type-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Phone',
+        last_name: 'Type',
+        date_of_birth: '1990-01-01',
+        phone: '555-555-7789',
+        phone_type: '',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:phone_type],
+                    I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
+    assert_nil assigns(:user).phone_type
+    assert_select 'input#phone_type_voice[checked=checked]', count: 0
+  end
+
   def test_should_not_offer_account_access_link_for_non_sms_phone_match
     test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
     create(:constituent,

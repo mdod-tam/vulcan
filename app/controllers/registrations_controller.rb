@@ -72,7 +72,8 @@ class RegistrationsController < ApplicationController
     @user.type = 'Users::Constituent'
     @user.force_password_change = false
     @user.portal_self_registration = true
-    @user.phone_type_submitted = registration_params.key?(:phone_type)
+    @user.phone_type_submitted = registration_params[:phone_type].present?
+    @user.phone_type = nil if @user.phone.present? && !@user.phone_type_submitted
   end
 
   def duplicate_account_match?

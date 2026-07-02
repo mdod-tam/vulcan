@@ -20,7 +20,7 @@ The controller:
 
 User password/session behavior lives in `UserAuthentication`.
 
-Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses `User.find_for_account_access`, which delegates identity lookup to `find_by_login_identifier` and selects delivery separately: email for email-shaped contact on an email-backed account, SMS only when the same account has `sms_capable_phone?` and phone-shaped contact was entered. Every outcome returns the same public confirmation; delivery attempts are recorded in audit logs only. WebAuthn recovery in `AccountRecoveryController` uses the same email-backed login lookup via a contact field.
+Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses `User.find_for_account_access`, which delegates identity lookup to `find_by_login_identifier` and selects delivery separately: email for email-shaped contact on an email-backed account, SMS only when the same account has `sms_capable_phone?` and phone-shaped contact was entered. Every outcome returns the same public confirmation; delivery attempts, including matched accounts with no available delivery route, are recorded in audit logs only. WebAuthn recovery in `AccountRecoveryController` uses the same email-backed login lookup via a contact field; throttling keys and unmatched rate-limit audit metadata use digests of submitted contacts rather than raw identifiers.
 
 Current account-lock behavior:
 

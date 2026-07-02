@@ -323,7 +323,7 @@ module UserProfile
 
   def portal_self_registration_phone_type_matches_phone
     return if phone.blank?
-    return if phone_type_submitted
+    return if phone_type_submitted && phone_type.present?
 
     errors.add(:phone_type, :portal_self_registration_phone_type_required)
   end

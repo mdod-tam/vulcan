@@ -359,8 +359,10 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     SmsService.expects(:send_message).never
 
-    assert_no_enqueued_emails do
-      post password_path, params: { contact: user.phone }
+    assert_difference -> { Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count }, 1 do
+      assert_no_enqueued_emails do
+        post password_path, params: { contact: user.phone }
+      end
     end
 
     assert_redirected_to sign_in_path

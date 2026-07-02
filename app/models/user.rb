@@ -179,7 +179,7 @@ class User < ApplicationRecord
            dependent: :destroy,
            inverse_of: :recipient
   has_many :applications, inverse_of: :user, dependent: :nullify
-  has_many :recovery_requests, dependent: :destroy
+  has_many :recovery_requests, dependent: :restrict_with_exception
   has_many :income_verified_applications,
            class_name: 'Application',
            foreign_key: :income_verified_by_id,

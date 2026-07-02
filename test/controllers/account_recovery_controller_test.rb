@@ -114,6 +114,38 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
         details: 'Over limit'
       }
     end
+
+    assert_equal 1, Event.where(action: 'security_key_recovery_request_rate_limited', user: @user).count
+  ensure
+    Rails.cache = old_cache
+  end
+
+  test 'rate limits unmatched recovery contacts without storing raw identifier' do
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    contact = "unknown-#{SecureRandom.hex(4)}@example.com"
+
+    AccountRecoveryController::RECOVERY_REQUEST_RATE_LIMIT.times do
+      assert_no_difference('RecoveryRequest.count') do
+        post request_security_key_reset_path, params: {
+          contact: contact,
+          details: 'Unknown repeated recovery'
+        }
+      end
+    end
+
+    assert_difference -> { Event.where(action: 'security_key_recovery_unmatched_rate_limited').count }, 1 do
+      assert_no_difference('RecoveryRequest.count') do
+        post request_security_key_reset_path, params: {
+          contact: contact,
+          details: 'Unknown over limit'
+        }
+      end
+    end
+
+    event = Event.where(action: 'security_key_recovery_unmatched_rate_limited').last
+    assert event.metadata['submitted_contact_digest'].present?
+    assert_not_includes event.metadata.values.join(' '), contact
   ensure
     Rails.cache = old_cache
   end
@@ -210,6 +242,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
+    assert_equal 1, Event.where(action: 'security_key_recovery_request_failed', user: @user).count
     assert_redirected_to account_recovery_confirmation_path
   end
 

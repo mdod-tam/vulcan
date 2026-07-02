@@ -4,21 +4,42 @@ import RejectionFormController from "controllers/forms/rejection_form_controller
 describe("RejectionFormController", () => {
   let application
   let element
-  let incomeOnlyReasons
+  let generalReasons
+  let medicalOnlyReasons
 
   beforeEach(() => {
     // Set up DOM
     document.body.innerHTML = `
       <div data-controller="rejection-form">
         <input type="hidden" id="rejection-proof-type" value="" data-rejection-form-target="proofType">
+        <input type="hidden" data-rejection-form-target="reasonCode">
         <textarea data-rejection-form-target="reasonField"></textarea>
-        <div class="income-only-reasons hidden" data-rejection-form-target="incomeOnlyReasons">
-          <button data-reason-type="missingAmount">Missing Amount</button>
-          <button data-reason-type="exceedsThreshold">Income Exceeds Threshold</button>
-          <button data-reason-type="outdatedSsAward">Outdated SS Award Letter</button>
+        <p data-rejection-form-target="codeStatus"></p>
+        <p class="hidden" data-rejection-form-target="languageNotice"></p>
+        <p data-rejection-form-target="liveRegion"></p>
+        <div class="general-reasons hidden" data-rejection-form-target="generalReasons">
+          <button
+            data-action="click->rejection-form#selectPredefinedReason"
+            data-rejection-form-target="reasonButton"
+            data-reason-code="address_mismatch"
+            data-reason-text="Address mismatch general text"
+            data-proof-types="income,residency">
+            Address mismatch
+          </button>
+        </div>
+        <div class="medical-only-reasons hidden" data-rejection-form-target="medicalOnlyReasons">
+          <button
+            data-action="click->rejection-form#selectPredefinedReason"
+            data-rejection-form-target="reasonButton"
+            data-reason-code="medical_missing"
+            data-reason-text="Medical missing text"
+            data-proof-types="medical">
+            Medical missing
+          </button>
         </div>
         <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="income">Income Proof</button>
         <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="residency">Residency Proof</button>
+        <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="medical">Medical Proof</button>
       </div>
     `
 
@@ -27,10 +48,16 @@ describe("RejectionFormController", () => {
     application.register("rejection-form", RejectionFormController)
 
     element = document.querySelector("[data-controller='rejection-form']")
-    incomeOnlyReasons = document.querySelector(".income-only-reasons")
+    generalReasons = document.querySelector(".general-reasons")
+    medicalOnlyReasons = document.querySelector(".medical-only-reasons")
   })
 
-  test("shows income-only reasons when income proof type is selected", () => {
+  afterEach(() => {
+    application.stop()
+    document.body.innerHTML = ""
+  })
+
+  test("shows general reasons when income proof type is selected", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     const proofTypeInput = controller.proofTypeTarget
     
@@ -38,10 +65,11 @@ describe("RejectionFormController", () => {
     incomeButton.click()
     
     expect(proofTypeInput.value).toBe("income")
-    expect(incomeOnlyReasons.classList.contains("hidden")).toBe(false)
+    expect(generalReasons.classList.contains("hidden")).toBe(false)
+    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
-  test("hides income-only reasons when residency proof type is selected", () => {
+  test("shows general reasons when residency proof type is selected", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     const proofTypeInput = controller.proofTypeTarget
     
@@ -49,49 +77,58 @@ describe("RejectionFormController", () => {
     residencyButton.click()
     
     expect(proofTypeInput.value).toBe("residency")
-    expect(incomeOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(generalReasons.classList.contains("hidden")).toBe(false)
+    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
-  test("initializes with income-only reasons hidden by default", () => {
+  test("initializes with reason groups hidden by default", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     // The controller's connect method should handle initial visibility
-    expect(incomeOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(generalReasons.classList.contains("hidden")).toBe(true)
+    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
-  test("updates income-only reasons visibility when proof type changes", () => {
+  test("updates reason group visibility when proof type changes", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     const incomeButton = document.querySelector("[data-proof-type='income']")
     const residencyButton = document.querySelector("[data-proof-type='residency']")
+    const medicalButton = document.querySelector("[data-proof-type='medical']")
     
     incomeButton.click()
-    expect(incomeOnlyReasons.classList.contains("hidden")).toBe(false)
+    expect(generalReasons.classList.contains("hidden")).toBe(false)
+    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
+
+    medicalButton.click()
+    expect(generalReasons.classList.contains("hidden")).toBe(true)
+    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(false)
     
     residencyButton.click()
-    expect(incomeOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(generalReasons.classList.contains("hidden")).toBe(false)
+    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
   test("selects predefined reason text when button is clicked", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     const proofTypeInput = controller.proofTypeTarget
     const reasonField = controller.reasonFieldTarget
-    
-    controller.addressMismatchIncomeValue = "Address mismatch income text"
-    controller.addressMismatchResidencyValue = "Address mismatch residency text"
+    const reasonCodeInput = controller.reasonCodeTarget
     
     const incomeButton = document.querySelector("[data-proof-type='income']")
     incomeButton.click() // Set proofTypeInput.value to "income"
     
-    const reasonButton = document.createElement("button")
-    reasonButton.dataset.reasonType = "addressMismatch"
+    const reasonButton = document.querySelector("[data-reason-code='address_mismatch']")
     
     controller.selectPredefinedReason({ currentTarget: reasonButton })
-    expect(reasonField.value).toBe("Address mismatch income text")
+    expect(reasonField.value).toBe("Address mismatch general text")
+    expect(reasonCodeInput.value).toBe("address_mismatch")
     
-    const residencyButton = document.querySelector("[data-proof-type='residency']")
-    residencyButton.click() // Set proofTypeInput.value to "residency"
+    const medicalButton = document.querySelector("[data-proof-type='medical']")
+    medicalButton.click() // Set proofTypeInput.value to "medical"
     
-    controller.selectPredefinedReason({ currentTarget: reasonButton })
-    expect(reasonField.value).toBe("Address mismatch residency text")
+    const medicalReasonButton = document.querySelector("[data-reason-code='medical_missing']")
+    controller.selectPredefinedReason({ currentTarget: medicalReasonButton })
+    expect(reasonField.value).toBe("Medical missing text")
+    expect(reasonCodeInput.value).toBe("medical_missing")
   })
 
   test("validates form submission", () => {

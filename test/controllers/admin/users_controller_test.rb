@@ -213,7 +213,7 @@ module Admin
       assert User.exists?(user.id)
 
       event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
-      assert_equal 'ActiveRecord::InvalidForeignKey', event.metadata['error_class']
+      assert_equal 'ActiveRecord::DeleteRestrictionError', event.metadata['error_class']
     end
 
     test 'admin deletion failure logs voucher blockers for constituent applications' do

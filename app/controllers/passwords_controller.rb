@@ -102,7 +102,12 @@ class PasswordsController < ApplicationController
   end
 
   def attempt_account_access_delivery(user, delivery_method)
-    return false unless user.present? && delivery_method.present?
+    return false if user.blank?
+
+    if delivery_method.blank?
+      log_account_access_attempt(user, :none, 'delivery_unavailable')
+      return false
+    end
 
     handle_account_access_request(user, delivery_method)
   end
