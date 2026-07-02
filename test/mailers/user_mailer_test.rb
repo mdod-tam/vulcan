@@ -189,4 +189,46 @@ class UserMailerTest < ActionMailer::TestCase
     assert_equal [user.email], email.to
     assert_equal 'Verificacion de correo electronico', email.subject
   end
+
+  test 'password_reset mailer error audit metadata redacts reset URLs' do
+    user = create(:user)
+    raw_url = 'http://example.com/password/edit?token=secret-token'
+
+    UserMailer.any_instance.stubs(:send_email).raises(StandardError.new("boom #{raw_url}"))
+
+    assert_difference -> { Event.where(action: 'email_delivery_error', auditable: user).count }, 1 do
+      assert_raises(StandardError) do
+        UserMailer.with(user: user).password_reset.deliver_now
+      end
+    end
+
+    event = Event.where(action: 'email_delivery_error', auditable: user).last
+    variables_json = event.metadata.fetch('variables').to_json
+
+    assert_includes event.metadata.fetch('error_message'), '[REDACTED_URL]'
+    assert_not_includes event.metadata.fetch('error_message'), raw_url
+    assert_not_includes variables_json, raw_url
+    assert_not_includes variables_json, 'secret-token'
+    assert_includes variables_json, '[REDACTED]'
+  end
+
+  test 'email_verification mailer error audit metadata redacts verification URLs' do
+    user = create(:user)
+    raw_url = 'http://example.com/constituent_portal/applications/verify?token=secret-token'
+
+    UserMailer.any_instance.stubs(:send_email).raises(StandardError.new("boom #{raw_url}"))
+
+    assert_difference -> { Event.where(action: 'email_delivery_error', auditable: user).count }, 1 do
+      assert_raises(StandardError) do
+        UserMailer.with(user: user).email_verification.deliver_now
+      end
+    end
+
+    event = Event.where(action: 'email_delivery_error', auditable: user).last
+    variables_json = event.metadata.fetch('variables').to_json
+
+    assert_includes event.metadata.fetch('error_message'), '[REDACTED_URL]'
+    assert_not_includes variables_json, raw_url
+    assert_not_includes variables_json, 'secret-token'
+  end
 end

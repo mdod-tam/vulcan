@@ -55,7 +55,7 @@ The controller does not own the main paper-application side effects after create
 - sets `submission_method` to `paper`
 - stamps `fulfillment_type` as `voucher` only when vouchers are enabled; otherwise paper applications remain equipment-fulfillment
 - processes income, residency, ID, and disability certification actions
-- sends account-creation notifications after a successful create for email-backed portal users only (`email_backed_portal_account?` / `real_email?`)
+- sends account-creation notifications after a successful create for email-backed portal users only (`email_backed_public_portal_account?` / `real_email?`)
 - logs `application_created` after create
 - performs reconciliation after the transaction commits
 

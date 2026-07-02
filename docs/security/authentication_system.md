@@ -205,6 +205,6 @@ When changing authentication:
 - Do not count unverified SMS credentials as enabled.
 - Do not store SMS codes in our database.
 - Use `User.find_by_login_identifier` for password sign-in lookup instead of calling `User.find_by_email` or `User.find_by_phone` directly.
-- Keep account-access lookup aligned with the same contact guards even if it remains in `PasswordsController#find_user_for_account_access` for now.
+- Delegate account-access identity lookup and delivery selection to `User.find_for_account_access` from `PasswordsController#create`; do not reimplement parallel lookup rules in the controller.
 - Do not add role-based MFA exceptions without updating tests.
 - Be careful with direct column writes in auth bookkeeping; the existing uses are narrow and documented in code.

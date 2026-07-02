@@ -15,22 +15,12 @@ module Admin
     end
 
     def approve
-      # Transaction to ensure user's credentials are deleted if and only if the status is updated
-      ActiveRecord::Base.transaction do
-        # Delete all the user's WebAuthn credentials
-        @recovery_request.user.webauthn_credentials.destroy_all
-
-        # Update the recovery request status
-        @recovery_request.update!(
-          status: 'approved',
-          resolved_at: Time.current,
-          resolved_by_id: current_user.id
-        )
-
-        # Notify the user
-        notify_user_of_approval
+      unless approve_pending_request
+        redirect_to admin_recovery_request_path(@recovery_request), alert: t('.not_pending')
+        return
       end
 
+      notify_user_of_approval
       redirect_to admin_recovery_requests_path, notice: t('.recovery_approved')
     end
 
@@ -44,6 +34,24 @@ module Admin
       return if current_user.admin?
 
       redirect_to root_path, alert: t('alerts.unauthorized_page')
+    end
+
+    def approve_pending_request
+      approved = false
+
+      @recovery_request.with_lock do
+        if @recovery_request.pending?
+          @recovery_request.user.webauthn_credentials.destroy_all
+          @recovery_request.update!(
+            status: 'approved',
+            resolved_at: Time.current,
+            resolved_by_id: current_user.id
+          )
+          approved = true
+        end
+      end
+
+      approved
     end
 
     def notify_user_of_approval

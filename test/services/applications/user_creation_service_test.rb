@@ -164,7 +164,7 @@ module Applications
       assert_nil user.email
       assert user.phone.present?
       assert user.portal_access_eligible?
-      assert_not user.email_backed_portal_account?
+      assert_not user.email_backed_public_portal_account?
       assert_nil result.data[:email_backed_portal_created_user_id]
       assert_not_includes result.data, :temp_password
       assert_not user.force_password_change?
@@ -189,7 +189,7 @@ module Applications
       user = result.data[:user]
       assert_equal email.strip.downcase, user.email
       assert user.portal_access_eligible?
-      assert user.email_backed_portal_account?
+      assert user.email_backed_public_portal_account?
       assert_equal user.id, result.data[:email_backed_portal_created_user_id]
       assert_not_includes result.data, :temp_password
     end

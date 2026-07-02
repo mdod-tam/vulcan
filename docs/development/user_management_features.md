@@ -35,7 +35,7 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Email search concern | `app/models/concerns/user_email_search.rb` | Stores HMAC email-search tokens for admin search, including dependent email and guardian fallback email search. |
 | Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and a create-time name+DOB duplicate check. |
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
-| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
+| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_public_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
 
 ## 3 · Signup And Duplicate Handling
@@ -67,7 +67,7 @@ Blank phone numbers are allowed. Non-blank phones must normalize to a 10-digit U
 | `real_phone?` | Present, valid 10-digit US, not synthetic `000-…` prefix |
 | `sms_capable_phone?` | `real_phone?` and `phone_type == 'text'` |
 | `portal_access_eligible?` | `real_email?` or `real_phone?` (PR2 stored-contact truth) |
-| `email_backed_portal_account?` | `real_email?` only — required for public portal sign-in, account access, and paper/admin portal setup markers |
+| `email_backed_public_portal_account?` | `real_email?` only — required for public portal sign-in, account access, and paper/admin portal setup markers |
 
 Paper/admin intake supports:
 
@@ -82,7 +82,7 @@ Admin display helpers (`display_contact_email`, `display_contact_phone`) hide sy
 | Concept | Source of truth |
 | --- | --- |
 | Stored contact truth (PR2) | `portal_access_eligible?` from `real_email?` / `real_phone?` |
-| Email-backed portal account (PR3) | `email_backed_portal_account?` (`real_email?`) for sign-in, account access, paper portal setup, and account-created notices |
+| Email-backed portal account (PR3) | `email_backed_public_portal_account?` (`real_email?`) for sign-in, account access, paper portal setup, and account-created notices |
 | Delivery route | `communication_preference` plus effective contact fallback for dependents |
 | Record truth | Stored email/phone values and explicit paper no-contact flags |
 

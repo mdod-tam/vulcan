@@ -3,6 +3,36 @@
 require 'test_helper'
 
 class UserLoginIdentifierTest < ActiveSupport::TestCase
+  test 'find_by_login_identifier is public portal email-backed lookup only' do
+    phone = '410-555-0199'
+    phone_only = nil
+    email_backed = create(:constituent, phone: '410-555-0198')
+
+    Current.paper_context = true
+    begin
+      phone_only = Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'Only',
+        phone: phone,
+        phone_type: 'voice',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    assert phone_only.portal_access_eligible?
+    assert_not phone_only.email_backed_public_portal_account?
+    assert_nil User.find_by_login_identifier(phone)
+
+    assert email_backed.email_backed_public_portal_account?
+    assert_equal email_backed, User.find_by_login_identifier(email_backed.email)
+    assert_equal email_backed, User.find_by_login_identifier(email_backed.phone)
+  end
+
   test 'find_by_login_identifier matches email' do
     user = create(:constituent, email: "login.email.#{SecureRandom.hex(3)}@example.com")
 
@@ -38,7 +68,7 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
 
     assert_nil user.email
     assert user.real_phone?
-    assert_not user.email_backed_portal_account?
+    assert_not user.email_backed_public_portal_account?
     assert_nil User.find_by_login_identifier(phone)
   end
 

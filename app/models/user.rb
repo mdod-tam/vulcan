@@ -89,6 +89,8 @@ class User < ApplicationRecord
     normalized.match?(URI::MailTo::EMAIL_REGEXP)
   end
 
+  # Public portal login/recovery lookup only (email-backed accounts; phone alternate when real_phone?).
+  # Do not use for paper/admin contact matching or delivery routing — use find_for_account_access for delivery.
   def self.find_by_login_identifier(contact)
     normalized = contact.to_s.strip.presence
     return nil if normalized.blank?
@@ -177,6 +179,7 @@ class User < ApplicationRecord
            dependent: :destroy,
            inverse_of: :recipient
   has_many :applications, inverse_of: :user, dependent: :nullify
+  has_many :recovery_requests, dependent: :destroy
   has_many :income_verified_applications,
            class_name: 'Application',
            foreign_key: :income_verified_by_id,

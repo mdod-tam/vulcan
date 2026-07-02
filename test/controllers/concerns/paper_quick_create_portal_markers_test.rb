@@ -4,7 +4,7 @@ require 'test_helper'
 
 class PaperQuickCreatePortalMarkersTest < ActiveSupport::TestCase
   FakeUser = Struct.new(:id, :email_backed) do
-    def email_backed_portal_account?
+    def email_backed_public_portal_account?
       email_backed
     end
   end

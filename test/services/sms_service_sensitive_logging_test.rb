@@ -20,4 +20,23 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
       context: { secure_request_form_id: 123, application_id: 456 }
     )
   end
+
+  test 'sensitive SMS logging omits account access reset URLs' do
+    SmsService.stubs(:twilio_configured?).returns(false)
+
+    reset_url = 'https://example.test/password/edit?token=secret-reset-token'
+    Rails.logger.expects(:info).with do |message|
+      message.include?('SMS delivery requested') &&
+        message.exclude?(reset_url) &&
+        message.exclude?('secret-reset-token') &&
+        message.include?('recipient_id')
+    end
+
+    SmsService.send_message(
+      '410-555-0199',
+      "MAT account access link: #{reset_url}",
+      sensitive: true,
+      context: { recipient_id: 42, recipient_channel: 'account_access_sms' }
+    )
+  end
 end

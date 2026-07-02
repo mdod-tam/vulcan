@@ -53,6 +53,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         # Disabilities are required for constituents
@@ -85,6 +86,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '01/15/1990',
         phone: '555-555-5565',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -105,6 +107,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: 'January 15 1990',
         phone: '555-555-5566',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -127,6 +130,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: false, # No disability selected
@@ -156,6 +160,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'Only',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -176,6 +181,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: 'invalid-phone', # Invalid format
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -200,6 +206,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -208,7 +215,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select 'h2', /An account already exists with that email/
-    assert_select 'a', 'Log in with your email or phone and password'
+    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
     assert_select 'input[value=?]', 'Send account access link'
   end
 
@@ -229,6 +236,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: test_phone, # Already exists
+        phone_type: 'text',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -237,7 +245,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select 'h2', /An account already exists with that phone/
-    assert_select 'a', 'Log in with your email or phone and password'
+    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
     assert_select 'input[value=?]', 'Send account access link'
   end
 
@@ -357,6 +365,26 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, 'has already been taken'
   end
 
+  def test_re_render_preserves_submitted_phone_type_selection
+    post sign_up_path, params: { user: {
+      email: "phone-type-rerender-#{SecureRandom.hex(4)}@example.com",
+      password: 'password123',
+      password_confirmation: 'wrong-password',
+      first_name: 'Phone',
+      last_name: 'Type',
+      date_of_birth: '1990-01-01',
+      phone: '555-555-7777',
+      phone_type: 'text',
+      timezone: 'Eastern Time (US & Canada)',
+      locale: 'en',
+      hearing_disability: true
+    } }
+
+    assert_response :unprocessable_content
+    assert_select 'input#phone_type_text[checked=checked]'
+    assert_select 'input#phone_type_voice[checked=checked]', count: 0
+  end
+
   def test_should_not_offer_account_access_link_for_non_sms_phone_match
     test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
     create(:constituent,
@@ -373,6 +401,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: test_phone,
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -381,7 +410,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select 'h2', /An account already exists with that phone/
-    assert_select 'a', 'Log in with your email or phone and password'
+    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
     assert_select 'a[href^=?]', 'mailto:'
     assert_select 'input[value=?]', 'Send account access link', count: 0
   end
@@ -400,6 +429,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: phone_user.phone,
+        phone_type: 'text',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -439,6 +469,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'USER',       # Same last name (case difference handled by controller)
         date_of_birth: '1985-05-15', # Same DOB
         phone: '555-123-4567', # Unique phone
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -465,6 +496,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -490,6 +522,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       last_name: 'User',
       date_of_birth: '1990-01-01',
       phone: '555-555-5555',
+      phone_type: 'voice',
       timezone: 'Eastern Time (US & Canada)',
       locale: 'en',
       communication_preference: 'email', # Ensure email is sent
@@ -588,6 +621,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
           last_name: 'Usuario',
           date_of_birth: '1990-01-01',
           phone: '555-555-5555',
+          phone_type: 'voice',
           timezone: 'Eastern Time (US & Canada)',
           locale: 'es',
           communication_preference: 'email',

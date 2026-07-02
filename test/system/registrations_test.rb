@@ -114,4 +114,33 @@ class RegistrationsTest < ApplicationSystemTestCase
     assert_equal 'password', find_field('Password')[:type]
     assert_equal 'password', find_field('Confirm Password')[:type]
   end
+
+  test 'registration optional phone type shows phone type when phone entered' do
+    visit sign_up_path
+    ensure_stimulus_loaded
+
+    assert page.has_css?('[data-controller~="optional-phone-type"]', wait: 5)
+    wait_until(time: 5) do
+      page.evaluate_script(<<~JS)
+        (function() {
+          var el = document.querySelector('[data-controller~="optional-phone-type"]');
+          return el && el.dataset.optionalPhoneTypeConnected === 'true';
+        })();
+      JS
+    end
+
+    phone_type_fields = find('[data-optional-phone-type-target="phoneTypeFields"]', visible: :all)
+    assert phone_type_fields[:class].include?('hidden')
+
+    find_by_id('user_phone').set('4105550123')
+
+    assert_no_selector('[data-optional-phone-type-target="phoneTypeFields"].hidden', wait: 5)
+    assert_not find_by_id('phone_type_voice', visible: :all)[:disabled]
+    assert_not find_by_id('phone_type_text', visible: :all)[:disabled]
+    assert_not find_by_id('phone_type_voice', visible: :all)[:checked]
+    assert_not find_by_id('phone_type_text', visible: :all)[:checked]
+
+    choose 'Text/SMS'
+    assert find_by_id('phone_type_text')[:checked]
+  end
 end

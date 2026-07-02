@@ -11,6 +11,8 @@ module SecureErrorSanitizer
     secure_token
     secure_upload_url
     secure_url
+    reset_url
+    verification_url
     token
   ].freeze
 

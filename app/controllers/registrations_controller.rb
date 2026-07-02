@@ -10,6 +10,8 @@ class RegistrationsController < ApplicationController
   # GET /sign_up
   def new
     @user = User.new
+    @user.portal_self_registration = true
+    @user.phone_type = :contact_email
   end
 
   # GET /edit_registration
@@ -70,6 +72,7 @@ class RegistrationsController < ApplicationController
     @user.type = 'Users::Constituent'
     @user.force_password_change = false
     @user.portal_self_registration = true
+    @user.phone_type_submitted = registration_params.key?(:phone_type)
   end
 
   def duplicate_account_match?

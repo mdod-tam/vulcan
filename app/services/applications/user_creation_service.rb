@@ -83,7 +83,7 @@ module Applications
       user = build_user
 
       if user.save
-        Rails.logger.info { "Created user #{user.id} (email_backed_portal=#{user.email_backed_portal_account?})" }
+        Rails.logger.info { "Created user #{user.id} (email_backed_portal=#{user.email_backed_public_portal_account?})" }
         user
       else
         @errors << "Failed to create user: #{user.errors.full_messages.join(', ')}"
@@ -136,11 +136,11 @@ module Applications
     end
 
     def email_backed_portal_created_user_id(user)
-      user.email_backed_portal_account? ? user.id : nil
+      user.email_backed_public_portal_account? ? user.id : nil
     end
 
     def email_backed_portal_account_from_attrs?
-      User.new(email: attrs[:email], phone: attrs[:phone], phone_type: attrs[:phone_type]).email_backed_portal_account?
+      User.new(email: attrs[:email], phone: attrs[:phone], phone_type: attrs[:phone_type]).email_backed_public_portal_account?
     end
 
     def normalize_contact_attrs!

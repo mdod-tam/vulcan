@@ -949,7 +949,7 @@ module Applications
       return unless send_account_created_notice?
 
       new_user_accounts.each do |user|
-        next unless user.email_backed_portal_account?
+        next unless user.email_backed_public_portal_account?
 
         append_account_access_warning(user) if quick_created_portal_user?(user)
 
@@ -999,7 +999,7 @@ module Applications
     end
 
     def account_created_notice_candidate?(user)
-      return false unless user.email_backed_portal_account?
+      return false unless user.email_backed_public_portal_account?
       return false unless account_access_instructions_deliverable?(user)
 
       @created_portal_user_ids.include?(user.id.to_s) || quick_created_portal_user?(user)

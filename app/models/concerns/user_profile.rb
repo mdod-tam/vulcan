@@ -5,6 +5,8 @@ module UserProfile
   extend ActiveSupport::Concern
 
   included do
+    attr_accessor :phone_type_submitted
+
     # Callbacks
     before_validation :normalize_email_fields
     before_validation :normalize_communication_preference_for_undeliverable_email
@@ -42,6 +44,8 @@ module UserProfile
     validate :validate_address_for_letter_preference
     validate :email_delivery_requires_real_email
     validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
+    before_validation :normalize_portal_self_registration_phone_type, if: :portal_self_registration?
+    validate :portal_self_registration_phone_type_matches_phone, if: :portal_self_registration?
     validate :portal_self_registration_requires_email_backed_account, if: :portal_self_registration?
 
     # Enums
@@ -311,6 +315,17 @@ module UserProfile
     return if real_email?
 
     errors.add(:base, :portal_self_registration_requires_email)
+  end
+
+  def normalize_portal_self_registration_phone_type
+    self.phone_type = :contact_email if phone.blank?
+  end
+
+  def portal_self_registration_phone_type_matches_phone
+    return if phone.blank?
+    return if phone_type_submitted
+
+    errors.add(:phone_type, :portal_self_registration_phone_type_required)
   end
 
   def portal_registration_support_email

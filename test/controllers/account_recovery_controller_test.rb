@@ -62,6 +62,62 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'Lost key; submitting phone on file for email-backed account', recovery_request.details
   end
 
+  test 'coalesces duplicate pending recovery requests without duplicate admin notifications' do
+    create(:recovery_request, user: @user, status: 'pending')
+
+    assert_no_difference('RecoveryRequest.count') do
+      assert_no_difference -> { Notification.where(action: 'security_key_recovery_requested').count } do
+        post request_security_key_reset_path, params: {
+          contact: @user.phone,
+          details: 'Repeat while pending'
+        }
+      end
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+  end
+
+  test 'allows new recovery request after prior request is resolved' do
+    create(:recovery_request, :approved, user: @user)
+
+    assert_difference('RecoveryRequest.count', 1) do
+      post request_security_key_reset_path, params: {
+        contact: @user.email,
+        details: 'New request after approval'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+    assert_equal 'pending', RecoveryRequest.order(:created_at).last.status
+  end
+
+  test 'rate limits new recovery requests per user and ip' do
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
+    AccountRecoveryController::RECOVERY_REQUEST_RATE_LIMIT.times do |i|
+      RecoveryRequest.where(user: @user).update_all(status: 'approved', resolved_at: Time.current, resolved_by_id: @admin.id)
+
+      assert_difference('RecoveryRequest.count', 1) do
+        post request_security_key_reset_path, params: {
+          contact: @user.email,
+          details: "Attempt #{i}"
+        }
+      end
+    end
+
+    RecoveryRequest.where(user: @user).update_all(status: 'approved', resolved_at: Time.current, resolved_by_id: @admin.id)
+
+    assert_no_difference('RecoveryRequest.count') do
+      post request_security_key_reset_path, params: {
+        contact: @user.email,
+        details: 'Over limit'
+      }
+    end
+  ensure
+    Rails.cache = old_cache
+  end
+
   test 'should not create recovery request for phone-only record' do
     phone = '410-555-0210'
     Current.paper_context = true
@@ -135,8 +191,55 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
 
     # Check for confirmation message content
-    assert_select 'h1', /confirmation|submitted|recovery/i
+    assert_select 'h1', /Recovery Request Submitted/i
+    assert_match(/administrator will review your request/i, response.body)
+    assert_no_match(/check your email/i, response.body)
     assert_select 'a[href=?]', sign_in_path
+  end
+
+  test 'does not leave pending recovery request when admin notification raises' do
+    NotificationService::NotificationBuilder.any_instance
+                                            .expects(:create_and_deliver!)
+                                            .once
+                                            .raises(StandardError.new('notification failed'))
+
+    assert_no_difference('RecoveryRequest.count') do
+      post request_security_key_reset_path, params: {
+        contact: @user.email,
+        details: 'Notification exception should roll back pending request'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+  end
+
+  test 'does not leave pending recovery request when admin notification returns nil' do
+    NotificationService::NotificationBuilder.any_instance
+                                            .expects(:create_and_deliver!)
+                                            .once
+                                            .returns(nil)
+
+    assert_no_difference('RecoveryRequest.count') do
+      post request_security_key_reset_path, params: {
+        contact: @user.email,
+        details: 'Notification nil return should roll back pending request'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+  end
+
+  test 'handles RecordNotUnique during create as coalesced duplicate pending' do
+    RecoveryRequest.any_instance.stubs(:save!).raises(ActiveRecord::RecordNotUnique.new('duplicate pending key'))
+
+    assert_no_difference('RecoveryRequest.count') do
+      post request_security_key_reset_path, params: {
+        contact: @user.email,
+        details: 'Concurrent duplicate pending'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
   end
 
   test 'should handle missing contact parameter' do

@@ -1392,7 +1392,7 @@ module Admin
       assert user, 'Expected phone-only user to be created'
       assert_nil user.email
       assert user.portal_access_eligible?
-      assert_not user.email_backed_portal_account?
+      assert_not user.email_backed_public_portal_account?
       assert user.deliver_via_letter?
       assert_not user.force_password_change?
     end

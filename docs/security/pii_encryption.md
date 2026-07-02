@@ -67,7 +67,7 @@ Use the helper methods on `User` for contact lookup:
 
 - `User.find_by_email(value)`
 - `User.find_by_phone(value)`
-- `User.find_by_login_identifier(value)` — password sign-in lookup in `SessionsController`; treats any `@` input as email-shaped, rejects malformed email strings without falling back to phone, and blocks synthetic dependent contacts
+- `User.find_by_login_identifier(value)` — public sign-in, account recovery, and other login-identity lookups; email-backed portal accounts only for phone-shaped input (`real_email?` and `real_phone?` required on the matched user); treats any `@` input as email-shaped, rejects malformed email strings without falling back to phone, and blocks synthetic dependent contacts
 - `User.exists_with_email?(value, excluding_id: nil)`
 - `User.exists_with_phone?(value, excluding_id: nil)`
 

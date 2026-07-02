@@ -38,10 +38,10 @@ en:
   sessions:
     form:
       contact_label: "Email Address or Phone Number"
-      contact_hint: "Use your account email. If your account also has a phone number, you can use that instead."
+      contact_hint: "Use your account email to sign in or request access. If your account has a phone number on file, you can also use that to identify your account. Account access links by text are sent only to text-capable phone numbers."
   portal_self_service:
     contact_label: "Email Address or Phone Number"
-    contact_hint: "Use your account email. If your account also has a phone number, you can use that instead."
+    contact_hint: "Use your account email to sign in or request access. If your account has a phone number on file, you can also use that to identify your account. Account access links by text are sent only to text-capable phone numbers."
     account_access:
       title: "Account Access"
       submit: "Send Account Access Link"
@@ -54,16 +54,19 @@ en:
       details_placeholder: "Please provide any details that will help verify your identity (e.g., reason for reset, when you last accessed the system, etc.)"
       submit: "Submit Recovery Request"
       back_to_sign_in: "Back to sign in"
+      confirmation_title: "Recovery Request Submitted"
+      confirmation_body: "An administrator will review your request and contact you using the information on file for your account."
     registrations:
       duplicate_conflict_heading: "We found conflicting account information."
       duplicate_conflict_body: "Please contact the MAT Team at %{support_email} for help accessing your account."
       duplicate_exists_heading: "An account already exists with that %{match_type}."
-      duplicate_available_body: "You can log in with your email or phone and password, or we can send an account access link to the contact information already on record."
-      duplicate_no_link_body: "You can log in with your email or phone and password. To receive an account access link, please contact the MAT Team at %{support_email}."
-      log_in_cta: "Log in with your email or phone and password"
+      duplicate_available_body: "You can sign in with your email address and password. If your account has a phone number on file, you can also use that to sign in. We can send an account access link when email or text-capable phone delivery is available on your account."
+      duplicate_no_link_body: "You can sign in with your email address and password. If your account has a phone number on file, you can also use that to sign in. To receive an account access link, please contact the MAT Team at %{support_email}."
+      log_in_cta: "Sign in with your email address and password"
       send_access_link: "Send account access link"
       phone_hint: "Optional. Enter 10 digits. You can use this number to sign in."
       phone_type_label: "Phone Type"
+      phone_type_required: "Select a phone type when providing a phone number."
       match_type:
         email: "email"
         phone: "phone"
@@ -75,6 +78,8 @@ en:
             base:
               portal_self_registration_requires_email: "A portal account requires an email address. If you do not have email, please contact MAT for assistance with a paper application."
               portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Portal accounts require an email address. Please contact the MAT Team at %{support_email} for assistance."
+            phone_type:
+              portal_self_registration_phone_type_required: "must be selected when a phone number is provided"
         application:
           attributes:
             base:
@@ -687,6 +692,7 @@ en:
     recovery_requests:
       approve:
         recovery_approved: "Security key recovery request approved successfully. The user can register a new security key."
+        not_pending: "This recovery request has already been resolved and cannot be approved again."
     users:
       update:
         user_update_pass: "User was successfully updated."

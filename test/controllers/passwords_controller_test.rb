@@ -73,7 +73,9 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     SmsService.expects(:send_message)
               .with(@user.phone,
-                    regexp_matches(%r{MAT account access link to set your password: https?://\S+ This link expires in 20 minutes\.}))
+                    regexp_matches(%r{MAT account access link to set your password: https?://\S+ This link expires in 20 minutes\.}),
+                    sensitive: true,
+                    context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
               .returns(true)
 
     assert_difference -> { Event.where(action: 'account_access_instructions_sent', user: @user).count }, 1 do

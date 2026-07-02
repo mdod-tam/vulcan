@@ -22,20 +22,7 @@ class UserMailer < ApplicationMailer
     Rails.logger.error "Missing EmailTemplate (text format) for #{template_name}: #{e.message}"
     raise "Email template (text format) not found for #{template_name}"
   rescue StandardError => e
-    AuditEventService.log(
-      actor: user,
-      action: 'email_delivery_error',
-      auditable: user,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name,
-        variables: variables,
-        backtrace: e.backtrace&.first(5)
-      }
-    )
+    log_mail_error(e, user, template_name, variables)
     raise e
   end
 
@@ -59,20 +46,7 @@ class UserMailer < ApplicationMailer
     Rails.logger.error "Missing EmailTemplate (text format) for #{template_name}: #{e.message}"
     raise "Email template (text format) not found for #{template_name}"
   rescue StandardError => e
-    AuditEventService.log(
-      actor: user,
-      action: 'email_delivery_error',
-      auditable: user,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name,
-        variables: variables,
-        backtrace: e.backtrace&.first(5)
-      }
-    )
+    log_mail_error(e, user, template_name, variables)
     raise e
   end
 end

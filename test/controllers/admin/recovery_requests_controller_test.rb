@@ -51,6 +51,27 @@ module Admin
       assert_equal 0, @user.reload.webauthn_credentials.count
     end
 
+    test 'cannot replay approval on already resolved recovery request' do
+      @recovery_request.update!(
+        status: 'approved',
+        resolved_at: Time.current,
+        resolved_by_id: @admin.id
+      )
+      setup_webauthn_credential(@user)
+
+      assert_no_difference '@user.webauthn_credentials.count' do
+        post approve_admin_recovery_request_path(@recovery_request)
+      end
+
+      assert_redirected_to admin_recovery_request_path(@recovery_request)
+      assert_match(/already been resolved/i, flash[:alert])
+
+      @recovery_request.reload
+      assert_equal 'approved', @recovery_request.status
+      assert_equal @admin.id, @recovery_request.resolved_by_id
+      assert @user.webauthn_credentials.exists?
+    end
+
     test 'should not allow non-admins to access requests' do
       # Sign out admin
       delete sign_out_path

@@ -147,7 +147,12 @@ class PasswordsController < ApplicationController
 
   def send_account_access_instructions(user, delivery_method)
     if delivery_method == :sms
-      SmsService.send_message(user.phone, account_access_sms_body(user))
+      SmsService.send_message(
+        user.phone,
+        account_access_sms_body(user),
+        sensitive: true,
+        context: { recipient_id: user.id, recipient_channel: 'account_access_sms' }
+      )
     else
       UserMailer.with(user: user).password_reset.deliver_later
     end
