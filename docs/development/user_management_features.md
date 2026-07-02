@@ -25,7 +25,7 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Area | Path | Current behavior |
 |------|------|------------------|
 | Routes | `config/routes.rb` | Defines `sign_up`, profile/password routes, `admin/users`, and member routes such as `mfa_tokens_admin_user_path`, `update_role_admin_user_path`, and `history_admin_user_path`. |
-| Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, blocks exact email/phone duplicates with an account-access prompt, flags name+DOB matches for review, creates the session, and sends registration confirmation. |
+| Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, blocks exact email or **email-backed** phone duplicates with an account-access prompt, flags name+DOB matches for review, creates the session, and sends registration confirmation. Phone-only and address-only paper records never match public duplicate handoff. |
 | Admin users | `app/controllers/admin/users_controller.rb` | Lists, filters, shows, edits, creates, role-converts, capability-updates, deletes MFA tokens, deletes users, and serves guardian/dependent helper endpoints. |
 | User model | `app/models/user.rb` | Base STI model. Includes authentication, roles/capabilities, profile validation, contact predicates, guardian/dependent logic, and email search tokens. |
 | Contact predicates | `app/models/concerns/user_contact_predicates.rb` | Canonical contact truth: `real_email?`, `real_phone?`, `sms_capable_phone?`, `portal_access_eligible?`. Portal eligibility is computed from stored contact, not faked with synthetic values. |
@@ -51,6 +51,7 @@ Email and phone are stored with deterministic Rails encryption so exact lookups 
 - matching text-capable phone can offer an account-access link by SMS only when the existing account is email-backed and `sms_capable_phone?`
 - `PasswordsController#create` uses the same email-backed resolver: SMS is sent only when the matched account has `real_email?` and `sms_capable_phone?`; all outcomes show the same public confirmation (delivery details stay in audit logs only)
 - conflicting matches, where email and phone belong to different users, show a support-contact prompt
+- phone matching a non-email-backed paper/admin record does not enter duplicate handoff; portal self-registration surfaces a generic base error with MAT support contact instead of a public phone-taken message
 
 `UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
 

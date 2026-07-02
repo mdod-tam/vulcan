@@ -221,9 +221,19 @@ module UserProfile
 
   def phone_must_be_unique
     return if phone.blank?
+    return unless User.exists_with_phone?(phone, excluding_id: id)
 
-    existing = User.exists_with_phone?(phone, excluding_id: id)
-    errors.add(:phone, 'has already been taken') if existing
+    conflicting_user = User.find_by_phone(phone)
+    if portal_self_registration? && conflicting_user.present? && !conflicting_user.real_email?
+      errors.add(
+        :base,
+        :portal_self_registration_unavailable_contact,
+        support_email: portal_registration_support_email
+      )
+      return
+    end
+
+    errors.add(:phone, 'has already been taken')
   rescue StandardError => e
     Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
   end
@@ -300,10 +310,11 @@ module UserProfile
   def portal_self_registration_requires_email_backed_account
     return if real_email?
 
-    errors.add(
-      :base,
-      'A portal account requires an email address. If you do not have email, please contact MAT for assistance with a paper application.'
-    )
+    errors.add(:base, :portal_self_registration_requires_email)
+  end
+
+  def portal_registration_support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
   end
 
   def was_address_only_contact?

@@ -311,7 +311,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes assigns(:user).errors[:email], "can't be blank"
   end
 
-  def test_should_not_create_registration_when_phone_matches_phone_only_paper_record
+  def test_phone_only_paper_record_does_not_get_public_match_or_account_access_prompt
     phone = '410-555-0199'
     Current.paper_context = true
     begin
@@ -346,8 +346,14 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'h2', /We need help finishing your registration/
-    assert_select 'p', /Portal accounts require an email address/
+    assert_nil assigns(:account_access_user)
+    assert_not assigns(:account_access_conflict)
+    assert_select 'h2', { text: /We need help finishing your registration/, count: 0 }
+    assert_select 'h2', { text: /An account already exists/, count: 0 }
+    assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_empty assigns(:user).errors[:phone]
+    assert_includes assigns(:user).errors[:base].join, 'Portal accounts require an email address'
+    assert_includes assigns(:user).errors[:base].join, 'contact the MAT Team'
     assert_not_includes response.body, 'has already been taken'
   end
 

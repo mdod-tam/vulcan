@@ -21,6 +21,7 @@ import ReportsChartController from "./charts/reports_chart_controller"
 import ApplicationFormController from "./forms/application_form_controller"
 import AutosaveController from "./forms/autosave_controller"
 import DeliveryPreferenceController from "./forms/delivery_preference_controller"
+import OptionalPhoneTypeController from "./forms/optional_phone_type_controller"
 import ContactFeedbackController from "./forms/contact_feedback_controller"
 import CurrencyFormatterController from "./forms/currency_formatter_controller"
 import DateRangeController from "./forms/date_range_controller"
@@ -84,6 +85,7 @@ application.register("reports-chart", ReportsChartController)
 application.register("application-form", ApplicationFormController)
 application.register("autosave", AutosaveController)
 application.register("delivery-preference", DeliveryPreferenceController)
+application.register("optional-phone-type", OptionalPhoneTypeController)
 application.register("contact-feedback", ContactFeedbackController)
 application.register("currency-formatter", CurrencyFormatterController)
 application.register("date-range", DateRangeController)

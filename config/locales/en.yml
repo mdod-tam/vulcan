@@ -38,10 +38,43 @@ en:
   sessions:
     form:
       contact_label: "Email Address or Phone Number"
-      contact_hint: "Portal accounts require an email address on file. Enter that email, or the phone number on the same account."
+      contact_hint: "Use your account email. If your account also has a phone number, you can use that instead."
+  portal_self_service:
+    contact_label: "Email Address or Phone Number"
+    contact_hint: "Use your account email. If your account also has a phone number, you can use that instead."
+    account_access:
+      title: "Account Access"
+      submit: "Send Account Access Link"
+      back_to_sign_in: "Back to Sign In"
+      confirmation: "If you need help signing in, contact the MAT Team at %{support_email}. Portal accounts require an email address on file. If the information you entered matches such an account, account access instructions may have been sent when email or text-capable phone delivery is available."
+    account_recovery:
+      title: "Security Key Recovery"
+      note: "Lost security keys cannot be recovered. An administrator will need to verify your identity and reset your 2FA enrollment."
+      details_label: "Additional Details"
+      details_placeholder: "Please provide any details that will help verify your identity (e.g., reason for reset, when you last accessed the system, etc.)"
+      submit: "Submit Recovery Request"
+      back_to_sign_in: "Back to sign in"
+    registrations:
+      duplicate_conflict_heading: "We found conflicting account information."
+      duplicate_conflict_body: "Please contact the MAT Team at %{support_email} for help accessing your account."
+      duplicate_exists_heading: "An account already exists with that %{match_type}."
+      duplicate_available_body: "You can log in with your email or phone and password, or we can send an account access link to the contact information already on record."
+      duplicate_no_link_body: "You can log in with your email or phone and password. To receive an account access link, please contact the MAT Team at %{support_email}."
+      log_in_cta: "Log in with your email or phone and password"
+      send_access_link: "Send account access link"
+      phone_hint: "Optional. Enter 10 digits. You can use this number to sign in."
+      phone_type_label: "Phone Type"
+      match_type:
+        email: "email"
+        phone: "phone"
   activerecord:
     errors:
       models:
+        user:
+          attributes:
+            base:
+              portal_self_registration_requires_email: "A portal account requires an email address. If you do not have email, please contact MAT for assistance with a paper application."
+              portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Portal accounts require an email address. Please contact the MAT Team at %{support_email} for assistance."
         application:
           attributes:
             base:

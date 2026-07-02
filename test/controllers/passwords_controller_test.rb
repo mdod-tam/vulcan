@@ -430,10 +430,10 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def account_access_confirmation_message
-    support_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
-    "If you need help signing in, contact the MAT Team at #{support_email}. " \
-      'Portal accounts require an email address on file. If the information you entered matches such an account, ' \
-      'account access instructions may have been sent when email or text-capable phone delivery is available.'
+    I18n.t(
+      'portal_self_service.account_access.confirmation',
+      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
+    )
   end
 
   private

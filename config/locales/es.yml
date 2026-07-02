@@ -9,10 +9,43 @@ es:
   sessions:
     form:
       contact_label: "Correo electrónico o número de teléfono"
-      contact_hint: "Las cuentas del portal requieren un correo electrónico registrado. Ingrese ese correo o el número de teléfono de la misma cuenta."
+      contact_hint: "Use el correo electrónico de su cuenta. Si su cuenta también tiene un número de teléfono, puede usarlo."
+  portal_self_service:
+    contact_label: "Correo electrónico o número de teléfono"
+    contact_hint: "Use el correo electrónico de su cuenta. Si su cuenta también tiene un número de teléfono, puede usarlo."
+    account_access:
+      title: "Acceso a la cuenta"
+      submit: "Enviar enlace de acceso a la cuenta"
+      back_to_sign_in: "Volver a iniciar sesión"
+      confirmation: "Si necesita ayuda para iniciar sesión, comuníquese con el equipo MAT en %{support_email}. Las cuentas del portal requieren un correo electrónico registrado. Si la información ingresada coincide con dicha cuenta, es posible que se hayan enviado instrucciones de acceso por correo electrónico o por teléfono con capacidad de texto."
+    account_recovery:
+      title: "Recuperación de llave de seguridad"
+      note: "Las llaves de seguridad perdidas no se pueden recuperar. Un administrador deberá verificar su identidad y restablecer su inscripción de 2FA."
+      details_label: "Detalles adicionales"
+      details_placeholder: "Proporcione detalles que ayuden a verificar su identidad (por ejemplo, motivo del restablecimiento, cuándo accedió por última vez al sistema, etc.)."
+      submit: "Enviar solicitud de recuperación"
+      back_to_sign_in: "Volver a iniciar sesión"
+    registrations:
+      duplicate_conflict_heading: "Encontramos información de cuenta en conflicto."
+      duplicate_conflict_body: "Comuníquese con el equipo MAT en %{support_email} para obtener ayuda para acceder a su cuenta."
+      duplicate_exists_heading: "Ya existe una cuenta con ese %{match_type}."
+      duplicate_available_body: "Puede iniciar sesión con su correo electrónico o teléfono y contraseña, o podemos enviar un enlace de acceso a la cuenta a la información de contacto registrada."
+      duplicate_no_link_body: "Puede iniciar sesión con su correo electrónico o teléfono y contraseña. Para recibir un enlace de acceso a la cuenta, comuníquese con el equipo MAT en %{support_email}."
+      log_in_cta: "Iniciar sesión con su correo electrónico o teléfono y contraseña"
+      send_access_link: "Enviar enlace de acceso a la cuenta"
+      phone_hint: "Opcional. Ingrese 10 dígitos. Puede usar este número para iniciar sesión."
+      phone_type_label: "Tipo de teléfono"
+      match_type:
+        email: "correo electrónico"
+        phone: "teléfono"
   activerecord:
     errors:
       models:
+        user:
+          attributes:
+            base:
+              portal_self_registration_requires_email: "Una cuenta del portal requiere una dirección de correo electrónico. Si no tiene correo electrónico, comuníquese con MAT para obtener ayuda con una solicitud en papel."
+              portal_self_registration_unavailable_contact: "No pudimos completar su registro con la información proporcionada. Las cuentas del portal requieren una dirección de correo electrónico. Comuníquese con el equipo MAT en %{support_email} para obtener ayuda."
         application:
           attributes:
             base:

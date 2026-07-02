@@ -21,7 +21,6 @@ class RegistrationsController < ApplicationController
   def create
     build_user
     return render_duplicate_account_prompt if duplicate_account_match?
-    return render_non_email_backed_phone_match_prompt if phone_matches_non_email_backed_record?
 
     # Check for potential duplicates based on Name + DOB and flag for admin review
     @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
@@ -106,20 +105,6 @@ class RegistrationsController < ApplicationController
     return nil unless user&.real_email? && user.real_phone?
 
     user
-  end
-
-  def phone_matches_non_email_backed_record?
-    phone = registration_params[:phone]
-    return false if phone.blank?
-
-    user = User.find_by_phone(phone)
-    user.present? && !user.real_email?
-  end
-
-  def render_non_email_backed_phone_match_prompt
-    @registration_requires_mat_help = true
-    @support_email = support_email
-    render :new, status: :unprocessable_content
   end
 
   def render_duplicate_account_prompt

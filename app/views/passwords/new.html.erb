@@ -1,6 +1,6 @@
 <div class="min-h-screen flex items-center justify-center bg-gray-100">
   <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
-    <h2 class="text-2xl font-semibold mb-6 text-center">Account Access</h2>
+    <h2 class="text-2xl font-semibold mb-6 text-center"><%= t("portal_self_service.account_access.title") %></h2>
 
     <% if flash[:alert] %>
       <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -10,22 +10,24 @@
 
     <%= form_with url: password_path, method: :post, class: "space-y-6" do |form| %>
       <div>
-        <%= form.label :contact, "Email Address or Phone Number", class: "block text-gray-700" %>
+        <%= form.label :contact, t("portal_self_service.contact_label"), class: "block text-gray-700" %>
         <%= form.text_field :contact,
+            id: "account-access-contact",
             class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
             required: true,
-            autofocus: true %>
-        <p class="mt-2 text-sm text-gray-500">
-          Portal accounts require an email address on file. Enter that email, or the phone number on the same account, and we will send account access instructions when a supported delivery method is available.
+            autofocus: true,
+            aria: { describedby: "account-access-contact-hint" } %>
+        <p id="account-access-contact-hint" class="mt-2 text-sm text-gray-500">
+          <%= t("portal_self_service.contact_hint") %>
         </p>
       </div>
 
       <div>
-        <%= form.submit "Send Account Access Link", class: "w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" %>
+        <%= form.submit t("portal_self_service.account_access.submit"), class: "w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" %>
       </div>
 
       <div class="text-center mt-4">
-        <%= link_to "Back to Sign In", sign_in_path, class: "text-sm text-indigo-600 hover:text-indigo-500" %>
+        <%= link_to t("portal_self_service.account_access.back_to_sign_in"), sign_in_path, class: "text-sm text-indigo-600 hover:text-indigo-500" %>
       </div>
     <% end %>
   </div>
