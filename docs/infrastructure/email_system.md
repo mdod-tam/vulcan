@@ -27,7 +27,7 @@ bin/rails email_templates:audit   # read-only: seeds + MAILER_MAP vs DB
 
 ```ruby
 tpl = EmailTemplate.find_by!(name: 'user_mailer_password_reset', format: :text)
-subj, body = tpl.render(user_first_name: @user.first_name, reset_url: ...)
+subj, body = tpl.render(user_email: @user.email, reset_url: ...)
 mail(to: @user.email, subject: subj) { format.text { render plain: body } }
 ```
 
@@ -42,7 +42,7 @@ current code; public signup currently sends
 
 ```ruby
 subj, body = EmailTemplate.render('user_mailer_password_reset',
-                                  user_first_name: @user.first_name,
+                                  user_email: @user.email,
                                   reset_url: ...)
 ```
 

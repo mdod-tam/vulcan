@@ -108,7 +108,7 @@ Sensitive request parameters are filtered in `config/initializers/filter_paramet
 Currently filtered categories include:
 
 - password fields
-- user contact and address fields, including unified auth `contact`
+- user contact and address fields, including unified auth `contact` and account-recovery `details`
 - date of birth and SSN fields
 - SMS phone number params
 - medical provider contact fields
