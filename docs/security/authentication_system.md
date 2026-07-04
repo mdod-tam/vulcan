@@ -12,7 +12,7 @@ The controller:
 
 - looks up users through `User.find_by_login_identifier`, which accepts email or phone for **email-backed portal accounts** (`real_email?` required; phone match also requires `real_phone?` on the same user), normalizes input, rejects malformed `@` input, rejects synthetic dependent emails and placeholder phones, and works with encrypted email storage
 - **does not** treat phone-only or address-only records as portal accounts — those truthful paper/admin records do not match public sign-in, account access, or WebAuthn recovery
-- public self-registration requires a real email address; phone is optional, requires an explicit phone type when present, and adds an alternate login identifier only when it can be stored on the new email-backed portal account; duplicate-contact blocks use neutral public copy and must not reveal whether the match was email, phone, or delivery-capable, while phone-only paper/admin records do not enter public duplicate handoff
+- public self-registration requires a real email address; phone is optional, requires an explicit phone type when present, and adds an alternate login identifier only when it can be stored on the new email-backed portal account; duplicate email redirects to sign-in without authenticating or exposing the submitted email, while duplicate phone/contact collisions render support-only copy and must not reveal whether the match was email-backed, phone-only, paper/admin-created, text-capable, or delivery-capable
 - checks account lock state before password authentication
 - records failed password attempts
 - signs the user in immediately when no second factor is enabled

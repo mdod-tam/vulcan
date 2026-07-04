@@ -195,11 +195,11 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes assigns(:user).errors[:phone], 'must be a valid 10-digit US phone number'
   end
 
-  def test_should_not_create_user_with_existing_email
+  def test_existing_email_redirects_to_sign_in_without_creating_account
     # Use FactoryBot to create an existing user
     existing_user = create(:constituent)
 
-    assert_no_difference('User.count') do
+    assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: existing_user.email, # Already exists
         password: 'password123',
@@ -215,15 +215,39 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_nil assigns(:account_access_user)
-    assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
-    assert_select 'form[action=?]', password_path, count: 0
-    assert_select 'input[name=?]', 'contact', count: 0
-    assert_select 'input[value=?]', 'Send account access link', count: 0
-    assert_no_match(/that email|that phone/i, response.body)
+    assert_redirected_to sign_in_path(locale: 'en')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
+    assert_no_match(existing_user.email, flash[:notice])
+    assert_no_match(existing_user.email, response.location)
+
+    follow_redirect!
+    assert_response :success
+    assert_select '[data-testid=?]', 'flash-notice',
+                  text: I18n.t('portal_self_service.registrations.existing_email_account')
+    assert_select '#contact-input[value=?]', existing_user.email, count: 0
+  end
+
+  def test_existing_email_redirect_normalizes_uppercase_and_whitespace
+    existing_user = create(:constituent, email: "duplicate-case-#{SecureRandom.hex(4)}@example.com")
+
+    assert_no_difference(['User.count', 'Session.count']) do
+      post sign_up_path, params: { user: {
+        email: "  #{existing_user.email.upcase}  ",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'User',
+        date_of_birth: '1990-01-01',
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+        phone_type: 'voice',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_redirected_to sign_in_path(locale: 'en')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
   end
 
   def test_should_not_create_user_with_existing_phone
@@ -254,7 +278,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
     assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
+    assert_no_sign_in_cta
     assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[name=?]', 'contact', count: 0
     assert_select 'input[value=?]', 'Send account access link', count: 0
@@ -371,7 +395,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
     assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
+    assert_no_sign_in_cta
     assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[name=?]', 'contact', count: 0
     assert_select 'input[value=?]', 'Send account access link', count: 0
@@ -417,6 +441,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
     assert_select 'h2', /We couldn't complete your registration/
+    assert_no_sign_in_cta
     assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[name=?]', 'contact', count: 0
   end
@@ -539,17 +564,17 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert assigns(:registration_support_needed)
     assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
+    assert_no_sign_in_cta
     assert_select 'a[href^=?]', 'mailto:'
     assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[value=?]', 'Send account access link', count: 0
     assert_no_match(/that email|that phone/i, response.body)
   end
 
-  def test_duplicate_registration_prompt_preserves_spanish_locale_on_sign_in_link
+  def test_duplicate_email_redirect_preserves_spanish_locale
     existing_user = create(:constituent, email: "duplicate-es-#{SecureRandom.hex(4)}@example.com")
 
-    assert_no_difference('User.count') do
+    assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: existing_user.email,
         password: 'password123',
@@ -565,20 +590,16 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_select 'h2', /No pudimos completar su registro/
-    assert_select 'a[href=?]', sign_in_path(locale: 'es'), text: I18n.t('portal_self_service.registrations.log_in_cta', locale: :es)
-    assert_select 'form[action=?]', password_path, count: 0
-    assert_select 'input[name=?]', 'contact', count: 0
+    assert_redirected_to sign_in_path(locale: 'es')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account', locale: :es), flash[:notice]
   end
 
-  def test_should_show_support_message_when_email_and_phone_match_different_accounts
+  def test_duplicate_email_takes_precedence_when_phone_matches_different_account
     email_user = create(:constituent, email: "email-match-#{SecureRandom.hex(4)}@example.com")
     phone_user = create(:constituent, email: "phone-match-#{SecureRandom.hex(4)}@example.com",
                                       phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
 
-    assert_no_difference('User.count') do
+    assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: email_user.email,
         password: 'password123',
@@ -594,12 +615,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a[href^=?]', 'mailto:'
-    assert_select 'input[value=?]', 'Send account access link', count: 0
-    assert_no_match(/that email|that phone/i, response.body)
+    assert_redirected_to sign_in_path(locale: 'en')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
   end
 
   def test_should_create_user_but_flag_for_review_on_name_dob_match
@@ -789,5 +806,15 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal [email], sent_email.to
     assert_equal 'Bienvenido ES', sent_email.subject
     assert_includes sent_email.body.to_s, 'ES body Prueba Prueba Usuario'
+  end
+
+  private
+
+  def assert_no_sign_in_cta
+    assert_select 'footer.text-center', count: 0
+    assert_select 'a[href=?]', sign_in_path, count: 0
+    assert_select 'a[href=?]', sign_in_path(locale: 'en'), count: 0
+    assert_select 'a', text: I18n.t('shared.header.sign_in'), count: 0
+    assert_select 'a', text: I18n.t('portal_self_service.registrations.sign_in_link'), count: 0
   end
 end

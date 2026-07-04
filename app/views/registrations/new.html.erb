@@ -34,11 +34,6 @@
         <p class="text-sm">
           <%= t("portal_self_service.registrations.registration_blocked_body", support_email: mail_to(@support_email)).html_safe %>
         </p>
-        <div class="mt-4">
-          <%= link_to t("portal_self_service.registrations.log_in_cta"),
-                      sign_in_path(locale: public_form_locale_param),
-                      class: "block w-full text-center bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" %>
-        </div>
       </div>
     <% end %>
 
@@ -336,10 +331,12 @@
               data: { disable_with: t("portal_self_service.registrations.submitting"), "aria-busy": "true" } %>
         </div>
 
-        <!-- Sign In -->
-        <footer class="text-center">
-          <p class="text-sm text-gray-700"><%= t("portal_self_service.registrations.sign_in_prompt") %> <%= link_to t("portal_self_service.registrations.sign_in_link"), sign_in_path(locale: public_form_locale_param), class: "font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" %></p>
-        </footer>
+        <% unless @registration_support_needed %>
+          <!-- Sign In -->
+          <footer class="text-center">
+            <p class="text-sm text-gray-700"><%= t("portal_self_service.registrations.sign_in_prompt") %> <%= link_to t("portal_self_service.registrations.sign_in_link"), sign_in_path(locale: public_form_locale_param), class: "font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" %></p>
+          </footer>
+        <% end %>
 
       <% end %>
     </main>

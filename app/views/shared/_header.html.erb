@@ -131,7 +131,7 @@
                     data: { turbo: false },
                     class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
                     aria: { label: "Sign out of your account" } %>
-            <% else %>
+            <% elsif !@hide_public_auth_links %>
               <div class="flex space-x-4">
                 <%= link_to t("shared.header.sign_in"),
                     sign_in_path(locale: public_request_locale_param),
@@ -195,7 +195,7 @@
                 class: "mt-1 block w-full px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
                 aria: { label: "Sign out of your account" } %>
           </div>
-        <% else %>
+        <% elsif !@hide_public_auth_links %>
           <div class="px-4 space-y-1">
             <%= link_to t("shared.header.sign_in"),
                 sign_in_path(locale: public_request_locale_param),

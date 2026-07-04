@@ -23,7 +23,13 @@ class RegistrationsController < ApplicationController
 
   def create
     build_user
-    return render_duplicate_account_prompt if duplicate_account_match?
+
+    case duplicate_registration_outcome
+    when :existing_email_account
+      return redirect_existing_email_account
+    when :contact_conflict
+      return render_duplicate_account_prompt
+    end
 
     # Check for potential duplicates based on Name + DOB and flag for admin review
     @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
@@ -77,15 +83,23 @@ class RegistrationsController < ApplicationController
     @user.phone_type = nil if @user.phone.present? && !@user.phone_type_submitted
   end
 
-  def duplicate_account_match?
-    email_user = email_backed_duplicate_for(registration_params[:email])
-    phone_user = phone_duplicate_for_registration_contact(registration_params[:phone])
+  def duplicate_registration_outcome
+    return :existing_email_account if email_backed_duplicate_for(registration_params[:email]).present?
+    return :contact_conflict if phone_duplicate_for_registration_contact(registration_params[:phone]).present?
 
-    return false if email_user.blank? && phone_user.blank?
+    nil
+  end
 
+  def redirect_existing_email_account
+    redirect_to sign_in_path(locale: public_form_locale_param),
+                notice: t('portal_self_service.registrations.existing_email_account')
+  end
+
+  def render_duplicate_account_prompt
     @registration_support_needed = true
+    @hide_public_auth_links = true
     @support_email = support_email
-    true
+    render :new, status: :unprocessable_content
   end
 
   def email_backed_duplicate_for(email)
@@ -104,10 +118,6 @@ class RegistrationsController < ApplicationController
     return nil unless user&.real_phone?
 
     user
-  end
-
-  def render_duplicate_account_prompt
-    render :new, status: :unprocessable_content
   end
 
   def create_session_and_cookie

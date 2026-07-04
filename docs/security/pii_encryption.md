@@ -76,7 +76,7 @@ These helpers normalize email and phone values before querying and rescue lookup
 Current adoption by path:
 
 - `User.find_by_login_identifier` — public sign-in and account recovery (email-backed portal accounts only; phone lookup requires `real_email?` and `real_phone?` on the matched user)
-- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, and other existing lookup paths. Public registration may use phone lookup to detect a paper/admin conflict, but only email-backed portal matches can block signup or enter public duplicate handoff. A phone-only paper/admin match must not become a public login identity; public signup creates the email-backed portal account without copying that phone and leaves an admin duplicate-review signal instead.
+- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, and other existing lookup paths. Public registration redirects duplicate email-backed account matches to sign-in without authenticating or exposing the submitted email. Public registration also uses phone lookup to detect stored-phone contact collisions, including phone-only paper/admin records; those collisions render support-only copy, create no portal account, and do not set `needs_duplicate_review`. A phone-only paper/admin match must not become a public login identity.
 - `User.find_for_account_access` — account-access identity lookup plus separate delivery selection in `PasswordsController#create`
 
 Direct Rails equality queries on deterministic encrypted fields can work, but new code should use the helpers where contact lookup or uniqueness is the point. That keeps normalization and failure behavior consistent.
