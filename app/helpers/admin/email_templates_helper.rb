@@ -315,7 +315,7 @@ module Admin
         'stale_reviews_text_list' => "- App 1\n- App 2\n- App 3\n- App 4\n- App 5",
         'constituent_disabilities_text_list' => "- Disability 1\n- Disability 2",
         'evaluators_evaluation_url' => 'http://example.com/evaluators/evaluations/1',
-        'verification_url' => 'http://example.com/identity/email_verifications/TOKEN',
+        'verification_url' => 'EMAIL_VERIFICATION_FLOW_NOT_CONFIGURED',
         'reset_url' => 'http://example.com/identity/password_resets/TOKEN',
         'invoice_number' => 'INV-2025-001',
         'total_amount_formatted' => '$1,234.56',

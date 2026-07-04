@@ -151,6 +151,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     old_cache = Rails.cache
     Rails.cache = ActiveSupport::Cache::MemoryStore.new
     contact = "unknown-#{SecureRandom.hex(4)}@example.com"
+    User.expects(:system_user).never
 
     AccountRecoveryController::RECOVERY_REQUEST_RATE_LIMIT.times do
       assert_no_difference('RecoveryRequest.count') do
@@ -171,6 +172,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     end
 
     event = Event.where(action: 'security_key_recovery_unmatched_rate_limited').last
+    assert event.user.admin?
     assert event.metadata['submitted_contact_digest'].present?
     assert_not_includes event.metadata.values.join(' '), contact
   ensure
@@ -250,8 +252,8 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
 
     # Check for confirmation message content
-    assert_select 'h1', /Recovery Request Submitted/i
-    assert_match(/administrator will review your request/i, response.body)
+    assert_select 'h1', /Recovery Request Received/i
+    assert_match(/If the information provided matches a portal account/i, response.body)
     assert_no_match(/check your email/i, response.body)
     assert_select 'a[href=?]', sign_in_path
   end

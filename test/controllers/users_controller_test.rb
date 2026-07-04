@@ -74,6 +74,29 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_select '.bg-red-50', text: /error/i # Error message should be displayed
   end
 
+  test 'constituent cannot clear portal email from profile while keeping phone' do
+    @user.update!(phone: '410-555-0301', phone_type: 'text')
+    original_email = @user.email
+
+    assert_no_difference('Event.count') do
+      patch profile_path, params: {
+        user: {
+          first_name: @user.first_name,
+          last_name: @user.last_name,
+          email: '',
+          phone: @user.phone,
+          phone_type: @user.phone_type
+        }
+      }
+    end
+
+    assert_response :unprocessable_content
+    assert_select '#error_explanation', /Email can't be blank/
+    @user.reload
+    assert_equal original_email, @user.email
+    assert_equal @user, User.find_by_login_identifier(original_email)
+  end
+
   test 'should redirect admin to admin dashboard after update' do
     admin = create(:admin)
     sign_out

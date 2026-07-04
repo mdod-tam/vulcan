@@ -67,7 +67,7 @@ Use the helper methods on `User` for contact lookup:
 
 - `User.find_by_email(value)`
 - `User.find_by_phone(value)`
-- `User.find_by_login_identifier(value)` — public sign-in, account recovery, and other login-identity lookups; email-backed portal accounts only for phone-shaped input (`real_email?` and `real_phone?` required on the matched user); treats any `@` input as email-shaped, rejects malformed email strings without falling back to phone, and blocks synthetic dependent contacts
+- `User.find_by_login_identifier(value)` — public sign-in, account recovery, and other login-identity lookups. Email-shaped input is normalized and matched only to an email-backed public portal account; malformed `@` input is rejected without falling back to phone. Phone-shaped input is normalized and matched only when the same stored user is email-backed and has a real phone (`real_email?` and `real_phone?`). Phone-only paper/admin records and synthetic dependent contacts do not match public login lookup.
 - `User.exists_with_email?(value, excluding_id: nil)`
 - `User.exists_with_phone?(value, excluding_id: nil)`
 
@@ -76,7 +76,7 @@ These helpers normalize email and phone values before querying and rescue lookup
 Current adoption by path:
 
 - `User.find_by_login_identifier` — public sign-in and account recovery (email-backed portal accounts only; phone lookup requires `real_email?` and `real_phone?` on the matched user)
-- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, and other existing lookup paths
+- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, and other existing lookup paths. Public registration may use phone lookup to detect a paper/admin conflict, but only email-backed portal matches can block signup or enter public duplicate handoff. A phone-only paper/admin match must not become a public login identity; public signup creates the email-backed portal account without copying that phone and leaves an admin duplicate-review signal instead.
 - `User.find_for_account_access` — account-access identity lookup plus separate delivery selection in `PasswordsController#create`
 
 Direct Rails equality queries on deterministic encrypted fields can work, but new code should use the helpers where contact lookup or uniqueness is the point. That keeps normalization and failure behavior consistent.

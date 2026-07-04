@@ -345,6 +345,34 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_equal 'preference', notification.metadata['delivery_route_reason']
   end
 
+  test 'security key recovery approval records email-only delivery even for letter preference' do
+    @constituent.update!(
+      communication_preference: 'letter',
+      physical_address_1: '123 Main St',
+      city: 'Baltimore',
+      state: 'MD',
+      zip_code: '21201'
+    )
+    recovery_request = create(:recovery_request, user: @constituent)
+    mail_delivery = mock('mail_delivery')
+    mail_delivery.expects(:deliver_later).returns(true)
+    ApplicationNotificationsMailer.expects(:security_key_recovery_approved)
+                                  .with(recovery_request, instance_of(Notification))
+                                  .returns(mail_delivery)
+
+    notification = NotificationService.create_and_deliver!(
+      type: :security_key_recovery_approved,
+      recipient: @constituent,
+      actor: @admin,
+      notifiable: recovery_request,
+      channel: :email
+    )
+
+    assert_not_nil notification
+    assert_equal 'email', notification.reload.metadata['actual_delivery_channel']
+    assert_equal 'email_only', notification.metadata['delivery_route_reason']
+  end
+
   test 'training_rescheduled routes session and notification metadata to training mailer' do
     trainer = create(:trainer)
     training_session = create(:training_session, application: @application, trainer: trainer)

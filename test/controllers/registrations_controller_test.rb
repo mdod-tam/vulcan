@@ -41,6 +41,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   def test_should_get_new
     get sign_up_path
     assert_response :success
+    assert_select '#phone-hint', text: I18n.t('portal_self_service.registrations.phone_hint')
+    assert_no_match(/You can use this number to sign in/i, response.body)
   end
 
   def test_should_create_constituent_with_required_fields
@@ -214,9 +216,14 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'h2', /An account already exists with that email/
+    assert assigns(:registration_support_needed)
+    assert_nil assigns(:account_access_user)
+    assert_select 'h2', /We couldn't complete your registration/
     assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
-    assert_select 'input[value=?]', 'Send account access link'
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
+    assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/that email|that phone/i, response.body)
   end
 
   def test_should_not_create_user_with_existing_phone
@@ -244,9 +251,14 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'h2', /An account already exists with that phone/
+    assert assigns(:registration_support_needed)
+    assert_nil assigns(:account_access_user)
+    assert_select 'h2', /We couldn't complete your registration/
     assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
-    assert_select 'input[value=?]', 'Send account access link'
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
+    assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/that email|that phone/i, response.body)
   end
 
   def test_should_create_constituent_with_email_only_without_phone
@@ -319,7 +331,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes assigns(:user).errors[:email], "can't be blank"
   end
 
-  def test_phone_only_paper_record_does_not_get_public_match_or_account_access_prompt
+  def test_phone_only_paper_record_does_not_block_public_registration_or_become_portal_phone
     phone = '410-555-0199'
     Current.paper_context = true
     begin
@@ -337,9 +349,11 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       Current.reset
     end
 
-    assert_no_difference('User.count') do
+    submitted_email = "new-signup-#{SecureRandom.hex(4)}@example.com"
+
+    assert_difference('User.count', 1) do
       post sign_up_path, params: { user: {
-        email: "new-signup-#{SecureRandom.hex(4)}@example.com",
+        email: submitted_email,
         password: 'password123',
         password_confirmation: 'password123',
         first_name: 'New',
@@ -353,16 +367,51 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_response :unprocessable_content
+    assert_redirected_to welcome_path
+    created_user = User.find_by!(email: submitted_email)
+    assert created_user.real_email?
+    assert_nil created_user.phone
+    assert_equal 'contact_email', created_user.phone_type
+    assert created_user.needs_duplicate_review?
     assert_nil assigns(:account_access_user)
-    assert_not assigns(:account_access_conflict)
-    assert_select 'h2', { text: /We need help finishing your registration/, count: 0 }
-    assert_select 'h2', { text: /An account already exists/, count: 0 }
-    assert_select 'input[value=?]', 'Send account access link', count: 0
-    assert_empty assigns(:user).errors[:phone]
-    assert_includes assigns(:user).errors[:base].join, 'Portal accounts require an email address'
-    assert_includes assigns(:user).errors[:base].join, 'contact the MAT Team'
-    assert_not_includes response.body, 'has already been taken'
+    assert_nil assigns(:registration_support_needed)
+  end
+
+  def test_phone_only_paper_record_does_not_render_public_duplicate_handoff
+    phone = '410-555-0196'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Paper', last_name: 'PhoneOnlyNoHandoff',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    post sign_up_path, params: { user: {
+      email: "new-no-handoff-#{SecureRandom.hex(4)}@example.com",
+      password: 'password123',
+      password_confirmation: 'password123',
+      first_name: 'New',
+      last_name: 'Registrant',
+      date_of_birth: '1990-01-01',
+      phone: phone,
+      phone_type: 'text',
+      timezone: 'Eastern Time (US & Canada)',
+      locale: 'en',
+      hearing_disability: true
+    } }
+
+    assert_redirected_to welcome_path
+    assert_nil assigns(:account_access_user)
+    assert_nil assigns(:registration_support_needed)
   end
 
   def test_re_render_preserves_submitted_phone_type_selection
@@ -432,6 +481,31 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'input#phone_type_voice[checked=checked]', count: 0
   end
 
+  def test_rejects_non_phone_contact_method_as_phone_type_when_phone_is_present
+    { 'email' => '555-555-7790', 'letter' => '555-555-7791' }.each do |submitted_phone_type, phone|
+      assert_no_difference('User.count') do
+        post sign_up_path, params: { user: {
+          email: "invalid-phone-type-#{submitted_phone_type}-#{SecureRandom.hex(4)}@example.com",
+          password: 'password123',
+          password_confirmation: 'password123',
+          first_name: 'Phone',
+          last_name: 'Type',
+          date_of_birth: '1990-01-01',
+          phone: phone,
+          phone_type: submitted_phone_type,
+          timezone: 'Eastern Time (US & Canada)',
+          locale: 'en',
+          hearing_disability: true
+        } }
+      end
+
+      assert_response :unprocessable_content
+      assert_includes assigns(:user).errors[:phone_type],
+                      I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
+      assert_nil assigns(:user).phone_type
+    end
+  end
+
   def test_should_not_offer_account_access_link_for_non_sms_phone_match
     test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
     create(:constituent,
@@ -456,10 +530,40 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'h2', /An account already exists with that phone/
+    assert assigns(:registration_support_needed)
+    assert_select 'h2', /We couldn't complete your registration/
     assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
     assert_select 'a[href^=?]', 'mailto:'
+    assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/that email|that phone/i, response.body)
+  end
+
+  def test_duplicate_registration_prompt_preserves_spanish_locale_on_sign_in_link
+    existing_user = create(:constituent, email: "duplicate-es-#{SecureRandom.hex(4)}@example.com")
+
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: existing_user.email,
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Nuevo',
+        last_name: 'Usuario',
+        date_of_birth: '1990-01-01',
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+        phone_type: 'text',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'es',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert assigns(:registration_support_needed)
+    assert_select 'h2', /No pudimos completar su registro/
+    assert_select 'a[href=?]', sign_in_path(locale: 'es'), text: I18n.t('portal_self_service.registrations.log_in_cta', locale: :es)
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
   end
 
   def test_should_show_support_message_when_email_and_phone_match_different_accounts
@@ -484,9 +588,11 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'h2', /We found conflicting account information/
+    assert assigns(:registration_support_needed)
+    assert_select 'h2', /We couldn't complete your registration/
     assert_select 'a[href^=?]', 'mailto:'
     assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/that email|that phone/i, response.body)
   end
 
   def test_should_create_user_but_flag_for_review_on_name_dob_match

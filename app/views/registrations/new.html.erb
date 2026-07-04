@@ -2,8 +2,8 @@
 <a href="#signup-form"
    class="sr-only focus:not-sr-only absolute top-2 left-2 p-2 bg-white border border-gray-300 text-gray-700 rounded focus:z-50"
    role="link"
-   aria-label="Skip to sign up form">
-  Skip to main content
+   aria-label="<%= t('portal_self_service.registrations.skip_to_form') %>">
+  <%= t('portal_self_service.registrations.skip_to_form') %>
 </a>
 
 <div class="flex items-center justify-center bg-gray-100 px-4 py-12">
@@ -11,11 +11,13 @@
     <!-- Page Heading -->
     <header>
       <h1 id="signup-heading" class="text-2xl font-semibold mb-6 text-center text-gray-900">
-        Create Account
+        <%= t("portal_self_service.registrations.title") %>
       </h1>
     </header>
 
-    <p style="text-align: center;" class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
+    <p style="text-align: center;" class="text-l text-gray-900">
+      <span style="color: red;">*</span> <%= t("portal_self_service.registrations.required_indicator") %>
+    </p>
 
     <!-- Flash/Alert Messages -->
     <% if flash[:alert] %>
@@ -25,44 +27,19 @@
       </div>
     <% end %>
 
-    <% if @account_access_conflict %>
+    <% if @registration_support_needed %>
       <div role="alert" aria-live="assertive"
            class="bg-yellow-50 border border-yellow-400 text-yellow-900 px-4 py-3 rounded mb-6">
-        <h2 class="font-semibold mb-2"><%= t("portal_self_service.registrations.duplicate_conflict_heading") %></h2>
+        <h2 class="font-semibold mb-2"><%= t("portal_self_service.registrations.registration_blocked_heading") %></h2>
         <p class="text-sm">
-          <%= t("portal_self_service.registrations.duplicate_conflict_body", support_email: mail_to(@support_email)).html_safe %>
+          <%= t("portal_self_service.registrations.registration_blocked_body", support_email: mail_to(@support_email)).html_safe %>
         </p>
-      </div>
-    <% elsif @account_access_user.present? %>
-      <section class="bg-blue-50 border border-blue-300 text-blue-900 px-4 py-4 rounded mb-6">
-        <h2 id="account-access-heading" class="font-semibold mb-2">
-          <%= t(
-                "portal_self_service.registrations.duplicate_exists_heading",
-                match_type: t("portal_self_service.registrations.match_type.#{@account_access_match_type}")
-              ) %>
-        </h2>
-        <% if @account_access_available %>
-          <p class="text-sm mb-4">
-            <%= t("portal_self_service.registrations.duplicate_available_body") %>
-          </p>
-        <% else %>
-          <p class="text-sm mb-4">
-            <%= t("portal_self_service.registrations.duplicate_no_link_body", support_email: mail_to(@support_email)).html_safe %>
-          </p>
-        <% end %>
-        <div class="space-y-3">
+        <div class="mt-4">
           <%= link_to t("portal_self_service.registrations.log_in_cta"),
-                      sign_in_path,
+                      sign_in_path(locale: public_form_locale_param),
                       class: "block w-full text-center bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" %>
-          <% if @account_access_available %>
-            <%= form_with url: password_path, method: :post, local: true do |access_form| %>
-              <%= access_form.hidden_field :contact, value: @account_access_contact %>
-              <%= access_form.submit t("portal_self_service.registrations.send_access_link"),
-                  class: "w-full bg-white text-indigo-700 border border-indigo-500 px-4 py-2 rounded-md hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" %>
-            <% end %>
-          <% end %>
         </div>
-      </section>
+      </div>
     <% end %>
 
     <!-- Main Form -->
@@ -87,9 +64,9 @@
 
         <!-- Name Fields -->
         <fieldset class="mb-4">
-          <legend class="sr-only">Name</legend>
+          <legend class="sr-only"><%= t("portal_self_service.registrations.name_legend") %></legend>
           <div class="mb-4">
-            <%= form.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+            <%= form.label :first_name, t("portal_self_service.registrations.first_name_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
             <%= form.text_field :first_name, required: true, autofocus: true,
                 class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm",
                 aria: { required: "true", invalid: @user.errors[:first_name].any?, errormessage: "first-name-error" } %>
@@ -98,12 +75,12 @@
             <% end %>
           </div>
           <div class="mb-4">
-            <%= form.label :middle_initial, "Middle Initial (Optional)", class: "block text-sm font-medium text-gray-700 mb-1" %>
+            <%= form.label :middle_initial, t("portal_self_service.registrations.middle_initial_label"), class: "block text-sm font-medium text-gray-700 mb-1" %>
             <%= form.text_field :middle_initial, maxlength: 1,
                 class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm" %>
           </div>
           <div class="mb-4">
-            <%= form.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+            <%= form.label :last_name, t("portal_self_service.registrations.last_name_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
             <%= form.text_field :last_name, required: true,
                 class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm",
                 aria: { required: "true", invalid: @user.errors[:last_name].any?, errormessage: "last-name-error" } %>
@@ -116,9 +93,9 @@
         <!-- Contact Fields -->
         <div data-controller="optional-phone-type">
         <fieldset class="mb-4">
-          <legend class="sr-only">Contact Information</legend>
+          <legend class="sr-only"><%= t("portal_self_service.registrations.contact_legend") %></legend>
           <div class="mb-4">
-            <%= form.label :email, "Email Address", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+            <%= form.label :email, t("portal_self_service.registrations.email_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
             <%= form.email_field :email, id: "user_email", required: true, autocomplete: "email",
                 class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm",
                 aria: { required: "true", invalid: @user.errors[:email].any?, errormessage: "email-error" } %>
@@ -127,7 +104,7 @@
             <% end %>
           </div>
           <div class="mb-4">
-            <%= form.label :phone, "Phone Number (Optional)", class: "block text-sm font-medium text-gray-700 mb-1" %>
+            <%= form.label :phone, t("portal_self_service.registrations.phone_label"), class: "block text-sm font-medium text-gray-700 mb-1" %>
             <%= form.telephone_field :phone, pattern: "[0-9]{3}-?[0-9]{3}-?[0-9]{4}", placeholder: "202-555-5555",
                 class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm",
                 aria: { invalid: @user.errors[:phone].any?, errormessage: "phone-error", describedby: "phone-hint" },
@@ -157,7 +134,7 @@
                        disabled: @user.phone.blank?,
                        required: @user.phone.present?,
                        aria: { required: @user.phone.present?.to_s } %>
-                <%= form.label :phone_type_voice, "Voice", for: "phone_type_voice", class: "ml-3 text-sm text-gray-700" %>
+                <%= form.label :phone_type_voice, t("portal_self_service.registrations.phone_type_options.voice"), for: "phone_type_voice", class: "ml-3 text-sm text-gray-700" %>
               </div>
               <div class="flex items-center">
                 <%= form.radio_button :phone_type, "videophone", id: "phone_type_videophone",
@@ -165,7 +142,7 @@
                        disabled: @user.phone.blank?,
                        required: @user.phone.present?,
                        aria: { required: @user.phone.present?.to_s } %>
-                <%= form.label :phone_type_videophone, "Videophone", for: "phone_type_videophone", class: "ml-3 text-sm text-gray-700" %>
+                <%= form.label :phone_type_videophone, t("portal_self_service.registrations.phone_type_options.videophone"), for: "phone_type_videophone", class: "ml-3 text-sm text-gray-700" %>
               </div>
               <div class="flex items-center">
                 <%= form.radio_button :phone_type, "text", id: "phone_type_text",
@@ -173,7 +150,7 @@
                        disabled: @user.phone.blank?,
                        required: @user.phone.present?,
                        aria: { required: @user.phone.present?.to_s } %>
-                <%= form.label :phone_type_text, "Text/SMS", for: "phone_type_text", class: "ml-3 text-sm text-gray-700" %>
+                <%= form.label :phone_type_text, t("portal_self_service.registrations.phone_type_options.text"), for: "phone_type_text", class: "ml-3 text-sm text-gray-700" %>
               </div>
             </div>
             <% if @user.errors[:phone_type].any? %>
@@ -185,9 +162,9 @@
 
         <!-- Security Fields -->
         <fieldset class="mb-4">
-          <legend class="sr-only">Security</legend>
+          <legend class="sr-only"><%= t("portal_self_service.registrations.security_legend") %></legend>
           <div class="mb-4">
-            <%= form.label :password, "Password", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+            <%= form.label :password, t("portal_self_service.registrations.password_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
             <div class="relative" <%= tag.attributes(data: password_visibility_data(timeout: 5000)) %>>
               <%= form.password_field :password, required: true, minlength: 6, autocomplete: "new-password",
                   class: "block w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm", # Added pr-10
@@ -212,13 +189,13 @@
                 <%= t('password_visibility.status.hidden') %>
               </div>
             </div>
-            <p id="password-hint" class="text-xs text-gray-700">Minimum 6 characters</p>
+            <p id="password-hint" class="text-xs text-gray-700"><%= t("portal_self_service.registrations.password_hint") %></p>
             <% if @user.errors[:password].any? %>
               <p id="password-error" role="alert" class="mt-1 text-sm text-red-600"><%= @user.errors[:password].join(", ") %></p>
             <% end %>
           </div>
           <div class="mb-4">
-            <%= form.label :password_confirmation, "Confirm Password", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+            <%= form.label :password_confirmation, t("portal_self_service.registrations.password_confirmation_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
             <div class="relative" <%= tag.attributes(data: password_visibility_data(timeout: 5000)) %>>
               <%= form.password_field :password_confirmation, required: true, minlength: 6, autocomplete: "new-password",
                   class: "block w-full px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm", # Added pr-10
@@ -251,16 +228,16 @@
 
         <!-- Date of Birth -->
         <div class="mb-4">
-          <%= form.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+          <%= form.label :date_of_birth, t("portal_self_service.registrations.date_of_birth_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
           <%= form.text_field :date_of_birth,
               required: true,
               value: accessible_date_value(@user.date_of_birth),
-              placeholder: "MM/DD/YYYY",
+              placeholder: t("portal_self_service.registrations.date_of_birth_placeholder"),
               autocomplete: "bday",
               inputmode: "numeric",
               class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm",
               aria: { required: "true", invalid: @user.errors[:date_of_birth].any?, errormessage: "dob-error", describedby: "dob-hint" } %>
-          <p id="dob-hint" class="text-xs text-gray-500 mt-1">Enter date of birth as MM/DD/YYYY</p>
+          <p id="dob-hint" class="text-xs text-gray-500 mt-1"><%= t("portal_self_service.registrations.date_of_birth_hint") %></p>
           <% if @user.errors[:date_of_birth].any? %>
             <p id="dob-error" role="alert" class="mt-1 text-sm text-red-600"><%= @user.errors[:date_of_birth].join(", ") %></p>
           <% end %>
@@ -268,12 +245,17 @@
 
         <!-- Language Preference -->
         <div class="mb-4">
-          <%= form.label :locale, "Language Preference", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
-          <%= form.select :locale, [["English","en"],["Spanish","es"]], { prompt: "Select Language" },
+          <%= form.label :locale, t("portal_self_service.registrations.language_preference_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+          <%= form.select :locale,
+              [
+                [t("portal_self_service.registrations.language_options.en"), "en"],
+                [t("portal_self_service.registrations.language_options.es"), "es"]
+              ],
+              { prompt: t("portal_self_service.registrations.language_prompt") },
               class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm",
               required: true,
               aria: { required: "true", invalid: @user.errors[:locale].any?, errormessage: "locale-error", describedby: "language-hint" } %>
-          <p id="language-hint" class="text-xs text-gray-500 mt-1">Select from our supported languages</p>
+          <p id="language-hint" class="text-xs text-gray-500 mt-1"><%= t("portal_self_service.registrations.language_hint") %></p>
           <% if @user.errors[:locale].any? %>
             <p id="locale-error" role="alert" class="mt-1 text-sm text-red-600"><%= @user.errors[:locale].join(", ") %></p>
           <% end %>
@@ -281,67 +263,53 @@
 
         <!-- Notification Method -->
         <fieldset class="mb-4" data-controller="delivery-preference">
-          <legend id="comm-pref-legend" class="block text-sm font-medium text-gray-700 mb-1">Notification Method</legend>
+          <legend id="comm-pref-legend" class="block text-sm font-medium text-gray-700 mb-1"><%= t("portal_self_service.registrations.notification_method_label") %></legend>
           <div class="space-y-2">
             <div class="flex items-center">
               <%= form.radio_button :communication_preference, "email", id: "pref_email", checked: true,
                      class: "h-4 w-4 focus:ring-indigo-500",
                      data: { action: "delivery-preference#togglePreference", "delivery-preference-target": "emailRadio" } %>
-              <%= form.label :communication_preference_email, "Email", for: "pref_email", class: "ml-3 text-sm text-gray-700" %>
+              <%= form.label :communication_preference_email, t("portal_self_service.registrations.notification_email_label"), for: "pref_email", class: "ml-3 text-sm text-gray-700" %>
             </div>
             <div class="flex items-center">
               <%= form.radio_button :communication_preference, "letter", id: "pref_letter",
                      class: "h-4 w-4 focus:ring-indigo-500",
                      data: { action: "delivery-preference#togglePreference", "delivery-preference-target": "letterRadio" } %>
-              <%= form.label :communication_preference_letter, "Mailed Letter", for: "pref_letter", class: "ml-3 text-sm text-gray-700" %>
+              <%= form.label :communication_preference_letter, t("portal_self_service.registrations.notification_letter_label"), for: "pref_letter", class: "ml-3 text-sm text-gray-700" %>
             </div>
           </div>
 
           <div id="mail-notice" class="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 hidden" aria-hidden="true" data-delivery-preference-target="notice">
-            <p><strong>Note:</strong> You will receive notifications by printed letter.</p>
+            <p><strong><%= t("portal_self_service.registrations.mail_notice_label") %></strong> <%= t("portal_self_service.registrations.mail_notice") %></p>
           </div>
 
           <div id="address_fields" class="mt-4 hidden" aria-hidden="true" data-delivery-preference-target="addressFields">
             <div class="mb-4">
-              <%= form.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+              <%= form.label :physical_address_1, t("portal_self_service.registrations.street_address_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
               <%= form.text_field :physical_address_1, disabled: true,
                      class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm" %>
             </div>
             <div class="mb-4">
-              <%= form.label :physical_address_2, "Apt/Suite (Optional)", class: "block text-sm font-medium text-gray-700 mb-1" %>
+              <%= form.label :physical_address_2, t("portal_self_service.registrations.address_2_label"), class: "block text-sm font-medium text-gray-700 mb-1" %>
               <%= form.text_field :physical_address_2, disabled: true,
                      class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm" %>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <%= form.label :city, "City", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+                <%= form.label :city, t("portal_self_service.registrations.city_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
                 <%= form.text_field :city, disabled: true,
                        class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm" %>
               </div>
               <div>
-                <%= form.label :state, "State", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+                <%= form.label :state, t("portal_self_service.registrations.state_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
                 <%= form.select :state,
-                    [
-                      ['Alabama', 'AL'], ['Alaska', 'AK'], ['Arizona', 'AZ'], ['Arkansas', 'AR'],
-                      ['California', 'CA'], ['Colorado', 'CO'], ['Connecticut', 'CT'], ['Delaware', 'DE'],
-                      ['Florida', 'FL'], ['Georgia', 'GA'], ['Hawaii', 'HI'], ['Idaho', 'ID'],
-                      ['Illinois', 'IL'], ['Indiana', 'IN'], ['Iowa', 'IA'], ['Kansas', 'KS'],
-                      ['Kentucky', 'KY'], ['Louisiana', 'LA'], ['Maine', 'ME'], ['Maryland', 'MD'],
-                      ['Massachusetts', 'MA'], ['Michigan', 'MI'], ['Minnesota', 'MN'], ['Mississippi', 'MS'],
-                      ['Missouri', 'MO'], ['Montana', 'MT'], ['Nebraska', 'NE'], ['Nevada', 'NV'],
-                      ['New Hampshire', 'NH'], ['New Jersey', 'NJ'], ['New Mexico', 'NM'], ['New York', 'NY'],
-                      ['North Carolina', 'NC'], ['North Dakota', 'ND'], ['Ohio', 'OH'], ['Oklahoma', 'OK'],
-                      ['Oregon', 'OR'], ['Pennsylvania', 'PA'], ['Rhode Island', 'RI'], ['South Carolina', 'SC'],
-                      ['South Dakota', 'SD'], ['Tennessee', 'TN'], ['Texas', 'TX'], ['Utah', 'UT'],
-                      ['Vermont', 'VT'], ['Virginia', 'VA'], ['Washington', 'WA'], ['West Virginia', 'WV'],
-                      ['Wisconsin', 'WI'], ['Wyoming', 'WY'], ['District of Columbia', 'DC']
-                    ],
+                    us_states_options,
                     { selected: @user.state || 'MD' },
                     { disabled: true,
                       class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm" } %>
               </div>
               <div>
-                <%= form.label :zip_code, "Zip Code", class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
+                <%= form.label :zip_code, t("portal_self_service.registrations.zip_code_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
                 <%= form.text_field :zip_code, disabled: true, placeholder: "12345", pattern: "[0-9]{5}(-[0-9]{4})?",
                        class: "block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm" %>
               </div>
@@ -356,21 +324,21 @@
                 id: "newsletter_signup",
                 class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
             <%= form.label :newsletter_signup,
-                "Sign up for our newsletter to receive updates about MAT programs and services",
+                t("portal_self_service.registrations.newsletter_signup"),
                 class: "ml-2 block text-sm text-gray-700" %>
           </div>
         </div>
 
         <!-- Submit -->
         <div class="mb-4">
-          <%= form.submit "Create Account",
+          <%= form.submit t("portal_self_service.registrations.submit"),
               class: "w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500",
-              data: { disable_with: "Creating account...", "aria-busy": "true" } %>
+              data: { disable_with: t("portal_self_service.registrations.submitting"), "aria-busy": "true" } %>
         </div>
 
         <!-- Sign In -->
         <footer class="text-center">
-          <p class="text-sm text-gray-700">Already have an account? <%= link_to "Sign In", sign_in_path, class: "font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" %></p>
+          <p class="text-sm text-gray-700"><%= t("portal_self_service.registrations.sign_in_prompt") %> <%= link_to t("portal_self_service.registrations.sign_in_link"), sign_in_path(locale: public_form_locale_param), class: "font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" %></p>
         </footer>
 
       <% end %>

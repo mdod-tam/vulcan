@@ -10,9 +10,10 @@ module UserAuthentication
   LOCK_DURATION = 1.hour
 
   included do
-    # Token generation for email verification and password reset
-    generates_token_for :password_reset, expires_in: 20.minutes
-    generates_token_for :email_verification, expires_in: 1.day
+    # Token generation for password reset
+    generates_token_for :password_reset, expires_in: 20.minutes do
+      password_digest&.last(10)
+    end
 
     has_secure_password
 

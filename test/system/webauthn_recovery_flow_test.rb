@@ -86,9 +86,9 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
     assert_current_path account_recovery_confirmation_path
 
     # Check confirmation page elements
-    assert_selector 'h1', text: 'Recovery Request Submitted'
-    assert_text 'administrator will review your request'
-    assert_link 'Return to Sign In'
+    assert_selector 'h1', text: 'Recovery Request Received'
+    assert_text 'If the information provided matches a portal account'
+    assert_link 'Back to sign in'
 
     # Verify request was created in the database
     assert RecoveryRequest.exists?(user_id: @user.id)

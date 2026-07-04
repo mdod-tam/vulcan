@@ -36,9 +36,21 @@ en:
       show: "Show password"
       hide: "Hide password"
   sessions:
+    title: "Sign In"
     form:
       contact_label: "Email Address or Phone Number"
       contact_hint: "Use your account email to sign in or request access. If your account has a phone number on file, you can also use that to identify your account. Account access links by text are sent only to text-capable phone numbers."
+      error_heading: "Please address the following errors:"
+      password_label: "Password"
+      password_hint: "Enter your password"
+      submit: "Sign In"
+      submitting: "Signing in..."
+      submit_aria: "Sign in to your account"
+      forgot_password: "Forgot password?"
+      forgot_password_aria: "Reset your password"
+      sign_up_prompt: "Don't have an account?"
+      sign_up: "Sign Up"
+      sign_up_aria: "Sign up for a new account"
   portal_self_service:
     contact_label: "Email Address or Phone Number"
     contact_hint: "Use your account email to sign in or request access. If your account has a phone number on file, you can also use that to identify your account. Account access links by text are sent only to text-capable phone numbers."
@@ -57,22 +69,59 @@ en:
       submit: "Submit Recovery Request"
       back_to_sign_in: "Back to sign in"
       remember_key_prompt: "Remember your security key?"
-      confirmation_title: "Recovery Request Submitted"
-      confirmation_body: "An administrator will review your request and contact you using the information on file for your account."
+      confirmation_title: "Recovery Request Received"
+      confirmation_body: "If the information provided matches a portal account and the request can be reviewed, an administrator will contact you using the information on file for that account."
     registrations:
-      duplicate_conflict_heading: "We found conflicting account information."
-      duplicate_conflict_body: "Please contact the MAT Team at %{support_email} for help accessing your account."
-      duplicate_exists_heading: "An account already exists with that %{match_type}."
-      duplicate_available_body: "You can sign in with your email address and password. If your account has a phone number on file, you can also use that to sign in. We can send an account access link when email or text-capable phone delivery is available on your account."
-      duplicate_no_link_body: "You can sign in with your email address and password. If your account has a phone number on file, you can also use that to sign in. To receive an account access link, please contact the MAT Team at %{support_email}."
+      skip_to_form: "Skip to sign up form"
+      title: "Create Account"
+      required_indicator: "Indicates a required field"
+      name_legend: "Name"
+      first_name_label: "First Name"
+      middle_initial_label: "Middle Initial (Optional)"
+      last_name_label: "Last Name"
+      contact_legend: "Contact Information"
+      email_label: "Email Address"
+      phone_label: "Phone Number (Optional)"
+      registration_blocked_heading: "We couldn't complete your registration."
+      registration_blocked_body: "If you already have a MAT portal account, try signing in. For help with registration or account access, contact the MAT Team at %{support_email}."
       log_in_cta: "Sign in with your email address and password"
-      send_access_link: "Send account access link"
-      phone_hint: "Optional. Enter 10 digits. You can use this number to sign in."
+      phone_hint: "Optional. Enter 10 digits. Use a number where MAT can safely reach you about your account or application."
       phone_type_label: "Phone Type"
       phone_type_required: "Select a phone type when providing a phone number."
-      match_type:
-        email: "email"
-        phone: "phone"
+      phone_type_options:
+        voice: "Voice"
+        videophone: "Videophone"
+        text: "Text/SMS"
+      security_legend: "Security"
+      password_label: "Password"
+      password_hint: "Minimum 6 characters"
+      password_confirmation_label: "Confirm Password"
+      date_of_birth_label: "Date of Birth"
+      date_of_birth_placeholder: "MM/DD/YYYY"
+      date_of_birth_hint: "Enter date of birth as MM/DD/YYYY"
+      language_preference_label: "Language Preference"
+      language_prompt: "Select Language"
+      language_hint: "Select from our supported languages"
+      language_options:
+        en: "English"
+        es: "Spanish"
+      notification_method_label: "Notification Method"
+      notification_email_label: "Email"
+      notification_letter_label: "Mailed Letter"
+      mail_notice_label: "Note:"
+      mail_notice: "You will receive notifications by printed letter."
+      street_address_label: "Street Address"
+      address_2_label: "Apt/Suite (Optional)"
+      city_label: "City"
+      state_label: "State"
+      zip_code_label: "Zip Code"
+      newsletter_signup: "Sign up for our newsletter to receive updates about MAT programs and services"
+      submit: "Create Account"
+      submitting: "Creating account..."
+      sign_in_prompt: "Already have an account?"
+      sign_in_link: "Sign In"
+    profile:
+      on_file: "On file:"
   activerecord:
     errors:
       models:
@@ -80,7 +129,7 @@ en:
           attributes:
             base:
               portal_self_registration_requires_email: "A portal account requires an email address. If you do not have email, please contact MAT for assistance with a paper application."
-              portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Portal accounts require an email address. Please contact the MAT Team at %{support_email} for assistance."
+              portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Please contact the MAT Team at %{support_email} for assistance."
             phone_type:
               portal_self_registration_phone_type_required: "must be selected when a phone number is provided"
         application:
@@ -449,6 +498,16 @@ en:
 
         If you have questions, please contact %{support_email}.
   shared:
+    header:
+      main_navigation: "Main Navigation"
+      primary_navigation: "Primary Navigation"
+      return_home: "Return to homepage"
+      logo_return_home: "TAM Logo - Return to Homepage"
+      toggle_navigation: "Toggle navigation menu"
+      sign_in: "Sign In"
+      sign_in_aria: "Sign in to your account"
+      sign_up: "Sign Up"
+      sign_up_aria: "Sign up for a new account"
     unauthorized: "Not authorized"
     enabled: "Enabled"
     disabled: "Disabled"
@@ -696,6 +755,7 @@ en:
       approve:
         recovery_approved: "Security key recovery request approved successfully. The user can register a new security key."
         not_pending: "This recovery request has already been resolved and cannot be approved again."
+        notification_failed: "Recovery approval could not be completed because the user notification could not be created or queued. No credentials were removed."
     users:
       update:
         user_update_pass: "User was successfully updated."

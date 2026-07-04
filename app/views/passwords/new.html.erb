@@ -9,7 +9,7 @@
     <% end %>
 
     <%= form_with url: password_path, method: :post, class: "space-y-6" do |form| %>
-      <%= hidden_field_tag :locale, public_request_locale_param if public_request_locale_param.present? %>
+      <%= hidden_field_tag :locale, public_form_locale_param if public_form_locale_param.present? %>
 
       <div>
         <%= form.label :contact, t("portal_self_service.contact_label"), class: "block text-gray-700" %>
@@ -29,7 +29,7 @@
       </div>
 
       <div class="text-center mt-4">
-        <%= link_to t("portal_self_service.account_access.back_to_sign_in"), sign_in_path(locale: public_request_locale_param), class: "text-sm text-indigo-600 hover:text-indigo-500" %>
+        <%= link_to t("portal_self_service.account_access.back_to_sign_in"), sign_in_path(locale: public_form_locale_param), class: "text-sm text-indigo-600 hover:text-indigo-500" %>
       </div>
     <% end %>
   </div>

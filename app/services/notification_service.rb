@@ -199,8 +199,11 @@ class NotificationService
     training_rescheduled
     training_cancelled
     training_missed
-    security_key_recovery_approved
     medical_certification_not_provided
+  ].freeze
+
+  EMAIL_ONLY_ACTIONS = %w[
+    security_key_recovery_approved
   ].freeze
 
   # ---- Creation + validation -------------------------------------------------
@@ -464,10 +467,8 @@ class NotificationService
     mail_delivery = build_mail_delivery(notification, mailer_class, method_name)
     actual_delivery_channel = resolve_actual_delivery_channel(mail_delivery, notification: notification)
     explicit_reason = mail_delivery.is_a?(ApplicationMailer::NoopDelivery) ? mail_delivery.reason : nil
-    delivery_route_reason = explicit_reason.presence || resolve_delivery_route_reason(
-      requested_channel: requested_channel,
-      actual_delivery_channel: actual_delivery_channel
-    )
+    delivery_route_reason = explicit_reason.presence ||
+                            delivery_route_reason_for(notification, requested_channel, actual_delivery_channel)
 
     raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
 
@@ -531,6 +532,7 @@ class NotificationService
   end
 
   def inferred_actual_delivery_channel(notification)
+    return 'email' if EMAIL_ONLY_ACTIONS.include?(notification.action.to_s)
     return 'letter' if letter_preference_route?(notification)
 
     'email'
@@ -551,6 +553,15 @@ class NotificationService
       end
 
     preference.to_s == 'letter'
+  end
+
+  def delivery_route_reason_for(notification, requested_channel, actual_delivery_channel)
+    return 'email_only' if EMAIL_ONLY_ACTIONS.include?(notification.action.to_s)
+
+    resolve_delivery_route_reason(
+      requested_channel: requested_channel,
+      actual_delivery_channel: actual_delivery_channel
+    )
   end
 
   def resolve_delivery_route_reason(requested_channel:, actual_delivery_channel:)

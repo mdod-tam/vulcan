@@ -63,6 +63,7 @@ Important channel details:
 - `deliver: false` creates history only. No mailer is enqueued.
 - Record-only actions are valid and intentional.
 - Email delivery uses ActionMailer jobs for mapped actions.
+- `security_key_recovery_approved` is email-only even for letter-preferring users; routing metadata records `actual_delivery_channel: "email"` and `delivery_route_reason: "email_only"` because the recovery approval mailer contains account-access instructions and has no printed-letter path.
 - Printable letters are represented through the letter/print queue flow.
 - SMS is not a general `NotificationService` channel. Selected secure-request services can send SMS through `SmsService`.
 - Account-access SMS is a narrow public auth exception owned by `PasswordsController`, not `NotificationService`; it sends through `SmsService` with sensitive logging and records the outcome through audit events.

@@ -25,10 +25,10 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Area | Path | Current behavior |
 |------|------|------------------|
 | Routes | `config/routes.rb` | Defines `sign_up`, profile/password routes, `admin/users`, and member routes such as `mfa_tokens_admin_user_path`, `update_role_admin_user_path`, and `history_admin_user_path`. |
-| Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, blocks exact email or **email-backed** phone duplicates with an account-access prompt, flags name+DOB matches for review, creates the session, and sends registration confirmation. Phone-only and address-only paper records never match public duplicate handoff. |
+| Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, blocks exact email or email-backed phone duplicates with neutral support/sign-in copy, flags name+DOB and non-portal phone conflicts for review, creates the session, and sends registration confirmation. Phone-only and address-only paper records must not become public portal identities. |
 | Admin users | `app/controllers/admin/users_controller.rb` | Lists, filters, shows, edits, creates, role-converts, capability-updates, deletes MFA tokens, deletes users, and serves guardian/dependent helper endpoints. |
 | User model | `app/models/user.rb` | Base STI model. Includes authentication, roles/capabilities, profile validation, contact predicates, guardian/dependent logic, and email search tokens. |
-| Contact predicates | `app/models/concerns/user_contact_predicates.rb` | Canonical contact truth: `real_email?`, `real_phone?`, `sms_capable_phone?`, `portal_access_eligible?`. Portal eligibility is computed from stored contact, not faked with synthetic values. |
+| Contact predicates | `app/models/concerns/user_contact_predicates.rb` | Canonical contact truth: `real_email?`, `real_phone?`, `sms_capable_phone?`, `portal_access_eligible?`, and `email_backed_public_portal_account?`. `portal_access_eligible?` is stored-contact truth; `email_backed_public_portal_account?` is the public self-service gate. |
 | Profile concern | `app/models/concerns/user_profile.rb` | Normalizes email and phone, declares encrypted fields, validates contact uniqueness and phone format, allows NULL email/phone in paper context, and logs profile changes. |
 | Authentication concern | `app/models/concerns/user_authentication.rb` | Owns password/session behavior and WebAuthn, TOTP, and SMS credential associations. |
 | Guardian concern | `app/models/concerns/user_guardianship.rb` | Owns guardian/dependent associations, effective contact methods, and guardian access checks. |
@@ -46,12 +46,11 @@ Email and phone are stored with deterministic Rails encryption so exact lookups 
 
 `RegistrationsController#create` calls `duplicate_account_match?` before saving:
 
-- matching email or phone on an **email-backed** existing account renders the signup page with an account-access prompt instead of creating another user
-- matching email can offer an account-access link by email when the existing account is email-backed
-- matching text-capable phone can offer an account-access link by SMS only when the existing account is email-backed and `sms_capable_phone?`
+- matching email or an email-backed portal account phone renders the signup page with the same neutral support/sign-in panel instead of creating another user
+- duplicate signup copy does not offer account-access delivery from the registration page and must not reveal whether the match was email-backed, phone-only, text-capable, or delivery-capable
 - `PasswordsController#create` uses the same email-backed resolver: SMS is sent only when the matched account has `real_email?` and `sms_capable_phone?`; all outcomes show the same public confirmation (delivery details stay in audit logs only)
-- conflicting matches, where email and phone belong to different users, show a support-contact prompt
-- phone matching a non-email-backed paper/admin record does not enter duplicate handoff; portal self-registration surfaces a generic base error with MAT support contact instead of a public phone-taken message
+- conflicting matches, where email and phone belong to different users, show the same neutral support/sign-in panel
+- phone matching a non-email-backed paper/admin record does not enter public duplicate handoff and never creates or promotes a portal identity for the paper record; public signup proceeds as an email-backed account without storing the already-on-file paper phone, and the new user is flagged for duplicate review. Registration copy therefore describes phone as an optional identifier only when it can be added to the portal account, not as an unconditional sign-in method.
 
 `UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
 
@@ -66,7 +65,7 @@ Blank phone numbers are allowed. Non-blank phones must normalize to a 10-digit U
 | `real_email?` | Present, valid format, not `@system.matvulcan.local` |
 | `real_phone?` | Present, valid 10-digit US, not synthetic `000-…` prefix |
 | `sms_capable_phone?` | `real_phone?` and `phone_type == 'text'` |
-| `portal_access_eligible?` | `real_email?` or `real_phone?` (PR2 stored-contact truth) |
+| `portal_access_eligible?` | `real_email?` or `real_phone?` for stored-contact truth |
 | `email_backed_public_portal_account?` | `real_email?` only — required for public portal sign-in, account access, and paper/admin portal setup markers |
 
 Paper/admin intake supports:
@@ -81,8 +80,8 @@ Admin display helpers (`display_contact_email`, `display_contact_phone`) hide sy
 
 | Concept | Source of truth |
 | --- | --- |
-| Stored contact truth (PR2) | `portal_access_eligible?` from `real_email?` / `real_phone?` |
-| Email-backed portal account (PR3) | `email_backed_public_portal_account?` (`real_email?`) for sign-in, account access, paper portal setup, and account-created notices |
+| Stored contact truth | `portal_access_eligible?` from `real_email?` / `real_phone?` |
+| Email-backed portal account | `email_backed_public_portal_account?` (`real_email?`) for sign-in, account access, paper portal setup, and account-created notices |
 | Delivery route | `communication_preference` plus effective contact fallback for dependents |
 | Record truth | Stored email/phone values and explicit paper no-contact flags |
 
@@ -92,7 +91,9 @@ Email-backed portal users created during paper intake get an internal initial pa
 
 Persisted address-only constituents remain editable in admin user edit (name, address, letter preference) without requiring email. Normal admin edit cannot clear all contact information or keep email delivery without a real email; those transitions are reserved for paper intake with explicit no-contact flags.
 
-Public portal self-registration requires a real email address; phone is optional and may serve as an alternate login identifier when also on file.
+Public portal self-registration requires a real email address. Phone remains optional; when supplied, the registrant must explicitly choose a phone type. The phone may serve as an alternate login identifier only if it can be stored on the email-backed portal account. If the submitted phone is already attached to a non-email-backed paper/admin record, signup stays email-backed, the phone is not copied onto the portal account, and staff receive the duplicate-review signal instead.
+
+Signed-in portal constituents must keep a real email address on their profile. Phone-only and address-only records remain valid paper/admin records, but a public portal account cannot clear its email and become phone-only because public sign-in, account access, and recovery are email-backed.
 
 ### 3.2 Name and DOB review flag
 
@@ -112,7 +113,7 @@ The admin user index currently surfaces this flag in three ways:
 - a `Needs Review` filter backed by `Users::FilterService`
 - a `Needs Review` badge and row highlight in `_users_table.html.erb`
 
-Important distinction: the current admin surface flags and filters possible duplicates. It does not provide a merge or ignore workflow.
+Important distinction: the current admin surface flags and filters possible duplicates. It does not provide reason details, matched candidates, submitted-phone context, mark-reviewed, keep-separate, merge, or ignore actions. Detailed admin duplicate/claim review and field-level merge/reconcile workflows are outside the current implementation.
 
 ### 3.3 Paper applicant lookup and eligibility
 

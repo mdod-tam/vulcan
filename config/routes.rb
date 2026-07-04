@@ -37,7 +37,6 @@ Rails.application.routes.draw do
   # Identity namespace for authentication-related actions
   namespace :identity do
     resources :password_resets, only: %i[edit update], param: :token
-    resources :email_verifications, only: [:show], param: :token
   end
 
   # Registration

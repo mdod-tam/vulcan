@@ -19,6 +19,16 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'a[href=?]', new_password_path, text: 'Forgot password?'
   end
 
+  def test_should_get_new_with_public_request_locale
+    get sign_in_path(locale: 'es')
+
+    assert_response :success
+    assert_select 'h1', 'Iniciar sesión'
+    assert_select 'form[action=?]', sign_in_path(locale: 'es')
+    assert_select 'a[href=?]', new_password_path(locale: 'es'), text: '¿Olvidó su contraseña?'
+    assert_select 'a[href=?]', sign_up_path(locale: 'es'), text: 'Registrarse'
+  end
+
   def test_should_not_sign_in_with_wrong_credentials
     post sign_in_path, params: {
       email: @admin.email,
@@ -27,6 +37,17 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
     follow_redirect!
     assert_match I18n.t('controllers.sessions.invalid_credentials'), flash[:alert]
+  end
+
+  def test_invalid_credentials_preserve_public_request_locale
+    post sign_in_path, params: {
+      locale: 'es',
+      email: @admin.email,
+      password: 'wrongpassword'
+    }
+
+    assert_redirected_to sign_in_path(locale: 'es')
+    assert_equal I18n.t('controllers.sessions.invalid_credentials', locale: :es), flash[:alert]
   end
 
   def test_failed_login_increments_failed_attempts

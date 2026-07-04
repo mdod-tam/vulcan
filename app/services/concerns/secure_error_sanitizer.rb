@@ -5,6 +5,8 @@ module SecureErrorSanitizer
 
   SECURE_URL_PATTERN = %r{https?://[^\s<>"']+}
   TOKEN_ASSIGNMENT_PATTERN = /(\b(?:token|secure_token|public_token|raw_token)=)[^\s&<>"']+/i
+  EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
+  EMAIL_KEY_PATTERN = /(?:\Aemail\z|_email\z)/i
   SENSITIVE_KEYS = %w[
     public_token
     raw_token
@@ -21,7 +23,7 @@ module SecureErrorSanitizer
   end
 
   def sanitize_secure_value(value, key = nil)
-    return '[REDACTED]' if secure_sensitive_key?(key)
+    return '[REDACTED]' if secure_sensitive_key?(key) || email_sensitive_key?(key)
 
     case value
     when Hash
@@ -34,6 +36,7 @@ module SecureErrorSanitizer
       value
         .gsub(SECURE_URL_PATTERN, '[REDACTED_URL]')
         .gsub(TOKEN_ASSIGNMENT_PATTERN, '\1[REDACTED]')
+        .gsub(EMAIL_ADDRESS_PATTERN, '[REDACTED_EMAIL]')
     else
       value
     end
@@ -43,5 +46,9 @@ module SecureErrorSanitizer
 
   def secure_sensitive_key?(key)
     SENSITIVE_KEYS.include?(key.to_s)
+  end
+
+  def email_sensitive_key?(key)
+    key.to_s.match?(EMAIL_KEY_PATTERN)
   end
 end

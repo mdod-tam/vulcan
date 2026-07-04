@@ -24,7 +24,7 @@ class PasswordsController < ApplicationController
     user, delivery_method = find_user_for_account_access
     attempt_account_access_delivery(user, delivery_method)
 
-    redirect_to sign_in_path, notice: account_access_confirmation_message
+    redirect_to sign_in_path(locale: public_request_locale_param), notice: account_access_confirmation_message
   end
 
   def update
@@ -107,17 +107,17 @@ class PasswordsController < ApplicationController
   def attempt_account_access_delivery(user, delivery_method)
     return false if user.blank?
 
-    if delivery_method.blank?
-      log_account_access_attempt(user, :none, 'delivery_unavailable')
-      return false
-    end
-
     handle_account_access_request(user, delivery_method)
   end
 
   def handle_account_access_request(user, delivery_method)
     if account_access_rate_limited?(user)
-      log_account_access_attempt(user, delivery_method, 'rate_limited')
+      log_account_access_attempt(user, delivery_method.presence || :none, 'rate_limited')
+      return false
+    end
+
+    if delivery_method.blank?
+      log_account_access_attempt(user, :none, 'delivery_unavailable')
       return false
     end
 
@@ -175,7 +175,7 @@ class PasswordsController < ApplicationController
 
   def account_access_sms_body(user)
     token = user.generate_token_for(:password_reset)
-    reset_url = edit_password_url(token: token, host: request.host, protocol: request.protocol)
+    reset_url = edit_password_url(token: token, **canonical_public_url_options)
     locale = account_access_sms_locale_for(user)
 
     I18n.t('passwords.account_access_sms.message', locale: locale, reset_url: reset_url)

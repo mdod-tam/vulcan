@@ -10,7 +10,7 @@
     </div>
 
     <%= form_with url: request_security_key_reset_path, local: true, class: "space-y-6" do |form| %>
-      <%= hidden_field_tag :locale, public_request_locale_param if public_request_locale_param.present? %>
+      <%= hidden_field_tag :locale, public_form_locale_param if public_form_locale_param.present? %>
 
       <div class="space-y-1">
         <%= form.label :contact, t("portal_self_service.contact_label"), class: "block text-sm font-medium text-gray-700" %>
@@ -39,7 +39,7 @@
     <div class="mt-6 text-center">
       <p class="text-sm text-gray-600">
         <%= t("portal_self_service.account_recovery.remember_key_prompt") %>
-        <%= link_to t("portal_self_service.account_recovery.back_to_sign_in"), sign_in_path(locale: public_request_locale_param), class: "text-indigo-600 hover:text-indigo-500" %>
+        <%= link_to t("portal_self_service.account_recovery.back_to_sign_in"), sign_in_path(locale: public_form_locale_param), class: "text-indigo-600 hover:text-indigo-500" %>
       </p>
     </div>
   </div>

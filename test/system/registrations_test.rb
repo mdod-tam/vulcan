@@ -3,6 +3,45 @@
 require 'application_system_test_case'
 
 class RegistrationsTest < ApplicationSystemTestCase
+  test 'phone-only paper conflict does not block public registration' do
+    phone = '410-555-0198'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Paper', last_name: 'PhoneOnlySystem',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    visit sign_up_path
+    fill_in 'First Name', with: 'New'
+    fill_in 'Last Name', with: 'Registrant'
+    fill_in 'Email Address', with: "neutral-registration-#{SecureRandom.hex(4)}@example.com"
+    fill_in 'Phone Number (Optional)', with: phone
+    choose 'Text/SMS'
+    fill_in 'Password', with: 'password123'
+    fill_in 'Confirm Password', with: 'password123'
+    fill_in 'Date of Birth', with: '01/01/1990'
+    select 'English', from: 'Language Preference'
+
+    click_button 'Create Account'
+
+    assert_current_path welcome_path, wait: 10
+    assert_text 'Account created successfully. Welcome!'
+    assert_no_text 'phone-only'
+    assert_no_text 'paper record'
+    assert_no_text 'has already been taken'
+    take_screenshot('registration-phone-only-paper-conflict-created', html: true)
+  end
+
   test 'password visibility toggle changes field type and updates accessibility attributes' do
     visit sign_up_path
     ensure_stimulus_loaded
@@ -150,5 +189,6 @@ class RegistrationsTest < ApplicationSystemTestCase
 
     choose 'Text/SMS'
     assert find_by_id('phone_type_text')[:checked]
+    take_screenshot('registration-optional-phone-type-visible', html: true)
   end
 end

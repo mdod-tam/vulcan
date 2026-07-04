@@ -4,6 +4,8 @@
 module UserProfile
   extend ActiveSupport::Concern
 
+  PORTAL_SELF_REGISTRATION_PHONE_TYPES = %w[voice videophone text].freeze
+
   included do
     attr_accessor :phone_type_submitted
 
@@ -44,6 +46,7 @@ module UserProfile
     validate :validate_address_for_letter_preference
     validate :email_delivery_requires_real_email
     validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
+    validate :self_service_profile_requires_email_backing, on: :update, if: :self_service_constituent_profile_update?
     before_validation :normalize_portal_self_registration_phone_type, if: :portal_self_registration?
     validate :portal_self_registration_phone_type_matches_phone, if: :portal_self_registration?
     validate :portal_self_registration_requires_email_backed_account, if: :portal_self_registration?
@@ -265,6 +268,14 @@ module UserProfile
     !Current.paper_context && constituent_user_type?
   end
 
+  def self_service_constituent_profile_update?
+    !Current.paper_context && Current.user == self && constituent_user_type?
+  end
+
+  def self_service_profile_requires_email_backing
+    errors.add(:email, :blank) unless real_email?
+  end
+
   def constituent_user_type?
     Users::FilterService::CONSTITUENT_TYPE_VALUES.include?(type)
   end
@@ -323,8 +334,9 @@ module UserProfile
 
   def portal_self_registration_phone_type_matches_phone
     return if phone.blank?
-    return if phone_type_submitted && phone_type.present?
+    return if phone_type_submitted && PORTAL_SELF_REGISTRATION_PHONE_TYPES.include?(phone_type)
 
+    self.phone_type = nil
     errors.add(:phone_type, :portal_self_registration_phone_type_required)
   end
 

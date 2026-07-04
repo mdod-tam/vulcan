@@ -51,6 +51,44 @@ module Admin
       assert_equal 0, @user.reload.webauthn_credentials.count
     end
 
+    test 'does not approve or remove credentials when approval notification cannot be created' do
+      NotificationService.expects(:create_and_deliver!).returns(nil)
+
+      assert_no_difference -> { WebauthnCredential.where(user_id: @user.id).count } do
+        assert_no_difference -> { Event.where(action: 'security_key_recovery_approved').count } do
+          post approve_admin_recovery_request_path(@recovery_request)
+        end
+      end
+
+      assert_redirected_to admin_recovery_request_path(@recovery_request)
+      assert_match(/notification could not be created or queued/i, flash[:alert])
+
+      @recovery_request.reload
+      assert_equal 'pending', @recovery_request.status
+      assert_nil @recovery_request.resolved_at
+      assert_nil @recovery_request.resolved_by_id
+      assert @user.webauthn_credentials.exists?
+    end
+
+    test 'does not approve or remove credentials when approval notification delivery errors synchronously' do
+      failed_notification = Notification.create!(
+        recipient: @user,
+        actor: @admin,
+        action: 'security_key_recovery_approved',
+        notifiable: @recovery_request,
+        delivery_status: 'error'
+      )
+      NotificationService.expects(:create_and_deliver!).returns(failed_notification)
+
+      assert_no_difference -> { WebauthnCredential.where(user_id: @user.id).count } do
+        post approve_admin_recovery_request_path(@recovery_request)
+      end
+
+      assert_redirected_to admin_recovery_request_path(@recovery_request)
+      assert_equal 'pending', @recovery_request.reload.status
+      assert @user.webauthn_credentials.exists?
+    end
+
     test 'cannot replay approval on already resolved recovery request' do
       @recovery_request.update!(
         status: 'approved',

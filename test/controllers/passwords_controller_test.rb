@@ -87,6 +87,25 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
   end
 
+  def test_account_access_sms_reset_url_uses_configured_host_not_request_host
+    original_default_url_options = Rails.application.config.action_mailer.default_url_options&.dup
+    Rails.application.config.action_mailer.default_url_options = { host: 'example.com' }
+    @user.update!(phone_type: 'text')
+
+    SmsService.expects(:send_message)
+              .with(@user.phone,
+                    regexp_matches(%r{MAT account access link to set your password: http://example\.com/password/edit\?token=\S+ This link expires in 20 minutes\.}),
+                    sensitive: true,
+                    context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
+              .returns(true)
+
+    post password_path, params: { contact: @user.phone }, headers: { 'Host' => 'attacker.example' }
+
+    assert_redirected_to sign_in_path
+  ensure
+    Rails.application.config.action_mailer.default_url_options = original_default_url_options
+  end
+
   def test_should_return_generic_confirmation_when_sms_delivery_fails
     @user.update!(phone_type: 'text')
 
@@ -124,7 +143,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     post password_path, params: { contact: 'unknown@example.com', locale: 'es' }
 
-    assert_redirected_to sign_in_path
+    assert_redirected_to sign_in_path(locale: 'es')
     assert_equal account_access_confirmation_message(locale: :es), flash[:notice]
   end
 
@@ -175,6 +194,30 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
     assert_equal 'Password successfully updated.', flash[:notice]
     assert @user.reload.authenticate('TokenReset*Password123')
+  end
+
+  def test_password_reset_token_cannot_be_reused_after_successful_update
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+
+    patch password_path, params: {
+      token: token,
+      password: 'TokenReset*Password123',
+      password_confirmation: 'TokenReset*Password123'
+    }
+
+    assert_redirected_to sign_in_path
+    assert @user.reload.authenticate('TokenReset*Password123')
+
+    patch password_path, params: {
+      token: token,
+      password: 'ReplayReset*Password123',
+      password_confirmation: 'ReplayReset*Password123'
+    }
+
+    assert_redirected_to new_password_path
+    assert_equal 'Invalid or expired reset link.', flash[:alert]
+    assert_not @user.reload.authenticate('ReplayReset*Password123')
   end
 
   def test_should_update_password_with_valid_inputs
@@ -395,6 +438,34 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to sign_in_path
     assert_equal account_access_confirmation_message, flash[:notice]
+  end
+
+  def test_delivery_unavailable_account_access_audits_stop_after_rate_limit
+    sign_out if respond_to?(:sign_out)
+
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
+    user = create(:constituent,
+                  phone: '410-555-0145',
+                  phone_type: 'voice',
+                  email: "voice-rate-limit-#{SecureRandom.hex(3)}@example.com",
+                  password: 'password123',
+                  password_confirmation: 'password123')
+
+    SmsService.expects(:send_message).never
+
+    (PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT + 1).times do |index|
+      post password_path, params: { contact: user.phone }
+      travel AuditEventService::DEDUP_WINDOW + 1.second if index < PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT
+    end
+
+    assert_equal PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT,
+                 Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count
+    assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', user: user).count
+  ensure
+    travel_back
+    Rails.cache = old_cache
   end
 
   def test_malformed_email_shaped_account_access_does_not_fall_through_to_phone

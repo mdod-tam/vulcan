@@ -50,15 +50,15 @@ class AccountRecoveryController < ApplicationController
     end
 
     user.with_lock do
-      return if user.recovery_requests.pending.exists?
-
-      recovery_request = user.recovery_requests.create!(
-        status: 'pending',
-        details: params[:details],
-        ip_address: request.remote_ip,
-        user_agent: request.user_agent
-      )
-      notify_admins_of_recovery_request!(recovery_request)
+      unless user.recovery_requests.pending.exists?
+        recovery_request = user.recovery_requests.create!(
+          status: 'pending',
+          details: params[:details],
+          ip_address: request.remote_ip,
+          user_agent: request.user_agent
+        )
+        notify_admins_of_recovery_request!(recovery_request)
+      end
     end
   rescue ActiveRecord::RecordNotUnique
     # Concurrent duplicate pending — treat as coalesced (partial unique index)
@@ -107,11 +107,15 @@ class AccountRecoveryController < ApplicationController
   end
 
   def log_unmatched_recovery_rate_limit(contact)
-    system_user = User.system_user
+    audit_actor = unmatched_recovery_audit_actor
+    unless audit_actor
+      Rails.logger.warn('Unable to audit unmatched security key recovery rate limit: no existing audit actor')
+      return
+    end
+
     AuditEventService.log(
       action: 'security_key_recovery_unmatched_rate_limited',
-      actor: system_user,
-      auditable: system_user,
+      actor: audit_actor,
       metadata: recovery_audit_metadata.merge(
         submitted_contact_digest: submitted_recovery_contact_digest(contact)
       )
@@ -145,6 +149,10 @@ class AccountRecoveryController < ApplicationController
 
   def request_ip_digest
     Digest::SHA256.hexdigest(request.remote_ip.to_s)
+  end
+
+  def unmatched_recovery_audit_actor
+    User.admins.find_by(email: 'system@mdmat.org') || User.admins.order(:id).first
   end
 
   def notify_admins_of_recovery_request!(recovery_request)

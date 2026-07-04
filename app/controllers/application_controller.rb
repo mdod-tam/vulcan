@@ -15,7 +15,7 @@ class ApplicationController < ActionController::Base
   helper PasswordFieldHelper
   helper EmailStatusHelper
   helper_method :dashboard_path_for_current_user, :mfa_required_for_current_user?,
-                :public_request_locale_param
+                :public_form_locale_param, :public_request_locale_param
 
   before_action :check_password_change_required
   before_action :enforce_required_mfa_enrollment
@@ -75,13 +75,15 @@ class ApplicationController < ActionController::Base
   end
 
   def public_request_locale
-    public_locale_from(params[:locale]) ||
-      public_locale_from(params.dig(:user, :locale)) ||
-      I18n.default_locale
+    public_form_locale_param || I18n.default_locale
   end
 
   def public_request_locale_param
     public_locale_from(params[:locale])
+  end
+
+  def public_form_locale_param
+    public_request_locale_param || public_locale_from(params.dig(:user, :locale))
   end
 
   def public_locale_from(value)
@@ -89,6 +91,10 @@ class ApplicationController < ActionController::Base
     return if locale.blank?
 
     locale if I18n.available_locales.map(&:to_s).include?(locale)
+  end
+
+  def canonical_public_url_options
+    CanonicalPublicUrlOptions.call
   end
 
   def after_sign_in_path_for(user)

@@ -25,6 +25,8 @@ class RegistrationsController < ApplicationController
     build_user
     return render_duplicate_account_prompt if duplicate_account_match?
 
+    suppress_non_portal_phone_conflict_for_public_registration
+
     # Check for potential duplicates based on Name + DOB and flag for admin review
     @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
 
@@ -79,19 +81,13 @@ class RegistrationsController < ApplicationController
 
   def duplicate_account_match?
     email_user = email_backed_duplicate_for(registration_params[:email])
-    phone_user = phone_duplicate_for_email_backed_account(registration_params[:phone])
+    phone_user = phone_duplicate_for_registration_contact(registration_params[:phone])
 
-    if email_user.present? && phone_user.present? && email_user.id != phone_user.id
-      @account_access_conflict = true
-      @support_email = support_email
-      return true
-    end
+    return false if email_user.blank? && phone_user.blank?
 
-    @account_access_user = email_user || phone_user
-    @account_access_match_type = email_user.present? ? 'email' : 'phone'
-    @account_access_contact = account_access_contact_for(@account_access_user, @account_access_match_type)
-    @account_access_available = @account_access_contact.present?
-    @account_access_user.present?
+    @registration_support_needed = true
+    @support_email = support_email
+    true
   end
 
   def email_backed_duplicate_for(email)
@@ -103,13 +99,25 @@ class RegistrationsController < ApplicationController
     user
   end
 
-  def phone_duplicate_for_email_backed_account(phone)
+  def phone_duplicate_for_registration_contact(phone)
     return nil if phone.blank?
 
     user = User.find_by_phone(phone)
-    return nil unless user&.real_email? && user.real_phone?
+    return nil unless user&.email_backed_public_portal_account? && user.real_phone?
 
     user
+  end
+
+  def suppress_non_portal_phone_conflict_for_public_registration
+    return if @user.phone.blank?
+
+    conflicting_user = User.find_by_phone(@user.phone)
+    return if conflicting_user.blank?
+    return if conflicting_user.email_backed_public_portal_account?
+
+    @user.phone = nil
+    @user.phone_type = :contact_email
+    @user.needs_duplicate_review = true
   end
 
   def render_duplicate_account_prompt
@@ -158,15 +166,6 @@ class RegistrationsController < ApplicationController
 
   def support_email
     Policy.get('support_email') || 'mat.program1@maryland.gov'
-  end
-
-  def account_access_contact_for(user, match_type)
-    return nil unless user&.real_email?
-    return user.email if match_type == 'email'
-    return user.phone if user.sms_capable_phone?
-
-    @support_email = support_email
-    nil
   end
 
   # Helper method for the soft duplicate check

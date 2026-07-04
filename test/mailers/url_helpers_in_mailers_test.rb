@@ -38,10 +38,15 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     @vendor = create(:vendor, email: "url_test_vendor_#{random_suffix}@example.com")
 
     # Configure default URL options for testing
+    @original_default_url_options = Rails.application.config.action_mailer.default_url_options&.dup
     Rails.application.config.action_mailer.default_url_options = { host: 'test.example.com' }
 
     # Create the required text templates for URL-bearing emails.
     create_templates_if_missing
+  end
+
+  teardown do
+    Rails.application.config.action_mailer.default_url_options = @original_default_url_options
   end
 
   test 'proof_rejected email contains absolute URLs' do
@@ -75,6 +80,36 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     email = EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned
 
     assert_match(%r{http://test\.example\.com}, decoded_text_part(email))
+  end
+
+  test 'password reset email uses canonical configured URL options' do
+    EmailTemplate.where(name: 'user_mailer_password_reset', format: :text).delete_all
+    create(:email_template, :text,
+           name: 'user_mailer_password_reset',
+           locale: 'en',
+           subject: 'Reset password',
+           body: 'Reset link: %<reset_url>s for %<user_email>s',
+           variables: {
+             'required' => %w[user_email reset_url],
+             'optional' => []
+           })
+    @user.stubs(:generate_token_for).with(:password_reset).returns('canonical-reset-token')
+
+    email = UserMailer.with(user: @user).password_reset
+
+    assert_includes decoded_text_part(email),
+                    'Reset link: http://test.example.com/password/edit?token=canonical-reset-token'
+  end
+
+  test 'password reset email fails fast for unsafe production canonical host' do
+    Rails.application.config.action_mailer.default_url_options = { host: 'example.com', protocol: 'https' }
+    Rails.env.stubs(:production?).returns(true)
+
+    error = assert_raises(ArgumentError) do
+      UserMailer.with(user: @user).password_reset.deliver_now
+    end
+
+    assert_equal 'Canonical public URL host is not configured', error.message
   end
 
   private

@@ -2,6 +2,7 @@
 
 class AddUniquePendingRecoveryRequestIndex < ActiveRecord::Migration[8.1]
   def change
+    # Alpha assumption: resolve duplicate pending requests in shared data before this migration.
     add_index :recovery_requests, :user_id,
               unique: true,
               where: "status = 'pending'",

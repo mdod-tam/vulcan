@@ -1,4 +1,15 @@
 es:
+  shared:
+    header:
+      main_navigation: "Navegación principal"
+      primary_navigation: "Navegación primaria"
+      return_home: "Volver a la página principal"
+      logo_return_home: "Logotipo de TAM - Volver a la página principal"
+      toggle_navigation: "Alternar menú de navegación"
+      sign_in: "Iniciar sesión"
+      sign_in_aria: "Iniciar sesión en su cuenta"
+      sign_up: "Registrarse"
+      sign_up_aria: "Registrarse para obtener una cuenta nueva"
   password_visibility:
     status:
       hidden: "La contraseña está oculta"
@@ -7,9 +18,21 @@ es:
       show: "Mostrar contraseña"
       hide: "Ocultar contraseña"
   sessions:
+    title: "Iniciar sesión"
     form:
       contact_label: "Correo electrónico o número de teléfono"
       contact_hint: "Use el correo electrónico de su cuenta para iniciar sesión o solicitar acceso. Si su cuenta tiene un número de teléfono registrado, también puede usarlo para identificar su cuenta. Los enlaces de acceso por mensaje de texto solo se envían a números con capacidad de texto."
+      error_heading: "Corrija los siguientes errores:"
+      password_label: "Contraseña"
+      password_hint: "Ingrese su contraseña"
+      submit: "Iniciar sesión"
+      submitting: "Iniciando sesión..."
+      submit_aria: "Iniciar sesión en su cuenta"
+      forgot_password: "¿Olvidó su contraseña?"
+      forgot_password_aria: "Restablecer su contraseña"
+      sign_up_prompt: "¿No tiene una cuenta?"
+      sign_up: "Registrarse"
+      sign_up_aria: "Registrarse para obtener una cuenta nueva"
   portal_self_service:
     contact_label: "Correo electrónico o número de teléfono"
     contact_hint: "Use el correo electrónico de su cuenta para iniciar sesión o solicitar acceso. Si su cuenta tiene un número de teléfono registrado, también puede usarlo para identificar su cuenta. Los enlaces de acceso por mensaje de texto solo se envían a números con capacidad de texto."
@@ -28,22 +51,59 @@ es:
       submit: "Enviar solicitud de recuperación"
       back_to_sign_in: "Volver a iniciar sesión"
       remember_key_prompt: "¿Recuerda su llave de seguridad?"
-      confirmation_title: "Solicitud de recuperación enviada"
-      confirmation_body: "Un administrador revisará su solicitud y se comunicará con usted usando la información registrada en su cuenta."
+      confirmation_title: "Solicitud de recuperación recibida"
+      confirmation_body: "Si la información proporcionada coincide con una cuenta del portal y la solicitud se puede revisar, un administrador se comunicará usando la información registrada en esa cuenta."
     registrations:
-      duplicate_conflict_heading: "Encontramos información de cuenta en conflicto."
-      duplicate_conflict_body: "Comuníquese con el equipo MAT en %{support_email} para obtener ayuda para acceder a su cuenta."
-      duplicate_exists_heading: "Ya existe una cuenta con ese %{match_type}."
-      duplicate_available_body: "Puede iniciar sesión con su correo electrónico y contraseña. Si su cuenta tiene un número de teléfono registrado, también puede usarlo para iniciar sesión. Podemos enviar un enlace de acceso a la cuenta cuando haya entrega por correo electrónico o por teléfono con capacidad de texto."
-      duplicate_no_link_body: "Puede iniciar sesión con su correo electrónico y contraseña. Si su cuenta tiene un número de teléfono registrado, también puede usarlo para iniciar sesión. Para recibir un enlace de acceso a la cuenta, comuníquese con el equipo MAT en %{support_email}."
+      skip_to_form: "Saltar al formulario de registro"
+      title: "Crear cuenta"
+      required_indicator: "Indica un campo obligatorio"
+      name_legend: "Nombre"
+      first_name_label: "Nombre"
+      middle_initial_label: "Inicial del segundo nombre (opcional)"
+      last_name_label: "Apellido"
+      contact_legend: "Información de contacto"
+      email_label: "Correo electrónico"
+      phone_label: "Número de teléfono (opcional)"
+      registration_blocked_heading: "No pudimos completar su registro."
+      registration_blocked_body: "Si ya tiene una cuenta del portal MAT, intente iniciar sesión. Para obtener ayuda con el registro o el acceso a la cuenta, comuníquese con el equipo MAT en %{support_email}."
       log_in_cta: "Iniciar sesión con su correo electrónico y contraseña"
-      send_access_link: "Enviar enlace de acceso a la cuenta"
-      phone_hint: "Opcional. Ingrese 10 dígitos. Puede usar este número para iniciar sesión."
+      phone_hint: "Opcional. Ingrese 10 dígitos. Use un número donde MAT pueda comunicarse con usted de forma segura sobre su cuenta o solicitud."
       phone_type_label: "Tipo de teléfono"
       phone_type_required: "Seleccione un tipo de teléfono cuando proporcione un número de teléfono."
-      match_type:
-        email: "correo electrónico"
-        phone: "teléfono"
+      phone_type_options:
+        voice: "Voz"
+        videophone: "Videoteléfono"
+        text: "Texto/SMS"
+      security_legend: "Seguridad"
+      password_label: "Contraseña"
+      password_hint: "Mínimo 6 caracteres"
+      password_confirmation_label: "Confirmar contraseña"
+      date_of_birth_label: "Fecha de nacimiento"
+      date_of_birth_placeholder: "MM/DD/AAAA"
+      date_of_birth_hint: "Ingrese la fecha de nacimiento como MM/DD/AAAA"
+      language_preference_label: "Preferencia de idioma"
+      language_prompt: "Seleccione idioma"
+      language_hint: "Seleccione uno de los idiomas disponibles"
+      language_options:
+        en: "Inglés"
+        es: "Español"
+      notification_method_label: "Método de notificación"
+      notification_email_label: "Correo electrónico"
+      notification_letter_label: "Carta por correo"
+      mail_notice_label: "Nota:"
+      mail_notice: "Recibirá notificaciones por carta impresa."
+      street_address_label: "Dirección"
+      address_2_label: "Apto./suite (opcional)"
+      city_label: "Ciudad"
+      state_label: "Estado"
+      zip_code_label: "Código postal"
+      newsletter_signup: "Suscríbase a nuestro boletín para recibir actualizaciones sobre los programas y servicios MAT"
+      submit: "Crear cuenta"
+      submitting: "Creando cuenta..."
+      sign_in_prompt: "¿Ya tiene una cuenta?"
+      sign_in_link: "Iniciar sesión"
+    profile:
+      on_file: "Registrado:"
   activerecord:
     errors:
       models:
@@ -51,7 +111,7 @@ es:
           attributes:
             base:
               portal_self_registration_requires_email: "Una cuenta del portal requiere una dirección de correo electrónico. Si no tiene correo electrónico, comuníquese con MAT para obtener ayuda con una solicitud en papel."
-              portal_self_registration_unavailable_contact: "No pudimos completar su registro con la información proporcionada. Las cuentas del portal requieren una dirección de correo electrónico. Comuníquese con el equipo MAT en %{support_email} para obtener ayuda."
+              portal_self_registration_unavailable_contact: "No pudimos completar su registro con la información proporcionada. Comuníquese con el equipo MAT en %{support_email} para obtener ayuda."
             phone_type:
               portal_self_registration_phone_type_required: "debe seleccionarse cuando se proporciona un número de teléfono"
         application:
@@ -256,6 +316,9 @@ es:
           revoke: "Revocar"
           revoke_confirm: "¿Revocar este enlace seguro para subir %{proof_type}? El destinatario ya no podrá usarlo."
           no_actions: "Sin acciones"
+      recovery_requests:
+        approve:
+          notification_failed: "No se pudo completar la aprobación de recuperación porque no se pudo crear o poner en cola la notificación al usuario. No se quitaron credenciales."
       medical_provider_secure_request_forms:
         panel:
           title: "Enlaces de carga de certificación segura"

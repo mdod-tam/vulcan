@@ -31,6 +31,13 @@ subj, body = tpl.render(user_first_name: @user.first_name, reset_url: ...)
 mail(to: @user.email, subject: subj) { format.text { render plain: body } }
 ```
 
+Password-reset links are bearer links. `UserMailer` builds them with
+`CanonicalPublicUrlOptions` so outbound email uses the configured public
+host/protocol instead of an inbound request host or the unsafe `example.com`
+production fallback. There is no live email-verification link flow in the
+current code; public signup currently sends
+`ApplicationNotificationsMailer.registration_confirmation`.
+
 **Alternative using class method:**
 
 ```ruby
@@ -111,19 +118,21 @@ mail(to: user.email, subject: 'Hi', message_stream: 'notifications')
 ### 4.2 Tracking & Webhooks
 
 * `track_opens: true` configured globally in `postmark_format.rb`.
-* `UpdateEmailStatusJob` polls Postmark API to update `Notification` delivery status.
+* `UpdateEmailStatusJob` polls Postmark only for `medical_certification_requested` notifications with a `message_id`; do not assume it updates every email-backed `Notification`.
 * Bounce events handled by `EmailEventHandler` → creates audit events.
 * Webhook endpoint: `/webhooks/email_events` for bounce/complaint notifications.
 
 ### 4.3 Debug Logs
 
 ```
-POSTMARK PAYLOAD (ORIGINAL)
-POSTMARK PAYLOAD (MODIFIED)
+POSTMARK PAYLOAD (ORIGINAL) # only when POSTMARK_DEBUG_PAYLOADS=true; redacted
+POSTMARK PAYLOAD (MODIFIED) # only when POSTMARK_DEBUG_PAYLOADS=true; redacted
 POSTMARK SUCCESS / POSTMARK ERROR
 ```
 
-Enable in `config/initializers/postmark_debugger.rb`.
+`config/initializers/postmark_debugger.rb` never logs raw payloads by default.
+When payload logging is explicitly enabled, bodies, URLs, and token-bearing
+fields are redacted before writing to Rails logs.
 
 ---
 
@@ -166,7 +175,7 @@ subj, body = tpl.render(first_name: 'Ada')
 | **Secure form upload rejected** | File type/size/content validation in `ProofAttachmentValidator` |
 | **Letter generation fails** | Text template exists? all variables supplied? `PrintQueueItem` created? |
 | **Wrong stream** | `message_stream` param in mailer (`outbound` vs `notifications`) |
-| **Email tracking issues** | `POSTMARK_API_TOKEN`, `UpdateEmailStatusJob` logs, `Notification` records |
+| **Email tracking issues** | `POSTMARK_API_TOKEN`, `UpdateEmailStatusJob` logs, `Notification` records with `action: "medical_certification_requested"` and a `message_id` |
 | **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, and syntax. Liquid placeholders must come from required variables. |
 
 **Tools:**

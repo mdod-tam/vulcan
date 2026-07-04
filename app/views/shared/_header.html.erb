@@ -1,7 +1,7 @@
 <%
   # Cache the current_user and derive all values once to avoid multiple DB queries
   user = current_user
-  
+
   # Set up navigation links once
   navigation_links = []
 
@@ -24,31 +24,31 @@
                      else
                        admin_dashboard_path
                      end
-    
+
     logo_link_path = dashboard_path
     logo_aria_label = "Go to your dashboard"
     logo_sr_text = "TAM Logo - Go to Dashboard"
-    
+
     # Check if user has any enrolled 2FA method set up
     has_second_factor = user.second_factor_enabled?
   else
     logo_link_path = root_path
-    logo_aria_label = "Return to homepage"
-    logo_sr_text = "TAM Logo - Return to Homepage"
+    logo_aria_label = t("shared.header.return_home")
+    logo_sr_text = t("shared.header.logo_return_home")
   end
 %>
 
 <header data-controller="mobile-menu" class="relative z-30">
-  <nav class="bg-white shadow" role="navigation" aria-label="Main Navigation">
+  <nav class="bg-white shadow" role="navigation" <%= tag.attributes(aria: { label: t("shared.header.main_navigation") }) %>>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <!-- Logo -->
         <div class="flex items-center">
-          <%= link_to logo_link_path, 
-              class: "focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md", 
+          <%= link_to logo_link_path,
+              class: "focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
               aria: { label: logo_aria_label } do %>
-            <img src="<%= asset_path("TAM_color.png") %>" 
-                 alt="TAM Logo" 
+            <img src="<%= asset_path("TAM_color.png") %>"
+                 alt="TAM Logo"
                  class="h-8 w-auto"
                  aria-hidden="true">
             <span class="sr-only"><%= logo_sr_text %></span>
@@ -63,28 +63,28 @@
                 aria-controls="mobile-menu"
                 aria-expanded="false"
                 aria-haspopup="true">
-          <span class="sr-only">Toggle navigation menu</span>
+          <span class="sr-only"><%= t("shared.header.toggle_navigation") %></span>
           <!-- Menu Open Icon -->
-          <svg class="h-6 w-6" 
-               xmlns="http://www.w3.org/2000/svg" 
-               fill="none" 
-               viewBox="0 0 24 24" 
+          <svg class="h-6 w-6"
+               xmlns="http://www.w3.org/2000/svg"
+               fill="none"
+               viewBox="0 0 24 24"
                stroke="currentColor"
                aria-hidden="true">
-            <path stroke-linecap="round" 
-                  stroke-linejoin="round" 
-                  stroke-width="2" 
+            <path stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
                   d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
 
         <!-- Desktop Navigation -->
         <div class="hidden md:flex md:items-center md:justify-between md:flex-1 md:ml-10">
-          <nav aria-label="Primary Navigation">
+          <nav <%= tag.attributes(aria: { label: t("shared.header.primary_navigation") }) %>>
             <ul class="flex space-x-4" role="menubar">
               <% navigation_links.each do |text, path| %>
                 <li role="none">
-                  <%= link_to text, 
+                  <%= link_to text,
                       path,
                       class: "text-gray-700 hover:text-gray-900 px-4 py-3 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500",
                       role: "menuitem" %>
@@ -99,9 +99,9 @@
               <span class="text-gray-700 text-sm" aria-label="Welcome message">
                 Hello, <%= user.first_name %>
               </span>
-              
+
               <% unless has_second_factor %>
-                <%= link_to setup_two_factor_authentication_path, 
+                <%= link_to setup_two_factor_authentication_path,
                     class: "flex items-center px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500",
                     aria: { label: "Set up two-factor authentication for your account" } do %>
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -119,7 +119,7 @@
                     Secure Account
                   <% end %>
                 <% end %>
-                
+
                 <%= link_to dashboard_path,
                     class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
                     aria: { label: "Go to your dashboard" } do %>
@@ -133,14 +133,14 @@
                     aria: { label: "Sign out of your account" } %>
             <% else %>
               <div class="flex space-x-4">
-                <%= link_to "Sign In",
-                    sign_in_path,
+                <%= link_to t("shared.header.sign_in"),
+                    sign_in_path(locale: public_request_locale_param),
                     class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-                    aria: { label: "Sign in to your account" } %>
-                <%= link_to "Sign Up",
-                    sign_up_path,
+                    aria: { label: t("shared.header.sign_in_aria") } %>
+                <%= link_to t("shared.header.sign_up"),
+                    sign_up_path(locale: public_request_locale_param),
                     class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
-                    aria: { label: "Sign up for a new account" } %>
+                    aria: { label: t("shared.header.sign_up_aria") } %>
               </div>
             <% end %>
           </div>
@@ -149,9 +149,9 @@
     </div>
 
     <!-- Mobile Menu -->
-    <div class="md:hidden hidden" 
-         id="mobile-menu" 
-         data-mobile-menu-target="menu" 
+    <div class="md:hidden hidden"
+         id="mobile-menu"
+         data-mobile-menu-target="menu"
          role="menu"
          aria-orientation="vertical"
          aria-labelledby="mobile-menu-button">
@@ -170,9 +170,9 @@
             <p class="text-base text-center font-medium text-gray-800">
               Hello, <%= user.first_name %>
             </p>
-            
+
             <% unless has_second_factor %>
-              <%= link_to setup_two_factor_authentication_path, 
+              <%= link_to setup_two_factor_authentication_path,
                   class: "mt-2 flex items-center justify-center w-full px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500",
                   role: "menuitem",
                     aria: { label: "Set up two-factor authentication for your account" } do %>
@@ -182,7 +182,7 @@
                 Secure Account <%# Standardized text %>
               <% end %>
             <% end %>
-            
+
             <%= link_to "Dashboard",
                 dashboard_path,
                 class: "mt-2 block w-full text-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
@@ -197,16 +197,16 @@
           </div>
         <% else %>
           <div class="px-4 space-y-1">
-            <%= link_to "Sign In",
-                sign_in_path,
+            <%= link_to t("shared.header.sign_in"),
+                sign_in_path(locale: public_request_locale_param),
                 class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
                 role: "menuitem",
-                aria: { label: "Sign in to your account" } %>
-            <%= link_to "Sign Up",
-                sign_up_path,
+                aria: { label: t("shared.header.sign_in_aria") } %>
+            <%= link_to t("shared.header.sign_up"),
+                sign_up_path(locale: public_request_locale_param),
                 class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
                 role: "menuitem",
-                aria: { label: "Sign up for a new account" } %>
+                aria: { label: t("shared.header.sign_up_aria") } %>
           </div>
         <% end %>
       </div>

@@ -37,6 +37,22 @@ class RecoveryRequestTest < ActiveSupport::TestCase
     assert_equal 'pending', request.status
   end
 
+  test 'database enforces one pending recovery request per user' do
+    FactoryBot.create(:recovery_request, user: @user, status: 'pending')
+
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      FactoryBot.create(:recovery_request, user: @user, status: 'pending')
+    end
+  end
+
+  test 'database allows a new pending recovery request after prior request is resolved' do
+    FactoryBot.create(:recovery_request, :approved, user: @user)
+
+    request = FactoryBot.build(:recovery_request, user: @user, status: 'pending')
+
+    assert request.save
+  end
+
   test 'should approve request and clear user credentials' do
     # Set up WebAuthn credential for the user
     create_webauthn_credential_for(@user)
