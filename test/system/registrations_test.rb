@@ -3,7 +3,7 @@
 require 'application_system_test_case'
 
 class RegistrationsTest < ApplicationSystemTestCase
-  test 'phone-only paper conflict does not block public registration' do
+  test 'phone-only paper conflict shows neutral support without creating portal account' do
     phone = '410-555-0198'
     Current.paper_context = true
     begin
@@ -34,12 +34,14 @@ class RegistrationsTest < ApplicationSystemTestCase
 
     click_button 'Create Account'
 
-    assert_current_path welcome_path, wait: 10
-    assert_text 'Account created successfully. Welcome!'
+    assert_current_path sign_up_path, wait: 10
+    assert_text "We couldn't complete your registration."
+    assert_text 'Sign in with your email address and password'
+    assert_no_text 'Account created successfully'
     assert_no_text 'phone-only'
     assert_no_text 'paper record'
     assert_no_text 'has already been taken'
-    take_screenshot('registration-phone-only-paper-conflict-created', html: true)
+    take_screenshot('registration-phone-only-paper-conflict-support', html: true)
   end
 
   test 'password visibility toggle changes field type and updates accessibility attributes' do

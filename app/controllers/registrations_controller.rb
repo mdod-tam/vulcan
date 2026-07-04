@@ -25,8 +25,6 @@ class RegistrationsController < ApplicationController
     build_user
     return render_duplicate_account_prompt if duplicate_account_match?
 
-    suppress_non_portal_phone_conflict_for_public_registration
-
     # Check for potential duplicates based on Name + DOB and flag for admin review
     @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
 
@@ -103,21 +101,9 @@ class RegistrationsController < ApplicationController
     return nil if phone.blank?
 
     user = User.find_by_phone(phone)
-    return nil unless user&.email_backed_public_portal_account? && user.real_phone?
+    return nil unless user&.real_phone?
 
     user
-  end
-
-  def suppress_non_portal_phone_conflict_for_public_registration
-    return if @user.phone.blank?
-
-    conflicting_user = User.find_by_phone(@user.phone)
-    return if conflicting_user.blank?
-    return if conflicting_user.email_backed_public_portal_account?
-
-    @user.phone = nil
-    @user.phone_type = :contact_email
-    @user.needs_duplicate_review = true
   end
 
   def render_duplicate_account_prompt
@@ -177,7 +163,6 @@ class RegistrationsController < ApplicationController
     # Check only if all parts are present
     return false unless normalized_first_name.present? && normalized_last_name.present? && user.date_of_birth.present?
 
-    # Correctly use where(...).exists? for multiple conditions
-    User.exists?(['lower(first_name) = ? AND lower(last_name) = ? AND date_of_birth = ?', normalized_first_name, normalized_last_name, user.date_of_birth])
+    Users::Constituent.find_duplicates(normalized_first_name, normalized_last_name, user.date_of_birth).exists?
   end
 end

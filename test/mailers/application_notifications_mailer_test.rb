@@ -593,6 +593,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'security_key_recovery_approved includes account access link' do
+    ApplicationNotificationsMailer.any_instance.unstub(:sign_in_url)
+    original_default_url_options = Rails.application.config.action_mailer.default_url_options&.dup
+    Rails.application.config.action_mailer.default_url_options = { host: 'test.example.com' }
     user = create(:constituent, first_name: 'Jane')
     recovery_request = create(:recovery_request, user: user, status: 'approved')
     notification = Notification.new(recipient: user, notifiable: recovery_request, action: 'security_key_recovery_approved')
@@ -604,7 +607,27 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
     assert_equal [user.email], email.to
     assert_includes decoded_text_part(email), 'Recovery approved for Jane'
-    assert_includes decoded_text_part(email), 'http://example.com/users/sign_in'
+    assert_includes decoded_text_part(email), 'http://test.example.com/sign_in'
+  ensure
+    Rails.application.config.action_mailer.default_url_options = original_default_url_options
+  end
+
+  test 'security_key_recovery_approved fails fast for unsafe production canonical host' do
+    ApplicationNotificationsMailer.any_instance.unstub(:sign_in_url)
+    original_default_url_options = Rails.application.config.action_mailer.default_url_options&.dup
+    Rails.application.config.action_mailer.default_url_options = { host: 'example.com', protocol: 'https' }
+    Rails.env.stubs(:production?).returns(true)
+    user = create(:constituent, first_name: 'Jane')
+    recovery_request = create(:recovery_request, user: user, status: 'approved')
+    notification = Notification.new(recipient: user, notifiable: recovery_request, action: 'security_key_recovery_approved')
+
+    error = assert_raises(ArgumentError) do
+      ApplicationNotificationsMailer.security_key_recovery_approved(recovery_request, notification).deliver_now
+    end
+
+    assert_equal 'Canonical public URL host is not configured', error.message
+  ensure
+    Rails.application.config.action_mailer.default_url_options = original_default_url_options
   end
 
   test 'security_key_recovery_approved uses recipient locale for Spanish locale staff recipient when available' do

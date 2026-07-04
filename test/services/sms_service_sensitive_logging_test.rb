@@ -42,13 +42,15 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
 
   test 'sensitive SMS failure logging redacts account access reset URLs from provider errors' do
     reset_url = 'https://example.test/password/edit?token=secret-reset-token'
+    formatted_phone = '410-555-0199'
+    e164_phone = '+14105550199'
     client = mock('twilio_client')
     messages = mock('twilio_messages')
 
     SmsService.stubs(:twilio_configured?).returns(true)
     Twilio::REST::Client.expects(:new).returns(client)
     client.expects(:messages).returns(messages)
-    messages.expects(:create).raises(StandardError.new("provider echoed #{reset_url}"))
+    messages.expects(:create).raises(StandardError.new("provider echoed #{reset_url} for #{formatted_phone} / #{e164_phone}"))
 
     logs = capture_rails_logs do
       assert_raises(StandardError) do
@@ -62,7 +64,11 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
     end
 
     assert_includes logs, '[REDACTED_URL]'
+    assert_includes logs, '[REDACTED_PHONE]'
     assert_not_includes logs, reset_url
     assert_not_includes logs, 'secret-reset-token'
+    assert_not_includes logs, formatted_phone
+    assert_not_includes logs, e164_phone
+    assert_not_includes logs, '4105550199'
   end
 end

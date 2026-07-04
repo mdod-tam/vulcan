@@ -6,6 +6,8 @@ module SecureErrorSanitizer
   SECURE_URL_PATTERN = %r{https?://[^\s<>"']+}
   TOKEN_ASSIGNMENT_PATTERN = /(\b(?:token|secure_token|public_token|raw_token)=)[^\s&<>"']+/i
   EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
+  E164_PHONE_PATTERN = /(?<!\w)\+\d[\d .()-]{7,}\d(?!\w)/
+  US_PHONE_PATTERN = /(?<!\w)(?:\(?\d{3}\)?[\s.-]*)\d{3}[\s.-]*\d{4}(?!\w)/
   EMAIL_KEY_PATTERN = /(?:\Aemail\z|_email\z)/i
   SENSITIVE_KEYS = %w[
     public_token
@@ -37,6 +39,8 @@ module SecureErrorSanitizer
         .gsub(SECURE_URL_PATTERN, '[REDACTED_URL]')
         .gsub(TOKEN_ASSIGNMENT_PATTERN, '\1[REDACTED]')
         .gsub(EMAIL_ADDRESS_PATTERN, '[REDACTED_EMAIL]')
+        .gsub(E164_PHONE_PATTERN, '[REDACTED_PHONE]')
+        .gsub(US_PHONE_PATTERN, '[REDACTED_PHONE]')
     else
       value
     end

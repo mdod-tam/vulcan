@@ -331,7 +331,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes assigns(:user).errors[:email], "can't be blank"
   end
 
-  def test_phone_only_paper_record_does_not_block_public_registration_or_become_portal_phone
+  def test_phone_only_paper_record_renders_neutral_support_without_creating_portal_account
     phone = '410-555-0199'
     Current.paper_context = true
     begin
@@ -351,7 +351,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     submitted_email = "new-signup-#{SecureRandom.hex(4)}@example.com"
 
-    assert_difference('User.count', 1) do
+    assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: submitted_email,
         password: 'password123',
@@ -367,17 +367,19 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    assert_redirected_to welcome_path
-    created_user = User.find_by!(email: submitted_email)
-    assert created_user.real_email?
-    assert_nil created_user.phone
-    assert_equal 'contact_email', created_user.phone_type
-    assert created_user.needs_duplicate_review?
+    assert_response :unprocessable_content
+    assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
-    assert_nil assigns(:registration_support_needed)
+    assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'a', I18n.t('portal_self_service.registrations.log_in_cta')
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
+    assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/phone-only|paper record|has already been taken|that phone/i, response.body)
+    assert_nil User.find_by_email(submitted_email)
   end
 
-  def test_phone_only_paper_record_does_not_render_public_duplicate_handoff
+  def test_phone_only_paper_record_gets_support_without_account_access_handoff
     phone = '410-555-0196'
     Current.paper_context = true
     begin
@@ -395,23 +397,28 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       Current.reset
     end
 
-    post sign_up_path, params: { user: {
-      email: "new-no-handoff-#{SecureRandom.hex(4)}@example.com",
-      password: 'password123',
-      password_confirmation: 'password123',
-      first_name: 'New',
-      last_name: 'Registrant',
-      date_of_birth: '1990-01-01',
-      phone: phone,
-      phone_type: 'text',
-      timezone: 'Eastern Time (US & Canada)',
-      locale: 'en',
-      hearing_disability: true
-    } }
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "new-no-handoff-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'Registrant',
+        date_of_birth: '1990-01-01',
+        phone: phone,
+        phone_type: 'text',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
 
-    assert_redirected_to welcome_path
+    assert_response :unprocessable_content
+    assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
-    assert_nil assigns(:registration_support_needed)
+    assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
   end
 
   def test_re_render_preserves_submitted_phone_type_selection
@@ -596,32 +603,22 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_create_user_but_flag_for_review_on_name_dob_match
-    # Skip this test until the migration is applied to the database
-    skip 'Skipping test that requires needs_duplicate_review column until migration is applied'
-
-    # Original test code is kept but skipped
-    # Create an existing user with specific details
     create(:constituent,
            first_name: 'Duplicate',
            last_name: 'User',
            date_of_birth: '1985-05-15',
-           email: "existing-user-#{SecureRandom.hex(4)}@example.com") # Ensure unique email
+           email: "existing-user-#{SecureRandom.hex(4)}@example.com")
 
-    # Force duplicate detection to return true
-    RegistrationsController.any_instance.stubs(:potential_duplicate_found?).returns(true)
-    User.any_instance.stubs(:needs_duplicate_review).returns(true)
-
-    # Attempt to create a new user with the same name and DOB, but different email/phone
     test_email = "duplicate-name-dob-#{SecureRandom.hex(4)}@example.com"
     assert_difference('User.count', 1) do
       post sign_up_path, params: { user: {
-        email: test_email, # Guaranteed unique email with random hex
+        email: test_email,
         password: 'password123',
         password_confirmation: 'password123',
-        first_name: 'Duplicate', # Same first name (case difference handled by controller)
-        last_name: 'USER',       # Same last name (case difference handled by controller)
-        date_of_birth: '1985-05-15', # Same DOB
-        phone: '555-123-4567', # Unique phone
+        first_name: 'Duplicate',
+        last_name: 'USER',
+        date_of_birth: '1985-05-15',
+        phone: '555-123-4567',
         phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
@@ -629,11 +626,9 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    # Should still redirect successfully
     assert_redirected_to welcome_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
-    # Verify the new user was created AND flagged
     new_user = User.find_by(email: test_email)
     assert_not_nil new_user, 'New user should have been created despite name/DOB match'
     assert new_user.needs_duplicate_review, 'User should be flagged for duplicate review'

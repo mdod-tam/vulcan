@@ -674,7 +674,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
     base_variables.merge({
                            user_first_name: user.first_name,
-                           sign_in_url: sign_in_url(host: default_url_options[:host])
+                           sign_in_url: sign_in_url(**CanonicalPublicUrlOptions.call)
                          }).compact
   end
 

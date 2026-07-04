@@ -25,7 +25,7 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Area | Path | Current behavior |
 |------|------|------------------|
 | Routes | `config/routes.rb` | Defines `sign_up`, profile/password routes, `admin/users`, and member routes such as `mfa_tokens_admin_user_path`, `update_role_admin_user_path`, and `history_admin_user_path`. |
-| Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, blocks exact email or email-backed phone duplicates with neutral support/sign-in copy, flags name+DOB and non-portal phone conflicts for review, creates the session, and sends registration confirmation. Phone-only and address-only paper records must not become public portal identities. |
+| Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, blocks exact email and stored-phone duplicates with neutral support/sign-in copy, flags name+DOB matches for review, creates the session only when registration is safe, and sends registration confirmation. Phone-only and address-only paper records must not become public portal identities. |
 | Admin users | `app/controllers/admin/users_controller.rb` | Lists, filters, shows, edits, creates, role-converts, capability-updates, deletes MFA tokens, deletes users, and serves guardian/dependent helper endpoints. |
 | User model | `app/models/user.rb` | Base STI model. Includes authentication, roles/capabilities, profile validation, contact predicates, guardian/dependent logic, and email search tokens. |
 | Contact predicates | `app/models/concerns/user_contact_predicates.rb` | Canonical contact truth: `real_email?`, `real_phone?`, `sms_capable_phone?`, `portal_access_eligible?`, and `email_backed_public_portal_account?`. `portal_access_eligible?` is stored-contact truth; `email_backed_public_portal_account?` is the public self-service gate. |
@@ -50,7 +50,7 @@ Email and phone are stored with deterministic Rails encryption so exact lookups 
 - duplicate signup copy does not offer account-access delivery from the registration page and must not reveal whether the match was email-backed, phone-only, text-capable, or delivery-capable
 - `PasswordsController#create` uses the same email-backed resolver: SMS is sent only when the matched account has `real_email?` and `sms_capable_phone?`; all outcomes show the same public confirmation (delivery details stay in audit logs only)
 - conflicting matches, where email and phone belong to different users, show the same neutral support/sign-in panel
-- phone matching a non-email-backed paper/admin record does not enter public duplicate handoff and never creates or promotes a portal identity for the paper record; public signup proceeds as an email-backed account without storing the already-on-file paper phone, and the new user is flagged for duplicate review. Registration copy therefore describes phone as an optional identifier only when it can be added to the portal account, not as an unconditional sign-in method.
+- phone matching a non-email-backed paper/admin record renders the same neutral support/sign-in panel and creates no portal account. The submitted phone remains owned by the paper/admin record; public copy must not reveal that the match was phone-only, paper/admin-created, text-capable, or delivery-capable.
 
 `UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
 
@@ -91,7 +91,7 @@ Email-backed portal users created during paper intake get an internal initial pa
 
 Persisted address-only constituents remain editable in admin user edit (name, address, letter preference) without requiring email. Normal admin edit cannot clear all contact information or keep email delivery without a real email; those transitions are reserved for paper intake with explicit no-contact flags.
 
-Public portal self-registration requires a real email address. Phone remains optional; when supplied, the registrant must explicitly choose a phone type. The phone may serve as an alternate login identifier only if it can be stored on the email-backed portal account. If the submitted phone is already attached to a non-email-backed paper/admin record, signup stays email-backed, the phone is not copied onto the portal account, and staff receive the duplicate-review signal instead.
+Public portal self-registration requires a real email address. Phone remains optional; when supplied, the registrant must explicitly choose a phone type. The phone may serve as an alternate login identifier only if it can be stored on the email-backed portal account. If the submitted phone is already attached to a non-email-backed paper/admin record, signup renders neutral support copy and does not create a second portal user.
 
 Signed-in portal constituents must keep a real email address on their profile. Phone-only and address-only records remain valid paper/admin records, but a public portal account cannot clear its email and become phone-only because public sign-in, account access, and recovery are email-backed.
 
