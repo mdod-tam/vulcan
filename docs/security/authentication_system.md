@@ -10,8 +10,9 @@ Password sign-in starts in `SessionsController#create`.
 
 The controller:
 
-- looks up users through `User.find_by_login_identifier`, which accepts email or phone, normalizes input, rejects malformed `@` input, and rejects users whose stored contact fails `real_email?` or `real_phone?` (covering synthetic dependent emails and placeholder phones), and works with encrypted email storage
-- does not change portal registration rules; signup still requires both email and phone in the public UI
+- looks up users through `User.find_by_login_identifier`, which accepts email or phone for **email-backed portal accounts** (`real_email?` required; phone match also requires `real_phone?` on the same user), normalizes input, rejects malformed `@` input, rejects synthetic dependent emails and placeholder phones, and works with encrypted email storage
+- **does not** treat phone-only or address-only records as portal accounts — those truthful paper/admin records do not match public sign-in, account access, or WebAuthn recovery
+- public self-registration requires a real email address; phone is optional, requires an explicit phone type when present, and adds an alternate login identifier only when it can be stored on the new email-backed portal account; duplicate email redirects to sign-in without authenticating or exposing the submitted email, while duplicate phone/contact collisions render support-only copy and must not reveal whether the match was email-backed, phone-only, paper/admin-created, text-capable, or delivery-capable
 - checks account lock state before password authentication
 - records failed password attempts
 - signs the user in immediately when no second factor is enabled
@@ -19,14 +20,17 @@ The controller:
 
 User password/session behavior lives in `UserAuthentication`.
 
-Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses parallel contact lookup logic in `find_user_for_account_access` with the same malformed-`@` guards plus instance predicates (`real_email?`, `real_phone?`, `sms_capable_phone?`), but it does not call `User.find_by_login_identifier` directly. WebAuthn recovery in `AccountRecoveryController` is email-only.
+Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses `User.find_for_account_access`, which delegates identity lookup to `find_by_login_identifier` and selects delivery separately: email for email-shaped contact on an email-backed account, SMS only when the same account has `sms_capable_phone?` and phone-shaped contact was entered. Email and SMS reset links are built from configured canonical URL options, not the inbound request host, and production refuses the unsafe `example.com` fallback. Every outcome returns the same public confirmation; delivery attempts, including matched accounts with no available delivery route, are recorded in audit logs only after the account-access rate-limit gate. WebAuthn recovery in `AccountRecoveryController` uses the same email-backed login lookup via a contact field; throttling keys and unmatched rate-limit audit metadata use digests of submitted contacts rather than raw identifiers.
 
 Current account-lock behavior:
 
 - maximum failed login attempts: 5
 - lock duration: 1 hour
-- password reset tokens expire after 20 minutes
-- email verification tokens expire after 1 day
+- password reset tokens expire after 20 minutes and are invalidated by a successful password change because token generation is tied to the password digest
+
+Recovery requests are durable and idempotent: a partial unique index allows only one pending request per user, duplicate pending submissions coalesce into the same public confirmation, and a new pending request is allowed after the previous request is resolved. The index migration assumes alpha/shared environments do not already contain duplicate pending recovery requests for the same user; resolve any such rows before migrating. Admin approval removes WebAuthn credentials only if the approval notification record can be created and queued without a synchronous delivery error.
+
+There is no live email-verification link flow in the current code. Public signup sends `ApplicationNotificationsMailer.registration_confirmation`; any future email-verification work should add a deliberate caller, query-parameter bearer token handling, and end-to-end tests instead of relying on the historical `user_mailer_email_verification` template seeds.
 
 Session records are stored through the `Session` model, and the signed session cookie contains the session token.
 
@@ -204,6 +208,6 @@ When changing authentication:
 - Do not count unverified SMS credentials as enabled.
 - Do not store SMS codes in our database.
 - Use `User.find_by_login_identifier` for password sign-in lookup instead of calling `User.find_by_email` or `User.find_by_phone` directly.
-- Keep account-access lookup aligned with the same contact guards even if it remains in `PasswordsController#find_user_for_account_access` for now.
+- Delegate account-access identity lookup and delivery selection to `User.find_for_account_access` from `PasswordsController#create`; do not reimplement parallel lookup rules in the controller.
 - Do not add role-based MFA exceptions without updating tests.
 - Be careful with direct column writes in auth bookkeeping; the existing uses are narrow and documented in code.

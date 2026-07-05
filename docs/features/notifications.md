@@ -63,8 +63,10 @@ Important channel details:
 - `deliver: false` creates history only. No mailer is enqueued.
 - Record-only actions are valid and intentional.
 - Email delivery uses ActionMailer jobs for mapped actions.
+- `security_key_recovery_approved` is email-only even for letter-preferring users; routing metadata records `actual_delivery_channel: "email"` and `delivery_route_reason: "email_only"` because the recovery approval mailer contains account-access instructions and has no printed-letter path.
 - Printable letters are represented through the letter/print queue flow.
 - SMS is not a general `NotificationService` channel. Selected secure-request services can send SMS through `SmsService`.
+- Account-access SMS is a narrow public auth exception owned by `PasswordsController`, not `NotificationService`; it sends through `SmsService` with sensitive logging and records the outcome through audit events.
 
 ---
 
@@ -143,6 +145,7 @@ When adding or changing templates:
 - declare variables explicitly
 - preserve locale fallback behavior
 - avoid putting sensitive values in long-lived metadata unless they are redacted after delivery
+- treat reset URLs, verification URLs, and secure upload links as delivery artifacts; sanitize them from mailer/SMS failure logs and never persist raw bearer links in notification metadata
 
 ---
 
@@ -213,6 +216,7 @@ Prefer asserting behavior rather than copying implementation internals. Useful a
 - a record-only action stores `actual_delivery_channel: "none"`
 - proof rejection goes through secure proof resubmission instead of bare `NotificationService` delivery
 - temporary secrets are redacted after delivery
+- sensitive SMS delivery tests assert the message body, reset URL, and token are absent from logs even on provider failures
 
 ---
 
@@ -248,6 +252,7 @@ When changing notifications:
 - Do not add SMS as a generic notification channel without designing a real channel contract.
 - Do not add a mailer map entry without a template, recipient contract, and tests.
 - Keep secrets out of durable metadata or redact them immediately after delivery.
+- Use `sensitive: true` and `SecureErrorSanitizer` for SMS paths carrying reset, verification, or secure-upload links.
 
 ---
 

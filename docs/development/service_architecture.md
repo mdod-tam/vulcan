@@ -202,6 +202,7 @@ NotificationService.create_and_deliver!(
 Current behavior:
 
 - `channel` accepts `:email` and `:letter`; recipient-facing mailers decide the actual route for preference-routed messages.
+- `security_key_recovery_approved` is deliberately email-only and records `delivery_route_reason: "email_only"` because there is no printed-letter delivery path for that account-access notice.
 - `deliver: false` creates the `Notification` record without enqueuing delivery.
 - `NOOP_DELIVERY_ACTIONS` are record-only delivery no-ops, including `proof_approved`, `medical_certification_received`, and `medical_certification_approved`.
 - Normal proof-rejection delivery is blocked here. Reviewable proof rejections should use `Applications::RequestProofResubmission`; legacy mailer-only paths must pass `metadata: { delivery_path: 'legacy' }`.

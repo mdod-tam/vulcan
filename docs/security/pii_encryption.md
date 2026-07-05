@@ -67,7 +67,7 @@ Use the helper methods on `User` for contact lookup:
 
 - `User.find_by_email(value)`
 - `User.find_by_phone(value)`
-- `User.find_by_login_identifier(value)` — password sign-in lookup in `SessionsController`; treats any `@` input as email-shaped, rejects malformed email strings without falling back to phone, and blocks synthetic dependent contacts
+- `User.find_by_login_identifier(value)` — public sign-in, account recovery, and other login-identity lookups. Email-shaped input is normalized and matched only to an email-backed public portal account; malformed `@` input is rejected without falling back to phone. Phone-shaped input is normalized and matched only when the same stored user is email-backed and has a real phone (`real_email?` and `real_phone?`). Phone-only paper/admin records and synthetic dependent contacts do not match public login lookup.
 - `User.exists_with_email?(value, excluding_id: nil)`
 - `User.exists_with_phone?(value, excluding_id: nil)`
 
@@ -75,9 +75,9 @@ These helpers normalize email and phone values before querying and rescue lookup
 
 Current adoption by path:
 
-- `User.find_by_login_identifier` — `SessionsController` sign-in only
-- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, WebAuthn recovery, and other existing lookup paths
-- `PasswordsController#find_user_for_account_access` — parallel account-access lookup with equivalent guards, but not yet routed through `find_by_login_identifier`
+- `User.find_by_login_identifier` — public sign-in and account recovery (email-backed portal accounts only; phone lookup requires `real_email?` and `real_phone?` on the matched user)
+- `User.find_by_email` / `User.find_by_phone` — registration duplicate checks, paper intake, and other existing lookup paths. Public registration redirects duplicate email-backed account matches to sign-in without authenticating or exposing the submitted email. Public registration also uses phone lookup to detect stored-phone contact collisions, including phone-only paper/admin records; those collisions render support-only copy, create no portal account, and do not set `needs_duplicate_review`. A phone-only paper/admin match must not become a public login identity.
+- `User.find_for_account_access` — account-access identity lookup plus separate delivery selection in `PasswordsController#create`
 
 Direct Rails equality queries on deterministic encrypted fields can work, but new code should use the helpers where contact lookup or uniqueness is the point. That keeps normalization and failure behavior consistent.
 
@@ -93,7 +93,7 @@ Important behavior:
 
 - email is normalized to lowercase before validation
 - phone is normalized to `XXX-XXX-XXXX` when it has a valid 10-digit US shape
-- email is required unless paper context allows a no-email paper flow, the user is a phone-only portal user (`email_optional?` — NULL email with `real_phone?`), or the user is a persisted address-only constituent (`real_email?` and `real_phone?` both false with letter delivery)
+- email is required unless paper context allows a no-email paper flow, the user is a persisted phone-only record (`email_optional?` — NULL email with `real_phone?`, not an email-backed portal account), or the user is a persisted address-only constituent (`real_email?` and `real_phone?` both false with letter delivery)
 - phone and dependent phone must be valid 10-digit US numbers when present
 - dependent email/phone are encrypted too
 
@@ -108,7 +108,7 @@ Sensitive request parameters are filtered in `config/initializers/filter_paramet
 Currently filtered categories include:
 
 - password fields
-- user contact and address fields, including unified auth `contact`
+- user contact and address fields, including unified auth `contact` and account-recovery `details`
 - date of birth and SSN fields
 - SMS phone number params
 - medical provider contact fields
@@ -116,6 +116,8 @@ Currently filtered categories include:
 - TOTP secrets and broad token/key/certificate patterns
 
 Do not add new PII fields without updating both encryption declarations and parameter filtering.
+
+Reset URLs, verification URLs, and secure upload URLs are bearer delivery artifacts, not durable record truth. Mailer and SMS failure logs must pass exception messages and backtraces through `SecureErrorSanitizer`; SMS paths carrying those links must also use `sensitive: true` so message bodies and full phone numbers are not written to logs.
 
 ---
 

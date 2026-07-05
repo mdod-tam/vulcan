@@ -11,8 +11,8 @@ Rails.application.configure do
   # recommend that you enable it in continuous integration systems to ensure eager loading is working properly before deploying your code.
   config.eager_load = ENV['CI'].present?
 
-  # Configure public file server for tests with cache-control for performance.
-  config.public_file_server.headers = { 'cache-control' => 'public, max-age=3600' }
+  # Avoid caching fingerprinted assets in system tests; stale JS breaks Stimulus verification.
+  config.public_file_server.headers = { 'cache-control' => 'no-store' }
   config.public_file_server.enabled = true
 
   # Enable serving of assets in test environment (Propshaft configuration)

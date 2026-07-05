@@ -65,8 +65,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
-    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
-                 flash[:notice]
+    assert_equal account_access_confirmation_message, flash[:notice]
   end
 
   def test_should_send_account_access_sms_for_existing_phone
@@ -74,7 +73,9 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     SmsService.expects(:send_message)
               .with(@user.phone,
-                    regexp_matches(%r{MAT account access link to set your password: https?://\S+ This link expires in 20 minutes\.}))
+                    regexp_matches(%r{MAT account access link to set your password: https?://\S+ This link expires in 20 minutes\.}),
+                    sensitive: true,
+                    context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
               .returns(true)
 
     assert_difference -> { Event.where(action: 'account_access_instructions_sent', user: @user).count }, 1 do
@@ -84,6 +85,25 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
+  end
+
+  def test_account_access_sms_reset_url_uses_configured_host_not_request_host
+    original_default_url_options = Rails.application.config.action_mailer.default_url_options&.dup
+    Rails.application.config.action_mailer.default_url_options = { host: 'example.com' }
+    @user.update!(phone_type: 'text')
+
+    SmsService.expects(:send_message)
+              .with(@user.phone,
+                    regexp_matches(%r{MAT account access link to set your password: http://example\.com/password/edit\?token=\S+ This link expires in 20 minutes\.}),
+                    sensitive: true,
+                    context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
+              .returns(true)
+
+    post password_path, params: { contact: @user.phone }, headers: { 'Host' => 'attacker.example' }
+
+    assert_redirected_to sign_in_path
+  ensure
+    Rails.application.config.action_mailer.default_url_options = original_default_url_options
   end
 
   def test_should_return_generic_confirmation_when_sms_delivery_fails
@@ -96,8 +116,35 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
-    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
-                 flash[:notice]
+    assert_equal account_access_confirmation_message, flash[:notice]
+  end
+
+  def test_sms_delivery_failure_logs_redact_account_access_reset_url
+    @user.update!(phone_type: 'text')
+    reset_url = 'https://example.test/password/edit?token=secret-reset-token'
+
+    SmsService.expects(:send_message).raises(StandardError.new("provider echoed #{reset_url}"))
+
+    logs = capture_rails_logs do
+      assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', user: @user).count }, 1 do
+        post password_path, params: { contact: @user.phone }
+      end
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+    assert_includes logs, '[REDACTED_URL]'
+    assert_not_includes logs, reset_url
+    assert_not_includes logs, 'secret-reset-token'
+  end
+
+  def test_account_access_confirmation_uses_request_locale
+    sign_out if respond_to?(:sign_out)
+
+    post password_path, params: { contact: 'unknown@example.com', locale: 'es' }
+
+    assert_redirected_to sign_in_path(locale: 'es')
+    assert_equal account_access_confirmation_message(locale: :es), flash[:notice]
   end
 
   def test_should_rate_limit_repeated_account_access_sms_requests
@@ -125,8 +172,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
-    assert_equal 'If the information you entered matches an account, we sent account access instructions to the contact information on record.',
-                 flash[:notice]
+    assert_equal account_access_confirmation_message, flash[:notice]
   end
 
   def test_should_update_password_with_valid_token_without_current_password
@@ -148,6 +194,30 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
     assert_equal 'Password successfully updated.', flash[:notice]
     assert @user.reload.authenticate('TokenReset*Password123')
+  end
+
+  def test_password_reset_token_cannot_be_reused_after_successful_update
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+
+    patch password_path, params: {
+      token: token,
+      password: 'TokenReset*Password123',
+      password_confirmation: 'TokenReset*Password123'
+    }
+
+    assert_redirected_to sign_in_path
+    assert @user.reload.authenticate('TokenReset*Password123')
+
+    patch password_path, params: {
+      token: token,
+      password: 'ReplayReset*Password123',
+      password_confirmation: 'ReplayReset*Password123'
+    }
+
+    assert_redirected_to new_password_path
+    assert_equal 'Invalid or expired reset link.', flash[:alert]
+    assert_not @user.reload.authenticate('ReplayReset*Password123')
   end
 
   def test_should_update_password_with_valid_inputs
@@ -252,6 +322,35 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal @original_password_digest, @user.password_digest
   end
 
+  def test_phone_only_record_does_not_receive_account_access
+    sign_out if respond_to?(:sign_out)
+
+    phone = '410-555-0177'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'OnlyAccess',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    SmsService.expects(:send_message).never
+
+    assert_no_enqueued_emails do
+      post password_path, params: { contact: phone }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+  end
 
   def test_system_email_does_not_fall_through_to_phone_for_account_access
     sign_out if respond_to?(:sign_out)
@@ -293,11 +392,11 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   def test_guardian_generated_synthetic_phone_does_not_receive_account_access_sms
     sign_out if respond_to?(:sign_out)
 
-    user = create(:constituent,
-                  phone: '000-345-6789',
-                  email: "real.#{SecureRandom.hex(3)}@example.com",
-                  password: 'password123',
-                  password_confirmation: 'password123')
+    create(:constituent,
+           phone: '000-345-6789',
+           email: "real.#{SecureRandom.hex(3)}@example.com",
+           password: 'password123',
+           password_confirmation: 'password123')
 
     SmsService.expects(:send_message).never
 
@@ -331,12 +430,42 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     SmsService.expects(:send_message).never
 
-    assert_no_enqueued_emails do
-      post password_path, params: { contact: user.phone }
+    assert_difference -> { Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count }, 1 do
+      assert_no_enqueued_emails do
+        post password_path, params: { contact: user.phone }
+      end
     end
 
     assert_redirected_to sign_in_path
     assert_equal account_access_confirmation_message, flash[:notice]
+  end
+
+  def test_delivery_unavailable_account_access_audits_stop_after_rate_limit
+    sign_out if respond_to?(:sign_out)
+
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+
+    user = create(:constituent,
+                  phone: '410-555-0145',
+                  phone_type: 'voice',
+                  email: "voice-rate-limit-#{SecureRandom.hex(3)}@example.com",
+                  password: 'password123',
+                  password_confirmation: 'password123')
+
+    SmsService.expects(:send_message).never
+
+    (PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT + 1).times do |index|
+      post password_path, params: { contact: user.phone }
+      travel AuditEventService::DEDUP_WINDOW + 1.second if index < PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT
+    end
+
+    assert_equal PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT,
+                 Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count
+    assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', user: user).count
+  ensure
+    travel_back
+    Rails.cache = old_cache
   end
 
   def test_malformed_email_shaped_account_access_does_not_fall_through_to_phone
@@ -403,8 +532,13 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal user, User.find_by_phone(phone)
   end
 
-  def account_access_confirmation_message
-    'If the information you entered matches an account, we sent account access instructions to the contact information on record.'
+  def account_access_confirmation_message(locale: I18n.locale)
+    I18n.t(
+      'portal_self_service.account_access.confirmation',
+      locale: locale,
+      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
+      support_phone: ProgramContact.support_phone_display
+    )
   end
 
   private

@@ -41,6 +41,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   def test_should_get_new
     get sign_up_path
     assert_response :success
+    assert_select '#phone-hint', text: I18n.t('portal_self_service.registrations.phone_hint')
+    assert_no_match(/You can use this number to sign in/i, response.body)
   end
 
   def test_should_create_constituent_with_required_fields
@@ -53,6 +55,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         # Disabilities are required for constituents
@@ -85,6 +88,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '01/15/1990',
         phone: '555-555-5565',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -105,6 +109,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: 'January 15 1990',
         phone: '555-555-5566',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -127,6 +132,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: false, # No disability selected
@@ -156,6 +162,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'Only',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -176,6 +183,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: 'invalid-phone', # Invalid format
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -187,11 +195,11 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes assigns(:user).errors[:phone], 'must be a valid 10-digit US phone number'
   end
 
-  def test_should_not_create_user_with_existing_email
+  def test_existing_email_redirects_to_sign_in_without_creating_account
     # Use FactoryBot to create an existing user
     existing_user = create(:constituent)
 
-    assert_no_difference('User.count') do
+    assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: existing_user.email, # Already exists
         password: 'password123',
@@ -200,16 +208,46 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
       } }
     end
 
-    assert_response :unprocessable_content
-    assert_select 'h2', /An account already exists with that email/
-    assert_select 'a', 'Log in with your email and password'
-    assert_select 'input[value=?]', 'Send account access link'
+    assert_redirected_to sign_in_path(locale: 'en')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
+    assert_no_match(existing_user.email, flash[:notice])
+    assert_no_match(existing_user.email, response.location)
+
+    follow_redirect!
+    assert_response :success
+    assert_select '[data-testid=?]', 'flash-notice',
+                  text: I18n.t('portal_self_service.registrations.existing_email_account')
+    assert_select '#contact-input[value=?]', existing_user.email, count: 0
+  end
+
+  def test_existing_email_redirect_normalizes_uppercase_and_whitespace
+    existing_user = create(:constituent, email: "duplicate-case-#{SecureRandom.hex(4)}@example.com")
+
+    assert_no_difference(['User.count', 'Session.count']) do
+      post sign_up_path, params: { user: {
+        email: "  #{existing_user.email.upcase}  ",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'User',
+        date_of_birth: '1990-01-01',
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+        phone_type: 'voice',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_redirected_to sign_in_path(locale: 'en')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
   end
 
   def test_should_not_create_user_with_existing_phone
@@ -229,6 +267,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: test_phone, # Already exists
+        phone_type: 'text',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -236,9 +275,277 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'h2', /An account already exists with that phone/
-    assert_select 'a', 'Log in with your email and password'
-    assert_select 'input[value=?]', 'Send account access link'
+    assert assigns(:registration_support_needed)
+    assert_nil assigns(:account_access_user)
+    assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'a', text: '410-767-6960'
+    assert_select 'a', text: '443-453-5970 (VP)'
+    assert_no_sign_in_cta
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
+    assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/that email|that phone/i, response.body)
+  end
+
+  def test_should_create_constituent_with_email_only_without_phone
+    assert_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "email-only-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Email',
+        last_name: 'Only',
+        date_of_birth: '1990-01-01',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_redirected_to welcome_path
+    user = User.last
+    assert_nil user.phone
+    assert user.real_email?
+  end
+
+  def test_should_not_create_address_only_registration
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Address',
+        last_name: 'Only',
+        date_of_birth: '1990-01-01',
+        communication_preference: 'letter',
+        physical_address_1: '123 Main St',
+        city: 'Baltimore',
+        state: 'MD',
+        zip_code: '21201',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:base].join, 'A portal account requires an email address'
+    assert_includes assigns(:user).errors[:base].join, '410-767-6960'
+    assert_includes assigns(:user).errors[:base].join, '443-453-5970 (VP)'
+  end
+
+  def test_should_not_create_address_and_phone_without_email_registration
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Address',
+        last_name: 'AndPhone',
+        date_of_birth: '1990-01-01',
+        phone: '555-555-5599',
+        phone_type: 'voice',
+        communication_preference: 'letter',
+        physical_address_1: '123 Main St',
+        city: 'Baltimore',
+        state: 'MD',
+        zip_code: '21201',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:base].join, 'A portal account requires an email address'
+    assert_includes assigns(:user).errors[:base].join, '410-767-6960'
+    assert_includes assigns(:user).errors[:base].join, '443-453-5970 (VP)'
+    assert_includes assigns(:user).errors[:email], "can't be blank"
+  end
+
+  def test_phone_only_paper_record_renders_neutral_support_without_creating_portal_account
+    phone = '410-555-0199'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Paper', last_name: 'PhoneOnly',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    submitted_email = "new-signup-#{SecureRandom.hex(4)}@example.com"
+
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: submitted_email,
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'Registrant',
+        date_of_birth: '1990-01-01',
+        phone: phone,
+        phone_type: 'text',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert assigns(:registration_support_needed)
+    assert_nil assigns(:account_access_user)
+    assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'a', text: '410-767-6960'
+    assert_select 'a', text: '443-453-5970 (VP)'
+    assert_no_sign_in_cta
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
+    assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/phone-only|paper record|has already been taken|that phone/i, response.body)
+    assert_nil User.find_by_email(submitted_email)
+  end
+
+  def test_phone_only_paper_record_gets_support_without_account_access_handoff
+    phone = '410-555-0196'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Paper', last_name: 'PhoneOnlyNoHandoff',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "new-no-handoff-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'Registrant',
+        date_of_birth: '1990-01-01',
+        phone: phone,
+        phone_type: 'text',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert assigns(:registration_support_needed)
+    assert_nil assigns(:account_access_user)
+    assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'a', text: '410-767-6960'
+    assert_select 'a', text: '443-453-5970 (VP)'
+    assert_no_sign_in_cta
+    assert_select 'form[action=?]', password_path, count: 0
+    assert_select 'input[name=?]', 'contact', count: 0
+  end
+
+  def test_re_render_preserves_submitted_phone_type_selection
+    post sign_up_path, params: { user: {
+      email: "phone-type-rerender-#{SecureRandom.hex(4)}@example.com",
+      password: 'password123',
+      password_confirmation: 'wrong-password',
+      first_name: 'Phone',
+      last_name: 'Type',
+      date_of_birth: '1990-01-01',
+      phone: '555-555-7777',
+      phone_type: 'text',
+      timezone: 'Eastern Time (US & Canada)',
+      locale: 'en',
+      hearing_disability: true
+    } }
+
+    assert_response :unprocessable_content
+    assert_select 'input#phone_type_text[checked=checked]'
+    assert_select 'input#phone_type_voice[checked=checked]', count: 0
+  end
+
+  def test_requires_explicit_phone_type_when_phone_is_present
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "missing-phone-type-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Phone',
+        last_name: 'Type',
+        date_of_birth: '1990-01-01',
+        phone: '555-555-7788',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:phone_type],
+                    I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
+    assert_nil assigns(:user).phone_type
+    assert_select 'input#phone_type_voice[checked=checked]', count: 0
+  end
+
+  def test_rejects_blank_phone_type_when_phone_is_present
+    assert_no_difference('User.count') do
+      post sign_up_path, params: { user: {
+        email: "blank-phone-type-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Phone',
+        last_name: 'Type',
+        date_of_birth: '1990-01-01',
+        phone: '555-555-7789',
+        phone_type: '',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_includes assigns(:user).errors[:phone_type],
+                    I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
+    assert_nil assigns(:user).phone_type
+    assert_select 'input#phone_type_voice[checked=checked]', count: 0
+  end
+
+  def test_rejects_non_phone_contact_method_as_phone_type_when_phone_is_present
+    { 'email' => '555-555-7790', 'letter' => '555-555-7791' }.each do |submitted_phone_type, phone|
+      assert_no_difference('User.count') do
+        post sign_up_path, params: { user: {
+          email: "invalid-phone-type-#{submitted_phone_type}-#{SecureRandom.hex(4)}@example.com",
+          password: 'password123',
+          password_confirmation: 'password123',
+          first_name: 'Phone',
+          last_name: 'Type',
+          date_of_birth: '1990-01-01',
+          phone: phone,
+          phone_type: submitted_phone_type,
+          timezone: 'Eastern Time (US & Canada)',
+          locale: 'en',
+          hearing_disability: true
+        } }
+      end
+
+      assert_response :unprocessable_content
+      assert_includes assigns(:user).errors[:phone_type],
+                      I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
+      assert_nil assigns(:user).phone_type
+    end
   end
 
   def test_should_not_offer_account_access_link_for_non_sms_phone_match
@@ -257,6 +564,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: test_phone,
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -264,18 +572,44 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'h2', /An account already exists with that phone/
-    assert_select 'a', 'Log in with your email and password'
+    assert assigns(:registration_support_needed)
+    assert_select 'h2', /We couldn't complete your registration/
+    assert_no_sign_in_cta
     assert_select 'a[href^=?]', 'mailto:'
+    assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_no_match(/that email|that phone/i, response.body)
   end
 
-  def test_should_show_support_message_when_email_and_phone_match_different_accounts
+  def test_duplicate_email_redirect_preserves_spanish_locale
+    existing_user = create(:constituent, email: "duplicate-es-#{SecureRandom.hex(4)}@example.com")
+
+    assert_no_difference(['User.count', 'Session.count']) do
+      post sign_up_path, params: { user: {
+        email: existing_user.email,
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'Nuevo',
+        last_name: 'Usuario',
+        date_of_birth: '1990-01-01',
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+        phone_type: 'text',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'es',
+        hearing_disability: true
+      } }
+    end
+
+    assert_redirected_to sign_in_path(locale: 'es')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account', locale: :es), flash[:notice]
+  end
+
+  def test_duplicate_email_takes_precedence_when_phone_matches_different_account
     email_user = create(:constituent, email: "email-match-#{SecureRandom.hex(4)}@example.com")
     phone_user = create(:constituent, email: "phone-match-#{SecureRandom.hex(4)}@example.com",
                                       phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
 
-    assert_no_difference('User.count') do
+    assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: email_user.email,
         password: 'password123',
@@ -284,56 +618,44 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: phone_user.phone,
+        phone_type: 'text',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
       } }
     end
 
-    assert_response :unprocessable_content
-    assert_select 'h2', /We found conflicting account information/
-    assert_select 'a[href^=?]', 'mailto:'
-    assert_select 'input[value=?]', 'Send account access link', count: 0
+    assert_redirected_to sign_in_path(locale: 'en')
+    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
   end
 
   def test_should_create_user_but_flag_for_review_on_name_dob_match
-    # Skip this test until the migration is applied to the database
-    skip 'Skipping test that requires needs_duplicate_review column until migration is applied'
-
-    # Original test code is kept but skipped
-    # Create an existing user with specific details
     create(:constituent,
            first_name: 'Duplicate',
            last_name: 'User',
            date_of_birth: '1985-05-15',
-           email: "existing-user-#{SecureRandom.hex(4)}@example.com") # Ensure unique email
+           email: "existing-user-#{SecureRandom.hex(4)}@example.com")
 
-    # Force duplicate detection to return true
-    RegistrationsController.any_instance.stubs(:potential_duplicate_found?).returns(true)
-    User.any_instance.stubs(:needs_duplicate_review).returns(true)
-
-    # Attempt to create a new user with the same name and DOB, but different email/phone
     test_email = "duplicate-name-dob-#{SecureRandom.hex(4)}@example.com"
     assert_difference('User.count', 1) do
       post sign_up_path, params: { user: {
-        email: test_email, # Guaranteed unique email with random hex
+        email: test_email,
         password: 'password123',
         password_confirmation: 'password123',
-        first_name: 'Duplicate', # Same first name (case difference handled by controller)
-        last_name: 'USER',       # Same last name (case difference handled by controller)
-        date_of_birth: '1985-05-15', # Same DOB
-        phone: '555-123-4567', # Unique phone
+        first_name: 'Duplicate',
+        last_name: 'USER',
+        date_of_birth: '1985-05-15',
+        phone: '555-123-4567',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
       } }
     end
 
-    # Should still redirect successfully
     assert_redirected_to welcome_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
-    # Verify the new user was created AND flagged
     new_user = User.find_by(email: test_email)
     assert_not_nil new_user, 'New user should have been created despite name/DOB match'
     assert new_user.needs_duplicate_review, 'User should be flagged for duplicate review'
@@ -349,6 +671,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         last_name: 'User',
         date_of_birth: '1990-01-01',
         phone: '555-555-5555',
+        phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
         hearing_disability: true
@@ -374,6 +697,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       last_name: 'User',
       date_of_birth: '1990-01-01',
       phone: '555-555-5555',
+      phone_type: 'voice',
       timezone: 'Eastern Time (US & Canada)',
       locale: 'en',
       communication_preference: 'email', # Ensure email is sent
@@ -472,6 +796,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
           last_name: 'Usuario',
           date_of_birth: '1990-01-01',
           phone: '555-555-5555',
+          phone_type: 'voice',
           timezone: 'Eastern Time (US & Canada)',
           locale: 'es',
           communication_preference: 'email',
@@ -491,5 +816,15 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal [email], sent_email.to
     assert_equal 'Bienvenido ES', sent_email.subject
     assert_includes sent_email.body.to_s, 'ES body Prueba Prueba Usuario'
+  end
+
+  private
+
+  def assert_no_sign_in_cta
+    assert_select 'footer.text-center', count: 0
+    assert_select 'a[href=?]', sign_in_path, count: 0
+    assert_select 'a[href=?]', sign_in_path(locale: 'en'), count: 0
+    assert_select 'a', text: I18n.t('shared.header.sign_in'), count: 0
+    assert_select 'a', text: I18n.t('portal_self_service.registrations.sign_in_link'), count: 0
   end
 end

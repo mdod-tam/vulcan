@@ -5,6 +5,7 @@ class SessionsController < ApplicationController
 
   skip_before_action :authenticate_user!, only: %i[new create]
   skip_before_action :enforce_required_mfa_enrollment
+  around_action :with_public_request_locale, only: %i[new create]
 
   def new
     respond_to do |format|
@@ -63,7 +64,7 @@ class SessionsController < ApplicationController
         render turbo_stream: turbo_stream.replace('sign_in_form', partial: 'sessions/form')
       end
       format.html do
-        redirect_to sign_in_path, alert: invalid_credentials_message
+        redirect_to sign_in_path(locale: public_request_locale_param), alert: invalid_credentials_message
       end
     end
   end

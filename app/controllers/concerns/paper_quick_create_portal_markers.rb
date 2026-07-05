@@ -7,7 +7,7 @@ module PaperQuickCreatePortalMarkers
   SESSION_KEY = 'paper_quick_created_portal_users'
 
   def store_quick_created_portal_user_marker!(user)
-    return unless user&.portal_access_eligible?
+    return unless user&.email_backed_public_portal_account?
 
     prune_stale_quick_created_portal_user_markers!
     session[SESSION_KEY] ||= {}

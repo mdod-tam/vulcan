@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_27_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_01_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -436,6 +436,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_27_120000) do
     t.text "user_agent"
     t.bigint "user_id", null: false
     t.index ["user_id"], name: "index_recovery_requests_on_user_id"
+    t.index ["user_id"], name: "index_recovery_requests_one_pending_per_user", unique: true, where: "((status)::text = 'pending'::text)"
   end
 
   create_table "rejection_reasons", force: :cascade do |t|

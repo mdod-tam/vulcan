@@ -80,12 +80,16 @@ module Users
 
       def format_date_for_encryption(date_of_birth)
         formatted_date = case date_of_birth
-                         when String then date_of_birth
-                         when Date then date_of_birth.strftime('%Y-%m-%d')
+                         when String
+                           Date.iso8601(date_of_birth)
+                         when Date
+                           date_of_birth
                          end
 
         Rails.logger.debug { "*** Using formatted_date: #{formatted_date} (#{formatted_date.class})" } if formatted_date
         formatted_date
+      rescue ArgumentError
+        nil
       end
 
       def log_debug_matches(first_name, last_name)
@@ -102,8 +106,9 @@ module Users
       end
 
       def build_duplicate_query(first_name, last_name, formatted_date)
-        query = where('LOWER(first_name) = ? AND LOWER(last_name) = ? AND date_of_birth = ?',
-                      first_name.downcase, last_name.downcase, formatted_date)
+        query = where('LOWER(first_name) = ? AND LOWER(last_name) = ?',
+                      first_name.downcase, last_name.downcase)
+                .where(date_of_birth: formatted_date)
 
         if Rails.logger.debug?
           Rails.logger.debug { "*** Duplicate query SQL: #{query.to_sql}" }
@@ -126,7 +131,7 @@ module Users
 
       # Don't exclude self since this is a new record
       has_duplicates = duplicates.exists?
-      self.needs_duplicate_review = has_duplicates
+      self.needs_duplicate_review = true if has_duplicates
       Rails.logger.debug { "*** Found duplicates: #{has_duplicates} - setting needs_duplicate_review to #{needs_duplicate_review}" }
     end
 

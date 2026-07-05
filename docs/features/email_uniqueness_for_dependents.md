@@ -35,7 +35,7 @@ The `User` model includes logic to manage dependent-specific contact information
 - **Validation**: The model validates the format of `dependent_email` and `dependent_phone` (implemented in `UserProfile` concern).
 - **Helper Methods** (implemented in `UserGuardianship` concern):
   - `effective_email`, `effective_phone`, `effective_phone_type`, and `effective_communication_preference` are **communication-only** helpers for notifications, mailers, and admin display. They prefer dependent-owned fields, then guardian fallback, then the user's own fields.
-  - Portal sign-in and password recovery still use primary `email`/`phone` through `User.find_by_login_identifier`; synthetic dependent primaries are excluded from those auth paths even when effective contact resolves to a guardian address.
+  - Portal sign-in, account access, and WebAuthn recovery use `User.find_by_login_identifier` on stored primary contact. Public portal lookup requires an **email-backed** account (`real_email?`); phone matches only when the same user also has `real_phone?`. Synthetic dependent primaries are excluded even when effective contact resolves to a guardian address.
   - `guardian_for_contact`: Returns the primary guardian for contact purposes.
 
 - **Contact predicates** (implemented in `UserContactPredicates` concern):

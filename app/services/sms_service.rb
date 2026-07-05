@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class SmsService
+  extend SecureErrorSanitizer
+
   def self.send_message(phone_number, message, sensitive: false, context: {})
     delivery_phone_number = format_phone_to_e164(phone_number)
 
@@ -34,13 +36,13 @@ class SmsService
       end
       true
     rescue Twilio::REST::RestError => e
-      Rails.logger.error("Twilio SMS delivery failed: #{e.message}")
+      log_sms_error('Twilio SMS delivery failed', e)
       Rails.logger.error("Twilio error code: #{e.code}") if e.respond_to?(:code)
       raise
     end
   rescue StandardError => e
-    Rails.logger.error("SMS delivery failed: #{e.message}")
-    Rails.logger.error("SMS error backtrace: #{e.backtrace.first(5).join("\n")}")
+    log_sms_error('SMS delivery failed', e)
+    log_sms_backtrace(e)
     raise
   end
 
@@ -72,4 +74,16 @@ class SmsService
     (context || {}).slice(:secure_request_form_id, :application_id, :recipient_id, :recipient_channel)
   end
   private_class_method :safe_context
+
+  def self.log_sms_error(prefix, error)
+    Rails.logger.error("#{prefix}: #{sanitize_secure_error_message(error.message)}")
+  end
+  private_class_method :log_sms_error
+
+  def self.log_sms_backtrace(error)
+    return if error.backtrace.blank?
+
+    Rails.logger.error("SMS error backtrace: #{sanitize_secure_error_message(error.backtrace.first(5).join("\n"))}")
+  end
+  private_class_method :log_sms_backtrace
 end

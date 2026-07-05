@@ -3,17 +3,127 @@
 require 'test_helper'
 
 class UserLoginIdentifierTest < ActiveSupport::TestCase
+  test 'find_by_login_identifier is public portal email-backed lookup only' do
+    phone = '410-555-0199'
+    phone_only = nil
+    email_backed = create(:constituent, phone: '410-555-0198')
+
+    Current.paper_context = true
+    begin
+      phone_only = Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'Only',
+        phone: phone,
+        phone_type: 'voice',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    assert phone_only.portal_access_eligible?
+    assert_not phone_only.email_backed_public_portal_account?
+    assert_nil User.find_by_login_identifier(phone)
+
+    assert email_backed.email_backed_public_portal_account?
+    assert_equal email_backed, User.find_by_login_identifier(email_backed.email)
+    assert_equal email_backed, User.find_by_login_identifier(email_backed.phone)
+  end
+
   test 'find_by_login_identifier matches email' do
     user = create(:constituent, email: "login.email.#{SecureRandom.hex(3)}@example.com")
 
     assert_equal user, User.find_by_login_identifier(user.email)
   end
 
-  test 'find_by_login_identifier matches normalized phone' do
+  test 'find_by_login_identifier matches phone only for email-backed accounts' do
     user = create(:constituent, phone: '410-555-0198')
 
+    assert user.real_email?
     assert_equal user, User.find_by_login_identifier('4105550198')
     assert_equal user, User.find_by_login_identifier(user.phone)
+  end
+
+  test 'find_by_login_identifier rejects phone-only records' do
+    phone = '410-555-0199'
+    user = nil
+    Current.paper_context = true
+    begin
+      user = Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'Only',
+        phone: phone,
+        phone_type: 'voice',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    assert_nil user.email
+    assert user.real_phone?
+    assert_not user.email_backed_public_portal_account?
+    assert_nil User.find_by_login_identifier(phone)
+  end
+
+  test 'find_for_account_access sends email delivery for email-shaped contact' do
+    user = create(:constituent, email: "access.#{SecureRandom.hex(3)}@example.com")
+
+    found_user, delivery = User.find_for_account_access(user.email)
+
+    assert_equal user, found_user
+    assert_equal :email, delivery
+  end
+
+  test 'find_for_account_access sends sms for email-backed text phone contact' do
+    user = create(:constituent, phone: '410-555-0201', phone_type: 'text')
+
+    found_user, delivery = User.find_for_account_access(user.phone)
+
+    assert_equal user, found_user
+    assert_equal :sms, delivery
+  end
+
+  test 'find_for_account_access does not deliver for voice phone on email-backed account' do
+    user = create(:constituent,
+                  phone: '410-555-0202',
+                  phone_type: 'voice',
+                  email: "voice.#{SecureRandom.hex(3)}@example.com")
+
+    found_user, delivery = User.find_for_account_access(user.phone)
+
+    assert_equal user, found_user
+    assert_nil delivery
+  end
+
+  test 'find_for_account_access does not match phone-only records' do
+    phone = '410-555-0203'
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Phone', last_name: 'OnlyAccess',
+        phone: phone,
+        phone_type: 'text',
+        communication_preference: :letter,
+        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    found_user, delivery = User.find_for_account_access(phone)
+
+    assert_nil found_user
+    assert_nil delivery
   end
 
   test 'email_shaped_identifier_does_not_fall_back_to_phone' do
@@ -37,7 +147,7 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
 
     assert_nil user.email
     assert_nil User.find_by_login_identifier('4105550197@example.com')
-    assert_equal user, User.find_by_login_identifier(phone)
+    assert_nil User.find_by_login_identifier(phone)
   end
 
   test 'login_identifier_looks_like_email? treats any at sign as email shaped' do
@@ -71,7 +181,7 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
 
     assert_nil user.email
     assert_nil User.find_by_login_identifier('4105550195@')
-    assert_equal user, User.find_by_login_identifier(phone)
+    assert_nil User.find_by_login_identifier(phone)
   end
 
   test 'find_by_login_identifier rejects placeholder phone' do

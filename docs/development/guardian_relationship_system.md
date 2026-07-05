@@ -79,7 +79,7 @@ dependent.effective_communication_preference  # uses guardian's preference if de
 dependent.guardian_for_contact  # returns primary guardian for contact purposes
 ```
 
-These effective-contact helpers are for communication, display, and notification routing. They are not login identifiers; auth and password recovery use `real_email?`, `real_phone?`, and `User.find_by_login_identifier`.
+These effective-contact helpers are for communication, display, and notification routing. They are not login identifiers. Public portal auth and recovery require an email-backed account (`real_email?` via `User.find_by_login_identifier`); phone is an alternate identifier only when the same user also has `real_phone?`.
 
 *Avoids uniqueness violations and supports real-world family setups.*
 

@@ -1,55 +1,102 @@
 # frozen_string_literal: true
 
-# Enhanced debugging for Postmark client to log request payload
-# This will help diagnose the difference between curl and Rails mail formatting
+# Enhanced debugging for Postmark client formatting differences.
+# Payload logging is opt-in and redacted because Postmark bodies can contain
+# password reset and verification links.
 
-if defined?(Postmark::HttpClient)
-  module PostmarkDebugger
-    def post(path, data = {})
-      # Log the original data being sent to Postmark
-      Rails.logger.info "POSTMARK PAYLOAD (ORIGINAL): #{data.to_json}"
+module PostmarkDebugger
+  BODY_KEYS = %w[Body HtmlBody TextBody Attachments].freeze
+  CONTACT_VALUE_KEYS = %w[
+    bcc cc contact contactemail email emailaddress from phone phonenumber recipient recipientemail recipients replyto
+    smsnumber to
+  ].freeze
+  SENSITIVE_VALUE_KEYS = %w[
+    email_verification_url raw_token reset_url secure_token secure_url token verification_url
+  ].freeze
+  EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
+  TOKEN_ASSIGNMENT_PATTERN = /(\b[\w-]*token=)[^&\s"'<>]+/i
+  URL_PATTERN = %r{https?://[^\s"'<>]+}i
 
-      # If this is an email, simplify the payload to match our successful curl request
-      if path == '/email' && data.is_a?(Hash)
-        # Ensure MessageStream is a top-level parameter, not a header
-        if data['Headers']&.any? { |h| h['Name'] == 'X-PM-Message-Stream' }
-          stream_header = data['Headers'].find { |h| h['Name'] == 'X-PM-Message-Stream' }
-          data['MessageStream'] = stream_header['Value'] if stream_header
-          data['Headers'].delete_if { |h| h['Name'] == 'X-PM-Message-Stream' }
-        end
+  def post(path, data = {})
+    log_postmark_payload('ORIGINAL', data)
 
-        # Always remove ReplyTo field to match our successful curl request
-        data.delete('ReplyTo')
+    normalize_postmark_email_payload(data) if path == '/email' && data.is_a?(Hash)
 
-        # Simplify Headers to match our curl request
-        if data['Headers']&.any?
-          # Keep only essential headers
-          data['Headers'].select! do |header|
-            %w[Message-ID Content-Type].include?(header['Name'])
-          end
+    log_postmark_payload('MODIFIED', data)
 
-          # Remove Headers entirely if empty
-          data.delete('Headers') if data['Headers'].empty?
-        end
+    # Call the original method
+    super
+  end
 
-        # Log the modified payload
-        Rails.logger.info "POSTMARK PAYLOAD (MODIFIED): #{data.to_json}"
-      end
+  # Simple error logging without trying to inspect the response type
+  def handle_response(response)
+    result = super
+    Rails.logger.info 'POSTMARK SUCCESS: Email sent successfully'
+    result
+  rescue StandardError => e
+    Rails.logger.error { "POSTMARK ERROR: #{e.class} - #{redacted_postmark_log_message(e.message)}" }
+    raise
+  end
 
-      # Call the original method
-      super
+  private
+
+  def normalize_postmark_email_payload(data)
+    # Ensure MessageStream is a top-level parameter, not a header
+    if data['Headers']&.any? { |h| h['Name'] == 'X-PM-Message-Stream' }
+      stream_header = data['Headers'].find { |h| h['Name'] == 'X-PM-Message-Stream' }
+      data['MessageStream'] = stream_header['Value'] if stream_header
+      data['Headers'].delete_if { |h| h['Name'] == 'X-PM-Message-Stream' }
     end
 
-    # Simple error logging without trying to inspect the response type
-    def handle_response(response)
-      result = super
-      Rails.logger.info 'POSTMARK SUCCESS: Email sent successfully'
-      result
-    rescue StandardError => e
-      Rails.logger.error "POSTMARK ERROR: #{e.class} - #{e.message}"
-      raise
+    # Always remove ReplyTo field to match our successful curl request
+    data.delete('ReplyTo')
+
+    # Simplify Headers to match our curl request
+    return unless data['Headers']&.any?
+
+    # Keep only essential headers
+    data['Headers'].select! do |header|
+      %w[Message-ID Content-Type].include?(header['Name'])
+    end
+
+    # Remove Headers entirely if empty
+    data.delete('Headers') if data['Headers'].empty?
+  end
+
+  def log_postmark_payload(label, payload)
+    return unless ENV.fetch('POSTMARK_DEBUG_PAYLOADS', '').casecmp('true').zero?
+
+    Rails.logger.debug { "POSTMARK PAYLOAD (#{label}): #{redacted_postmark_payload(payload).to_json}" }
+  end
+
+  def redacted_postmark_log_message(message)
+    redacted_postmark_payload(message.to_s)
+  end
+
+  def redacted_postmark_payload(value, key = nil)
+    return '[REDACTED_BODY]' if BODY_KEYS.include?(key.to_s)
+    return '[REDACTED_CONTACT]' if CONTACT_VALUE_KEYS.include?(normalized_postmark_key(key))
+    return '[REDACTED]' if SENSITIVE_VALUE_KEYS.include?(key.to_s)
+
+    case value
+    when Hash
+      value.each_with_object({}) do |(nested_key, nested_value), redacted_payload|
+        redacted_payload[nested_key] = redacted_postmark_payload(nested_value, nested_key)
+      end
+    when Array
+      value.map { |nested_value| redacted_postmark_payload(nested_value) }
+    when String
+      value.gsub(URL_PATTERN, '[REDACTED_URL]')
+           .gsub(TOKEN_ASSIGNMENT_PATTERN, '\1[REDACTED]')
+           .gsub(EMAIL_ADDRESS_PATTERN, '[REDACTED_EMAIL]')
+    else
+      value
     end
   end
 
-  Postmark::HttpClient.prepend(PostmarkDebugger)
+  def normalized_postmark_key(key)
+    key.to_s.downcase.gsub(/[^a-z0-9]/, '')
+  end
 end
+
+Postmark::HttpClient.prepend(PostmarkDebugger) if defined?(Postmark::HttpClient)

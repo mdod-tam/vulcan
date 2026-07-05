@@ -3,9 +3,9 @@
 require 'test_helper'
 
 class PaperQuickCreatePortalMarkersTest < ActiveSupport::TestCase
-  FakeUser = Struct.new(:id, :portal_eligible) do
-    def portal_access_eligible?
-      portal_eligible
+  FakeUser = Struct.new(:id, :email_backed) do
+    def email_backed_public_portal_account?
+      email_backed
     end
   end
 
@@ -36,7 +36,7 @@ class PaperQuickCreatePortalMarkersTest < ActiveSupport::TestCase
     assert_empty @controller.quick_created_portal_user_ids
   end
 
-  test 'does not store marker for address-only user' do
+  test 'does not store marker for non-email-backed user' do
     @controller.store_quick_created_portal_user_marker!(FakeUser.new(99, false))
 
     assert_empty @controller.quick_created_portal_user_ids

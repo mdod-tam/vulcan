@@ -3,15 +3,15 @@
     <svg class="mx-auto h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
     </svg>
-    
-    <h1 class="mt-4 text-xl font-semibold text-gray-900">Recovery Request Submitted</h1>
-    
+
+    <h1 class="mt-4 text-xl font-semibold text-gray-900"><%= t("portal_self_service.account_recovery.confirmation_title") %></h1>
+
     <p class="mt-2 text-sm text-gray-600">
-      An administrator will review your request and contact you shortly. Please check your email for updates.
+      <%= t("portal_self_service.account_recovery.confirmation_body") %>
     </p>
-    
+
     <div class="mt-6">
-      <%= link_to "Return to Sign In", sign_in_path, 
+      <%= link_to t("portal_self_service.account_recovery.back_to_sign_in"), sign_in_path(locale: public_request_locale_param),
                  class: "inline-block py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700" %>
     </div>
   </div>

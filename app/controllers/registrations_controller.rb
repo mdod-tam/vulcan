@@ -6,10 +6,13 @@ class RegistrationsController < ApplicationController
 
   # Set the current user for actions that require authentication
   before_action :set_user, only: %i[edit update destroy]
+  around_action :with_public_request_locale, only: %i[new create]
 
   # GET /sign_up
   def new
     @user = User.new
+    @user.portal_self_registration = true
+    @user.phone_type = :contact_email
   end
 
   # GET /edit_registration
@@ -20,7 +23,13 @@ class RegistrationsController < ApplicationController
 
   def create
     build_user
-    return render_duplicate_account_prompt if duplicate_account_match?
+
+    case duplicate_registration_outcome
+    when :existing_email_account
+      return redirect_existing_email_account
+    when :contact_conflict
+      return render_duplicate_account_prompt
+    end
 
     # Check for potential duplicates based on Name + DOB and flag for admin review
     @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
@@ -69,27 +78,49 @@ class RegistrationsController < ApplicationController
     @user = User.new(registration_params)
     @user.type = 'Users::Constituent'
     @user.force_password_change = false
+    @user.portal_self_registration = true
+    @user.phone_type_submitted = registration_params[:phone_type].present?
+    @user.phone_type = nil if @user.phone.present? && !@user.phone_type_submitted
   end
 
-  def duplicate_account_match?
-    email_user = User.find_by_email(registration_params[:email])
-    phone_user = User.find_by_phone(registration_params[:phone])
+  def duplicate_registration_outcome
+    return :existing_email_account if email_backed_duplicate_for(registration_params[:email]).present?
+    return :contact_conflict if phone_duplicate_for_registration_contact(registration_params[:phone]).present?
 
-    if email_user.present? && phone_user.present? && email_user.id != phone_user.id
-      @account_access_conflict = true
-      @support_email = support_email
-      return true
-    end
+    nil
+  end
 
-    @account_access_user = email_user || phone_user
-    @account_access_match_type = email_user.present? ? 'email' : 'phone'
-    @account_access_contact = account_access_contact_for(@account_access_user, @account_access_match_type)
-    @account_access_available = @account_access_contact.present?
-    @account_access_user.present?
+  def redirect_existing_email_account
+    redirect_to sign_in_path(locale: public_form_locale_param),
+                notice: t('portal_self_service.registrations.existing_email_account')
   end
 
   def render_duplicate_account_prompt
+    @registration_support_needed = true
+    @hide_public_auth_links = true
+    @support_email = support_email
+    @support_phone = support_phone
+    @support_videophone = ProgramContact.support_videophone
+    @support_videophone_label = ProgramContact.support_videophone_label
     render :new, status: :unprocessable_content
+  end
+
+  def email_backed_duplicate_for(email)
+    return nil if email.blank?
+
+    user = User.find_by_email(email)
+    return nil unless user&.real_email?
+
+    user
+  end
+
+  def phone_duplicate_for_registration_contact(phone)
+    return nil if phone.blank?
+
+    user = User.find_by_phone(phone)
+    return nil unless user&.real_phone?
+
+    user
   end
 
   def create_session_and_cookie
@@ -136,13 +167,8 @@ class RegistrationsController < ApplicationController
     Policy.get('support_email') || 'mat.program1@maryland.gov'
   end
 
-  def account_access_contact_for(user, match_type)
-    return nil unless user
-    return user.email if match_type == 'email'
-    return user.phone if user.phone_type.to_s == 'text'
-
-    @support_email = support_email
-    nil
+  def support_phone
+    ProgramContact.support_phone
   end
 
   # Helper method for the soft duplicate check
@@ -154,7 +180,6 @@ class RegistrationsController < ApplicationController
     # Check only if all parts are present
     return false unless normalized_first_name.present? && normalized_last_name.present? && user.date_of_birth.present?
 
-    # Correctly use where(...).exists? for multiple conditions
-    User.exists?(['lower(first_name) = ? AND lower(last_name) = ? AND date_of_birth = ?', normalized_first_name, normalized_last_name, user.date_of_birth])
+    Users::Constituent.find_duplicates(normalized_first_name, normalized_last_name, user.date_of_birth).exists?
   end
 end

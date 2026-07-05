@@ -33,7 +33,7 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
 
     # Check for form elements
     assert_selector 'h1', text: 'Security Key Recovery'
-    assert_field 'email'
+    assert_field 'contact'
     assert_field 'details'
     assert_button 'Submit Recovery Request'
   end
@@ -78,7 +78,7 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
     visit lost_security_key_path
 
     # Fill out the form
-    fill_in 'email', with: @user.email
+    fill_in 'contact', with: @user.email
     fill_in 'details', with: 'I lost my security key during travel.'
     click_button 'Submit Recovery Request'
 
@@ -86,9 +86,9 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
     assert_current_path account_recovery_confirmation_path
 
     # Check confirmation page elements
-    assert_selector 'h1', text: 'Recovery Request Submitted'
-    assert_text 'administrator will review your request'
-    assert_link 'Return to Sign In'
+    assert_selector 'h1', text: 'Recovery Request Received'
+    assert_text 'If the information provided matches a portal account'
+    assert_link 'Back to sign in'
 
     # Verify request was created in the database
     assert RecoveryRequest.exists?(user_id: @user.id)

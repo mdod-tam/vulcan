@@ -71,6 +71,19 @@ class UserContactPredicatesTest < ActiveSupport::TestCase
     assert user.portal_access_eligible?
   end
 
+  test 'email_backed_public_portal_account? requires real email' do
+    assert build(:constituent, email: 'portal@example.com').email_backed_public_portal_account?
+    assert_not build(:constituent, email: nil, phone: '410-555-0103').email_backed_public_portal_account?
+  end
+
+  test 'mfa_account_name prefers real email then phone then name' do
+    email_user = build(:constituent, email: 'mfa@example.com', phone: '410-555-0104')
+    assert_equal 'mfa@example.com', email_user.mfa_account_name
+
+    phone_user = build(:constituent, email: nil, phone: '410-555-0105', first_name: 'Pat', last_name: 'Lee')
+    assert_equal '410-555-0105', phone_user.mfa_account_name
+  end
+
   test 'portal_access_eligible? is true with real phone only' do
     user = build(:constituent, email: nil, phone: '410-555-0103')
 

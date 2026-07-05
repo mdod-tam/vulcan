@@ -6,7 +6,7 @@
          tabindex="-1"
          data-controller="error-summary"
          class="bg-red-50 border border-red-400 text-red-700 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500">
-      <h2 id="signin-error-heading" class="sr-only">Please address the following errors:</h2>
+      <h2 id="signin-error-heading" class="sr-only"><%= t("sessions.form.error_heading") %></h2>
       <ul class="list-disc list-inside">
         <% @errors.each do |field, msg| %>
             <li><a href="#<%= field %>-input" class="underline" data-action="click->error-summary#focus"><%= msg %></a></li>
@@ -15,7 +15,7 @@
     </div>
   <% end %>
 
-  <%= form_with url: sign_in_path,
+  <%= form_with url: sign_in_path(locale: public_request_locale_param),
                 local: true,
                 class: "space-y-6",
                 aria: { labelledby: "signin-heading" },
@@ -29,7 +29,7 @@
     <%= form.text_field :contact,
         id: "contact-input",
         class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-        value: params[:email_hint].presence || "",
+        value: "",
         required: true,
         autocomplete: "username",
         autofocus: true,
@@ -45,7 +45,7 @@
   </div>
 
   <div class="space-y-1" role="group" aria-labelledby="password-input-label">
-    <%= form.label :password, "Password",
+    <%= form.label :password, t("sessions.form.password_label"),
         for: "password-input",
         id: "password-input-label",
         class: "block text-sm font-medium text-gray-700" %>
@@ -79,7 +79,7 @@
       </div>
     </div>
     <div class="flex items-center justify-between mt-2">
-      <p id="password-hint" class="text-xs text-gray-500">Enter your password</p>
+      <p id="password-hint" class="text-xs text-gray-500"><%= t("sessions.form.password_hint") %></p>
     </div>
     <% if @errors&.include?(:password) %>
       <p id="password-error" class="mt-1 text-sm text-red-600">
@@ -88,23 +88,23 @@
     <% end %>
   </div>
 
-  <%= form.submit "Sign In",
+  <%= form.submit t("sessions.form.submit"),
       class: "w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-      "data-disable-with": "Signing in...",
+      "data-disable-with": t("sessions.form.submitting"),
       "aria-busy": "true",
-      "aria-label": "Sign in to your account" %>
+      "aria-label": t("sessions.form.submit_aria") %>
 
   <div class="text-center" role="contentinfo">
-    <%= link_to "Forgot password?",
-      new_password_path,
+    <%= link_to t("sessions.form.forgot_password"),
+      new_password_path(locale: public_request_locale_param),
       class: "text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
-      "aria-label": "Reset your password" %>
+      "aria-label": t("sessions.form.forgot_password_aria") %>
     <p class="text-sm text-gray-600">
-      Don't have an account?
-      <%= link_to "Sign Up",
-          sign_up_path,
+      <%= t("sessions.form.sign_up_prompt") %>
+      <%= link_to t("sessions.form.sign_up"),
+          sign_up_path(locale: public_request_locale_param),
           class: "ml-1 font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
-          "aria-label": "Sign up for a new account" %>
+          "aria-label": t("sessions.form.sign_up_aria") %>
     </p>
   </div>
   <% end %>

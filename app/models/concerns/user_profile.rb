@@ -4,7 +4,11 @@
 module UserProfile
   extend ActiveSupport::Concern
 
+  PORTAL_SELF_REGISTRATION_PHONE_TYPES = %w[voice videophone text].freeze
+
   included do
+    attr_accessor :phone_type_submitted
+
     # Callbacks
     before_validation :normalize_email_fields
     before_validation :normalize_communication_preference_for_undeliverable_email
@@ -42,6 +46,10 @@ module UserProfile
     validate :validate_address_for_letter_preference
     validate :email_delivery_requires_real_email
     validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
+    validate :self_service_profile_requires_email_backing, on: :update, if: :self_service_constituent_profile_update?
+    before_validation :normalize_portal_self_registration_phone_type, if: :portal_self_registration?
+    validate :portal_self_registration_phone_type_matches_phone, if: :portal_self_registration?
+    validate :portal_self_registration_requires_email_backed_account, if: :portal_self_registration?
 
     # Enums
     enum :status, { inactive: 0, active: 1, suspended: 2 }, default: :active
@@ -220,9 +228,20 @@ module UserProfile
 
   def phone_must_be_unique
     return if phone.blank?
+    return unless User.exists_with_phone?(phone, excluding_id: id)
 
-    existing = User.exists_with_phone?(phone, excluding_id: id)
-    errors.add(:phone, 'has already been taken') if existing
+    conflicting_user = User.find_by_phone(phone)
+    if portal_self_registration? && conflicting_user.present? && !conflicting_user.real_email?
+      errors.add(
+        :base,
+        :portal_self_registration_unavailable_contact,
+        support_email: portal_registration_support_email,
+        support_phone: portal_registration_support_phone
+      )
+      return
+    end
+
+    errors.add(:phone, 'has already been taken')
   rescue StandardError => e
     Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
   end
@@ -237,7 +256,8 @@ module UserProfile
     Current.paper_context && phone.blank?
   end
 
-  # Phone-only portal users store NULL email; password/profile saves must not require email.
+  # Phone-only paper records store NULL email; password/profile saves must not require email.
+  # They are not email-backed portal accounts and cannot use public portal sign-in.
   # Address-only users store NULL email/phone and remain editable outside paper context.
   def email_optional?
     paper_context_no_email? ||
@@ -247,6 +267,14 @@ module UserProfile
 
   def validate_admin_contact_update?
     !Current.paper_context && constituent_user_type?
+  end
+
+  def self_service_constituent_profile_update?
+    !Current.paper_context && Current.user == self && constituent_user_type?
+  end
+
+  def self_service_profile_requires_email_backing
+    errors.add(:email, :blank) unless real_email?
   end
 
   def constituent_user_type?
@@ -289,6 +317,41 @@ module UserProfile
     return if was_address_only_contact?
 
     errors.add(:base, 'Cannot clear all contact information outside paper intake.')
+  end
+
+  def portal_self_registration?
+    portal_self_registration == true
+  end
+
+  def portal_self_registration_requires_email_backed_account
+    return if real_email?
+
+    errors.add(
+      :base,
+      :portal_self_registration_requires_email,
+      support_email: portal_registration_support_email,
+      support_phone: portal_registration_support_phone
+    )
+  end
+
+  def normalize_portal_self_registration_phone_type
+    self.phone_type = :contact_email if phone.blank?
+  end
+
+  def portal_self_registration_phone_type_matches_phone
+    return if phone.blank?
+    return if phone_type_submitted && PORTAL_SELF_REGISTRATION_PHONE_TYPES.include?(phone_type)
+
+    self.phone_type = nil
+    errors.add(:phone_type, :portal_self_registration_phone_type_required)
+  end
+
+  def portal_registration_support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
+  end
+
+  def portal_registration_support_phone
+    ProgramContact.support_phone_display
   end
 
   def was_address_only_contact?

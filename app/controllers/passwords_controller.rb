@@ -2,6 +2,8 @@
 
 # Handles password reset and forced password change functionality
 class PasswordsController < ApplicationController
+  include SecureErrorSanitizer
+
   ACCOUNT_ACCESS_RATE_LIMIT = 5
   ACCOUNT_ACCESS_RATE_LIMIT_WINDOW = 1.hour
 
@@ -9,6 +11,7 @@ class PasswordsController < ApplicationController
   skip_before_action :enforce_required_mfa_enrollment
   before_action :set_user_from_token, only: %i[edit]
   before_action :require_password_change_authorization, only: %i[edit update]
+  around_action :with_public_request_locale, only: %i[new create]
 
   def new; end
 
@@ -19,9 +22,9 @@ class PasswordsController < ApplicationController
 
   def create
     user, delivery_method = find_user_for_account_access
-    handle_account_access_request(user, delivery_method) if user.present?
+    attempt_account_access_delivery(user, delivery_method)
 
-    redirect_to sign_in_path, notice: account_access_confirmation_message
+    redirect_to sign_in_path(locale: public_request_locale_param), notice: account_access_confirmation_message
   end
 
   def update
@@ -94,36 +97,34 @@ class PasswordsController < ApplicationController
     contact = account_access_contact.to_s.strip.presence
     return [nil, nil] if contact.blank?
 
-    if User.login_identifier_looks_like_email?(contact)
-      return [nil, nil] unless User.login_identifier_valid_email?(contact)
-
-      email_user = User.find_by_email(contact)
-      return [nil, nil] if email_user.blank?
-      return [nil, nil] unless email_user.real_email?
-
-      return [email_user, :email]
-    end
-
-    phone_user = User.find_by_phone(contact)
-    return [nil, nil] if phone_user.blank?
-    return [nil, nil] unless phone_user.real_phone?
-    return [nil, nil] unless phone_user.sms_capable_phone?
-
-    [phone_user, :sms]
+    User.find_for_account_access(contact)
   end
 
   def account_access_contact
     params[:contact].presence || params[:email].presence || params[:phone].presence
   end
 
+  def attempt_account_access_delivery(user, delivery_method)
+    return false if user.blank?
+
+    handle_account_access_request(user, delivery_method)
+  end
+
   def handle_account_access_request(user, delivery_method)
     if account_access_rate_limited?(user)
-      log_account_access_attempt(user, delivery_method, 'rate_limited')
-      return
+      log_account_access_attempt(user, delivery_method.presence || :none, 'rate_limited')
+      return false
     end
 
-    send_account_access_instructions(user, delivery_method)
+    if delivery_method.blank?
+      log_account_access_attempt(user, :none, 'delivery_unavailable')
+      return false
+    end
+
+    return false unless send_account_access_instructions(user, delivery_method)
+
     log_account_access_attempt(user, delivery_method, 'sent')
+    true
   end
 
   def account_access_rate_limited?(user)
@@ -154,18 +155,27 @@ class PasswordsController < ApplicationController
 
   def send_account_access_instructions(user, delivery_method)
     if delivery_method == :sms
-      SmsService.send_message(user.phone, account_access_sms_body(user))
+      SmsService.send_message(
+        user.phone,
+        account_access_sms_body(user),
+        sensitive: true,
+        context: { recipient_id: user.id, recipient_channel: 'account_access_sms' }
+      )
     else
       UserMailer.with(user: user).password_reset.deliver_later
     end
+    true
   rescue StandardError => e
     log_account_access_attempt(user, delivery_method, 'delivery_failed')
-    Rails.logger.warn("Unable to send account access instructions for user #{user.id}: #{e.class}: #{e.message}")
+    Rails.logger.warn(
+      "Unable to send account access instructions for user #{user.id}: #{e.class}: #{sanitize_secure_error_message(e.message)}"
+    )
+    false
   end
 
   def account_access_sms_body(user)
     token = user.generate_token_for(:password_reset)
-    reset_url = edit_password_url(token: token, host: request.host, protocol: request.protocol)
+    reset_url = edit_password_url(token: token, **canonical_public_url_options)
     locale = account_access_sms_locale_for(user)
 
     I18n.t('passwords.account_access_sms.message', locale: locale, reset_url: reset_url)
@@ -197,6 +207,14 @@ class PasswordsController < ApplicationController
   end
 
   def account_access_confirmation_message
-    'If the information you entered matches an account, we sent account access instructions to the contact information on record.'
+    I18n.t(
+      'portal_self_service.account_access.confirmation',
+      support_email: account_access_support_email,
+      support_phone: ProgramContact.support_phone_display
+    )
+  end
+
+  def account_access_support_email
+    Policy.get('support_email') || 'mat.program1@maryland.gov'
   end
 end

@@ -31,7 +31,7 @@ module Applications
             success: true,
             data: {
               user: existing,
-              portal_eligible_created_user_id: nil,
+              email_backed_portal_created_user_id: nil,
               existing_user: true
             }
           )
@@ -45,7 +45,7 @@ module Applications
           success: true,
           data: {
             user: user,
-            portal_eligible_created_user_id: portal_eligible_created_user_id(user)
+            email_backed_portal_created_user_id: email_backed_portal_created_user_id(user)
           }
         )
       else
@@ -83,7 +83,7 @@ module Applications
       user = build_user
 
       if user.save
-        Rails.logger.info { "Created user #{user.id} (portal_eligible=#{user.portal_access_eligible?})" }
+        Rails.logger.info { "Created user #{user.id} (email_backed_portal=#{user.email_backed_public_portal_account?})" }
         user
       else
         @errors << "Failed to create user: #{user.errors.full_messages.join(', ')}"
@@ -120,7 +120,7 @@ module Applications
       user.verified = true
       user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
 
-      if portal_eligible_from_attrs?
+      if email_backed_portal_account_from_attrs?
         initial_password = SecureRandom.hex(8)
         user.password = initial_password
         user.password_confirmation = initial_password
@@ -135,12 +135,12 @@ module Applications
       user
     end
 
-    def portal_eligible_created_user_id(user)
-      user.portal_access_eligible? ? user.id : nil
+    def email_backed_portal_created_user_id(user)
+      user.email_backed_public_portal_account? ? user.id : nil
     end
 
-    def portal_eligible_from_attrs?
-      User.new(email: attrs[:email], phone: attrs[:phone], phone_type: attrs[:phone_type]).portal_access_eligible?
+    def email_backed_portal_account_from_attrs?
+      User.new(email: attrs[:email], phone: attrs[:phone], phone_type: attrs[:phone_type]).email_backed_public_portal_account?
     end
 
     def normalize_contact_attrs!

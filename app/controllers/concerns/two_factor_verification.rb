@@ -252,7 +252,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   # Generate QR code with validated secret only
   def generate_totp_qr_code
     # Only use the validated @secret instance variable
-    @totp_uri = ROTP::TOTP.new(@secret, issuer: 'MatVulcan').provisioning_uri(current_user.email)
+    @totp_uri = ROTP::TOTP.new(@secret, issuer: 'MatVulcan').provisioning_uri(current_user.mfa_account_name)
     @qr_code = RQRCode::QRCode.new(@totp_uri).as_svg(
       color: '000',
       shape_rendering: 'crispEdges',
@@ -291,7 +291,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     WebAuthn::Credential.options_for_create(
       user: {
         id: current_user.webauthn_id,
-        name: current_user.email
+        name: current_user.mfa_account_name
       },
       exclude: current_user.webauthn_credentials.pluck(:external_id),
       authenticator_selection: {
@@ -307,7 +307,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     WebAuthn::Credential.options_for_create(
       user: {
         id: current_user.webauthn_id,
-        name: current_user.email
+        name: current_user.mfa_account_name
       },
       exclude: current_user.webauthn_credentials.pluck(:external_id)
     )

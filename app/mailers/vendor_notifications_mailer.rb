@@ -293,31 +293,6 @@ class VendorNotificationsMailer < ApplicationMailer
     mail_with_text_body(mail_options, body.to_s)
   end
 
-  def log_mail_error(error, user, template_name, variables)
-    AuditEventService.log(
-      actor: user,
-      action: 'email_delivery_error',
-      auditable: user,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: sanitize_secure_error_message(error.message),
-        error_class: error.class.name,
-        template_name: template_name,
-        variables: sanitized_mail_variables(variables),
-        backtrace: sanitize_secure_value(error.backtrace&.first(5))
-      }
-    )
-  end
-
-  def sanitized_mail_variables(variables)
-    redact_sensitive_mail_value(variables.to_h.deep_dup)
-  end
-
-  def redact_sensitive_mail_value(value, key = nil)
-    sanitize_secure_value(value, key)
-  end
-
   def render_transactions_html(transactions)
     rows = transactions.map do |t|
       "<tr><td>#{t.processed_at.strftime('%Y-%m-%d')}</td><td>#{t.voucher.code}</td><td>#{number_to_currency(t.amount)}</td></tr>"

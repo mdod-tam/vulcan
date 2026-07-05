@@ -117,7 +117,7 @@ module Applications
       assert result.success?
       assert result.data[:existing_user]
       assert_equal existing.id, result.data[:user].id
-      assert_nil result.data[:portal_eligible_created_user_id]
+      assert_nil result.data[:email_backed_portal_created_user_id]
       assert_not_includes result.data, :temp_password
     end
 
@@ -144,7 +144,7 @@ module Applications
       end
     end
 
-    test 'creates portal-eligible phone-only user with created portal marker' do
+    test 'creates phone-only user without email-backed portal account setup' do
       phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
 
       Current.paper_context = true
@@ -164,12 +164,13 @@ module Applications
       assert_nil user.email
       assert user.phone.present?
       assert user.portal_access_eligible?
-      assert_equal user.id, result.data[:portal_eligible_created_user_id]
+      assert_not user.email_backed_public_portal_account?
+      assert_nil result.data[:email_backed_portal_created_user_id]
       assert_not_includes result.data, :temp_password
-      assert user.force_password_change?
+      assert_not user.force_password_change?
     end
 
-    test 'creates portal-eligible user when email has surrounding whitespace' do
+    test 'creates email-backed portal user when email has surrounding whitespace' do
       phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
       email = " padded-#{SecureRandom.hex(4)}@example.com "
 
@@ -188,7 +189,8 @@ module Applications
       user = result.data[:user]
       assert_equal email.strip.downcase, user.email
       assert user.portal_access_eligible?
-      assert_equal user.id, result.data[:portal_eligible_created_user_id]
+      assert user.email_backed_public_portal_account?
+      assert_equal user.id, result.data[:email_backed_portal_created_user_id]
       assert_not_includes result.data, :temp_password
     end
 
@@ -211,7 +213,7 @@ module Applications
       assert_nil user.email
       assert_nil user.phone
       assert_not user.portal_access_eligible?
-      assert_nil result.data[:portal_eligible_created_user_id]
+      assert_nil result.data[:email_backed_portal_created_user_id]
       assert_not_includes result.data, :temp_password
       assert_not user.force_password_change?
       assert user.deliver_via_letter?
