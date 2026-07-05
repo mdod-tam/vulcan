@@ -209,7 +209,8 @@ class PasswordsController < ApplicationController
   def account_access_confirmation_message
     I18n.t(
       'portal_self_service.account_access.confirmation',
-      support_email: account_access_support_email
+      support_email: account_access_support_email,
+      support_phone: ProgramContact.support_phone_display
     )
   end
 

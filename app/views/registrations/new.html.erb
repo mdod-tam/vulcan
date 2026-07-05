@@ -32,7 +32,11 @@
            class="bg-yellow-50 border border-yellow-400 text-yellow-900 px-4 py-3 rounded mb-6">
         <h2 class="font-semibold mb-2"><%= t("portal_self_service.registrations.registration_blocked_heading") %></h2>
         <p class="text-sm">
-          <%= t("portal_self_service.registrations.registration_blocked_body", support_email: mail_to(@support_email)).html_safe %>
+          <%= t("portal_self_service.registrations.registration_blocked_body",
+                support_email: mail_to(@support_email),
+                support_phone: phone_to(@support_phone),
+                support_videophone: link_to(@support_videophone_label,
+                                            "tel:#{@support_videophone.delete('-')}")).html_safe %>
         </p>
       </div>
     <% end %>

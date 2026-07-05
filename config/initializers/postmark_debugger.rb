@@ -6,9 +6,14 @@
 
 module PostmarkDebugger
   BODY_KEYS = %w[Body HtmlBody TextBody Attachments].freeze
+  CONTACT_VALUE_KEYS = %w[
+    bcc cc contact contactemail email emailaddress from phone phonenumber recipient recipientemail recipients replyto
+    smsnumber to
+  ].freeze
   SENSITIVE_VALUE_KEYS = %w[
     email_verification_url raw_token reset_url secure_token secure_url token verification_url
   ].freeze
+  EMAIL_ADDRESS_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
   TOKEN_ASSIGNMENT_PATTERN = /(\b[\w-]*token=)[^&\s"'<>]+/i
   URL_PATTERN = %r{https?://[^\s"'<>]+}i
 
@@ -70,6 +75,7 @@ module PostmarkDebugger
 
   def redacted_postmark_payload(value, key = nil)
     return '[REDACTED_BODY]' if BODY_KEYS.include?(key.to_s)
+    return '[REDACTED_CONTACT]' if CONTACT_VALUE_KEYS.include?(normalized_postmark_key(key))
     return '[REDACTED]' if SENSITIVE_VALUE_KEYS.include?(key.to_s)
 
     case value
@@ -82,9 +88,14 @@ module PostmarkDebugger
     when String
       value.gsub(URL_PATTERN, '[REDACTED_URL]')
            .gsub(TOKEN_ASSIGNMENT_PATTERN, '\1[REDACTED]')
+           .gsub(EMAIL_ADDRESS_PATTERN, '[REDACTED_EMAIL]')
     else
       value
     end
+  end
+
+  def normalized_postmark_key(key)
+    key.to_s.downcase.gsub(/[^a-z0-9]/, '')
   end
 end
 

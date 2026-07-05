@@ -99,6 +99,9 @@ class RegistrationsController < ApplicationController
     @registration_support_needed = true
     @hide_public_auth_links = true
     @support_email = support_email
+    @support_phone = support_phone
+    @support_videophone = ProgramContact.support_videophone
+    @support_videophone_label = ProgramContact.support_videophone_label
     render :new, status: :unprocessable_content
   end
 
@@ -162,6 +165,10 @@ class RegistrationsController < ApplicationController
 
   def support_email
     Policy.get('support_email') || 'mat.program1@maryland.gov'
+  end
+
+  def support_phone
+    ProgramContact.support_phone
   end
 
   # Helper method for the soft duplicate check

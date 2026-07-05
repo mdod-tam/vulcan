@@ -36,7 +36,10 @@ class RegistrationsTest < ApplicationSystemTestCase
 
     assert_current_path sign_up_path, wait: 10
     assert_text "We couldn't complete your registration."
-    assert_text 'Sign in with your email address and password'
+    assert_text 'Please contact the MAT Team'
+    assert_text '410-767-6960'
+    assert_text '443-453-5970 (VP)'
+    assert_no_text 'Sign in with your email address and password'
     assert_no_text 'Account created successfully'
     assert_no_text 'phone-only'
     assert_no_text 'paper record'

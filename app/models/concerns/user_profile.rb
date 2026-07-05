@@ -235,7 +235,8 @@ module UserProfile
       errors.add(
         :base,
         :portal_self_registration_unavailable_contact,
-        support_email: portal_registration_support_email
+        support_email: portal_registration_support_email,
+        support_phone: portal_registration_support_phone
       )
       return
     end
@@ -325,7 +326,12 @@ module UserProfile
   def portal_self_registration_requires_email_backed_account
     return if real_email?
 
-    errors.add(:base, :portal_self_registration_requires_email)
+    errors.add(
+      :base,
+      :portal_self_registration_requires_email,
+      support_email: portal_registration_support_email,
+      support_phone: portal_registration_support_phone
+    )
   end
 
   def normalize_portal_self_registration_phone_type
@@ -342,6 +348,10 @@ module UserProfile
 
   def portal_registration_support_email
     Policy.get('support_email') || 'mat.program1@maryland.gov'
+  end
+
+  def portal_registration_support_phone
+    ProgramContact.support_phone_display
   end
 
   def was_address_only_contact?

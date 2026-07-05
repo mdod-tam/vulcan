@@ -39,7 +39,7 @@ en:
     title: "Sign In"
     form:
       contact_label: "Email Address or Phone Number"
-      contact_hint: "Use your account email to sign in or request access. If your account has a phone number on file, you can also use that to identify your account. Account access links by text are sent only to text-capable phone numbers."
+      contact_hint: "Use your account email or phone number. Text access links are sent only to text-capable numbers."
       error_heading: "Please address the following errors:"
       password_label: "Password"
       password_hint: "Enter your password"
@@ -53,12 +53,12 @@ en:
       sign_up_aria: "Sign up for a new account"
   portal_self_service:
     contact_label: "Email Address or Phone Number"
-    contact_hint: "Use your account email to sign in or request access. If your account has a phone number on file, you can also use that to identify your account. Account access links by text are sent only to text-capable phone numbers."
+    contact_hint: "Use your account email or phone number. Text access links are sent only to text-capable numbers."
     account_access:
       title: "Account Access"
       submit: "Send Account Access Link"
       back_to_sign_in: "Back to Sign In"
-      confirmation: "If you need help signing in, contact the MAT Team at %{support_email}. Portal accounts require an email address on file. If the information you entered matches such an account, account access instructions may have been sent when email or text-capable phone delivery is available."
+      confirmation: "If this matches an email-backed portal account, access instructions may have been sent. Need help? Contact the MAT Team at %{support_email} or %{support_phone}."
     account_recovery:
       title: "Security Key Recovery"
       note_label: "Note:"
@@ -84,7 +84,7 @@ en:
       phone_label: "Phone Number (Optional)"
       existing_email_account: "It looks like a MAT portal account already exists for that email address. Please sign in instead."
       registration_blocked_heading: "We couldn't complete your registration."
-      registration_blocked_body: "We couldn't complete signup with this information. Please contact the MAT Team at %{support_email} for help."
+      registration_blocked_body: "We couldn't complete signup with this information. Please contact the MAT Team at %{support_email} or %{support_phone} or %{support_videophone}."
       phone_hint: "Optional. Enter 10 digits. Use a number where MAT can safely reach you about your account or application."
       phone_type_label: "Phone Type"
       phone_type_required: "Select a phone type when providing a phone number."
@@ -128,8 +128,8 @@ en:
         user:
           attributes:
             base:
-              portal_self_registration_requires_email: "A portal account requires an email address. If you do not have email, please contact MAT for assistance with a paper application."
-              portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Please contact the MAT Team at %{support_email} for assistance."
+              portal_self_registration_requires_email: "A portal account requires an email address. If you do not have email, please contact MAT at %{support_email} or %{support_phone} for assistance with a paper application."
+              portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Please contact the MAT Team at %{support_email} or %{support_phone} for assistance."
             phone_type:
               portal_self_registration_phone_type_required: "must be selected when a phone number is provided"
         application:

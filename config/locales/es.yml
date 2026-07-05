@@ -21,7 +21,7 @@ es:
     title: "Iniciar sesión"
     form:
       contact_label: "Correo electrónico o número de teléfono"
-      contact_hint: "Use el correo electrónico de su cuenta para iniciar sesión o solicitar acceso. Si su cuenta tiene un número de teléfono registrado, también puede usarlo para identificar su cuenta. Los enlaces de acceso por mensaje de texto solo se envían a números con capacidad de texto."
+      contact_hint: "Use el correo electrónico o número de teléfono de su cuenta. Los enlaces de acceso por texto solo se envían a números con capacidad de recibir textos."
       error_heading: "Corrija los siguientes errores:"
       password_label: "Contraseña"
       password_hint: "Ingrese su contraseña"
@@ -35,12 +35,12 @@ es:
       sign_up_aria: "Registrarse para obtener una cuenta nueva"
   portal_self_service:
     contact_label: "Correo electrónico o número de teléfono"
-    contact_hint: "Use el correo electrónico de su cuenta para iniciar sesión o solicitar acceso. Si su cuenta tiene un número de teléfono registrado, también puede usarlo para identificar su cuenta. Los enlaces de acceso por mensaje de texto solo se envían a números con capacidad de texto."
+    contact_hint: "Use el correo electrónico o número de teléfono de su cuenta. Los enlaces de acceso por texto solo se envían a números con capacidad de recibir textos."
     account_access:
       title: "Acceso a la cuenta"
       submit: "Enviar enlace de acceso a la cuenta"
       back_to_sign_in: "Volver a iniciar sesión"
-      confirmation: "Si necesita ayuda para iniciar sesión, comuníquese con el equipo MAT en %{support_email}. Las cuentas del portal requieren un correo electrónico registrado. Si la información ingresada coincide con dicha cuenta, es posible que se hayan enviado instrucciones de acceso por correo electrónico o por teléfono con capacidad de texto."
+      confirmation: "Si esto coincide con una cuenta del portal con correo electrónico, es posible que se hayan enviado instrucciones de acceso. ¿Necesita ayuda? Comuníquese con el equipo MAT en %{support_email} o %{support_phone}."
     account_recovery:
       title: "Recuperación de llave de seguridad"
       note_label: "Nota:"
@@ -66,7 +66,7 @@ es:
       phone_label: "Número de teléfono (opcional)"
       existing_email_account: "Parece que ya existe una cuenta del portal MAT para ese correo electrónico. Inicie sesión en su lugar."
       registration_blocked_heading: "No pudimos completar su registro."
-      registration_blocked_body: "No pudimos completar el registro con esta información. Comuníquese con el equipo MAT en %{support_email} para obtener ayuda."
+      registration_blocked_body: "No pudimos completar el registro con esta información. Comuníquese con el equipo MAT en %{support_email} o %{support_phone} o %{support_videophone} para obtener ayuda."
       phone_hint: "Opcional. Ingrese 10 dígitos. Use un número donde MAT pueda comunicarse con usted de forma segura sobre su cuenta o solicitud."
       phone_type_label: "Tipo de teléfono"
       phone_type_required: "Seleccione un tipo de teléfono cuando proporcione un número de teléfono."
@@ -110,8 +110,8 @@ es:
         user:
           attributes:
             base:
-              portal_self_registration_requires_email: "Una cuenta del portal requiere una dirección de correo electrónico. Si no tiene correo electrónico, comuníquese con MAT para obtener ayuda con una solicitud en papel."
-              portal_self_registration_unavailable_contact: "No pudimos completar su registro con la información proporcionada. Comuníquese con el equipo MAT en %{support_email} para obtener ayuda."
+              portal_self_registration_requires_email: "Una cuenta del portal requiere una dirección de correo electrónico. Si no tiene correo electrónico, comuníquese con MAT en %{support_email} o %{support_phone} para obtener ayuda con una solicitud en papel."
+              portal_self_registration_unavailable_contact: "No pudimos completar su registro con la información proporcionada. Comuníquese con el equipo MAT en %{support_email} o %{support_phone} para obtener ayuda."
             phone_type:
               portal_self_registration_phone_type_required: "debe seleccionarse cuando se proporciona un número de teléfono"
         application:

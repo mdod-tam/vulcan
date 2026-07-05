@@ -278,6 +278,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
     assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'a', text: '410-767-6960'
+    assert_select 'a', text: '443-453-5970 (VP)'
     assert_no_sign_in_cta
     assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[name=?]', 'contact', count: 0
@@ -327,6 +329,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_includes assigns(:user).errors[:base].join, 'A portal account requires an email address'
+    assert_includes assigns(:user).errors[:base].join, '410-767-6960'
+    assert_includes assigns(:user).errors[:base].join, '443-453-5970 (VP)'
   end
 
   def test_should_not_create_address_and_phone_without_email_registration
@@ -352,6 +356,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_includes assigns(:user).errors[:base].join, 'A portal account requires an email address'
+    assert_includes assigns(:user).errors[:base].join, '410-767-6960'
+    assert_includes assigns(:user).errors[:base].join, '443-453-5970 (VP)'
     assert_includes assigns(:user).errors[:email], "can't be blank"
   end
 
@@ -395,6 +401,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
     assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'a', text: '410-767-6960'
+    assert_select 'a', text: '443-453-5970 (VP)'
     assert_no_sign_in_cta
     assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[name=?]', 'contact', count: 0
@@ -441,6 +449,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert assigns(:registration_support_needed)
     assert_nil assigns(:account_access_user)
     assert_select 'h2', /We couldn't complete your registration/
+    assert_select 'a', text: '410-767-6960'
+    assert_select 'a', text: '443-453-5970 (VP)'
     assert_no_sign_in_cta
     assert_select 'form[action=?]', password_path, count: 0
     assert_select 'input[name=?]', 'contact', count: 0

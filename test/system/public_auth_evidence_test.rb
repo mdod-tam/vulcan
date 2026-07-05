@@ -20,7 +20,8 @@ class PublicAuthEvidenceTest < ApplicationSystemTestCase
     JS
     wait_until { current_path == sign_in_path }
     assert_text I18n.t('portal_self_service.account_access.confirmation',
-                       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov')
+                       support_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
+                       support_phone: ProgramContact.support_phone_display)
     take_screenshot('public-auth-account-access-confirmation', html: true)
 
     visit lost_security_key_path
