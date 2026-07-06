@@ -7,7 +7,9 @@ This document describes the current user creation, duplicate detection, admin us
 ```text
 Public signup
   -> RegistrationsController#create
+  -> DuplicateDetectionService
   -> User / Users::Constituent
+  -> DuplicateReviewCases::CreateService when soft review is needed
   -> UserProfile / UserAuthentication / UserGuardianship / UserEmailSearch
   -> Users::RegistrationConfirmationService
 
@@ -33,7 +35,9 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Authentication concern | `app/models/concerns/user_authentication.rb` | Owns password/session behavior and WebAuthn, TOTP, and SMS credential associations. |
 | Guardian concern | `app/models/concerns/user_guardianship.rb` | Owns guardian/dependent associations, effective contact methods, and guardian access checks. |
 | Email search concern | `app/models/concerns/user_email_search.rb` | Stores HMAC email-search tokens for admin search, including dependent email and guardian fallback email search. |
-| Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and a create-time name+DOB duplicate check. |
+| Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and exposes duplicate-query helpers used by `DuplicateDetectionService`. |
+| Duplicate detection | `app/services/duplicate_detection_service.rb` | Owns exact contact and soft name+DOB/address signal evaluation for public registration, admin quick-create, and paper self/guardian/dependent creation contexts. |
+| Duplicate review cases | `app/services/duplicate_review_cases/create_service.rb` | Opens idempotent review cases after the subject user is persisted, stores sanitized candidate/metadata snapshots, sets `users.needs_duplicate_review`, and logs the case-opened event. |
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
 | User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_public_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
@@ -44,14 +48,16 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 
 Email and phone are stored with deterministic Rails encryption so exact lookups still work. Before validation, `UserProfile` normalizes email with `User.normalize_email` and formats 10-digit US phone numbers as `XXX-XXX-XXXX`.
 
-`RegistrationsController#create` calls `duplicate_registration_outcome` before saving:
+`RegistrationsController#create` calls `DuplicateDetectionService` with context `:public_registration` before saving. Exact contact matches are hard blockers:
 
-- matching email on an email-backed portal account redirects to sign-in with clear copy instead of creating another user; signup does not authenticate, create a session, send an account-access link, or include the submitted email in the redirect URL or flash copy
-- matching phone renders the signup page with support-only copy and no sign-in CTA because the phone may belong to a phone-only paper/admin record
+- matching email on an email-backed portal account redirects to sign-in with clear copy instead of creating another user; signup does not authenticate, create a session, send an account-access link, create a review case, set duplicate booleans, write audit rows, or include the submitted email in the redirect URL or flash copy
+- matching phone or matching a non-portal email contact renders the signup page with support-only copy and no sign-in CTA because the contact may belong to a phone-only or address-only paper/admin record
 - duplicate signup copy does not offer account-access delivery from the registration page and must not reveal whether a phone match was email-backed, phone-only, paper/admin-created, text-capable, or delivery-capable
 - `PasswordsController#create` uses the same email-backed resolver: SMS is sent only when the matched account has `real_email?` and `sms_capable_phone?`; all outcomes show the same public confirmation (delivery details stay in audit logs only)
 - conflicting matches, where submitted email and phone belong to different users, prioritize the email-backed sign-in redirect and save nothing from the attempted signup
 - phone matching a non-email-backed paper/admin record renders the same support-only panel as other phone contact collisions and creates no portal account. The submitted phone remains owned by the paper/admin record; public copy must not reveal that the match was phone-only, paper/admin-created, text-capable, or delivery-capable.
+
+All public registration hard blocks return before persistence, so they create no user, session, duplicate-review case, audit row, or duplicate-review boolean side effect.
 
 `UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
 
@@ -98,13 +104,15 @@ Signed-in portal constituents must keep a real email address on their profile. P
 
 ### 3.2 Name and DOB review flag
 
-Name+DOB matching is a soft duplicate signal, not a signup blocker. Exact email and phone contact collisions are resolved by the duplicate registration outcome above, not by setting `needs_duplicate_review`.
+Name+DOB and matching address/ZIP are soft duplicate signals, not signup blockers. Exact email and phone contact collisions are resolved by the `DuplicateDetectionService` hard-block outcomes above, not by setting `needs_duplicate_review`.
 
-Current checks compare lowercased first name, lowercased last name, and exact `date_of_birth`:
+Soft duplicate handling is service-owned:
 
-- `RegistrationsController#potential_duplicate_found?` runs during public signup.
-- `Users::Constituent#check_for_duplicates` runs before validation on create.
-- `Admin::UsersController#potential_duplicate_found?` runs after admin JSON user creation and excludes the newly persisted user.
+- `DuplicateDetectionService` evaluates exact contact matches and soft name+DOB/address signals. Public signup uses context `:public_registration`.
+- Soft matches create `DuplicateReviewCase` rows through `DuplicateReviewCases::CreateService` after the subject user is persisted. Public registration uses source `:registration_soft_match`.
+- `users.needs_duplicate_review` is set by `DuplicateReviewCases::CreateService`, not by controller helpers or model callbacks.
+- Admin quick-create uses context `:admin_create` and source `:admin_create`.
+- Paper self, guardian, and dependent creation use contexts `:paper_new_self`, `:paper_new_guardian`, and `:paper_new_dependent`; all paper-created review cases use source `:paper_intake`.
 
 The flag is the real boolean column `users.needs_duplicate_review`, with default `false`.
 
@@ -114,7 +122,7 @@ The admin user index currently surfaces this flag in three ways:
 - a `Needs Review` filter backed by `Users::FilterService`
 - a `Needs Review` badge and row highlight in `_users_table.html.erb`
 
-Important distinction: the current admin surface flags and filters possible duplicates. It does not provide reason details, matched candidates, submitted-phone context, mark-reviewed, keep-separate, merge, or ignore actions. Detailed admin duplicate/claim review and field-level merge/reconcile workflows are outside the current implementation.
+Important distinction: the current admin surface flags and filters possible duplicates. `DuplicateReviewCase` stores sanitized reason, candidate, and metadata snapshots for review plumbing, but the admin user index does not yet provide a full case detail, mark-reviewed, keep-separate, merge, or ignore workflow. Detailed admin duplicate/claim review and field-level merge/reconcile workflows are outside the current implementation.
 
 ### 3.3 Paper applicant lookup and eligibility
 
