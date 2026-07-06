@@ -5,6 +5,8 @@ require 'test_helper'
 class SessionsControllerTest < ActionDispatch::IntegrationTest
   def setup
     @admin = create(:admin)
+    @system_audit_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) ||
+                          create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
   end
 
   def test_should_redirect_admin_without_mfa_to_setup
@@ -60,6 +62,30 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
   end
 
+  def test_failed_login_rate_limit_returns_neutral_error_and_skips_failed_attempt_mutation
+    user = create(:constituent)
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    set_auth_rate_limit_policy('sign_in_attempt_rate_limit_ip', 1)
+    set_auth_rate_limit_policy('sign_in_attempt_rate_period', 1)
+
+    post sign_in_path, params: { email: user.email, password: 'wrongpassword' }
+
+    assert_difference -> { Event.where(action: 'sign_in_attempt_rate_limited', user: @system_audit_actor).count }, 1 do
+      assert_no_difference -> { user.reload.failed_attempts.to_i } do
+        post sign_in_path, params: { email: user.email, password: 'wrongpassword' }
+      end
+    end
+
+    assert_redirected_to sign_in_path
+    event = Event.where(action: 'sign_in_attempt_rate_limited', user: @system_audit_actor).last
+    assert event.metadata['request_ip_digest'].present?
+    assert event.metadata['submitted_contact_digest'].present?
+    assert_not_includes event.metadata.values.join(' '), user.email
+  ensure
+    Rails.cache = old_cache
+  end
+
   def test_repeated_failed_logins_lock_account
     user = create(:constituent)
 
@@ -83,6 +109,16 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
   def test_should_sign_in_constituent_without_mfa
     user = create(:constituent)
+
+    post sign_in_path, params: { email: user.email, password: 'password123' }
+
+    assert_redirected_to constituent_portal_dashboard_path
+  end
+
+  def test_successful_login_does_not_check_failed_attempt_rate_limit
+    user = create(:constituent)
+
+    AuthRateLimit.expects(:check!).never
 
     post sign_in_path, params: { email: user.email, password: 'password123' }
 
@@ -276,5 +312,17 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to sign_in_path
     assert_nil URI(response.redirect_url).query
+  end
+
+  private
+
+  def set_auth_rate_limit_policy(key, value)
+    policy = Policy.find_or_initialize_by(key: key)
+    if policy.new_record?
+      policy.value = value
+      policy.save!
+    else
+      policy.update_column(:value, value)
+    end
   end
 end

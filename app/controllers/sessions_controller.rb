@@ -25,6 +25,8 @@ class SessionsController < ApplicationController
     end
 
     unless user&.authenticate(params[:password])
+      return render_rate_limited_sign_in if failed_sign_in_rate_limited?
+
       user&.record_failed_login!
       @errors = { contact: invalid_credentials_message }
       return render_form_errors
@@ -56,6 +58,31 @@ class SessionsController < ApplicationController
 
   def login_contact_param
     params[:contact].presence || params[:email].presence
+  end
+
+  def failed_sign_in_rate_limited?
+    AuthRateLimit.check!(action: :sign_in_attempt, scope: :ip, request: request)
+    false
+  rescue AuthRateLimit::ExceededError
+    PublicAuditActor.log_audit(
+      action: 'sign_in_attempt_rate_limited',
+      metadata: public_auth_rate_limit_metadata(submitted_contact: login_contact_param)
+    )
+    true
+  end
+
+  def render_rate_limited_sign_in
+    @errors = { contact: invalid_credentials_message }
+    render_form_errors
+  end
+
+  def public_auth_rate_limit_metadata(submitted_contact:)
+    metadata = {
+      request_ip_digest: AuthRateLimit.request_ip_digest(request),
+      request_id: request.request_id
+    }
+    metadata[:submitted_contact_digest] = AuthRateLimit.contact_digest(submitted_contact) if submitted_contact.present?
+    metadata
   end
 
   def render_form_errors

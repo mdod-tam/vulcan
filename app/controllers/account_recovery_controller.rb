@@ -1,11 +1,6 @@
 # frozen_string_literal: true
 
-require 'openssl'
-
 class AccountRecoveryController < ApplicationController
-  RECOVERY_REQUEST_RATE_LIMIT = 5
-  RECOVERY_REQUEST_RATE_LIMIT_WINDOW = 1.hour
-
   skip_before_action :authenticate_user!, only: %i[new create confirmation]
   around_action :with_public_request_locale, only: %i[new create confirmation]
 
@@ -14,23 +9,16 @@ class AccountRecoveryController < ApplicationController
   end
 
   def create
-    contact = account_recovery_contact
-    contact_rate_limited = recovery_contact_rate_limited?(contact)
-    @user = User.find_by_login_identifier(contact)
-
-    if @user.present?
-      if contact_rate_limited
-        log_recovery_attempt(@user, 'rate_limited', reason: 'submitted_contact_ip')
-      else
-        submit_recovery_request(@user)
-      end
-    elsif contact_rate_limited
-      log_unmatched_recovery_rate_limit(contact)
+    @account_recovery_contact = account_recovery_contact
+    if (rate_limit_scope = pre_lookup_recovery_rate_limit_scope(@account_recovery_contact))
+      log_unmatched_recovery_rate_limit(rate_limit_scope)
+      return redirect_to_recovery_confirmation
     end
 
-    # We don't want to reveal if an email exists in our system
-    # So we show the confirmation page regardless
-    redirect_to account_recovery_confirmation_path(locale: public_request_locale_param)
+    @user = User.find_by_login_identifier(@account_recovery_contact)
+    submit_recovery_request(@user) if @user.present?
+
+    redirect_to_recovery_confirmation
   end
 
   def confirmation
@@ -44,7 +32,7 @@ class AccountRecoveryController < ApplicationController
   end
 
   def submit_recovery_request(user)
-    if recovery_submission_rate_limited?(user)
+    if user_recovery_rate_limited?(user)
       log_recovery_attempt(user, 'rate_limited', reason: 'user_ip')
       return
     end
@@ -69,30 +57,28 @@ class AccountRecoveryController < ApplicationController
     nil
   end
 
-  def recovery_contact_rate_limited?(contact)
-    count = Rails.cache.increment(recovery_contact_rate_limit_key(contact), 1,
-                                  expires_in: RECOVERY_REQUEST_RATE_LIMIT_WINDOW)
+  def pre_lookup_recovery_rate_limit_scope(contact)
+    return :ip if recovery_auth_rate_limited?(:ip)
+    return :contact_ip if contact.present? && recovery_auth_rate_limited?(:contact_ip, submitted_contact: contact)
 
-    count.to_i > RECOVERY_REQUEST_RATE_LIMIT
+    nil
   end
 
-  def recovery_contact_rate_limit_key(contact)
-    hashed_scope = Digest::SHA256.hexdigest(
-      [submitted_recovery_contact_digest(contact), request_ip_digest].join(':')
+  def user_recovery_rate_limited?(user)
+    recovery_auth_rate_limited?(:user_ip, user: user)
+  end
+
+  def recovery_auth_rate_limited?(scope, submitted_contact: nil, user: nil)
+    AuthRateLimit.check!(
+      action: :account_recovery,
+      scope: scope,
+      request: request,
+      submitted_contact: submitted_contact,
+      user_id: user&.id
     )
-    "security_key_recovery_contact:#{hashed_scope}"
-  end
-
-  def recovery_submission_rate_limited?(user)
-    count = Rails.cache.increment(recovery_submission_rate_limit_key(user), 1,
-                                  expires_in: RECOVERY_REQUEST_RATE_LIMIT_WINDOW)
-
-    count.to_i > RECOVERY_REQUEST_RATE_LIMIT
-  end
-
-  def recovery_submission_rate_limit_key(user)
-    hashed_scope = Digest::SHA256.hexdigest("#{user.id}:#{request.remote_ip}")
-    "security_key_recovery:#{hashed_scope}"
+    false
+  rescue AuthRateLimit::ExceededError
+    true
   end
 
   def log_recovery_attempt(user, status, metadata = {})
@@ -106,53 +92,20 @@ class AccountRecoveryController < ApplicationController
     Rails.logger.warn("Unable to audit security key recovery #{status} for user #{user.id}: #{e.message}")
   end
 
-  def log_unmatched_recovery_rate_limit(contact)
-    audit_actor = unmatched_recovery_audit_actor
-    unless audit_actor
-      Rails.logger.warn('Unable to audit unmatched security key recovery rate limit: no existing audit actor')
-      return
-    end
-
-    AuditEventService.log(
+  def log_unmatched_recovery_rate_limit(rate_limit_scope)
+    PublicAuditActor.log_audit(
       action: 'security_key_recovery_unmatched_rate_limited',
-      actor: audit_actor,
-      metadata: recovery_audit_metadata.merge(
-        submitted_contact_digest: submitted_recovery_contact_digest(contact)
-      )
+      metadata: recovery_audit_metadata.merge(rate_limit_scope: rate_limit_scope.to_s)
     )
-  rescue StandardError => e
-    Rails.logger.warn("Unable to audit unmatched security key recovery rate limit: #{e.message}")
   end
 
   def recovery_audit_metadata
-    {
-      ip_address: request.remote_ip,
+    metadata = {
+      request_ip_digest: AuthRateLimit.request_ip_digest(request),
       request_id: request.request_id
     }
-  end
-
-  def submitted_recovery_contact_digest(contact)
-    OpenSSL::HMAC.hexdigest('SHA256', recovery_contact_digest_secret, normalized_recovery_contact(contact))
-  end
-
-  def normalized_recovery_contact(contact)
-    normalized = contact.to_s.strip
-    return 'blank' if normalized.blank?
-    return User.normalize_email(normalized) if User.login_identifier_looks_like_email?(normalized)
-
-    User.normalize_phone(normalized).to_s
-  end
-
-  def recovery_contact_digest_secret
-    Rails.application.key_generator.generate_key('account-recovery-submitted-contact', 32)
-  end
-
-  def request_ip_digest
-    Digest::SHA256.hexdigest(request.remote_ip.to_s)
-  end
-
-  def unmatched_recovery_audit_actor
-    User.admins.find_by(email: 'system@mdmat.org') || User.admins.order(:id).first
+    metadata[:submitted_contact_digest] = AuthRateLimit.contact_digest(@account_recovery_contact) if @account_recovery_contact.present?
+    metadata
   end
 
   def notify_admins_of_recovery_request!(recovery_request)
@@ -181,5 +134,10 @@ class AccountRecoveryController < ApplicationController
 
     raise 'No admin recipients configured for recovery notification' if admin_count.zero?
     raise 'Failed to create admin notifications for recovery request' if notifications_created.zero?
+  end
+
+  def redirect_to_recovery_confirmation
+    # We don't want to reveal if an email exists in our system.
+    redirect_to account_recovery_confirmation_path(locale: public_request_locale_param)
   end
 end
