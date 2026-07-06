@@ -36,7 +36,8 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Guardian concern | `app/models/concerns/user_guardianship.rb` | Owns guardian/dependent associations, effective contact methods, and guardian access checks. |
 | Email search concern | `app/models/concerns/user_email_search.rb` | Stores HMAC email-search tokens for admin search, including dependent email and guardian fallback email search. |
 | Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and exposes duplicate-query helpers used by `DuplicateDetectionService`. |
-| Duplicate detection | `app/services/duplicate_detection_service.rb` | Owns exact contact and soft name+DOB/address signal evaluation for public registration, admin quick-create, and paper self/guardian/dependent creation contexts. |
+| Portal dependent creation | `app/controllers/constituent_portal/dependents_controller.rb` | Creates new dependents for signed-in guardians, blocks exact contact collisions before persistence, and opens duplicate-review cases for soft matches after the dependent and guardian relationship are persisted. |
+| Duplicate detection | `app/services/duplicate_detection_service.rb` | Owns exact contact and soft name+DOB/address signal evaluation for public registration, portal dependent creation, admin quick-create, and paper self/guardian/dependent creation contexts. |
 | Duplicate review cases | `app/services/duplicate_review_cases/create_service.rb` | Opens idempotent review cases after the subject user is persisted, stores sanitized candidate/metadata snapshots, sets `users.needs_duplicate_review`, and logs the case-opened event. |
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
 | User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_public_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
@@ -111,6 +112,7 @@ Soft duplicate handling is service-owned:
 - `DuplicateDetectionService` evaluates exact contact matches and soft name+DOB/address signals. Public signup uses context `:public_registration`.
 - Soft matches create `DuplicateReviewCase` rows through `DuplicateReviewCases::CreateService` after the subject user is persisted. Public registration uses source `:registration_soft_match`.
 - `users.needs_duplicate_review` is set by `DuplicateReviewCases::CreateService`, not by controller helpers or model callbacks.
+- Portal dependent creation uses context `:portal_new_dependent` and source `:portal_dependent`.
 - Admin quick-create uses context `:admin_create` and source `:admin_create`.
 - Paper self, guardian, and dependent creation use contexts `:paper_new_self`, `:paper_new_guardian`, and `:paper_new_dependent`; all paper-created review cases use source `:paper_intake`.
 

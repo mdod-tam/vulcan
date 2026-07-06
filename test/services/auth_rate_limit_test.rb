@@ -51,6 +51,17 @@ class AuthRateLimitTest < ActiveSupport::TestCase
     assert_not_includes @identifier, @contact
   end
 
+  test 'increments cache with explicit amount and expiration' do
+    cache_key = "auth_rate_limit:account_access:contact_ip:#{@identifier}"
+    Rails.cache.expects(:increment).with(cache_key, 1, expires_in: 1.hour).returns(1)
+
+    AuthRateLimit.new(
+      action: :account_access,
+      scope: :contact_ip,
+      identifier: @identifier
+    ).check!
+  end
+
   test 'request ip digest is keyed and not plain sha256' do
     digest = AuthRateLimit.request_ip_digest(@request)
 

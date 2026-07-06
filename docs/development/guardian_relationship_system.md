@@ -129,10 +129,13 @@ scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct
 ### 4.1 · Web-Created Dependent (Constituent Portal)
 
 1. Guardian uses `ConstituentPortal::DependentsController#create`
-2. Uses `UserServiceIntegration` concern for consistent user creation
-3. Flow: `create_user_with_service(params, is_managing_adult: false)` → handles password, disability validation
-4. Then: `create_guardian_relationship_with_service(guardian, dependent, relationship_type)` → creates GuardianRelationship
-5. Application creation happens separately when dependent applies
+2. Applies dependent contact strategies, then checks `DuplicateDetectionService` with context `:portal_new_dependent`
+3. Exact contact collisions block before persistence; soft name+DOB/address matches continue to new dependent creation
+4. Uses `UserServiceIntegration` concern for consistent user creation
+5. Flow: `create_user_with_service(params, is_managing_adult: false)` → handles password, disability validation
+6. Then: `create_guardian_relationship_with_service(guardian, dependent, relationship_type)` → creates GuardianRelationship
+7. Soft matches open a `DuplicateReviewCase` with source `:portal_dependent` after the dependent and relationship are persisted
+8. Application creation happens separately when dependent applies
 
 ### 4.2 · Admin Paper Application
 
@@ -152,7 +155,7 @@ ensure
 end
 ```
 
-Supports new guardians, existing guardians, new dependents, and existing dependents selected with `dependent_id`. `PaperApplicationService` owns application creation and dedup eligibility checks; `GuardianDependentManagementService` owns dependent/guardian setup and request-time contact strategy snapshots (`email_strategy`, `phone_strategy`, `address_strategy`).
+Supports new guardians, existing guardians, new dependents, and existing dependents selected with `dependent_id`. `PaperApplicationService` owns application creation and eligibility checks; `GuardianDependentManagementService` owns dependent/guardian setup, duplicate detection for new paper guardians/dependents, duplicate-review case creation with source `:paper_intake`, and request-time contact strategy snapshots (`email_strategy`, `phone_strategy`, `address_strategy`).
 
 Existing dependent reuse should preserve the current relationship when possible, set `managing_guardian_id` explicitly on the new application, and still respect waiting-period or `blocking_new_submission` checks from the paper applicant lookup.
 

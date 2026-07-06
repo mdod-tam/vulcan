@@ -23,7 +23,8 @@ class DuplicateReviewCase < ApplicationRecord
     registration_soft_match: 0,
     paper_intake: 1,
     admin_create: 2,
-    support_claim: 3
+    support_claim: 3,
+    portal_dependent: 4
   }
 
   validates :deduplication_key, presence: true

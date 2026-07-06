@@ -164,6 +164,6 @@ class AuthRateLimit
   end
 
   def increment_count
-    Rails.cache.increment(cache_key, expires_in: @limit[:period]).to_i
+    Rails.cache.increment(cache_key, 1, expires_in: @limit[:period]).to_i
   end
 end

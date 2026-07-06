@@ -3,6 +3,7 @@
 class DuplicateDetectionService < BaseService
   CONTEXTS = %i[
     public_registration
+    portal_new_dependent
     paper_new_self
     paper_new_guardian
     paper_new_dependent

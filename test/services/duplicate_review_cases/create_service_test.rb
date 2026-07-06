@@ -37,6 +37,18 @@ module DuplicateReviewCases
       end
     end
 
+    test 'subject deletion preserves duplicate review case for staff history' do
+      result = create_case
+      assert result.success?
+      duplicate_case = result.data[:duplicate_review_case]
+
+      assert_no_difference 'DuplicateReviewCase.count' do
+        @subject.destroy!
+      end
+
+      assert_nil duplicate_case.reload.subject_user_id
+    end
+
     test 'requires subject user and actor' do
       assert_no_workflow_side_effects do
         result = CreateService.new(

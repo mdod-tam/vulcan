@@ -52,6 +52,48 @@ module ConstituentPortal
       assert_includes(@guardian.dependents, new_dependent)
     end
 
+    test 'soft duplicate dependent creation opens duplicate review case' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Portal',
+        last_name: 'Duplicate',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-existing-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      dependent_email = "portal-dependent-new-#{SecureRandom.hex(4)}@example.com"
+
+      assert_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count',
+                         'DuplicateReviewCaseCandidate.count'], 1 do
+        assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
+          post constituent_portal_dependents_url, params: {
+            dependent: {
+              first_name: existing_dependent.first_name,
+              last_name: existing_dependent.last_name,
+              date_of_birth: '05/15/2010',
+              email: dependent_email,
+              phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+              hearing_disability: true
+            },
+            guardian_relationship: { relationship_type: 'Parent' }
+          }
+        end
+      end
+
+      new_dependent = User.find_by!(email: dependent_email)
+      assert new_dependent.needs_duplicate_review
+      assert_redirected_to constituent_portal_dashboard_url
+
+      duplicate_case = DuplicateReviewCase.find_by!(subject_user: new_dependent)
+      assert_equal 'portal_dependent', duplicate_case.source
+      assert_equal ['name_dob'], duplicate_case.metadata['reason_codes']
+      assert_equal 'portal_dependent', duplicate_case.metadata['intake_context']
+      assert_equal [existing_dependent.id], duplicate_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
+
+      event = Event.find_by!(action: 'duplicate_review_case_opened', auditable: new_dependent)
+      assert_equal @guardian.id, event.user_id
+    end
+
     test 'should create dependent with MM/DD/YYYY date of birth' do
       dependent_attributes = {
         first_name: 'Date',

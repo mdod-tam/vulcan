@@ -39,41 +39,18 @@ module ConstituentPortal
         handle_creation_failure(contact_strategy_errors)
         return
       end
+      duplicate_detection = detect_portal_dependent_duplicates(dependent_attrs)
+      return unless duplicate_detection
+      return if portal_dependent_duplicate_blocked?(duplicate_detection)
 
       # Using UserServiceIntegration concern for consistent user creation
       # Portal always creates NEW users for dependents (skip_user_lookup: true)
       # Paper intake creates new guardians and self applicants with skip_user_lookup; explicit search selects existing users
       # Require disability validation for portal-created dependents
-      result = create_user_with_service(dependent_attrs,
-                                        is_managing_adult: false,
-                                        skip_user_lookup: true,
-                                        require_disability_validation: true)
+      result = create_portal_dependent_user(dependent_attrs)
+      return handle_portal_dependent_creation_failure(result) unless result.success?
 
-      if result.success?
-        @dependent_user = result.data[:user]
-
-        # Safety check: Ensure the dependent is not the same as the guardian
-        if @dependent_user.id == current_user.id
-          @dependent_user.destroy if @dependent_user.persisted?
-          log_user_service_error('to create dependent', 'Cannot add yourself as your own dependent')
-          handle_creation_failure(['You cannot add yourself as your own dependent. Please create a dependent with different contact information.'])
-          return
-        end
-
-        # Using UserServiceIntegration concern for relationship creation
-        # Flow: create_guardian_relationship_with_service -> handles relationship creation and validation
-        if create_guardian_relationship_with_service(current_user, @dependent_user, guardian_relationship_params[:relationship_type])
-          redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully created.'
-        else
-          # Clean up the created user if relationship creation fails
-          @dependent_user.destroy
-          log_user_service_error('to create guardian relationship', 'Relationship creation failed')
-          handle_creation_failure(['Failed to create guardian relationship'])
-        end
-      else
-        log_user_service_error('to create dependent user', result.data[:errors] || [result.message])
-        handle_creation_failure(result.data[:errors] || [result.message])
-      end
+      handle_portal_dependent_creation_success(result.data[:user], duplicate_detection)
     end
 
     # PATCH/PUT /constituent_portal/dependents/:id
@@ -167,6 +144,123 @@ module ConstituentPortal
 
     def contact_strategy_errors
       @contact_strategy_errors.presence || ['Unable to apply dependent contact strategy']
+    end
+
+    def detect_portal_dependent_duplicates(attrs)
+      result = DuplicateDetectionService.new(
+        context: :portal_new_dependent,
+        attrs: duplicate_detection_attrs(attrs)
+      ).call
+      return result.data if result.success?
+
+      log_user_service_error('to evaluate dependent duplicate review', result.message)
+      handle_creation_failure(['Unable to complete dependent creation. Please try again.'])
+      nil
+    end
+
+    def portal_dependent_duplicate_blocked?(duplicate_detection)
+      return false unless duplicate_detection.hard_block
+
+      handle_creation_failure(['Unable to complete dependent creation. Please contact the MAT Team for assistance.'])
+      true
+    end
+
+    def create_portal_dependent_user(dependent_attrs)
+      create_user_with_service(dependent_attrs,
+                               is_managing_adult: false,
+                               skip_user_lookup: true,
+                               require_disability_validation: true)
+    end
+
+    def handle_portal_dependent_creation_failure(result)
+      log_user_service_error('to create dependent user', result.data[:errors] || [result.message])
+      handle_creation_failure(result.data[:errors] || [result.message])
+    end
+
+    def handle_portal_dependent_creation_success(dependent_user, duplicate_detection)
+      @dependent_user = dependent_user
+      return if dependent_matches_current_user?
+
+      if create_guardian_relationship_with_service(current_user, @dependent_user, guardian_relationship_params[:relationship_type])
+        return unless open_required_portal_dependent_duplicate_review_case(duplicate_detection)
+
+        redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully created.'
+      else
+        @dependent_user.destroy
+        log_user_service_error('to create guardian relationship', 'Relationship creation failed')
+        handle_creation_failure(['Failed to create guardian relationship'])
+      end
+    end
+
+    def dependent_matches_current_user?
+      return false unless @dependent_user.id == current_user.id
+
+      @dependent_user.destroy if @dependent_user.persisted?
+      log_user_service_error('to create dependent', 'Cannot add yourself as your own dependent')
+      handle_creation_failure(['You cannot add yourself as your own dependent. Please create a dependent with different contact information.'])
+      true
+    end
+
+    def open_required_portal_dependent_duplicate_review_case(duplicate_detection)
+      return true if open_portal_dependent_duplicate_review_case(duplicate_detection)
+
+      @dependent_user.destroy
+      log_user_service_error('to open duplicate review case', 'Duplicate review case creation failed')
+      handle_creation_failure(['Unable to complete dependent creation. Please try again.'])
+      false
+    end
+
+    def open_portal_dependent_duplicate_review_case(duplicate_detection)
+      return true unless duplicate_detection.recommended_action == :flag
+
+      result = DuplicateReviewCases::CreateService.new(
+        source: :portal_dependent,
+        subject_user: @dependent_user,
+        actor: current_user,
+        reason_codes: duplicate_detection.reasons,
+        candidates: duplicate_review_candidates_for(duplicate_detection),
+        metadata: { intake_context: 'portal_dependent' }
+      ).call
+      return true if result.success?
+
+      Rails.logger.warn("Portal dependent duplicate review case failed: #{result.message}")
+      false
+    rescue ActiveRecord::ActiveRecordError => e
+      Rails.logger.warn("Portal dependent duplicate review case failed: #{e.message}")
+      false
+    end
+
+    def duplicate_review_candidates_for(duplicate_detection)
+      duplicate_detection.matched_users.map do |candidate|
+        DuplicateReviewCases::CreateService::CandidateInput.new(
+          candidate,
+          duplicate_detection.reasons.first,
+          {
+            email_backed_public_portal_account: candidate.email_backed_public_portal_account?,
+            real_email: candidate.real_email?,
+            real_phone: candidate.real_phone?
+          }
+        )
+      end
+    end
+
+    def duplicate_detection_attrs(attrs)
+      data = attrs.with_indifferent_access
+      dob_holder = Users::Constituent.new
+      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
+
+      {
+        email: data[:email],
+        phone: data[:phone],
+        first_name: data[:first_name],
+        last_name: data[:last_name],
+        date_of_birth: dob_holder.date_of_birth,
+        physical_address_1: data[:physical_address_1],
+        physical_address_2: data[:physical_address_2],
+        city: data[:city],
+        state: data[:state],
+        zip_code: data[:zip_code]
+      }
     end
 
     def dependent_contact_strategy_params(attrs)

@@ -3,7 +3,7 @@
 module DuplicateReviewCases
   class MetadataSanitizer
     ALLOWED_SUBJECT_SNAPSHOT_KEYS = %w[contact_digest name_dob_digest].freeze
-    ALLOWED_INTAKE_CONTEXTS = %w[registration paper_intake admin_create support_claim].freeze
+    ALLOWED_INTAKE_CONTEXTS = %w[registration portal_dependent paper_intake admin_create support_claim].freeze
     DIGEST_PATTERN = /\A[a-f0-9]{64}\z/i
 
     def self.build(reason_codes:, submitted_contact_digest: nil, intake_context: nil, subject_snapshot: nil)

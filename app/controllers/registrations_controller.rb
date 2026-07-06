@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class RegistrationsController < ApplicationController
+  class DuplicateReviewCaseRequired < StandardError; end
+
   # Require authentication for all actions except new and create
   skip_before_action :authenticate_user!, only: %i[new create]
 
@@ -34,8 +36,7 @@ class RegistrationsController < ApplicationController
       end
     end
 
-    if @user.save
-      open_registration_duplicate_review_case(duplicate_detection) if duplicate_detection.recommended_action == :flag
+    if save_user_with_duplicate_review!(duplicate_detection)
       create_session_and_cookie
       track_sign_in
       send_registration_confirmation
@@ -95,6 +96,31 @@ class RegistrationsController < ApplicationController
     DuplicateDetectionService::Result.new([], 0.0, [], false, :allow, :proceed)
   end
 
+  def save_user_with_duplicate_review!(duplicate_detection)
+    ActiveRecord::Base.transaction do
+      @user.save!
+      require_registration_duplicate_review_case!(duplicate_detection) if duplicate_detection.recommended_action == :flag
+    end
+
+    true
+  rescue ActiveRecord::RecordInvalid
+    false
+  rescue DuplicateReviewCaseRequired
+    Rails.logger.warn('Registration rolled back because duplicate review case could not be opened')
+    false
+  rescue ActiveRecord::ActiveRecordError => e
+    Rails.logger.warn("Registration rolled back because duplicate review case failed: #{e.message}")
+    @user.errors.add(:base, t('portal_self_service.registrations.registration_blocked_heading')) if @user.errors.empty?
+    false
+  end
+
+  def require_registration_duplicate_review_case!(duplicate_detection)
+    return if open_registration_duplicate_review_case(duplicate_detection)
+
+    @user.errors.add(:base, t('portal_self_service.registrations.registration_blocked_heading'))
+    raise DuplicateReviewCaseRequired
+  end
+
   def redirect_existing_email_account
     redirect_to sign_in_path(locale: public_form_locale_param),
                 notice: t('portal_self_service.registrations.existing_email_account')
@@ -114,7 +140,7 @@ class RegistrationsController < ApplicationController
     actor = PublicAuditActor.system_audit_actor
     unless actor
       Rails.logger.warn('Registration duplicate review case skipped: no configured public audit actor')
-      return
+      return false
     end
 
     result = DuplicateReviewCases::CreateService.new(
@@ -125,7 +151,12 @@ class RegistrationsController < ApplicationController
       candidates: duplicate_review_candidates_for(duplicate_detection),
       metadata: { intake_context: 'registration' }
     ).call
-    Rails.logger.warn("Registration duplicate review case failed: #{result.message}") if result.failure?
+    if result.failure?
+      Rails.logger.warn("Registration duplicate review case failed: #{result.message}")
+      return false
+    end
+
+    true
   end
 
   def duplicate_review_candidates_for(duplicate_detection)

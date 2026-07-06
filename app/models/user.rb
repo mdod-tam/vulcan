@@ -183,7 +183,7 @@ class User < ApplicationRecord
   has_many :subject_duplicate_review_cases,
            class_name: 'DuplicateReviewCase',
            foreign_key: :subject_user_id,
-           dependent: :destroy,
+           dependent: :nullify,
            inverse_of: :subject_user
   has_many :income_verified_applications,
            class_name: 'Application',

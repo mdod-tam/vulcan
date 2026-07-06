@@ -715,6 +715,37 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, duplicate_case.duplicate_review_case_candidates.count
   end
 
+  def test_name_dob_match_rolls_back_when_duplicate_review_actor_is_missing
+    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).find_each do |user|
+      user.update!(email: "former-system-audit-#{user.id}-#{SecureRandom.hex(3)}@example.com")
+    end
+    create(:constituent,
+           first_name: 'MissingActor',
+           last_name: 'Duplicate',
+           date_of_birth: '1985-05-15',
+           email: "missing-actor-existing-#{SecureRandom.hex(4)}@example.com")
+
+    assert_no_difference(['User.count', 'Session.count', 'DuplicateReviewCase.count',
+                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
+      post sign_up_path, params: { user: {
+        email: "missing-actor-duplicate-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'MissingActor',
+        last_name: 'Duplicate',
+        date_of_birth: '05/15/1985',
+        phone: '555-123-4599',
+        phone_type: 'voice',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert_select 'li', text: I18n.t('portal_self_service.registrations.registration_blocked_heading')
+  end
+
   def test_invalid_registration_with_name_dob_match_creates_no_duplicate_case
     create(:constituent,
            first_name: 'Invalid',
