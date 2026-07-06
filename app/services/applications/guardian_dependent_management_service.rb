@@ -8,9 +8,10 @@ module Applications
 
     attr_reader :params, :guardian_user, :dependent_user, :errors
 
-    def initialize(params)
+    def initialize(params = nil, actor: nil, **keyword_params)
       super()
-      @params = params.with_indifferent_access
+      @params = (params || keyword_params).with_indifferent_access
+      @actor = actor
       @guardian_user = nil
       @dependent_user = nil
       @email_backed_portal_created_user_ids = []
@@ -18,19 +19,43 @@ module Applications
     end
 
     def process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
-      return failure('Failed to setup guardian') unless setup_guardian(guardian_id, new_guardian_attrs)
+      result = nil
 
-      applicant_data = applicant_data.deep_dup
-      return failure('Failed to apply contact strategies') unless apply_contact_strategies(applicant_data)
+      ActiveRecord::Base.transaction do
+        unless setup_guardian(guardian_id, new_guardian_attrs)
+          result = failure('Failed to setup guardian')
+          raise ActiveRecord::Rollback
+        end
 
-      return failure('Failed to create dependent') unless create_dependent?(applicant_data)
-      return failure('Failed to create relationship') unless create_relationship(relationship_type)
+        applicant_data = applicant_data.deep_dup
+        unless apply_contact_strategies(applicant_data)
+          result = failure('Failed to apply contact strategies')
+          raise ActiveRecord::Rollback
+        end
 
-      success(
-        guardian: @guardian_user,
-        dependent: @dependent_user,
-        email_backed_portal_created_user_ids: @email_backed_portal_created_user_ids
-      )
+        unless dependent_duplicate_detection_allows_creation?(applicant_data)
+          result = failure('Failed to create dependent')
+          raise ActiveRecord::Rollback
+        end
+
+        unless create_dependent?(applicant_data)
+          result = failure('Failed to create dependent')
+          raise ActiveRecord::Rollback
+        end
+
+        unless create_relationship(relationship_type)
+          result = failure('Failed to create relationship')
+          raise ActiveRecord::Rollback
+        end
+
+        result = success(
+          guardian: @guardian_user,
+          dependent: @dependent_user,
+          email_backed_portal_created_user_ids: @email_backed_portal_created_user_ids
+        )
+      end
+
+      result
     end
 
     def apply_contact_strategies(applicant_data)
@@ -69,6 +94,10 @@ module Applications
       elsif attributes_present?(new_guardian_attrs)
         contact_flags = Applications::PaperContactFlags.new(params, scope: :guardian)
         guardian_attrs = contact_flags.apply_to(new_guardian_attrs)
+        duplicate_detection = detect_duplicates(:paper_new_guardian, guardian_attrs)
+        return false if duplicate_detection.blank?
+        return block_duplicate(:paper_new_guardian) if duplicate_detection.hard_block
+
         result = UserCreationService.new(
           guardian_attrs,
           is_managing_adult: true,
@@ -80,6 +109,7 @@ module Applications
 
         @guardian_user = result.data[:user]
         track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
+        return false unless open_duplicate_review_case(@guardian_user, duplicate_detection)
       else
         return add_error?('Guardian information missing')
       end
@@ -92,6 +122,16 @@ module Applications
 
       @dependent_user = result.data[:user]
       track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
+      return false unless open_duplicate_review_case(@dependent_user, @dependent_duplicate_detection)
+
+      true
+    end
+
+    def dependent_duplicate_detection_allows_creation?(applicant_data)
+      @dependent_duplicate_detection = detect_duplicates(:paper_new_dependent, applicant_data)
+      return false if @dependent_duplicate_detection.blank?
+      return block_duplicate(:paper_new_dependent) if @dependent_duplicate_detection.hard_block
+
       true
     end
 
@@ -202,6 +242,75 @@ module Applications
 
     def attributes_present?(attrs)
       attrs.present? && attrs.values.any?(&:present?)
+    end
+
+    def detect_duplicates(context, attrs)
+      result = DuplicateDetectionService.new(
+        context: context,
+        attrs: duplicate_detection_attrs(attrs)
+      ).call
+      return result.data if result.success?
+
+      add_error?("Duplicate detection failed: #{result.message}")
+      nil
+    end
+
+    def block_duplicate(context)
+      add_error?(duplicate_block_message(context))
+    end
+
+    def duplicate_block_message(context)
+      case context
+      when :paper_new_guardian
+        'A guardian with this email or phone already exists. Select the existing guardian instead of creating a new one.'
+      else
+        'A dependent with this email or phone already exists. Select the existing dependent instead of creating a new one.'
+      end
+    end
+
+    def open_duplicate_review_case(user, duplicate_detection)
+      return true unless duplicate_detection&.recommended_action == :flag
+
+      result = DuplicateReviewCases::CreateService.new(
+        source: :paper_intake,
+        subject_user: user,
+        actor: @actor,
+        reason_codes: duplicate_detection.reasons,
+        candidates: duplicate_review_candidates_for(duplicate_detection),
+        metadata: { intake_context: 'paper_intake' }
+      ).call
+      return true if result.success?
+
+      add_error?(result.message)
+      false
+    end
+
+    def duplicate_review_candidates_for(duplicate_detection)
+      duplicate_detection.matched_users.map do |candidate|
+        DuplicateReviewCases::CreateService::CandidateInput.new(
+          candidate,
+          duplicate_detection.reasons.first
+        )
+      end
+    end
+
+    def duplicate_detection_attrs(attrs)
+      data = attrs.to_h.with_indifferent_access
+      dob_holder = Users::Constituent.new
+      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
+
+      {
+        email: User.normalize_email(data[:email]),
+        phone: User.normalize_phone(data[:phone]),
+        first_name: data[:first_name],
+        last_name: data[:last_name],
+        date_of_birth: dob_holder.date_of_birth,
+        physical_address_1: data[:physical_address_1],
+        physical_address_2: data[:physical_address_2],
+        city: data[:city],
+        state: data[:state],
+        zip_code: data[:zip_code]
+      }
     end
 
     def track_email_backed_portal_created_user_id(user_id)

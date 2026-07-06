@@ -23,6 +23,8 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     Session.delete_all
     RoleCapability.delete_all
     Invoice.delete_all
+    DuplicateReviewCaseCandidate.delete_all
+    DuplicateReviewCase.delete_all
 
     # Clear all users to ensure a completely clean slate for system_user and admins
     User.delete_all

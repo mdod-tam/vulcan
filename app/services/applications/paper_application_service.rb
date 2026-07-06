@@ -279,7 +279,7 @@ module Applications
     end
 
     def process_guardian_dependent(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
-      service = GuardianDependentManagementService.new(params)
+      service = GuardianDependentManagementService.new(params, actor: @admin)
       result = service.process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
 
       if result.success?
@@ -298,6 +298,9 @@ module Applications
     def process_self_applicant(applicant_data)
       contact_flags = paper_contact_flags(:constituent)
       applicant_data = contact_flags.apply_to(applicant_data)
+      duplicate_detection = detect_paper_self_duplicates(applicant_data)
+      return false if duplicate_detection.blank?
+      return block_paper_self_duplicate if duplicate_detection.hard_block
 
       result = UserCreationService.new(
         applicant_data,
@@ -310,6 +313,7 @@ module Applications
       if result.success?
         @constituent = result.data[:user]
         track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
+        return false unless open_paper_duplicate_review_case(@constituent, duplicate_detection)
 
         return false unless validate_no_active_application('constituent')
         return false unless waiting_period_eligible?(@constituent)
@@ -319,6 +323,73 @@ module Applications
         @errors.concat(result.data[:errors] || [result.message])
         false
       end
+    end
+
+    def detect_paper_self_duplicates(attrs)
+      result = DuplicateDetectionService.new(
+        context: :paper_new_self,
+        attrs: duplicate_detection_attrs(attrs)
+      ).call
+      return result.data if result.success?
+
+      add_error("Duplicate detection failed: #{result.message}")
+      nil
+    end
+
+    def block_paper_self_duplicate
+      add_error('An applicant with this email or phone already exists. Select the existing applicant instead of creating a new one.')
+      false
+    end
+
+    def open_paper_duplicate_review_case(user, duplicate_detection)
+      return true unless duplicate_detection.recommended_action == :flag
+
+      result = DuplicateReviewCases::CreateService.new(
+        source: :paper_intake,
+        subject_user: user,
+        actor: @admin,
+        reason_codes: duplicate_detection.reasons,
+        candidates: duplicate_review_candidates_for(duplicate_detection),
+        metadata: { intake_context: 'paper_intake' }
+      ).call
+      return true if result.success?
+
+      add_error(result.message)
+      false
+    end
+
+    def duplicate_review_candidates_for(duplicate_detection)
+      duplicate_detection.matched_users.map do |candidate|
+        DuplicateReviewCases::CreateService::CandidateInput.new(
+          candidate,
+          duplicate_detection.reasons.first
+        )
+      end
+    end
+
+    def duplicate_detection_attrs(attrs)
+      data = hash_for_duplicate_detection(attrs)
+      dob_holder = Users::Constituent.new
+      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
+
+      {
+        email: User.normalize_email(data[:email]),
+        phone: User.normalize_phone(data[:phone]),
+        first_name: data[:first_name],
+        last_name: data[:last_name],
+        date_of_birth: dob_holder.date_of_birth,
+        physical_address_1: data[:physical_address_1],
+        physical_address_2: data[:physical_address_2],
+        city: data[:city],
+        state: data[:state],
+        zip_code: data[:zip_code]
+      }
+    end
+
+    def hash_for_duplicate_detection(attrs)
+      return attrs.to_unsafe_h.with_indifferent_access if attrs.respond_to?(:to_unsafe_h)
+
+      attrs.to_h.with_indifferent_access
     end
 
     def no_email_address?(scope = :constituent)

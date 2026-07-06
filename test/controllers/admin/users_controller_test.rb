@@ -330,9 +330,8 @@ module Admin
       assert json_response['errors'].present?
     end
 
-    test 'should detect potential duplicate guardians' do
-      # First, create an existing user directly
-      first_user = Users::Constituent.create!(
+    test 'admin quick create soft duplicate opens review case through create service' do
+      existing_user = Users::Constituent.create!(
         first_name: 'Test',
         last_name: 'Duplicate',
         email: "first.user.#{Time.now.to_i}@example.com",
@@ -347,42 +346,46 @@ module Admin
         verified: true
       )
 
-      # Create a second user via the controller with matching name and DOB
-      assert_difference('Users::Constituent.count') do
-        post admin_users_path, params: {
-          first_name: 'Test',           # Same first name
-          last_name: 'Duplicate',       # Same last name
-          date_of_birth: '1995-06-11',  # Same date of birth
-          email: 'second.duplicate@example.com', # Different email
-          phone: '555-222-2222', # Different phone
-          physical_address_1: '123 Main St',
-          city: 'Baltimore',
-          state: 'MD',
-          zip_code: '21202',
-          communication_preference: 'email'
-        }, as: :json
+      new_email = "second.duplicate.#{SecureRandom.hex(4)}@example.com"
+
+      assert_difference('Users::Constituent.count', 1) do
+        assert_difference('DuplicateReviewCase.count', 1) do
+          assert_difference('DuplicateReviewCaseCandidate.count', 1) do
+            assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
+              post admin_users_path, params: {
+                first_name: 'Test',
+                last_name: 'Duplicate',
+                date_of_birth: '1995-06-11',
+                email: new_email,
+                phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+                physical_address_1: '123 Main St',
+                city: 'Baltimore',
+                state: 'MD',
+                zip_code: '21202',
+                communication_preference: 'email'
+              }, as: :json
+            end
+          end
+        end
       end
 
       assert_response :success
+      new_user = Users::Constituent.find_by!(email: new_email)
+      assert new_user.needs_duplicate_review
 
-      # Test that duplicate detection would work by finding users with same criteria
-      second_user = Users::Constituent.find_by(email: 'second.duplicate@example.com')
+      duplicate_case = DuplicateReviewCase.find_by!(subject_user: new_user)
+      assert_equal 'admin_create', duplicate_case.source
+      assert_equal ['name_dob'], duplicate_case.metadata['reason_codes']
+      assert_equal [existing_user.id], duplicate_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
 
-      # Test duplicate detection by finding users with same name and DOB
-      potential_duplicates = Users::Constituent.where(
-        first_name: second_user.first_name,
-        last_name: second_user.last_name,
-        date_of_birth: second_user.date_of_birth
-      ).where.not(id: second_user.id)
-
-      assert potential_duplicates.exists?, 'Expected user to be flagged for duplicate review'
-      assert potential_duplicates.include?(first_user), 'Should find the first user as a potential duplicate'
+      event = Event.find_by!(action: 'duplicate_review_case_opened', auditable: new_user)
+      assert_equal @admin.id, event.user_id
     end
 
-    test 'quick create guardian rejects duplicate phone instead of reusing existing user' do
+    test 'admin quick create hard duplicate contact blocks before persistence without workflow side effects' do
       existing = create(:constituent, phone: "410-555-#{SecureRandom.random_number(9000) + 1000}")
 
-      assert_no_difference 'User.count' do
+      assert_no_difference ['User.count', 'DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count', 'Event.count'] do
         post admin_users_path, params: {
           first_name: 'Different',
           last_name: 'Guardian',
@@ -400,7 +403,8 @@ module Admin
       assert_response :unprocessable_content
       body = response.parsed_body
       assert_not body['success']
-      assert(body['errors'].values.join(' ').match?(/phone|taken/i))
+      assert(body['errors'].values.join(' ').match?(/email|phone|already exists/i))
+      assert_not existing.reload.needs_duplicate_review
     end
 
     test 'quick create guardian without email or phone succeeds for address-only intake' do
