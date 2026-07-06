@@ -10,6 +10,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     ActionMailer::Base.deliveries.clear
 
     admin = User.find_by(email: 'david.bahar@maryland.gov') || create(:admin, email: 'david.bahar@maryland.gov')
+    User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) || create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     template = EmailTemplate.find_or_initialize_by(
       name: 'application_notifications_registration_confirmation',
       format: :text,
@@ -199,7 +200,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     # Use FactoryBot to create an existing user
     existing_user = create(:constituent)
 
-    assert_no_difference(['User.count', 'Session.count']) do
+    assert_no_difference(['User.count', 'Session.count', 'DuplicateReviewCase.count',
+                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
         email: existing_user.email, # Already exists
         password: 'password123',
@@ -258,7 +260,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
            phone: test_phone,
            phone_type: 'text')
 
-    assert_no_difference('User.count') do
+    assert_no_difference(['User.count', 'DuplicateReviewCase.count',
+                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
         email: "unique-email-#{SecureRandom.hex(4)}@example.com", # Unique email to avoid conflicts
         password: 'password123',
@@ -456,6 +459,48 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'input[name=?]', 'contact', count: 0
   end
 
+  def test_synthetic_email_duplicate_renders_support_copy_without_uniqueness_error
+    synthetic_email = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
+    Current.paper_context = true
+    begin
+      Users::Constituent.create!(
+        first_name: 'Synthetic', last_name: 'Email',
+        email: synthetic_email,
+        dependent_email: 'dependent-contact@example.com',
+        phone: '410-555-0133',
+        phone_type: 'text',
+        communication_preference: :email,
+        date_of_birth: Date.new(1950, 1, 1),
+        password: 'password123', password_confirmation: 'password123',
+        hearing_disability: true
+      )
+    ensure
+      Current.reset
+    end
+
+    assert_no_difference(['User.count', 'DuplicateReviewCase.count',
+                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
+      post sign_up_path, params: { user: {
+        email: synthetic_email,
+        password: 'password123',
+        password_confirmation: 'password123',
+        first_name: 'New',
+        last_name: 'Registrant',
+        date_of_birth: '1990-01-01',
+        phone: '410-555-0191',
+        phone_type: 'voice',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+    assert assigns(:registration_support_needed)
+    assert_select 'h2', /We couldn't complete your registration/
+    assert_no_match(/has already been taken/i, response.body)
+  end
+
   def test_re_render_preserves_submitted_phone_type_selection
     post sign_up_path, params: { user: {
       email: "phone-type-rerender-#{SecureRandom.hex(4)}@example.com",
@@ -638,19 +683,23 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     test_email = "duplicate-name-dob-#{SecureRandom.hex(4)}@example.com"
     assert_difference('User.count', 1) do
-      post sign_up_path, params: { user: {
-        email: test_email,
-        password: 'password123',
-        password_confirmation: 'password123',
-        first_name: 'Duplicate',
-        last_name: 'USER',
-        date_of_birth: '1985-05-15',
-        phone: '555-123-4567',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
+      assert_difference(['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'], 1) do
+        assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
+          post sign_up_path, params: { user: {
+            email: test_email,
+            password: 'password123',
+            password_confirmation: 'password123',
+            first_name: 'Duplicate',
+            last_name: 'USER',
+            date_of_birth: '05/15/1985',
+            phone: '555-123-4567',
+            phone_type: 'voice',
+            timezone: 'Eastern Time (US & Canada)',
+            locale: 'en',
+            hearing_disability: true
+          } }
+        end
+      end
     end
 
     assert_redirected_to welcome_path
@@ -659,6 +708,63 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     new_user = User.find_by(email: test_email)
     assert_not_nil new_user, 'New user should have been created despite name/DOB match'
     assert new_user.needs_duplicate_review, 'User should be flagged for duplicate review'
+
+    duplicate_case = DuplicateReviewCase.find_by!(subject_user: new_user)
+    assert_equal 'registration_soft_match', duplicate_case.source
+    assert_includes duplicate_case.metadata['reason_codes'], 'name_dob'
+    assert_equal 1, duplicate_case.duplicate_review_case_candidates.count
+  end
+
+  def test_invalid_registration_with_name_dob_match_creates_no_duplicate_case
+    create(:constituent,
+           first_name: 'Invalid',
+           last_name: 'Duplicate',
+           date_of_birth: '1985-05-15',
+           email: "invalid-existing-#{SecureRandom.hex(4)}@example.com")
+
+    assert_no_difference(['User.count', 'DuplicateReviewCase.count',
+                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
+      post sign_up_path, params: { user: {
+        email: "invalid-duplicate-name-dob-#{SecureRandom.hex(4)}@example.com",
+        password: 'password123',
+        password_confirmation: 'different123',
+        first_name: 'Invalid',
+        last_name: 'Duplicate',
+        date_of_birth: '1985-05-15',
+        phone: '555-123-4588',
+        phone_type: 'voice',
+        timezone: 'Eastern Time (US & Canada)',
+        locale: 'en',
+        hearing_disability: true
+      } }
+    end
+
+    assert_response :unprocessable_content
+  end
+
+  def test_submitted_duplicate_review_param_is_ignored
+    email = "ignore-review-param-#{SecureRandom.hex(4)}@example.com"
+
+    assert_difference('User.count', 1) do
+      assert_no_difference('DuplicateReviewCase.count') do
+        post sign_up_path, params: { user: {
+          email: email,
+          password: 'password123',
+          password_confirmation: 'password123',
+          first_name: 'Ignore',
+          last_name: 'Param',
+          date_of_birth: '1990-01-01',
+          phone: '555-123-4599',
+          phone_type: 'voice',
+          timezone: 'Eastern Time (US & Canada)',
+          locale: 'en',
+          hearing_disability: true,
+          needs_duplicate_review: true
+        } }
+      end
+    end
+
+    assert_not User.find_by!(email: email).needs_duplicate_review
   end
 
   def test_should_not_create_user_with_mismatched_passwords

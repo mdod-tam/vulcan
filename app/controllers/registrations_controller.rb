@@ -23,18 +23,19 @@ class RegistrationsController < ApplicationController
 
   def create
     build_user
+    duplicate_detection = detect_registration_duplicates
 
-    case duplicate_registration_outcome
-    when :existing_email_account
-      return redirect_existing_email_account
-    when :contact_conflict
-      return render_duplicate_account_prompt
+    if duplicate_detection.hard_block
+      case duplicate_detection.public_outcome
+      when :redirect_sign_in
+        return redirect_existing_email_account
+      when :support_only
+        return render_duplicate_account_prompt
+      end
     end
 
-    # Check for potential duplicates based on Name + DOB and flag for admin review
-    @user.needs_duplicate_review = true if potential_duplicate_found?(@user)
-
     if @user.save
+      open_registration_duplicate_review_case(duplicate_detection) if duplicate_detection.recommended_action == :flag
       create_session_and_cookie
       track_sign_in
       send_registration_confirmation
@@ -83,11 +84,15 @@ class RegistrationsController < ApplicationController
     @user.phone_type = nil if @user.phone.present? && !@user.phone_type_submitted
   end
 
-  def duplicate_registration_outcome
-    return :existing_email_account if email_backed_duplicate_for(registration_params[:email]).present?
-    return :contact_conflict if phone_duplicate_for_registration_contact(registration_params[:phone]).present?
+  def detect_registration_duplicates
+    result = DuplicateDetectionService.new(
+      context: :public_registration,
+      attrs: registration_duplicate_detection_attrs
+    ).call
+    return result.data if result.success?
 
-    nil
+    Rails.logger.warn("Registration duplicate detection failed: #{result.message}")
+    DuplicateDetectionService::Result.new([], 0.0, [], false, :allow, :proceed)
   end
 
   def redirect_existing_email_account
@@ -105,22 +110,36 @@ class RegistrationsController < ApplicationController
     render :new, status: :unprocessable_content
   end
 
-  def email_backed_duplicate_for(email)
-    return nil if email.blank?
+  def open_registration_duplicate_review_case(duplicate_detection)
+    actor = PublicAuditActor.system_audit_actor
+    unless actor
+      Rails.logger.warn('Registration duplicate review case skipped: no configured public audit actor')
+      return
+    end
 
-    user = User.find_by_email(email)
-    return nil unless user&.real_email?
-
-    user
+    result = DuplicateReviewCases::CreateService.new(
+      source: :registration_soft_match,
+      subject_user: @user,
+      actor: actor,
+      reason_codes: duplicate_detection.reasons,
+      candidates: duplicate_review_candidates_for(duplicate_detection),
+      metadata: { intake_context: 'registration' }
+    ).call
+    Rails.logger.warn("Registration duplicate review case failed: #{result.message}") if result.failure?
   end
 
-  def phone_duplicate_for_registration_contact(phone)
-    return nil if phone.blank?
-
-    user = User.find_by_phone(phone)
-    return nil unless user&.real_phone?
-
-    user
+  def duplicate_review_candidates_for(duplicate_detection)
+    duplicate_detection.matched_users.map do |candidate|
+      DuplicateReviewCases::CreateService::CandidateInput.new(
+        candidate,
+        duplicate_detection.reasons.first,
+        {
+          email_backed_public_portal_account: candidate.email_backed_public_portal_account?,
+          real_email: candidate.real_email?,
+          real_phone: candidate.real_phone?
+        }
+      )
+    end
   end
 
   def create_session_and_cookie
@@ -158,9 +177,23 @@ class RegistrationsController < ApplicationController
              :communication_preference, :newsletter_signup,
              # Address fields for letter notifications
              :physical_address_1, :physical_address_2,
-             :city, :state, :zip_code,
-             :needs_duplicate_review]
+             :city, :state, :zip_code]
     )
+  end
+
+  def registration_duplicate_detection_attrs
+    {
+      email: registration_params[:email],
+      phone: registration_params[:phone],
+      first_name: @user.first_name,
+      last_name: @user.last_name,
+      date_of_birth: @user.date_of_birth,
+      physical_address_1: @user.physical_address_1,
+      physical_address_2: @user.physical_address_2,
+      city: @user.city,
+      state: @user.state,
+      zip_code: @user.zip_code
+    }
   end
 
   def support_email
@@ -169,17 +202,5 @@ class RegistrationsController < ApplicationController
 
   def support_phone
     ProgramContact.support_phone
-  end
-
-  # Helper method for the soft duplicate check
-  def potential_duplicate_found?(user)
-    # Normalize inputs for comparison
-    normalized_first_name = user.first_name&.strip&.downcase
-    normalized_last_name = user.last_name&.strip&.downcase
-
-    # Check only if all parts are present
-    return false unless normalized_first_name.present? && normalized_last_name.present? && user.date_of_birth.present?
-
-    Users::Constituent.find_duplicates(normalized_first_name, normalized_last_name, user.date_of_birth).exists?
   end
 end
