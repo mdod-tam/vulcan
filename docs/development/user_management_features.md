@@ -42,6 +42,9 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
 | User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_public_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
+| Duplicate review workflow | `app/controllers/admin/duplicate_reviews_controller.rb`, `app/views/admin/duplicate_reviews/` | Review queue, case detail with grouped record comparison, and audited approve/ignore/keep-separate/merge actions. |
+| Duplicate resolution service | `app/services/duplicate_review_cases/resolution_service.rb` | Records approve/ignore/keep-separate determinations and clears the review flag when no other open case remains. |
+| Same-person merge service | `app/services/users/duplicate_merge_service.rb` | Merges a duplicate constituent into a canonical survivor with explicit contact/delivery choices and one audit event. |
 
 ## 3 · Signup And Duplicate Handling
 
@@ -124,7 +127,51 @@ The admin user index currently surfaces this flag in three ways:
 - a `Needs Review` filter backed by `Users::FilterService`
 - a `Needs Review` badge and row highlight in `_users_table.html.erb`
 
-Important distinction: the current admin surface flags and filters possible duplicates. `DuplicateReviewCase` stores sanitized reason, candidate, and metadata snapshots for review plumbing, but the admin user index does not yet provide a full case detail, mark-reviewed, keep-separate, merge, or ignore workflow. Detailed admin duplicate/claim review and field-level merge/reconcile workflows are outside the current implementation.
+### 3.2.1 Admin duplicate review and merge
+
+Flagged duplicates are resolved through an audited admin workflow. `DuplicateReviewCase` is the primary durable source when a case exists; a bare `users.needs_duplicate_review` row with no open case is treated as a manual/legacy fallback.
+
+- Entry points: `app/controllers/admin/duplicate_reviews_controller.rb`, reachable from the admin user index badge and the user show page.
+- Queue (`index`): lists open cases with a source label (`registration_soft_match`, `paper_intake`, `admin_create`, `support_claim`, `portal_dependent`) plus manual/legacy flagged users that have no open case.
+- Detail (`show`): groups each record's facts by login identity, delivery route, record truth, applications, relationships, and auth artifacts, and shows candidate link state (current, already merged, or record no longer exists).
+
+There are two distinct paths. `DuplicateReviewCases::ResolutionService` (controller `resolve` action) records a decision without moving any data; it takes an admin-selected `resolution_determination` and a required rationale:
+
+| Resolution action | Resulting status | Effect |
+|-------------------|------------------|--------|
+| Approve | `resolved_approved` | Resolves the case and clears the review flag when no other open case remains. |
+| Ignore | `resolved_ignored` | Resolves the case; the duplicate signal is acceptable. |
+| Keep separate | `resolved_ignored` | Resolves the case; pair with the `keep_separate` determination to record that the records stay distinct. No contact is copied. |
+
+Merge is a separate workflow, not a `ResolutionService` action: the controller `merge` action calls `Users::DuplicateMergeService` (see §3.2.2), which produces status `resolved_merged` and records the `same_person_confirmed` determination. It requires the admin's explicit same-person confirmation and a rationale; it does not consume a pre-set determination on the case.
+
+Resolution state lives on `DuplicateReviewCase`: `resolution_determination` (`same_person_confirmed`, `authorized_relationship_confirmed`, `keep_separate`, `needs_more_information`, `fraud_or_security_review`), `resolution_rationale`, and `resolution_metadata`. The coarse `status` enum (`open`, `resolved_approved`, `resolved_ignored`, `resolved_merged`) is unchanged.
+
+Flag/case sync is enforced in both directions: resolving or merging recomputes the subject/canonical `needs_duplicate_review` flag from remaining open cases, a merge resolves every open case whose subject is the retired duplicate (plus canonical-subject cases that name the duplicate as a candidate), and the legacy `clear_flag` path refuses to clear a flag while the record still has an open case, directing the admin to resolve the case instead.
+
+### 3.2.2 Same-person merge service
+
+`Users::DuplicateMergeService` performs a same-person merge of one constituent record into a canonical survivor. It requires an admin actor, an open review case, explicit same-person confirmation, a rationale, evidence/reason codes, and explicit contact and delivery choices. It locks both users and the case, preflights every blocker, performs all mutations with bang persistence inside one transaction, rolls back on failure, and emits exactly one `duplicate_user_merged` audit event.
+
+A merged duplicate is deactivated (`status: inactive`) and points at its survivor through `users.merged_into_user_id`, with `merged_by_id` and `merged_at` recorded. It is never destroyed. `User#public_login_active?` rejects merged, inactive, and suspended records (treating legacy NULL status as active). It gates the auth-lookup helper (`find_by_login_identifier`), the password-reset token flows, and session-cookie creation (`_create_and_set_session_cookie`), which is the single chokepoint for both password sign-in and 2FA completion, so a duplicate retired mid-login cannot finish authenticating.
+
+Merge inventory (decision per area):
+
+| Area | Decision |
+|------|----------|
+| Applications | Transfer all duplicate-owned applications to the canonical user by FK repoint, preserving status, history, and audit. The admin UI always transfers all owned applications; per-application selection exists only at the service layer and is not wired into a form. If the canonical was the managing guardian of a transferred application, the managing guardian is cleared first so the merged record is never self-managed. Blocked if it would leave the canonical record with more than one active/blocking application. |
+| Managed applications | Repoint `managing_guardian_id` to the canonical user, except for applications the canonical already owns, where the managing guardian is cleared instead (a record cannot manage its own application). |
+| Guardian relationships (duplicate as guardian) | Transfer to canonical; blocked on a shared-dependent pair conflict. A direct guardian relationship between the two merged records (either direction) is dissolved rather than repointed, since a person cannot be their own guardian. |
+| Guardian relationships (duplicate as dependent) | Transfer to canonical without copying effective guardian contact into stored record truth; blocked on a shared-guardian pair conflict. |
+| Sessions | Duplicate sessions expire. |
+| WebAuthn / TOTP / SMS credentials | Never transferred; canonical auth state preserved. |
+| Password reset / recovery state | Duplicate reset token cleared on retirement; blocked if the duplicate has a pending recovery request; resolved recovery requests remain as retired-record history. |
+| Secure request forms | Blocked if the duplicate is the recipient of an active bearer-link form. |
+| Contact facts | Admin explicitly chooses the surviving email, phone, phone type, and address; synthetic or effective fallback values never become stored record truth. A real surviving phone requires an explicit phone type. |
+| Delivery route | Chosen explicitly and independently from login identity. |
+| Login identity | The canonical account keeps a real email if it was email-backed; the merge is blocked if it would strand an email-backed portal account without a real email. |
+| Duplicate review cases | The selected case and exact pair-related open cases resolve to `resolved_merged`; candidate snapshots and evidence are retained. |
+| Events / notifications / audit | Historical records are preserved; the merge adds one `duplicate_user_merged` event rather than rewriting history. |
 
 ### 3.3 Paper applicant lookup and eligibility
 

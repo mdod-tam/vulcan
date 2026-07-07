@@ -1,0 +1,42 @@
+<%# locals: review_case %>
+<%= form_with url: resolve_admin_duplicate_review_path(review_case), method: :post, class: 'space-y-4' do |f| %>
+  <fieldset>
+    <legend class="text-sm font-medium text-gray-700">Action</legend>
+    <label class="inline-flex items-center mr-4 text-sm">
+      <%= radio_button_tag :resolution_action, 'approve', true, required: true %>
+      <span class="ml-1">Approve</span>
+    </label>
+    <label class="inline-flex items-center mr-4 text-sm">
+      <%= radio_button_tag :resolution_action, 'ignore' %>
+      <span class="ml-1">Ignore</span>
+    </label>
+    <label class="inline-flex items-center text-sm">
+      <%= radio_button_tag :resolution_action, 'keep_separate' %>
+      <span class="ml-1">Keep separate</span>
+    </label>
+  </fieldset>
+
+  <div>
+    <%= label_tag :determination, 'Identity / linking determination', class: 'block text-sm font-medium text-gray-700' %>
+    <%= select_tag :determination,
+                   options_for_select(DuplicateReviewCase.resolution_determinations.keys.map { |d| [d.humanize, d] }, 'keep_separate'),
+                   class: 'border-gray-300 rounded-md text-sm' %>
+  </div>
+
+  <fieldset>
+    <legend class="text-sm font-medium text-gray-700">Evidence / reason codes</legend>
+    <% Array(review_case.metadata['reason_codes']).each do |code| %>
+      <label class="inline-flex items-center mr-3 text-sm">
+        <%= check_box_tag 'reason_codes[]', code, true %>
+        <span class="ml-1"><%= code.humanize %></span>
+      </label>
+    <% end %>
+  </fieldset>
+
+  <div>
+    <%= label_tag :rationale, 'Rationale (required)', class: 'block text-sm font-medium text-gray-700' %>
+    <%= text_area_tag :rationale, nil, rows: 2, required: true, class: 'w-full border-gray-300 rounded-md text-sm', placeholder: 'Explain the decision.' %>
+  </div>
+
+  <%= f.submit 'Resolve case', class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded text-sm cursor-pointer' %>
+<% end %>

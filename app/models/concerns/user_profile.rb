@@ -9,6 +9,12 @@ module UserProfile
   included do
     attr_accessor :phone_type_submitted
 
+    # merge_in_progress: set by the same-person merge service while it moves contact facts, so the
+    #   admin-edit reachability guard does not apply to a supervised release of a duplicate's contact.
+    # retiring_for_merge: set on the duplicate being retired by a merge; a retired record never
+    #   receives deliveries, so email-delivery and letter-address guards do not apply.
+    attr_accessor :merge_in_progress, :retiring_for_merge
+
     # Callbacks
     before_validation :normalize_email_fields
     before_validation :normalize_communication_preference_for_undeliverable_email
@@ -156,7 +162,8 @@ module UserProfile
   end
 
   def validate_address_for_letter_preference
-    return unless communication_preference.to_s == 'letter' || communication_preference == :letter
+    return if retiring_for_merge
+    return unless communication_preference.to_s == 'letter'
 
     errors.add(:physical_address_1, 'is required when notification method is set to letter') if physical_address_1.blank?
     errors.add(:city, 'is required when notification method is set to letter') if city.blank?
@@ -193,7 +200,9 @@ module UserProfile
       end
     end
 
-    return if changed_attributes.blank?
+    # A merge emits a single duplicate_user_merged audit event; suppress the per-field
+    # profile audit noise for the contact moves it performs on the canonical and duplicate.
+    return if changed_attributes.blank? || merge_in_progress || retiring_for_merge
 
     actor = Current.user || self
     action = if Current.paper_context
@@ -254,13 +263,13 @@ module UserProfile
   # They are not email-backed portal accounts and cannot use public portal sign-in.
   # Address-only users store NULL email/phone and remain editable outside paper context.
   def email_optional?
-    paper_context_no_email? ||
+    retiring_for_merge || paper_context_no_email? ||
       (persisted? && constituent_user_type? && portal_phone_only_without_email?) ||
       (persisted? && constituent_user_type? && address_only_contact?)
   end
 
   def validate_admin_contact_update?
-    !Current.paper_context && constituent_user_type?
+    !Current.paper_context && !merge_in_progress && constituent_user_type?
   end
 
   def self_service_constituent_profile_update?
@@ -276,7 +285,7 @@ module UserProfile
   end
 
   def email_delivery_requires_real_email
-    return unless deliver_via_email?
+    return if retiring_for_merge || !deliver_via_email?
     return if real_email?
     return if dependent_with_deliverable_contact_email?
 

@@ -66,6 +66,10 @@
               <span class="font-bold mr-1"><%= @needs_review_count %></span> need review
             <% end %>
           <% end %>
+          <div class="hidden sm:block text-gray-300">|</div>
+          <%= link_to 'Duplicate review queue', admin_duplicate_reviews_path,
+              class: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200",
+              data: { turbo_frame: "_top" } %>
         </div>
       </div>
     </section>

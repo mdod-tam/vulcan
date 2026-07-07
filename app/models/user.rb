@@ -101,6 +101,7 @@ class User < ApplicationRecord
       user = find_by_email(normalized)
       return nil if user.blank?
       return nil unless user.real_email?
+      return nil unless user.public_login_active?
 
       return user
     end
@@ -109,6 +110,7 @@ class User < ApplicationRecord
     return nil if phone_user.blank?
     return nil unless phone_user.real_email?
     return nil unless phone_user.real_phone?
+    return nil unless phone_user.public_login_active?
 
     phone_user
   end
@@ -185,6 +187,15 @@ class User < ApplicationRecord
            foreign_key: :subject_user_id,
            dependent: :nullify,
            inverse_of: :subject_user
+
+  # Same-person merge retirement: a duplicate points at its surviving canonical user.
+  belongs_to :merged_into_user, class_name: 'User', optional: true, inverse_of: :merged_duplicate_users
+  belongs_to :merged_by, class_name: 'User', optional: true
+  has_many :merged_duplicate_users,
+           class_name: 'User',
+           foreign_key: :merged_into_user_id,
+           dependent: :nullify,
+           inverse_of: :merged_into_user
   has_many :income_verified_applications,
            class_name: 'Application',
            foreign_key: :income_verified_by_id,
@@ -201,6 +212,22 @@ class User < ApplicationRecord
   # do not rely on UI-only filtering or raw +existing_constituent_id+.
   def paper_applicant_candidate?
     constituent?
+  end
+
+  # True once this record has been retired into a canonical survivor by a same-person merge.
+  def merged?
+    merged_into_user_id.present?
+  end
+
+  # Public portal auth gate for sign-in, account access, and password-reset token flows.
+  # A merged, inactive, or suspended record must never authenticate. Legacy NULL status
+  # (before the status enum existed) is treated as active.
+  def public_login_active?
+    return false if merged?
+    return false if respond_to?(:suspended?) && suspended?
+    return false if respond_to?(:inactive?) && inactive?
+
+    true
   end
 
   private

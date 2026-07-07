@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -195,6 +195,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
     t.string "deduplication_key", null: false
     t.jsonb "metadata", default: {}, null: false
     t.datetime "opened_at", null: false
+    t.string "resolution_determination"
+    t.jsonb "resolution_metadata", default: {}, null: false
+    t.text "resolution_rationale"
     t.datetime "resolved_at"
     t.bigint "resolved_by_id"
     t.integer "source", null: false
@@ -771,6 +774,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
     t.string "locale"
     t.datetime "locked_at"
     t.bigint "medical_provider_id"
+    t.datetime "merged_at"
+    t.bigint "merged_by_id"
+    t.bigint "merged_into_user_id"
     t.string "middle_initial"
     t.boolean "mobility_disability", default: false
     t.boolean "needs_duplicate_review", default: false, null: false
@@ -812,6 +818,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
     t.index ["evaluator_id"], name: "index_users_on_evaluator_id"
     t.index ["income_verified_by_id"], name: "index_users_on_income_verified_by_id"
     t.index ["medical_provider_id"], name: "index_users_on_medical_provider_id"
+    t.index ["merged_by_id"], name: "index_users_on_merged_by_id"
+    t.index ["merged_into_user_id"], name: "index_users_on_merged_into_user_id"
     t.index ["phone"], name: "index_users_on_phone", where: "(phone IS NOT NULL)"
     t.index ["phone"], name: "index_users_on_phone_unique", unique: true, where: "(phone IS NOT NULL)"
     t.index ["phone_type"], name: "index_users_on_phone_type"
@@ -986,6 +994,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_05_120000) do
   add_foreign_key "users", "users", column: "evaluator_id"
   add_foreign_key "users", "users", column: "income_verified_by_id"
   add_foreign_key "users", "users", column: "medical_provider_id"
+  add_foreign_key "users", "users", column: "merged_by_id"
+  add_foreign_key "users", "users", column: "merged_into_user_id"
   add_foreign_key "users", "users", column: "recipient_id"
   add_foreign_key "vendor_secure_request_forms", "users", column: "requested_by_id"
   add_foreign_key "vendor_secure_request_forms", "users", column: "vendor_id", on_delete: :restrict

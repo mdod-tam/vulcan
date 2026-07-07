@@ -153,7 +153,13 @@ class ApplicationController < ActionController::Base
 
   # Creates the Session record and sets the secure cookie.
   # Returns the session record on success, nil on failure.
+  #
+  # Fails closed for records that are not login-active (merged into another account,
+  # inactive, or suspended). This is the single chokepoint for both password sign-in
+  # and 2FA completion, so a duplicate retired mid-flow cannot finish authenticating.
   def _create_and_set_session_cookie(user)
+    return unless user&.public_login_active?
+
     session_record = user.sessions.new(
       user_agent: request.user_agent,
       ip_address: request.remote_ip
