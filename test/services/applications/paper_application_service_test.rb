@@ -790,7 +790,7 @@ module Applications
       assert_includes service.send(:new_user_accounts), guardian
     end
 
-    test 'process_self_applicant rejects duplicate phone instead of reusing existing user' do
+    test 'paper self hard duplicate contact blocks before persistence without workflow side effects' do
       phone = unique_paper_phone
       original_email = "dup-reuse-#{SecureRandom.hex(4)}@example.com"
       existing = create(:constituent, email: original_email, phone: phone)
@@ -811,12 +811,62 @@ module Applications
       }
 
       service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
-      assert_not service.create
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count',
+                            'DuplicateReviewCaseCandidate.count', 'Event.count'] do
+        assert_not service.create
+      end
       assert(service.errors.any? { |error| error.match?(/phone|taken|create user/i) })
 
       existing.reload
       assert_equal original_email, existing.email
       assert_not_equal 'Different', existing.first_name
+      assert_not existing.needs_duplicate_review
+    end
+
+    test 'paper self soft match persists user and opens duplicate review case through create service' do
+      existing = create(
+        :constituent,
+        first_name: 'Paper',
+        last_name: 'Softmatch',
+        date_of_birth: Date.new(1981, 4, 12),
+        email: "paper-soft-existing-#{SecureRandom.hex(4)}@example.com",
+        phone: unique_paper_phone
+      )
+
+      service_params = {
+        constituent: @constituent_params.merge(
+          first_name: existing.first_name,
+          last_name: existing.last_name,
+          date_of_birth: '04/12/1981',
+          email: "paper-soft-new-#{SecureRandom.hex(4)}@example.com",
+          phone: unique_paper_phone,
+          physical_address_1: '900 Soft Match Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21203'
+        ),
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+
+      assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count',
+                         'DuplicateReviewCaseCandidate.count'], 1 do
+        assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
+          assert service.create, "Service creation failed: #{service.errors.inspect}"
+        end
+      end
+
+      subject = service.constituent.reload
+      assert subject.needs_duplicate_review
+
+      duplicate_case = DuplicateReviewCase.find_by!(subject_user: subject)
+      assert_equal 'paper_intake', duplicate_case.source
+      assert_equal ['name_dob'], duplicate_case.metadata['reason_codes']
+      assert_equal [existing.id], duplicate_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
+
+      event = Event.find_by!(action: 'duplicate_review_case_opened', auditable: subject)
+      assert_equal @admin.id, event.user_id
     end
 
     test 'process_self_applicant does not attach application when duplicate contact blocks creation' do

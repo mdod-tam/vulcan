@@ -8,9 +8,6 @@ module Users
     has_many :assigned_evaluators, through: :evaluations, source: :evaluator
     # Removed unconditional validation: validate :must_have_at_least_one_disability
 
-    # Callbacks
-    before_validation :check_for_duplicates, on: :create
-
     # Enums
     enum :communication_preference, { email: 0, letter: 1 }
 
@@ -121,19 +118,6 @@ module Users
     end
 
     private
-
-    def check_for_duplicates
-      Rails.logger.debug { "*** Checking for duplicates: first_name=#{first_name}, last_name=#{last_name}, date_of_birth=#{date_of_birth} (#{date_of_birth.class})" }
-      return unless first_name.present? && last_name.present? && date_of_birth.present?
-
-      # Look for potential duplicates using the class method
-      duplicates = self.class.find_duplicates(first_name, last_name, date_of_birth)
-
-      # Don't exclude self since this is a new record
-      has_duplicates = duplicates.exists?
-      self.needs_duplicate_review = true if has_duplicates
-      Rails.logger.debug { "*** Found duplicates: #{has_duplicates} - setting needs_duplicate_review to #{needs_duplicate_review}" }
-    end
 
     def must_have_at_least_one_disability
       return if hearing_disability || vision_disability || speech_disability || mobility_disability || cognition_disability

@@ -180,6 +180,11 @@ class User < ApplicationRecord
            inverse_of: :recipient
   has_many :applications, inverse_of: :user, dependent: :nullify
   has_many :recovery_requests, dependent: :restrict_with_exception
+  has_many :subject_duplicate_review_cases,
+           class_name: 'DuplicateReviewCase',
+           foreign_key: :subject_user_id,
+           dependent: :nullify,
+           inverse_of: :subject_user
   has_many :income_verified_applications,
            class_name: 'Application',
            foreign_key: :income_verified_by_id,

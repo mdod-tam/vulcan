@@ -14,6 +14,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     @user = create(:constituent, password: 'password123', password_confirmation: 'password123')
     @original_password_digest = @user.password_digest
+    @system_audit_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) ||
+                          create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
 
     # Standard sign-in for integration tests
     sign_in_for_integration_test(@user)
@@ -152,14 +154,51 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     old_cache = Rails.cache
     Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    limit = 2
+    set_auth_rate_limit_policy('account_access_rate_limit_ip', 10)
+    set_auth_rate_limit_policy('account_access_rate_limit_contact_ip', 10)
+    set_auth_rate_limit_policy('account_access_rate_limit_user_ip', limit)
+    set_auth_rate_limit_policy('account_access_rate_period', 1)
 
-    SmsService.expects(:send_message).times(PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT).returns(true)
+    SmsService.expects(:send_message).times(limit).returns(true)
 
-    (PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT + 1).times do
+    (limit + 1).times do
       post password_path, params: { contact: @user.phone }
     end
 
     assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', user: @user).count
+    assert_cache_prefix_present('auth_rate_limit:account_access:user_ip:')
+    assert_cache_prefix_absent('account_access:')
+  ensure
+    Rails.cache = old_cache
+  end
+
+  def test_unknown_account_access_contact_rate_limit_uses_public_audit_without_raw_contact
+    sign_out if respond_to?(:sign_out)
+
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    contact = "unknown-access-#{SecureRandom.hex(4)}@example.com"
+    set_auth_rate_limit_policy('account_access_rate_limit_ip', 10)
+    set_auth_rate_limit_policy('account_access_rate_limit_contact_ip', 1)
+    set_auth_rate_limit_policy('account_access_rate_limit_user_ip', 10)
+    set_auth_rate_limit_policy('account_access_rate_period', 1)
+
+    post password_path, params: { contact: contact }
+
+    assert_difference -> { Event.where(action: 'account_access_instructions_rate_limited', user: @system_audit_actor).count }, 1 do
+      assert_no_enqueued_emails do
+        post password_path, params: { contact: contact }
+      end
+    end
+
+    event = Event.where(action: 'account_access_instructions_rate_limited', user: @system_audit_actor).last
+    assert_equal 'contact_ip', event.metadata['rate_limit_scope']
+    assert event.metadata['request_ip_digest'].present?
+    assert event.metadata['submitted_contact_digest'].present?
+    assert_not_includes event.metadata.values.join(' '), contact
+    assert_cache_prefix_present('auth_rate_limit:account_access:contact_ip:')
+    assert_cache_prefix_absent('account_access:')
   ensure
     Rails.cache = old_cache
   end
@@ -452,17 +491,23 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
                   email: "voice-rate-limit-#{SecureRandom.hex(3)}@example.com",
                   password: 'password123',
                   password_confirmation: 'password123')
+    limit = 2
+    set_auth_rate_limit_policy('account_access_rate_limit_ip', 10)
+    set_auth_rate_limit_policy('account_access_rate_limit_contact_ip', 10)
+    set_auth_rate_limit_policy('account_access_rate_limit_user_ip', limit)
+    set_auth_rate_limit_policy('account_access_rate_period', 1)
 
     SmsService.expects(:send_message).never
 
-    (PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT + 1).times do |index|
+    (limit + 1).times do |index|
       post password_path, params: { contact: user.phone }
-      travel AuditEventService::DEDUP_WINDOW + 1.second if index < PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT
+      travel AuditEventService::DEDUP_WINDOW + 1.second if index < limit
     end
 
-    assert_equal PasswordsController::ACCOUNT_ACCESS_RATE_LIMIT,
-                 Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count
+    assert_equal limit, Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count
     assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', user: user).count
+    assert_cache_prefix_present('auth_rate_limit:account_access:user_ip:')
+    assert_cache_prefix_absent('account_access:')
   ensure
     travel_back
     Rails.cache = old_cache
@@ -564,5 +609,27 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       description: 'Email footer template for testing',
       body: 'Contact us at support@mat.maryland.gov'
     )
+  end
+
+  def set_auth_rate_limit_policy(key, value)
+    policy = Policy.find_or_initialize_by(key: key)
+    if policy.new_record?
+      policy.value = value
+      policy.save!
+    else
+      policy.update_column(:value, value)
+    end
+  end
+
+  def assert_cache_prefix_present(prefix)
+    assert cache_keys.any? { |key| key.start_with?(prefix) }, "Expected cache prefix #{prefix.inspect}"
+  end
+
+  def assert_cache_prefix_absent(prefix)
+    assert cache_keys.none? { |key| key.start_with?(prefix) }, "Expected no cache prefix #{prefix.inspect}"
+  end
+
+  def cache_keys
+    Rails.cache.instance_variable_get(:@data).keys.map(&:to_s)
   end
 end

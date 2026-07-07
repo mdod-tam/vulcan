@@ -76,6 +76,10 @@ Use `success?`, `failure?`, `message`, and `data` when a service returns `BaseSe
 | `Applications::MedicalCertificationService` | `app/services/applications/medical_certification_service.rb` | Requests disability certification from a provider. | `BaseService::Result` |
 | `Applications::EventService` | `app/services/applications/event_service.rb` | Logs guardian/dependent application submission and update events. | `Event` or `nil` |
 | `Applications::EventDeduplicationService` | `app/services/applications/event_deduplication_service.rb` | Deduplicates timeline inputs for display. | Array |
+| `DuplicateDetectionService` | `app/services/duplicate_detection_service.rb` | Evaluates exact contact duplicates and soft name+DOB/address signals for public registration, portal dependent creation, admin quick-create, and paper self/guardian/dependent creation contexts. | `BaseService::Result` with `DuplicateDetectionService::Result` data |
+| `DuplicateReviewCases::CreateService` | `app/services/duplicate_review_cases/create_service.rb` | Opens idempotent duplicate-review cases after the subject user is persisted, stores sanitized candidate/metadata snapshots, syncs `needs_duplicate_review`, and logs case-opened audit events. | `BaseService::Result` |
+| `AuthRateLimit` | `app/services/auth_rate_limit.rb` | Centralizes sign-in, account-access, and account-recovery throttles using policy-backed per-action/per-scope limits and digest-only identifiers. | Raises `AuthRateLimit::ExceededError` on denial |
+| `PublicAuditActor` | `app/services/public_audit_actor.rb` | Attributes unauthenticated security/rate-limit audit events to the configured system audit actor without promoting a public request to a real user. | `Event` or `nil` |
 
 Related docs:
 
@@ -240,7 +244,23 @@ Primary tests:
 - `test/services/applications/event_deduplication_service_test.rb`
 - `test/services/applications/audit_log_builder_test.rb`
 
-### 4.6 · Training and Evaluation Services
+### 4.6 · Auth Rate Limits and Public Audits
+
+`AuthRateLimit` is the shared gate for public auth throttles:
+
+- `SessionsController#create` uses action `:sign_in_attempt` and scope `:ip`.
+- `PasswordsController#create` uses action `:account_access` with `:ip`, `:contact_ip`, and matched `:user_ip` scopes.
+- `AccountRecoveryController#create` uses action `:account_recovery` with `:ip`, `:contact_ip`, and matched `:user_ip` scopes.
+
+`Policy.auth_rate_limit_for` delegates to `AuthRateLimit.limit_config_for`, so policy rows and service defaults share the same allowlist and fallback behavior. Cache identifiers are HMAC/SHA digests, not raw contacts or IP addresses. Rate-limited public requests log through `PublicAuditActor`, which uses `system@mdmat.org` when present and otherwise skips the audit with a warning instead of inventing a privileged actor.
+
+Primary tests:
+
+- `test/services/auth_rate_limit_test.rb`
+- `test/services/public_audit_actor_test.rb`
+- `test/models/policy_auth_rate_limit_test.rb`
+
+### 4.7 · Training and Evaluation Services
 
 Training services currently include:
 

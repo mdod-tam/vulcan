@@ -8,6 +8,8 @@ module Admin
     include UserServiceIntegration
     include PaperQuickCreatePortalMarkers
 
+    class DuplicateReviewCaseRollback < StandardError; end
+
     DependentSummary = Struct.new(
       :id,
       :name,
@@ -215,19 +217,31 @@ module Admin
       Current.paper_context = true
       contact_flags = quick_create_contact_flags
       attrs = contact_flags.apply_to(user_create_params.to_h)
+      duplicate_detection = detect_admin_create_duplicates(attrs)
 
-      result = create_user_with_service(
-        attrs,
-        is_managing_adult: true,
-        skip_user_lookup: true,
-        skip_email_validation: contact_flags.skip_email_validation?,
-        skip_phone_validation: contact_flags.skip_phone_validation?
-      )
+      return render_admin_duplicate_block if duplicate_detection.hard_block
 
-      if result.success?
+      result = nil
+      review_result = nil
+      user = nil
+
+      ActiveRecord::Base.transaction do
+        result = create_user_with_service(
+          attrs,
+          is_managing_adult: true,
+          skip_user_lookup: true,
+          skip_email_validation: contact_flags.skip_email_validation?,
+          skip_phone_validation: contact_flags.skip_phone_validation?
+        )
+
+        raise ActiveRecord::Rollback unless result.success?
+
         user = result.data[:user]
-        user.update!(needs_duplicate_review: true) if potential_duplicate_found?(user)
+        review_result = open_admin_duplicate_review_case(user, duplicate_detection)
+        raise DuplicateReviewCaseRollback if review_result&.failure?
+      end
 
+      if result&.success?
         store_quick_created_portal_user_marker!(user)
 
         render json: {
@@ -242,6 +256,12 @@ module Admin
           errors: format_validation_errors(result.data[:errors] || [result.message])
         }, status: :unprocessable_content
       end
+    rescue DuplicateReviewCaseRollback
+      log_user_service_error('to create duplicate review case in admin interface', [review_result.message])
+      render json: {
+        success: false,
+        errors: format_validation_errors([review_result.message])
+      }, status: :unprocessable_content
     ensure
       Current.reset
     end
@@ -667,6 +687,67 @@ module Admin
       end
     end
 
+    def detect_admin_create_duplicates(attrs)
+      result = DuplicateDetectionService.new(
+        context: :admin_create,
+        attrs: duplicate_detection_attrs(attrs)
+      ).call
+      return result.data if result.success?
+
+      Rails.logger.warn("Admin user duplicate detection failed: #{result.message}")
+      DuplicateDetectionService::Result.new([], 0.0, [], false, :allow, :proceed)
+    end
+
+    def render_admin_duplicate_block
+      render json: {
+        success: false,
+        errors: {
+          duplicate: 'A user with this email or phone already exists. Select the existing user instead of creating a new one.'
+        }
+      }, status: :unprocessable_content
+    end
+
+    def open_admin_duplicate_review_case(user, duplicate_detection)
+      return unless duplicate_detection.recommended_action == :flag
+
+      DuplicateReviewCases::CreateService.new(
+        source: :admin_create,
+        subject_user: user,
+        actor: current_user,
+        reason_codes: duplicate_detection.reasons,
+        candidates: duplicate_review_candidates_for(duplicate_detection),
+        metadata: { intake_context: 'admin_create' }
+      ).call
+    end
+
+    def duplicate_review_candidates_for(duplicate_detection)
+      duplicate_detection.matched_users.map do |candidate|
+        DuplicateReviewCases::CreateService::CandidateInput.new(
+          candidate,
+          duplicate_detection.reasons.first
+        )
+      end
+    end
+
+    def duplicate_detection_attrs(attrs)
+      data = attrs.with_indifferent_access
+      dob_holder = Users::Constituent.new
+      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
+
+      {
+        email: User.normalize_email(data[:email]),
+        phone: User.normalize_phone(data[:phone]),
+        first_name: data[:first_name],
+        last_name: data[:last_name],
+        date_of_birth: dob_holder.date_of_birth,
+        physical_address_1: data[:physical_address_1],
+        physical_address_2: data[:physical_address_2],
+        city: data[:city],
+        state: data[:state],
+        zip_code: data[:zip_code]
+      }
+    end
+
     # Build DependentSummary objects for a guardian's dependents
     def build_dependent_summaries(guardian, waiting_period_years)
       guardian.dependents.map do |dep|
@@ -915,7 +996,7 @@ module Admin
           user: %i[first_name last_name email phone phone_type
                    physical_address_1 physical_address_2
                    city state zip_code date_of_birth
-                   communication_preference locale needs_duplicate_review]
+                   communication_preference locale]
         )
       else
         # Handle direct params from paper application form's guardian_attributes
@@ -923,7 +1004,7 @@ module Admin
           :first_name, :last_name, :email, :phone, :phone_type,
           :physical_address_1, :physical_address_2,
           :city, :state, :zip_code, :date_of_birth,
-          :communication_preference, :locale, :needs_duplicate_review
+          :communication_preference, :locale
         )
       end
     end
@@ -970,22 +1051,6 @@ module Admin
         # Default: use first word lowercased with underscores
         clean_msg.split.first.downcase.gsub(/[^a-z0-9_]/, '')
       end
-    end
-
-    # Checks for possible duplicate users based on name and date of birth
-    # Called in the create action to flag potential duplicates for review
-    def potential_duplicate_found?(user)
-      return false unless user.first_name.present? && user.last_name.present? && user.date_of_birth.present?
-
-      query = User.where('LOWER(first_name) = ? AND LOWER(last_name) = ? AND date_of_birth = ?',
-                         user.first_name.downcase,
-                         user.last_name.downcase,
-                         user.date_of_birth)
-
-      # Exclude the current user if it has been persisted to avoid self-matching
-      query = query.where.not(id: user.id) if user.persisted?
-
-      query.exists?
     end
 
     # Avoid N+1 queries on users index

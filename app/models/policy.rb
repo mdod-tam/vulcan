@@ -16,11 +16,23 @@ class Policy < ApplicationRecord
 
   after_update :log_change
 
-  RATE_LIMIT_ACTIONS = %i[proof_submission].freeze
+  RATE_LIMIT_ACTIONS = %i[proof_submission sign_in_attempt account_access account_recovery].freeze
+  PROOF_RATE_LIMIT_ACTIONS = %i[proof_submission].freeze
+  AUTH_RATE_LIMIT_ACTIONS = %i[sign_in_attempt account_access account_recovery].freeze
   RATE_LIMIT_KEYS = %w[
     proof_submission_rate_limit_web
     proof_submission_rate_limit_email
     proof_submission_rate_period
+    sign_in_attempt_rate_limit_ip
+    sign_in_attempt_rate_period
+    account_access_rate_limit_ip
+    account_access_rate_limit_contact_ip
+    account_access_rate_limit_user_ip
+    account_access_rate_period
+    account_recovery_rate_limit_contact_ip
+    account_recovery_rate_limit_user_ip
+    account_recovery_rate_limit_ip
+    account_recovery_rate_period
   ].freeze
 
   VOUCHER_KEYS = %w[
@@ -34,7 +46,7 @@ class Policy < ApplicationRecord
   ].freeze
 
   def self.rate_limit_for(action, method)
-    return nil unless action.to_sym.in?(RATE_LIMIT_ACTIONS)
+    return nil unless action.to_sym.in?(PROOF_RATE_LIMIT_ACTIONS)
 
     max_value = get("#{action}_rate_limit_#{method}")
     period_value = get("#{action}_rate_period")
@@ -51,6 +63,12 @@ class Policy < ApplicationRecord
       max: max_value,
       period: period_value.hours
     }
+  end
+
+  def self.auth_rate_limit_for(action, scope)
+    return nil unless action.to_sym.in?(AUTH_RATE_LIMIT_ACTIONS)
+
+    AuthRateLimit.limit_config_for(action, scope)
   end
 
   def self.get(key)

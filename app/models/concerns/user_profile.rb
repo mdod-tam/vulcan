@@ -221,7 +221,11 @@ module UserProfile
     return if email.blank?
 
     existing = User.exists_with_email?(email, excluding_id: id)
-    errors.add(:email, 'has already been taken') if existing
+    return unless existing
+
+    return add_portal_self_registration_unavailable_contact_error if portal_self_registration?
+
+    errors.add(:email, 'has already been taken')
   rescue StandardError => e
     Rails.logger.warn "Email uniqueness check failed: #{e.message}"
   end
@@ -231,27 +235,17 @@ module UserProfile
     return unless User.exists_with_phone?(phone, excluding_id: id)
 
     conflicting_user = User.find_by_phone(phone)
-    if portal_self_registration? && conflicting_user.present? && !conflicting_user.real_email?
-      errors.add(
-        :base,
-        :portal_self_registration_unavailable_contact,
-        support_email: portal_registration_support_email,
-        support_phone: portal_registration_support_phone
-      )
-      return
-    end
+    return add_portal_self_registration_unavailable_contact_error if portal_self_registration? && conflicting_user.present? && !conflicting_user.real_email?
 
     errors.add(:phone, 'has already been taken')
   rescue StandardError => e
     Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
   end
 
-  # Check if we're in a paper context where email is not required
   def paper_context_no_email?
     Current.paper_context && email.blank?
   end
 
-  # Check if we're in a paper context where phone is not required
   def paper_context_no_phone?
     Current.paper_context && phone.blank?
   end
@@ -352,6 +346,11 @@ module UserProfile
 
   def portal_registration_support_phone
     ProgramContact.support_phone_display
+  end
+
+  def add_portal_self_registration_unavailable_contact_error
+    errors.add(:base, :portal_self_registration_unavailable_contact,
+               support_email: portal_registration_support_email, support_phone: portal_registration_support_phone)
   end
 
   def was_address_only_contact?

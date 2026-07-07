@@ -46,14 +46,9 @@ Income threshold (FPL) validation follow-ups
 
 ## Registration & Account Integrity  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 
-- [ ] Duplicate detection approach (heuristics vs. AI-assisted) and privacy constraints  [DATA-001][DATA-002]
-- [ ] Signals: implement deterministic checks (email/phone/dob/address similarity)  [DATA-002]
-- [ ] Service: `DuplicateDetectionService` returning matched score + reasons
-- [ ] DB indexes to support queries (e.g., lower(email), phone digits only)
-- [ ] UI: badge + table filter for `needs_duplicate_review`  [AUTHZ-002]
-- [ ] Review queue: list, detail, actions (approve/merge/ignore) with rationale textarea  [AUTHZ-002]
+- [ ] Review queue: list `DuplicateReviewCase` records with candidate snapshots, reason codes, and actions (approve/merge/ignore) with rationale textarea  [AUTHZ-002]
 - [ ] Merge semantics: pick canonical user/application; record merge event  [AUDIT-002]
-- [ ] Tests: service scoring, controller actions, system flow with merge/ignore
+- [ ] Tests: review queue controller actions and system flow with merge/ignore
 
 ## Notification System
 

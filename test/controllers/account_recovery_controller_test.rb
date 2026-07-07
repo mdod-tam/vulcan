@@ -7,6 +7,8 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     # Set up a test user with WebAuthn credentials
     @user = create(:user) # Replaced fixture with factory
     @admin = create(:admin)
+    @system_audit_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) ||
+                          create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     @webauthn_credential = setup_webauthn_credential_for(@user)
   end
 
@@ -121,8 +123,13 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   test 'rate limits new recovery requests per user and ip' do
     old_cache = Rails.cache
     Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    limit = 2
+    set_auth_rate_limit_policy('account_recovery_rate_limit_ip', 10)
+    set_auth_rate_limit_policy('account_recovery_rate_limit_contact_ip', 10)
+    set_auth_rate_limit_policy('account_recovery_rate_limit_user_ip', limit)
+    set_auth_rate_limit_policy('account_recovery_rate_period', 1)
 
-    AccountRecoveryController::RECOVERY_REQUEST_RATE_LIMIT.times do |i|
+    limit.times do |i|
       RecoveryRequest.where(user: @user).update_all(status: 'approved', resolved_at: Time.current, resolved_by_id: @admin.id)
 
       assert_difference('RecoveryRequest.count', 1) do
@@ -143,6 +150,8 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_equal 1, Event.where(action: 'security_key_recovery_request_rate_limited', user: @user).count
+    assert_cache_prefix_present('auth_rate_limit:account_recovery:user_ip:')
+    assert_cache_prefix_absent('security_key_recovery:')
   ensure
     Rails.cache = old_cache
   end
@@ -152,8 +161,12 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     Rails.cache = ActiveSupport::Cache::MemoryStore.new
     contact = "unknown-#{SecureRandom.hex(4)}@example.com"
     User.expects(:system_user).never
+    set_auth_rate_limit_policy('account_recovery_rate_limit_ip', 10)
+    set_auth_rate_limit_policy('account_recovery_rate_limit_contact_ip', 2)
+    set_auth_rate_limit_policy('account_recovery_rate_limit_user_ip', 10)
+    set_auth_rate_limit_policy('account_recovery_rate_period', 1)
 
-    AccountRecoveryController::RECOVERY_REQUEST_RATE_LIMIT.times do
+    2.times do
       assert_no_difference('RecoveryRequest.count') do
         post request_security_key_reset_path, params: {
           contact: contact,
@@ -172,9 +185,13 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     end
 
     event = Event.where(action: 'security_key_recovery_unmatched_rate_limited').last
-    assert event.user.admin?
+    assert_equal @system_audit_actor, event.user
+    assert_equal 'contact_ip', event.metadata['rate_limit_scope']
+    assert event.metadata['request_ip_digest'].present?
     assert event.metadata['submitted_contact_digest'].present?
     assert_not_includes event.metadata.values.join(' '), contact
+    assert_cache_prefix_present('auth_rate_limit:account_recovery:contact_ip:')
+    assert_cache_prefix_absent('security_key_recovery')
   ensure
     Rails.cache = old_cache
   end
@@ -365,5 +382,27 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
       nickname: 'Test Key',
       sign_count: 0
     )
+  end
+
+  def set_auth_rate_limit_policy(key, value)
+    policy = Policy.find_or_initialize_by(key: key)
+    if policy.new_record?
+      policy.value = value
+      policy.save!
+    else
+      policy.update_column(:value, value)
+    end
+  end
+
+  def assert_cache_prefix_present(prefix)
+    assert cache_keys.any? { |key| key.start_with?(prefix) }, "Expected cache prefix #{prefix.inspect}"
+  end
+
+  def assert_cache_prefix_absent(prefix)
+    assert cache_keys.none? { |key| key.start_with?(prefix) }, "Expected no cache prefix #{prefix.inspect}"
+  end
+
+  def cache_keys
+    Rails.cache.instance_variable_get(:@data).keys.map(&:to_s)
   end
 end

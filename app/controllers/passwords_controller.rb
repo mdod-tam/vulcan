@@ -4,9 +4,6 @@
 class PasswordsController < ApplicationController
   include SecureErrorSanitizer
 
-  ACCOUNT_ACCESS_RATE_LIMIT = 5
-  ACCOUNT_ACCESS_RATE_LIMIT_WINDOW = 1.hour
-
   skip_before_action :authenticate_user!
   skip_before_action :enforce_required_mfa_enrollment
   before_action :set_user_from_token, only: %i[edit]
@@ -21,10 +18,16 @@ class PasswordsController < ApplicationController
   end
 
   def create
-    user, delivery_method = find_user_for_account_access
+    @account_access_contact = account_access_contact.to_s.strip.presence
+    if (rate_limit_scope = pre_lookup_account_access_rate_limit_scope(@account_access_contact))
+      log_public_account_access_rate_limit(rate_limit_scope)
+      return redirect_to_account_access_confirmation
+    end
+
+    user, delivery_method = find_user_for_account_access(@account_access_contact)
     attempt_account_access_delivery(user, delivery_method)
 
-    redirect_to sign_in_path(locale: public_request_locale_param), notice: account_access_confirmation_message
+    redirect_to_account_access_confirmation
   end
 
   def update
@@ -93,8 +96,7 @@ class PasswordsController < ApplicationController
     redirect_to new_password_path, alert: 'Use your account access link to reset your password.'
   end
 
-  def find_user_for_account_access
-    contact = account_access_contact.to_s.strip.presence
+  def find_user_for_account_access(contact = account_access_contact.to_s.strip.presence)
     return [nil, nil] if contact.blank?
 
     User.find_for_account_access(contact)
@@ -111,8 +113,8 @@ class PasswordsController < ApplicationController
   end
 
   def handle_account_access_request(user, delivery_method)
-    if account_access_rate_limited?(user)
-      log_account_access_attempt(user, delivery_method.presence || :none, 'rate_limited')
+    if user_account_access_rate_limited?(user)
+      log_account_access_attempt(user, delivery_method.presence || :none, 'rate_limited', rate_limit_scope: 'user_ip')
       return false
     end
 
@@ -127,30 +129,57 @@ class PasswordsController < ApplicationController
     true
   end
 
-  def account_access_rate_limited?(user)
-    count = Rails.cache.increment(account_access_rate_limit_key(user), 1, expires_in: ACCOUNT_ACCESS_RATE_LIMIT_WINDOW)
+  def pre_lookup_account_access_rate_limit_scope(contact)
+    return :ip if account_access_auth_rate_limited?(:ip)
+    return :contact_ip if contact.present? && account_access_auth_rate_limited?(:contact_ip, submitted_contact: contact)
 
-    count.to_i > ACCOUNT_ACCESS_RATE_LIMIT
+    nil
   end
 
-  def account_access_rate_limit_key(user)
-    hashed_scope = Digest::SHA256.hexdigest("#{user.id}:#{request.remote_ip}")
-    "account_access:#{hashed_scope}"
+  def user_account_access_rate_limited?(user)
+    account_access_auth_rate_limited?(:user_ip, user: user)
   end
 
-  def log_account_access_attempt(user, delivery_method, status)
+  def account_access_auth_rate_limited?(scope, submitted_contact: nil, user: nil)
+    AuthRateLimit.check!(
+      action: :account_access,
+      scope: scope,
+      request: request,
+      submitted_contact: submitted_contact,
+      user_id: user&.id
+    )
+    false
+  rescue AuthRateLimit::ExceededError
+    true
+  end
+
+  def log_account_access_attempt(user, delivery_method, status, metadata = {})
     AuditEventService.log(
       action: "account_access_instructions_#{status}",
       actor: user,
       auditable: user,
-      metadata: {
-        delivery_method: delivery_method.to_s,
-        ip_address: request.remote_ip,
-        request_id: request.request_id
-      }
+      metadata: account_access_audit_metadata.merge(
+        { delivery_method: delivery_method.to_s }.merge(metadata)
+      )
     )
   rescue StandardError => e
     Rails.logger.warn("Unable to audit account access request for user #{user.id}: #{e.message}")
+  end
+
+  def log_public_account_access_rate_limit(rate_limit_scope)
+    PublicAuditActor.log_audit(
+      action: 'account_access_instructions_rate_limited',
+      metadata: account_access_audit_metadata.merge(rate_limit_scope: rate_limit_scope.to_s)
+    )
+  end
+
+  def account_access_audit_metadata
+    metadata = {
+      request_ip_digest: AuthRateLimit.request_ip_digest(request),
+      request_id: request.request_id
+    }
+    metadata[:submitted_contact_digest] = AuthRateLimit.contact_digest(@account_access_contact) if @account_access_contact.present?
+    metadata
   end
 
   def send_account_access_instructions(user, delivery_method)
@@ -216,5 +245,9 @@ class PasswordsController < ApplicationController
 
   def account_access_support_email
     Policy.get('support_email') || 'mat.program1@maryland.gov'
+  end
+
+  def redirect_to_account_access_confirmation
+    redirect_to sign_in_path(locale: public_request_locale_param), notice: account_access_confirmation_message
   end
 end

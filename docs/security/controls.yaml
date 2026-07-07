@@ -191,15 +191,18 @@ controls:
 
   - id: "AUTHZ-003"
     name: "API Security"
-    frameworks: { doit: ["PR.AC-4"], rails: ["Rack::Attack"] }
+    frameworks: { doit: ["PR.AC-4"], rails: ["RateLimit", "AuthRateLimit"] }
     priority: { label: "High", value: 2 }
     owner: "@david"
     status: { implemented: true, tested: true, documented: true, audited: true }
     implementation:
-      files: [ { path: "config/initializers/rack_attack.rb", purpose: "Rate limiting" } ]
+      files:
+        - { path: "app/services/rate_limit.rb", purpose: "Proof and secure-form throttles" }
+        - { path: "app/services/auth_rate_limit.rb", purpose: "Public auth throttles" }
       details:
         - "Token auth"
-        - "IP/user-level throttling"
+        - "Policy-backed Rails cache throttling"
+        - "Digest-keyed sign-in, account-access, and account-recovery throttles"
 
   # ── HTTP / APP HARDENING ───────────────────────────────────────────────────
   http_security:
