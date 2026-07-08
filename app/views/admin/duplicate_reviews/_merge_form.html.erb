@@ -8,11 +8,11 @@
   <fieldset>
     <legend class="text-sm font-medium text-gray-700">Which record survives (canonical)?</legend>
     <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :canonical_user_id, subject.id, true, required: true %>
+      <%= radio_button_tag :canonical_user_id, subject.id, false, required: true %>
       <span class="ml-1"><%= subject.full_name %> (subject #<%= subject.id %>)</span>
     </label>
     <label class="inline-flex items-center text-sm">
-      <%= radio_button_tag :canonical_user_id, candidate.id %>
+      <%= radio_button_tag :canonical_user_id, candidate.id, false, required: true %>
       <span class="ml-1"><%= candidate.full_name %> (candidate #<%= candidate.id %>)</span>
     </label>
     <p class="text-xs text-gray-500 mt-1">The other record is retired (deactivated) and points at the canonical survivor. It is never deleted.</p>
@@ -29,11 +29,11 @@
           <div><span class="font-medium">Candidate #<%= candidate.id %>:</span> <%= send(display, candidate) %></div>
         </dl>
         <label class="inline-flex items-center mr-3">
-          <%= radio_button_tag "contact[#{field}]", 'canonical', true %>
+          <%= radio_button_tag "contact[#{field}]", 'canonical', false, required: true %>
           <span class="ml-1">Keep canonical record's <%= field %></span>
         </label>
         <label class="inline-flex items-center">
-          <%= radio_button_tag "contact[#{field}]", 'duplicate' %>
+          <%= radio_button_tag "contact[#{field}]", 'duplicate', false, required: true %>
           <span class="ml-1">Use duplicate record's <%= field %></span>
         </label>
       </div>
@@ -52,11 +52,11 @@
       <div><span class="font-medium">Candidate #<%= candidate.id %>:</span> <%= candidate.communication_preference.presence || 'not set' %></div>
     </dl>
     <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :delivery_choice, 'canonical', true %>
+      <%= radio_button_tag :delivery_choice, 'canonical', false, required: true %>
       <span class="ml-1">Canonical record's preference</span>
     </label>
     <label class="inline-flex items-center text-sm">
-      <%= radio_button_tag :delivery_choice, 'duplicate' %>
+      <%= radio_button_tag :delivery_choice, 'duplicate', false, required: true %>
       <span class="ml-1">Duplicate record's preference</span>
     </label>
   </fieldset>

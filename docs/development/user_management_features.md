@@ -131,7 +131,7 @@ The admin user index currently surfaces this flag in three ways:
 
 Flagged duplicates are resolved through an audited admin workflow. `DuplicateReviewCase` is the primary durable source when a case exists; a bare `users.needs_duplicate_review` row with no open case is treated as a manual/legacy fallback.
 
-- Entry points: `app/controllers/admin/duplicate_reviews_controller.rb`, reachable from the admin user index badge and the user show page.
+- Entry points: `app/controllers/admin/duplicate_reviews_controller.rb`, reachable from the admin user index badge, the user show page, and a `Duplicate review pending` badge on the application show page (`Admin::DuplicateReviewsHelper#duplicate_review_pending_badge`) for the applicant or managing guardian, since staff working from an application would otherwise have no on-page signal that a review is pending.
 - Queue (`index`): lists open cases with a source label (`registration_soft_match`, `paper_intake`, `admin_create`, `support_claim`, `portal_dependent`) plus manual/legacy flagged users that have no open case.
 - Detail (`show`): groups each record's facts by login identity, delivery route, record truth, applications, relationships, and auth artifacts, and shows candidate link state (current, already merged, or record no longer exists).
 
@@ -167,11 +167,12 @@ Merge inventory (decision per area):
 | WebAuthn / TOTP / SMS credentials | Never transferred; canonical auth state preserved. |
 | Password reset / recovery state | Duplicate reset token cleared on retirement; blocked if the duplicate has a pending recovery request; resolved recovery requests remain as retired-record history. |
 | Secure request forms | Blocked if the duplicate is the recipient of an active bearer-link form. |
-| Contact facts | Admin explicitly chooses the surviving email, phone, phone type, and address; synthetic or effective fallback values never become stored record truth. A real surviving phone requires an explicit phone type. |
-| Delivery route | Chosen explicitly and independently from login identity. |
+| Contact facts | Admin explicitly chooses the surviving email, phone, phone type, and address; synthetic or effective fallback values never become stored record truth. A real surviving phone requires an explicit phone type. A missing or invalid per-field choice blocks the merge rather than silently defaulting to canonical. |
+| Delivery route | Chosen explicitly and independently from login identity. A missing or invalid delivery choice blocks the merge rather than silently defaulting to canonical. |
 | Login identity | The canonical account keeps a real email if it was email-backed; the merge is blocked if it would strand an email-backed portal account without a real email. |
 | Duplicate review cases | The selected case and exact pair-related open cases resolve to `resolved_merged`; candidate snapshots and evidence are retained. |
-| Events / notifications / audit | Historical records are preserved; the merge adds one `duplicate_user_merged` event rather than rewriting history. |
+| Evaluations / print queue | Evaluations follow their already-transferred application to the canonical user, so `evaluation.constituent` never drifts from `evaluation.application.user`. A still-pending print queue item transfers to the canonical user, since undelivered work needs a contactable owner; printed and canceled print queue items are historical and are never repointed. |
+| Events / notifications / audit | Historical records are preserved (notifications are never repointed to the canonical user); the merge adds one `duplicate_user_merged` event, fingerprinted per merged-user id so two merges into the same canonical within the audit dedup window each keep their own event, rather than rewriting history. |
 
 ### 3.3 Paper applicant lookup and eligibility
 

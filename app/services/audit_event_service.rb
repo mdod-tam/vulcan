@@ -109,6 +109,15 @@ class AuditEventService < BaseService
       end
     end
 
+    # For duplicate merges, include the merged (retired) user id. Without this, the
+    # fingerprint collapses to just the action name, so a second merge into the same
+    # canonical user within the dedup window would silently suppress its required
+    # audit event even though the merge itself succeeded.
+    if action.to_s == 'duplicate_user_merged'
+      merged_user_id = metadata['merged_user_id'] || metadata[:merged_user_id]
+      return "#{base}_#{merged_user_id}" if merged_user_id.present?
+    end
+
     # For feature flag toggles, include flag name, old/new values, and actor.
     # Use key?-based lookup because || collapses `false` to nil after JSON round-trip.
     if action.to_s == 'feature_flag_toggled'

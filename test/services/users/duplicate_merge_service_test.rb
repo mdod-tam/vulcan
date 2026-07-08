@@ -74,7 +74,7 @@ module Users
     test 'blocks merge that would create conflicting active applications' do
       create(:application, user: @canonical, status: :in_progress)
       create(:application, user: @duplicate, status: :in_progress)
-      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice' })
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' })
       assert result.failure?
       assert_not @duplicate.reload.merged?
     end
@@ -83,7 +83,7 @@ module Users
       dependent = create(:constituent)
       create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
       create(:guardian_relationship, guardian_user: @duplicate, dependent_user: dependent)
-      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice' })
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' })
       assert result.failure?
       assert_not @duplicate.reload.merged?
     end
@@ -146,15 +146,43 @@ module Users
       duplicate_without_email = @duplicate # phone-only, no real email
       result = merge(
         duplicate_user: duplicate_without_email,
-        contact_choices: { email: 'duplicate', phone: 'duplicate', phone_type: 'voice' }
+        contact_choices: { email: 'duplicate', phone: 'duplicate', phone_type: 'voice', address: 'canonical' }
       )
       assert result.failure?
       assert_not @duplicate.reload.merged?
     end
 
     test 'requires an explicit phone type when a real phone survives' do
-      result = merge(contact_choices: { phone: 'duplicate', email: 'canonical' })
+      result = merge(contact_choices: { phone: 'duplicate', email: 'canonical', address: 'canonical' })
       assert result.failure?
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when a contact choice is missing' do
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', address: 'canonical' })
+      assert result.failure?
+      assert_match(/explicit email choice/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when a contact choice is invalid' do
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'nonsense', address: 'canonical' })
+      assert result.failure?
+      assert_match(/invalid email choice/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when the delivery choice is missing' do
+      result = merge(delivery_choice: nil)
+      assert result.failure?
+      assert_match(/explicit delivery route choice/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when the delivery choice is invalid' do
+      result = merge(delivery_choice: 'nonsense')
+      assert result.failure?
+      assert_match(/invalid delivery route choice/i, result.message)
       assert_not @duplicate.reload.merged?
     end
 
@@ -180,6 +208,28 @@ module Users
       end
       assert result.success?, result.message
       assert_equal 1, Event.where(action: 'duplicate_user_merged').count
+    end
+
+    test 'does not deduplicate audit events across two rapid merges into the same canonical' do
+      result_one = merge
+      assert result_one.success?, result_one.message
+
+      second_duplicate = phone_only_constituent(phone: '555-999-1111')
+      second_case = open_case(subject: second_duplicate, candidate: @canonical, reason: 'exact_phone')
+
+      result_two = nil
+      assert_difference 'Event.where(action: \'duplicate_user_merged\').count', 1 do
+        result_two = merge(
+          duplicate_review_case: second_case,
+          duplicate_user: second_duplicate,
+          contact_choices: { phone: 'canonical', phone_type: 'voice', email: 'canonical', address: 'canonical' }
+        )
+      end
+      assert result_two.success?, result_two.message
+
+      merged_ids = Event.where(action: 'duplicate_user_merged').pluck(Arel.sql("metadata->>'merged_user_id'"))
+      assert_equal [@duplicate.id.to_s, second_duplicate.id.to_s].sort, merged_ids.sort,
+                   'both merges into the same canonical must each keep their own audit event'
     end
 
     test 'clears the managing guardian when a transferred app was managed by the canonical' do
@@ -215,10 +265,30 @@ module Users
       assert_not GuardianRelationship.exists?(guardian_id: @duplicate.id)
     end
 
+    test 'transfers evaluations and pending print queue items but preserves historical records' do
+      duplicate_app = create(:application, user: @duplicate)
+      evaluation = create(:evaluation, constituent: @duplicate, application: duplicate_app)
+      pending_print_item = create(:print_queue_item, :pending, constituent: @duplicate)
+      printed_item = create(:print_queue_item, constituent: @duplicate)
+      canceled_item = create(:print_queue_item, :canceled, constituent: @duplicate)
+      notification = create(:notification, recipient: @duplicate)
+
+      result = merge
+      assert result.success?, result.message
+
+      assert_equal @canonical.id, evaluation.reload.constituent_id,
+                   'evaluation must follow the person to stay consistent with its already-transferred application'
+      assert_equal @canonical.id, pending_print_item.reload.constituent_id,
+                   'a still-pending print queue item needs an explicit, contactable owner'
+      assert_equal @duplicate.id, printed_item.reload.constituent_id, 'a printed letter is historical and must not be rewritten'
+      assert_equal @duplicate.id, canceled_item.reload.constituent_id, 'a canceled letter is historical and must not be rewritten'
+      assert_equal @duplicate.id, notification.reload.recipient_id, 'notification history is preserved, not repointed'
+    end
+
     test 'transfers guardian-as-dependent relationships without copying guardian contact' do
       guardian = create(:constituent)
       create(:guardian_relationship, guardian_user: guardian, dependent_user: @duplicate)
-      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice' })
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' })
       assert result.success?, result.message
       assert GuardianRelationship.exists?(guardian_id: guardian.id, dependent_id: @canonical.id)
       assert_not GuardianRelationship.exists?(dependent_id: @duplicate.id)
@@ -236,8 +306,7 @@ module Users
         rationale: 'confirmed same person via support call',
         reason_codes: %w[exact_phone],
         contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' },
-        delivery_choice: 'canonical',
-        transfer_choices: {}
+        delivery_choice: 'canonical'
       }
       DuplicateMergeService.new(**defaults, **overrides).call
     end

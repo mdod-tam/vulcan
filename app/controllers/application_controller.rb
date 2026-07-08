@@ -211,6 +211,9 @@ class ApplicationController < ActionController::Base
       # Redirect to stored location or appropriate dashboard
       redirect_to stored_location || _dashboard_for(user), notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
     else
+      # Session creation failed closed (e.g. the record was retired mid-login). Clear all
+      # temporary 2FA state, including the challenge, so nothing can be replayed.
+      TwoFactorAuth.abort_authentication(session)
       redirect_to sign_in_path, alert: t('alerts.session_fail')
     end
   end
@@ -220,10 +223,14 @@ class ApplicationController < ActionController::Base
     TwoFactorAuth.get_temp_user_id(session).present?
   end
 
-  # Finds the user for whom 2FA is in progress
+  # Finds the user for whom 2FA is in progress. Fails closed for records that are not
+  # login-active (merged into another account, inactive, or suspended).
   def find_user_for_two_factor
     user_id = TwoFactorAuth.get_temp_user_id(session)
-    user_id ? User.find(user_id) : nil
+    return nil unless user_id
+
+    user = User.find(user_id)
+    user if user.public_login_active?
   rescue ActiveRecord::RecordNotFound
     nil
   end

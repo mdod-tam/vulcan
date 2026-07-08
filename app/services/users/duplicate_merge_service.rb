@@ -27,7 +27,7 @@ module Users
     # rubocop:disable Metrics/ParameterLists -- explicit, auditable merge contract
     def initialize(actor:, duplicate_review_case:, canonical_user:, duplicate_user:,
                    same_person_confirmed:, rationale:, reason_codes: [],
-                   contact_choices: {}, delivery_choice: nil, transfer_choices: {})
+                   contact_choices: {}, delivery_choice: nil)
       super()
       @actor = actor
       @duplicate_review_case = duplicate_review_case
@@ -38,7 +38,6 @@ module Users
       @reason_codes = Array(reason_codes).map(&:to_s).compact_blank.uniq
       @contact_choices = (contact_choices || {}).to_h.symbolize_keys
       @delivery_choice = delivery_choice.to_s.presence
-      @transfer_choices = (transfer_choices || {}).to_h.symbolize_keys
       @summary = {}
     end
     # rubocop:enable Metrics/ParameterLists
@@ -57,6 +56,7 @@ module Users
         apply_canonical_contact!
         transfer_applications!
         transfer_guardian_relationships!
+        reconcile_person_references!
         expire_duplicate_sessions!
         retire_duplicate!
         audit_event = log_merge!
@@ -76,7 +76,7 @@ module Users
     # --- Preflight -----------------------------------------------------------
 
     def static_preflight
-      identity_preflight || intent_preflight || contact_choice_error
+      identity_preflight || intent_preflight || contact_choice_error || delivery_choice_error
     end
 
     def identity_preflight
@@ -121,11 +121,25 @@ module Users
       'The duplicate record has already been merged' if @duplicate_user.merged?
     end
 
+    # Each contact fact must be an explicit admin decision, not an inferred default:
+    # a missing or garbage value must block the merge rather than silently resolve to
+    # "canonical" and let the audit metadata misrepresent what the admin chose.
     def contact_choice_error
       %i[email phone address].each do |field|
-        source = @contact_choices[field].to_s.presence || 'canonical'
+        source = @contact_choices[field].to_s.presence
+        return "An explicit #{field} choice (canonical or duplicate) is required" if source.blank?
         return "Invalid #{field} choice" unless CONTACT_SOURCES.include?(source)
       end
+      nil
+    end
+
+    # The delivery route is chosen explicitly and independently from login identity
+    # (see the merge inventory). A missing or invalid value must not silently fall
+    # back to the canonical record's preference.
+    def delivery_choice_error
+      return 'An explicit delivery route choice (canonical or duplicate) is required' if @delivery_choice.blank?
+      return 'Invalid delivery route choice' unless CONTACT_SOURCES.include?(@delivery_choice)
+
       nil
     end
 
@@ -143,7 +157,7 @@ module Users
 
     def contact_result_error
       return 'The chosen email is not a real email address' if final_email_invalid?
-      return 'Merging would leave the canonical portal account without a real email' if strands_portal_account?
+      return 'Merging would strand an email-backed login; keep the email-backed record\'s email as the surviving email' if strands_portal_account?
       return 'A real surviving phone requires an explicit phone type' if phone_type_missing?
       return 'Invalid phone type' if phone_type_invalid?
       return 'The chosen phone is not a real phone number' if final_phone_invalid?
@@ -153,16 +167,18 @@ module Users
 
     # --- Contact resolution --------------------------------------------------
 
+    # Preflight's contact_choice_error already rejected blank/invalid values, so these
+    # always resolve an explicit admin choice by the time mutations run.
     def final_email_source
-      @contact_choices[:email].to_s.presence || 'canonical'
+      @contact_choices[:email].to_s
     end
 
     def final_phone_source
-      @contact_choices[:phone].to_s.presence || 'canonical'
+      @contact_choices[:phone].to_s
     end
 
     def final_address_source
-      @contact_choices[:address].to_s.presence || 'canonical'
+      @contact_choices[:address].to_s
     end
 
     def email_source_user
@@ -220,8 +236,17 @@ module Users
       !final_phone_real?
     end
 
+    # An email-backed record's login email must survive the merge. Whenever either the
+    # canonical or the retiring duplicate is an email-backed portal account, the surviving
+    # canonical must end with a real email; otherwise the person loses their login.
     def strands_portal_account?
-      @canonical_user.email_backed_public_portal_account? && !email_source_user.real_email?
+      return false unless either_is_email_backed_portal?
+
+      !email_source_user.real_email?
+    end
+
+    def either_is_email_backed_portal?
+      @canonical_user.email_backed_public_portal_account? || @duplicate_user.email_backed_public_portal_account?
     end
 
     def phone_type_missing?
@@ -322,10 +347,11 @@ module Users
       transferable.update_all(managing_guardian_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 
+    # A merge always transfers every application the duplicate owns. Partial transfer
+    # would leave applications stranded on a retired record and could dodge the
+    # active-application conflict check, so there is no selectable subset.
     def selected_application_ids
-      requested = Array(@transfer_choices[:application_ids]).map(&:to_i).reject(&:zero?)
-      owned = @duplicate_user.applications.pluck(:id)
-      requested.present? ? (requested & owned) : owned
+      @duplicate_user.applications.pluck(:id)
     end
 
     def transfer_guardian_relationships!
@@ -350,6 +376,24 @@ module Users
       direct = GuardianRelationship.where(guardian_id: pair, dependent_id: pair)
       @summary[:guardian_relationships_dissolved] = direct.count
       direct.delete_all
+    end
+
+    # Same-person records that reference the duplicate directly (not through an
+    # application) must follow the person to the canonical survivor only where that
+    # doesn't rewrite history. Evaluations belong to an already-transferred application,
+    # so they must move with it or evaluation.constituent would drift from
+    # evaluation.application.user. Print queue items and notifications are historical
+    # delivery/communication records ("Events / notifications / audit: Historical
+    # records are preserved" per the merge inventory) and must not be repointed after
+    # the fact -- except a still-pending print queue item, which is undelivered work
+    # that needs an explicit, contactable owner going forward.
+    def reconcile_person_references!
+      @summary[:evaluations_transferred] =
+        Evaluation.where(constituent_id: @duplicate_user.id)
+                  .update_all(constituent_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+      @summary[:pending_print_queue_items_transferred] =
+        PrintQueueItem.where(constituent_id: @duplicate_user.id, status: :pending)
+                      .update_all(constituent_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 
     def expire_duplicate_sessions!

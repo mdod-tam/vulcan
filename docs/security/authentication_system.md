@@ -96,6 +96,8 @@ Current temporary state includes:
 
 The challenge is not always cleared at the exact same moment as successful verification because JSON/WebAuthn completion needs to create the final application session first. Do not add manual session cleanup in a controller without checking the existing flow.
 
+`User#public_login_active?` rejects merged, inactive, and suspended records (legacy NULL status is treated as active). It gates every point that resolves the in-progress MFA user — `ApplicationController#find_user_for_two_factor` and `TwoFactorAuthenticationsController#find_user_for_two_factor` both return `nil` for a record that fails this check, so a record retired by an admin merge mid-login cannot reach method selection, verification options, SMS resend, or credential updates; it fails closed to sign-in instead of only being caught at final session creation. `ApplicationController#_create_and_set_session_cookie` also re-checks `public_login_active?` and is the single chokepoint for both password sign-in and 2FA completion, so a record retired between password entry and MFA completion still cannot finish authenticating, and `TwoFactorAuth.abort_authentication` clears the temporary MFA state (including the challenge) on that failure so nothing can be replayed.
+
 ---
 
 ## 5. WebAuthn

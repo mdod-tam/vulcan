@@ -3,7 +3,7 @@
   <fieldset>
     <legend class="text-sm font-medium text-gray-700">Action</legend>
     <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :resolution_action, 'approve', true, required: true %>
+      <%= radio_button_tag :resolution_action, 'approve', false, required: true %>
       <span class="ml-1">Approve</span>
     </label>
     <label class="inline-flex items-center mr-4 text-sm">
@@ -19,7 +19,8 @@
   <div>
     <%= label_tag :determination, 'Identity / linking determination', class: 'block text-sm font-medium text-gray-700' %>
     <%= select_tag :determination,
-                   options_for_select(DuplicateReviewCase.resolution_determinations.keys.map { |d| [d.humanize, d] }, 'keep_separate'),
+                   options_for_select(DuplicateReviewCase.resolution_determinations.keys.map { |d| [d.humanize, d] }),
+                   include_blank: 'Select a determination…', required: true,
                    class: 'border-gray-300 rounded-md text-sm' %>
   </div>
 

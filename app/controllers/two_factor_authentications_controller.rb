@@ -346,39 +346,49 @@ class TwoFactorAuthenticationsController < ApplicationController
     status = determine_error_status(message)
 
     format.html do
-      set_verification_context
-      template = verification_template_for_type(@type)
-      handle_error_response(
-        html_render_action: template,
-        error_message: message,
-        status: status
-      )
+      if set_verification_context
+        template = verification_template_for_type(@type)
+        handle_error_response(
+          html_render_action: template,
+          error_message: message,
+          status: status
+        )
+      else
+        redirect_to sign_in_path, alert: message
+      end
     end
     format.turbo_stream do
       if @type == 'sms'
         redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
                     alert: message,
                     status: :see_other
-      else
-        set_verification_context
+      elsif set_verification_context
         handle_error_response(
           error_message: message,
           status: status
         )
+      else
+        redirect_to sign_in_path, alert: message
       end
     end
     format.json { render json: { error: message }, status: status }
   end
 
+  # Returns false (without rendering) when the session no longer resolves to a
+  # login-active user, e.g. it was retired by a merge mid-flow. Callers must fail
+  # closed to sign-in instead of dereferencing a nil @user.
   def set_verification_context
     @user = find_user_for_two_factor
+    return false unless @user
+
     @webauthn_enabled = @user.webauthn_credentials.exists?
     @totp_enabled = @user.totp_credentials.exists?
     @sms_enabled = @user.sms_credentials.verified.exists?
-    return unless @type == 'sms' && @sms_enabled
+    return true unless @type == 'sms' && @sms_enabled
 
     @sms_credential = resolve_sms_credential_for_resend(@user)
     @sms_code_sent = @sms_credential.present? && active_sms_challenge_for?(@sms_credential)
+    true
   end
 
   # Determine appropriate HTTP status code based on error message
@@ -418,11 +428,16 @@ class TwoFactorAuthenticationsController < ApplicationController
     session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]].present?
   end
 
-  # Find the user in the middle of two-factor authentication
+  # Find the user in the middle of two-factor authentication. A record retired by a
+  # same-person merge (or otherwise not login-active) must never progress through
+  # verification, SMS send/resend, or credential updates, so it fails closed here.
   def find_user_for_two_factor
     # Use the standardized session key from the TwoFactorAuth module
     user_id = session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
-    User.find_by(id: user_id) if user_id
+    return nil unless user_id
+
+    user = User.find_by(id: user_id)
+    user if user&.public_login_active?
   end
 
   def ensure_two_factor_initiated_unless_skipped

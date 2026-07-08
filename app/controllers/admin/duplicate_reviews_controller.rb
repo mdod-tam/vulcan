@@ -53,8 +53,7 @@ module Admin
         rationale: params[:rationale],
         reason_codes: Array(params[:reason_codes]),
         contact_choices: merge_contact_choices,
-        delivery_choice: params[:delivery_choice],
-        transfer_choices: merge_transfer_choices
+        delivery_choice: params[:delivery_choice]
       ).call
 
       if result.success?
@@ -130,10 +129,6 @@ module Admin
         phone_type: params.dig(:contact, :phone_type),
         address: params.dig(:contact, :address)
       }
-    end
-
-    def merge_transfer_choices
-      { application_ids: Array(params[:application_ids]).compact_blank }
     end
   end
 end

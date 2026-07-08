@@ -68,6 +68,29 @@ module Admin
       assert_equal @candidate.id, @subject.merged_into_user_id
     end
 
+    test 'merge ignores a forged application_ids param and still transfers every application the duplicate owns' do
+      duplicate_app = create(:application, user: @subject)
+      unrelated_owner = create(:constituent, email: "unrelated-#{SecureRandom.hex(3)}@example.com")
+      unrelated_app = create(:application, user: unrelated_owner)
+
+      post merge_admin_duplicate_review_path(@review_case), params: {
+        pair_ids: [@subject.id, @candidate.id],
+        canonical_user_id: @candidate.id,
+        same_person_confirmed: '1',
+        rationale: 'same person confirmed',
+        reason_codes: ['name_dob'],
+        contact: { email: 'canonical', phone: 'canonical', address: 'canonical', phone_type: 'voice' },
+        delivery_choice: 'canonical',
+        # Forged/irrelevant application_ids: an unrelated app id plus a nonexistent id.
+        # The service no longer accepts a transfer subset, so this must have no effect.
+        application_ids: [unrelated_app.id, 0]
+      }
+
+      assert_redirected_to admin_user_path(@candidate)
+      assert_equal @candidate.id, duplicate_app.reload.user_id, "the duplicate's own application must still transfer"
+      assert_equal unrelated_owner.id, unrelated_app.reload.user_id, 'an unrelated application must never move'
+    end
+
     test 'merge rejects a forged pair that excludes the case subject' do
       other_candidate = create(:constituent, email: "cand2-#{SecureRandom.hex(3)}@example.com")
       @review_case.duplicate_review_case_candidates.create!(candidate_user: other_candidate, match_reason: 'name_dob', snapshot: {})

@@ -29,6 +29,18 @@ class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
     assert_no_match(/dashboard/i, request.path)
   end
 
+  test 'user retired mid-flow submitting a wrong TOTP code fails closed without crashing' do
+    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
+
+    canonical = create(:constituent)
+    @user.update!(status: :active, merged_into_user: canonical, merged_at: Time.current)
+
+    post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: '000000' }
+
+    assert_redirected_to sign_in_path
+  end
+
   test 'active user completes TOTP 2FA and gets a session' do
     post sign_in_path, params: { email: @user.email, password: 'password123' }
     assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]

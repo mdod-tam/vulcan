@@ -65,6 +65,21 @@ module Admin
       open_case ? admin_duplicate_review_path(open_case) : admin_duplicate_reviews_path
     end
 
+    # Surfaces the flag on the application page too, not just the user/queue pages.
+    # Staff working from an application (e.g. a soft-matched paper intake) would
+    # otherwise have no on-page signal that a duplicate review is pending for the
+    # applicant or their managing guardian.
+    def duplicate_review_pending_badge(application)
+      flagged_user = [application.user, application.managing_guardian].compact.find(&:needs_duplicate_review?)
+      return if flagged_user.blank?
+
+      link_to 'Duplicate review pending',
+              admin_duplicate_review_entry_path(flagged_user),
+              class: 'px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center ' \
+                     'justify-center bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+              data: { testid: 'duplicate-review-pending-badge' }
+    end
+
     def candidate_link_state_label(candidate)
       {
         'current' => 'Current record',

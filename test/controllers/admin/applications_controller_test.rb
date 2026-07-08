@@ -340,6 +340,21 @@ module Admin
       assert_includes response.body, 'Fulfillment: Voucher'
     end
 
+    test 'show page surfaces a duplicate review pending badge for a flagged applicant' do
+      flagged_user = create(:constituent, email: generate(:email), needs_duplicate_review: true)
+      flagged_app = create(:application, user: flagged_user)
+
+      get admin_application_path(flagged_app)
+      assert_response :success
+      assert_select '[data-testid="duplicate-review-pending-badge"]', text: 'Duplicate review pending'
+    end
+
+    test 'show page omits the duplicate review badge when the applicant is not flagged' do
+      get admin_application_path(@application)
+      assert_response :success
+      assert_select '[data-testid="duplicate-review-pending-badge"]', count: 0
+    end
+
     test 'show page displays the correct proof review button text' do
       # Assuming there's a button related to income proof review
       # Need to create applications with different proof statuses
