@@ -124,6 +124,16 @@ Rails.application.routes.draw do
       end
     end
 
+    resources :duplicate_reviews, only: %i[index show] do
+      member do
+        post :resolve
+        post :merge
+      end
+      collection do
+        post :clear_flag
+      end
+    end
+
     resources :print_queue, only: %i[index show] do
       member do
         post :mark_as_printed

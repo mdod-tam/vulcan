@@ -1,0 +1,73 @@
+<%# locals: user, role_label %>
+<div class="border border-gray-200 rounded-lg p-4" data-testid="record-facts">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <span class="text-xs uppercase tracking-wide text-gray-500"><%= role_label %></span>
+      <h4 class="text-base font-semibold text-gray-900"><%= user.full_name %> <span class="text-xs text-gray-400">#<%= user.id %></span></h4>
+    </div>
+    <%= link_to 'Open profile', admin_user_path(user), class: 'text-xs text-indigo-600 hover:text-indigo-900', target: '_blank', rel: 'noopener' %>
+  </div>
+
+  <dl class="space-y-3 text-sm">
+    <div>
+      <dt class="font-medium text-gray-700">Login identity</dt>
+      <dd class="text-gray-600">
+        Public portal account: <%= user.email_backed_public_portal_account? ? 'Yes (email-backed)' : 'No' %><br>
+        Login active: <%= user.public_login_active? ? 'Yes' : 'No' %><br>
+        Account status: <%= (user.status || 'active').to_s.humanize %>
+      </dd>
+    </div>
+
+    <div>
+      <dt class="font-medium text-gray-700">Delivery route</dt>
+      <dd class="text-gray-600">
+        Notice preference: <%= user.communication_preference.to_s.humanize.presence || 'Not set' %>
+      </dd>
+    </div>
+
+    <div>
+      <dt class="font-medium text-gray-700">Record truth</dt>
+      <dd class="text-gray-600">
+        Email: <%= stored_email_display(user) %><br>
+        Phone: <%= stored_phone_display(user) %><%= " (#{user.phone_type})" if user.real_phone? %><br>
+        Address: <%= stored_address_display(user) %>
+      </dd>
+    </div>
+
+    <div>
+      <dt class="font-medium text-gray-700">Applications</dt>
+      <dd class="text-gray-600">
+        <% apps = user.applications.order(application_date: :desc).limit(5) %>
+        <% if apps.any? %>
+          <ul class="list-disc list-inside">
+            <% apps.each do |app| %>
+              <li>#<%= app.id %> · <%= app.status.to_s.humanize %> · <%= app.application_date&.strftime('%b %Y') %></li>
+            <% end %>
+          </ul>
+        <% else %>
+          None on file
+        <% end %>
+      </dd>
+    </div>
+
+    <div>
+      <dt class="font-medium text-gray-700">Relationships</dt>
+      <dd class="text-gray-600">
+        As guardian: <%= GuardianRelationship.where(guardian_id: user.id).count %> dependent(s)<br>
+        As dependent: <%= GuardianRelationship.where(dependent_id: user.id).count %> guardian(s)
+      </dd>
+    </div>
+
+    <div>
+      <dt class="font-medium text-gray-700">Auth artifacts</dt>
+      <dd class="text-gray-600">
+        WebAuthn: <%= user.webauthn_credentials.count %> ·
+        TOTP: <%= user.totp_credentials.count %> ·
+        SMS: <%= user.sms_credentials.count %><br>
+        Active sessions: <%= user.sessions.count %><br>
+        Pending recovery: <%= user.recovery_requests.pending.exists? ? 'Yes' : 'No' %><br>
+        Active secure forms: <%= SecureRequestForm.active.where(recipient_id: user.id).exists? ? 'Yes' : 'No' %>
+      </dd>
+    </div>
+  </dl>
+</div>

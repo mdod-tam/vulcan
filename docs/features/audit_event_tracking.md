@@ -98,7 +98,7 @@ This is display behavior only. It does not delete records and should not be used
 | Proof review | `proof_approved`, `proof_rejected` | `ProofReview` owns approval/rejection audit events. |
 | Proof secure requests | `proof_resubmission_requested`, `proof_submitted_via_secure_form`, request revoked/expired events | Secure request services own these. |
 | Disability certification | `medical_certification_requested`, `medical_certification_received`, approved/rejected/status events, secure upload and DocuSeal events | Code names still use `medical_certification_*`; user-facing prose should say disability certification. |
-| Duplicate review | `duplicate_review_case_opened` | `DuplicateReviewCases::CreateService` owns case-opened audit rows after the subject user is persisted. |
+| Duplicate review | `duplicate_review_case_opened`, `duplicate_review_case_resolved`, `duplicate_user_merged`, `duplicate_review_flag_cleared` | `DuplicateReviewCases::CreateService` owns case-opened rows; `DuplicateReviewCases::ResolutionService` owns approve/ignore/keep-separate resolutions; `Users::DuplicateMergeService` emits exactly one `duplicate_user_merged` per merge; `Admin::DuplicateReviewsController#clear_flag` logs legacy-flag clears. |
 | Notifications | `notification_<action>_created`, `notification_<action>_sent`, `notification_<action>_failed` when notification auditing is enabled | Domain workflows usually leave `audit: false`. |
 | Email provider webhooks | `email_bounced` for matched provider outbound emails | Spam complaints update notification delivery state without a separate audit event today. |
 | Vouchers | `voucher_assigned`, `voucher_redeemed`, `voucher_expired`, `voucher_cancelled` | Voucher model and services own these. |

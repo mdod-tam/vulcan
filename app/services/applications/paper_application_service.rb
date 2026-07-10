@@ -32,7 +32,7 @@ module Applications
       application_created = false
 
       ActiveRecord::Base.transaction do
-        rollback_failure('Constituent processing failed') unless process_constituent
+        rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
         rollback_failure('Application creation failed') unless create_application
         rollback_failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
 
@@ -109,6 +109,16 @@ module Applications
 
     def rollback_failure(message)
       failure(message)
+      raise TransactionFailure, message
+    end
+
+    # Same as rollback_failure, but skips the generic step-name message when the step
+    # already recorded a specific, staff-facing reason via add_error (e.g. "An applicant
+    # with this email or phone already exists..."). Without this, staff see a redundant,
+    # internal-sounding tail like "; Constituent processing failed" appended after the
+    # real explanation.
+    def rollback_failure_unless_explained(message)
+      failure(message) if @errors.empty?
       raise TransactionFailure, message
     end
 

@@ -86,6 +86,7 @@ class PasswordsController < ApplicationController
     return if params[:token].blank?
 
     @user = User.find_by_token_for(:password_reset, params[:token])
+    @user = nil unless @user&.public_login_active?
     redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless @user
   end
 
@@ -220,6 +221,7 @@ class PasswordsController < ApplicationController
 
   def update_password_from_token
     @user = User.find_by_token_for(:password_reset, params[:token])
+    @user = nil unless @user&.public_login_active?
     return redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless @user
 
     if params[:password] != params[:password_confirmation]
