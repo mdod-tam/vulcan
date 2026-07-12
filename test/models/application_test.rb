@@ -206,6 +206,20 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal 'submission', status_change.metadata['trigger']
   end
 
+  test 'submit! rejects an incomplete applicant physical address without lifecycle side effects' do
+    application = create(:application, :draft)
+    application.user.update!(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
+
+    assert_no_difference ['ApplicationStatusChange.count', "Event.where(action: 'application_status_changed').count"] do
+      assert_raises ActiveRecord::RecordInvalid do
+        application.submit!(actor: application.user)
+      end
+    end
+
+    assert application.reload.status_draft?
+    assert_includes application.errors[:base], 'Applicant street address is required for submission'
+  end
+
   test 'training_request_pending? is true until a newer training session is created' do
     application = create(:application, :approved)
 

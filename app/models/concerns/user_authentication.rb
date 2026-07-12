@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'openssl'
+
 # Concern for handling user authentication, password management, and session tracking.
 module UserAuthentication
   extend ActiveSupport::Concern
@@ -10,12 +12,15 @@ module UserAuthentication
   LOCK_DURATION = 1.hour
 
   included do
-    # Token generation for password reset
-    generates_token_for :password_reset, expires_in: 20.minutes do
-      password_digest&.last(10)
-    end
+    has_secure_password reset_token: { expires_in: PASSWORD_RESET_EXPIRY }
 
-    has_secure_password
+    # has_secure_password defines its own password-only fingerprint, so this must come
+    # afterward. Binding the token to login identity invalidates links after an email
+    # change without embedding the email itself in the human-readable token payload.
+    generates_token_for :password_reset, expires_in: PASSWORD_RESET_EXPIRY do
+      fingerprint = [password_salt&.last(10), User.normalize_email(email)].join("\0")
+      OpenSSL::HMAC.hexdigest('SHA256', Rails.application.secret_key_base, fingerprint)
+    end
 
     # Associations
     has_many :sessions, dependent: :destroy

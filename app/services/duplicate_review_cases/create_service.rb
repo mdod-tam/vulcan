@@ -23,7 +23,7 @@ module DuplicateReviewCases
       return failure('Actor is required for duplicate review case') if @actor.blank?
       return failure('Reason codes are required') if @reason_codes.empty?
 
-      existing = DuplicateReviewCase.open_cases.find_by(deduplication_key: deduplication_key)
+      existing = DuplicateReviewCase.pending_review.find_by(deduplication_key: deduplication_key)
       if existing
         sync_subject_review_flag!(existing)
         return success(nil, { duplicate_review_case: existing, idempotent: true })
@@ -40,7 +40,7 @@ module DuplicateReviewCases
 
       success(nil, { duplicate_review_case: duplicate_review_case })
     rescue ActiveRecord::RecordNotUnique
-      duplicate_review_case = DuplicateReviewCase.open_cases.find_by!(deduplication_key: deduplication_key)
+      duplicate_review_case = DuplicateReviewCase.pending_review.find_by!(deduplication_key: deduplication_key)
       sync_subject_review_flag!(duplicate_review_case)
       success(nil, { duplicate_review_case: duplicate_review_case, idempotent: true })
     end

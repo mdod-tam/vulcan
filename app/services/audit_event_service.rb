@@ -19,7 +19,16 @@ class AuditEventService < BaseService
     # (action, auditable_type, auditable_id) for recent events.
 
     # Skip deduplication for application_created - these should always be logged
-    skip_deduplication_actions = %w[application_created]
+    # Each duplicate-review workflow transition is an explicit admin action that changes
+    # durable state. Rapid await/resume cycles must retain every transition rather than
+    # being mistaken for duplicate logging noise.
+    skip_deduplication_actions = %w[
+      application_created
+      duplicate_review_case_resolved
+      duplicate_review_case_awaiting_information
+      duplicate_review_case_security_review_started
+      duplicate_review_case_returned_to_review
+    ]
 
     # Skip deduplication if auditable is nil (can't dedupe without record reference)
     should_check_duplicates = auditable.present? && skip_deduplication_actions.exclude?(action.to_s)

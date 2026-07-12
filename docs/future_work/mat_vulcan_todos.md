@@ -5,7 +5,6 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 ## Table of Contents
 - [Application & Dependent Contact Management](#application--dependent-contact-management)
 - [JavaScript Architecture & Frontend Tests](#javascript-architecture--frontend-tests)
-- [Registration & Account Integrity](#registration--account-integrity)
 - [Notification System](#notification-system)
 - [Communication & Feedback](#communication--feedback)
 - [UI/UX Enhancements](#uiux-enhancements)
@@ -43,12 +42,6 @@ Income threshold (FPL) validation follow-ups
 - [ ] Standardize tests to target `[data-income-validation-target="warningContainer"]` and use `[hidden]` for visibility checks; avoid relying on CSS-only classes.  [TEST-001]
 - [ ] Confirm no dual ownership: remove any `data-paper-application-target="incomeThresholdWarning"` or warning toggling from non-owner controllers.  [PATCH-001]
 - [ ] Grep for `#income-threshold-warning` usages in admin paths and replace with `#admin-income-threshold-warning` or target-based selectors as appropriate.  [PATCH-001]
-
-## Registration & Account Integrity  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
-
-- [ ] Review queue: list `DuplicateReviewCase` records with candidate snapshots, reason codes, and actions (approve/merge/ignore) with rationale textarea  [AUTHZ-002]
-- [ ] Merge semantics: pick canonical user/application; record merge event  [AUDIT-002]
-- [ ] Tests: review queue controller actions and system flow with merge/ignore
 
 ## Notification System
 

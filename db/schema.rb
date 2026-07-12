@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_09_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -195,22 +195,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
     t.string "deduplication_key", null: false
     t.jsonb "metadata", default: {}, null: false
     t.datetime "opened_at", null: false
-    t.string "resolution_determination"
-    t.jsonb "resolution_metadata", default: {}, null: false
-    t.text "resolution_rationale"
     t.datetime "resolved_at"
     t.bigint "resolved_by_id"
+    t.jsonb "review_metadata", default: {}, null: false
+    t.text "review_rationale"
+    t.datetime "reviewed_at"
+    t.bigint "reviewed_by_id"
     t.integer "source", null: false
     t.integer "status", default: 0, null: false
     t.string "subject_fingerprint"
     t.bigint "subject_user_id"
     t.datetime "updated_at", null: false
-    t.index ["deduplication_key"], name: "index_duplicate_review_cases_open_deduplication_key", unique: true, where: "(status = 0)"
+    t.index ["deduplication_key"], name: "index_duplicate_review_cases_pending_deduplication_key", unique: true, where: "(status = ANY (ARRAY[0, 1, 2]))"
     t.index ["resolved_by_id"], name: "index_duplicate_review_cases_on_resolved_by_id"
+    t.index ["reviewed_by_id"], name: "index_duplicate_review_cases_on_reviewed_by_id"
     t.index ["source"], name: "index_duplicate_review_cases_on_source"
     t.index ["status"], name: "index_duplicate_review_cases_on_status"
     t.index ["subject_user_id"], name: "index_duplicate_review_cases_on_subject_user_id"
-    t.check_constraint "status = ANY (ARRAY[0, 1, 2, 3])", name: "duplicate_review_cases_status_check"
+    t.check_constraint "status = ANY (ARRAY[0, 1, 2, 3, 4, 5])", name: "duplicate_review_cases_status_check"
   end
 
   create_table "email_templates", force: :cascade do |t|
@@ -952,6 +954,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
   add_foreign_key "duplicate_review_case_candidates", "duplicate_review_cases"
   add_foreign_key "duplicate_review_case_candidates", "users", column: "candidate_user_id"
   add_foreign_key "duplicate_review_cases", "users", column: "resolved_by_id"
+  add_foreign_key "duplicate_review_cases", "users", column: "reviewed_by_id"
   add_foreign_key "duplicate_review_cases", "users", column: "subject_user_id"
   add_foreign_key "email_templates", "users", column: "updated_by_id"
   add_foreign_key "evaluations", "applications"

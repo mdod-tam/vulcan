@@ -214,6 +214,22 @@ module Applications
       assert_includes form.errors[:base], 'Medical provider information is required for submission.'
     end
 
+    test 'application submission requires a complete physical address but draft save does not' do
+      @user.update!(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
+      form = create_valid_form(@user)
+
+      assert form.valid?, 'an incomplete address may remain on a draft'
+
+      form.is_submission = true
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert_includes form.errors[:physical_address_1], 'is required for application submission'
+      assert_includes form.errors[:city], 'is required for application submission'
+      assert_includes form.errors[:state], 'is required for application submission'
+      assert_includes form.errors[:zip_code], 'is required for application submission'
+    end
+
     test 'sets draft status for non-submissions' do
       form = create_valid_form(@user)
       form.is_submission = false
@@ -255,6 +271,10 @@ module Applications
         first_name: 'Test',
         last_name: 'User',
         phone: "555#{@timestamp[-7..]}",
+        physical_address_1: '123 Main Street',
+        city: 'Baltimore',
+        state: 'MD',
+        zip_code: '21201',
         password: 'password123',
         password_confirmation: 'password123',
         type: 'Users::Constituent'
@@ -267,6 +287,10 @@ module Applications
         first_name: 'Dependent',
         last_name: 'User',
         phone: "556#{@timestamp[-7..]}",
+        physical_address_1: '456 Main Street',
+        city: 'Baltimore',
+        state: 'MD',
+        zip_code: '21201',
         password: 'password123',
         password_confirmation: 'password123',
         type: 'Users::Constituent'

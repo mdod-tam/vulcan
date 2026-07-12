@@ -41,6 +41,26 @@ class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
   end
 
+  test 'JSON success path aborts all temporary 2FA state when session creation fails' do
+    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
+
+    # Simulate the narrow race where the record is retired between verifying the code
+    # and minting the session (session creation is the chokepoint and fails closed).
+    ApplicationController.any_instance.stubs(:_create_and_set_session_cookie).returns(nil)
+
+    post process_verification_two_factor_authentication_path(type: 'totp'),
+         params: { code: ROTP::TOTP.new(@secret).now },
+         as: :json
+
+    assert_response :unprocessable_content
+    assert_nil session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]], 'temp user id must not linger'
+    assert_nil session[TwoFactorAuth::SESSION_KEYS[:verified_at]], 'session must not be left marked verified'
+    assert_nil session[TwoFactorAuth::SESSION_KEYS[:challenge]], 'the challenge must not be left replayable'
+    assert_nil session[TwoFactorAuth::SESSION_KEYS[:type]]
+    assert_nil session[TwoFactorAuth::SESSION_KEYS[:metadata]]
+  end
+
   test 'active user completes TOTP 2FA and gets a session' do
     post sign_in_path, params: { email: @user.email, password: 'password123' }
     assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]

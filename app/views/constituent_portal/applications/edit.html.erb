@@ -4,8 +4,11 @@
    <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
  </header>
 
- <% edit_form_data = {
+ <% submit_gate_locale = @form&.message_locale || @applicant_user&.effective_locale || current_user.effective_locale
+    edit_form_data = {
    controller: "final-submit-gate currency-formatter autosave",
+   final_submit_gate_incomplete_message_value: t('applications.submit_gate.incomplete', locale: submit_gate_locale),
+   final_submit_gate_ready_message_value: t('applications.submit_gate.ready', locale: submit_gate_locale),
    autosave_target: "form",
    autosave_url_value: autosave_field_constituent_portal_application_path(@application),
    autosave_debounce_wait_value: 1000

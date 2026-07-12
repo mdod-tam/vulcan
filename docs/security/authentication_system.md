@@ -29,7 +29,7 @@ Current account-lock behavior:
 
 - maximum failed login attempts: 5
 - lock duration: 1 hour
-- password reset tokens expire after 20 minutes and are invalidated by a successful password change because token generation is tied to the password digest
+- password reset tokens expire after 20 minutes and are invalidated by a successful password change or login-email change because token generation is tied to both the password salt and normalized email
 
 Recovery requests are durable and idempotent: a partial unique index allows only one pending request per user, duplicate pending submissions coalesce into the same public confirmation, and a new pending request is allowed after the previous request is resolved. The index migration assumes alpha/shared environments do not already contain duplicate pending recovery requests for the same user; resolve any such rows before migrating. Admin approval removes WebAuthn credentials only if the approval notification record can be created and queued without a synchronous delivery error.
 
@@ -96,7 +96,9 @@ Current temporary state includes:
 
 The challenge is not always cleared at the exact same moment as successful verification because JSON/WebAuthn completion needs to create the final application session first. Do not add manual session cleanup in a controller without checking the existing flow.
 
-`User#public_login_active?` rejects merged, inactive, and suspended records (legacy NULL status is treated as active). It gates every point that resolves the in-progress MFA user — `ApplicationController#find_user_for_two_factor` and `TwoFactorAuthenticationsController#find_user_for_two_factor` both return `nil` for a record that fails this check, so a record retired by an admin merge mid-login cannot reach method selection, verification options, SMS resend, or credential updates; it fails closed to sign-in instead of only being caught at final session creation. `ApplicationController#_create_and_set_session_cookie` also re-checks `public_login_active?` and is the single chokepoint for both password sign-in and 2FA completion, so a record retired between password entry and MFA completion still cannot finish authenticating, and `TwoFactorAuth.abort_authentication` clears the temporary MFA state (including the challenge) on that failure so nothing can be replayed.
+`User#public_login_active?` rejects merged, inactive, and suspended records (legacy NULL status is treated as active). It gates every point that resolves the in-progress MFA user — `ApplicationController#find_user_for_two_factor` and `TwoFactorAuthenticationsController#find_user_for_two_factor` both return `nil` for a record that fails this check, so a record retired by an admin merge mid-login cannot reach method selection, verification options, SMS resend, or credential updates; it fails closed to sign-in instead of only being caught at final session creation. This applies to both the HTML and JSON success paths in `TwoFactorAuthenticationsController#handle_successful_verification`; either path calls `TwoFactorAuth.abort_authentication` (clearing the challenge and any verified/temp-user state) when session creation fails, so nothing can be replayed regardless of response format.
+
+`ApplicationController#_create_and_set_session_cookie` re-checks `public_login_active?` and is the single chokepoint for both password sign-in and 2FA completion, so a record retired between password entry and MFA completion still cannot finish authenticating. Because `user` can be loaded well before this runs (`SessionsController#create` loads it before password verification), the method reloads `user` immediately before the check rather than trusting the in-memory instance — a concurrent admin merge that retires the record in between must not let a stale, already-loaded object mint a session. `Authentication#current_user` adds an independent, per-request recheck of `public_login_active?` against the session's user: a session created while active must stop authenticating the moment the record becomes non-login-active, even if whatever changed the status did not itself destroy the session; a stale session found this way is destroyed and its cookie cleared rather than merely ignored. This is defense in depth on top of `Users::DuplicateMergeService#expire_duplicate_sessions!`, which already destroys the retired duplicate's sessions as part of every merge.
 
 ---
 
@@ -170,13 +172,15 @@ Do not assume every MFA attempt creates an `Event` row. The current MFA flow pri
 
 Use the tests that match the layer you are changing:
 
-- `test/controllers/sessions_controller_test.rb` for password-to-MFA handoff
+- `test/controllers/sessions_controller_test.rb` for password-to-MFA handoff, including the reload-before-check race where the record is retired between the initial user lookup and session creation
 - `test/controllers/mfa_enrollment_policy_test.rb` for role-based enrollment enforcement
 - `test/controllers/two_factor_authentication_webauthn_test.rb` for WebAuthn verification routing
 - `test/controllers/two_factor_authentication_sms_selection_test.rb` for SMS method selection/resend behavior
 - `test/services/twilio_verify_service_test.rb` for Twilio Verify wrapper behavior
 - `test/services/two_factor/challenge_hydration_test.rb` for SMS challenge hydration
 - `test/system/webauthn_sign_in_test.rb` and `test/system/two_factor_authentication_flow_test.rb` for end-to-end browser coverage
+- `test/integration/merged_user_two_factor_gate_test.rb` for the `public_login_active?` fail-closed gate across TOTP verification and the JSON success path's session-failure cleanup
+- `test/integration/authentication_test.rb` for `Authentication#current_user`'s per-request recheck, including a live session whose user was retired after the session was created
 
 Test mode has deliberate shortcuts, especially SMS code acceptance. Keep production behavior in mind when writing assertions.
 

@@ -405,15 +405,6 @@ class Application < ApplicationRecord
     Applications::DocumentRequester.new(self, by: user).call
   end
 
-  # Submits the application, moving it from draft to in_progress
-  def submit!(actor:)
-    transition_status!(
-      :in_progress,
-      actor: actor,
-      metadata: { trigger: 'submission' }
-    )
-  end
-
   # Explicit status transition API for new lifecycle paths.
   # This writes the status change, status-change record, and audit event atomically.
   # Audit failures propagate and roll back the status change.

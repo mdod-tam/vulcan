@@ -1,0 +1,125 @@
+<%# locals: (subject:, candidate:) -%>
+<div data-testid="record-comparison">
+  <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-2 text-left font-medium text-gray-500">Field</th>
+            <% [['Subject', subject], ['Candidate', candidate]].each do |role_label, user| %>
+              <th class="px-4 py-2 text-left font-medium text-gray-500">
+                <div><%= role_label %> #<%= user.id %></div>
+                <div class="font-semibold text-gray-900 normal-case"><%= user.full_name %></div>
+                <%= link_to 'Open profile', admin_user_path(user),
+                            class: 'text-xs text-indigo-600 hover:text-indigo-900 font-normal normal-case',
+                            target: '_blank', rel: 'noopener' %>
+              </th>
+            <% end %>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <% record_comparison_rows.each do |label, display_method| %>
+            <% subject_value = send(display_method, subject) %>
+            <% candidate_value = send(display_method, candidate) %>
+            <% differs = subject_value != candidate_value %>
+            <tr data-diff="<%= differs ? 'different' : 'same' %>">
+              <td class="px-4 py-2 font-medium whitespace-nowrap <%= differs ? 'text-gray-900' : 'text-gray-400' %>">
+                <%= label %>
+                <% if differs %>
+                  <span class="ml-1 text-amber-700 font-semibold text-xs uppercase tracking-wide">Differs</span>
+                <% end %>
+              </td>
+              <td class="px-4 py-2 break-words max-w-xs <%= differs ? 'text-gray-900' : 'text-gray-400' %>"><%= subject_value %></td>
+              <td class="px-4 py-2 break-words max-w-xs <%= differs ? 'text-gray-900' : 'text-gray-400' %>"><%= candidate_value %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="border-t border-gray-200 px-4 py-3">
+      <h5 class="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">Related records</h5>
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        <div>
+          <dt class="font-medium text-gray-700">Subject applications</dt>
+          <dd class="text-gray-600">
+            <% subject_apps = subject.applications.order(application_date: :desc).limit(5) %>
+            <% if subject_apps.any? %>
+              <ul class="list-disc list-inside">
+                <% subject_apps.each do |app| %>
+                  <li>#<%= app.id %> · <%= app.status.to_s.humanize %> · <%= app.application_date&.strftime('%b %Y') %></li>
+                <% end %>
+              </ul>
+            <% else %>
+              None on file
+            <% end %>
+          </dd>
+          <dt class="font-medium text-gray-700 mt-2">Subject guardian relationships</dt>
+          <dd class="text-gray-600"><%= stored_guardian_relationships_display(subject) %></dd>
+        </div>
+        <div>
+          <dt class="font-medium text-gray-700">Candidate applications</dt>
+          <dd class="text-gray-600">
+            <% candidate_apps = candidate.applications.order(application_date: :desc).limit(5) %>
+            <% if candidate_apps.any? %>
+              <ul class="list-disc list-inside">
+                <% candidate_apps.each do |app| %>
+                  <li>#<%= app.id %> · <%= app.status.to_s.humanize %> · <%= app.application_date&.strftime('%b %Y') %></li>
+                <% end %>
+              </ul>
+            <% else %>
+              None on file
+            <% end %>
+          </dd>
+          <dt class="font-medium text-gray-700 mt-2">Candidate guardian relationships</dt>
+          <dd class="text-gray-600"><%= stored_guardian_relationships_display(candidate) %></dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+
+  <% subject_security = auth_security_snapshot(subject) %>
+  <% candidate_security = auth_security_snapshot(candidate) %>
+  <% subject_blocker = retirement_blocker_message(subject, 'Subject', security_snapshot: subject_security) %>
+  <% candidate_blocker = retirement_blocker_message(candidate, 'Candidate', security_snapshot: candidate_security) %>
+
+  <% if subject_blocker %>
+    <div class="flash-message flash-warning mt-4"><%= subject_blocker %></div>
+  <% end %>
+  <% if candidate_blocker %>
+    <div class="flash-message flash-warning mt-4"><%= candidate_blocker %></div>
+  <% end %>
+
+  <% if mfa_imbalance?(subject_security, candidate_security) %>
+    <div class="flash-message flash-warning mt-4">
+      MFA/passkey methods differ. The surviving record keeps only its own authentication methods. Retired-record MFA will not transfer; the user may need to re-enroll MFA after merge.
+    </div>
+  <% end %>
+
+  <div class="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
+    <h5 class="text-sm font-medium text-gray-700">
+      Access and security state
+      <span class="text-xs font-normal text-gray-500">(not transferred)</span>
+    </h5>
+    <p class="text-xs text-gray-500 mb-3">
+      The surviving record keeps its existing MFA/passkeys. The duplicate record's sessions will expire. MFA credentials are not transferred.
+    </p>
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+      <% [['Subject', subject, subject_security], ['Candidate', candidate, candidate_security]].each do |role_label, user, security| %>
+        <% auth_counts = security.fetch(:credential_counts) %>
+        <div>
+          <dt class="font-medium text-gray-700"><%= role_label %> #<%= user.id %></dt>
+          <dd class="text-gray-600">
+            WebAuthn: <%= auth_counts[:webauthn] %> ·
+            TOTP: <%= auth_counts[:totp] %> ·
+            SMS (verified): <%= auth_counts[:sms] %><br>
+            Pending SMS setup: <%= auth_counts[:pending_sms] %><br>
+            Active sessions: <%= security.fetch(:active_sessions) %><br>
+            Pending recovery: <%= security.fetch(:pending_recovery) ? 'Yes' : 'No' %><br>
+            Active secure forms: <%= security.fetch(:active_secure_form) ? 'Yes' : 'No' %>
+          </dd>
+        </div>
+      <% end %>
+    </dl>
+  </div>
+</div>

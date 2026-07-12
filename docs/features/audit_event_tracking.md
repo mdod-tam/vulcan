@@ -65,7 +65,7 @@ Key examples:
 Current creation deduplication:
 
 - does not run when there is no auditable record
-- never suppresses `application_created`
+- never suppresses `application_created` or explicit duplicate-review workflow transitions (`duplicate_review_case_resolved`, awaiting-information, security-review, and return-to-review events)
 - uses action plus selected metadata for proof submissions, proof attachments, profile updates, feature flag toggles, and secure-request revocation/expiration events
 - returns `nil` when a duplicate is suppressed
 - raises validation errors when an event cannot be saved
@@ -98,7 +98,7 @@ This is display behavior only. It does not delete records and should not be used
 | Proof review | `proof_approved`, `proof_rejected` | `ProofReview` owns approval/rejection audit events. |
 | Proof secure requests | `proof_resubmission_requested`, `proof_submitted_via_secure_form`, request revoked/expired events | Secure request services own these. |
 | Disability certification | `medical_certification_requested`, `medical_certification_received`, approved/rejected/status events, secure upload and DocuSeal events | Code names still use `medical_certification_*`; user-facing prose should say disability certification. |
-| Duplicate review | `duplicate_review_case_opened`, `duplicate_review_case_resolved`, `duplicate_user_merged`, `duplicate_review_flag_cleared` | `DuplicateReviewCases::CreateService` owns case-opened rows; `DuplicateReviewCases::ResolutionService` owns approve/ignore/keep-separate resolutions; `Users::DuplicateMergeService` emits exactly one `duplicate_user_merged` per merge; `Admin::DuplicateReviewsController#clear_flag` logs legacy-flag clears. |
+| Duplicate review | `duplicate_review_case_opened`, `duplicate_review_case_awaiting_information`, `duplicate_review_case_security_review_started`, `duplicate_review_case_returned_to_review`, `duplicate_review_case_resolved`, `duplicate_user_merged`, `duplicate_review_flag_cleared` | `DuplicateReviewCases::CreateService` owns case-opened rows; `ResolutionService` owns terminal keep-separate/relationship outcomes and nonterminal awaiting/security outcomes; `ResumeService` owns return-to-review; `Users::DuplicateMergeService` emits exactly one merge event; the controller logs legacy-flag clears. |
 | Notifications | `notification_<action>_created`, `notification_<action>_sent`, `notification_<action>_failed` when notification auditing is enabled | Domain workflows usually leave `audit: false`. |
 | Email provider webhooks | `email_bounced` for matched provider outbound emails | Spam complaints update notification delivery state without a separate audit event today. |
 | Vouchers | `voucher_assigned`, `voucher_redeemed`, `voucher_expired`, `voucher_cancelled` | Voucher model and services own these. |
@@ -108,6 +108,10 @@ This is display behavior only. It does not delete records and should not be used
 Treat event action names as API. Before adding a new one, search for existing events and displays that already cover the same logical action.
 
 Duplicate-review case audit actor selection is flow-specific: public registration uses `PublicAuditActor` and rolls back account creation if no system actor can open the required case; portal dependent creation uses the signed-in guardian; admin quick-create and paper intake use the current admin/operator.
+
+Every admin workflow transition stores `duplicate_review_case_id`, the resulting state, rationale, and stable outcome context without raw contact values or credentials. Awaiting-information and security-review are pending states, not resolutions; their dedicated events record the transition while the case keeps `needs_duplicate_review`. Security-review entry does not itself suspend/deactivate an account or expire sessions. Account restrictions require a separate authorized action and audit event.
+
+Duplicate-review transitions bypass the five-second creation-deduplication window because each successful service call changes durable state and every rapid await/resume cycle must remain in history. The state change, subject-flag recomputation, and event creation share the service transaction, so an event failure rolls the workflow transition back.
 
 ---
 

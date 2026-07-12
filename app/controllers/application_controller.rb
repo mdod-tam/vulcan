@@ -157,18 +157,34 @@ class ApplicationController < ActionController::Base
   # Fails closed for records that are not login-active (merged into another account,
   # inactive, or suspended). This is the single chokepoint for both password sign-in
   # and 2FA completion, so a duplicate retired mid-flow cannot finish authenticating.
+  #
+  # `user` may have been loaded earlier in the request (e.g. SessionsController#create
+  # loads it before password verification, well before this runs), so a plain reload is
+  # not enough: it could still read a not-yet-committed pre-merge state and then insert
+  # the session after a concurrent merge commits. `with_lock` takes the same row-level
+  # `SELECT ... FOR UPDATE` that Users::DuplicateMergeService#lock_records! takes, so the
+  # two are mutually exclusive -- session creation either fully precedes or fully follows
+  # a concurrent merge of this user, with no window to mint a session for a record that
+  # is (or is about to become) retired.
   def _create_and_set_session_cookie(user)
-    return unless user&.public_login_active?
+    return unless user
 
-    session_record = user.sessions.new(
-      user_agent: request.user_agent,
-      ip_address: request.remote_ip
-    )
-    return unless session_record.save
+    session_record = user.with_lock do
+      next nil unless user.public_login_active?
+
+      candidate = user.sessions.new(
+        user_agent: request.user_agent,
+        ip_address: request.remote_ip
+      )
+      candidate.save ? candidate : nil
+    end
+    return unless session_record
 
     cookies.signed[:session_token] = _session_cookie_options(session_record.session_token)
     user.track_sign_in!(request.remote_ip) # Assuming this method exists on User model
     session_record
+  rescue ActiveRecord::RecordNotFound
+    nil
   end
 
   # Generates options for the session cookie.

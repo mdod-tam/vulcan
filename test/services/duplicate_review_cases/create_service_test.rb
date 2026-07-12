@@ -37,6 +37,28 @@ module DuplicateReviewCases
       end
     end
 
+    test 'idempotent create returns an existing nonterminal case' do
+      first = create_case
+      review_case = first.data[:duplicate_review_case]
+      transition = ResolutionService.new(
+        duplicate_review_case: review_case,
+        actor: @admin,
+        outcome: 'needs_more_information',
+        rationale: 'Waiting for records.',
+        reason_codes: ['name_dob']
+      ).call
+      assert transition.success?, transition.message
+
+      assert_no_difference ['DuplicateReviewCase.count', 'Event.count'] do
+        second = create_case
+        assert second.success?
+        assert second.data[:idempotent]
+        assert_equal review_case.id, second.data[:duplicate_review_case].id
+      end
+      assert review_case.reload.awaiting_information?
+      assert @subject.reload.needs_duplicate_review
+    end
+
     test 'subject deletion preserves duplicate review case for staff history' do
       result = create_case
       assert result.success?

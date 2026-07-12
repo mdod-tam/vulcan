@@ -158,6 +158,9 @@ es:
       followup_scheduled_for: "Seguimiento programado para"
       reason: "Motivo: %{reason}"
   applications:
+    submit_gate:
+      incomplete: "Complete todas las confirmaciones requeridas antes de enviar."
+      ready: "La solicitud está lista para enviar."
     proof_resubmission_requests:
       create:
         failure: "No se pudo enviar la solicitud segura para subir el documento."

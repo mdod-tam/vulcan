@@ -41,13 +41,46 @@ module Users
 
       @review_case.reload
       assert_equal 'resolved_merged', @review_case.status
-      assert_equal 'same_person_confirmed', @review_case.resolution_determination
+      assert_equal 'confirmed same person via support call', @review_case.review_rationale
+      assert_equal @admin, @review_case.reviewed_by
     end
 
     test 'blocks merge without same-person confirmation' do
       result = merge(same_person_confirmed: false)
       assert result.failure?
       assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge while the selected case is in a nonterminal workflow state' do
+      @review_case.update!(
+        status: :awaiting_information,
+        review_rationale: 'Waiting for records.',
+        reviewed_by: @admin,
+        reviewed_at: Time.current
+      )
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/actionable review state/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge while a related case is under security review' do
+      related_case = open_case(subject: @duplicate, candidate: create(:constituent), reason: 'name_dob')
+      related_case.update!(
+        status: :security_review,
+        review_rationale: 'Security specialist review.',
+        reviewed_by: @admin,
+        reviewed_at: Time.current
+      )
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/security review.*return it to normal review/i, result.message)
+      assert_not @duplicate.reload.merged?
+      assert related_case.reload.security_review?
     end
 
     test 'blocks merge for a non-admin actor' do
@@ -115,6 +148,89 @@ module Users
       assert_nil email_backed.email, 'the retired email-backed duplicate released its email'
     end
 
+    test 'releases discarded duplicate email and phone when canonical contact survives' do
+      canonical_email = @canonical.email
+      canonical_phone = '555-111-2222'
+      discarded_email = "retired-#{SecureRandom.hex(3)}@example.com"
+      discarded_phone = @duplicate.phone
+      @canonical.update!(phone: canonical_phone, phone_type: :voice)
+      @duplicate.update!(email: discarded_email)
+
+      result = merge(
+        contact_choices: { email: 'canonical', phone: 'canonical', phone_type: 'voice', address: 'canonical' }
+      )
+
+      assert result.success?, result.message
+      assert_equal canonical_email, @canonical.reload.email
+      assert_equal canonical_phone, @canonical.phone
+      assert_nil @duplicate.reload.email
+      assert_nil @duplicate.phone
+      assert_nil User.find_by_email(discarded_email), 'retired email must not remain a global identity owner'
+      assert_nil User.find_by_phone(discarded_phone), 'retired phone must not remain a global identity owner'
+    end
+
+    test 'invalidates an outstanding canonical password reset token when merge replaces its email' do
+      replacement_email = "replacement-#{SecureRandom.hex(3)}@example.com"
+      @duplicate.update!(email: replacement_email)
+      token = @canonical.generate_token_for(:password_reset)
+      assert_equal @canonical, User.find_by_token_for(:password_reset, token)
+
+      result = merge(
+        contact_choices: { email: 'duplicate', phone: 'duplicate', phone_type: 'voice', address: 'canonical' }
+      )
+
+      assert result.success?, result.message
+      assert_equal replacement_email, @canonical.reload.email
+      assert_nil User.find_by_token_for(:password_reset, token)
+    end
+
+    test 'preserves canonical and retired duplicate MFA credential ownership' do
+      create(:webauthn_credential, user: @canonical)
+      create(:webauthn_credential, user: @duplicate)
+      @canonical.totp_credentials.create!(secret: ROTP::Base32.random, nickname: 'Canonical authenticator')
+      @duplicate.totp_credentials.create!(secret: ROTP::Base32.random, nickname: 'Duplicate authenticator')
+      @canonical.sms_credentials.create!(phone_number: '410-555-0101', verified_at: Time.current)
+      @duplicate.sms_credentials.create!(phone_number: '410-555-0102', verified_at: Time.current)
+      canonical_credentials = mfa_credential_snapshot(@canonical)
+      duplicate_credentials = mfa_credential_snapshot(@duplicate)
+
+      result = merge
+
+      assert result.success?, result.message
+      assert_equal canonical_credentials, mfa_credential_snapshot(@canonical.reload)
+      assert_equal duplicate_credentials, mfa_credential_snapshot(@duplicate.reload)
+    end
+
+    test 'rolls back the full merge inventory when a late transaction step fails' do
+      duplicate_application = create(:application, user: @duplicate)
+      dependent = create(:constituent)
+      relationship = create(:guardian_relationship, guardian_user: @duplicate, dependent_user: dependent)
+      duplicate_session = @duplicate.sessions.create!(
+        session_token: SecureRandom.hex(16),
+        user_agent: 'rollback test',
+        ip_address: '127.0.0.1'
+      )
+      canonical_contact = @canonical.attributes.slice('email', 'phone', 'status', 'merged_into_user_id')
+      duplicate_contact = @duplicate.attributes.slice('email', 'phone', 'status', 'merged_into_user_id')
+      service = build_service
+      service.define_singleton_method(:log_merge!) do
+        raise ActiveRecord::RecordInvalid, Event.new
+      end
+
+      result = nil
+      assert_no_difference "Event.where(action: 'duplicate_user_merged').count" do
+        result = service.call
+      end
+
+      assert result.failure?
+      assert_equal canonical_contact, @canonical.reload.attributes.slice(*canonical_contact.keys)
+      assert_equal duplicate_contact, @duplicate.reload.attributes.slice(*duplicate_contact.keys)
+      assert_equal @duplicate.id, duplicate_application.reload.user_id
+      assert_equal @duplicate.id, relationship.reload.guardian_id
+      assert Session.exists?(duplicate_session.id), 'destroyed session must return on rollback'
+      assert @review_case.reload.open?
+    end
+
     test 'blocks merge when the canonical survivor is already merged' do
       other = create(:constituent)
       @canonical.update!(merged_into_user: other, merged_at: Time.current)
@@ -129,6 +245,26 @@ module Users
       result = merge
       assert result.failure?
       assert_match(/active record/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when the canonical becomes ineligible between static preflight and the lock' do
+      service = build_service
+      other_canonical = create(:constituent)
+
+      # Simulate a concurrent merge/deactivation of the canonical landing exactly between
+      # static_preflight (which passed on the then-eligible canonical) and lock_records!
+      # taking the row lock -- live_preflight's post-lock recheck must still catch it.
+      service.define_singleton_method(:lock_records!) do
+        User.where(id: @canonical_user.id).update_all(
+          merged_into_user_id: other_canonical.id, status: User.statuses[:inactive], updated_at: Time.current
+        )
+        super()
+      end
+
+      result = service.call
+      assert result.failure?
+      assert_match(/canonical survivor/i, result.message)
       assert_not @duplicate.reload.merged?
     end
 
@@ -186,7 +322,7 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
-    test 'resolves the retired duplicate other open cases and keeps unrelated canonical cases open' do
+    test 'resolves the retired duplicate other pending cases and keeps unrelated canonical cases pending' do
       third_party = create(:constituent, email: "third-#{SecureRandom.hex(3)}@example.com")
       duplicate_other_case = open_case(subject: @duplicate, candidate: third_party, reason: 'name_dob')
       canonical_unrelated = open_case(subject: @canonical, candidate: third_party, reason: 'name_dob')
@@ -196,7 +332,7 @@ module Users
 
       assert_equal 'resolved_merged', duplicate_other_case.reload.status
       assert_equal 'open', canonical_unrelated.reload.status, 'unrelated canonical case stays open'
-      assert DuplicateReviewCase.open_cases.for_subject(@duplicate).none?, 'retired duplicate has no open cases'
+      assert DuplicateReviewCase.pending_review.for_subject(@duplicate).none?, 'retired duplicate has no pending cases'
       assert @canonical.reload.needs_duplicate_review, 'canonical flag reflects its remaining open case'
     end
 
@@ -297,6 +433,10 @@ module Users
     private
 
     def merge(**overrides)
+      build_service(**overrides).call
+    end
+
+    def build_service(**overrides)
       defaults = {
         actor: @admin,
         duplicate_review_case: @review_case,
@@ -308,7 +448,7 @@ module Users
         contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' },
         delivery_choice: 'canonical'
       }
-      DuplicateMergeService.new(**defaults, **overrides).call
+      DuplicateMergeService.new(**defaults, **overrides)
     end
 
     def phone_only_constituent(phone:)
@@ -329,6 +469,20 @@ module Users
       )
       review_case.duplicate_review_case_candidates.create!(candidate_user: candidate, match_reason: reason, snapshot: {})
       review_case
+    end
+
+    def mfa_credential_snapshot(user)
+      {
+        webauthn: user.webauthn_credentials.order(:id).map do |credential|
+          credential.attributes.slice('id', 'user_id', 'external_id', 'public_key', 'nickname', 'sign_count')
+        end,
+        totp: user.totp_credentials.order(:id).map do |credential|
+          credential.attributes.slice('id', 'user_id', 'secret', 'nickname', 'last_used_at')
+        end,
+        sms: user.sms_credentials.order(:id).map do |credential|
+          credential.attributes.slice('id', 'user_id', 'phone_number', 'last_sent_at', 'verified_at')
+        end
+      }
     end
   end
 end

@@ -1,0 +1,15 @@
+<%# locals: (review_case:, prefill: nil) -%>
+<% prefill ||= {} %>
+<%= form_with url: resume_admin_duplicate_review_path(review_case), method: :post, class: 'space-y-3' do |f| %>
+  <div>
+    <%= f.label :rationale, 'Why is this case ready for normal review? (required)', class: 'block text-sm font-medium text-gray-700' %>
+    <%= f.text_area :rationale,
+                    value: prefill[:rationale],
+                    rows: 2,
+                    required: true,
+                    class: 'w-full border-gray-300 rounded-md text-sm',
+                    placeholder: 'Describe what changed or what information is now available.' %>
+  </div>
+  <%= f.submit 'Return to normal review',
+               class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded text-sm cursor-pointer' %>
+<% end %>

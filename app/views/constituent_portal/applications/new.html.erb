@@ -15,8 +15,11 @@
       </h1>
       <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
 
-      <% new_app_form_data = {
+      <% submit_gate_locale = @form&.message_locale || @applicant_user&.effective_locale || current_user.effective_locale
+         new_app_form_data = {
         controller: "final-submit-gate currency-formatter accessibility-announcer autosave",
+        final_submit_gate_incomplete_message_value: t('applications.submit_gate.incomplete', locale: submit_gate_locale),
+        final_submit_gate_ready_message_value: t('applications.submit_gate.ready', locale: submit_gate_locale),
         autosave_target: "form",
         autosave_url_value: autosave_field_constituent_portal_applications_path,
         autosave_debounce_wait_value: 1000,

@@ -336,6 +336,12 @@ class TwoFactorAuthenticationsController < ApplicationController
         return_to = stored_location || _dashboard_for(@user)
         render json: { status: 'success', redirect_url: return_to }
       else
+        # Session creation failed closed (e.g. the record was retired mid-login).
+        # complete_authentication above already marked the session verified and
+        # cleared temp_user_id without ever creating a real login session; abort
+        # fully undoes that (including the still-uncleared challenge) so nothing
+        # stale can be replayed, matching the HTML path's failure handling.
+        TwoFactorAuth.abort_authentication(session)
         render json: { error: 'Unable to create session' }, status: :unprocessable_content
       end
     end

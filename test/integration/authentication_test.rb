@@ -120,6 +120,37 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # A session created while the user was active must stop authenticating them the
+  # moment the record becomes non-login-active in the database, even if whatever
+  # changed the status did not itself destroy the session (Authentication#current_user
+  # is the defense-in-depth recheck, independent of merge's own session expiry).
+  test 'should reject a live session whose user was retired after the session was created' do
+    sign_out if defined?(sign_out)
+    ENV['TEST_USER_ID'] = nil
+    cookies.delete(:session_token)
+    reset_for_next_request
+
+    live_session = Session.create!(user: @user, user_agent: 'Test User Agent', ip_address: '127.0.0.1')
+    cookies[:session_token] = live_session.session_token
+
+    canonical = create(:constituent)
+    User.where(id: @user.id).update_all(
+      merged_into_user_id: canonical.id, status: User.statuses[:inactive], updated_at: Time.current
+    )
+
+    original_test_user_id = ENV.fetch('TEST_USER_ID', nil)
+    ENV['TEST_USER_ID'] = nil
+
+    begin
+      get constituent_portal_applications_path
+
+      assert_redirected_to sign_in_path
+      assert_not Session.exists?(live_session.id), 'the stale session must be destroyed, not just ignored'
+    ensure
+      ENV['TEST_USER_ID'] = original_test_user_id
+    end
+  end
+
   # Test sign out - simplified to focus on core behavior
   test 'should sign out user' do
     # First sign in normally without mocking

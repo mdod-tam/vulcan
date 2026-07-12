@@ -43,6 +43,17 @@ module ConstituentPortal
                       visible: :all
     end
 
+    test 'announces the submit gate status in the constituent locale' do
+      @constituent.update!(locale: 'es')
+      visit new_constituent_portal_application_path
+      wait_for_turbo
+
+      assert_selector '#portal-submit-gate-status',
+                      text: I18n.t('applications.submit_gate.incomplete', locale: :es),
+                      visible: :all
+      take_screenshot('constituent-application-submit-gate-es', html: true)
+    end
+
     test 'can submit application with one disability selected' do
       # Fill in required fields
       check 'I certify that I am a resident of Maryland'

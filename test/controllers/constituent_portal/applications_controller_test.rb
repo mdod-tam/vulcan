@@ -90,6 +90,17 @@ module ConstituentPortal
       assert_select 'select[name="constituent[locale]"] option[value="es"]', text: 'Spanish'
     end
 
+    test 'new application submit gate renders in the applicant locale' do
+      %w[en es].each do |locale|
+        @user.update!(locale: locale)
+
+        get new_constituent_portal_application_path
+
+        assert_response :success
+        assert_submit_gate_messages(locale)
+      end
+    end
+
     # Test creating a draft application
     test 'should create application as draft' do
       # Create a unique user for this test to avoid 3-year validation
@@ -442,6 +453,19 @@ module ConstituentPortal
 
       # Verify the page loaded successfully
       assert_response :success
+    end
+
+    test 'edit application submit gate renders in the applicant locale' do
+      @application.update!(status: :draft)
+
+      %w[en es].each do |locale|
+        @user.update!(locale: locale)
+
+        get edit_constituent_portal_application_path(@application)
+
+        assert_response :success
+        assert_submit_gate_messages(locale)
+      end
     end
 
     # Test that users can't edit submitted applications
@@ -948,5 +972,15 @@ module ConstituentPortal
       assert_equal 'Bethesda', guardian.city, 'Guardian city should not be affected'
     end
 
+    private
+
+    def assert_submit_gate_messages(locale)
+      form = css_select('form[data-controller~="final-submit-gate"]').first
+      assert form, 'expected a form wired to final-submit-gate'
+      assert_equal I18n.t('applications.submit_gate.incomplete', locale: locale),
+                   form['data-final-submit-gate-incomplete-message-value']
+      assert_equal I18n.t('applications.submit_gate.ready', locale: locale),
+                   form['data-final-submit-gate-ready-message-value']
+    end
   end
 end

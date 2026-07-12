@@ -1,18 +1,32 @@
-<%# locals: review_case (DuplicateReviewCase), subject (User), candidate (candidate User) %>
+<%# locals: (review_case:, subject:, candidate:, prefill: nil) -%>
 <% reason_codes = Array(review_case.metadata['reason_codes']).compact.uniq %>
 <% contact_displays = { 'email' => :stored_email_display, 'phone' => :stored_phone_display, 'address' => :stored_address_display } %>
-<%= form_with url: merge_admin_duplicate_review_path(review_case), method: :post, class: 'space-y-4' do |f| %>
-  <%= hidden_field_tag 'pair_ids[]', subject.id %>
-  <%= hidden_field_tag 'pair_ids[]', candidate.id %>
+<%# This partial renders once per candidate on the same page, so every id below is scoped
+    with dom_id_prefix -- without it every merge form on the page would share the same
+    auto-generated ids, which is invalid HTML and breaks label/for associations. %>
+<% dom_id_prefix = "merge_#{candidate.id}" %>
+<% prefill ||= {} %>
+<% contact_prefill = prefill[:contact] || {} %>
+<% reason_codes_prefill = prefill.key?(:reason_codes) ? Array(prefill[:reason_codes]) : nil %>
+<%= form_with url: merge_admin_duplicate_review_path(review_case), method: :post, class: 'space-y-4',
+              data: {
+                controller: 'final-submit-gate',
+                final_submit_gate_incomplete_message_value: 'Choose a canonical record, contact facts, delivery preference, and confirm before merging.',
+                final_submit_gate_ready_message_value: 'Ready to merge.'
+              } do |f| %>
+  <%= hidden_field_tag 'pair_ids[]', subject.id, id: "#{dom_id_prefix}_pair_id_subject" %>
+  <%= hidden_field_tag 'pair_ids[]', candidate.id, id: "#{dom_id_prefix}_pair_id_candidate" %>
 
   <fieldset>
     <legend class="text-sm font-medium text-gray-700">Which record survives (canonical)?</legend>
     <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :canonical_user_id, subject.id, false, required: true %>
+      <%= radio_button_tag :canonical_user_id, subject.id, prefill[:canonical_user_id].to_s == subject.id.to_s,
+                            required: true, id: "#{dom_id_prefix}_canonical_user_id_subject" %>
       <span class="ml-1"><%= subject.full_name %> (subject #<%= subject.id %>)</span>
     </label>
     <label class="inline-flex items-center text-sm">
-      <%= radio_button_tag :canonical_user_id, candidate.id, false, required: true %>
+      <%= radio_button_tag :canonical_user_id, candidate.id, prefill[:canonical_user_id].to_s == candidate.id.to_s,
+                            required: true, id: "#{dom_id_prefix}_canonical_user_id_candidate" %>
       <span class="ml-1"><%= candidate.full_name %> (candidate #<%= candidate.id %>)</span>
     </label>
     <p class="text-xs text-gray-500 mt-1">The other record is retired (deactivated) and points at the canonical survivor. It is never deleted.</p>
@@ -29,66 +43,100 @@
           <div><span class="font-medium">Candidate #<%= candidate.id %>:</span> <%= send(display, candidate) %></div>
         </dl>
         <label class="inline-flex items-center mr-3">
-          <%= radio_button_tag "contact[#{field}]", 'canonical', false, required: true %>
+          <%= radio_button_tag "contact[#{field}]", 'canonical', contact_prefill[field] == 'canonical',
+                                required: true, id: "#{dom_id_prefix}_contact_#{field}_canonical" %>
           <span class="ml-1">Keep canonical record's <%= field %></span>
         </label>
         <label class="inline-flex items-center">
-          <%= radio_button_tag "contact[#{field}]", 'duplicate', false, required: true %>
+          <%= radio_button_tag "contact[#{field}]", 'duplicate', contact_prefill[field] == 'duplicate',
+                                required: true, id: "#{dom_id_prefix}_contact_#{field}_duplicate" %>
           <span class="ml-1">Use duplicate record's <%= field %></span>
         </label>
       </div>
     <% end %>
     <div class="text-sm border-t border-gray-100 pt-2">
-      <%= label_tag 'contact[phone_type]', 'Phone type (required if a real phone survives)', class: 'block text-gray-700 font-medium' %>
-      <%= select_tag 'contact[phone_type]', options_for_select(%w[voice videophone text]), include_blank: 'Select…', class: 'border-gray-300 rounded-md text-sm' %>
-      <p class="text-xs text-gray-500">Never leave this blank when a phone survives; SMS capability must be chosen explicitly.</p>
+      <%= label_tag "#{dom_id_prefix}_contact_phone_type", 'Phone type (required if a real phone survives)',
+                    class: 'block text-gray-700 font-medium' %>
+      <%= select_tag 'contact[phone_type]', options_for_select(%w[voice videophone text], contact_prefill['phone_type']),
+                     include_blank: 'Select…', class: 'border-gray-300 rounded-md text-sm', id: "#{dom_id_prefix}_contact_phone_type" %>
+      <p class="text-xs text-gray-500">If the surviving phone is real, choose its phone type; otherwise the merge will be rejected. SMS capability must be chosen explicitly, never assumed.</p>
     </div>
   </fieldset>
 
   <fieldset>
-    <legend class="text-sm font-medium text-gray-700">Official-notice delivery route</legend>
+    <legend class="text-sm font-medium text-gray-700">Notice delivery preference</legend>
     <dl class="text-xs text-gray-500 mb-1">
       <div><span class="font-medium">Subject #<%= subject.id %>:</span> <%= subject.communication_preference.presence || 'not set' %></div>
       <div><span class="font-medium">Candidate #<%= candidate.id %>:</span> <%= candidate.communication_preference.presence || 'not set' %></div>
     </dl>
     <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :delivery_choice, 'canonical', false, required: true %>
+      <%= radio_button_tag :delivery_choice, 'canonical', prefill[:delivery_choice] == 'canonical',
+                            required: true, id: "#{dom_id_prefix}_delivery_choice_canonical" %>
       <span class="ml-1">Canonical record's preference</span>
     </label>
     <label class="inline-flex items-center text-sm">
-      <%= radio_button_tag :delivery_choice, 'duplicate', false, required: true %>
+      <%= radio_button_tag :delivery_choice, 'duplicate', prefill[:delivery_choice] == 'duplicate',
+                            required: true, id: "#{dom_id_prefix}_delivery_choice_duplicate" %>
       <span class="ml-1">Duplicate record's preference</span>
     </label>
   </fieldset>
 
-  <fieldset>
-    <legend class="text-sm font-medium text-gray-700">Evidence / reason codes</legend>
+  <fieldset data-requires-one-checkbox="true">
+    <legend class="text-sm font-medium text-gray-700">Merge evidence</legend>
     <% if reason_codes.any? %>
+      <p class="text-xs text-gray-500 mb-1">Structured match signals that flagged this pair. Leave checked only the signals you verified as relevant.</p>
       <% reason_codes.each do |code| %>
         <label class="inline-flex items-center mr-3 text-sm">
-          <%= check_box_tag 'reason_codes[]', code, true %>
+          <%= check_box_tag 'reason_codes[]', code, reason_codes_prefill ? reason_codes_prefill.include?(code) : true,
+                            id: "#{dom_id_prefix}_reason_codes_#{code}" %>
           <span class="ml-1"><%= code.humanize %></span>
         </label>
       <% end %>
     <% else %>
+      <p class="text-xs text-gray-500 mb-1">No structured match signal was stored for this case. Review the available records and document the basis for merging in Admin rationale.</p>
       <label class="inline-flex items-center text-sm">
-        <%= check_box_tag 'reason_codes[]', 'admin_reviewed', true %>
-        <span class="ml-1">Admin reviewed</span>
+        <%= check_box_tag 'reason_codes[]', 'admin_reviewed', reason_codes_prefill&.include?('admin_reviewed'),
+                          id: "#{dom_id_prefix}_reason_codes_admin_reviewed" %>
+        <span class="ml-1">I reviewed the available records and found sufficient evidence to merge.</span>
       </label>
     <% end %>
   </fieldset>
 
   <div>
-    <%= label_tag :rationale, 'Rationale (required)', class: 'block text-sm font-medium text-gray-700' %>
-    <%= text_area_tag :rationale, nil, rows: 2, required: true, class: 'w-full border-gray-300 rounded-md text-sm', placeholder: 'Explain why these records are the same person and what was verified.' %>
+    <%= label_tag "#{dom_id_prefix}_rationale", 'Admin rationale (required)', class: 'block text-sm font-medium text-gray-700' %>
+    <%= text_area_tag :rationale, prefill[:rationale], rows: 2, required: true,
+                       class: 'w-full border-gray-300 rounded-md text-sm',
+                       placeholder: 'Explain why these records are the same person and what was verified.',
+                       id: "#{dom_id_prefix}_rationale" %>
+  </div>
+
+  <div class="flash-message flash-info">
+    <p class="font-medium mb-1">What happens when you merge:</p>
+    <ul class="list-disc list-inside space-y-0.5">
+      <li>The duplicate record is retired, not deleted.</li>
+      <li>Applications and guardian relationships move to the canonical record.</li>
+      <li>Historical audit and notification records stay attached to their original record.</li>
+      <li>The duplicate record's sessions expire immediately.</li>
+      <li>Auth credentials (WebAuthn/TOTP/SMS) are not transferred.</li>
+      <li>The merge is audited and cannot be undone from this screen.</li>
+    </ul>
   </div>
 
   <label class="inline-flex items-center text-sm">
-    <%= check_box_tag :same_person_confirmed, '1', false, required: true %>
+    <%= check_box_tag :same_person_confirmed, '1', ActiveModel::Type::Boolean.new.cast(prefill[:same_person_confirmed]) == true,
+                      required: true, id: "#{dom_id_prefix}_same_person_confirmed" %>
     <span class="ml-2">I confirm these records are the same person. All applications on the duplicate record will transfer to the canonical account.</span>
   </label>
 
   <div>
-    <%= f.submit 'Merge records', class: 'bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded text-sm cursor-pointer', data: { turbo_confirm: 'Merge is audited and retires the duplicate record. Continue?' } %>
+    <p class="text-xs text-gray-500 mb-1" data-final-submit-gate-target="status" id="<%= dom_id_prefix %>_submit_gate_status" aria-live="polite"></p>
+    <%= f.submit 'Merge records',
+                 disabled: true,
+                 class: 'bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded text-sm cursor-pointer ' \
+                        'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600',
+                 data: {
+                   final_submit_gate_target: 'submitButton',
+                   turbo_confirm: 'Merge is audited and retires the duplicate record. Continue?'
+                 } %>
   </div>
 <% end %>

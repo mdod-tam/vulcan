@@ -176,6 +176,9 @@ en:
       followup_scheduled_for: "Follow-up scheduled for"
       reason: "Reason: %{reason}"
   applications:
+    submit_gate:
+      incomplete: "Complete all required confirmations before submitting."
+      ready: "Application is ready to submit."
     proof_resubmission_requests:
       create:
         failure: "Secure proof upload request could not be sent."

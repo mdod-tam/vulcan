@@ -70,6 +70,17 @@ module ApplicationStatusManagement
     !status_draft?
   end
 
+  # Submits the application, moving it from draft to in_progress only after the
+  # applicant has the complete physical address required by the program.
+  def submit!(actor:)
+    validate_physical_address_for_submission!
+    transition_status!(
+      :in_progress,
+      actor: actor,
+      metadata: { trigger: 'submission' }
+    )
+  end
+
   # Unified reconciliation entry point for workflow state transitions.
   # Checks whether the application should be auto-approved (all requirements met)
   # or escalated to DCF (proofs approved, cert pending). Row-locked, idempotent,
@@ -102,12 +113,14 @@ module ApplicationStatusManagement
 
       return if status_approved? || status_rejected? || status_archived?
 
-      transition_status!(
-        :awaiting_dcf,
-        actor: actor,
-        notes: 'Requesting medical certification documents',
-        metadata: { trigger: trigger&.to_s }.compact
-      ) unless status_awaiting_dcf?
+      unless status_awaiting_dcf?
+        transition_status!(
+          :awaiting_dcf,
+          actor: actor,
+          notes: 'Requesting medical certification documents',
+          metadata: { trigger: trigger&.to_s }.compact
+        )
+      end
 
       return unless required_proofs_for_dcf_approved?
       return unless medical_certification_status_not_requested?
@@ -118,6 +131,19 @@ module ApplicationStatusManagement
   end
 
   private
+
+  def validate_physical_address_for_submission!
+    missing_fields = %i[physical_address_1 city state zip_code].select do |field|
+      user&.public_send(field).blank?
+    end
+    return if missing_fields.empty?
+
+    missing_fields.each do |field|
+      label = field == :physical_address_1 ? 'street address' : field.to_s.humanize.downcase
+      errors.add(:base, "Applicant #{label} is required for submission")
+    end
+    raise ActiveRecord::RecordInvalid, self
+  end
 
   def all_requirements_met?
     required_proofs_approved? &&

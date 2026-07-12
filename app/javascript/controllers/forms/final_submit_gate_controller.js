@@ -2,6 +2,13 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["submitButton", "status"]
+  // No defaults: every form using the status target must say what it means for that
+  // specific form to be incomplete/ready, rather than inheriting generic wording from
+  // whichever form happened to add this controller first.
+  static values = {
+    incompleteMessage: String,
+    readyMessage: String
+  }
 
   connect() {
     this._incomeExceedsThreshold = false
@@ -42,8 +49,8 @@ export default class extends Controller {
 
     if (this.hasStatusTarget) {
       this.statusTarget.textContent = disabled
-        ? "Complete all required confirmations before submitting."
-        : "Application is ready to submit."
+        ? this.incompleteMessageValue
+        : this.readyMessageValue
     }
   }
 

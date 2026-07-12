@@ -4,18 +4,21 @@ module Users
   # Same-person merge of a duplicate constituent record into a canonical survivor.
   #
   # Contract:
-  # - Requires an admin actor, an open duplicate review case, explicit same-person
+  # - Requires an admin actor, an actionable duplicate review case, explicit same-person
   #   confirmation, a rationale, evidence/reason codes, and explicit contact, delivery,
   #   and transfer choices.
   # - Locks both users and the case, preflights every blocker, then performs all
   #   mutations with bang persistence inside a single transaction and rolls back on failure.
   # - Retires (deactivates) the duplicate and points it at the canonical survivor; it is
-  #   never destroyed. Clears review flags and resolves the related open cases.
+  #   never destroyed. Clears review flags and resolves the related pending cases.
   # - Emits exactly one +duplicate_user_merged+ audit event.
   #
   # Concept boundaries preserved:
   # - Login identity: the canonical survivor keeps a real email if it was email-backed;
-  #   synthetic/effective fallback values never become stored contact truth.
+  #   synthetic/effective fallback values never become stored contact truth. After the
+  #   selected values are captured, the retired duplicate releases its primary email and
+  #   phone so global identity lookups and unique indexes do not treat discarded contact
+  #   as a live owner.
   # - Delivery route: chosen independently from login identity.
   # - Auth artifacts (WebAuthn/TOTP/SMS credentials, reset/recovery state) are never
   #   transferred; the canonical user's auth state is preserved and duplicate sessions expire.
@@ -81,7 +84,7 @@ module Users
 
     def identity_preflight
       return 'An admin actor is required' unless admin_actor?
-      return 'An open duplicate review case is required' unless open_case?
+      return 'Duplicate review case must be in an actionable review state' unless open_case?
       return 'Both canonical and duplicate users are required' if @canonical_user.blank? || @duplicate_user.blank?
       return 'Users must be persisted' unless @canonical_user.persisted? && @duplicate_user.persisted?
       return 'Canonical and duplicate users must be different' if @canonical_user.id == @duplicate_user.id
@@ -145,8 +148,17 @@ module Users
 
     # Blockers that depend on live, locked state.
     def live_preflight
-      return 'Case is no longer open' unless @duplicate_review_case.open?
+      return 'Case is no longer in an actionable review state' unless @duplicate_review_case.merge_allowed?
       return 'The duplicate record has already been merged' if @duplicate_user.merged?
+      return related_case_state_message if related_case_not_actionable?
+
+      # Re-check under lock: static_preflight's canonical_eligibility_error ran on
+      # whatever was loaded before the transaction, which a concurrent merge or
+      # deactivation of the canonical could have since invalidated. lock_records! just
+      # reloaded @canonical_user via SELECT ... FOR UPDATE, so this check is now
+      # authoritative rather than a stale pre-lock snapshot.
+      canonical_error = canonical_eligibility_error
+      return canonical_error if canonical_error
       return 'The duplicate record has a pending recovery request; resolve it before merging' if duplicate_pending_recovery?
       return 'The duplicate record is the recipient of an active secure request form; revoke it before merging' if duplicate_active_secure_forms?
       return application_conflict_message if application_conflict?
@@ -163,6 +175,20 @@ module Users
       return 'The chosen phone is not a real phone number' if final_phone_invalid?
 
       nil
+    end
+
+    def related_case_not_actionable?
+      related_pending_cases.any? { |review_case| !review_case.merge_allowed? }
+    end
+
+    def related_case_state_message
+      held_case = related_pending_cases.find { |review_case| !review_case.merge_allowed? }
+      changed_message = "Duplicate review case ##{held_case.id} changed while the merge was being prepared; " \
+                        'reload and review it before merging'
+      return changed_message unless held_case.nonterminal_hold?
+
+      "Duplicate review case ##{held_case.id} is #{held_case.status.humanize.downcase}; " \
+        'return it to normal review before merging'
     end
 
     # --- Contact resolution --------------------------------------------------
@@ -263,23 +289,16 @@ module Users
 
     def lock_records!
       [@canonical_user, @duplicate_user].sort_by(&:id).each(&:lock!)
-      @duplicate_review_case.lock!
+      related_pending_cases.sort_by(&:id).each(&:lock!)
     end
 
-    # Release contact facts that move onto the canonical survivor so the unique
-    # email/phone indexes are never violated. The duplicate is being retired.
+    # The canonical record becomes the only live owner of primary identity contacts.
+    # Capture happened before this method, so release both email and phone regardless of
+    # which source was selected. Keeping an unselected value on the merged row would still
+    # participate in global lookup, duplicate detection, and unique indexes.
     def release_duplicate_contact!
       mark_duplicate_retiring!
-      attrs = {}
-      attrs[:email] = nil if moving_from_duplicate?(:email)
-      attrs[:phone] = nil if moving_from_duplicate?(:phone)
-      return if attrs.empty?
-
-      @duplicate_user.update!(attrs)
-    end
-
-    def moving_from_duplicate?(field)
-      field == :email ? final_email_source == 'duplicate' : final_phone_source == 'duplicate'
+      @duplicate_user.update!(email: nil, phone: nil)
     end
 
     def mark_duplicate_retiring!
@@ -415,33 +434,38 @@ module Users
     end
 
     def resolve_related_cases!(audit_event)
-      metadata = case_resolution_metadata(audit_event)
-      related_open_cases.each do |review_case|
+      metadata = case_review_metadata(audit_event)
+      now = Time.current
+      related_pending_cases.each do |review_case|
         review_case.update!(
           status: :resolved_merged,
-          resolution_determination: :same_person_confirmed,
-          resolution_rationale: @rationale,
-          resolution_metadata: metadata,
+          review_rationale: @rationale,
+          review_metadata: metadata,
+          reviewed_by: @actor,
+          reviewed_at: now,
           resolved_by: @actor,
-          resolved_at: Time.current
+          resolved_at: now
         )
       end
     end
 
     # Resolve everything that would otherwise leave the retired duplicate desynced:
-    # every open case whose subject is the duplicate (its identity no longer exists
+    # every pending case whose subject is the duplicate (its identity no longer exists
     # independently), plus canonical-subject cases that name the duplicate as a candidate
-    # (the same pair from the other side). Canonical cases about unrelated third parties
-    # stay open and are reflected by sync_canonical_review_flag!.
-    def related_open_cases
+    # (the same pair from the other side). A nonterminal related case blocks the merge
+    # until staff explicitly return it to normal review. Canonical cases about unrelated
+    # third parties stay pending and are reflected by sync_canonical_review_flag!.
+    def related_pending_cases
+      return @related_pending_cases if defined?(@related_pending_cases)
+
       cases = [@duplicate_review_case]
-      cases += DuplicateReviewCase.open_cases.for_subject(@duplicate_user).to_a
-      DuplicateReviewCase.open_cases
+      cases += DuplicateReviewCase.pending_review.for_subject(@duplicate_user).to_a
+      DuplicateReviewCase.pending_review
                          .for_subject(@canonical_user)
                          .find_each do |review_case|
         cases << review_case if references_duplicate?(review_case)
       end
-      cases.uniq
+      @related_pending_cases = cases.uniq
     end
 
     def references_duplicate?(review_case)
@@ -450,7 +474,7 @@ module Users
                  .include?(@duplicate_user.id)
     end
 
-    def case_resolution_metadata(audit_event)
+    def case_review_metadata(audit_event)
       {
         'reason_codes' => @reason_codes,
         'canonical_user_id' => @canonical_user.id,
@@ -472,7 +496,7 @@ module Users
     end
 
     def sync_canonical_review_flag!
-      remaining = DuplicateReviewCase.open_cases.for_subject(@canonical_user).exists?
+      remaining = DuplicateReviewCase.pending_review.for_subject(@canonical_user).exists?
       @canonical_user.update!(needs_duplicate_review: remaining)
     end
 
@@ -485,7 +509,7 @@ module Users
           duplicate_review_case_id: @duplicate_review_case.id,
           canonical_user_id: @canonical_user.id,
           merged_user_id: @duplicate_user.id,
-          resolution_determination: 'same_person_confirmed',
+          review_outcome: 'same_person_confirmed',
           rationale: @rationale,
           reason_codes: @reason_codes,
           contact_choices: sanitized_contact_choices,
@@ -544,7 +568,7 @@ module Users
     end
 
     def open_case?
-      @duplicate_review_case.present? && @duplicate_review_case.open?
+      @duplicate_review_case.present? && @duplicate_review_case.merge_allowed?
     end
 
     def both_constituents?

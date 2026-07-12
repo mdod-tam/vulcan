@@ -15,6 +15,32 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to setup_two_factor_authentication_path
   end
 
+  # SessionsController#create loads the user, then verifies the password, then hands
+  # that same in-memory instance to sign_in. If an admin merge retires the record in
+  # the database in between (e.g. a concurrent request), the stale instance must not
+  # be trusted to mint a session -- ApplicationController#_create_and_set_session_cookie
+  # must reload before its public_login_active? check.
+  def test_user_retired_between_password_check_and_session_creation_cannot_sign_in
+    user = create(:constituent, password: 'password123', password_confirmation: 'password123')
+    stale_user = User.find(user.id)
+    canonical = create(:constituent)
+
+    # Simulate a concurrent duplicate merge retiring the row without touching the
+    # already-loaded `stale_user` Ruby object.
+    User.where(id: user.id).update_all(
+      merged_into_user_id: canonical.id, status: User.statuses[:inactive], updated_at: Time.current
+    )
+    assert stale_user.public_login_active?, 'sanity: the in-memory instance must still look active (that is the race)'
+
+    User.stubs(:find_by_login_identifier).returns(stale_user)
+
+    post sign_in_path, params: { email: user.email, password: 'password123' }
+
+    assert_redirected_to sign_in_path
+    assert_nil cookies[:session_token]
+    assert_equal 0, Session.where(user_id: user.id).count, 'a retired record must never mint a session'
+  end
+
   def test_should_get_new
     get sign_in_path
     assert_response :success
@@ -113,6 +139,14 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     post sign_in_path, params: { email: user.email, password: 'password123' }
 
     assert_redirected_to constituent_portal_dashboard_path
+  end
+
+  def test_email_backed_constituent_can_sign_in_while_duplicate_review_awaits_information
+    assert_nonterminal_duplicate_review_does_not_block_sign_in('needs_more_information')
+  end
+
+  def test_email_backed_constituent_can_sign_in_while_duplicate_case_is_in_security_review
+    assert_nonterminal_duplicate_review_does_not_block_sign_in('fraud_or_security_review')
   end
 
   def test_successful_login_does_not_check_failed_attempt_rate_limit
@@ -315,6 +349,40 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def assert_nonterminal_duplicate_review_does_not_block_sign_in(outcome)
+    user = create(:constituent, needs_duplicate_review: true)
+    candidate = create(:constituent)
+    review_case = DuplicateReviewCase.create!(
+      source: :registration_soft_match,
+      subject_user: user,
+      deduplication_key: SecureRandom.hex(16),
+      metadata: { 'reason_codes' => ['name_dob'] },
+      opened_at: Time.current,
+      status: :open
+    )
+    review_case.duplicate_review_case_candidates.create!(
+      candidate_user: candidate,
+      match_reason: 'name_dob',
+      snapshot: {}
+    )
+    result = DuplicateReviewCases::ResolutionService.new(
+      duplicate_review_case: review_case,
+      actor: @admin,
+      outcome: outcome,
+      rationale: 'Pending admin follow-up.',
+      reason_codes: ['name_dob']
+    ).call
+    assert result.success?, result.message
+
+    assert_difference -> { Session.where(user: user).count }, 1 do
+      post sign_in_path, params: { email: user.email, password: 'password123' }
+    end
+
+    assert_redirected_to constituent_portal_dashboard_path
+    assert user.reload.needs_duplicate_review
+    assert user.public_login_active?
+  end
 
   def set_auth_rate_limit_policy(key, value)
     policy = Policy.find_or_initialize_by(key: key)

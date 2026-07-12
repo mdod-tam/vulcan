@@ -8,6 +8,8 @@ class ApplicationForm
   include ActiveModel::Validations
   include ParamCasting
 
+  REQUIRED_ADDRESS_FIELDS = %i[physical_address_1 city state zip_code].freeze
+
   # Application attributes
   attribute :annual_income, :string
   attribute :status, :string, default: 'draft'
@@ -68,6 +70,7 @@ class ApplicationForm
   validates :current_user, presence: true
   validates :annual_income, presence: true, if: -> { is_submission && income_collection_required? }
   validate :validate_disability_selection, if: :is_submission
+  validate :validate_physical_address, if: :is_submission
   validate :validate_guardian_relationship, if: :for_dependent?
   validate :validate_medical_provider, if: :is_submission
 
@@ -256,6 +259,23 @@ class ApplicationForm
     return if disability_fields.any?
 
     errors.add(:base, 'At least one disability must be selected for the applicant before submitting an application.')
+  end
+
+  def validate_physical_address
+    REQUIRED_ADDRESS_FIELDS.each do |field|
+      next if effective_submission_address_value(field).present?
+
+      errors.add(field, 'is required for application submission')
+    end
+  end
+
+  def effective_submission_address_value(field)
+    return current_user&.public_send(field) if for_dependent? && use_guardian_address
+
+    submitted_value = public_send(field)
+    return submitted_value unless submitted_value.nil?
+
+    applicant_user&.public_send(field)
   end
 
   def validate_guardian_relationship

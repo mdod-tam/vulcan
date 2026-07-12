@@ -42,8 +42,8 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
 | User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_public_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
-| Duplicate review workflow | `app/controllers/admin/duplicate_reviews_controller.rb`, `app/views/admin/duplicate_reviews/` | Review queue, case detail with grouped record comparison, and audited approve/ignore/keep-separate/merge actions. |
-| Duplicate resolution service | `app/services/duplicate_review_cases/resolution_service.rb` | Records approve/ignore/keep-separate determinations and clears the review flag when no other open case remains. |
+| Duplicate review workflow | `app/controllers/admin/duplicate_reviews_controller.rb`, `app/views/admin/duplicate_reviews/` | Active-case queue, state filter, grouped record comparison, one-outcome review form, audited return-to-review action, and same-person merge. |
+| Duplicate resolution service | `app/services/duplicate_review_cases/resolution_service.rb` | Records one terminal or nonterminal outcome, enforces outcome prerequisites, recomputes the review flag from every pending state, and writes its audit event transactionally. |
 | Same-person merge service | `app/services/users/duplicate_merge_service.rb` | Merges a duplicate constituent into a canonical survivor with explicit contact/delivery choices and one audit event. |
 
 ## 3 · Signup And Duplicate Handling
@@ -84,6 +84,8 @@ Paper/admin intake supports:
 - **Phone-only adults** — `no_email_address=1` strips email; user may still be `portal_access_eligible?` for record truth, but is **not** an email-backed portal account. No forced-change portal setup, quick-create markers, or account-created notices.
 - **Address-only adults** — `no_email_address=1` and `no_phone_number=1` store NULL email/phone, force letter delivery, set `phone_type` to `letter`, and create users without exposed/temp passwords or portal access.
 - **Dependents** — synthetic primary email/phone remain dependent-only placeholders; adults never receive synthetic contacts when NULL is valid. Notifications and display use **effective contact** helpers (`effective_email`, `effective_phone`, `effective_phone_type`, `effective_communication_preference`), which prefer dependent-owned contact fields and fall back to the managing guardian for communication only—not for portal login identifiers.
+
+Physical address is enforced at the operation that needs it, not at sign-in. An application draft may be saved while an address is incomplete, but online submission requires street, city, state, and ZIP through `ApplicationForm`, with a final guard in canonical `Application#submit!` for direct submission callers. Letter preference requires the same complete mailing address through `UserProfile#validate_address_for_letter_preference`, and delivery resolvers also refuse a letter route without a mailing address. `email_backed_public_portal_account?` remains a real-email predicate; address completeness never grants portal access or makes an otherwise valid ongoing sign-in fail.
 
 Admin display helpers (`display_contact_email`, `display_contact_phone`) hide synthetic values and show “No email on file” / “No phone on file”.
 
@@ -129,29 +131,41 @@ The admin user index currently surfaces this flag in three ways:
 
 ### 3.2.1 Admin duplicate review and merge
 
-Flagged duplicates are resolved through an audited admin workflow. `DuplicateReviewCase` is the primary durable source when a case exists; a bare `users.needs_duplicate_review` row with no open case is treated as a manual/legacy fallback.
+Flagged duplicates are handled through an audited admin workflow. `DuplicateReviewCase` is the primary durable source when a case exists; a bare `users.needs_duplicate_review` row with no pending case is treated as a manual/legacy fallback.
 
 - Entry points: `app/controllers/admin/duplicate_reviews_controller.rb`, reachable from the admin user index badge, the user show page, and a `Duplicate review pending` badge on the application show page (`Admin::DuplicateReviewsHelper#duplicate_review_pending_badge`) for the applicant or managing guardian, since staff working from an application would otherwise have no on-page signal that a review is pending.
-- Queue (`index`): lists open cases with a source label (`registration_soft_match`, `paper_intake`, `admin_create`, `support_claim`, `portal_dependent`) plus manual/legacy flagged users that have no open case.
+- Queue (`index`): lists all active cases (`open`, `awaiting_information`, `security_review`) with source and workflow-state labels, supports state filtering, and separately shows manual/legacy flagged users that have no pending case.
 - Detail (`show`): groups each record's facts by login identity, delivery route, record truth, applications, relationships, and auth artifacts, and shows candidate link state (current, already merged, or record no longer exists).
 
-There are two distinct paths. `DuplicateReviewCases::ResolutionService` (controller `resolve` action) records a decision without moving any data; it takes an admin-selected `resolution_determination` and a required rationale:
+`DuplicateReviewCase.status` is the single workflow source of truth:
 
-| Resolution action | Resulting status | Effect |
+| State | Meaning | Flag / queue / merge behavior |
 |-------------------|------------------|--------|
-| Approve | `resolved_approved` | Resolves the case and clears the review flag when no other open case remains. |
-| Ignore | `resolved_ignored` | Resolves the case; the duplicate signal is acceptable. |
-| Keep separate | `resolved_ignored` | Resolves the case; pair with the `keep_separate` determination to record that the records stay distinct. No contact is copied. |
+| `open` | Normal actionable review | Pending, queued, owns `needs_duplicate_review`, merge allowed. |
+| `awaiting_information` | Staff need more evidence | Pending and queued; owns the flag; merge disabled until return to normal review. |
+| `security_review` | Specialist security/fraud review is needed | Pending and queued; owns the flag; merge disabled. Does not suspend or deactivate either account. |
+| `resolved_keep_separate` | Records were confirmed distinct | Terminal; moves no data. |
+| `resolved_relationship` | A supported guardian/authorized relationship was confirmed after persistence | Terminal; never merges the two records. |
+| `resolved_merged` | Same-person merge completed | Terminal; produced only by the merge service. |
 
-Merge is a separate workflow, not a `ResolutionService` action: the controller `merge` action calls `Users::DuplicateMergeService` (see §3.2.2), which produces status `resolved_merged` and records the `same_person_confirmed` determination. It requires the admin's explicit same-person confirmation and a rationale; it does not consume a pre-set determination on the case.
+The non-merge form has one required **Review outcome** control. `DuplicateReviewCases::ResolutionService` accepts only `outcome`, admin actor, nonblank rationale, and optional reviewed reason codes:
 
-Resolution state lives on `DuplicateReviewCase`: `resolution_determination` (`same_person_confirmed`, `authorized_relationship_confirmed`, `keep_separate`, `needs_more_information`, `fraud_or_security_review`), `resolution_rationale`, and `resolution_metadata`. The coarse `status` enum (`open`, `resolved_approved`, `resolved_ignored`, `resolved_merged`) is unchanged.
+| Submitted outcome | Resulting state | Server-side requirement |
+|-------------------|-----------------|-------------------------|
+| `keep_separate` | `resolved_keep_separate` | Terminal; no user-owned data moves. |
+| `authorized_relationship_confirmed` | `resolved_relationship` | A persisted supported `GuardianRelationship` must connect the subject and a recorded candidate. If none exists, the case stays open and staff are told to create it first. |
+| `needs_more_information` | `awaiting_information` | Nonterminal; dedicated audit event; no user-owned data changes. |
+| `fraud_or_security_review` | `security_review` | Nonterminal; dedicated audit event; no account restriction or user-owned data change. |
 
-Flag/case sync is enforced in both directions: resolving or merging recomputes the subject/canonical `needs_duplicate_review` flag from remaining open cases, a merge resolves every open case whose subject is the retired duplicate (plus canonical-subject cases that name the duplicate as a candidate), and the legacy `clear_flag` path refuses to clear a flag while the record still has an open case, directing the admin to resolve the case instead.
+`same_person_confirmed` is rejected by `ResolutionService`. It is available only through `Users::DuplicateMergeService`, which performs the merge and sets `resolved_merged`. A nonterminal case must first use `DuplicateReviewCases::ResumeService` to return to `open`; that transition also requires an admin rationale and records `duplicate_review_case_returned_to_review`.
+
+Current actor, rationale, and timestamp live in `reviewed_by`, `review_rationale`, and `reviewed_at`; terminal states additionally set `resolved_by` and `resolved_at`. `review_metadata` stores only structured codes and merge context, never raw contact values.
+
+Flag/case sync is enforced in both directions: every outcome or merge recomputes the subject/canonical `needs_duplicate_review` flag from all pending states, a merge resolves the actionable pair-related pending cases that would otherwise be stranded on the retired duplicate, and the legacy `clear_flag` path refuses to clear a flag while any pending case remains. Awaiting-information or security-review cases block merging—including through a related case—until staff explicitly return them to normal review.
 
 ### 3.2.2 Same-person merge service
 
-`Users::DuplicateMergeService` performs a same-person merge of one constituent record into a canonical survivor. It requires an admin actor, an open review case, explicit same-person confirmation, a rationale, evidence/reason codes, and explicit contact and delivery choices. It locks both users and the case, preflights every blocker, performs all mutations with bang persistence inside one transaction, rolls back on failure, and emits exactly one `duplicate_user_merged` audit event.
+`Users::DuplicateMergeService` performs a same-person merge of one constituent record into a canonical survivor. It requires an admin actor, an actionable (`open`) review case, explicit same-person confirmation, a rationale, evidence/reason codes, and explicit contact and delivery choices. It locks both users and the related pending cases, preflights every blocker, performs all mutations with bang persistence inside one transaction, rolls back on failure, and emits exactly one `duplicate_user_merged` audit event.
 
 A merged duplicate is deactivated (`status: inactive`) and points at its survivor through `users.merged_into_user_id`, with `merged_by_id` and `merged_at` recorded. It is never destroyed. `User#public_login_active?` rejects merged, inactive, and suspended records (treating legacy NULL status as active). It gates the auth-lookup helper (`find_by_login_identifier`), the password-reset token flows, and session-cookie creation (`_create_and_set_session_cookie`), which is the single chokepoint for both password sign-in and 2FA completion, so a duplicate retired mid-login cannot finish authenticating.
 
@@ -167,10 +181,10 @@ Merge inventory (decision per area):
 | WebAuthn / TOTP / SMS credentials | Never transferred; canonical auth state preserved. |
 | Password reset / recovery state | Duplicate reset token cleared on retirement; blocked if the duplicate has a pending recovery request; resolved recovery requests remain as retired-record history. |
 | Secure request forms | Blocked if the duplicate is the recipient of an active bearer-link form. |
-| Contact facts | Admin explicitly chooses the surviving email, phone, phone type, and address; synthetic or effective fallback values never become stored record truth. A real surviving phone requires an explicit phone type. A missing or invalid per-field choice blocks the merge rather than silently defaulting to canonical. |
+| Contact facts | Admin explicitly chooses the surviving email, phone, phone type, and address; synthetic or effective fallback values never become stored record truth. After those values are captured, the retired duplicate releases its primary email and phone so global identity lookup, duplicate detection, and unique indexes do not keep discarded contact live. A real surviving phone requires an explicit phone type. A missing or invalid per-field choice blocks the merge rather than silently defaulting to canonical. |
 | Delivery route | Chosen explicitly and independently from login identity. A missing or invalid delivery choice blocks the merge rather than silently defaulting to canonical. |
 | Login identity | The canonical account keeps a real email if it was email-backed; the merge is blocked if it would strand an email-backed portal account without a real email. |
-| Duplicate review cases | The selected case and exact pair-related open cases resolve to `resolved_merged`; candidate snapshots and evidence are retained. |
+| Duplicate review cases | The selected case and actionable pair-related pending cases resolve to `resolved_merged`; candidate snapshots and evidence are retained. A related awaiting-information or security-review case blocks merge until staff return it to normal review. |
 | Evaluations / print queue | Evaluations follow their already-transferred application to the canonical user, so `evaluation.constituent` never drifts from `evaluation.application.user`. A still-pending print queue item transfers to the canonical user, since undelivered work needs a contactable owner; printed and canceled print queue items are historical and are never repointed. |
 | Events / notifications / audit | Historical records are preserved (notifications are never repointed to the canonical user); the merge adds one `duplicate_user_merged` event, fingerprinted per merged-user id so two merges into the same canonical within the audit dedup window each keep their own event, rather than rewriting history. |
 
@@ -312,6 +326,11 @@ Focused test coverage for this area currently includes:
 | Admin user show, MFA token deletion, user deletion, and admin JSON user creation | `test/controllers/admin/users_controller_test.rb` |
 | Admin user search tokens and filter service | `test/models/user_email_search_token_test.rb`, `test/services/users/filter_service_test.rb` |
 | Security-key recovery request approval | `test/controllers/admin/recovery_requests_controller_test.rb` |
+| Same-person merge service (transfer, contact/delivery choices, rollback, audit dedup) | `test/services/users/duplicate_merge_service_test.rb` |
+| Duplicate review outcomes, nonterminal state boundaries, relationship requirement, and transactional audit | `test/services/duplicate_review_cases/resolution_service_test.rb` |
+| Return from awaiting/security state to normal review | `test/services/duplicate_review_cases/resume_service_test.rb` |
+| Admin duplicate review queue, detail, resolve, and merge controller actions | `test/controllers/admin/duplicate_reviews_controller_test.rb` |
+| Application-show duplicate-review-pending badge | `test/controllers/admin/applications_controller_test.rb` |
 
 ## 10 · Related Docs
 

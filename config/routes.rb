@@ -128,6 +128,7 @@ Rails.application.routes.draw do
       member do
         post :resolve
         post :merge
+        post :resume
       end
       collection do
         post :clear_flag

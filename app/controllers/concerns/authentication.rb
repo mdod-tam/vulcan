@@ -24,12 +24,32 @@ module Authentication
     current_session
 
     # Return the already loaded user from the session if possible
-    @current_user = @current_session&.user
+    candidate = @current_session&.user
+
+    # A session created before the user was merged/deactivated must not keep
+    # authenticating them on later requests: session destruction at retirement time
+    # (e.g. Users::DuplicateMergeService#expire_duplicate_sessions!) is the normal path,
+    # but this is the authoritative recheck so any status change closes the session
+    # immediately, not only when the code path that caused it remembered to expire it.
+    if candidate && !candidate.public_login_active?
+      invalidate_stale_session!
+      candidate = nil
+    end
+
+    @current_user = candidate
 
     # Set Current.user for the request context - needed for verify_authentication_state
     Current.user = @current_user if @current_user.present?
 
     @current_user
+  end
+
+  # Destroys a session whose user is no longer login-active and clears the cookie so
+  # the browser stops presenting a token for a session that can never authenticate.
+  def invalidate_stale_session!
+    @current_session.destroy if @current_session&.persisted?
+    @current_session = nil
+    cookies.delete(:session_token)
   end
 
   # Load and cache the current session

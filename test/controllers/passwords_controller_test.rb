@@ -259,6 +259,19 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_not @user.reload.authenticate('ReplayReset*Password123')
   end
 
+  def test_password_reset_token_is_invalidated_when_login_email_changes
+    token = @user.generate_token_for(:password_reset)
+    assert_equal @user, User.find_by_token_for(:password_reset, token)
+
+    @user.update!(email: "changed-#{SecureRandom.hex(4)}@example.com")
+
+    assert_nil User.find_by_token_for(:password_reset, token)
+
+    get edit_password_path(token: token)
+    assert_redirected_to new_password_path
+    assert_equal 'Invalid or expired reset link.', flash[:alert]
+  end
+
   def test_should_update_password_with_valid_inputs
     patch password_path, params: {
       password_challenge: 'password123',

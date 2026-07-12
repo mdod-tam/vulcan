@@ -411,6 +411,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'input[name=?]', 'contact', count: 0
     assert_select 'input[value=?]', 'Send account access link', count: 0
     assert_no_match(/phone-only|paper record|has already been taken|that phone/i, response.body)
+    assert_no_match(/duplicate review|awaiting information|security review/i, response.body)
     assert_nil User.find_by_email(submitted_email)
   end
 

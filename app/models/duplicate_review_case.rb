@@ -8,9 +8,9 @@ class DuplicateReviewCase < ApplicationRecord
     subject_snapshot
   ].freeze
 
-  # Structured record of an admin resolution. Stores decision context and codes only;
-  # never raw contact values (those come from live records at merge time).
-  ALLOWED_RESOLUTION_METADATA_KEYS = %w[
+  # Structured record of the latest admin review transition. Stores decision context
+  # and codes only; never raw contact values (those come from live records at merge time).
+  ALLOWED_REVIEW_METADATA_KEYS = %w[
     reason_codes
     canonical_user_id
     merged_user_id
@@ -20,18 +20,23 @@ class DuplicateReviewCase < ApplicationRecord
     merge_audit_event_id
   ].freeze
 
-  RESOLVED_STATUSES = %w[resolved_approved resolved_ignored resolved_merged].freeze
+  PENDING_STATUSES = %w[open awaiting_information security_review].freeze
+  NONTERMINAL_HOLD_STATUSES = %w[awaiting_information security_review].freeze
+  TERMINAL_STATUSES = %w[resolved_keep_separate resolved_relationship resolved_merged].freeze
 
   belongs_to :subject_user, class_name: 'User', optional: true
+  belongs_to :reviewed_by, class_name: 'User', optional: true
   belongs_to :resolved_by, class_name: 'User', optional: true
   has_many :duplicate_review_case_candidates, dependent: :destroy
 
   enum :status, {
     open: 0,
-    resolved_approved: 1,
-    resolved_ignored: 2,
-    resolved_merged: 3
-  }
+    awaiting_information: 1,
+    security_review: 2,
+    resolved_keep_separate: 3,
+    resolved_relationship: 4,
+    resolved_merged: 5
+  }, validate: true
 
   enum :source, {
     registration_soft_match: 0,
@@ -41,64 +46,81 @@ class DuplicateReviewCase < ApplicationRecord
     portal_dependent: 4
   }
 
-  # Identity/linking determination the admin recorded. Distinct from the coarse
-  # status enum: it captures what the admin actually decided about the two records.
-  enum :resolution_determination, {
-    same_person_confirmed: 'same_person_confirmed',
-    authorized_relationship_confirmed: 'authorized_relationship_confirmed',
-    keep_separate: 'keep_separate',
-    needs_more_information: 'needs_more_information',
-    fraud_or_security_review: 'fraud_or_security_review'
-  }, validate: { allow_nil: true }
-
-  MERGE_ELIGIBLE_DETERMINATIONS = %w[same_person_confirmed].freeze
-
   validates :deduplication_key, presence: true
   validates :opened_at, presence: true
   validates :metadata, presence: true
   validate :metadata_shape
-  validate :resolution_fields_present_when_resolved
-  validate :resolution_metadata_shape
+  validate :review_fields_match_status
+  validate :review_metadata_shape
 
-  scope :open_cases, -> { where(status: statuses[:open]) }
-  scope :resolved_cases, -> { where(status: RESOLVED_STATUSES.map { |s| statuses[s] }) }
+  scope :pending_review, -> { where(status: statuses.values_at(*PENDING_STATUSES)) }
+  scope :active_queue, -> { pending_review }
+  scope :resolved_cases, -> { where(status: statuses.values_at(*TERMINAL_STATUSES)) }
   scope :for_subject, ->(user) { where(subject_user: user) }
 
-  def open?
-    status == 'open'
+  def terminal?
+    TERMINAL_STATUSES.include?(status)
   end
 
-  def resolved?
-    RESOLVED_STATUSES.include?(status)
+  def pending?
+    PENDING_STATUSES.include?(status)
   end
 
-  def merge_eligible_determination?
-    MERGE_ELIGIBLE_DETERMINATIONS.include?(resolution_determination)
+  def owns_duplicate_review_flag?
+    pending?
+  end
+
+  def merge_allowed?
+    open?
+  end
+
+  def active_queue?
+    pending?
+  end
+
+  def nonterminal_hold?
+    NONTERMINAL_HOLD_STATUSES.include?(status)
+  end
+
+  def supported_relationship_persisted?
+    subject_id = subject_user_id
+    candidate_ids = duplicate_review_case_candidates.where.not(candidate_user_id: nil).distinct.pluck(:candidate_user_id)
+    return false if subject_id.blank? || candidate_ids.empty?
+
+    GuardianRelationship.where(guardian_id: subject_id, dependent_id: candidate_ids)
+                        .or(GuardianRelationship.where(guardian_id: candidate_ids, dependent_id: subject_id))
+                        .exists?
   end
 
   private
 
-  def resolution_fields_present_when_resolved
-    return unless RESOLVED_STATUSES.include?(status)
+  def review_fields_match_status
+    if terminal? || nonterminal_hold?
+      errors.add(:review_rationale, 'is required for a review outcome') if review_rationale.blank?
+      errors.add(:reviewed_by, 'is required for a review outcome') if reviewed_by_id.blank?
+      errors.add(:reviewed_at, 'is required for a review outcome') if reviewed_at.blank?
+    end
 
-    errors.add(:resolution_determination, 'is required to resolve a case') if resolution_determination.blank?
-    errors.add(:resolution_rationale, 'is required to resolve a case') if resolution_rationale.blank?
-    errors.add(:resolved_by, 'is required to resolve a case') if resolved_by_id.blank?
-    errors.add(:resolved_at, 'is required to resolve a case') if resolved_at.blank?
+    if terminal?
+      errors.add(:resolved_by, 'is required to resolve a case') if resolved_by_id.blank?
+      errors.add(:resolved_at, 'is required to resolve a case') if resolved_at.blank?
+    elsif resolved_by_id.present? || resolved_at.present?
+      errors.add(:base, 'pending cases cannot have terminal resolution fields')
+    end
   end
 
-  def resolution_metadata_shape
-    return if resolution_metadata.blank?
+  def review_metadata_shape
+    return if review_metadata.blank?
 
-    unless resolution_metadata.is_a?(Hash)
-      errors.add(:resolution_metadata, 'must be a hash')
+    unless review_metadata.is_a?(Hash)
+      errors.add(:review_metadata, 'must be a hash')
       return
     end
 
-    unknown_keys = resolution_metadata.keys.map(&:to_s) - ALLOWED_RESOLUTION_METADATA_KEYS
+    unknown_keys = review_metadata.keys.map(&:to_s) - ALLOWED_REVIEW_METADATA_KEYS
     return if unknown_keys.empty?
 
-    errors.add(:resolution_metadata, "contains unsupported keys: #{unknown_keys.join(', ')}")
+    errors.add(:review_metadata, "contains unsupported keys: #{unknown_keys.join(', ')}")
   end
 
   def metadata_shape
