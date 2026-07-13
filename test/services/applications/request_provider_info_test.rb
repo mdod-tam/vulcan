@@ -35,6 +35,18 @@ module Applications
       assert_predicate result, :success?
     end
 
+    test 'does not issue or deliver a request to a recipient retired before locking' do
+      recipient = @application.user
+      canonical = create(:constituent)
+      recipient.update!(status: :inactive, merged_into_user: canonical, merged_at: Time.current)
+      @mailer_delivery.expects(:deliver_now).never
+
+      assert_no_difference ['SecureRequestForm.count', 'Notification.count'] do
+        result = RequestProviderInfo.new(application: @application, actor: @actor).call
+        assert_not result.success?
+      end
+    end
+
     test 'issued provider info request appears in application audit logs' do
       result = RequestProviderInfo.new(application: @application, actor: @actor).call
 

@@ -22,27 +22,7 @@ module Applications
     end
 
     def call
-      deliveries = nil
-      result = nil
-
-      ApplicationRecord.transaction do
-        application.with_lock do
-          repair_result = repair_managing_guardian_if_possible
-          unless repair_result.success?
-            result = repair_result
-            raise ActiveRecord::Rollback
-          end
-
-          resolved = resolve_recipients
-          unless resolved.success?
-            result = resolved
-            raise ActiveRecord::Rollback
-          end
-
-          deliveries = create_requests_for(resolved.data)
-          result = success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
-        end
-      end
+      deliveries, result = prepare_requests
 
       return result if result&.failure?
 
@@ -60,6 +40,62 @@ module Applications
     end
 
     private
+
+    def prepare_requests
+      deliveries = nil
+      result = nil
+
+      ApplicationRecord.transaction do
+        locked_recipient_ids = lock_potential_recipient_users
+        if locked_recipient_ids.nil?
+          result = failure(message(:request_conflict))
+          raise ActiveRecord::Rollback
+        end
+        application.lock!
+
+        repair_result = repair_managing_guardian_if_possible
+        unless repair_result.success?
+          result = repair_result
+          raise ActiveRecord::Rollback
+        end
+
+        resolved = resolve_recipients
+        unless resolved.success?
+          result = resolved
+          raise ActiveRecord::Rollback
+        end
+
+        unless resolved_recipients_locked?(resolved.data, locked_recipient_ids)
+          result = failure(message(:request_conflict))
+          raise ActiveRecord::Rollback
+        end
+
+        deliveries = create_requests_for(resolved.data)
+        result = success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+      end
+
+      [deliveries, result]
+    end
+
+    # Merge locks users before applications. Lock every user the resolver could select,
+    # then lock/reload the application and resolve again. If merge commits first the
+    # recipient is now inactive; if issuance commits first the active form blocks merge.
+    def lock_potential_recipient_users
+      ids = potential_recipient_ids
+      users = User.where(id: ids).order(:id).lock.to_a
+      return if users.size != ids.size || users.any? { |user| !user.public_login_active? }
+
+      users.map(&:id)
+    end
+
+    def potential_recipient_ids
+      recipient_resolver = resend_of.present? ? resolver_for_resend : resolver
+      recipient_resolver.known_recipients.filter_map(&:id).uniq
+    end
+
+    def resolved_recipients_locked?(candidates, locked_recipient_ids)
+      candidates.all? { |candidate| locked_recipient_ids.include?(candidate.recipient.id) }
+    end
 
     # resend_of takes precedence over recipient_ids; they are mutually exclusive
     def resolve_recipients

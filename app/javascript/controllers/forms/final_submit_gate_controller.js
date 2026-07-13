@@ -32,6 +32,7 @@ export default class extends Controller {
   }
 
   update() {
+    this._syncConditionalRequirements()
     const disabled = this._incomeExceedsThreshold ||
       this._requiredControlsBlockSubmit() ||
       this._requiredRadioGroupBlocksSubmit() ||
@@ -52,6 +53,27 @@ export default class extends Controller {
         ? this.incompleteMessageValue
         : this.readyMessageValue
     }
+  }
+
+  _syncConditionalRequirements() {
+    this.element.querySelectorAll("[data-required-when-selected-phone-real]").forEach((field) => {
+      const required = this._selectedMergePhoneIsReal()
+      field.required = required
+      field.setAttribute("aria-required", required ? "true" : "false")
+    })
+  }
+
+  _selectedMergePhoneIsReal() {
+    const canonicalRadios = Array.from(this.element.querySelectorAll('input[name="canonical_user_id"]'))
+    const selectedCanonical = canonicalRadios.find((radio) => radio.checked)
+    const selectedPhoneSource = this.element.querySelector('input[name="contact[phone]"]:checked')
+    if (!selectedCanonical || !selectedPhoneSource) return false
+
+    const sourceRecord = selectedPhoneSource.value === "canonical"
+      ? selectedCanonical
+      : canonicalRadios.find((radio) => radio !== selectedCanonical)
+
+    return sourceRecord?.dataset.recordHasRealPhone === "true"
   }
 
   _requiredControlsBlockSubmit() {

@@ -71,6 +71,18 @@ module Applications
       assert_not notification.metadata.key?('secure_upload_url')
     end
 
+    test 'does not issue or deliver a request to a recipient retired before locking' do
+      recipient = @application.user
+      canonical = create(:constituent)
+      recipient.update!(status: :inactive, merged_into_user: canonical, merged_at: Time.current)
+      @mailer_delivery.expects(:deliver_now).never
+
+      assert_no_difference ['SecureRequestForm.count', 'Notification.count'] do
+        result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+        assert_not result.success?
+      end
+    end
+
     test 'creates proof request when rejected attachment is still awaiting purge' do
       @application.update!(income_proof_status: :rejected)
       @application.income_proof.attach(

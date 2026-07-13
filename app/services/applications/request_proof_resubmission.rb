@@ -68,18 +68,48 @@ module Applications
 
     private
 
+    # Follow DuplicateMergeService's user-before-application lock order. The post-lock
+    # recipient resolution must remain within the prelocked set, preventing delivery
+    # artifacts from being created for a user retired by a concurrent merge.
+    def lock_potential_recipient_users
+      ids = potential_recipient_ids
+      users = User.where(id: ids).order(:id).lock.to_a
+      return if users.size != ids.size || users.any? { |user| !user.public_login_active? }
+
+      users.map(&:id)
+    end
+
+    def potential_recipient_ids
+      recipient_resolver = resend_of.present? ? resolver_for_resend : resolver
+      recipient_resolver.known_recipients.filter_map(&:id).uniq
+    end
+
+    def resolved_recipients_locked?(candidates, locked_recipient_ids)
+      candidates.all? { |candidate| locked_recipient_ids.include?(candidate.recipient.id) }
+    end
+
     def prepare_requests
       deliveries = nil
       result = nil
 
       ApplicationRecord.transaction do
-        application.with_lock do
-          result = validate_request_preconditions
-          raise ActiveRecord::Rollback if result.failure?
-
-          deliveries = create_requests_for(result.data)
-          result = success(message(:request_created), result_data_for(deliveries))
+        locked_recipient_ids = lock_potential_recipient_users
+        if locked_recipient_ids.nil?
+          result = failure(message(:request_conflict))
+          raise ActiveRecord::Rollback
         end
+        application.lock!
+
+        result = validate_request_preconditions
+        raise ActiveRecord::Rollback if result.failure?
+
+        unless resolved_recipients_locked?(result.data, locked_recipient_ids)
+          result = failure(message(:request_conflict))
+          raise ActiveRecord::Rollback
+        end
+
+        deliveries = create_requests_for(result.data)
+        result = success(message(:request_created), result_data_for(deliveries))
       end
 
       [deliveries, result]

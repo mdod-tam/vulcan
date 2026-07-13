@@ -106,6 +106,31 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to account_recovery_confirmation_path
   end
 
+  test 'does not create recovery after the locked user has been retired' do
+    canonical = create(:constituent)
+    stale_user = @user
+    stale_user.define_singleton_method(:with_lock) do |&block|
+      User.where(id: id).update_all(
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+      reload
+      block.call
+    end
+    User.stubs(:find_by_login_identifier).returns(stale_user)
+
+    assert_no_difference ['RecoveryRequest.count', 'Notification.count'] do
+      post request_security_key_reset_path, params: {
+        contact: stale_user.email,
+        details: 'Request raced a merge'
+      }
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+  end
+
   test 'allows new recovery request after prior request is resolved' do
     create(:recovery_request, :approved, user: @user)
 

@@ -322,6 +322,7 @@ es:
       recovery_requests:
         approve:
           notification_failed: "No se pudo completar la aprobación de recuperación porque no se pudo crear o poner en cola la notificación al usuario. No se quitaron credenciales."
+          user_unavailable: "Esta cuenta ya no está activa, por lo que no se puede aprobar su solicitud de recuperación."
       medical_provider_secure_request_forms:
         panel:
           title: "Enlaces de carga de certificación segura"

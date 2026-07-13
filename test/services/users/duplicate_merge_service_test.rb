@@ -336,6 +336,34 @@ module Users
       assert @canonical.reload.needs_duplicate_review, 'canonical flag reflects its remaining open case'
     end
 
+    test 'repoints and deduplicates unrelated pending candidate references to the canonical survivor' do
+      first_subject = create(:constituent, needs_duplicate_review: true)
+      repointed_case = open_case(subject: first_subject, candidate: @duplicate, reason: 'name_dob')
+
+      second_subject = create(:constituent, needs_duplicate_review: true)
+      deduplicated_case = open_case(subject: second_subject, candidate: @duplicate, reason: 'exact_phone')
+      deduplicated_case.duplicate_review_case_candidates.create!(
+        candidate_user: @canonical,
+        match_reason: 'exact_phone',
+        snapshot: {}
+      )
+
+      result = merge
+      assert result.success?, result.message
+
+      [repointed_case, deduplicated_case].each do |review_case|
+        assert review_case.reload.open?, 'unrelated-subject review work must remain pending'
+        assert_not review_case.duplicate_review_case_candidates.exists?(candidate_user_id: @duplicate.id)
+        assert review_case.duplicate_review_case_candidates.exists?(candidate_user_id: @canonical.id)
+      end
+      assert_equal 1, repointed_case.duplicate_review_case_candidates.where(candidate_user_id: @canonical.id).count
+      assert_equal 1, deduplicated_case.duplicate_review_case_candidates.where(candidate_user_id: @canonical.id).count
+      assert first_subject.reload.needs_duplicate_review
+      assert second_subject.reload.needs_duplicate_review
+      assert_equal 1, result.data[:summary][:duplicate_review_candidate_references_transferred]
+      assert_equal 1, result.data[:summary][:duplicate_review_candidate_references_deduplicated]
+    end
+
     test 'does not emit profile audit events during a successful merge' do
       profile_actions = %w[profile_updated profile_updated_by_guardian profile_created_by_admin_via_paper]
       result = nil

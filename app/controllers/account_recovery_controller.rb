@@ -38,6 +38,8 @@ class AccountRecoveryController < ApplicationController
     end
 
     user.with_lock do
+      next unless user.public_login_active?
+
       unless user.recovery_requests.pending.exists?
         recovery_request = user.recovery_requests.create!(
           status: 'pending',

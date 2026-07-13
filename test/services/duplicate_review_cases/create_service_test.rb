@@ -190,6 +190,52 @@ module DuplicateReviewCases
       end
     end
 
+    test 'rejects a stale subject retired before the writer lock is acquired' do
+      canonical = create(:constituent)
+      User.where(id: @subject.id).update_all(
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+
+      assert_no_workflow_side_effects do
+        result = create_case
+        assert result.failure?
+        assert_match(/no longer active/i, result.message)
+      end
+    end
+
+    test 'rejects a stale candidate retired before the writer lock is acquired' do
+      canonical = create(:constituent)
+      User.where(id: @candidate.id).update_all(
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+
+      assert_no_workflow_side_effects do
+        result = create_case
+        assert result.failure?
+        assert_match(/no longer active/i, result.message)
+      end
+    end
+
+    test 'allows an unmerged suspended candidate to remain reviewable' do
+      @candidate.update!(status: :suspended)
+
+      result = nil
+      assert_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count', 'Event.count'], 1 do
+        result = create_case
+      end
+
+      assert result.success?, result.message
+      assert_equal @candidate.id,
+                   result.data[:duplicate_review_case].duplicate_review_case_candidates.sole.candidate_user_id
+      assert @subject.reload.needs_duplicate_review
+    end
+
     private
 
     def assert_no_workflow_side_effects(&)

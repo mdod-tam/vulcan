@@ -239,6 +239,24 @@ module Applications
       assert_equal 'draft', result.application.status
     end
 
+    test 'rejects a stale form after its applicant is retired by a merge' do
+      form = create_valid_form(@user)
+      canonical = create(:constituent)
+      User.where(id: @user.id).update_all(
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+
+      assert_no_difference 'Application.count' do
+        result = ApplicationCreator.call(form)
+
+        assert result.failure?
+        assert_includes result.error_messages, 'Account is no longer active. Please sign in again.'
+      end
+    end
+
     test 'logs dependent application events' do
       create_guardian_relationship(@user, @dependent)
       form = create_valid_dependent_form(@user, @dependent)

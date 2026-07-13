@@ -272,6 +272,22 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'Invalid or expired reset link.', flash[:alert]
   end
 
+  def test_password_reset_revalidates_token_after_acquiring_the_user_lock
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+    User.stubs(:find_by_token_for).with(:password_reset, token).returns(@user, nil)
+
+    patch password_path, params: {
+      token: token,
+      password: 'StaleReset*Password123',
+      password_confirmation: 'StaleReset*Password123'
+    }
+
+    assert_redirected_to new_password_path
+    assert_equal 'Invalid or expired reset link.', flash[:alert]
+    assert_not @user.reload.authenticate('StaleReset*Password123')
+  end
+
   def test_should_update_password_with_valid_inputs
     patch password_path, params: {
       password_challenge: 'password123',

@@ -229,7 +229,23 @@ class PasswordsController < ApplicationController
       return render :edit, status: :unprocessable_content
     end
 
-    if @user.update(password: params[:password], password_confirmation: params[:password_confirmation], force_password_change: false)
+    token_still_valid = false
+    password_updated = false
+    @user.with_lock do
+      resolved_user = User.find_by_token_for(:password_reset, params[:token])
+      next unless resolved_user&.id == @user.id && @user.public_login_active?
+
+      token_still_valid = true
+      password_updated = @user.update(
+        password: params[:password],
+        password_confirmation: params[:password_confirmation],
+        force_password_change: false
+      )
+    end
+
+    return redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless token_still_valid
+
+    if password_updated
       redirect_to sign_in_path, notice: 'Password successfully updated.'
     else
       flash.now[:alert] = "Unable to update password. Please check requirements., #{@user.errors.full_messages.join(', ')}"

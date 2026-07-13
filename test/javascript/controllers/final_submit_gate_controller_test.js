@@ -19,6 +19,14 @@ describe("FinalSubmitGateController", () => {
           <input type="checkbox" name="application[hearing_disability]">
           <input type="checkbox" name="application[vision_disability]">
         </fieldset>
+        <input type="radio" name="canonical_user_id" value="1" data-record-has-real-phone="true">
+        <input type="radio" name="canonical_user_id" value="2" data-record-has-real-phone="false">
+        <input type="radio" name="contact[phone]" value="canonical">
+        <input type="radio" name="contact[phone]" value="duplicate">
+        <select name="contact[phone_type]" data-required-when-selected-phone-real="true">
+          <option value="">Select…</option>
+          <option value="voice">voice</option>
+        </select>
         <button type="submit" data-final-submit-gate-target="submitButton">Submit</button>
         <button type="submit" name="save_draft">Save Draft</button>
         <p data-final-submit-gate-target="status"></p>
@@ -78,6 +86,16 @@ describe("FinalSubmitGateController", () => {
       value: [new File(["proof"], "proof.pdf", { type: "application/pdf" })],
       configurable: true
     })
+  }
+
+  function completeBaseRequiredFields() {
+    document.querySelector('input[name="application[self_certify_disability]"]').checked = true
+    document.querySelector('input[name="application[terms_accepted]"]').checked = true
+    document.querySelector('input[name="application[hearing_disability]"]').checked = true
+    document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
+    document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
+    document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    attachRequiredFile()
   }
 
   test("requires portal self-certification and disability group before final submit", () => {
@@ -152,6 +170,43 @@ describe("FinalSubmitGateController", () => {
     expect(submitButton.disabled).toBe(true)
 
     controller.handleIncomeValidation({ detail: { exceedsThreshold: false } })
+    expect(submitButton.disabled).toBe(false)
+  })
+
+  test("requires phone type only when the selected merge phone is real", () => {
+    completeBaseRequiredFields()
+    const canonicalWithPhone = document.querySelector('input[name="canonical_user_id"][value="1"]')
+    const canonicalWithoutPhone = document.querySelector('input[name="canonical_user_id"][value="2"]')
+    const canonicalPhoneChoice = document.querySelector('input[name="contact[phone]"][value="canonical"]')
+    const duplicatePhoneChoice = document.querySelector('input[name="contact[phone]"][value="duplicate"]')
+    const phoneType = document.querySelector('select[name="contact[phone_type]"]')
+
+    canonicalWithPhone.checked = true
+    canonicalPhoneChoice.checked = true
+    controller.update()
+
+    expect(phoneType.required).toBe(true)
+    expect(phoneType.getAttribute("aria-required")).toBe("true")
+    expect(submitButton.disabled).toBe(true)
+
+    phoneType.value = "voice"
+    controller.update()
+    expect(submitButton.disabled).toBe(false)
+
+    phoneType.value = ""
+    canonicalWithoutPhone.checked = true
+    canonicalPhoneChoice.checked = false
+    duplicatePhoneChoice.checked = true
+    controller.update()
+
+    expect(phoneType.required).toBe(true)
+    expect(submitButton.disabled).toBe(true)
+
+    canonicalWithPhone.checked = true
+    canonicalWithoutPhone.checked = false
+    controller.update()
+    expect(phoneType.required).toBe(false)
+    expect(phoneType.getAttribute("aria-required")).toBe("false")
     expect(submitButton.disabled).toBe(false)
   })
 

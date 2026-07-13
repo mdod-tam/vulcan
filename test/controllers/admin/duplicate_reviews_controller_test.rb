@@ -24,10 +24,15 @@ module Admin
       get admin_duplicate_reviews_path
 
       assert_response :success
-      assert_select '[data-testid="duplicate-review-case-row"]', count: 3
-      assert_select '[data-testid="case-workflow-state"]', text: 'Open'
-      assert_select '[data-testid="case-workflow-state"]', text: 'Awaiting information'
-      assert_select '[data-testid="case-workflow-state"]', text: 'Security review'
+      {
+        @review_case => 'Open',
+        awaiting => 'Awaiting information',
+        security => 'Security review'
+      }.each do |review_case, label|
+        assert_select "[data-testid='duplicate-review-case-row'][data-case-id='#{review_case.id}']" do
+          assert_select '[data-testid="case-workflow-state"]', text: label
+        end
+      end
       assert_match legacy.full_name, response.body
     end
 
@@ -38,8 +43,10 @@ module Admin
       get admin_duplicate_reviews_path(state: 'awaiting_information')
 
       assert_response :success
-      assert_select '[data-testid="duplicate-review-case-row"]', count: 1
-      assert_select '[data-testid="case-workflow-state"]', text: 'Awaiting information'
+      assert_select "[data-testid='duplicate-review-case-row'][data-case-id='#{awaiting.id}']" do
+        assert_select '[data-testid="case-workflow-state"]', text: 'Awaiting information'
+      end
+      assert_select "[data-testid='duplicate-review-case-row'][data-case-id='#{@review_case.id}']", count: 0
     end
 
     test 'show renders grouped comparison and forms' do
@@ -445,13 +452,15 @@ module Admin
     end
 
     def resolve_case(review_case, outcome)
-      DuplicateReviewCases::ResolutionService.new(
+      result = DuplicateReviewCases::ResolutionService.new(
         duplicate_review_case: review_case,
         actor: @admin,
         outcome: outcome,
         rationale: 'Controller test review rationale.',
         reason_codes: ['name_dob']
       ).call
+      assert result.success?, result.message
+      result
     end
 
     def merge_params

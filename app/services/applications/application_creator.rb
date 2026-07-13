@@ -4,6 +4,8 @@ module Applications
   # Service to orchestrate application creation and updates with proper separation of concerns
   # Handles persistence, audit logging, and event management for validated ApplicationForm objects
   class ApplicationCreator < BaseService
+    class AccountUnavailableError < StandardError; end
+
     # Result object that provides success/failure status and application access
     class Result
       attr_reader :application, :errors
@@ -44,6 +46,7 @@ module Applications
       return failure_result(['Form is invalid']) unless @form.valid?
 
       ActiveRecord::Base.transaction do
+        lock_application_participants!
         setup_applicant_user
         update_user_attributes
         create_or_update_application
@@ -61,6 +64,24 @@ module Applications
     end
 
     private
+
+    # DuplicateMergeService locks users before touching applications. Follow the same
+    # order here so a request that authenticated before a merge either commits first
+    # (and is included in the merge inventory) or reloads the retired user and stops.
+    def lock_application_participants!
+      participants = [
+        @form.current_user,
+        applicant_user,
+        target_application.persisted? ? target_application.user : nil,
+        target_application.persisted? ? target_application.managing_guardian : nil
+      ].compact.uniq(&:id).sort_by(&:id)
+
+      participants.each(&:lock!)
+      raise AccountUnavailableError, 'Account is no longer active. Please sign in again.' if
+        participants.any? { |user| !user.public_login_active? }
+
+      target_application.lock! if target_application.persisted?
+    end
 
     def setup_applicant_user
       return unless applicant_user

@@ -110,6 +110,19 @@ module Admin
       assert @user.webauthn_credentials.exists?
     end
 
+    test 'does not approve recovery for a retired user' do
+      canonical = create(:constituent)
+      @user.update!(status: :inactive, merged_into_user: canonical, merged_at: Time.current)
+
+      assert_no_difference '@user.webauthn_credentials.count' do
+        post approve_admin_recovery_request_path(@recovery_request)
+      end
+
+      assert_redirected_to admin_recovery_request_path(@recovery_request)
+      assert_match(/no longer active/i, flash[:alert])
+      assert_equal 'pending', @recovery_request.reload.status
+    end
+
     test 'should not allow non-admins to access requests' do
       # Sign out admin
       delete sign_out_path

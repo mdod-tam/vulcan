@@ -44,11 +44,13 @@ module Admin
       choose "#{dom_id_prefix}_contact_email_canonical"
       choose "#{dom_id_prefix}_contact_phone_canonical"
       choose "#{dom_id_prefix}_contact_address_canonical"
-      select 'voice', from: "#{dom_id_prefix}_contact_phone_type"
       choose "#{dom_id_prefix}_delivery_choice_canonical"
       fill_in "#{dom_id_prefix}_rationale", with: 'Confirmed same person via support call, verified DOB and address.'
       check "#{dom_id_prefix}_same_person_confirmed"
 
+      assert submit_button.disabled?, 'a real surviving phone should require an explicit phone type'
+      take_full_page_screenshot('duplicate-review-merge-phone-type-required', html: true)
+      select 'voice', from: "#{dom_id_prefix}_contact_phone_type"
       assert_not submit_button.disabled?, 'submit button should enable once every required choice is made'
     end
 

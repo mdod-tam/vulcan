@@ -16,10 +16,14 @@ module Admin
 
     def approve
       approval_result = approve_pending_request
-      if approval_result == :not_pending
+      case approval_result
+      when :not_pending
         redirect_to admin_recovery_request_path(@recovery_request), alert: t('.not_pending')
         return
-      elsif approval_result == :notification_failed
+      when :user_unavailable
+        redirect_to admin_recovery_request_path(@recovery_request), alert: t('.user_unavailable')
+        return
+      when :notification_failed
         redirect_to admin_recovery_request_path(@recovery_request), alert: t('.notification_failed')
         return
       end
@@ -43,10 +47,14 @@ module Admin
       result = :not_pending
 
       ActiveRecord::Base.transaction do
+        user = @recovery_request.user
+        user.lock!
         @recovery_request.lock!
-        if @recovery_request.pending?
+        if !user.public_login_active?
+          result = :user_unavailable
+        elsif @recovery_request.pending?
           approved_at = Time.current
-          @recovery_request.user.webauthn_credentials.destroy_all
+          user.webauthn_credentials.destroy_all
           @recovery_request.update!(
             status: 'approved',
             resolved_at: approved_at,

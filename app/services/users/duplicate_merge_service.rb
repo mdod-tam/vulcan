@@ -60,6 +60,7 @@ module Users
         transfer_applications!
         transfer_guardian_relationships!
         reconcile_person_references!
+        reconcile_duplicate_review_candidate_references!
         expire_duplicate_sessions!
         retire_duplicate!
         audit_event = log_merge!
@@ -289,7 +290,8 @@ module Users
 
     def lock_records!
       [@canonical_user, @duplicate_user].sort_by(&:id).each(&:lock!)
-      related_pending_cases.sort_by(&:id).each(&:lock!)
+      (related_pending_cases + pending_candidate_reference_cases).uniq.sort_by(&:id).each(&:lock!)
+      pending_candidate_reference_rows
     end
 
     # The canonical record becomes the only live owner of primary identity contacts.
@@ -415,6 +417,35 @@ module Users
                       .update_all(constituent_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 
+    # Pending cases about a third person remain actionable after this identity is
+    # merged. Move their candidate link to the canonical survivor instead of leaving
+    # the queue item pointed at a retired record. If that case already records the
+    # canonical user for the same match reason, keep the existing row and remove the
+    # now-redundant duplicate link.
+    def reconcile_duplicate_review_candidate_references!
+      transferred = 0
+      deduplicated = 0
+
+      pending_candidate_reference_rows.each do |candidate_reference|
+        existing = DuplicateReviewCaseCandidate.find_by(
+          duplicate_review_case_id: candidate_reference.duplicate_review_case_id,
+          candidate_user_id: @canonical_user.id,
+          match_reason: candidate_reference.match_reason
+        )
+
+        if existing
+          candidate_reference.destroy!
+          deduplicated += 1
+        else
+          candidate_reference.update!(candidate_user: @canonical_user)
+          transferred += 1
+        end
+      end
+
+      @summary[:duplicate_review_candidate_references_transferred] = transferred
+      @summary[:duplicate_review_candidate_references_deduplicated] = deduplicated
+    end
+
     def expire_duplicate_sessions!
       @summary[:sessions_expired] = @duplicate_user.sessions.count
       @duplicate_user.sessions.destroy_all
@@ -466,6 +497,35 @@ module Users
         cases << review_case if references_duplicate?(review_case)
       end
       @related_pending_cases = cases.uniq
+    end
+
+    # These cases belong to an unrelated subject, so resolving them as part of this
+    # merge would erase legitimate review work. They are locked with the merge and
+    # their duplicate candidate links are repointed to the canonical survivor.
+    def pending_candidate_reference_cases
+      return @pending_candidate_reference_cases if defined?(@pending_candidate_reference_cases)
+
+      case_ids = DuplicateReviewCaseCandidate
+                 .joins(:duplicate_review_case)
+                 .merge(DuplicateReviewCase.pending_review)
+                 .where(candidate_user_id: @duplicate_user.id)
+                 .distinct
+                 .pluck(:duplicate_review_case_id)
+      pair_ids = [@canonical_user.id, @duplicate_user.id]
+      @pending_candidate_reference_cases = DuplicateReviewCase.where(id: case_ids).to_a.reject do |review_case|
+        pair_ids.include?(review_case.subject_user_id)
+      end
+    end
+
+    def pending_candidate_reference_rows
+      return @pending_candidate_reference_rows if defined?(@pending_candidate_reference_rows)
+
+      case_ids = pending_candidate_reference_cases.map(&:id)
+      @pending_candidate_reference_rows = DuplicateReviewCaseCandidate
+                                          .where(duplicate_review_case_id: case_ids, candidate_user_id: @duplicate_user.id)
+                                          .order(:id)
+                                          .lock
+                                          .to_a
     end
 
     def references_duplicate?(review_case)

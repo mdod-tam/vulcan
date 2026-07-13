@@ -26,7 +26,7 @@
       <div class="bg-white shadow overflow-hidden sm:rounded-md">
         <ul class="divide-y divide-gray-200">
           <% @active_cases.each do |review_case| %>
-            <li class="px-4 py-4 sm:px-6" data-testid="duplicate-review-case-row">
+            <li class="px-4 py-4 sm:px-6" data-testid="duplicate-review-case-row" data-case-id="<%= review_case.id %>">
               <div class="flex items-center justify-between">
                 <div>
                   <h3 class="text-base font-medium text-gray-900">

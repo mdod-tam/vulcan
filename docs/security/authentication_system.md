@@ -29,9 +29,9 @@ Current account-lock behavior:
 
 - maximum failed login attempts: 5
 - lock duration: 1 hour
-- password reset tokens expire after 20 minutes and are invalidated by a successful password change or login-email change because token generation is tied to both the password salt and normalized email
+- password reset tokens expire after 20 minutes and are invalidated by a successful password change or login-email change because token generation is tied to both the password salt and normalized email; token consumption re-resolves the token and rechecks account activity while holding the user lock so a concurrent merge cannot use a stale resolution
 
-Recovery requests are durable and idempotent: a partial unique index allows only one pending request per user, duplicate pending submissions coalesce into the same public confirmation, and a new pending request is allowed after the previous request is resolved. The index migration assumes alpha/shared environments do not already contain duplicate pending recovery requests for the same user; resolve any such rows before migrating. Admin approval removes WebAuthn credentials only if the approval notification record can be created and queued without a synchronous delivery error.
+Recovery requests are durable and idempotent: a partial unique index allows only one pending request per user, duplicate pending submissions coalesce into the same public confirmation, and a new pending request is allowed after the previous request is resolved. Public creation and admin approval lock and recheck the account before changing recovery state, so neither can create or approve recovery work for a record retired by a concurrent merge. The index migration assumes alpha/shared environments do not already contain duplicate pending recovery requests for the same user; resolve any such rows before migrating. Admin approval removes WebAuthn credentials only if the approval notification record can be created and queued without a synchronous delivery error.
 
 There is no live email-verification link flow in the current code. Public signup sends `ApplicationNotificationsMailer.registration_confirmation`; any future email-verification work should add a deliberate caller, query-parameter bearer token handling, and end-to-end tests instead of relying on the historical `user_mailer_email_verification` template seeds.
 

@@ -758,6 +758,7 @@ en:
       approve:
         recovery_approved: "Security key recovery request approved successfully. The user can register a new security key."
         not_pending: "This recovery request has already been resolved and cannot be approved again."
+        user_unavailable: "This account is no longer active, so its recovery request cannot be approved."
         notification_failed: "Recovery approval could not be completed because the user notification could not be created or queued. No credentials were removed."
     users:
       update:

@@ -2,6 +2,8 @@
 
 module DuplicateReviewCases
   class CreateService < BaseService
+    class ParticipantUnavailableError < StandardError; end
+
     CandidateInput = Struct.new(:user, :match_reason, :snapshot)
 
     # rubocop:disable Metrics/ParameterLists -- explicit service contract for atomic case creation
@@ -23,29 +25,42 @@ module DuplicateReviewCases
       return failure('Actor is required for duplicate review case') if @actor.blank?
       return failure('Reason codes are required') if @reason_codes.empty?
 
-      existing = DuplicateReviewCase.pending_review.find_by(deduplication_key: deduplication_key)
-      if existing
-        sync_subject_review_flag!(existing)
-        return success(nil, { duplicate_review_case: existing, idempotent: true })
-      end
-
       duplicate_review_case = nil
+      idempotent = false
 
       ActiveRecord::Base.transaction do
-        duplicate_review_case = create_open_case!
-        upsert_candidates!(duplicate_review_case)
+        lock_and_validate_participants!
+        duplicate_review_case = DuplicateReviewCase.pending_review.find_by(deduplication_key: deduplication_key)
+        if duplicate_review_case
+          idempotent = true
+        else
+          duplicate_review_case = create_open_case!
+          upsert_candidates!(duplicate_review_case)
+          log_case_opened!(duplicate_review_case)
+        end
         sync_subject_review_flag!(duplicate_review_case)
-        log_case_opened!(duplicate_review_case)
       end
 
-      success(nil, { duplicate_review_case: duplicate_review_case })
-    rescue ActiveRecord::RecordNotUnique
-      duplicate_review_case = DuplicateReviewCase.pending_review.find_by!(deduplication_key: deduplication_key)
-      sync_subject_review_flag!(duplicate_review_case)
-      success(nil, { duplicate_review_case: duplicate_review_case, idempotent: true })
+      data = { duplicate_review_case: duplicate_review_case }
+      data[:idempotent] = true if idempotent
+      success(nil, data)
+    rescue ParticipantUnavailableError => e
+      failure(e.message)
     end
 
     private
+
+    # Same-person merge also locks every affected user in ascending id order before
+    # it snapshots related cases. Holding those same locks makes case creation visible
+    # to a later merge, or rejects the creation after an earlier merge retires a party.
+    def lock_and_validate_participants!
+      candidate_users = @candidates.filter_map(&:user)
+      participants = [@subject_user, *candidate_users].uniq(&:id).sort_by(&:id)
+      participants.each(&:lock!)
+      return if @subject_user.public_login_active? && candidate_users.none?(&:merged?)
+
+      raise ParticipantUnavailableError, 'A duplicate-review participant is no longer active'
+    end
 
     def create_open_case!
       DuplicateReviewCase.create!(

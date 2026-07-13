@@ -21,12 +21,14 @@
     <legend class="text-sm font-medium text-gray-700">Which record survives (canonical)?</legend>
     <label class="inline-flex items-center mr-4 text-sm">
       <%= radio_button_tag :canonical_user_id, subject.id, prefill[:canonical_user_id].to_s == subject.id.to_s,
-                            required: true, id: "#{dom_id_prefix}_canonical_user_id_subject" %>
+                            required: true, id: "#{dom_id_prefix}_canonical_user_id_subject",
+                            data: { record_has_real_phone: subject.real_phone? } %>
       <span class="ml-1"><%= subject.full_name %> (subject #<%= subject.id %>)</span>
     </label>
     <label class="inline-flex items-center text-sm">
       <%= radio_button_tag :canonical_user_id, candidate.id, prefill[:canonical_user_id].to_s == candidate.id.to_s,
-                            required: true, id: "#{dom_id_prefix}_canonical_user_id_candidate" %>
+                            required: true, id: "#{dom_id_prefix}_canonical_user_id_candidate",
+                            data: { record_has_real_phone: candidate.real_phone? } %>
       <span class="ml-1"><%= candidate.full_name %> (candidate #<%= candidate.id %>)</span>
     </label>
     <p class="text-xs text-gray-500 mt-1">The other record is retired (deactivated) and points at the canonical survivor. It is never deleted.</p>
@@ -58,7 +60,9 @@
       <%= label_tag "#{dom_id_prefix}_contact_phone_type", 'Phone type (required if a real phone survives)',
                     class: 'block text-gray-700 font-medium' %>
       <%= select_tag 'contact[phone_type]', options_for_select(%w[voice videophone text], contact_prefill['phone_type']),
-                     include_blank: 'Select…', class: 'border-gray-300 rounded-md text-sm', id: "#{dom_id_prefix}_contact_phone_type" %>
+                     include_blank: 'Select…', class: 'border-gray-300 rounded-md text-sm',
+                     id: "#{dom_id_prefix}_contact_phone_type",
+                     data: { required_when_selected_phone_real: true } %>
       <p class="text-xs text-gray-500">If the surviving phone is real, choose its phone type; otherwise the merge will be rejected. SMS capability must be chosen explicitly, never assumed.</p>
     </div>
   </fieldset>
