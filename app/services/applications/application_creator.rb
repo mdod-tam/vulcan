@@ -69,18 +69,26 @@ module Applications
     # order here so a request that authenticated before a merge either commits first
     # (and is included in the merge inventory) or reloads the retired user and stops.
     def lock_application_participants!
-      participants = [
-        @form.current_user,
-        applicant_user,
-        target_application.persisted? ? target_application.user : nil,
-        target_application.persisted? ? target_application.managing_guardian : nil
-      ].compact.uniq(&:id).sort_by(&:id)
+      applicant = applicant_user
+      participant_ids = [
+        @form.current_user&.id,
+        applicant&.id,
+        target_application.persisted? ? target_application.user_id : nil,
+        target_application.persisted? ? target_application.managing_guardian_id : nil
+      ].compact.uniq
+      locked_users = User.where(id: participant_ids).order(:id).lock.index_by(&:id)
+      raise AccountUnavailableError, 'Account is no longer available.' unless locked_users.size == participant_ids.size
 
-      participants.each(&:lock!)
+      @form.current_user = locked_users.fetch(@form.current_user.id)
+      @locked_applicant_user = locked_users[applicant.id] if applicant
       raise AccountUnavailableError, 'Account is no longer active. Please sign in again.' if
-        participants.any? { |user| !user.public_login_active? }
+        locked_users.values.any? { |user| !user.public_login_active? }
 
-      target_application.lock! if target_application.persisted?
+      return unless target_application.persisted?
+
+      target_application.lock!
+      target_application.association(:user).reset
+      target_application.association(:managing_guardian).reset
     end
 
     def setup_applicant_user
@@ -286,6 +294,8 @@ module Applications
     end
 
     def applicant_user
+      return @locked_applicant_user if defined?(@locked_applicant_user)
+
       @form.applicant_user
     end
 

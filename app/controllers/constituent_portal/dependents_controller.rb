@@ -55,15 +55,9 @@ module ConstituentPortal
 
     # PATCH/PUT /constituent_portal/dependents/:id
     def update
-      params_to_update = dependent_attributes_with_contact_strategies
-      unless params_to_update
-        contact_strategy_errors.each { |error| @dependent.errors.add(:base, error) }
-        setup_edit_template_variables
-        render :edit, status: :unprocessable_content
-        return
-      end
+      updated = update_dependent_under_lock
 
-      if @dependent.update(params_to_update)
+      if updated
         redirect_after_successful_update
       else
         setup_edit_template_variables
@@ -93,6 +87,45 @@ module ConstituentPortal
     end
 
     private
+
+    # A guardian request may have authenticated and loaded the dependent before either
+    # record was merged. Lock and recheck both identities plus the relationship before
+    # deriving contact strategies or persisting submitted profile data.
+    def update_dependent_under_lock
+      updated = false
+      ActiveRecord::Base.transaction do
+        guardian_id = current_user.id
+        dependent_id = @dependent.id
+        original_dependent = @dependent
+        locked_users = User.where(id: [guardian_id, dependent_id]).order(:id).lock.index_by(&:id)
+        locked_guardian = locked_users[guardian_id]
+        locked_dependent = locked_users[dependent_id]
+
+        unless locked_guardian && locked_dependent
+          @dependent = original_dependent
+          @dependent.errors.add(:base, 'This dependent is no longer available for editing')
+          raise ActiveRecord::Rollback
+        end
+
+        @current_user = locked_guardian
+        @dependent = locked_dependent
+        unless current_user.public_login_active? && !@dependent.merged? &&
+               GuardianRelationship.exists?(guardian_id: current_user.id, dependent_id: @dependent.id)
+          @dependent.errors.add(:base, 'This dependent is no longer available for editing')
+          raise ActiveRecord::Rollback
+        end
+
+        params_to_update = dependent_attributes_with_contact_strategies
+        unless params_to_update
+          contact_strategy_errors.each { |error| @dependent.errors.add(:base, error) }
+          raise ActiveRecord::Rollback
+        end
+
+        updated = @dependent.update(params_to_update)
+        raise ActiveRecord::Rollback unless updated
+      end
+      updated
+    end
 
     def set_dependent
       # Use Rails-centric scope for authorization

@@ -6,6 +6,7 @@ require 'bcrypt'
 class User < ApplicationRecord
   include UserAuthentication
   include UserRolesAndCapabilities
+  include UserMergeIntegrity
   include UserProfile
   include UserContactPredicates
   include UserGuardianship

@@ -23,7 +23,10 @@ class UserPublicLoginActiveTest < ActiveSupport::TestCase
     assert_not @user.public_login_active?
 
     canonical = create(:constituent)
-    @user.update!(status: :active, merged_into_user: canonical, merged_at: Time.current)
+    @user.update_columns(
+      status: User.statuses[:active], merged_into_user_id: canonical.id,
+      merged_at: Time.current, email: nil, phone: nil
+    )
     assert_not @user.public_login_active?
   end
 
@@ -36,7 +39,9 @@ class UserPublicLoginActiveTest < ActiveSupport::TestCase
 
   test 'merged record cannot be found by login identifier' do
     canonical = create(:constituent)
-    @user.update!(merged_into_user: canonical, merged_at: Time.current)
-    assert_nil User.find_by_login_identifier(@user.email)
+    former_email = @user.email
+    @user.update_columns(merged_into_user_id: canonical.id, merged_at: Time.current, email: nil, phone: nil)
+
+    assert_nil User.find_by_login_identifier(former_email)
   end
 end

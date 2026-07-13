@@ -280,6 +280,37 @@ module Applications
       assert_equal applicant, service.application.user
     end
 
+    test 'existing self applicant retired before participant locking is rejected without side effects' do
+      applicant = create(:constituent, :without_disabilities)
+      canonical = create(:constituent)
+      User.where(id: applicant.id).update_all(
+        email: nil,
+        phone: nil,
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+      service = PaperApplicationService.new(
+        params: {
+          applicant_type: 'self',
+          existing_constituent_id: applicant.id,
+          contact_info_mode: 'on_file',
+          contact_info_verified: true,
+          constituent: { hearing_disability: true },
+          application: @application_params
+        },
+        admin: @admin,
+        skip_proof_processing: true
+      )
+
+      assert_no_difference ['Application.count', 'Event.count'] do
+        assert_not service.create
+      end
+      assert_match(/merged.*no longer available/i, service.errors.to_sentence)
+      assert_not applicant.reload.hearing_disability
+    end
+
     test 'existing dependent disability flags are saved before application validation' do
       guardian = create(:constituent, email: "existing-paper-guardian-#{Time.now.to_i}@example.com")
       dependent = create(

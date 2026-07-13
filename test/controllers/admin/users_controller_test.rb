@@ -9,6 +9,37 @@ module Admin
       sign_in_for_integration_test @admin
     end
 
+    test 'admin cannot restore primary contact on a merged user' do
+      canonical = create(:constituent)
+      merged_user = create(:constituent)
+      User.where(id: merged_user.id).update_all(
+        email: nil,
+        phone: nil,
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+
+      assert_no_difference -> { Event.where(action: 'user_updated', auditable: merged_user).count } do
+        patch admin_user_path(merged_user), params: {
+          user: {
+            first_name: merged_user.first_name,
+            last_name: merged_user.last_name,
+            email: 'restored@example.com',
+            phone: '410-555-0198',
+            phone_type: 'voice',
+            communication_preference: 'email'
+          }
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_match(/Merged records cannot own an email address or phone number/, response.body)
+      assert_nil merged_user.reload.email
+      assert_nil merged_user.phone
+    end
+
     test 'show surfaces destructive admin actions with native confirmation messages' do
       user = create(:constituent)
 

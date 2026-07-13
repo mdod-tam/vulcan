@@ -20,6 +20,34 @@ module ConstituentPortal
       assert_response :success
     end
 
+    test 'guardian cannot restore contact on a dependent retired before update locking' do
+      canonical = create(:constituent)
+      User.where(id: @dependent.id).update_all(
+        email: nil,
+        phone: nil,
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: {
+          first_name: @dependent.first_name,
+          last_name: @dependent.last_name,
+          email: 'restored-dependent@example.com',
+          phone: '410-555-0197',
+          phone_type: 'voice',
+          hearing_disability: true
+        }
+      }
+
+      assert_response :unprocessable_content
+      assert_nil @dependent.reload.email
+      assert_nil @dependent.phone
+      assert_match(/no longer available/i, response.body)
+    end
+
     test 'should create dependent and guardian relationship' do
       dependent_attributes = {
         first_name: 'Jane',

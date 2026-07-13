@@ -10,8 +10,22 @@ class UsersController < ApplicationController
   end
 
   def update
-    @user = current_user
-    if @user.update(user_params)
+    updated = nil
+    User.transaction do
+      @user = User.lock.find(current_user.id)
+      @current_user = @user
+      Current.user = @user
+
+      unless @user.public_login_active?
+        @user.errors.add(:base, 'Account is no longer active. Please sign in again.')
+        updated = false
+        next
+      end
+
+      updated = @user.update(user_params)
+    end
+
+    if updated
       flash[:notice] = 'Profile successfully updated'
       redirect_to after_update_path(@user) # Add @user as argument
     else

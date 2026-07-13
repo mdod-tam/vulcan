@@ -30,7 +30,7 @@ module DuplicateReviewCases
 
       ActiveRecord::Base.transaction do
         lock_and_validate_participants!
-        duplicate_review_case = DuplicateReviewCase.pending_review.find_by(deduplication_key: deduplication_key)
+        duplicate_review_case = find_pending_case
         if duplicate_review_case
           idempotent = true
         else
@@ -46,6 +46,14 @@ module DuplicateReviewCases
       success(nil, data)
     rescue ParticipantUnavailableError => e
       failure(e.message)
+    rescue ActiveRecord::RecordNotUnique => e
+      # The partial unique index is the final idempotency guard. If another writer
+      # committed the same pending semantic case after our lookup, return that winner
+      # exactly as the ordinary pre-create idempotent path would.
+      duplicate_review_case = find_pending_case
+      raise e unless duplicate_review_case
+
+      success(nil, { duplicate_review_case: duplicate_review_case, idempotent: true })
     end
 
     private
@@ -55,8 +63,16 @@ module DuplicateReviewCases
     # to a later merge, or rejects the creation after an earlier merge retires a party.
     def lock_and_validate_participants!
       candidate_users = @candidates.filter_map(&:user)
-      participants = [@subject_user, *candidate_users].uniq(&:id).sort_by(&:id)
-      participants.each(&:lock!)
+      participant_ids = [@subject_user, *candidate_users].map(&:id).uniq
+      locked_users = User.where(id: participant_ids).order(:id).lock.index_by(&:id)
+      raise ParticipantUnavailableError, 'A duplicate-review participant is no longer available' if
+        locked_users.size != participant_ids.size
+
+      @subject_user = locked_users.fetch(@subject_user.id)
+      @candidates.each do |candidate_input|
+        candidate_input.user = locked_users[candidate_input.user.id] if candidate_input.user
+      end
+      candidate_users = @candidates.filter_map(&:user)
       return if @subject_user.public_login_active? && candidate_users.none?(&:merged?)
 
       raise ParticipantUnavailableError, 'A duplicate-review participant is no longer active'
@@ -71,6 +87,10 @@ module DuplicateReviewCases
         opened_at: Time.current,
         status: :open
       )
+    end
+
+    def find_pending_case
+      DuplicateReviewCase.pending_review.find_by(deduplication_key: deduplication_key)
     end
 
     def upsert_candidates!(duplicate_review_case)
@@ -105,9 +125,11 @@ module DuplicateReviewCases
     end
 
     def deduplication_key
-      candidate_ids = @candidates.filter_map { |candidate| candidate.user&.id }.sort.join(',')
-      Digest::SHA256.hexdigest(
-        [@source, @subject_user.id, @reason_codes.join(','), candidate_ids].join(':')
+      DeduplicationKey.call(
+        source: @source,
+        subject_user_id: @subject_user.id,
+        reason_codes: @reason_codes,
+        candidate_user_ids: @candidates.filter_map { |candidate| candidate.user&.id }
       )
     end
 

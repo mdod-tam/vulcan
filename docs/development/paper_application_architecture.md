@@ -50,6 +50,7 @@ The controller does not own the main paper-application side effects after create
 `Applications::PaperApplicationService` currently:
 
 - handles existing self-applicant, existing dependent, new guardian/dependent, and new self-applicant scenarios
+- locks selected existing applicants/guardians/dependents in ascending user-ID order before eligibility/contact/application writes; update locks current owner/guardian rows before the application
 - creates or updates the relevant users
 - creates or updates the `Application`
 - sets `submission_method` to `paper`
@@ -65,8 +66,8 @@ Paper intake deliberately branches before it writes the application:
 
 | Branch | When it applies | Service behavior |
 |--------|-----------------|------------------|
-| Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
-| Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
+| Existing self applicant | Admin selects an existing adult constituent for their own application. | Locks and rechecks the selected user, rejects a merged identity, requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
+| Existing dependent | Admin selects an existing dependent through `dependent_id`. | Locks and rechecks guardian/dependent together, rejects a merged participant, reuses the relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
 | New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
 | New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Supports phone-only and address-only adults with NULL stored contacts when appropriate. Email-backed portal users get internal forced-change account setup; phone-only and address-only users do not. No-phone intake sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
 
@@ -75,6 +76,8 @@ New paper self, guardian, and dependent records run through `DuplicateDetectionS
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
 Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
+
+These locks share the duplicate-merge order. If paper intake commits first, its application is visible to merge inventory; if merge retires a selected participant first, paper intake fails without creating/updating the application or restoring retired contact.
 
 ## Account-Created Notices And Quick-Create Markers
 

@@ -37,6 +37,30 @@ module DuplicateReviewCases
       end
     end
 
+    test 'unique-index race returns the concurrently committed pending case' do
+      existing = create_case.data.fetch(:duplicate_review_case)
+      service = CreateService.new(
+        source: :registration_soft_match,
+        subject_user: @subject,
+        actor: @admin,
+        reason_codes: ['name_dob'],
+        candidates: [
+          CreateService::CandidateInput.new(user: @candidate, match_reason: 'name_dob', snapshot: { real_email: true })
+        ],
+        metadata: { intake_context: 'registration' }
+      )
+      service.stubs(:find_pending_case).returns(nil, existing)
+      service.stubs(:create_open_case!).raises(ActiveRecord::RecordNotUnique)
+
+      assert_no_difference ['DuplicateReviewCase.count', 'Event.count'] do
+        result = service.call
+
+        assert result.success?
+        assert result.data[:idempotent]
+        assert_equal existing, result.data[:duplicate_review_case]
+      end
+    end
+
     test 'idempotent create returns an existing nonterminal case' do
       first = create_case
       review_case = first.data[:duplicate_review_case]

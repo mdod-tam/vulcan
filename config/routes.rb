@@ -423,7 +423,6 @@ Rails.application.routes.draw do
       member do
         patch :autosave_field
         patch :upload_documents
-        patch :submit
         post :resubmit_proof
         post :update # Handle form submissions that POST to update path
         post :request_training

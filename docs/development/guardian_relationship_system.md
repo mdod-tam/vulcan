@@ -137,6 +137,8 @@ scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct
 7. Soft matches open a `DuplicateReviewCase` with source `:portal_dependent` after the dependent and relationship are persisted
 8. Application creation happens separately when dependent applies
 
+Editing an existing dependent is also a merge-sensitive contact boundary. The controller locks guardian and dependent rows in ascending ID order, rechecks that both identities and the relationship are still valid, then derives and persists the submitted contact strategies. A request that began before the dependent or guardian was merged cannot restore contact on the retired row.
+
 ### 4.2 · Admin Paper Application
 
 Handled by `Applications::PaperApplicationService` with `GuardianDependentManagementService`:

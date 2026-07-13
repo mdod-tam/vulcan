@@ -27,7 +27,10 @@ class ConcurrentMergeSignInTest < ActionDispatch::IntegrationTest
           lock_held << true
           release_merge.pop # hold the row lock open until the main thread signals
           locked.sessions.destroy_all
-          locked.update!(merged_into_user_id: canonical.id, status: :inactive, merged_at: Time.current)
+          locked.update_columns(
+            merged_into_user_id: canonical.id, status: User.statuses[:inactive],
+            merged_at: Time.current, email: nil, phone: nil
+          )
         end
       end
     ensure

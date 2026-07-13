@@ -8,6 +8,7 @@ module Applications
     include Rails.application.routes.url_helpers
 
     class TransactionFailure < StandardError; end
+    class ParticipantUnavailableError < StandardError; end
 
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
 
@@ -32,6 +33,7 @@ module Applications
       application_created = false
 
       ActiveRecord::Base.transaction do
+        lock_create_participants!
         rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
         rollback_failure('Application creation failed') unless create_application
         rollback_failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
@@ -55,6 +57,9 @@ module Applications
       application_created
     rescue TransactionFailure
       false
+    rescue ParticipantUnavailableError => e
+      @errors << e.message
+      false
     rescue StandardError => e
       log_error(e, 'Failed to create paper application')
       @errors << e.message
@@ -68,8 +73,9 @@ module Applications
       update_succeeded = false
 
       ActiveRecord::Base.transaction do
+        lock_update_participants!(application)
         @application = application
-        @constituent = application.user
+        @constituent = application.reload.user
 
         rollback_failure('Application update failed') unless update_application_attributes
         rollback_failure('Proof upload failed') unless process_proof_uploads
@@ -81,6 +87,9 @@ module Applications
 
       update_succeeded
     rescue TransactionFailure
+      false
+    rescue ParticipantUnavailableError => e
+      @errors << e.message
       false
     rescue StandardError => e
       log_error(e, 'Failed to update paper application')
@@ -101,6 +110,37 @@ module Applications
     ].freeze
 
     private
+
+    # Paper intake may select an existing applicant, guardian, or dependent. Lock every
+    # selected identity before eligibility/contact checks so merge either observes the
+    # completed application or retirement makes this request fail without side effects.
+    def lock_create_participants!
+      ids = [params[:existing_constituent_id], params[:guardian_id], params[:dependent_id]].compact_blank.map(&:to_i).uniq
+      @locked_participants = User.where(id: ids).order(:id).lock.index_by(&:id)
+      reject_merged_participants!(@locked_participants.values)
+    end
+
+    def lock_update_participants!(application)
+      participant_ids = [application.user_id, application.managing_guardian_id].compact.uniq
+      participants = User.where(id: participant_ids).order(:id).lock.to_a
+      reject_merged_participants!(participants)
+
+      application.lock!
+      current_ids = [application.user_id, application.managing_guardian_id].compact.uniq
+      return if current_ids.sort == participant_ids.sort
+
+      raise ParticipantUnavailableError, 'Application ownership changed; reload before updating it'
+    end
+
+    def reject_merged_participants!(participants)
+      return if participants.none?(&:merged?)
+
+      raise ParticipantUnavailableError, 'A selected user was merged and is no longer available for paper intake'
+    end
+
+    def locked_participant(id)
+      @locked_participants&.fetch(id.to_i, nil)
+    end
 
     def failure(message)
       @errors << message
@@ -163,6 +203,10 @@ module Applications
     end
 
     def process_constituent
+      # The routed create path initializes this before any constituent work. Keep the
+      # private operation safe when exercised directly by focused service tests too.
+      lock_create_participants! unless defined?(@locked_participants)
+
       guardian_id = params[:guardian_id]
       new_guardian_attrs = params[:new_guardian_attributes]
       applicant_data = params[:constituent]
@@ -189,7 +233,7 @@ module Applications
     end
 
     def process_existing_self_applicant(existing_constituent_id)
-      user = User.find_by(id: existing_constituent_id)
+      user = locked_participant(existing_constituent_id)
       return add_error('Applicant not found') unless user
       return add_error('Selected user is not eligible as an applicant.') unless user.paper_applicant_candidate?
 
@@ -231,8 +275,8 @@ module Applications
     end
 
     def process_existing_dependent(guardian_id, dependent_id, relationship_type)
-      guardian = User.find_by(id: guardian_id)
-      dependent = User.find_by(id: dependent_id)
+      guardian = locked_participant(guardian_id)
+      dependent = locked_participant(dependent_id)
 
       return add_error('Guardian not found') unless guardian
       return add_error('Dependent not found') unless dependent

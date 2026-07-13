@@ -23,6 +23,7 @@ A concise reference for the Stimulus, Rails request, form-gating, and Chart.js l
 | Request service | `app/javascript/services/rails_request.js` | Wraps `@rails/request.js` for JSON-style requests, cancellation, and response parsing. |
 | Constituent application forms | `app/views/constituent_portal/applications/new.html.erb`, `edit.html.erb` | Attach `autosave`, `currency-formatter`, `final-submit-gate`, and conditionally `income-validation` and `dependent-fields`. |
 | Admin paper application form | `app/views/admin/paper_applications/new.html.erb` | Attaches `paper-application`, `applicant-type`, and conditionally `income-validation`. |
+| Admin duplicate-review forms | `app/views/admin/duplicate_reviews/_merge_form.html.erb`, `_resolve_form.html.erb` | Attach `final-submit-gate` for required choices/rationale and the conditional surviving-phone-type requirement. |
 | Charts | `app/views/admin/applications/_charts_section.html.erb`, `app/views/admin/reports/index.html.erb`, `app/views/vendor_portal/dashboard/show.html.erb` | Use `reports-chart`, `chart`, and `chart-toggle` controllers. |
 | Flash | `app/views/layouts/application.html.erb`, `app/views/shared/_flash.html.erb` | Layout renders `#flash`; Turbo helpers update it with `shared/flash`. |
 
@@ -116,7 +117,7 @@ const overLimit = exceeds({
 | `BaseFormController` | `app/javascript/controllers/base/form_controller.js` | Shared async form submit helper for controllers that opt into `railsRequest`; handles loading state, local status text, field errors, cancellation, and validation hooks. |
 | `autosave` | `app/javascript/controllers/forms/autosave_controller.js` | Saves individual fields on blur through the constituent autosave route. Updates form URLs after a new draft is created. |
 | `income-validation` | `app/javascript/controllers/forms/income_validation_controller.js` | Calculates FPL threshold state, owns the warning container, updates the income field group styling, and dispatches validation events. |
-| `final-submit-gate` | `app/javascript/controllers/forms/final_submit_gate_controller.js` | Gates constituent final submit buttons from required checkboxes, required visible non-file fields, checkbox groups, and income validation events. |
+| `final-submit-gate` | `app/javascript/controllers/forms/final_submit_gate_controller.js` | Gates constituent and admin duplicate-review final submit buttons from required checkboxes, required visible non-file fields, checkbox/radio groups, and optional income validation events. |
 | `paper-application` | `app/javascript/controllers/forms/paper_application_controller.js` | Gates admin paper submit from income state, existing-adult verification, required attestations, visible required fields, required proof radio groups, checkbox groups, and medical provider requirements. Also populates the income-rejection dialog. |
 | `optional-phone-type` | `app/javascript/controllers/forms/optional_phone_type_controller.js` | Reveals the self-registration phone-type radio group only when a phone number is present and keeps radio disabled, required, and ARIA state aligned with the visible field. |
 | `applicant-type` | `app/javascript/controllers/users/applicant_type_controller.js` | Shows the adult or dependent-with-guardian path and dispatches `applicant-type:applicantTypeChanged`. |

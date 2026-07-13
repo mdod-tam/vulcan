@@ -33,6 +33,29 @@ module Applications
       end
     end
 
+    test 'rejects a stale user retired before the autosave lock is acquired' do
+      canonical = create(:constituent)
+      stale_user = User.find(@user.id)
+      User.where(id: @user.id).update_all(
+        email: nil,
+        phone: nil,
+        status: User.statuses[:inactive],
+        merged_into_user_id: canonical.id,
+        merged_at: Time.current,
+        updated_at: Time.current
+      )
+
+      assert_no_difference ['Application.count', 'Event.count'] do
+        result = Applications::AutosaveService.new(
+          current_user: stale_user,
+          params: { field_name: 'application[household_size]', field_value: '3' }
+        ).call
+
+        assert_not result[:success]
+        assert_match(/no longer active/i, result.dig(:errors, :base).to_sentence)
+      end
+    end
+
     test 'reuses existing draft application instead of creating duplicate' do
       # Create initial draft
       existing_draft = FactoryBot.create(:application, :draft, user: @user)

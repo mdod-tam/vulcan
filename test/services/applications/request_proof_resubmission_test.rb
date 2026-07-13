@@ -74,7 +74,10 @@ module Applications
     test 'does not issue or deliver a request to a recipient retired before locking' do
       recipient = @application.user
       canonical = create(:constituent)
-      recipient.update!(status: :inactive, merged_into_user: canonical, merged_at: Time.current)
+      recipient.update_columns(
+        status: User.statuses[:inactive], merged_into_user_id: canonical.id,
+        merged_at: Time.current, email: nil, phone: nil
+      )
       @mailer_delivery.expects(:deliver_now).never
 
       assert_no_difference ['SecureRequestForm.count', 'Notification.count'] do

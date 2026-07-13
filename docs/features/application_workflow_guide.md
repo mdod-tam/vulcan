@@ -40,9 +40,10 @@ All flows converge on **one Application record**, so every downstream service (e
 
 1. **Auth → Dashboard → "Create Application"**  
 2. **Form-based application** with autosave functionality.  
-3. **Autosave**: UI changes trigger `app/javascript/controllers/forms/autosave_controller.js` which calls the backend `Applications::AutosaveService` via `constituent_portal/applications_controller#autosave_field`. This flow saves individual fields (excluding file inputs), returns validation errors inline, and updates the form action/URLs when a new draft `Application` is created.  
-4. `Applications::ApplicationCreator` service:  
-   * Uses `ApplicationForm` for validation → updates user attributes → creates/updates Application → attaches file uploads → logs events via `AuditEventService` + sends notifications via `NotificationService`.
+3. **Autosave**: UI changes trigger `app/javascript/controllers/forms/autosave_controller.js` which calls the backend `Applications::AutosaveService` via `constituent_portal/applications_controller#autosave_field`. This flow saves individual fields (excluding file inputs), returns validation errors inline, and updates the form action/URLs when a new draft `Application` is created. It locks/revalidates the guardian/applicant user rows before the application so a concurrent duplicate merge either includes the saved draft or makes the stale autosave fail.
+4. `Applications::ApplicationCreator` service:
+   * Uses `ApplicationForm` for validation → locks/revalidates participants → updates user attributes → creates/updates Application → attaches file uploads → logs events via `AuditEventService` + sends notifications via `NotificationService`.
+   * Owns the only routed final portal submission path through `ApplicationsController#update`; the former unused member `submit` endpoint is removed.
 
 ### 2.2 Paper (Admin)
 

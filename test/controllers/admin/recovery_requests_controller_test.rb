@@ -112,7 +112,10 @@ module Admin
 
     test 'does not approve recovery for a retired user' do
       canonical = create(:constituent)
-      @user.update!(status: :inactive, merged_into_user: canonical, merged_at: Time.current)
+      @user.update_columns(
+        status: User.statuses[:inactive], merged_into_user_id: canonical.id,
+        merged_at: Time.current, email: nil, phone: nil
+      )
 
       assert_no_difference '@user.webauthn_credentials.count' do
         post approve_admin_recovery_request_path(@recovery_request)

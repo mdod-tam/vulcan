@@ -2,6 +2,8 @@
 
 module Applications
   class AutosaveService < BaseService
+    class AccountUnavailableError < StandardError; end
+
     attr_reader :current_user, :params
 
     def initialize(current_user:, params:)
@@ -14,10 +16,21 @@ module Applications
       return autosave_error_result('Field name is required') if field_name.blank?
       return autosave_error_result('File uploads are not supported for autosave') if file_field?
 
-      initialize_application
-      return autosave_error_result('Unable to find or create application') if @application.nil?
+      result = nil
+      ActiveRecord::Base.transaction do
+        lock_application_participants!
+        initialize_application
+        if @application.nil?
+          result = autosave_error_result('Unable to find or create application')
+          raise ActiveRecord::Rollback
+        end
 
-      save_field
+        result = save_field
+        raise ActiveRecord::Rollback unless result[:success]
+      end
+      result
+    rescue AccountUnavailableError => e
+      autosave_error_result(e.message)
     end
 
     private
@@ -42,10 +55,51 @@ module Applications
                      end
     end
 
+    # Merge locks users before applications. Autosave must take the same locks before
+    # looking up or creating a draft, otherwise a request authenticated before retirement
+    # can create a new application after merge has already transferred its inventory.
+    def lock_application_participants!
+      participant_ids = application_participant_ids
+      locked_users = User.where(id: participant_ids).order(:id).lock.index_by(&:id)
+      raise AccountUnavailableError, 'Account is no longer available.' unless locked_users.size == participant_ids.size
+
+      @current_user = locked_users.fetch(current_user.id)
+      @requested_dependent = locked_users[requested_dependent.id] if requested_dependent
+
+      raise AccountUnavailableError, 'Account is no longer active. Please sign in again.' if locked_users.values.any? { |user| !user.public_login_active? }
+
+      lock_candidate_application!
+    end
+
+    def application_participant_ids
+      [current_user.id, requested_dependent&.id, candidate_application&.user_id,
+       candidate_application&.managing_guardian_id].compact.uniq
+    end
+
+    def lock_candidate_application!
+      return unless candidate_application
+
+      candidate_application.lock!
+      candidate_application.association(:user).reset
+      candidate_application.association(:managing_guardian).reset
+    end
+
+    def candidate_application
+      return @candidate_application if defined?(@candidate_application)
+
+      @candidate_application = (Application.accessible_by(current_user).find_by(id: params[:id]) if params[:id].present?)
+    end
+
+    def requested_dependent
+      return @requested_dependent if defined?(@requested_dependent)
+
+      @requested_dependent = (current_user.dependents.find_by(id: dependent_id_param) if dependent_id_param.present?)
+    end
+
     def find_existing_application
       # Search in both user's own applications and applications they manage as guardian
-      application = current_user.applications.find_by(id: params[:id]) ||
-                    current_user.managed_applications.find_by(id: params[:id])
+      application = candidate_application
+      application = nil unless application&.accessible_by?(current_user)
 
       application || find_or_create_draft_application
     end
@@ -103,7 +157,10 @@ module Applications
       dependent_id = dependent_id_param
       return nil if dependent_id.blank?
 
-      current_user.dependents.exists?(id: dependent_id) ? dependent_id : :unauthorized
+      return :unauthorized unless requested_dependent&.id.to_s == dependent_id.to_s
+      return :unauthorized unless current_user.dependents.exists?(id: requested_dependent.id)
+
+      requested_dependent.id
     end
 
     def apply_default_attributes(app)
@@ -189,7 +246,7 @@ module Applications
 
       was_new_record = @application.new_record?
 
-      @application.save(validate: false)
+      @application.save!(validate: false)
       log_application_created_event if was_new_record
       # Autosave records draft progress field-by-field without full validation.
       # rubocop:disable Rails/SkipsModelValidations

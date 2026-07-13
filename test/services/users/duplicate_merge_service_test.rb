@@ -233,7 +233,9 @@ module Users
 
     test 'blocks merge when the canonical survivor is already merged' do
       other = create(:constituent)
-      @canonical.update!(merged_into_user: other, merged_at: Time.current)
+      # Simulate stale/legacy merged state without asking the model to create a merged
+      # record that still owns live contact under the current invariant.
+      @canonical.update_columns(merged_into_user_id: other.id, merged_at: Time.current, updated_at: Time.current)
       result = merge
       assert result.failure?
       assert_match(/already been merged/i, result.message)
@@ -362,6 +364,50 @@ module Users
       assert second_subject.reload.needs_duplicate_review
       assert_equal 1, result.data[:summary][:duplicate_review_candidate_references_transferred]
       assert_equal 1, result.data[:summary][:duplicate_review_candidate_references_deduplicated]
+    end
+
+    test 'recomputes a repointed pending case key so repeat detection stays idempotent' do
+      subject = create(:constituent, needs_duplicate_review: false)
+      create_result = create_pending_case(subject: subject, candidate: @duplicate, reason: 'name_dob')
+      assert create_result.success?, create_result.message
+      repointed_case = create_result.data.fetch(:duplicate_review_case)
+
+      result = merge
+      assert result.success?, result.message
+
+      expected_key = DuplicateReviewCases::DeduplicationKey.call(
+        source: repointed_case.source,
+        subject_user_id: subject.id,
+        reason_codes: ['name_dob'],
+        candidate_user_ids: [@canonical.id]
+      )
+      assert_equal expected_key, repointed_case.reload.deduplication_key
+
+      assert_no_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count', 'Event.count'] do
+        repeated = create_pending_case(subject: subject, candidate: @canonical, reason: 'name_dob')
+        assert repeated.success?, repeated.message
+        assert repeated.data[:idempotent]
+        assert_equal repointed_case.id, repeated.data.fetch(:duplicate_review_case).id
+      end
+    end
+
+    test 'blocks merge when a projected candidate key collides with another pending case' do
+      subject = create(:constituent, needs_duplicate_review: false)
+      duplicate_case = create_pending_case(subject: subject, candidate: @duplicate, reason: 'name_dob')
+                       .data.fetch(:duplicate_review_case)
+      canonical_case = create_pending_case(subject: subject, candidate: @canonical, reason: 'name_dob')
+                       .data.fetch(:duplicate_review_case)
+      duplicate_contact = @duplicate.attributes.slice('email', 'phone', 'status', 'merged_into_user_id')
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/would duplicate pending case/i, result.message)
+      assert_includes result.message, duplicate_case.id.to_s
+      assert_includes result.message, canonical_case.id.to_s
+      assert_equal duplicate_contact, @duplicate.reload.attributes.slice('email', 'phone', 'status', 'merged_into_user_id')
+      assert duplicate_case.reload.duplicate_review_case_candidates.exists?(candidate_user_id: @duplicate.id)
+      assert_not @duplicate.merged?
     end
 
     test 'does not emit profile audit events during a successful merge' do
@@ -497,6 +543,18 @@ module Users
       )
       review_case.duplicate_review_case_candidates.create!(candidate_user: candidate, match_reason: reason, snapshot: {})
       review_case
+    end
+
+    def create_pending_case(subject:, candidate:, reason:)
+      DuplicateReviewCases::CreateService.new(
+        source: :support_claim,
+        subject_user: subject,
+        actor: @admin,
+        reason_codes: [reason],
+        candidates: [
+          DuplicateReviewCases::CreateService::CandidateInput.new(candidate, reason, {})
+        ]
+      ).call
     end
 
     def mfa_credential_snapshot(user)

@@ -71,6 +71,8 @@ module Users
       success('Duplicate record merged', { canonical_user: @canonical_user, duplicate_user: @duplicate_user, summary: @summary })
     rescue MergeError => e
       failure(e.message)
+    rescue ActiveRecord::RecordNotUnique
+      failure('Pending duplicate-review work changed during the merge; reload and reconcile the cases before retrying')
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence.presence || e.message)
     end
@@ -164,6 +166,7 @@ module Users
       return 'The duplicate record is the recipient of an active secure request form; revoke it before merging' if duplicate_active_secure_forms?
       return application_conflict_message if application_conflict?
       return guardian_conflict_message if guardian_pair_conflict?
+      return candidate_deduplication_conflict_message if candidate_deduplication_conflict?
 
       contact_result_error
     end
@@ -289,8 +292,19 @@ module Users
     # --- Mutations -----------------------------------------------------------
 
     def lock_records!
-      [@canonical_user, @duplicate_user].sort_by(&:id).each(&:lock!)
-      (related_pending_cases + pending_candidate_reference_cases).uniq.sort_by(&:id).each(&:lock!)
+      user_ids = [@canonical_user.id, @duplicate_user.id]
+      locked_users = User.where(id: user_ids).order(:id).lock.index_by(&:id)
+      raise MergeError, 'One of the selected users no longer exists' unless locked_users.size == user_ids.uniq.size
+
+      @canonical_user = locked_users.fetch(@canonical_user.id)
+      @duplicate_user = locked_users.fetch(@duplicate_user.id)
+      candidate_cases = pending_candidate_reference_cases
+      (related_pending_cases + candidate_cases).uniq.sort_by(&:id).each(&:lock!)
+
+      # A resolution may have committed while merge waited for one of these case locks.
+      # Requalify after lock! reloads each row; terminal cases are immutable history and
+      # must never be repointed merely because they were pending during the first query.
+      @pending_candidate_reference_cases = candidate_cases.select(&:pending?)
       pending_candidate_reference_rows
     end
 
@@ -425,6 +439,7 @@ module Users
     def reconcile_duplicate_review_candidate_references!
       transferred = 0
       deduplicated = 0
+      affected_case_ids = pending_candidate_reference_rows.map(&:duplicate_review_case_id).uniq
 
       pending_candidate_reference_rows.each do |candidate_reference|
         existing = DuplicateReviewCaseCandidate.find_by(
@@ -441,6 +456,8 @@ module Users
           transferred += 1
         end
       end
+
+      recompute_candidate_deduplication_keys!(affected_case_ids)
 
       @summary[:duplicate_review_candidate_references_transferred] = transferred
       @summary[:duplicate_review_candidate_references_deduplicated] = deduplicated
@@ -526,6 +543,61 @@ module Users
                                           .order(:id)
                                           .lock
                                           .to_a
+    end
+
+    def candidate_deduplication_conflict?
+      candidate_deduplication_conflict.present?
+    end
+
+    def candidate_deduplication_conflict_message
+      conflict = candidate_deduplication_conflict
+      return unless conflict
+
+      "Repointing duplicate-review case ##{conflict.fetch(:affected_case_id)} would duplicate pending case " \
+        "##{conflict.fetch(:existing_case_id)}; resolve one case before merging"
+    end
+
+    def candidate_deduplication_conflict
+      return @candidate_deduplication_conflict if defined?(@candidate_deduplication_conflict)
+
+      projected = {}
+      affected_cases = pending_candidate_reference_cases
+      affected_case_ids = affected_cases.map(&:id)
+      @candidate_deduplication_conflict = affected_cases.each do |review_case|
+        key = candidate_deduplication_key(review_case, projected: true)
+        existing_id = projected[key] || DuplicateReviewCase.pending_review
+                                                           .where(deduplication_key: key)
+                                                           .where.not(id: affected_case_ids)
+                                                           .pick(:id)
+        break { affected_case_id: review_case.id, existing_case_id: existing_id } if existing_id
+
+        projected[key] = review_case.id
+      end
+      @candidate_deduplication_conflict = nil unless @candidate_deduplication_conflict.is_a?(Hash)
+      @candidate_deduplication_conflict
+    end
+
+    def recompute_candidate_deduplication_keys!(case_ids)
+      pending_candidate_reference_cases.index_by(&:id).slice(*case_ids).each_value do |review_case|
+        review_case.update!(deduplication_key: candidate_deduplication_key(review_case))
+      end
+    end
+
+    def candidate_deduplication_key(review_case, projected: false)
+      candidate_rows = review_case.duplicate_review_case_candidates.pluck(:candidate_user_id, :match_reason)
+      if projected
+        candidate_rows = candidate_rows.map do |candidate_user_id, match_reason|
+          replacement_id = candidate_user_id == @duplicate_user.id ? @canonical_user.id : candidate_user_id
+          [replacement_id, match_reason]
+        end.uniq
+      end
+
+      DuplicateReviewCases::DeduplicationKey.call(
+        source: review_case.source,
+        subject_user_id: review_case.subject_user_id,
+        reason_codes: review_case.metadata['reason_codes'],
+        candidate_user_ids: candidate_rows.map(&:first)
+      )
     end
 
     def references_duplicate?(review_case)

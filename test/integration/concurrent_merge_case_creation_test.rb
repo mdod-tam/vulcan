@@ -25,7 +25,10 @@ class ConcurrentMergeCaseCreationTest < ActionDispatch::IntegrationTest
           locked = User.lock.find(subject.id)
           lock_held << true
           release_merge.pop
-          locked.update!(status: :inactive, merged_into_user: canonical, merged_at: Time.current)
+          locked.update_columns(
+            status: User.statuses[:inactive], merged_into_user_id: canonical.id,
+            merged_at: Time.current, email: nil, phone: nil
+          )
         end
       end
     ensure

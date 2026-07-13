@@ -17,7 +17,10 @@ class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
     assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
 
     canonical = create(:constituent)
-    @user.update!(status: :active, merged_into_user: canonical, merged_at: Time.current)
+    @user.update_columns(
+      status: User.statuses[:active], merged_into_user_id: canonical.id,
+      merged_at: Time.current, email: nil, phone: nil
+    )
 
     assert_no_difference '@user.sessions.count' do
       post process_verification_two_factor_authentication_path(type: 'totp'),
@@ -34,7 +37,10 @@ class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
     assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
 
     canonical = create(:constituent)
-    @user.update!(status: :active, merged_into_user: canonical, merged_at: Time.current)
+    @user.update_columns(
+      status: User.statuses[:active], merged_into_user_id: canonical.id,
+      merged_at: Time.current, email: nil, phone: nil
+    )
 
     post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: '000000' }
 

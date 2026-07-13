@@ -373,9 +373,16 @@ module Admin
     end
 
     def update
-      @user = User.find(params[:id])
+      updated = nil
+      User.transaction do
+        # Lock through the STI base class. Legacy rows may still store `Constituent`
+        # while instantiating as Users::Constituent; subclass `with_lock` would add a
+        # namespaced type predicate and fail to reload those otherwise valid rows.
+        @user = User.lock.find(params[:id])
+        updated = @user.update(admin_user_params)
+      end
 
-      if @user.update(admin_user_params)
+      if updated
         AuditEventService.log(
           action: 'user_updated',
           actor: current_user,
