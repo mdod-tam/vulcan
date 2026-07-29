@@ -103,10 +103,10 @@ module Applications
       replace_with_exact_target!(locked_inventory)
       requalify_application_authority!
 
-      return unless @form.is_submission
-
       raise IneligibleApplicantError, 'This application is no longer a draft.' unless
         target_application.new_record? || target_application.status_draft?
+
+      return unless @form.is_submission
 
       error = Application.sibling_application_eligibility_error(
         locked_inventory,
@@ -226,13 +226,9 @@ module Applications
         alternate_contact_email: @form.alternate_contact_email,
         alternate_contact_relationship_type: @form.alternate_contact_relationship_type
       }
+      # Every portal write starts from a newly-built or exactly locked draft.
       # Submission moves draft -> in_progress via transition_status! after save (canonical audit).
-      attributes[:status] =
-        if @form.is_submission
-          target_application.persisted? ? target_application.status : :draft
-        else
-          determine_status
-        end
+      attributes[:status] = target_application.persisted? ? target_application.status : :draft
 
       # Only set user if this is a new application or explicitly changing the user
       attributes[:user] = applicant_user if target_application.new_record? || @form.user_id.present?
@@ -340,10 +336,6 @@ module Applications
 
     def find_guardian_relationship
       locked_guardian_relationship
-    end
-
-    def determine_status
-      @form.application&.status || 'draft'
     end
 
     def determine_managing_guardian_id

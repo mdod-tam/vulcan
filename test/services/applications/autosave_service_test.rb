@@ -380,5 +380,75 @@ module Applications
       assert result[:success], "Expected autosave to succeed but got errors: #{result[:errors]}"
       assert dependent_draft.reload.maryland_resident, 'maryland_resident should be set to true'
     end
+
+    test 'rolls back a new draft when application-created audit logging raises' do
+      application_count = Application.count
+      event_count = Event.count
+      AuditEventService.stubs(:log).raises(StandardError, 'simulated application-created audit failure')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          field_name: 'application[household_size]',
+          field_value: '3'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors]['application[household_size]'], 'simulated application-created audit failure'
+      assert_equal application_count, Application.count, 'the new draft must roll back with its required audit'
+      assert_equal event_count, Event.count
+      assert_nil Application.find_by(user: @user)
+    end
+
+    test 'rolls back a user-field write when updating the application step raises' do
+      draft = FactoryBot.create(:application, :draft, user: @user, last_visited_step: 'step_1')
+      Application.any_instance
+                 .stubs(:update_column)
+                 .with(:last_visited_step, 'hearing_disability')
+                 .raises(StandardError, 'simulated application step failure')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: draft.id,
+          field_name: 'application[hearing_disability]',
+          field_value: 'true'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors]['application[hearing_disability]'], 'simulated application step failure'
+      assert_not @user.reload.hearing_disability, 'the earlier user-field write must roll back'
+      assert_equal 'step_1', draft.reload.last_visited_step
+    end
+
+    test 'rolls back an application-field write when updating the application step raises' do
+      draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @user,
+        household_size: 2,
+        last_visited_step: 'step_1'
+      )
+      Application.any_instance
+                 .stubs(:update_column)
+                 .with(:last_visited_step, 'household_size')
+                 .raises(StandardError, 'simulated application step failure')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: draft.id,
+          field_name: 'application[household_size]',
+          field_value: '5'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors]['application[household_size]'], 'simulated application step failure'
+      assert_equal 2, draft.reload.household_size, 'the earlier application-field write must roll back'
+      assert_equal 'step_1', draft.last_visited_step
+    end
   end
 end

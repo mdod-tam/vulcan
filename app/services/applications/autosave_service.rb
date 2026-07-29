@@ -130,6 +130,9 @@ module Applications
       result[:success] ? autosave_success_result : result
     rescue IneligibleAutosaveTargetError => e
       { success: false, errors: { base: [e.message] } }
+    rescue StandardError => e
+      Rails.logger.error("Error autosaving field #{attribute_name}: #{e.message}")
+      { success: false, errors: { "application[#{attribute_name}]" => [e.message] } }
     end
 
     # Locks the target participant (and, for a dependent application, the guardian) through
@@ -260,9 +263,6 @@ module Applications
       @application.update_column(:last_visited_step, attribute) if @application.persisted?
       # rubocop:enable Rails/SkipsModelValidations
       { success: true }
-    rescue StandardError => e
-      Rails.logger.error("Error autosaving user field #{attribute}: #{e.message}")
-      { success: false, errors: { "application[#{attribute}]" => [e.message] } }
     end
 
     # Called only from within save_field's transaction, after lock_and_requalify_participant!
@@ -285,16 +285,13 @@ module Applications
 
       was_new_record = @application.new_record?
 
-      @application.save(validate: false)
+      @application.save!(validate: false)
       log_application_created_event if was_new_record
       # Autosave records draft progress field-by-field without full validation.
       # rubocop:disable Rails/SkipsModelValidations
       @application.update_column(:last_visited_step, attribute)
       # rubocop:enable Rails/SkipsModelValidations
       { success: true }
-    rescue StandardError => e
-      Rails.logger.error("Error autosaving application field #{attribute}: #{e.message}")
-      { success: false, errors: { "application[#{attribute}]" => [e.message] } }
     end
 
     def cast_user_field_value(attribute, value)

@@ -141,6 +141,104 @@ module Applications
       user&.destroy
     end
 
+    test 'submission commits first: a stale save-draft fails closed without undoing lifecycle state' do
+      user = create(:constituent, hearing_disability: false, vision_disability: true)
+      draft = create(:application, :draft, user: user, annual_income: 10_000, household_size: 1)
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      submission_result = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          submission_result = run_submission(user:, application: draft)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      draft_save_result = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        draft_save_result = run_draft_save(user:, application: draft)
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid: holder_pid,
+        release_queue: release_holder,
+        holder_thread: holder_thread,
+        contender_thread: contender_thread
+      )
+
+      assert submission_result.success?, submission_result.error_messages.inspect
+      assert draft_save_result.failure?, 'the stale save-draft must requalify the exact locked row and fail'
+      assert_includes draft_save_result.error_messages, 'This application is no longer a draft.'
+      assert_equal 'in_progress', draft.reload.status
+      assert_equal 2, draft.household_size, 'the losing save-draft must not overwrite the submitted application'
+      assert_equal 50_000, draft.annual_income
+      assert_not user.reload.hearing_disability, 'the losing save-draft must not mutate participant fields'
+      assert user.vision_disability
+      assert_equal 1, ApplicationStatusChange.where(application: draft).count
+      assert_equal 1, Event.where(action: 'application_status_changed', auditable: draft).count
+      assert_equal 1, Event.where(action: 'application_updated', auditable: draft).count
+    ensure
+      draft&.destroy
+      user&.destroy
+    end
+
+    test 'save-draft commits first: a waiting submission proceeds through the canonical lifecycle once' do
+      user = create(:constituent, hearing_disability: false, vision_disability: true)
+      draft = create(:application, :draft, user: user, annual_income: 10_000, household_size: 1)
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      draft_save_result = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          draft_save_result = run_draft_save(user:, application: draft)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      submission_result = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        submission_result = run_submission(user:, application: draft)
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid: holder_pid,
+        release_queue: release_holder,
+        holder_thread: holder_thread,
+        contender_thread: contender_thread
+      )
+
+      assert draft_save_result.success?, draft_save_result.error_messages.inspect
+      assert submission_result.success?, submission_result.error_messages.inspect
+      assert_equal 'in_progress', draft.reload.status
+      assert_equal 2, draft.household_size
+      assert_equal 50_000, draft.annual_income
+      assert_equal 1, ApplicationStatusChange.where(application: draft).count
+      assert_equal 1, Event.where(action: 'application_status_changed', auditable: draft).count
+      assert_equal 1, Event.where(action: 'application_updated', auditable: draft).count,
+                   'rapid draft and submission updates share the existing audit deduplication window'
+    ensure
+      draft&.destroy
+      user&.destroy
+    end
+
     test 'role conversion commits first: final submission fails the exact constituent-role recheck' do
       user = create(:constituent)
       draft = create(:application, :draft, user: user)
@@ -291,6 +389,29 @@ module Applications
         medical_release_authorized: true,
         income_proof: submission_income_proof(attach_income_proof),
         is_submission: true
+      )
+      ApplicationCreator.call(form)
+    end
+
+    def run_draft_save(user:, application:)
+      form = ApplicationForm.new(
+        current_user: User.find(user.id),
+        application: Application.find(application.id),
+        annual_income: '62000',
+        household_size: 4,
+        submission_method: 'online',
+        hearing_disability: true,
+        vision_disability: false,
+        speech_disability: false,
+        mobility_disability: false,
+        cognition_disability: false,
+        medical_provider_name: 'Draft Provider',
+        medical_provider_phone: '555-4321',
+        medical_provider_email: 'draft-provider@test.com',
+        terms_accepted: true,
+        information_verified: true,
+        medical_release_authorized: true,
+        is_submission: false
       )
       ApplicationCreator.call(form)
     end

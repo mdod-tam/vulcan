@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
-require Rails.root.join('.cursor/support/system_test_evidence')
+require Rails.root.join('test/support/system_test_evidence')
 
 module Admin
   class DuplicateReviewsTest < ApplicationSystemTestCase
-    include Cursor::SystemTestEvidence
+    include SystemTestEvidence
 
     setup do
       @admin = create(:admin)
