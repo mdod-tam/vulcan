@@ -142,8 +142,16 @@ class ApplicationController < ActionController::Base
 
   # Creates a session, sets the cookie, tracks sign-in, and redirects.
   # To be called after successful authentication (password or 2FA).
-  def sign_in(user)
-    session_record = _create_and_set_session_cookie(user)
+  #
+  # +submitted_login_identifier+ and +submitted_password+ are the exact credentials the
+  # requester submitted (password sign-in only; 2FA completion omits both). They are passed
+  # through only for this immediate locked recheck and are never stored in session/cookies.
+  def sign_in(user, submitted_login_identifier: nil, submitted_password: nil)
+    session_record = _create_and_set_session_cookie(
+      user,
+      submitted_login_identifier: submitted_login_identifier,
+      submitted_password: submitted_password
+    )
     if session_record
       redirect_to after_sign_in_path_for(user), notice: t('controllers.application.sign_in.signin_pass')
     else
@@ -157,17 +165,44 @@ class ApplicationController < ActionController::Base
   # Fails closed for records that are not login-active (merged into another account,
   # inactive, or suspended). This is the single chokepoint for both password sign-in
   # and 2FA completion, so a duplicate retired mid-flow cannot finish authenticating.
-  def _create_and_set_session_cookie(user)
-    return unless user&.public_login_active?
+  #
+  # Locks the user row before requalifying so a concurrent merge and a concurrent sign-in
+  # can never interleave: either the merge commits first and this reload sees the retired
+  # record and fails closed, or this session is created and committed first and the merge
+  # -- which takes the same lock -- must wait behind it.
+  #
+  # For password sign-in, also re-resolves the exact submitted identifier and reauthenticates
+  # the exact submitted password under the same lock. A merge may reassign the identifier, or
+  # a concurrent password change may invalidate the password, while this request waits. The
+  # stale pre-lock authentication must not create a session after either authority changes.
+  def _create_and_set_session_cookie(user, submitted_login_identifier: nil, submitted_password: nil)
+    return unless user
 
-    session_record = user.sessions.new(
-      user_agent: request.user_agent,
-      ip_address: request.remote_ip
-    )
-    return unless session_record.save
+    session_record = nil
+    ActiveRecord::Base.transaction do
+      locked_user = User.lock_for_merge_integrity!(user).fetch(user.id)
+      next unless locked_user.public_login_active?
+
+      if submitted_login_identifier.present?
+        resolved_user = User.find_by_login_identifier(submitted_login_identifier)
+        next unless resolved_user&.id == locked_user.id
+        next unless locked_user.authenticate(submitted_password)
+      end
+
+      session_record = locked_user.sessions.new(
+        user_agent: request.user_agent,
+        ip_address: request.remote_ip
+      )
+      unless session_record.save
+        session_record = nil
+        next
+      end
+
+      locked_user.track_sign_in!(request.remote_ip) # Assuming this method exists on User model
+    end
+    return unless session_record
 
     cookies.signed[:session_token] = _session_cookie_options(session_record.session_token)
-    user.track_sign_in!(request.remote_ip) # Assuming this method exists on User model
     session_record
   end
 

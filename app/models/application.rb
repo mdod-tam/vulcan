@@ -36,6 +36,7 @@ class Application < ApplicationRecord
 
   # Concerns
   include ApplicationStatusManagement
+  include ApplicationSubmissionEligibility
   include NotificationDelivery
   include ProofManageable
   include ProofConsistencyValidation
@@ -363,9 +364,6 @@ class Application < ApplicationRecord
       { success: true, success_count: success_count, errors: [] }
     end
   end
-
-  # Allow test suite to disable certain validations globally
-  cattr_accessor :skip_wait_period_validation, default: false
 
   # Instance Methods
   def skip_medical_provider_validation?

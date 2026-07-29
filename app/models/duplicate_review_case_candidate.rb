@@ -24,8 +24,35 @@ class DuplicateReviewCaseCandidate < ApplicationRecord
 
   validates :match_reason, presence: true, inclusion: { in: MATCH_REASONS }
   validate :snapshot_shape
+  # Review evidence invariant: candidate snapshots are never created or rewritten once the
+  # parent case is resolved (terminal) -- runs on :create too, not just :update, since a new
+  # candidate added to an already-resolved case would be just as much a rewrite of terminal
+  # evidence as editing an existing one. Reads the live database state of the parent case,
+  # not an in-memory association, so a stale case instance cannot bypass the guard. This is
+  # a best-effort backstop (an unlocked read), not full concurrency control -- no live
+  # caller mutates an existing candidate outside of case-open time, so there is no traced
+  # writer for this to serialize against yet.
+  validate :immutable_once_case_resolved, on: %i[create update]
+  before_destroy :reject_destroy_once_case_resolved
 
   private
+
+  def immutable_once_case_resolved
+    return unless case_currently_resolved?
+
+    errors.add(:base, 'Cannot create or modify a candidate once its duplicate review case is resolved')
+  end
+
+  def reject_destroy_once_case_resolved
+    return unless case_currently_resolved?
+
+    errors.add(:base, 'Cannot delete a candidate once its duplicate review case is resolved')
+    throw :abort
+  end
+
+  def case_currently_resolved?
+    DuplicateReviewCase.unscoped.resolved_cases.exists?(id: duplicate_review_case_id)
+  end
 
   def snapshot_shape
     return if snapshot.blank?

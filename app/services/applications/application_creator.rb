@@ -4,6 +4,10 @@ module Applications
   # Service to orchestrate application creation and updates with proper separation of concerns
   # Handles persistence, audit logging, and event management for validated ApplicationForm objects
   class ApplicationCreator < BaseService
+    class IneligibleApplicantError < StandardError; end
+
+    attr_reader :target_application
+
     # Result object that provides success/failure status and application access
     class Result
       attr_reader :application, :errors
@@ -38,12 +42,14 @@ module Applications
       super()
       @form = form
       @errors = []
+      @target_application = form.target_application
     end
 
     def call
       return failure_result(['Form is invalid']) unless @form.valid?
 
       ActiveRecord::Base.transaction do
+        lock_and_requalify_applicant!
         setup_applicant_user
         update_user_attributes
         create_or_update_application
@@ -54,6 +60,9 @@ module Applications
       end
 
       success_result
+    rescue IneligibleApplicantError => e
+      @errors << e.message
+      failure_result(@errors)
     rescue ActiveRecord::RecordInvalid, StandardError => e
       Rails.logger.error("ApplicationCreator failed: #{e.message}")
       @errors << e.message
@@ -61,6 +70,100 @@ module Applications
     end
 
     private
+
+    def lock_and_requalify_applicant!
+      current_user_id = @form.current_user&.id
+      applicant_id = initial_applicant_id
+      raise IneligibleApplicantError, 'This record is no longer an eligible active record.' if current_user_id.blank? || applicant_id.blank?
+
+      guardian_ids = GuardianRelationship.where(dependent_id: applicant_id).pluck(:guardian_id)
+      locked_users = User.lock_for_merge_integrity!(
+        current_user_id,
+        applicant_id,
+        guardian_ids,
+        @form.managing_guardian_id
+      )
+      @current_user = locked_users.fetch(current_user_id)
+      @applicant_user = locked_users.fetch(applicant_id)
+
+      validate_constituent_participant!(@current_user)
+      validate_constituent_participant!(@applicant_user)
+
+      @locked_guardian_relationships = GuardianRelationship
+                                       .where(dependent_id: applicant_id)
+                                       .order(:id)
+                                       .lock
+                                       .to_a
+      missing_guardian_ids = @locked_guardian_relationships.map(&:guardian_id).uniq - locked_users.keys
+      raise IneligibleApplicantError, 'This guardian relationship changed while the application was being saved.' if missing_guardian_ids.any?
+
+      hydrate_guardian_relationships!(locked_users)
+
+      locked_inventory = Application.where(user_id: applicant_id).order(:id).lock.to_a
+      replace_with_exact_target!(locked_inventory)
+      requalify_application_authority!
+
+      return unless @form.is_submission
+
+      raise IneligibleApplicantError, 'This application is no longer a draft.' unless
+        target_application.new_record? || target_application.status_draft?
+
+      error = Application.sibling_application_eligibility_error(
+        locked_inventory,
+        target_application: target_application
+      )
+      raise IneligibleApplicantError, error if error
+    end
+
+    def initial_applicant_id
+      if target_application.persisted?
+        Application.where(id: target_application.id).pick(:user_id)
+      else
+        @form.applicant_user&.id
+      end
+    end
+
+    def validate_constituent_participant!(user)
+      raise IneligibleApplicantError, 'This record is no longer an eligible active record.' unless user.public_login_active?
+
+      return if user.constituent?
+
+      raise IneligibleApplicantError, 'Only constituent records can use the constituent application portal.'
+    end
+
+    def hydrate_guardian_relationships!(locked_users)
+      @locked_guardian_relationships.each do |relationship|
+        relationship.association(:guardian_user).target = locked_users.fetch(relationship.guardian_id)
+        relationship.association(:dependent_user).target = @applicant_user
+      end
+    end
+
+    def replace_with_exact_target!(locked_inventory)
+      if target_application.persisted?
+        exact_target = locked_inventory.find { |application| application.id == target_application.id }
+        raise IneligibleApplicantError, 'This application no longer belongs to this participant.' unless exact_target
+
+        @target_application = exact_target
+      end
+
+      target_application.association(:user).target = @applicant_user
+    end
+
+    def requalify_application_authority!
+      manager_id = target_application.persisted? ? target_application.managing_guardian_id : nil
+      @dependent_application = @applicant_user.id != @current_user.id || manager_id.present?
+
+      if dependent_application?
+        unless @applicant_user.id != @current_user.id && (!target_application.persisted? || manager_id == @current_user.id)
+          raise IneligibleApplicantError, 'This application is no longer managed by this guardian.'
+        end
+        raise IneligibleApplicantError, 'This guardian relationship is no longer authorized.' unless locked_guardian_relationship
+
+        target_application.association(:managing_guardian).target = @current_user if target_application.persisted?
+      elsif target_application.persisted? && target_application.user_id != @current_user.id
+        raise IneligibleApplicantError, 'This application no longer belongs to this participant.'
+      end
+    end
 
     def setup_applicant_user
       return unless applicant_user
@@ -85,7 +188,7 @@ module Applications
     end
 
     def address_attributes
-      return guardian_address_attributes if @form.for_dependent? && @form.use_guardian_address
+      return guardian_address_attributes if dependent_application? && @form.use_guardian_address
 
       {
         physical_address_1: @form.physical_address_1,
@@ -98,11 +201,11 @@ module Applications
 
     def guardian_address_attributes
       {
-        physical_address_1: @form.current_user.physical_address_1,
-        physical_address_2: @form.current_user.physical_address_2,
-        city: @form.current_user.city,
-        state: @form.current_user.state,
-        zip_code: @form.current_user.zip_code
+        physical_address_1: current_user.physical_address_1,
+        physical_address_2: current_user.physical_address_2,
+        city: current_user.city,
+        state: current_user.state,
+        zip_code: current_user.zip_code
       }
     end
 
@@ -179,11 +282,7 @@ module Applications
     end
 
     def determine_audit_actor
-      if @form.for_dependent?
-        target_application.managing_guardian || @form.current_user
-      else
-        @form.current_user
-      end
+      current_user
     end
 
     def log_application_created_event(actor)
@@ -229,10 +328,10 @@ module Applications
       return unless target_application.persisted?
 
       # Log dependent application event if applicable
-      return unless @form.for_dependent? && target_application.managing_guardian && target_application.user
+      return unless dependent_application? && target_application.managing_guardian && target_application.user
 
       relationship = find_guardian_relationship
-      event_service = Applications::EventService.new(target_application, user: @form.current_user)
+      event_service = Applications::EventService.new(target_application, user: current_user)
       event_service.log_dependent_application_update(
         dependent: target_application.user,
         relationship_type: relationship&.relationship_type
@@ -240,10 +339,7 @@ module Applications
     end
 
     def find_guardian_relationship
-      GuardianRelationship.find_by(
-        guardian_id: target_application.managing_guardian_id,
-        dependent_id: target_application.user_id
-      )
+      locked_guardian_relationship
     end
 
     def determine_status
@@ -251,25 +347,28 @@ module Applications
     end
 
     def determine_managing_guardian_id
-      # If explicitly set in form, use that
-      return @form.managing_guardian_id if @form.managing_guardian_id.present?
-
-      # If this is for a dependent, use current_user as guardian
-      return @form.current_user.id if @form.for_dependent?
-
       # If updating existing application, preserve existing managing_guardian_id
       return target_application.managing_guardian_id if target_application.persisted? && target_application.managing_guardian_id.present?
 
-      # Otherwise, no managing guardian
-      nil
+      dependent_application? ? current_user.id : nil
     end
 
     def applicant_user
-      @form.applicant_user
+      @applicant_user || @form.applicant_user
     end
 
-    def target_application
-      @target_application ||= @form.target_application
+    def current_user
+      @current_user || @form.current_user
+    end
+
+    def dependent_application?
+      @dependent_application == true
+    end
+
+    def locked_guardian_relationship
+      @locked_guardian_relationships&.find do |relationship|
+        relationship.guardian_id == current_user.id && relationship.dependent_id == applicant_user.id
+      end
     end
 
     def success_result

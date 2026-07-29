@@ -57,7 +57,10 @@ module Applications
       end
 
       result
-    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
+    rescue ActiveRecord::RecordNotUnique,
+           ActiveRecord::RecordInvalid,
+           ActiveRecord::RecordNotFound,
+           Applications::SecureRequestIssuanceIntegrity::ParticipantSetUnstable => e
       Rails.logger.warn("Proof resubmission request failed for application #{application.id}: #{e.message}")
       failure(message(:request_conflict))
     rescue CooldownActive => e
@@ -72,17 +75,60 @@ module Applications
       deliveries = nil
       result = nil
 
-      ApplicationRecord.transaction do
-        application.with_lock do
-          result = validate_request_preconditions
-          raise ActiveRecord::Rollback if result.failure?
-
-          deliveries = create_requests_for(result.data)
-          result = success(message(:request_created), result_data_for(deliveries))
+      issuance_integrity.with_locked_context do |context|
+        install_locked_context!(context)
+        unless secure_request_actor_eligible?
+          result = failure(message(:recipient_no_longer_eligible))
+          raise ActiveRecord::Rollback
         end
+
+        # #call's unlocked state check is only a fast-fail. Recheck against the
+        # exact locked application before creating any request rows.
+        unless requestable_proof_state?
+          result = failure(message(:request_not_needed))
+          raise ActiveRecord::Rollback
+        end
+
+        result = validate_request_preconditions
+        raise ActiveRecord::Rollback if result.failure?
+
+        result.data.each do |candidate|
+          candidate.recipient = context.locked_users.fetch(candidate.recipient.id)
+        end
+        unless secure_request_recipients_eligible?(result.data)
+          result = failure(message(:recipient_no_longer_eligible))
+          raise ActiveRecord::Rollback
+        end
+
+        deliveries = create_requests_for(result.data)
+        result = success(message(:request_created), result_data_for(deliveries))
       end
 
       [deliveries, result]
+    end
+
+    def issuance_integrity
+      Applications::SecureRequestIssuanceIntegrity.new(
+        application: application,
+        actor: actor,
+        resend_of: resend_of
+      )
+    end
+
+    def install_locked_context!(context)
+      @application = context.application
+      @actor = context.actor
+      @resend_of = context.resend_of
+      @secure_request_known_recipients = context.known_recipients
+      @secure_request_guardian_relationships = context.guardian_relationships
+    end
+
+    def secure_request_actor_eligible?
+      actor.admin? && actor.public_login_active?
+    end
+
+    def secure_request_recipients_eligible?(candidates)
+      candidates.all? { |candidate| candidate.recipient.constituent? && candidate.recipient.public_login_active? }
     end
 
     def validate_request_preconditions
@@ -142,7 +188,9 @@ module Applications
       Applications::SecureRequestRecipientResolver.new(
         application: application,
         recipient_ids: recipient_ids,
-        channel_overrides: channel_overrides
+        channel_overrides: channel_overrides,
+        known_recipients: @secure_request_known_recipients,
+        guardian_relationships: @secure_request_guardian_relationships
       )
     end
 
@@ -150,14 +198,16 @@ module Applications
       Applications::SecureRequestRecipientResolver.new(
         application: application,
         recipient_ids: [resend_of.recipient_id],
-        channel_overrides: { resend_of.recipient_id => resend_of.recipient_channel }
+        channel_overrides: { resend_of.recipient_id => resend_of.recipient_channel },
+        known_recipients: @secure_request_known_recipients,
+        guardian_relationships: @secure_request_guardian_relationships
       )
     end
 
     def repair_managing_guardian_if_possible
       return success if application.managing_guardian_id.present?
 
-      relationships = GuardianRelationship.where(dependent_id: application.user_id).to_a
+      relationships = @secure_request_guardian_relationships
       return success if relationships.empty?
 
       if relationships.one?
@@ -173,7 +223,9 @@ module Applications
       candidates.map do |candidate|
         ensure_cooldown_allows!(candidate)
         open_requests_for(candidate.recipient.id)
-          .find_each { |request_form| request_form.revoke!(actor: actor, reason: :replacement_request) }
+          .order(:id)
+          .lock
+          .each { |request_form| request_form.revoke!(actor: actor, reason: :replacement_request) }
         create_delivery(candidate, request_batch_id)
       end
     end

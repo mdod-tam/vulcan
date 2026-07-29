@@ -59,6 +59,11 @@ class DuplicateReviewCase < ApplicationRecord
   validate :metadata_shape
   validate :resolution_fields_present_when_resolved
   validate :resolution_metadata_shape
+  # Review evidence invariant: a resolved case is terminal and its resolution/snapshot facts
+  # are never rewritten. Reads the live database row (not this instance's own dirty
+  # tracking) so a caller holding a pre-resolution instance cannot bypass the guard.
+  validate :terminal_case_immutable, on: :update
+  before_destroy :reject_resolved_case_destroy
 
   scope :open_cases, -> { where(status: statuses[:open]) }
   scope :resolved_cases, -> { where(status: RESOLVED_STATUSES.map { |s| statuses[s] }) }
@@ -77,6 +82,23 @@ class DuplicateReviewCase < ApplicationRecord
   end
 
   private
+
+  def terminal_case_immutable
+    errors.add(:base, 'A resolved duplicate review case cannot be modified') if currently_resolved_in_database?
+  end
+
+  def currently_resolved_in_database?
+    return false if new_record?
+
+    self.class.unscoped.resolved_cases.exists?(id: id)
+  end
+
+  def reject_resolved_case_destroy
+    return unless currently_resolved_in_database?
+
+    errors.add(:base, 'A resolved duplicate review case cannot be deleted')
+    throw :abort
+  end
 
   def resolution_fields_present_when_resolved
     return unless RESOLVED_STATUSES.include?(status)

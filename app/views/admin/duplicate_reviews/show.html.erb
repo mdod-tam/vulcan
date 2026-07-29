@@ -43,13 +43,17 @@
               <%= render 'record_facts', user: @subject, role_label: 'Subject' %>
               <%= render 'record_facts', user: candidate.candidate_user, role_label: 'Candidate' %>
             </div>
-            <% if @review_case.open? %>
+            <% if @review_case.open? && @review_case.registration_soft_match? %>
               <details class="border-t border-gray-100 pt-3">
                 <summary class="cursor-pointer text-sm font-medium text-red-700">Merge these two records</summary>
                 <div class="mt-3">
                   <%= render 'merge_form', review_case: @review_case, subject: @subject, candidate: candidate.candidate_user %>
                 </div>
               </details>
+            <% elsif @review_case.open? %>
+              <p class="border-t border-gray-100 pt-3 text-sm text-gray-500">
+                Same-person merge is available only for registration-match cases. Resolve this case without merging.
+              </p>
             <% else %>
               <p class="border-t border-gray-100 pt-3 text-sm text-gray-500">This case is resolved. Merging is disabled.</p>
             <% end %>

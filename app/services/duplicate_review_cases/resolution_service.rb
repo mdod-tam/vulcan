@@ -6,6 +6,8 @@ module DuplicateReviewCases
   # determination, and a required rationale, then clears the subject review flag when
   # no other open case remains. Same-person merges are handled by Users::DuplicateMergeService.
   class ResolutionService < BaseService
+    class StaleCaseError < StandardError; end
+
     ACTIONS = {
       approve: :resolved_approved,
       ignore: :resolved_ignored,
@@ -27,8 +29,13 @@ module DuplicateReviewCases
       return failure(validation_error) if validation_error
 
       ActiveRecord::Base.transaction do
+        # User rows lock before the case, matching Users::DuplicateMergeService's order, so
+        # a resolution and a same-person merge racing on the same case/subject can never
+        # deadlock (Postgres would otherwise detect a User<->Case ABBA cycle and abort one
+        # transaction, surfacing as an unhandled error instead of a clean failure result).
+        lock_user_participants!
         @duplicate_review_case.lock!
-        return failure('Case is no longer open') unless @duplicate_review_case.open?
+        raise StaleCaseError, 'Case is no longer open' unless @duplicate_review_case.open?
 
         resolve_case!
         sync_subject_review_flag!
@@ -36,6 +43,8 @@ module DuplicateReviewCases
       end
 
       success('Duplicate review case resolved', { duplicate_review_case: @duplicate_review_case })
+    rescue StaleCaseError => e
+      failure(e.message)
     end
 
     private
@@ -56,6 +65,15 @@ module DuplicateReviewCases
       @actor.respond_to?(:admin?) && @actor.admin?
     end
 
+    def lock_user_participants!
+      subject_id = @duplicate_review_case.subject_user_id
+      locked_users = User.lock_for_merge_integrity!(@actor.id, subject_id)
+      @actor = locked_users.fetch(@actor.id)
+      raise StaleCaseError, 'Admin actor is no longer eligible' unless @actor.admin? && @actor.public_login_active?
+
+      @locked_subject = locked_users[subject_id]
+    end
+
     def resolve_case!
       @duplicate_review_case.update!(
         status: ACTIONS.fetch(@action),
@@ -74,18 +92,17 @@ module DuplicateReviewCases
     end
 
     def sync_subject_review_flag!
-      subject = @duplicate_review_case.subject_user
-      return if subject.blank?
+      return if @locked_subject.blank?
 
-      remaining = DuplicateReviewCase.open_cases.for_subject(subject).where.not(id: @duplicate_review_case.id).exists?
-      subject.update!(needs_duplicate_review: remaining)
+      remaining = DuplicateReviewCase.open_cases.for_subject(@locked_subject).where.not(id: @duplicate_review_case.id).exists?
+      @locked_subject.update!(needs_duplicate_review: remaining)
     end
 
     def log_resolution!
       AuditEventService.log(
         action: 'duplicate_review_case_resolved',
         actor: @actor,
-        auditable: @duplicate_review_case.subject_user,
+        auditable: @locked_subject || @duplicate_review_case.subject_user,
         metadata: {
           duplicate_review_case_id: @duplicate_review_case.id,
           resolution_action: @action.to_s,

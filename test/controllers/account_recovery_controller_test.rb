@@ -56,6 +56,18 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_not_nil recovery_request.user_agent
   end
 
+  test 'recovery submission locks only the requester, not every admin recipient' do
+    locked_user = @user.reload
+    User.expects(:lock_for_merge_integrity!).with(@user.id).returns({ @user.id => locked_user })
+
+    assert_difference('RecoveryRequest.count', 1) do
+      post request_security_key_reset_path, params: {
+        contact: @user.email,
+        details: 'Verify the narrow merge-integrity lock boundary'
+      }
+    end
+  end
+
   test 'recovery request preserves request locale through confirmation' do
     assert_difference('RecoveryRequest.count', 1) do
       post request_security_key_reset_path, params: {

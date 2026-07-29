@@ -550,6 +550,20 @@ module ConstituentPortal
       assert_equal 'Dependent was successfully updated.', flash[:notice]
     end
 
+    %i[inactive suspended].each do |status|
+      test "guardian can edit an unmerged #{status} dependent" do
+        @dependent.update!(status: status)
+
+        patch constituent_portal_dependent_path(@dependent), params: {
+          dependent: { first_name: 'Still Editable' }
+        }
+
+        assert_redirected_to constituent_portal_dashboard_path
+        assert_equal 'Still Editable', @dependent.reload.first_name
+        assert_not @dependent.merged?
+      end
+    end
+
     test 'should only allow permitted parameters' do
       # Try to update a field that shouldn't be allowed
       patch constituent_portal_dependent_path(@dependent), params: {

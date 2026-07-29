@@ -54,6 +54,13 @@ module ConstituentPortal
     end
 
     # PATCH/PUT /constituent_portal/dependents/:id
+    #
+    # Locks the dependent and the guardian before requalifying and updating, so a concurrent
+    # merge and a concurrent dependent profile edit can never interleave: either the merge
+    # commits first and this reload sees the retired participant and refuses, or the edit
+    # commits first and the merge -- which takes the same lock -- waits. Also rechecks the
+    # guardian relationship under the lock: set_dependent's own scope already checked it once,
+    # unlocked, before this lock was granted.
     def update
       params_to_update = dependent_attributes_with_contact_strategies
       unless params_to_update
@@ -63,11 +70,25 @@ module ConstituentPortal
         return
       end
 
-      if @dependent.update(params_to_update)
-        redirect_after_successful_update
-      else
-        setup_edit_template_variables
-        render :edit, status: :unprocessable_content
+      ActiveRecord::Base.transaction do
+        locked_users = User.lock_for_merge_integrity!(@dependent, current_user)
+        locked_dependent = locked_users.fetch(@dependent.id)
+        locked_guardian = locked_users.fetch(current_user.id)
+
+        if locked_dependent.merged? || locked_guardian.merged? ||
+           !GuardianRelationship.exists?(guardian_id: current_user.id, dependent_id: @dependent.id)
+          redirect_to constituent_portal_dashboard_path, alert: 'This dependent is no longer available to edit.'
+          raise ActiveRecord::Rollback
+        end
+
+        @dependent = locked_dependent
+        if @dependent.update(params_to_update)
+          redirect_after_successful_update
+        else
+          setup_edit_template_variables
+          render :edit, status: :unprocessable_content
+          raise ActiveRecord::Rollback
+        end
       end
     end
 

@@ -32,7 +32,13 @@ class SessionsController < ApplicationController
       return render_form_errors
     end
 
-    return sign_in(user) unless user.second_factor_enabled?
+    unless user.second_factor_enabled?
+      return sign_in(
+        user,
+        submitted_login_identifier: login_contact_param,
+        submitted_password: params[:password]
+      )
+    end
 
     setup_two_factor_session(user)
     redirect_to_two_factor_verification(user)

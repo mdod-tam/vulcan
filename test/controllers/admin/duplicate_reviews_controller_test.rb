@@ -26,6 +26,52 @@ module Admin
       get admin_duplicate_review_path(@review_case)
       assert_response :success
       assert_select '[data-testid="candidate-comparison"]'
+      assert_select 'form[data-controller~="final-submit-gate"][data-testid="duplicate-merge-form"]'
+      assert_select 'input[type="radio"][name="contact[email]"]', count: 0
+      assert_select 'input[type="hidden"][name="contact[email]"][value="canonical"]'
+      assert_select 'select[data-final-submit-gate-conditional-required="phone-type"][aria-required="false"]'
+      assert_select 'input[type="submit"][data-final-submit-gate-target="submitButton"][disabled]'
+    end
+
+    test 'show assigns unique control ids to every candidate merge form' do
+      other_candidate = create(:constituent, email: "cand2-#{SecureRandom.hex(3)}@example.com")
+      @review_case.duplicate_review_case_candidates.create!(
+        candidate_user: other_candidate,
+        match_reason: 'name_dob',
+        snapshot: {}
+      )
+
+      get admin_duplicate_review_path(@review_case)
+
+      forms = css_select('form[data-testid="duplicate-merge-form"]')
+      assert_equal 2, forms.size
+      control_ids = forms.flat_map { |form| form.css('input[id], select[id], textarea[id]').map { |control| control['id'] } }
+      assert_equal control_ids.uniq.size, control_ids.size, 'per-candidate merge controls must not reuse DOM ids'
+    end
+
+    test 'show disables a non-email canonical choice when the other record owns the email-backed login' do
+      @subject.update!(email: nil, communication_preference: :letter)
+
+      get admin_duplicate_review_path(@review_case)
+
+      prefix = "duplicate-review-#{@review_case.id}-candidate-#{@candidate.id}"
+      assert_select "input[id='#{prefix}-canonical-#{@subject.id}'][disabled]"
+      assert_select "input[id='#{prefix}-canonical-#{@candidate.id}']:not([disabled])"
+      assert_select 'span', text: /Unavailable: the other record owns the email-backed login/
+    end
+
+    test 'show does not offer merge for an open case outside registration soft match' do
+      support_case = open_case(
+        create(:constituent, needs_duplicate_review: true),
+        create(:constituent),
+        source: :support_claim
+      )
+
+      get admin_duplicate_review_path(support_case)
+
+      assert_response :success
+      assert_select 'form[data-testid="duplicate-merge-form"]', count: 0
+      assert_select 'p', text: /Same-person merge is available only for registration-match cases/
     end
 
     test 'show hides the forms and renders a read-only summary for a resolved case' do
@@ -60,8 +106,8 @@ module Admin
         same_person_confirmed: '1',
         rationale: 'same person confirmed',
         reason_codes: ['name_dob'],
-        contact: { email: 'canonical', phone: 'canonical', address: 'canonical', phone_type: 'voice' },
-        delivery_choice: 'canonical'
+        contact: { phone_user_id: @candidate.id, address_user_id: @candidate.id, phone_type: 'voice' },
+        delivery_user_id: @candidate.id
       }
       assert_redirected_to admin_user_path(@candidate)
       assert @subject.reload.merged?
@@ -79,8 +125,8 @@ module Admin
         same_person_confirmed: '1',
         rationale: 'same person confirmed',
         reason_codes: ['name_dob'],
-        contact: { email: 'canonical', phone: 'canonical', address: 'canonical', phone_type: 'voice' },
-        delivery_choice: 'canonical',
+        contact: { phone_user_id: @candidate.id, address_user_id: @candidate.id, phone_type: 'voice' },
+        delivery_user_id: @candidate.id,
         # Forged/irrelevant application_ids: an unrelated app id plus a nonexistent id.
         # The service no longer accepts a transfer subset, so this must have no effect.
         application_ids: [unrelated_app.id, 0]
@@ -89,6 +135,44 @@ module Admin
       assert_redirected_to admin_user_path(@candidate)
       assert_equal @candidate.id, duplicate_app.reload.user_id, "the duplicate's own application must still transfer"
       assert_equal unrelated_owner.id, unrelated_app.reload.user_id, 'an unrelated application must never move'
+    end
+
+    test 'merge ignores a forged email source and keeps the canonical login authority' do
+      canonical_email = @candidate.email
+      post merge_admin_duplicate_review_path(@review_case), params: {
+        pair_ids: [@subject.id, @candidate.id],
+        canonical_user_id: @candidate.id,
+        same_person_confirmed: '1',
+        rationale: 'same person confirmed',
+        reason_codes: ['name_dob'],
+        contact: {
+          email: 'duplicate',
+          phone_user_id: @candidate.id,
+          address_user_id: @candidate.id,
+          phone_type: 'voice'
+        },
+        delivery_user_id: @candidate.id
+      }
+      assert_redirected_to admin_user_path(@candidate)
+      assert_equal canonical_email, @candidate.reload.email
+      assert_nil @subject.reload.email
+    end
+
+    test 'merge rejects a forged contact source outside the reviewed pair' do
+      outsider = create(:constituent)
+      post merge_admin_duplicate_review_path(@review_case), params: {
+        pair_ids: [@subject.id, @candidate.id],
+        canonical_user_id: @candidate.id,
+        same_person_confirmed: '1',
+        rationale: 'same person confirmed',
+        reason_codes: ['name_dob'],
+        contact: { phone_user_id: outsider.id, address_user_id: @candidate.id, phone_type: 'voice' },
+        delivery_user_id: @candidate.id
+      }
+
+      assert_redirected_to admin_duplicate_review_path(@review_case)
+      assert_not @candidate.reload.merged?
+      assert_not @subject.reload.merged?
     end
 
     test 'merge rejects a forged pair that excludes the case subject' do
@@ -101,8 +185,8 @@ module Admin
         same_person_confirmed: '1',
         rationale: 'forged candidate-only pair',
         reason_codes: ['name_dob'],
-        contact: { email: 'canonical', phone: 'canonical', address: 'canonical', phone_type: 'voice' },
-        delivery_choice: 'canonical'
+        contact: { phone_user_id: @candidate.id, address_user_id: @candidate.id, phone_type: 'voice' },
+        delivery_user_id: @candidate.id
       }
       assert_redirected_to admin_duplicate_review_path(@review_case)
       assert_not @candidate.reload.merged?
@@ -111,7 +195,9 @@ module Admin
 
     test 'clear_flag clears a legacy flag with rationale' do
       legacy = create(:constituent, needs_duplicate_review: true)
-      post clear_flag_admin_duplicate_reviews_path, params: { user_id: legacy.id, rationale: 'reviewed manually' }
+      assert_difference 'Event.where(action: \'duplicate_review_flag_cleared\').count', 1 do
+        post clear_flag_admin_duplicate_reviews_path, params: { user_id: legacy.id, rationale: 'reviewed manually' }
+      end
       assert_redirected_to admin_duplicate_reviews_path
       assert_not legacy.reload.needs_duplicate_review
     end
@@ -131,9 +217,9 @@ module Admin
 
     private
 
-    def open_case(subject, candidate)
+    def open_case(subject, candidate, source: :registration_soft_match)
       review_case = DuplicateReviewCase.create!(
-        source: :registration_soft_match,
+        source: source,
         subject_user: subject,
         deduplication_key: SecureRandom.hex(16),
         metadata: { 'reason_codes' => ['name_dob'] },

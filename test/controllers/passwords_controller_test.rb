@@ -259,6 +259,14 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_not @user.reload.authenticate('ReplayReset*Password123')
   end
 
+  def test_generated_password_reset_token_is_invalid_after_normalized_email_changes
+    token = @user.generate_token_for(:password_reset)
+
+    @user.update!(email: "changed-#{SecureRandom.hex(4)}@example.com")
+
+    assert_nil User.find_by_token_for(:password_reset, token)
+  end
+
   def test_should_update_password_with_valid_inputs
     patch password_path, params: {
       password_challenge: 'password123',

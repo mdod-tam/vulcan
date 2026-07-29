@@ -10,12 +10,20 @@ module UserAuthentication
   LOCK_DURATION = 1.hour
 
   included do
-    # Token generation for password reset
-    generates_token_for :password_reset, expires_in: 20.minutes do
-      password_digest&.last(10)
-    end
-
+    # Define the password accessors first. Rails' has_secure_password installs its own
+    # password-salt token definition, so our stronger password-plus-email definition
+    # must be registered afterward.
     has_secure_password
+
+    # Token generation for password reset. Bound to a fingerprint of both the password
+    # digest and the normalized login email (not the digest alone) so either a password
+    # change OR a login-email change -- e.g. a merge reassigning the login email to a
+    # different survivor -- invalidates outstanding tokens. This is a distinct mechanism from
+    # clearing the legacy reset_password_token/reset_password_sent_at columns on retirement;
+    # the two must not be conflated.
+    generates_token_for :password_reset, expires_in: 20.minutes do
+      password_reset_token_fingerprint
+    end
 
     # Associations
     has_many :sessions, dependent: :destroy
@@ -109,5 +117,14 @@ module UserAuthentication
     webauthn_credentials.exists? ||
       totp_credentials.exists? ||
       sms_credentials.verified.exists?
+  end
+
+  private
+
+  # HMAC-SHA256 of the password digest (standing in for a dedicated password salt column,
+  # which this schema does not have) plus the normalized login email. Used only as the
+  # generates_token_for :password_reset payload above -- see that block's comment.
+  def password_reset_token_fingerprint
+    OpenSSL::HMAC.hexdigest('SHA256', password_digest.to_s, User.normalize_email(email).to_s)
   end
 end

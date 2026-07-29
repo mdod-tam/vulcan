@@ -101,7 +101,8 @@ module Applications
         :application,
         :draft,
         user: @dependent,
-        managing_guardian_id: @user.id
+        managing_guardian_id: @user.id,
+        household_size: 1
       )
 
       assert_no_difference -> { Application.count } do
@@ -175,8 +176,8 @@ module Applications
       assert_equal draft.id, result[:application_id]
     end
 
-    test 'falls back to find_or_create when provided id not found' do
-      existing_draft = FactoryBot.create(:application, :draft, user: @user)
+    test 'fails closed rather than substituting a different draft when the provided id is not found' do
+      FactoryBot.create(:application, :draft, user: @user)
 
       result = Applications::AutosaveService.new(
         current_user: @user,
@@ -187,9 +188,8 @@ module Applications
         }
       ).call
 
-      assert result[:success]
-      # Should find the existing draft instead of creating new
-      assert_equal existing_draft.id, result[:application_id]
+      assert_not result[:success]
+      assert_includes result[:errors][:base], 'Unable to find or create application'
     end
 
     test 'does not create new draft when active application exists' do
@@ -263,7 +263,8 @@ module Applications
         :application,
         :draft,
         user: @dependent,
-        managing_guardian_id: @user.id
+        managing_guardian_id: @user.id,
+        household_size: 1
       )
 
       result = Applications::AutosaveService.new(
@@ -307,6 +308,54 @@ module Applications
       # Verify the dependent's disability flag was updated, not the guardian's
       assert @dependent.reload.hearing_disability, 'Dependent should have hearing_disability set to true'
       assert_not @user.reload.hearing_disability, 'Guardian should not have hearing_disability set'
+    end
+
+    test 'dependent autosave rejects a guardian whose locked role is no longer constituent' do
+      dependent_draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian_id: @user.id,
+        household_size: 1
+      )
+      @user.update_column(:type, 'Users::Administrator')
+
+      result = Applications::AutosaveService.new(
+        current_user: User.find(@user.id),
+        params: {
+          id: dependent_draft.id,
+          field_name: 'application[household_size]',
+          field_value: '4'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors][:base], 'Only constituent records can use the constituent application portal.'
+      assert_not_equal 4, dependent_draft.reload.household_size
+    end
+
+    test 'dependent autosave rejects an applicant whose locked role is no longer constituent' do
+      dependent_draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian_id: @user.id,
+        household_size: 1
+      )
+      @dependent.update_column(:type, 'Users::Administrator')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: dependent_draft.id,
+          field_name: 'application[household_size]',
+          field_value: '4'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors][:base], 'Only constituent records can use the constituent application portal.'
+      assert_not_equal 4, dependent_draft.reload.household_size
     end
 
     test 'handles maryland_resident checkbox for dependent applications' do

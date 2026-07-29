@@ -474,6 +474,27 @@ module Admin
       assert_nil user.phone
     end
 
+    %i[inactive suspended].each do |status|
+      test "admin can edit an unmerged #{status} user profile" do
+        user = create(:constituent)
+        user.update!(status: status)
+
+        patch admin_user_path(user), params: {
+          user: {
+            first_name: 'Updated',
+            last_name: user.last_name,
+            email: user.email,
+            phone: user.phone,
+            phone_type: user.phone_type
+          }
+        }
+
+        assert_redirected_to admin_user_path(user)
+        assert_equal 'Updated', user.reload.first_name
+        assert_predicate user, :"#{status}?"
+      end
+    end
+
     test 'admin cannot clear all contact information outside paper intake' do
       user = create(:constituent, email: generate(:email), phone: '410-555-0100')
 

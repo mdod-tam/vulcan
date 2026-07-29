@@ -78,8 +78,10 @@ Use `success?`, `failure?`, `message`, and `data` when a service returns `BaseSe
 | `Applications::EventDeduplicationService` | `app/services/applications/event_deduplication_service.rb` | Deduplicates timeline inputs for display. | Array |
 | `DuplicateDetectionService` | `app/services/duplicate_detection_service.rb` | Evaluates exact contact duplicates and soft name+DOB/address signals for public registration, portal dependent creation, admin quick-create, and paper self/guardian/dependent creation contexts. | `BaseService::Result` with `DuplicateDetectionService::Result` data |
 | `DuplicateReviewCases::CreateService` | `app/services/duplicate_review_cases/create_service.rb` | Opens idempotent duplicate-review cases after the subject user is persisted, stores sanitized candidate/metadata snapshots, syncs `needs_duplicate_review`, and logs case-opened audit events. | `BaseService::Result` |
-| `DuplicateReviewCases::ResolutionService` | `app/services/duplicate_review_cases/resolution_service.rb` | Resolves an open case without moving data (approve/ignore/keep-separate), recording the determination + rationale, syncing the subject `needs_duplicate_review` flag, and logging `duplicate_review_case_resolved`. | `BaseService::Result` |
-| `Users::DuplicateMergeService` | `app/services/users/duplicate_merge_service.rb` | Same-person merge of a duplicate constituent into a canonical survivor: locks both records + the case, preflights every blocker, transfers applications/guardian relationships, retires the duplicate, resolves related open cases, and emits one `duplicate_user_merged` event, all in one transaction. | `BaseService::Result` |
+| `DuplicateReviewCases::ResolutionService` | `app/services/duplicate_review_cases/resolution_service.rb` | Resolves an open case without moving data (approve/ignore/keep-separate), locking actor + subject before the case, recording the determination + rationale, syncing the subject `needs_duplicate_review` flag, and logging `duplicate_review_case_resolved`. | `BaseService::Result` |
+| `Users::DuplicateMergeService` | `app/services/users/duplicate_merge_service.rb` | Same-person merge for one selected open `registration_soft_match` case: locks active actor + canonical + duplicate base users, the selected case/candidate, and the complete participant application inventory; preflights blockers; transfers supported ownership; clears the retired row's email/phone/phone type; resolves only the selected case; and emits one `duplicate_user_merged` event in the same transaction. | `BaseService::Result` |
+| `DuplicateReviewCases::ClearFlagService` | `app/services/duplicate_review_cases/clear_flag_service.rb` | Clears a subject's `needs_duplicate_review` flag outside of any case (requires a rationale), locking the subject row, refusing if an open case still exists, and logging `duplicate_review_flag_cleared`. | `BaseService::Result` |
+| `Applications::SecureRequestIssuanceIntegrity` | `app/services/applications/secure_request_issuance_integrity.rb` | Shared bounded-retry lock owner for provider-info and proof-resubmission issuance: locks the complete known base-user participant set before the exact application, guardian relationships, and optional resend form; retries the whole transaction if the locked inventory reveals another participant. | Yields a locked context or raises a bounded conflict |
 | `AuthRateLimit` | `app/services/auth_rate_limit.rb` | Centralizes sign-in, account-access, and account-recovery throttles using policy-backed per-action/per-scope limits and digest-only identifiers. | Raises `AuthRateLimit::ExceededError` on denial |
 | `PublicAuditActor` | `app/services/public_audit_actor.rb` | Attributes unauthenticated security/rate-limit audit events to the configured system audit actor without promoting a public request to a real user. | `Event` or `nil` |
 
@@ -89,6 +91,18 @@ Related docs:
 - Audit/event tracking: [`docs/features/audit_event_tracking.md`](../features/audit_event_tracking.md)
 - Notifications: [`docs/features/notifications.md`](../features/notifications.md)
 - Document signing: [`docs/development/docuseal_integration_guide.md`](docuseal_integration_guide.md)
+
+### Merge-integrity lock boundary
+
+Merge-integrity coordination covers only the writers traced to the same-person merge result. Production owners acquire base `User` locks in ascending id order before dependent rows; `User.lock_for_merge_integrity!` is the shared `FOR UPDATE` entry point, with the recovery-request exception documented below for its notification foreign keys:
+
+- merge: active actor, canonical, duplicate → selected case → matching candidate evidence → all applications owned or managed by either participant;
+- duplicate-review create/clear/resolve: actor and affected subject/candidates → case rows and audit mutation;
+- portal final submission/autosave: actor/applicant/known guardian participants → guardian relationships → exact application inventory;
+- recovery-request creation: requester + admin-notification FK inventory in ascending id order with `FOR KEY SHARE`, then the requester upgraded through `lock_for_merge_integrity!` before recovery/notification rows; secure-request creation: actor/requester/recipient inventory → application/relationship/secure-form rows;
+- primary contact edits, role conversion, password-only sign-in, and password-reset completion: the affected user(s) before re-resolving authority and writing.
+
+This inventory is a bounded guarantee for the listed merge-adjacent writers and their deterministic concurrency tests. It does not establish system-wide `User` serialization or universal deadlock freedom for unrelated services.
 
 ## 4 · Core Flows
 

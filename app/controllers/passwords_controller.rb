@@ -221,7 +221,6 @@ class PasswordsController < ApplicationController
 
   def update_password_from_token
     @user = User.find_by_token_for(:password_reset, params[:token])
-    @user = nil unless @user&.public_login_active?
     return redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless @user
 
     if params[:password] != params[:password_confirmation]
@@ -229,7 +228,39 @@ class PasswordsController < ApplicationController
       return render :edit, status: :unprocessable_content
     end
 
-    if @user.update(password: params[:password], password_confirmation: params[:password_confirmation], force_password_change: false)
+    # Lock the user row before requalifying and consuming the token, so a concurrent merge
+    # and a concurrent reset-password submission can never interleave: either the merge
+    # commits first and this reload sees the retired record and fails closed, or the
+    # password update commits first and the merge -- which takes the same lock -- waits.
+    token = params[:token]
+    eligible = false
+    update_succeeded = false
+    ActiveRecord::Base.transaction do
+      locked_user = User.lock_for_merge_integrity!(@user).fetch(@user.id)
+      eligible = locked_user.public_login_active?
+      next unless eligible
+
+      # Re-resolve the token itself under lock: the unlocked lookup above only proves the
+      # token's payload (bound to the password digest) was valid at that moment. A concurrent
+      # password change -- a different reset token, an admin reset, etc. -- in the window
+      # before this lock was granted would already have invalidated it; re-verifying against
+      # the now-locked row's current state closes that gap instead of letting a stale token
+      # still land.
+      resolved_by_token = User.find_by_token_for(:password_reset, token)
+      eligible = resolved_by_token.present? && resolved_by_token.id == locked_user.id
+      next unless eligible
+
+      @user = locked_user
+      update_succeeded = @user.update(
+        password: params[:password],
+        password_confirmation: params[:password_confirmation],
+        force_password_change: false
+      )
+    end
+
+    return redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless eligible
+
+    if update_succeeded
       redirect_to sign_in_path, notice: 'Password successfully updated.'
     else
       flash.now[:alert] = "Unable to update password. Please check requirements., #{@user.errors.full_messages.join(', ')}"

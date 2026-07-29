@@ -5,6 +5,7 @@ export default class extends Controller {
 
   connect() {
     this._incomeExceedsThreshold = false
+    this._conditionalRequiredSourceValues = new Map()
     this._boundUpdate = this.update.bind(this)
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this)
     this.element.addEventListener("input", this._boundUpdate)
@@ -25,6 +26,8 @@ export default class extends Controller {
   }
 
   update() {
+    this._syncConditionalRequiredControls()
+
     const disabled = this._incomeExceedsThreshold ||
       this._requiredControlsBlockSubmit() ||
       this._requiredRadioGroupBlocksSubmit() ||
@@ -42,9 +45,45 @@ export default class extends Controller {
 
     if (this.hasStatusTarget) {
       this.statusTarget.textContent = disabled
-        ? "Complete all required confirmations before submitting."
-        : "Application is ready to submit."
+        ? this._incompleteMessage()
+        : this._readyMessage()
     }
+  }
+
+  _syncConditionalRequiredControls() {
+    const sources = Array.from(
+      this.element.querySelectorAll("[data-final-submit-gate-conditional-required-source]")
+    )
+
+    Array.from(this.element.querySelectorAll("[data-final-submit-gate-conditional-required]"))
+      .forEach((field) => {
+        const key = field.dataset.finalSubmitGateConditionalRequired
+        const selectedSource = sources.find((source) => {
+          return source.checked && source.dataset.finalSubmitGateConditionalRequiredSource === key
+        })
+        const selectedValue = selectedSource ? `${selectedSource.name}:${selectedSource.value}` : null
+        const hadPreviousValue = this._conditionalRequiredSourceValues.has(key)
+        const previousValue = this._conditionalRequiredSourceValues.get(key)
+        const required = selectedSource?.dataset.finalSubmitGateRequiredWhenSelected === "true"
+
+        if (!required || (hadPreviousValue && previousValue !== selectedValue)) {
+          field.value = ""
+        }
+
+        field.required = required
+        field.setAttribute("aria-required", required ? "true" : "false")
+        this._conditionalRequiredSourceValues.set(key, selectedValue)
+      })
+  }
+
+  _incompleteMessage() {
+    return this.element.dataset.finalSubmitGateIncompleteMessage ||
+      "Complete all required confirmations before submitting."
+  }
+
+  _readyMessage() {
+    return this.element.dataset.finalSubmitGateReadyMessage ||
+      "Application is ready to submit."
   }
 
   _requiredControlsBlockSubmit() {

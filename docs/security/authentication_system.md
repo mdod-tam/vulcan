@@ -29,7 +29,8 @@ Current account-lock behavior:
 
 - maximum failed login attempts: 5
 - lock duration: 1 hour
-- password reset tokens expire after 20 minutes and are invalidated by a successful password change because token generation is tied to the password digest
+- password reset tokens expire after 20 minutes and are invalidated by either a successful password change or a normalized login-email change because token generation is bound to both authorities
+- reset-token consumption locks and reloads the base `User` row, then resolves the exact submitted token again against that locked password/email authority before changing the password
 
 Recovery requests are durable and idempotent: a partial unique index allows only one pending request per user, duplicate pending submissions coalesce into the same public confirmation, and a new pending request is allowed after the previous request is resolved. The index migration assumes alpha/shared environments do not already contain duplicate pending recovery requests for the same user; resolve any such rows before migrating. Admin approval removes WebAuthn credentials only if the approval notification record can be created and queued without a synchronous delivery error.
 
@@ -96,7 +97,7 @@ Current temporary state includes:
 
 The challenge is not always cleared at the exact same moment as successful verification because JSON/WebAuthn completion needs to create the final application session first. Do not add manual session cleanup in a controller without checking the existing flow.
 
-`User#public_login_active?` rejects merged, inactive, and suspended records (legacy NULL status is treated as active). It gates every point that resolves the in-progress MFA user — `ApplicationController#find_user_for_two_factor` and `TwoFactorAuthenticationsController#find_user_for_two_factor` both return `nil` for a record that fails this check, so a record retired by an admin merge mid-login cannot reach method selection, verification options, SMS resend, or credential updates; it fails closed to sign-in instead of only being caught at final session creation. `ApplicationController#_create_and_set_session_cookie` also re-checks `public_login_active?` and is the single chokepoint for both password sign-in and 2FA completion, so a record retired between password entry and MFA completion still cannot finish authenticating, and `TwoFactorAuth.abort_authentication` clears the temporary MFA state (including the challenge) on that failure so nothing can be replayed.
+`User#public_login_active?` rejects merged, inactive, and suspended records (legacy NULL status is treated as active). It gates every point that resolves the in-progress MFA user — `ApplicationController#find_user_for_two_factor` and `TwoFactorAuthenticationsController#find_user_for_two_factor` both return `nil` for a record that fails this check, so a record retired by an admin merge mid-login cannot reach method selection, verification options, SMS resend, or credential updates; it fails closed to sign-in instead of only being caught at final session creation. `ApplicationController#_create_and_set_session_cookie` also re-checks `public_login_active?` and is the single chokepoint for both password sign-in and 2FA completion, so a record retired between password entry and MFA completion still cannot finish authenticating, and `TwoFactorAuth.abort_authentication` clears the temporary MFA state (including the challenge) on that failure so nothing can be replayed. Brand-new self-registration creates its initial session separately after the new user and duplicate-review outcome are persisted; it does not pass through this existing-account authentication chokepoint.
 
 ---
 

@@ -2,6 +2,8 @@
 
 module Applications
   class AutosaveService < BaseService
+    class IneligibleAutosaveTargetError < StandardError; end
+
     attr_reader :current_user, :params
 
     def initialize(current_user:, params:)
@@ -43,11 +45,12 @@ module Applications
     end
 
     def find_existing_application
-      # Search in both user's own applications and applications they manage as guardian
-      application = current_user.applications.find_by(id: params[:id]) ||
-                    current_user.managed_applications.find_by(id: params[:id])
-
-      application || find_or_create_draft_application
+      # Search in both user's own applications and applications they manage as guardian.
+      # No fallback to find_or_create_draft_application: the caller supplied an exact
+      # application id, so if it can't be found (or isn't owned/managed by current_user),
+      # autosave must fail closed rather than silently substituting a different draft.
+      current_user.applications.find_by(id: params[:id]) ||
+        current_user.managed_applications.find_by(id: params[:id])
     end
 
     def find_or_create_draft_application
@@ -116,16 +119,105 @@ module Applications
     def save_field
       attribute_name = extract_attribute_name
       target_model = autosave_target_for(attribute_name)
+      return { success: false, errors: { field_name => ['This field cannot be autosaved'] } } if target_model == :ignored
 
-      result = if target_model == :user
-                 save_user_field(attribute_name)
-               elsif target_model == :ignored
-                 { success: false, errors: { field_name => ['This field cannot be autosaved'] } }
-               else
-                 save_application_field(attribute_name)
-               end
+      result = nil
+      ActiveRecord::Base.transaction do
+        lock_and_requalify_participant!
+        result = target_model == :user ? save_user_field(attribute_name) : save_application_field(attribute_name)
+      end
 
       result[:success] ? autosave_success_result : result
+    rescue IneligibleAutosaveTargetError => e
+      { success: false, errors: { base: [e.message] } }
+    end
+
+    # Locks the target participant (and, for a dependent application, the guardian) through
+    # the shared merge-integrity primitive before any write, so a concurrent merge and a
+    # concurrent autosave can never interleave. For an application that already exists in the
+    # database, also locks and reloads it and rechecks it is still exactly the draft that was
+    # found -- never substituting a different one -- still belongs to the same participant
+    # (ownership itself could have been transferred by a merge in the window between the
+    # initial unlocked lookup and this lock being granted), and that any guardian relationship
+    # is still authorized. For a brand-new draft about to be created, checks the shared
+    # Application.sibling_application_eligibility_error policy against the target's own
+    # now-locked application inventory instead of the prior unlocked ad hoc check.
+    def lock_and_requalify_participant!
+      initial_target_id = @application.user_id
+      guardian_ids = GuardianRelationship.where(dependent_id: initial_target_id).pluck(:guardian_id)
+      locked_users = User.lock_for_merge_integrity!(
+        current_user.id,
+        initial_target_id,
+        @application.managing_guardian_id,
+        guardian_ids
+      )
+      @locked_users = locked_users
+      @current_user = locked_users.fetch(current_user.id)
+      @target_user = locked_users.fetch(initial_target_id)
+
+      validate_constituent_participant!(@current_user)
+      validate_constituent_participant!(@target_user)
+
+      @locked_guardian_relationships = GuardianRelationship
+                                       .where(dependent_id: initial_target_id)
+                                       .order(:id)
+                                       .lock
+                                       .to_a
+      missing_guardian_ids = @locked_guardian_relationships.map(&:guardian_id).uniq - locked_users.keys
+      raise IneligibleAutosaveTargetError, 'This guardian relationship changed while the application was being saved.' if missing_guardian_ids.any?
+
+      if @application.persisted?
+        exact_application = Application.where(id: @application.id).order(:id).lock.first
+        raise IneligibleAutosaveTargetError, 'This application no longer belongs to this participant.' unless
+          exact_application&.user_id == initial_target_id
+
+        @application = exact_application
+      else
+        locked_inventory = Application.where(user_id: initial_target_id).order(:id).lock.to_a
+        error = Application.sibling_application_eligibility_error(locked_inventory, target_application: @application)
+        raise IneligibleAutosaveTargetError, error if error
+      end
+
+      install_locked_application_associations!
+      requalify_application_authority!
+      raise IneligibleAutosaveTargetError, 'This application is no longer a draft.' unless @application.status == 'draft'
+    end
+
+    def validate_constituent_participant!(user)
+      raise IneligibleAutosaveTargetError, 'This record is no longer an eligible active record.' unless user.public_login_active?
+
+      return if user.constituent?
+
+      raise IneligibleAutosaveTargetError, 'Only constituent records can use the constituent application portal.'
+    end
+
+    def install_locked_application_associations!
+      @application.association(:user).target = @target_user
+      @locked_guardian_relationships.each do |relationship|
+        relationship.association(:guardian_user).target = @locked_users.fetch(relationship.guardian_id)
+        relationship.association(:dependent_user).target = @target_user
+      end
+    end
+
+    def requalify_application_authority!
+      dependent_application = @target_user.id != current_user.id || @application.managing_guardian_id.present?
+
+      if dependent_application
+        unless @target_user.id != current_user.id && @application.managing_guardian_id == current_user.id
+          raise IneligibleAutosaveTargetError, 'This application is no longer managed by this guardian.'
+        end
+        raise IneligibleAutosaveTargetError, 'This guardian relationship is no longer authorized.' unless locked_guardian_relationship
+
+        @application.association(:managing_guardian).target = current_user
+      elsif @application.user_id != current_user.id
+        raise IneligibleAutosaveTargetError, 'This application no longer belongs to this participant.'
+      end
+    end
+
+    def locked_guardian_relationship
+      @locked_guardian_relationships.find do |relationship|
+        relationship.guardian_id == current_user.id && relationship.dependent_id == @target_user.id
+      end
     end
 
     def extract_attribute_name
@@ -157,13 +249,14 @@ module Applications
       :ignored
     end
 
+    # Called only from within save_field's transaction, after lock_and_requalify_participant!
+    # has already locked and revalidated the target user and (if persisted) the application.
     def save_user_field(attribute)
       value = cast_user_field_value(attribute, field_value)
-      # Update the target user (dependent if this is a dependent application, otherwise current_user)
-      target_user = @application.for_dependent? ? @application.user : current_user
+
       # Autosave persists individual draft fields without running full-form validations.
       # rubocop:disable Rails/SkipsModelValidations
-      target_user.update_column(attribute, value)
+      @target_user.update_column(attribute, value)
       @application.update_column(:last_visited_step, attribute) if @application.persisted?
       # rubocop:enable Rails/SkipsModelValidations
       { success: true }
@@ -172,6 +265,9 @@ module Applications
       { success: false, errors: { "application[#{attribute}]" => [e.message] } }
     end
 
+    # Called only from within save_field's transaction, after lock_and_requalify_participant!
+    # has already locked and revalidated the target participant and (if persisted) the
+    # application itself.
     def save_application_field(attribute)
       validation_result = validate_field_value(attribute)
       return validation_result unless validation_result[:success]
