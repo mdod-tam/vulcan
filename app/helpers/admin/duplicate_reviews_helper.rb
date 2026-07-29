@@ -3,11 +3,23 @@
 module Admin
   module DuplicateReviewsHelper
     SOURCE_LABELS = {
-      'registration_soft_match' => 'Registration match',
+      'registration_soft_match' => 'Found during registration',
       'paper_intake' => 'Paper intake',
       'admin_create' => 'Admin-created',
       'support_claim' => 'Support / claim case',
       'portal_dependent' => 'Portal dependent'
+    }.freeze
+
+    REASON_LABELS = {
+      'name_dob' => 'Name and date of birth match',
+      'exact_email' => 'Same email address',
+      'exact_email_non_portal' => 'Same email address on a non-portal record',
+      'exact_phone' => 'Same phone number',
+      'email_phone_split' => 'Email and phone match different records',
+      'address_zip' => 'Street address and ZIP code match',
+      'address_only_record' => 'Matching address-only record',
+      'admin_reviewed' => 'Reviewed by an administrator',
+      'manual_review' => 'Manual review'
     }.freeze
 
     STATUS_LABELS = {
@@ -27,6 +39,10 @@ module Admin
 
     def duplicate_review_status_label(status)
       STATUS_LABELS.fetch(status.to_s, status.to_s.humanize)
+    end
+
+    def duplicate_review_reason_label(reason)
+      REASON_LABELS.fetch(reason.to_s, reason.to_s.humanize)
     end
 
     # Stored record truth (not the delivery/effective fallback). Synthetic placeholders

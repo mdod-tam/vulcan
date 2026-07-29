@@ -145,7 +145,98 @@ class AccountRecoveryControllerConcurrencyTest < ActiveSupport::TestCase
     cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
   end
 
+  test 'simultaneous recovery submissions for the same constituent coalesce without deadlock' do
+    guard_admin = create(:admin)
+    requester = create(:constituent)
+
+    run_simultaneous_recovery_submissions(requester, requester)
+
+    assert_equal 1, requester.reload.recovery_requests.pending.count
+    assert_no_recovery_deadlock_for(requester)
+  ensure
+    cleanup_duplicate_review_test_data!(guard_admin, requester)
+  end
+
+  test 'simultaneous recovery submissions for different constituents both complete without deadlock' do
+    guard_admin = create(:admin)
+    first_requester = create(:constituent)
+    second_requester = create(:constituent)
+
+    run_simultaneous_recovery_submissions(first_requester, second_requester)
+
+    assert_equal 1, first_requester.reload.recovery_requests.pending.count
+    assert_equal 1, second_requester.reload.recovery_requests.pending.count
+    assert_no_recovery_deadlock_for(first_requester, second_requester)
+  ensure
+    cleanup_duplicate_review_test_data!(guard_admin, first_requester, second_requester)
+  end
+
+  test 'simultaneous recovery submissions for the same admin coalesce without deadlock' do
+    guard_admin = create(:admin)
+    requester = create(:admin)
+
+    run_simultaneous_recovery_submissions(requester, requester)
+
+    assert_equal 1, requester.reload.recovery_requests.pending.count
+    assert_no_recovery_deadlock_for(requester)
+  ensure
+    cleanup_duplicate_review_test_data!(guard_admin, requester)
+  end
+
+  test 'simultaneous recovery submissions for different admins both complete without deadlock' do
+    guard_admin = create(:admin)
+    first_requester = create(:admin)
+    second_requester = create(:admin)
+
+    run_simultaneous_recovery_submissions(first_requester, second_requester)
+
+    assert_equal 1, first_requester.reload.recovery_requests.pending.count
+    assert_equal 1, second_requester.reload.recovery_requests.pending.count
+    assert_no_recovery_deadlock_for(first_requester, second_requester)
+  ensure
+    cleanup_duplicate_review_test_data!(guard_admin, first_requester, second_requester)
+  end
+
   private
+
+  def run_simultaneous_recovery_submissions(*requesters)
+    key_share_ready = Queue.new
+    release_key_share = Queue.new
+    threads = requesters.each_with_index.map do |requester, index|
+      on_own_connection do
+        pause_after_first_key_share(index, ready: key_share_ready, release: release_key_share) do
+          run_recovery_submission(requester)
+        end
+      end
+    end
+
+    requesters.size.times { wait_for_signal(key_share_ready) }
+  ensure
+    requesters&.size&.times { release_key_share << true }
+    threads&.each { |thread| reap_thread(thread, timeout: 10, suppress_errors: !$ERROR_INFO.nil?) }
+  end
+
+  def pause_after_first_key_share(index, ready:, release:, &)
+    paused = false
+    subscriber = lambda do |_name, _started, _finished, _unique_id, payload|
+      next if paused || !payload[:sql].match?(/\bFOR KEY SHARE\b/)
+
+      paused = true
+      ready << index
+      release.pop
+    end
+
+    ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record', &)
+  end
+
+  def assert_no_recovery_deadlock_for(*requesters)
+    failed_events = Event.where(
+      action: 'security_key_recovery_request_failed',
+      user_id: requesters.map(&:id)
+    )
+
+    assert_empty failed_events, "recovery submission failures: #{failed_events.pluck(:metadata).inspect}"
+  end
 
   def build_fixtures
     admin = create(:admin)

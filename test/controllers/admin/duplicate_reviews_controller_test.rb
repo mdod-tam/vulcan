@@ -20,17 +20,23 @@ module Admin
       assert_response :success
       assert_select '[data-testid="duplicate-review-case-row"]'
       assert_match legacy.full_name, response.body
+      assert_select 'p', text: 'Review records that may belong to the same person.'
+      assert_select '[data-testid="case-source"]', text: 'Found during registration'
+      assert_select 'span', text: 'Name and date of birth match'
+      assert_select 'span', text: '1 possible matching record'
+      assert_select 'a', text: 'Compare records'
+      assert_select '#legacy-heading', text: 'Other records flagged for review'
     end
 
     test 'show renders grouped comparison and forms' do
       get admin_duplicate_review_path(@review_case)
       assert_response :success
       assert_select '[data-testid="candidate-comparison"]'
+      assert_select 'span', text: 'Name and date of birth match'
       assert_select 'form[data-controller~="final-submit-gate"][data-testid="duplicate-merge-form"]'
-      assert_select 'input[type="radio"][name="contact[email]"]', count: 0
-      assert_select 'input[type="hidden"][name="contact[email]"][value="canonical"]'
+      assert_select 'input[name="contact[email]"]', count: 0
       assert_select 'select[data-final-submit-gate-conditional-required="phone-type"][aria-required="false"]'
-      assert_select 'input[type="submit"][data-final-submit-gate-target="submitButton"][disabled]'
+      assert_select 'input[type="submit"][data-final-submit-gate-target="submitButton"]:not([disabled])'
     end
 
     test 'show assigns unique control ids to every candidate merge form' do

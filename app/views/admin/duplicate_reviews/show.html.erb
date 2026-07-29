@@ -9,7 +9,7 @@
       <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><%= duplicate_review_source_label(@review_case.source) %></span>
       <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= duplicate_review_status_label(@review_case.status) %></span>
       <% Array(@review_case.metadata['reason_codes']).each do |code| %>
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= code.humanize %></span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= duplicate_review_reason_label(code) %></span>
       <% end %>
     </div>
     <p class="text-sm text-gray-600">Opened <%= @review_case.opened_at.strftime('%B %d, %Y at %I:%M %p') %></p>
@@ -34,7 +34,7 @@
       <% @candidates.each do |candidate| %>
         <article class="bg-white shadow sm:rounded-md p-4 mb-6" data-testid="candidate-comparison">
           <div class="flex items-center gap-2 mb-3 text-xs">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= candidate.match_reason.humanize %></span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= duplicate_review_reason_label(candidate.match_reason) %></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"><%= candidate_link_state_label(candidate) %></span>
           </div>
 

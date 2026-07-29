@@ -42,14 +42,16 @@ class AccountRecoveryController < ApplicationController
     ActiveRecord::Base.transaction do
       # Only the requester needs exclusive requalification. Notification inserts also take
       # FK key-share locks on requester/admin rows, while merge locks its admin actor plus
-      # participants FOR UPDATE. Acquire the complete FK inventory weakly in global id order
-      # before upgrading the requester; this prevents a requester↔actor inversion without
-      # blocking ordinary non-key admin updates as FOR UPDATE would.
-      guarded_users = User.where(id: [user.id, *admin_ids].uniq)
-                          .order(:id)
-                          .lock('FOR KEY SHARE')
-                          .index_by(&:id)
+      # participants FOR UPDATE. Acquire every row once, in global id order, at its final
+      # strength: lower-id admins weakly, the requester exclusively, then higher-id admins
+      # weakly. This prevents requester↔actor inversion without a KEY SHARE -> UPDATE
+      # conversion that can deadlock two simultaneous recovery submissions.
+      notification_admin_ids = admin_ids.uniq - [user.id]
+      lower_admin_ids, higher_admin_ids = notification_admin_ids.partition { |id| id < user.id }
+      guarded_users = lock_recovery_notification_admins!(lower_admin_ids)
       locked_user = User.lock_for_merge_integrity!(user.id).fetch(user.id)
+      guarded_users[locked_user.id] = locked_user
+      guarded_users.merge!(lock_recovery_notification_admins!(higher_admin_ids))
       notification_admins = admin_ids.filter_map { |id| guarded_users[id] }.select(&:admin?)
       next unless locked_user.public_login_active?
       next if locked_user.recovery_requests.pending.exists?
@@ -69,6 +71,15 @@ class AccountRecoveryController < ApplicationController
     log_recovery_attempt(user, 'failed', error_class: e.class.name)
     Rails.logger.error "Failed to submit recovery request for user #{user.id}: #{e.message}"
     nil
+  end
+
+  def lock_recovery_notification_admins!(ids)
+    return {} if ids.empty?
+
+    locked_admins = User.unscoped.where(id: ids).order(:id).lock('FOR KEY SHARE').to_a
+    raise ActiveRecord::RecordNotFound, "Could not lock all recovery notification admins: #{ids}" if locked_admins.size != ids.size
+
+    locked_admins.index_by(&:id)
   end
 
   def pre_lookup_recovery_rate_limit_scope(contact)

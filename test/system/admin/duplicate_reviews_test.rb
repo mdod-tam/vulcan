@@ -49,7 +49,7 @@ module Admin
       assert_selector '[data-testid="duplicate-review-case-row"]', text: @subject.full_name
       take_evidence_screenshot('duplicate-review-queue-current', full: true, html: true)
 
-      click_link 'Review'
+      click_link 'Compare records'
       assert_current_path admin_duplicate_review_path(@review_case)
       assert_selector '[data-testid="duplicate-review-detail"]'
       find('summary', text: 'Merge these two records').click
