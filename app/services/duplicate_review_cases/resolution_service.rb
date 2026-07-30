@@ -58,7 +58,21 @@ module DuplicateReviewCases
       return 'Unsupported resolution determination' unless DuplicateReviewCase.resolution_determinations.key?(@determination)
       return 'A rationale is required' if @rationale.blank?
 
-      nil
+      reason_code_error
+    end
+
+    # Reason codes become immutable resolution metadata and audit evidence, so they are checked
+    # against the server-owned vocabulary here rather than only at the model: resolve_case! uses
+    # update!, and #call rescues StaleCaseError only, so a model-level rejection would surface as
+    # an unhandled RecordInvalid instead of a failure result the admin can act on.
+    def reason_code_error
+      return "Too many reason/evidence codes (maximum #{DuplicateReviewCase::MAX_REASON_CODES})" if
+        @reason_codes.length > DuplicateReviewCase::MAX_REASON_CODES
+
+      unsupported = @reason_codes - DuplicateReviewCase::RESOLUTION_REASON_CODES
+      return if unsupported.empty?
+
+      "Unsupported reason/evidence code: #{unsupported.join(', ')}"
     end
 
     def admin_actor?

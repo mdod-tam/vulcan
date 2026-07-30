@@ -170,7 +170,21 @@ module Users
       return 'A rationale is required' if @rationale.blank?
       return 'At least one reason/evidence code is required' if @reason_codes.empty?
 
-      duplicate_eligibility_error
+      reason_code_error || duplicate_eligibility_error
+    end
+
+    # Reason codes become immutable resolution metadata and audit evidence, so they are checked
+    # against the server-owned vocabulary here -- as a clean preflight failure the admin can act
+    # on -- rather than only at the model, where ResolutionService#resolve_case!-style update!
+    # calls would surface an unhandled RecordInvalid instead.
+    def reason_code_error
+      return "Too many reason/evidence codes (maximum #{DuplicateReviewCase::MAX_REASON_CODES})" if
+        @reason_codes.length > DuplicateReviewCase::MAX_REASON_CODES
+
+      unsupported = @reason_codes - DuplicateReviewCase::RESOLUTION_REASON_CODES
+      return if unsupported.empty?
+
+      "Unsupported reason/evidence code: #{unsupported.join(', ')}"
     end
 
     # Each contact fact must be an explicit admin decision, not an inferred default:
@@ -323,10 +337,15 @@ module Users
       final_phone_real? && final_phone_type.blank?
     end
 
+    # Only a real telephone route may survive as the canonical's phone_type. The full
+    # phone_type enum also carries the legacy non-phone contact modes contact_email and
+    # contact_letter, which the merge form never offers -- accepting them would let a forged
+    # request store "reach this person by email" as the canonical's phone preference, which
+    # then renders as their preferred contact method in evaluator and trainer notifications.
     def phone_type_invalid?
       return false if final_phone_type.blank?
 
-      User.phone_types.key?(final_phone_type).equal?(false)
+      User::REAL_PHONE_TYPES.exclude?(final_phone_type.to_s)
     end
 
     # --- Mutations -----------------------------------------------------------

@@ -29,9 +29,22 @@ module Admin
       'resolved_merged' => 'Merged'
     }.freeze
 
+    PHONE_TYPE_LABELS = {
+      'voice' => 'Voice',
+      'videophone' => 'Videophone',
+      'text' => 'Text/SMS'
+    }.freeze
+
     NO_EMAIL = 'No email on file'
     NO_PHONE = 'No phone on file'
     NO_ADDRESS = 'No address on file'
+
+    # Derived from the server-owned allowlist Users::DuplicateMergeService validates against,
+    # so the form can never offer a phone_type the service rejects -- nor silently stop
+    # offering one it accepts.
+    def duplicate_review_phone_type_options
+      User::REAL_PHONE_TYPES.map { |type| [PHONE_TYPE_LABELS.fetch(type, type.humanize), type] }
+    end
 
     def duplicate_review_source_label(source)
       SOURCE_LABELS.fetch(source.to_s, source.to_s.humanize)

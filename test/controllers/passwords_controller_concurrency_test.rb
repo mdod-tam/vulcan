@@ -145,6 +145,91 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
     user&.destroy
   end
 
+  # The signed-in and forced password-change path (PasswordsController#update ->
+  # Users::PasswordUpdateService) reaches the same password_digest as the reset-token path above
+  # and must serialize with merge the same way. Before the service locked the user, it
+  # authenticated and wrote through the caller's pre-lock instance: the unlocked
+  # merged_record_immutable read could observe "not merged" while the merge was still
+  # uncommitted, and the UPDATE would then wait on the merge's row lock and land immediately
+  # after it committed -- writing a password onto a retired duplicate.
+  test 'merge commits first: the signed-in password change for the newly-merged duplicate fails closed with zero writes' do
+    admin, canonical, duplicate, review_case = build_fixtures
+    original_digest = duplicate.password_digest
+
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_pid_queue = Queue.new
+    merge_result = nil
+    holder_thread = on_own_connection do
+      holder_pid_queue << backend_pid
+      ActiveRecord::Base.transaction do
+        merge_result = run_merge(admin:, canonical:, duplicate:, review_case:)
+        holder_ready << true
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+    wait_for_signal(holder_ready, thread: holder_thread)
+
+    contender_pid_queue = Queue.new
+    update_result = nil
+    contender_thread = on_own_connection do
+      contender_pid_queue << backend_pid
+      update_result = run_password_update(duplicate)
+    end
+
+    confirm_blocked_then_release(
+      wait_for_signal(contender_pid_queue, thread: contender_thread),
+      holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+    )
+
+    assert merge_result.success?, "expected the merge (holder) to succeed: #{merge_result&.message}"
+    assert update_result.failure?, 'the password change must fail closed once the merge has retired this record'
+    assert_match(/no longer eligible/i, update_result.message)
+    assert_equal original_digest, duplicate.reload.password_digest,
+                 "zero side effects: the merged duplicate's password must be untouched by the losing change attempt"
+  ensure
+    cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
+  end
+
+  test 'signed-in password change commits first: the merge then proceeds normally' do
+    admin, canonical, duplicate, review_case = build_fixtures
+    original_digest = duplicate.password_digest
+
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_pid_queue = Queue.new
+    update_result = nil
+    holder_thread = on_own_connection do
+      holder_pid_queue << backend_pid
+      ActiveRecord::Base.transaction do
+        update_result = run_password_update(duplicate)
+        holder_ready << true
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+    wait_for_signal(holder_ready, thread: holder_thread)
+
+    contender_pid_queue = Queue.new
+    merge_result = nil
+    contender_thread = on_own_connection do
+      contender_pid_queue << backend_pid
+      merge_result = run_merge(admin:, canonical:, duplicate:, review_case:)
+    end
+
+    confirm_blocked_then_release(
+      wait_for_signal(contender_pid_queue, thread: contender_thread),
+      holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+    )
+
+    assert update_result.success?, "expected the password change (holder) to succeed: #{update_result&.message}"
+    assert_not_equal original_digest, duplicate.reload.password_digest, 'the committed password change must have taken effect'
+    assert merge_result.success?, "expected the merge to proceed normally once the password change committed: #{merge_result&.message}"
+  ensure
+    cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
+  end
+
   private
 
   def build_fixtures
@@ -184,6 +269,18 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
       reason_codes: %w[exact_phone],
       contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' },
       delivery_choice: 'canonical'
+    ).call
+  end
+
+  # The signed-in/forced-change path. Takes the user the way the controller does -- as an
+  # already-loaded instance (current_user), not re-resolved inside the service -- so the stale
+  # pre-lock instance the hardening has to defend against is exactly what gets passed in.
+  def run_password_update(user)
+    Users::PasswordUpdateService.new(
+      User.find(user.id),
+      'OriginalPass123!',
+      'NewPassword123!',
+      'NewPassword123!'
     ).call
   end
 

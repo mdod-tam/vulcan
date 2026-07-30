@@ -205,6 +205,45 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
+    # phone_type doubles as "preferred contact method", so its enum also carries the legacy
+    # non-phone modes contact_email => 'email' and contact_letter => 'letter'. The merge form
+    # offers only real telephone routes; a forged request must not be able to store "reach this
+    # person by email" as the canonical's phone preference, which then renders as their contact
+    # method in evaluator and trainer notifications.
+    %w[contact_email contact_letter email letter].each do |forged_phone_type|
+      test "blocks merge when phone type #{forged_phone_type} is not a real telephone route" do
+        result = merge(contact_choices: { phone: 'duplicate', phone_type: forged_phone_type,
+                                          email: 'canonical', address: 'canonical' })
+        assert result.failure?
+        assert_match(/phone type/i, result.message)
+        assert_not @duplicate.reload.merged?
+      end
+    end
+
+    # Reason codes become immutable resolution metadata and audit evidence, so they are validated
+    # against a server-owned vocabulary rather than accepted from the request.
+    test 'blocks merge when a reason code is outside the server-owned vocabulary' do
+      result = merge(reason_codes: ['exact_phone', 'attacker supplied note'])
+      assert result.failure?
+      assert_match(/unsupported reason/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when too many reason codes are submitted' do
+      result = merge(reason_codes: Array.new(DuplicateReviewCase::MAX_REASON_CODES + 1) { |i| "code-#{i}" })
+      assert result.failure?
+      assert_match(/too many reason/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    # The merge form falls back to 'admin_reviewed' for a case opened without detection reasons,
+    # so that operator code must stay in the vocabulary or every such merge would be rejected.
+    test 'accepts the admin_reviewed operator reason code the merge form falls back to' do
+      result = merge(reason_codes: %w[admin_reviewed])
+      assert result.success?, result.message
+      assert @duplicate.reload.merged?
+    end
+
     test 'blocks merge when a contact choice is missing' do
       result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', address: 'canonical' })
       assert result.failure?

@@ -17,6 +17,7 @@
                 controller: 'final-submit-gate',
                 testid: 'duplicate-merge-form',
                 final_submit_gate_incomplete_message: 'Complete every required merge decision before submitting.',
+                final_submit_gate_incomplete_detail_message: 'Still needed: %{items}.',
                 final_submit_gate_ready_message: 'Merge form is ready to submit.'
               } do |f| %>
   <%= hidden_field_tag 'pair_ids[]', subject.id, id: "#{dom_id_prefix}-subject-id" %>
@@ -62,8 +63,8 @@
     <legend class="text-sm font-medium text-gray-700 mb-1">Contact facts to keep</legend>
     <p class="text-xs text-gray-500">Choose the stored phone and address facts that are true for this person. Contact similarity is evidence only; it does not authorize a merge.</p>
 
-    <div class="text-sm border-t border-gray-100 pt-2">
-      <span class="block text-gray-700 font-medium">Phone</span>
+    <fieldset class="text-sm border-t border-gray-100 pt-2">
+      <legend class="block text-gray-700 font-medium">Phone</legend>
       <% pair_users.each do |user| %>
         <% input_id = "#{dom_id_prefix}-phone-source-#{user.id}" %>
         <div>
@@ -81,12 +82,12 @@
                         class: 'ml-1 text-xs text-gray-700' %>
         </div>
       <% end %>
-    </div>
+    </fieldset>
 
     <div class="text-sm border-t border-gray-100 pt-2">
       <%= label_tag phone_type_id, 'Phone type', class: 'block text-gray-700 font-medium' %>
       <%= select_tag 'contact[phone_type]',
-                     options_for_select([['Voice', 'voice'], ['Videophone', 'videophone'], ['Text/SMS', 'text']]),
+                     options_for_select(duplicate_review_phone_type_options),
                      include_blank: 'Select…',
                      id: phone_type_id,
                      class: 'border-gray-300 rounded-md text-sm',
@@ -97,8 +98,8 @@
       </p>
     </div>
 
-    <div class="text-sm border-t border-gray-100 pt-2">
-      <span class="block text-gray-700 font-medium">Address</span>
+    <fieldset class="text-sm border-t border-gray-100 pt-2">
+      <legend class="block text-gray-700 font-medium">Address</legend>
       <% pair_users.each do |user| %>
         <% input_id = "#{dom_id_prefix}-address-source-#{user.id}" %>
         <div>
@@ -108,7 +109,7 @@
                         class: 'ml-1 text-xs text-gray-700' %>
         </div>
       <% end %>
-    </div>
+    </fieldset>
   </fieldset>
 
   <fieldset>

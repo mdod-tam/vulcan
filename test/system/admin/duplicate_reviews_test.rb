@@ -69,6 +69,12 @@ module Admin
 
         assert_selector "##{prefix}-phone-type[required][aria-required='true']"
         assert_selector "input[type='submit'][disabled]"
+
+        # Each decision group carries its own accessible name, and the gate says which one is
+        # still outstanding rather than only that something is.
+        assert_selector 'fieldset > legend', text: 'Phone'
+        assert_selector 'fieldset > legend', text: 'Address'
+        assert_selector '[data-final-submit-gate-target="status"]', text: 'Still needed: Phone type.'
       end
       take_evidence_screenshot('duplicate-merge-real-phone-type-required', full: true, html: true)
 
@@ -80,9 +86,13 @@ module Admin
 
       within(form_selector) do
         choose "#{prefix}-phone-source-#{@subject.id}"
+        # A control whose value is cleared on every update must not stay operable, so no real
+        # phone surviving disables it outright rather than leaving a selection the gate would
+        # silently discard. (A CSS `find` still locates it; only find_field filters on disabled.)
         phone_type = find("##{prefix}-phone-type")
         assert_equal 'false', phone_type['aria-required']
         assert_not phone_type[:required]
+        assert phone_type.disabled?, 'phone type must not remain operable when no real phone survives'
         assert_equal '', phone_type.value
         assert_selector "input[type='submit']:not([disabled])"
       end

@@ -95,6 +95,135 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
     end
 
+    # Retirement is not the only way the guardian can lose authority while its request waits.
+    # The guardian is the authenticated actor, so a suspension landing inside the lock window
+    # must end the edit too -- before the fix, #update rechecked only merged? and would honor an
+    # edit from an actor that could no longer sign in. (The dependent is deliberately held to a
+    # different standard: see the "guardian can edit an unmerged inactive/suspended dependent"
+    # cases in dependents_controller_test.rb.)
+    test 'guardian suspension commits first: the dependent edit then fails closed with zero writes' do
+      guardian, admin, canonical, duplicate, _review_case = build_fixtures
+      original_first_name = duplicate.first_name
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          locked_guardian = User.lock_for_merge_integrity!(guardian).fetch(guardian.id)
+          locked_guardian.update!(status: :suspended)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      update_response = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        update_response = run_dependent_edit(guardian:, dependent: duplicate)
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert_equal :redirect, update_response[:action]
+      assert_match(/no longer available/i, update_response[:alert])
+      assert_equal original_first_name, duplicate.reload.first_name,
+                   'zero side effects: a suspended guardian must not land an edit that was authorized before the suspension'
+    ensure
+      cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
+    end
+
+    # set_dependent's User.editable_by_guardian scope proves the relationship existed at lookup
+    # time, unlocked. If it is removed while the request waits for the user lock, the edit is no
+    # longer authorized by anything -- the previous unlocked exists? recheck could still observe
+    # the row a concurrent removal was about to delete.
+    test 'relationship removal commits first: the dependent edit then fails closed with zero writes' do
+      guardian, admin, canonical, duplicate, _review_case = build_fixtures
+      original_first_name = duplicate.first_name
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          User.lock_for_merge_integrity!(duplicate, guardian)
+          GuardianRelationship.where(guardian_id: guardian.id, dependent_id: duplicate.id).delete_all
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      update_response = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        update_response = run_dependent_edit(guardian:, dependent: duplicate)
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert_equal :redirect, update_response[:action]
+      assert_match(/no longer available/i, update_response[:alert])
+      assert_equal original_first_name, duplicate.reload.first_name,
+                   'zero side effects: an edit whose authorizing relationship was removed must not land'
+    ensure
+      cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
+    end
+
+    # Proves the mechanism rather than an outcome: the edit holds the *relationship* row itself
+    # FOR UPDATE, not merely the two user rows. A concurrent removal physically blocks on it, so
+    # the authorizing row cannot be deleted between the recheck and the write. If the recheck
+    # were an unlocked exists? again, this delete would not block and the test would fail.
+    test "a relationship removal physically blocks on the dependent edit's own row lock" do
+      guardian, admin, canonical, duplicate, _review_case = build_fixtures
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      update_response = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          update_response = run_dependent_edit(guardian:, dependent: duplicate)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        GuardianRelationship.where(guardian_id: guardian.id, dependent_id: duplicate.id).delete_all
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert_equal :redirect, update_response[:action]
+      assert_equal 'Updated', duplicate.reload.first_name, 'the committed edit must have taken effect'
+      assert_not GuardianRelationship.exists?(guardian_id: guardian.id, dependent_id: duplicate.id),
+                 'the removal must proceed once the edit released its lock'
+    ensure
+      cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
+    end
+
     private
 
     def build_fixtures

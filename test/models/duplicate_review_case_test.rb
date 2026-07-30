@@ -30,6 +30,37 @@ class DuplicateReviewCaseTest < ActiveSupport::TestCase
     )
   end
 
+  # metadata['reason_codes'] was already held to DuplicateReviewCaseCandidate::MATCH_REASONS;
+  # resolution_metadata validated only its keys, and that is where admin-supplied codes land.
+  test 'resolution metadata rejects reason codes outside the resolution vocabulary' do
+    @review_case.resolution_metadata = { 'reason_codes' => ['name_dob', 'free text'] }
+
+    assert_not @review_case.valid?
+    assert_includes @review_case.errors[:resolution_metadata].join, 'unsupported values'
+  end
+
+  test 'resolution metadata caps the number of reason codes' do
+    @review_case.resolution_metadata = { 'reason_codes' => Array.new(DuplicateReviewCase::MAX_REASON_CODES + 1) { |i| "code-#{i}" } }
+
+    assert_not @review_case.valid?
+    assert_includes @review_case.errors[:resolution_metadata].join, 'cannot exceed'
+  end
+
+  test 'resolution metadata accepts detection reasons and operator codes together' do
+    @review_case.resolution_metadata = { 'reason_codes' => %w[exact_phone admin_reviewed manual_review] }
+
+    assert @review_case.valid?, @review_case.errors.full_messages.to_sentence
+  end
+
+  # Detection metadata records why the case was opened, which is machine-derived; the operator
+  # codes are only meaningful on a resolution, so they stay out of that vocabulary.
+  test 'detection metadata still rejects the operator-only reason codes' do
+    @review_case.metadata = { 'reason_codes' => %w[admin_reviewed] }
+
+    assert_not @review_case.valid?
+    assert_includes @review_case.errors[:metadata].join, 'unsupported values'
+  end
+
   test 'a resolved case is terminal and cannot be modified further, even from a stale pre-resolution instance' do
     stale = DuplicateReviewCase.find(@review_case.id)
 

@@ -58,9 +58,9 @@ module ConstituentPortal
     # Locks the dependent and the guardian before requalifying and updating, so a concurrent
     # merge and a concurrent dependent profile edit can never interleave: either the merge
     # commits first and this reload sees the retired participant and refuses, or the edit
-    # commits first and the merge -- which takes the same lock -- waits. Also rechecks the
-    # guardian relationship under the lock: set_dependent's own scope already checked it once,
-    # unlocked, before this lock was granted.
+    # commits first and the merge -- which takes the same lock -- waits. Also re-derives every
+    # authority fact under that lock (see dependent_edit_still_authorized?): set_dependent and
+    # require_constituent! both ran before the lock was granted.
     def update
       params_to_update = dependent_attributes_with_contact_strategies
       unless params_to_update
@@ -75,8 +75,7 @@ module ConstituentPortal
         locked_dependent = locked_users.fetch(@dependent.id)
         locked_guardian = locked_users.fetch(current_user.id)
 
-        if locked_dependent.merged? || locked_guardian.merged? ||
-           !GuardianRelationship.exists?(guardian_id: current_user.id, dependent_id: @dependent.id)
+        unless dependent_edit_still_authorized?(locked_dependent, locked_guardian)
           redirect_to constituent_portal_dashboard_path, alert: 'This dependent is no longer available to edit.'
           raise ActiveRecord::Rollback
         end
@@ -114,6 +113,36 @@ module ConstituentPortal
     end
 
     private
+
+    # Every authority fact behind this edit, re-derived against the locked rows instead of the
+    # pre-lock instances the request was authorized with.
+    #
+    # The two participants are deliberately held to different standards. The guardian is the
+    # authenticated actor, so it must still satisfy the same gates the request was admitted
+    # under: public_login_active? (an admin suspension or deactivation landing mid-request must
+    # end the actor's authority, exactly as it would have blocked sign-in) and constituent?
+    # (require_constituent! ran before the lock was granted, so a role conversion in that window
+    # would otherwise still be honored). The dependent is a managed record that never
+    # authenticates, so only merged? disqualifies it: an admin deactivating or suspending a
+    # dependent must not lock their guardian out of maintaining the profile, and the dependent's
+    # own STI type is not part of this authorization -- User.editable_by_guardian scopes on the
+    # relationship alone. See the "guardian can edit an unmerged inactive/suspended dependent"
+    # cases in test/controllers/constituent_portal/dependents_controller_test.rb.
+    #
+    # The guardian relationship is read FOR UPDATE rather than through an unlocked exists?: an
+    # unlocked check can be satisfied by a row that a concurrent removal deletes before the
+    # update below lands, whereas locking the row makes that removal wait for this transaction.
+    def dependent_edit_still_authorized?(locked_dependent, locked_guardian)
+      return false if locked_dependent.merged?
+      return false unless locked_guardian.public_login_active? && locked_guardian.constituent?
+
+      GuardianRelationship
+        .where(guardian_id: locked_guardian.id, dependent_id: locked_dependent.id)
+        .order(:id)
+        .lock
+        .first
+        .present?
+    end
 
     def set_dependent
       # Use Rails-centric scope for authorization

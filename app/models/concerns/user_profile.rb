@@ -4,7 +4,12 @@
 module UserProfile
   extend ActiveSupport::Concern
 
-  PORTAL_SELF_REGISTRATION_PHONE_TYPES = %w[voice videophone text].freeze
+  # phone_type doubles as "preferred contact method", so its enum also carries two legacy
+  # non-phone modes (contact_email => 'email', contact_letter => 'letter'). These are the
+  # values that describe an actual telephone route, and therefore the only ones that may be
+  # stored alongside a real phone number. Server-owned: any surface that accepts a submitted
+  # phone_type for a real phone must validate against this list rather than the full enum.
+  REAL_PHONE_TYPES = %w[voice videophone text].freeze
 
   included do
     attr_accessor :phone_type_submitted
@@ -343,7 +348,7 @@ module UserProfile
 
   def portal_self_registration_phone_type_matches_phone
     return if phone.blank?
-    return if phone_type_submitted && PORTAL_SELF_REGISTRATION_PHONE_TYPES.include?(phone_type)
+    return if phone_type_submitted && REAL_PHONE_TYPES.include?(phone_type)
 
     self.phone_type = nil
     errors.add(:phone_type, :portal_self_registration_phone_type_required)

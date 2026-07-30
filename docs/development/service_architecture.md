@@ -98,11 +98,18 @@ Merge-integrity coordination covers only the writers traced to the same-person m
 
 - merge: active actor, canonical, duplicate → selected case → matching candidate evidence → all applications owned or managed by either participant;
 - duplicate-review create/clear/resolve: actor and affected subject/candidates → case rows and audit mutation;
-- portal final submission/autosave: actor/applicant/known guardian participants → guardian relationships → exact application inventory;
+- portal final submission: actor/applicant/known guardian participants → guardian relationships → the applicant's full locked application inventory, against which the shared `Application.sibling_application_eligibility_error` policy is evaluated;
+- portal autosave: actor/applicant/known guardian participants → guardian relationships → for a new draft the applicant's full locked inventory plus the shared sibling policy; for a draft that already exists, the target application row alone. A persisted draft is therefore not re-checked against siblings on each keystroke — that policy is enforced at submission by `ApplicationCreator`, under lock, against the full inventory. Merge serialization is unaffected either way, because the merge locks a superset (every application owned or managed by either participant);
 - recovery-request creation: requester + admin-notification FK inventory in ascending id order with `FOR KEY SHARE`, then the requester upgraded through `lock_for_merge_integrity!` before recovery/notification rows; secure-request creation: actor/requester/recipient inventory → application/relationship/secure-form rows;
-- primary contact edits, role conversion, password-only sign-in, and password-reset completion: the affected user(s) before re-resolving authority and writing.
+- primary contact edits, role conversion, and password-only sign-in: the affected user(s) before re-resolving authority and writing;
+- password writes — both password-reset completion (token re-resolved under lock) and the signed-in/forced password change (`Users::PasswordUpdateService`, which re-runs the password challenge against the locked row): the affected user before re-checking `public_login_active?` and writing;
+- guardian-managed dependent profile edits: dependent and guardian, then the authorizing `GuardianRelationship` row itself. The guardian, as the authenticated actor, must still be `public_login_active?` and a constituent under lock; the dependent, which never authenticates, is disqualified only by `merged?`.
 
 This inventory is a bounded guarantee for the listed merge-adjacent writers and their deterministic concurrency tests. It does not establish system-wide `User` serialization or universal deadlock freedom for unrelated services.
+
+Named exclusions — merge-adjacent writers deliberately *not* yet inside this boundary:
+
+- dependent **creation** (`ConstituentPortal::DependentsController#create`). User creation, `GuardianRelationship` insertion, and duplicate-review-case creation still run in separate transactions with compensating deletes, so no lock can span them; a merge retiring the guardian mid-request can strand a new relationship on the retired record. Closing this requires collapsing those writes into one transaction, tracked separately from the writers above.
 
 ## 4 · Core Flows
 
