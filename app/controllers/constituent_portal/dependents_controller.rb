@@ -453,13 +453,16 @@ module ConstituentPortal
       error_prefix = Rails.env.test? ? '[TEST_VALIDATION] ' : ''
       Rails.logger.error "#{error_prefix}Failed to create dependent: #{error_messages.join(', ')}"
 
-      # Set up form variables for re-rendering
-      # A relationship/case failure reaches here while the new user is still persisted inside
-      # the transaction that is about to roll back. Do not render the new form with that
-      # transient persisted object: form_with would target the member PATCH route for a row
-      # that no longer exists after rollback.
-      @dependent_user = User.new(dependent_user_params) if @dependent_user&.persisted?
-      @dependent_user ||= User.new(dependent_user_params)
+      # Always rebuild the form object from the submitted parameters, never from the object the
+      # failed attempt produced. Rollback restores that object to a new record but keeps the
+      # attributes the contact strategies wrote into it, so a persisted?/new_record? test cannot
+      # tell the two apart -- and rendering it would put internal placeholders (a synthetic
+      # dependent-...@system.matvulcan.local address, a 000-... phone) into the form as if the
+      # guardian had typed them. Resubmitting that form would then store those placeholders as
+      # dependent-owned contact and silently change delivery routing. The submitted parameters
+      # are also what preserves the guardian-contact choice: "use my email/phone" submits blank
+      # contact, and the form re-checks those boxes from a blank rebuilt value.
+      @dependent_user = User.new(dependent_user_params)
       @guardian_relationship ||= GuardianRelationship.new(guardian_relationship_params)
 
       flash.now[:alert] = "Failed to create dependent: #{error_messages.join(', ')}"

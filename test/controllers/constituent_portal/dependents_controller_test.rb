@@ -136,6 +136,50 @@ module ConstituentPortal
       assert_not User.exists?(email: dependent_email)
     end
 
+    # Rollback restores the attempted dependent to a new record but keeps the synthetic contact
+    # the guardian strategy wrote into it. Re-rendering that object would show internal
+    # placeholders as if the guardian had typed them, uncheck "use my email/phone", and let an
+    # unchanged retry store those placeholders as dependent-owned contact.
+    test 'guardian-strategy failure re-renders the submitted contact choice, never internal placeholders' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Placeholder',
+        last_name: 'Leak',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-leak-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+
+      post constituent_portal_dependents_url, params: {
+        # The guardian contact strategy: blank dependent contact plus the "use mine" checkboxes.
+        dependent: {
+          first_name: existing_dependent.first_name,
+          last_name: existing_dependent.last_name,
+          date_of_birth: '05/15/2010',
+          email: '',
+          phone: '',
+          hearing_disability: true
+        },
+        use_guardian_email: '1',
+        use_guardian_phone: '1',
+        guardian_relationship: { relationship_type: 'Parent' }
+      }
+
+      assert_response :unprocessable_content
+      assert_no_match(/@system\.matvulcan\.local/, response.body,
+                      'the synthetic primary email must never be rendered back into the form')
+      assert_no_match(/000-\d{3}-\d{4}/, response.body,
+                      'the synthetic primary phone must never be rendered back into the form')
+      assert_select 'input#use_guardian_email_checkbox[checked]', 1,
+                    'the guardian email choice must survive the failed attempt'
+      assert_select 'input#use_guardian_phone_checkbox[checked]', 1,
+                    'the guardian phone choice must survive the failed attempt'
+    end
+
     # The participant set is resolved by duplicate detection and locked afterwards.
     # lock_for_merge_integrity! refuses a partial set, which is correct, but a candidate deleted
     # in that window is an ordinary concurrent condition and must not surface as a 500.
