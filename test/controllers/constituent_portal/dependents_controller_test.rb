@@ -180,6 +180,60 @@ module ConstituentPortal
                     'the guardian phone choice must survive the failed attempt'
     end
 
+    # A guardian may type dependent contact and *then* check "use my email/phone". The portal form
+    # declares no guardian-contact JS targets, so copyGuardianEmail/copyGuardianPhone return early
+    # and the typed value survives in params. If the failed re-render infers the checkbox from
+    # contact blankness, both boxes come back unchecked and an unchanged retry silently stores
+    # dependent-owned contact -- routing this dependent's communications to the dependent rather
+    # than the guardian.
+    test 'a failed attempt preserves the guardian contact choice made over typed contact' do
+      # A soft-match candidate, so creation reaches the review-case step that is forced to fail.
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Typed',
+        last_name: 'Contact',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-typed-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      typed_email = "typed-dependent-#{SecureRandom.hex(4)}@example.com"
+      typed_phone = '555-987-6543'
+      submitted = {
+        dependent: {
+          first_name: existing_dependent.first_name, last_name: existing_dependent.last_name,
+          date_of_birth: '05/15/2010',
+          email: typed_email, phone: typed_phone, hearing_disability: true
+        },
+        use_guardian_email: '1',
+        use_guardian_phone: '1',
+        guardian_relationship: { relationship_type: 'Parent' }
+      }
+
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+      post constituent_portal_dependents_url, params: submitted
+
+      assert_response :unprocessable_content
+      assert_select 'input#use_guardian_email_checkbox[checked]', 1,
+                    'the guardian email choice must survive even though contact was typed'
+      assert_select 'input#use_guardian_phone_checkbox[checked]', 1,
+                    'the guardian phone choice must survive even though contact was typed'
+
+      # Retry exactly what the re-rendered form now submits, unchanged.
+      DuplicateReviewCases::CreateService.any_instance.unstub(:call)
+      post constituent_portal_dependents_url, params: submitted
+
+      dependent = GuardianRelationship.where(guardian_id: @guardian.id).order(:id).last.dependent_user
+      assert_equal 'Typed', dependent.first_name
+      assert_equal @guardian.email, dependent.effective_email,
+                   'communications must still route to the guardian after the failed attempt'
+      assert_equal User.normalize_phone(@guardian.phone), User.normalize_phone(dependent.effective_phone),
+                   'phone communications must still route to the guardian after the failed attempt'
+      assert_not_equal typed_email, dependent.effective_email
+    end
+
     # The participant set is resolved by duplicate detection and locked afterwards.
     # lock_for_merge_integrity! refuses a partial set, which is correct, but a candidate deleted
     # in that window is an ordinary concurrent condition and must not surface as a 500.

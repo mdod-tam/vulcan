@@ -440,6 +440,20 @@ module ConstituentPortal
       ).order(created_at: :desc).limit(10)
     end
 
+    # The re-rendered form must show the contact choice the server actually applied, not re-derive
+    # it from whether the contact field is blank. A guardian may type dependent contact and *then*
+    # check "use my email/phone": the portal form declares no guardian-contact JS targets, so
+    # copyGuardianEmail/copyGuardianPhone return early and the typed value survives in params.
+    # Blankness-inference would then render both boxes unchecked, and an unchanged retry would
+    # silently store dependent-owned contact -- routing that dependent's program communications to
+    # the dependent instead of the guardian. Derived through contact_strategy_for so the form can
+    # never disagree with the strategy the write path would choose for the same parameters.
+    def capture_guardian_contact_choices
+      attrs = dependent_user_params.to_h
+      @use_guardian_email = contact_strategy_for(:email, :use_guardian_email, attrs, current_user) != 'dependent'
+      @use_guardian_phone = contact_strategy_for(:phone, :use_guardian_phone, attrs, current_user) != 'dependent'
+    end
+
     def handle_creation_failure(errors)
       # Handle both array of strings and ActiveModel::Errors objects
       error_messages = if errors.respond_to?(:full_messages)
@@ -459,11 +473,10 @@ module ConstituentPortal
       # tell the two apart -- and rendering it would put internal placeholders (a synthetic
       # dependent-...@system.matvulcan.local address, a 000-... phone) into the form as if the
       # guardian had typed them. Resubmitting that form would then store those placeholders as
-      # dependent-owned contact and silently change delivery routing. The submitted parameters
-      # are also what preserves the guardian-contact choice: "use my email/phone" submits blank
-      # contact, and the form re-checks those boxes from a blank rebuilt value.
+      # dependent-owned contact and silently change delivery routing.
       @dependent_user = User.new(dependent_user_params)
       @guardian_relationship ||= GuardianRelationship.new(guardian_relationship_params)
+      capture_guardian_contact_choices
 
       flash.now[:alert] = "Failed to create dependent: #{error_messages.join(', ')}"
       render :new, status: :unprocessable_content

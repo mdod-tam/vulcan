@@ -1,3 +1,10 @@
+<%# The guardian-contact choice is explicit form state, not something to infer from whether the
+    contact field happens to be blank. A guardian can type dependent contact and then check "use
+    mine"; the typed value survives, so blankness-inference would flip the choice on a failed
+    re-render. @use_guardian_email/@use_guardian_phone carry the choice the server applied; the
+    blank fallback is only for a fresh form that was never submitted. %>
+<% use_guardian_email_checked = @use_guardian_email.nil? ? dependent_user.email.blank? : @use_guardian_email %>
+<% use_guardian_phone_checked = @use_guardian_phone.nil? ? dependent_user.phone.blank? : @use_guardian_phone %>
 <%= form_with(model: dependent_user,
     url: dependent_user.new_record? ? constituent_portal_dependents_path : constituent_portal_dependent_path(dependent_user),
       local: true,
@@ -40,7 +47,7 @@
         <div class="space-y-3 md:col-span-2">
           <% if dependent_user.new_record? %>
             <div class="flex items-start">
-              <%= check_box_tag :use_guardian_email, "1", dependent_user.email.blank?,
+              <%= check_box_tag :use_guardian_email, "1", use_guardian_email_checked,
                   id: "use_guardian_email_checkbox",
                   class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                   data: {
@@ -58,8 +65,8 @@
 
           <div id="dependent_email_field"
                data-dependent-fields-target="emailFieldContainer"
-               class="<%= 'hidden' if dependent_user.new_record? && dependent_user.email.blank? %>"
-               aria-hidden="<%= dependent_user.new_record? && dependent_user.email.blank? %>">
+               class="<%= 'hidden' if dependent_user.new_record? && use_guardian_email_checked %>"
+               aria-hidden="<%= dependent_user.new_record? && use_guardian_email_checked %>">
             <%= form.label :email, "Dependent Email", class: "block text-sm font-medium text-gray-700" %>
             <%= form.email_field :email,
                 class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
@@ -86,7 +93,7 @@
         <div class="space-y-3 md:col-span-2">
           <% if dependent_user.new_record? %>
             <div class="flex items-start">
-              <%= check_box_tag :use_guardian_phone, "1", dependent_user.phone.blank?,
+              <%= check_box_tag :use_guardian_phone, "1", use_guardian_phone_checked,
                   id: "use_guardian_phone_checkbox",
                   class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                   data: {
@@ -104,8 +111,8 @@
 
           <div id="dependent_phone_field"
                data-dependent-fields-target="phoneFieldContainer"
-               class="<%= 'hidden' if dependent_user.new_record? && dependent_user.phone.blank? %>"
-               aria-hidden="<%= dependent_user.new_record? && dependent_user.phone.blank? %>">
+               class="<%= 'hidden' if dependent_user.new_record? && use_guardian_phone_checked %>"
+               aria-hidden="<%= dependent_user.new_record? && use_guardian_phone_checked %>">
             <%= form.label :phone, "Dependent Phone Number", class: "block text-sm font-medium text-gray-700" %>
             <%= form.telephone_field :phone,
                 class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
