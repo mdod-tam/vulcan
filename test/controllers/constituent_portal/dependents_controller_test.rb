@@ -136,6 +136,45 @@ module ConstituentPortal
       assert_not User.exists?(email: dependent_email)
     end
 
+    # The participant set is resolved by duplicate detection and locked afterwards.
+    # lock_for_merge_integrity! refuses a partial set, which is correct, but a candidate deleted
+    # in that window is an ordinary concurrent condition and must not surface as a 500.
+    test 'a candidate deleted before the lock fails closed with the ordinary retry response' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Vanishing',
+        last_name: 'Candidate',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-vanish-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      dependent_email = "portal-dependent-vanish-new-#{SecureRandom.hex(4)}@example.com"
+
+      # Delete the matched candidate after detection resolves it but before the lock is taken.
+      User.stubs(:lock_for_merge_integrity!).with do |*|
+        User.where(id: existing_dependent.id).delete_all
+        true
+      end.raises(ActiveRecord::RecordNotFound)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count'] do
+        post constituent_portal_dependents_url, params: {
+          dependent: {
+            first_name: 'Vanishing',
+            last_name: 'Candidate',
+            date_of_birth: '05/15/2010',
+            email: dependent_email,
+            phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+            hearing_disability: true
+          },
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_select "form[action='#{constituent_portal_dependents_path}'][method='post']"
+      assert_not User.exists?(email: dependent_email)
+    end
+
     test 'soft-match creation locks the lower-id candidate and guardian together in ascending order before writing' do
       existing_dependent = create(
         :constituent,

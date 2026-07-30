@@ -133,9 +133,10 @@ scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct
 3. Exact contact collisions block before persistence; soft name+DOB/address matches continue to new dependent creation
 4. Before writing, locks the guardian plus every candidate needed by a soft-match review case in one ascending-ID `User.lock_for_merge_integrity!` call
 5. Requalifies the locked guardian as an active constituent and re-derives guardian contact snapshots from that locked row
-6. Uses `UserServiceIntegration` for `create_user_with_service(params, is_managing_adult: false)` and `create_guardian_relationship_with_service(guardian, dependent, relationship_type)`
-7. The dependent `User`, `GuardianRelationship`, and any soft-match `DuplicateReviewCase` with source `:portal_dependent` commit in one transaction; any failure rolls all three back
-8. Application creation happens separately when the dependent applies
+6. Uses `UserServiceIntegration` for `create_user_with_service(params, is_managing_adult: false, skip_user_lookup: true, require_disability_validation: true)` — which handles password generation, requires the disability validation, and always creates a new dependent rather than reusing a lookup hit — and then `create_guardian_relationship_with_service(guardian, dependent, relationship_type)`
+7. The whole review bundle commits or rolls back together: the dependent `User`, the `GuardianRelationship`, and — for a soft match — the `DuplicateReviewCase` with source `:portal_dependent`, its `DuplicateReviewCaseCandidate` rows, the subject's `needs_duplicate_review` flag, and the `duplicate_review_case_opened` audit event. No compensating delete is used; a failure at any step leaves nothing behind
+8. A participant deleted between duplicate detection and the lock fails closed with the ordinary retry response rather than a server error
+9. Application creation happens separately when the dependent applies
 
 ### 4.2 · Admin Paper Application
 

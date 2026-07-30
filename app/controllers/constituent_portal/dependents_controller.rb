@@ -240,7 +240,12 @@ module ConstituentPortal
       failure_messages = nil
 
       ActiveRecord::Base.transaction do
-        locked_users = User.lock_for_merge_integrity!(participant_ids)
+        locked_users = lock_creation_participants(participant_ids)
+        unless locked_users
+          failure_messages = ['Unable to complete dependent creation. Please try again.']
+          raise ActiveRecord::Rollback
+        end
+
         locked_guardian = locked_users.fetch(current_user.id)
 
         unless locked_guardian.public_login_active? && locked_guardian.constituent?
@@ -290,6 +295,18 @@ module ConstituentPortal
       # Render only after rollback. In particular, CreateService may rescue a database error
       # into a failure result; PostgreSQL rejects every query until that transaction ends.
       handle_creation_failure(failure_messages) if failure_messages
+    end
+
+    # lock_for_merge_integrity! refuses to lock a partial participant set: if a candidate resolved
+    # during duplicate detection was deleted before this lock was granted, it raises rather than
+    # locking fewer rows than asked for. Failing closed is correct, but on this path that is an
+    # ordinary concurrent condition, not a server error -- before the lock moved here it was
+    # absorbed by open_portal_dependent_duplicate_review_case's rescue and surfaced as the normal
+    # retry message. Returning nil keeps that response instead of escaping as a 500.
+    def lock_creation_participants(participant_ids)
+      User.lock_for_merge_integrity!(participant_ids)
+    rescue ActiveRecord::RecordNotFound
+      nil
     end
 
     def open_portal_dependent_duplicate_review_case(duplicate_detection, locked_guardian, locked_users)
