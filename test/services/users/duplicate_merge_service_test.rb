@@ -440,6 +440,39 @@ module Users
       assert_nil User.find_by_token_for(:password_reset, password_reset_token)
     end
 
+    # The retirement case above covers the duplicate. This covers the survivor, which is the
+    # dangerous half: a merge that replaces the canonical's phone is the admin declaring the old
+    # number is not this person's, and an account-access reset link already texted to that number
+    # must stop working. Reset authority is revoked through the token fingerprint, not through
+    # lock ordering at issuance -- issuing the link before the merge was legitimate at the time,
+    # so no amount of locking the lookup would invalidate it afterwards.
+    test 'discarding the canonical phone invalidates a reset link already sent to that number' do
+      @canonical.update!(phone: '555-867-5309', phone_type: 'voice')
+      discarded_phone = @canonical.phone
+      token_texted_to_discarded_phone = @canonical.generate_token_for(:password_reset)
+
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' })
+
+      assert result.success?, result.message
+      @canonical.reload
+      assert_equal '555-777-8888', @canonical.phone, 'the merge moved the duplicate phone onto the survivor'
+      assert_not_equal discarded_phone, @canonical.phone
+      assert @canonical.real_email?, 'survivor keeps login email, so the digest and email halves are unchanged'
+      assert_nil User.find_by_token_for(:password_reset, token_texted_to_discarded_phone),
+                 'a reset link delivered to the discarded number must not survive the merge'
+    end
+
+    test 'keeping the canonical phone leaves an outstanding reset link usable' do
+      @canonical.update!(phone: '555-867-5309', phone_type: 'voice')
+      token = @canonical.generate_token_for(:password_reset)
+
+      result = merge(contact_choices: { phone: 'canonical', phone_type: 'voice', email: 'canonical', address: 'canonical' })
+
+      assert result.success?, result.message
+      assert_equal @canonical.id, User.find_by_token_for(:password_reset, token)&.id,
+                   'contact authority did not change, so the link must still work'
+    end
+
     test 'clears a stale survivor phone type when the selected surviving phone is blank' do
       @canonical.update!(phone: nil, phone_type: 'voice')
 

@@ -400,8 +400,13 @@ module Users
     # mutation, so the selected survivor values are already safe to apply to the canonical
     # row. Clearing every duplicate email/phone (not only values selected for transfer)
     # releases uniqueness ownership, prevents public registration from treating the retired
-    # identity as an existing account, and invalidates password-reset tokens whose purpose
-    # fingerprint includes the normalized login email.
+    # identity as an existing account, and invalidates password-reset tokens, whose purpose
+    # fingerprint covers the normalized login email and phone.
+    #
+    # The same fingerprint is what revokes reset authority on the *canonical* survivor: this
+    # merge may replace its phone (or its delivery route), and a reset link already emailed or
+    # texted to a discarded contact must stop working. See +apply_canonical_contact!+ and
+    # UserAuthentication's :password_reset token block.
     def release_duplicate_contact!
       mark_duplicate_retiring!
       @duplicate_user.update!(email: nil, phone: nil, phone_type: nil)

@@ -224,7 +224,131 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
     end
 
+    # The cases above make the *dependent* the merge target. This one makes the *guardian* the
+    # canonical survivor, which is where stale contact derivation shows up: a guardian contact
+    # strategy snapshots the guardian's own phone into the dependent's stored dependent_phone, and
+    # User#effective_phone prefers it. Deriving that snapshot before the lock would make the
+    # discarded pre-merge number the dependent's durable contact truth even though the edit
+    # correctly reauthorized under the lock.
+    test 'merge commits first: the dependent edit snapshots the post-merge guardian phone' do
+      guardian, guardian_duplicate, admin, dependent, review_case = build_guardian_merge_fixtures
+      discarded_guardian_phone = guardian.phone
+      surviving_guardian_phone = guardian_duplicate.phone
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      merge_result = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          merge_result = run_merge(admin:, canonical: guardian, duplicate: guardian_duplicate, review_case:)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      update_response = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        # Submitting a blank phone selects the guardian phone strategy for this update.
+        update_response = run_dependent_edit(guardian:, dependent:, extra_dependent_params: { phone: '' })
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert merge_result.success?, "expected the merge (holder) to succeed: #{merge_result&.message}"
+      assert_equal :redirect, update_response[:action]
+
+      dependent.reload
+      assert_equal User.normalize_phone(surviving_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+                   'the snapshot must come from the locked guardian, i.e. the phone the merge left in place'
+      assert_not_equal User.normalize_phone(discarded_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+                       'the pre-lock guardian phone the merge discarded must never become dependent contact truth'
+      assert_equal User.normalize_phone(surviving_guardian_phone), User.normalize_phone(dependent.effective_phone),
+                   'effective_phone prefers dependent_phone, so a stale snapshot would misroute notifications'
+    ensure
+      cleanup_duplicate_review_test_data!(guardian, guardian_duplicate, admin, dependent)
+    end
+
+    test 'dependent edit commits first: the guardian merge then proceeds normally' do
+      guardian, guardian_duplicate, admin, dependent, review_case = build_guardian_merge_fixtures
+      pre_merge_guardian_phone = guardian.phone
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      update_response = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          update_response = run_dependent_edit(guardian:, dependent:, extra_dependent_params: { phone: '' })
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      merge_result = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        merge_result = run_merge(admin:, canonical: guardian, duplicate: guardian_duplicate, review_case:)
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert_equal :redirect, update_response[:action]
+      assert_equal User.normalize_phone(pre_merge_guardian_phone), User.normalize_phone(dependent.reload.dependent_phone),
+                   'the edit committed first, so it correctly snapshotted the guardian phone of that moment'
+      assert merge_result.success?, "expected the merge to proceed normally once the edit committed: #{merge_result&.message}"
+    ensure
+      cleanup_duplicate_review_test_data!(guardian, guardian_duplicate, admin, dependent)
+    end
+
     private
+
+    # Guardian-as-canonical-survivor pair, plus a dependent of that guardian. The dependent is
+    # not a merge participant, so the two transactions collide only on the guardian's user row.
+    def build_guardian_merge_fixtures
+      admin = create(:admin)
+      guardian = create(:constituent, email: "guardian-#{SecureRandom.hex(3)}@example.com",
+                                      phone: '555-867-5309', phone_type: 'voice')
+      guardian_duplicate = nil
+      dependent = nil
+      begin
+        Current.paper_context = true
+        guardian_duplicate = create(:constituent, email: nil, phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+                                                  communication_preference: :letter)
+        dependent = create(:constituent, email: "dependent-#{SecureRandom.hex(3)}@example.com",
+                                         phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
+      ensure
+        Current.reset
+      end
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      review_case = DuplicateReviewCase.create!(
+        source: :registration_soft_match,
+        subject_user: guardian_duplicate,
+        deduplication_key: SecureRandom.hex(16),
+        metadata: { 'reason_codes' => ['name_dob'] },
+        opened_at: Time.current,
+        status: :open
+      )
+      review_case.duplicate_review_case_candidates.create!(candidate_user: guardian, match_reason: 'name_dob', snapshot: {})
+
+      [guardian, guardian_duplicate, admin, dependent, review_case]
+    end
 
     def build_fixtures
       guardian = create(:constituent, email: "guardian-#{SecureRandom.hex(3)}@example.com")
@@ -267,7 +391,7 @@ module ConstituentPortal
       ).call
     end
 
-    def run_dependent_edit(guardian:, dependent:)
+    def run_dependent_edit(guardian:, dependent:, extra_dependent_params: {})
       fresh_guardian = User.find(guardian.id)
       fresh_dependent = User.find(dependent.id)
 
@@ -283,7 +407,7 @@ module ConstituentPortal
       controller.instance_variable_set(:@current_user, fresh_guardian)
       controller.instance_variable_set(:@dependent, fresh_dependent)
       controller.params = ActionController::Parameters.new(
-        dependent: { first_name: 'Updated', last_name: fresh_dependent.last_name }
+        dependent: { first_name: 'Updated', last_name: fresh_dependent.last_name }.merge(extra_dependent_params)
       )
 
       controller.send(:update)
