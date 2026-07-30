@@ -180,6 +180,59 @@ module ConstituentPortal
                     'the guardian phone choice must survive the failed attempt'
     end
 
+    # The failure re-render must show what the *locked* pass decided, not re-derive it from the
+    # pre-lock current_user. matches_guardian_contact? is the one strategy branch that reads the
+    # guardian's own contact, so a guardian contact change landing inside the lock window makes the
+    # same submitted value match under one instance and not the other.
+    #
+    # The change is injected just before the lock returns rather than through the concurrency
+    # harness: the failure has to be forced by stubbing CreateService, and mocha is not thread-safe,
+    # so stubbing across the harness's threads would be flaky. This drives the real controller
+    # single-threaded and reproduces the same stale-instance divergence deterministically.
+    test 'a failed attempt renders the contact choice the locked pass applied, not a re-derivation' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Locked', last_name: 'Choice', date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-locked-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      guardian_old_email = @guardian.email
+      rotated_email = "rotated-guardian-#{SecureRandom.hex(4)}@example.com"
+
+      # Submitted dependent email equals the guardian's CURRENT email, so the pre-lock derivation
+      # says "guardian". The lock then observes rotated contact, so the locked pass says
+      # "dependent" -- the divergence this guards.
+      rotate = lambda do
+        @guardian.update_columns(email: rotated_email)
+        rotate = nil
+      end
+      original = User.method(:lock_for_merge_integrity!)
+      User.define_singleton_method(:lock_for_merge_integrity!) do |*args|
+        rotate&.call
+        original.call(*args)
+      end
+
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+
+      post constituent_portal_dependents_url, params: {
+        dependent: {
+          first_name: existing_dependent.first_name, last_name: existing_dependent.last_name,
+          date_of_birth: '05/15/2010', email: guardian_old_email,
+          phone: "555-#{rand(100..999)}-#{rand(1000..9999)}", hearing_disability: true
+        },
+        guardian_relationship: { relationship_type: 'Parent' }
+      }
+
+      assert_response :unprocessable_content
+      assert_select 'input#use_guardian_email_checkbox[checked]', 0,
+                    'the locked pass chose dependent email routing, so the form must not offer guardian routing'
+    ensure
+      User.singleton_class.remove_method(:lock_for_merge_integrity!)
+    end
+
     # A guardian may type dependent contact and *then* check "use my email/phone". The portal form
     # declares no guardian-contact JS targets, so copyGuardianEmail/copyGuardianPhone return early
     # and the typed value survives in params. If the failed re-render infers the checkbox from

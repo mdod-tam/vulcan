@@ -262,6 +262,8 @@ module ConstituentPortal
           raise ActiveRecord::Rollback
         end
 
+        record_applied_contact_choices
+
         # Using UserServiceIntegration for the existing portal contract: always create a new
         # dependent, never reuse a lookup hit, and require the disability validation.
         result = create_portal_dependent_user(dependent_attrs)
@@ -449,9 +451,33 @@ module ConstituentPortal
     # the dependent instead of the guardian. Derived through contact_strategy_for so the form can
     # never disagree with the strategy the write path would choose for the same parameters.
     def capture_guardian_contact_choices
+      # Prefer the choice the locked pass actually applied. It is only absent when the attempt
+      # failed before any strategy was derived under lock -- a participant that vanished before the
+      # lock, or a guardian that no longer qualifies -- in which case no locked decision exists and
+      # the submitted parameters are the best available answer.
+      return unless @use_guardian_email.nil? && @use_guardian_phone.nil?
+
       attrs = dependent_user_params.to_h
       @use_guardian_email = contact_strategy_for(:email, :use_guardian_email, attrs, current_user) != 'dependent'
       @use_guardian_phone = contact_strategy_for(:phone, :use_guardian_phone, attrs, current_user) != 'dependent'
+    end
+
+    # Retain the strategy the *locked* pass applied, captured before any rollback, so failure
+    # rendering never re-derives it. The service records the final strategy per channel including
+    # its own fallbacks (a 'dependent' choice with blank contact becomes 'guardian'), so this is
+    # the decision the write used rather than a reconstruction of it.
+    #
+    # Re-deriving would read the pre-lock `current_user`, and `matches_guardian_contact?` is the one
+    # strategy branch that depends on the guardian's own contact. A concurrent merge or admin
+    # contact edit landing inside the lock window makes the same submitted value match under one
+    # instance and not the other, so the rendered choice -- and with it an unchanged retry -- could
+    # disagree with what the locked transaction actually decided.
+    def record_applied_contact_choices
+      applied = @contact_strategy_service&.params
+      return if applied.blank?
+
+      @use_guardian_email = applied[:email_strategy] != 'dependent'
+      @use_guardian_phone = applied[:phone_strategy] != 'dependent'
     end
 
     def handle_creation_failure(errors)
