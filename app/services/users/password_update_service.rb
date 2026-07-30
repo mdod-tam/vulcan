@@ -15,6 +15,31 @@ module Users
     def call
       return fail_with_error('User not found.') unless @user
 
+      result = nil
+      ActiveRecord::Base.transaction { result = update_password_under_lock }
+      result
+    rescue ActiveRecord::RecordNotFound
+      # The row disappeared between the caller loading this instance and the lock being
+      # granted; fail closed rather than authenticating against a stale in-memory record.
+      fail_with_error('User not found.')
+    end
+
+    private
+
+    # Locks the user row before re-running the password challenge and writing, so a concurrent
+    # merge and a concurrent password change can never interleave: either the merge commits
+    # first and this reload sees the retired record and refuses, or the password change commits
+    # first and the merge -- which takes the same lock -- waits. The challenge is re-run against
+    # the freshly locked row, not the caller's pre-lock instance: a merge may retire the record,
+    # or another password change may invalidate the digest, while this request waits, and a
+    # stale authentication must not authorize the write that lands afterwards. Mirrors
+    # PasswordsController#update_password_from_token and
+    # ApplicationController#_create_and_set_session_cookie.
+    def update_password_under_lock
+      @user = User.lock_for_merge_integrity!(@user).fetch(@user.id)
+
+      return fail_with_error('This account is no longer eligible to change its password.') unless @user.public_login_active?
+
       return fail_with_error('Current password is incorrect.') unless @user.authenticate(@password_challenge)
 
       return fail_with_error('New password and confirmation do not match.') unless @new_password == @new_password_confirmation
@@ -25,8 +50,6 @@ module Users
         fail_with_error('Unable to update password. Please check requirements.', @user.errors.full_messages)
       end
     end
-
-    private
 
     def fail_with_error(message, details = [])
       @errors << message

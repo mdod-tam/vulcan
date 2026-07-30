@@ -1,94 +1,171 @@
 <%# locals: review_case (DuplicateReviewCase), subject (User), candidate (candidate User) %>
 <% reason_codes = Array(review_case.metadata['reason_codes']).compact.uniq %>
-<% contact_displays = { 'email' => :stored_email_display, 'phone' => :stored_phone_display, 'address' => :stored_address_display } %>
-<%= form_with url: merge_admin_duplicate_review_path(review_case), method: :post, class: 'space-y-4' do |f| %>
-  <%= hidden_field_tag 'pair_ids[]', subject.id %>
-  <%= hidden_field_tag 'pair_ids[]', candidate.id %>
+<% pair_users = [subject, candidate] %>
+<% dom_id_prefix = "duplicate-review-#{review_case.id}-candidate-#{candidate.id}" %>
+<% canonical_hint_id = "#{dom_id_prefix}-canonical-hint" %>
+<% phone_type_id = "#{dom_id_prefix}-phone-type" %>
+<% phone_type_hint_id = "#{dom_id_prefix}-phone-type-hint" %>
+<% canonical_allowed = lambda do |user, other_user|
+     !other_user.email_backed_public_portal_account? || user.email_backed_public_portal_account?
+   end %>
 
-  <fieldset>
-    <legend class="text-sm font-medium text-gray-700">Which record survives (canonical)?</legend>
-    <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :canonical_user_id, subject.id, false, required: true %>
-      <span class="ml-1"><%= subject.full_name %> (subject #<%= subject.id %>)</span>
-    </label>
-    <label class="inline-flex items-center text-sm">
-      <%= radio_button_tag :canonical_user_id, candidate.id, false, required: true %>
-      <span class="ml-1"><%= candidate.full_name %> (candidate #<%= candidate.id %>)</span>
-    </label>
-    <p class="text-xs text-gray-500 mt-1">The other record is retired (deactivated) and points at the canonical survivor. It is never deleted.</p>
-  </fieldset>
+<%= form_with url: merge_admin_duplicate_review_path(review_case),
+              method: :post,
+              id: "#{dom_id_prefix}-form",
+              class: 'space-y-4',
+              data: {
+                controller: 'final-submit-gate',
+                testid: 'duplicate-merge-form',
+                final_submit_gate_incomplete_message: 'Complete every required merge decision before submitting.',
+                final_submit_gate_incomplete_detail_message: 'Still needed: %{items}.',
+                final_submit_gate_ready_message: 'Merge form is ready to submit.'
+              } do |f| %>
+  <%= hidden_field_tag 'pair_ids[]', subject.id, id: "#{dom_id_prefix}-subject-id" %>
+  <%= hidden_field_tag 'pair_ids[]', candidate.id, id: "#{dom_id_prefix}-candidate-id" %>
 
-  <fieldset class="space-y-3">
-    <legend class="text-sm font-medium text-gray-700 mb-1">Contact facts to keep (record truth)</legend>
-    <p class="text-xs text-gray-500">"Canonical" is whichever record you selected above; "duplicate" is the retiring record. Stored values for each record are shown so you can choose the correct fact.</p>
-    <% contact_displays.each do |field, display| %>
-      <div class="text-sm border-t border-gray-100 pt-2">
-        <span class="block text-gray-700 font-medium capitalize"><%= field %></span>
-        <dl class="text-xs text-gray-500 mb-1">
-          <div><span class="font-medium">Subject #<%= subject.id %>:</span> <%= send(display, subject) %></div>
-          <div><span class="font-medium">Candidate #<%= candidate.id %>:</span> <%= send(display, candidate) %></div>
-        </dl>
-        <label class="inline-flex items-center mr-3">
-          <%= radio_button_tag "contact[#{field}]", 'canonical', false, required: true %>
-          <span class="ml-1">Keep canonical record's <%= field %></span>
-        </label>
-        <label class="inline-flex items-center">
-          <%= radio_button_tag "contact[#{field}]", 'duplicate', false, required: true %>
-          <span class="ml-1">Use duplicate record's <%= field %></span>
-        </label>
+  <fieldset aria-describedby="<%= canonical_hint_id %>">
+    <legend class="text-sm font-medium text-gray-700">Canonical record</legend>
+    <p id="<%= canonical_hint_id %>" class="text-xs text-gray-500 mb-2">
+      Select the record whose password, MFA, and login email must survive. An email-backed account cannot be retired into a record without login authority.
+    </p>
+    <% pair_users.each do |user| %>
+      <% other_user = pair_users.find { |pair_user| pair_user.id != user.id } %>
+      <% input_id = "#{dom_id_prefix}-canonical-#{user.id}" %>
+      <% allowed = canonical_allowed.call(user, other_user) %>
+      <div class="mb-1">
+        <%= radio_button_tag :canonical_user_id,
+                             user.id,
+                             false,
+                             id: input_id,
+                             required: true,
+                             disabled: !allowed %>
+        <%= label_tag input_id,
+                      "#{user.full_name} (#{user.id == subject.id ? 'subject' : 'candidate'} ##{user.id})",
+                      class: "ml-1 text-sm #{allowed ? 'text-gray-700' : 'text-gray-400'}" %>
+        <% unless allowed %>
+          <span class="ml-2 text-xs text-gray-500">Unavailable: the other record owns the email-backed login.</span>
+        <% end %>
       </div>
     <% end %>
+    <p class="text-xs text-gray-500 mt-1">The other record is retired, releases its primary contact values, and points at the canonical survivor. It is never deleted.</p>
+  </fieldset>
+
+  <section class="text-sm border-t border-gray-100 pt-3" aria-labelledby="<%= dom_id_prefix %>-login-email-heading">
+    <h3 id="<%= dom_id_prefix %>-login-email-heading" class="font-medium text-gray-700">Login email</h3>
+    <dl class="text-xs text-gray-500 mt-1">
+      <div><span class="font-medium">Subject #<%= subject.id %>:</span> <%= stored_email_display(subject) %></div>
+      <div><span class="font-medium">Candidate #<%= candidate.id %>:</span> <%= stored_email_display(candidate) %></div>
+    </dl>
+    <p class="text-xs text-gray-500 mt-1">The selected canonical record keeps its own login email. Login email cannot be transferred between records.</p>
+  </section>
+
+  <fieldset class="space-y-3">
+    <legend class="text-sm font-medium text-gray-700 mb-1">Contact facts to keep</legend>
+    <p class="text-xs text-gray-500">Choose the stored phone and address facts that are true for this person. Contact similarity is evidence only; it does not authorize a merge.</p>
+
+    <fieldset class="text-sm border-t border-gray-100 pt-2">
+      <legend class="block text-gray-700 font-medium">Phone</legend>
+      <% pair_users.each do |user| %>
+        <% input_id = "#{dom_id_prefix}-phone-source-#{user.id}" %>
+        <div>
+          <%= radio_button_tag 'contact[phone_user_id]',
+                               user.id,
+                               false,
+                               id: input_id,
+                               required: true,
+                               data: {
+                                 final_submit_gate_conditional_required_source: 'phone-type',
+                                 final_submit_gate_required_when_selected: user.real_phone?.to_s
+                               } %>
+          <%= label_tag input_id,
+                        "#{user.id == subject.id ? 'Subject' : 'Candidate'} ##{user.id}: #{stored_phone_display(user)}",
+                        class: 'ml-1 text-xs text-gray-700' %>
+        </div>
+      <% end %>
+    </fieldset>
+
     <div class="text-sm border-t border-gray-100 pt-2">
-      <%= label_tag 'contact[phone_type]', 'Phone type (required if a real phone survives)', class: 'block text-gray-700 font-medium' %>
-      <%= select_tag 'contact[phone_type]', options_for_select(%w[voice videophone text]), include_blank: 'Select…', class: 'border-gray-300 rounded-md text-sm' %>
-      <p class="text-xs text-gray-500">Never leave this blank when a phone survives; SMS capability must be chosen explicitly.</p>
+      <%= label_tag phone_type_id, 'Phone type', class: 'block text-gray-700 font-medium' %>
+      <%= select_tag 'contact[phone_type]',
+                     options_for_select(duplicate_review_phone_type_options),
+                     include_blank: 'Select…',
+                     id: phone_type_id,
+                     class: 'border-gray-300 rounded-md text-sm',
+                     data: { final_submit_gate_conditional_required: 'phone-type' },
+                     aria: { required: 'false', describedby: phone_type_hint_id } %>
+      <p id="<%= phone_type_hint_id %>" class="text-xs text-gray-500">
+        Required only when the selected surviving phone is real. Selecting a blank phone clears phone type.
+      </p>
     </div>
+
+    <fieldset class="text-sm border-t border-gray-100 pt-2">
+      <legend class="block text-gray-700 font-medium">Address</legend>
+      <% pair_users.each do |user| %>
+        <% input_id = "#{dom_id_prefix}-address-source-#{user.id}" %>
+        <div>
+          <%= radio_button_tag 'contact[address_user_id]', user.id, false, id: input_id, required: true %>
+          <%= label_tag input_id,
+                        "#{user.id == subject.id ? 'Subject' : 'Candidate'} ##{user.id}: #{stored_address_display(user)}",
+                        class: 'ml-1 text-xs text-gray-700' %>
+        </div>
+      <% end %>
+    </fieldset>
   </fieldset>
 
   <fieldset>
     <legend class="text-sm font-medium text-gray-700">Official-notice delivery route</legend>
-    <dl class="text-xs text-gray-500 mb-1">
-      <div><span class="font-medium">Subject #<%= subject.id %>:</span> <%= subject.communication_preference.presence || 'not set' %></div>
-      <div><span class="font-medium">Candidate #<%= candidate.id %>:</span> <%= candidate.communication_preference.presence || 'not set' %></div>
-    </dl>
-    <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :delivery_choice, 'canonical', false, required: true %>
-      <span class="ml-1">Canonical record's preference</span>
-    </label>
-    <label class="inline-flex items-center text-sm">
-      <%= radio_button_tag :delivery_choice, 'duplicate', false, required: true %>
-      <span class="ml-1">Duplicate record's preference</span>
-    </label>
+    <% pair_users.each do |user| %>
+      <% input_id = "#{dom_id_prefix}-delivery-source-#{user.id}" %>
+      <div>
+        <%= radio_button_tag :delivery_user_id, user.id, false, id: input_id, required: true %>
+        <%= label_tag input_id,
+                      "#{user.id == subject.id ? 'Subject' : 'Candidate'} ##{user.id}: #{user.communication_preference.presence || 'not set'}",
+                      class: 'ml-1 text-sm text-gray-700' %>
+      </div>
+    <% end %>
   </fieldset>
 
-  <fieldset>
+  <fieldset data-requires-one-checkbox="true">
     <legend class="text-sm font-medium text-gray-700">Evidence / reason codes</legend>
-    <% if reason_codes.any? %>
-      <% reason_codes.each do |code| %>
-        <label class="inline-flex items-center mr-3 text-sm">
-          <%= check_box_tag 'reason_codes[]', code, true %>
-          <span class="ml-1"><%= code.humanize %></span>
-        </label>
-      <% end %>
-    <% else %>
-      <label class="inline-flex items-center text-sm">
-        <%= check_box_tag 'reason_codes[]', 'admin_reviewed', true %>
-        <span class="ml-1">Admin reviewed</span>
-      </label>
+    <% (reason_codes.presence || ['admin_reviewed']).each do |code| %>
+      <% input_id = "#{dom_id_prefix}-reason-#{code.parameterize}" %>
+      <div>
+        <%= check_box_tag 'reason_codes[]', code, true, id: input_id %>
+        <%= label_tag input_id, duplicate_review_reason_label(code), class: 'ml-1 text-sm text-gray-700' %>
+      </div>
     <% end %>
   </fieldset>
 
   <div>
-    <%= label_tag :rationale, 'Rationale (required)', class: 'block text-sm font-medium text-gray-700' %>
-    <%= text_area_tag :rationale, nil, rows: 2, required: true, class: 'w-full border-gray-300 rounded-md text-sm', placeholder: 'Explain why these records are the same person and what was verified.' %>
+    <% rationale_id = "#{dom_id_prefix}-rationale" %>
+    <%= label_tag rationale_id, 'Rationale (required)', class: 'block text-sm font-medium text-gray-700' %>
+    <%= text_area_tag :rationale,
+                      nil,
+                      id: rationale_id,
+                      rows: 2,
+                      required: true,
+                      class: 'w-full border-gray-300 rounded-md text-sm',
+                      placeholder: 'Explain why these records are the same person and what was verified.' %>
   </div>
 
-  <label class="inline-flex items-center text-sm">
-    <%= check_box_tag :same_person_confirmed, '1', false, required: true %>
-    <span class="ml-2">I confirm these records are the same person. All applications on the duplicate record will transfer to the canonical account.</span>
-  </label>
+  <% confirmation_id = "#{dom_id_prefix}-same-person-confirmed" %>
+  <div>
+    <%= check_box_tag :same_person_confirmed, '1', false, id: confirmation_id, required: true %>
+    <%= label_tag confirmation_id,
+                  'I confirm these records are the same person. All applications on the duplicate record will transfer to the canonical account.',
+                  class: 'ml-1 text-sm text-gray-700' %>
+  </div>
 
   <div>
-    <%= f.submit 'Merge records', class: 'bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded text-sm cursor-pointer', data: { turbo_confirm: 'Merge is audited and retires the duplicate record. Continue?' } %>
+    <%= f.submit 'Merge records',
+                 class: 'bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-2 px-4 rounded text-sm cursor-pointer',
+                 data: {
+                   final_submit_gate_target: 'submitButton',
+                   turbo_confirm: 'Merge is audited and retires the duplicate record. Continue?'
+                 } %>
+    <p class="mt-2 text-xs text-gray-600"
+       role="status"
+       aria-live="polite"
+       data-final-submit-gate-target="status">Complete every required merge decision before submitting.</p>
   </div>
 <% end %>

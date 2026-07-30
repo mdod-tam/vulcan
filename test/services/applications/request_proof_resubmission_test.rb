@@ -137,6 +137,24 @@ module Applications
       end
     end
 
+    test 'an unrelated inactive guardian does not block proof issuance to an eligible selected recipient' do
+      active_guardian = create(:constituent)
+      inactive_guardian = create(:constituent, status: :inactive)
+      create(:guardian_relationship, guardian_user: active_guardian, dependent_user: @application.user)
+      create(:guardian_relationship, guardian_user: inactive_guardian, dependent_user: @application.user)
+      @application.update!(managing_guardian: active_guardian)
+
+      result = RequestProofResubmission.new(
+        application: @application,
+        actor: @actor,
+        proof_type: :income,
+        recipient_ids: [@application.user_id]
+      ).call
+
+      assert_predicate result, :success?
+      assert_equal [@application.user_id], result.data.fetch(:secure_request_forms).map(&:recipient_id)
+    end
+
     test 'delivery error reporting redacts secure proof upload urls' do
       raw_url = 'https://example.test/secure_proof_form?token=raw-proof-token'
       @mailer_delivery.stubs(:deliver_now).raises(StandardError, "smtp rendered #{raw_url}")

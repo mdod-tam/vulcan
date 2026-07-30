@@ -22,6 +22,18 @@ class DuplicateReviewCase < ApplicationRecord
 
   RESOLVED_STATUSES = %w[resolved_approved resolved_ignored resolved_merged].freeze
 
+  # Reason codes an admin may record on a resolution, as opposed to the detection-derived
+  # evidence codes in DuplicateReviewCaseCandidate::MATCH_REASONS. A case opened without any
+  # detection reasons still has to be resolvable, so the merge form falls back to
+  # 'admin_reviewed' -- it must stay in this vocabulary or every such merge would be rejected.
+  OPERATOR_REASON_CODES = %w[admin_reviewed manual_review].freeze
+
+  # Resolution metadata and audit evidence are immutable once written, so the codes that land
+  # there are validated against a server-owned vocabulary rather than accepted from the request.
+  RESOLUTION_REASON_CODES = (DuplicateReviewCaseCandidate::MATCH_REASONS + OPERATOR_REASON_CODES).freeze
+
+  MAX_REASON_CODES = 20
+
   belongs_to :subject_user, class_name: 'User', optional: true
   belongs_to :resolved_by, class_name: 'User', optional: true
   has_many :duplicate_review_case_candidates, dependent: :destroy
@@ -59,6 +71,11 @@ class DuplicateReviewCase < ApplicationRecord
   validate :metadata_shape
   validate :resolution_fields_present_when_resolved
   validate :resolution_metadata_shape
+  # Review evidence invariant: a resolved case is terminal and its resolution/snapshot facts
+  # are never rewritten. Reads the live database row (not this instance's own dirty
+  # tracking) so a caller holding a pre-resolution instance cannot bypass the guard.
+  validate :terminal_case_immutable, on: :update
+  before_destroy :reject_resolved_case_destroy
 
   scope :open_cases, -> { where(status: statuses[:open]) }
   scope :resolved_cases, -> { where(status: RESOLVED_STATUSES.map { |s| statuses[s] }) }
@@ -78,6 +95,23 @@ class DuplicateReviewCase < ApplicationRecord
 
   private
 
+  def terminal_case_immutable
+    errors.add(:base, 'A resolved duplicate review case cannot be modified') if currently_resolved_in_database?
+  end
+
+  def currently_resolved_in_database?
+    return false if new_record?
+
+    self.class.unscoped.resolved_cases.exists?(id: id)
+  end
+
+  def reject_resolved_case_destroy
+    return unless currently_resolved_in_database?
+
+    errors.add(:base, 'A resolved duplicate review case cannot be deleted')
+    throw :abort
+  end
+
   def resolution_fields_present_when_resolved
     return unless RESOLVED_STATUSES.include?(status)
 
@@ -96,9 +130,12 @@ class DuplicateReviewCase < ApplicationRecord
     end
 
     unknown_keys = resolution_metadata.keys.map(&:to_s) - ALLOWED_RESOLUTION_METADATA_KEYS
-    return if unknown_keys.empty?
+    if unknown_keys.any?
+      errors.add(:resolution_metadata, "contains unsupported keys: #{unknown_keys.join(', ')}")
+      return
+    end
 
-    errors.add(:resolution_metadata, "contains unsupported keys: #{unknown_keys.join(', ')}")
+    validate_reason_code_list(:resolution_metadata, resolution_metadata['reason_codes'], RESOLUTION_REASON_CODES)
   end
 
   def metadata_shape
@@ -110,24 +147,31 @@ class DuplicateReviewCase < ApplicationRecord
       return
     end
 
-    validate_reason_codes(metadata['reason_codes'])
+    # Detection metadata carries only machine-derived match evidence; the operator codes are
+    # valid on a resolution, not on the reason a case was opened.
+    validate_reason_code_list(:metadata, metadata['reason_codes'], DuplicateReviewCaseCandidate::MATCH_REASONS)
     validate_submitted_contact_digest(metadata['submitted_contact_digest'])
     validate_intake_context(metadata['intake_context'])
     validate_subject_snapshot(metadata['subject_snapshot'])
   end
 
-  def validate_reason_codes(reason_codes)
+  def validate_reason_code_list(attribute, reason_codes, allowed_codes)
     return if reason_codes.blank?
 
     unless reason_codes.is_a?(Array)
-      errors.add(:metadata, 'reason_codes must be an array')
+      errors.add(attribute, 'reason_codes must be an array')
       return
     end
 
-    invalid = reason_codes.map(&:to_s) - DuplicateReviewCaseCandidate::MATCH_REASONS
+    if reason_codes.length > MAX_REASON_CODES
+      errors.add(attribute, "reason_codes cannot exceed #{MAX_REASON_CODES} entries")
+      return
+    end
+
+    invalid = reason_codes.map(&:to_s) - allowed_codes
     return if invalid.empty?
 
-    errors.add(:metadata, "reason_codes contains unsupported values: #{invalid.join(', ')}")
+    errors.add(attribute, "reason_codes contains unsupported values: #{invalid.join(', ')}")
   end
 
   def validate_submitted_contact_digest(digest)

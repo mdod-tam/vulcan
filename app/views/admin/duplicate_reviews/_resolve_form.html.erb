@@ -29,7 +29,7 @@
     <% Array(review_case.metadata['reason_codes']).each do |code| %>
       <label class="inline-flex items-center mr-3 text-sm">
         <%= check_box_tag 'reason_codes[]', code, true %>
-        <span class="ml-1"><%= code.humanize %></span>
+        <span class="ml-1"><%= duplicate_review_reason_label(code) %></span>
       </label>
     <% end %>
   </fieldset>

@@ -28,7 +28,7 @@ module ConstituentPortal
 
     before_action :authenticate_user!
     before_action :require_constituent!
-    before_action :set_application, only: %i[show edit update submit]
+    before_action :set_application, only: %i[show edit update]
     before_action :ensure_editable, only: %i[edit update]
     before_action :setup_address_for_form, only: %i[new edit]
     # ParamCasting concern: Automatically converts checkbox values to proper boolean types
@@ -129,20 +129,6 @@ module ConstituentPortal
       else
         handle_update_failure(result)
       end
-    end
-
-    def submit
-      @application = current_user.applications.find(params[:id])
-      ApplicationRecord.transaction do
-        @application.assign_attributes(submission_params)
-        @application.save!
-        @application.submit!(actor: current_user)
-      end
-      ApplicationNotificationsMailer.application_submitted(@application).deliver_later
-      redirect_with_notice(constituent_portal_application_path(@application),
-                           'Application submitted successfully!')
-    rescue ActiveRecord::RecordInvalid
-      render :edit, status: :unprocessable_content
     end
 
     def resubmit_proof
@@ -479,14 +465,6 @@ module ConstituentPortal
         :city,
         :state,
         :zip_code
-      )
-    end
-
-    def submission_params
-      params.expect(
-        application: %i[terms_accepted
-                        information_verified
-                        medical_release_authorized]
       )
     end
 

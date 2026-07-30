@@ -372,22 +372,44 @@ module Admin
       }, status: :unprocessable_content
     end
 
+    # Locks the target user before requalifying and updating primary contact fields, so a
+    # concurrent merge and a concurrent admin profile edit can never interleave: either the
+    # merge commits first and this reload sees the retired record and refuses, or the edit
+    # commits first and the merge -- which takes the same lock -- waits.
     def update
       @user = User.find(params[:id])
 
-      if @user.update(admin_user_params)
-        AuditEventService.log(
-          action: 'user_updated',
-          actor: current_user,
-          auditable: @user,
-          metadata: {
-            admin_id: current_user.id,
-            admin_name: current_user.full_name
-          }
-        )
-        redirect_to admin_user_path(@user), notice: t('.user_update_pass')
-      else
-        render :edit, status: :unprocessable_content
+      ActiveRecord::Base.transaction do
+        locked_users = User.lock_for_merge_integrity!(@user, current_user)
+        locked_user = locked_users.fetch(@user.id)
+        locked_actor = locked_users.fetch(current_user.id)
+
+        unless locked_actor.admin? && locked_actor.public_login_active?
+          redirect_to admin_user_path(locked_user), alert: 'Your admin session is no longer eligible for this action.'
+          raise ActiveRecord::Rollback
+        end
+
+        if locked_user.merged?
+          redirect_to admin_user_path(locked_user), alert: 'This record is no longer an eligible active record.'
+          raise ActiveRecord::Rollback
+        end
+
+        @user = locked_user
+        if @user.update(admin_user_params)
+          AuditEventService.log(
+            action: 'user_updated',
+            actor: locked_actor,
+            auditable: @user,
+            metadata: {
+              admin_id: locked_actor.id,
+              admin_name: locked_actor.full_name
+            }
+          )
+          redirect_to admin_user_path(@user), notice: t('.user_update_pass')
+        else
+          render :edit, status: :unprocessable_content
+          raise ActiveRecord::Rollback
+        end
       end
     end
 
@@ -900,8 +922,25 @@ module Admin
       new_klass = validate_target_class(namespaced_role)
       return if performed? # Early return if validation failed
 
-      converted_user = convert_user_to_new_type(user, new_klass)
-      save_converted_user(converted_user, user)
+      # Locks the base User row before requalifying so a concurrent merge and a concurrent
+      # role conversion can never interleave: either the merge commits first and this reload
+      # sees the retired record and refuses, or the conversion commits first and the merge --
+      # which takes the same lock -- waits. converted_user.save below runs with
+      # validate: false (STI type conversion can legitimately fail unrelated validations for
+      # the new type), so this explicit merged? check is the only thing standing between a
+      # retired duplicate and having its `type` column silently rewritten.
+      ActiveRecord::Base.transaction do
+        locked_user = User.lock_for_merge_integrity!(user).fetch(user.id)
+
+        if locked_user.merged?
+          render json: { success: false, message: 'This record is no longer an eligible active record.' },
+                 status: :unprocessable_content
+          raise ActiveRecord::Rollback
+        end
+
+        converted_user = convert_user_to_new_type(locked_user, new_klass)
+        save_converted_user(converted_user, locked_user)
+      end
     end
 
     def validate_target_class(namespaced_role)

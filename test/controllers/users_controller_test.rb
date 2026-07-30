@@ -49,6 +49,18 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'updated@example.com', changes['email']['new']
   end
 
+  %i[inactive suspended].each do |status|
+    test "profile edit remains available to an unmerged #{status} user with an existing session" do
+      @user.update!(status: status)
+
+      patch profile_path, params: { user: { first_name: 'Still Editable' } }
+
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Still Editable', @user.reload.first_name
+      assert_not @user.merged?
+    end
+  end
+
   test 'should set Current.user before update' do
     # Verify Current.user is set during the request
     UsersController.any_instance.expects(:set_current_user).once

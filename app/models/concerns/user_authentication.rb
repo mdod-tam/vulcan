@@ -10,12 +10,24 @@ module UserAuthentication
   LOCK_DURATION = 1.hour
 
   included do
-    # Token generation for password reset
-    generates_token_for :password_reset, expires_in: 20.minutes do
-      password_digest&.last(10)
-    end
-
+    # Define the password accessors first. Rails' has_secure_password installs its own
+    # password-salt token definition, so our stronger password-plus-email definition
+    # must be registered afterward.
     has_secure_password
+
+    # Token generation for password reset. Bound to a fingerprint of the password digest plus
+    # *every* contact route a reset link can be delivered to -- normalized login email and
+    # normalized phone -- not the digest alone. A password change, a login-email change, or a
+    # phone change therefore invalidates outstanding tokens. The phone half matters because a
+    # reset link is also delivered by SMS: without it, a merge that replaced a survivor's phone
+    # left the token already texted to the discarded number valid for its full lifetime, even
+    # though that merge is precisely the admin action declaring the number is not this person's.
+    # Revocation, not issuance ordering, is what makes an already-sent link safe. This is a
+    # distinct mechanism from clearing the legacy reset_password_token/reset_password_sent_at
+    # columns on retirement; the two must not be conflated.
+    generates_token_for :password_reset, expires_in: 20.minutes do
+      password_reset_token_fingerprint
+    end
 
     # Associations
     has_many :sessions, dependent: :destroy
@@ -109,5 +121,22 @@ module UserAuthentication
     webauthn_credentials.exists? ||
       totp_credentials.exists? ||
       sms_credentials.verified.exists?
+  end
+
+  private
+
+  # HMAC-SHA256 of the password digest (standing in for a dedicated password salt column,
+  # which this schema does not have) plus the normalized login email and normalized phone --
+  # every delivery route a reset link can reach. Used only as the generates_token_for
+  # :password_reset payload above -- see that block's comment. Both contact values go through
+  # the same normalizers the lookup paths use, so a cosmetic reformat is not a change of
+  # authority; the separator keeps two different email/phone splits from colliding.
+  def password_reset_token_fingerprint
+    contact_authority = [
+      User.normalize_email(email).to_s,
+      User.normalize_phone(phone).to_s
+    ].join("\x1f")
+
+    OpenSSL::HMAC.hexdigest('SHA256', password_digest.to_s, contact_authority)
   end
 end

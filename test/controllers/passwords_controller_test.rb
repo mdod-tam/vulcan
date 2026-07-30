@@ -259,6 +259,47 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_not @user.reload.authenticate('ReplayReset*Password123')
   end
 
+  def test_generated_password_reset_token_is_invalid_after_normalized_email_changes
+    token = @user.generate_token_for(:password_reset)
+
+    @user.update!(email: "changed-#{SecureRandom.hex(4)}@example.com")
+
+    assert_nil User.find_by_token_for(:password_reset, token)
+  end
+
+  # A reset link is also delivered by SMS, so the phone carries reset authority exactly as the
+  # login email does. Once the phone changes, a link already texted to the old number must stop
+  # working -- otherwise whoever holds that number keeps a live reset for the rest of the token's
+  # 20-minute life.
+  def test_generated_password_reset_token_is_invalid_after_phone_changes
+    @user.update!(phone: '555-867-5309')
+    token = @user.generate_token_for(:password_reset)
+
+    @user.update!(phone: '555-234-5678')
+
+    assert_nil User.find_by_token_for(:password_reset, token)
+  end
+
+  def test_generated_password_reset_token_survives_a_non_contact_change
+    token = @user.generate_token_for(:password_reset)
+
+    @user.update!(first_name: "Renamed#{SecureRandom.hex(2)}")
+
+    assert_equal @user.id, User.find_by_token_for(:password_reset, token)&.id
+  end
+
+  # Cosmetic reformatting is not a change of authority: the column and the fingerprint both run
+  # the value through User.normalize_phone, so re-submitting the same number in another format
+  # must not invalidate a reset the user still needs.
+  def test_generated_password_reset_token_survives_a_cosmetic_phone_reformat
+    @user.update!(phone: '555-867-5309')
+    token = @user.generate_token_for(:password_reset)
+
+    @user.update!(phone: '5558675309')
+
+    assert_equal @user.id, User.find_by_token_for(:password_reset, token)&.id
+  end
+
   def test_should_update_password_with_valid_inputs
     patch password_path, params: {
       password_challenge: 'password123',

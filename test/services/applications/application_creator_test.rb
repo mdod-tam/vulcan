@@ -44,6 +44,48 @@ module Applications
       assert_equal @user, result.application.managing_guardian
     end
 
+    test 'updates an existing dependent application from its locked ownership even when user_id is omitted' do
+      create_guardian_relationship(@user, @dependent)
+      application = create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian: @user,
+        annual_income: '40000'
+      )
+      form = create_form_with_application(@user, application)
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?, result.error_messages.inspect
+      assert_equal @dependent.id, result.application.user_id
+      assert_equal @user.id, result.application.managing_guardian_id
+      assert @dependent.reload.vision_disability?
+      assert_not @user.reload.vision_disability?
+    end
+
+    test 'dependent application rejects a guardian whose locked role is no longer constituent' do
+      create_guardian_relationship(@user, @dependent)
+      @user.update_column(:type, 'Users::Administrator')
+      form = create_valid_dependent_form(User.find(@user.id), @dependent)
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert_includes result.error_messages, 'Only constituent records can use the constituent application portal.'
+    end
+
+    test 'dependent application rejects an applicant whose locked role is no longer constituent' do
+      create_guardian_relationship(@user, @dependent)
+      @dependent.update_column(:type, 'Users::Administrator')
+      form = create_valid_dependent_form(@user, User.find(@dependent.id))
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert_includes result.error_messages, 'Only constituent records can use the constituent application portal.'
+    end
+
     test 'submission creates exactly one application_status_changed event' do
       application = create_application_for(@user)
       form = create_form_with_application(@user, application)

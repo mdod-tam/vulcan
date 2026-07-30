@@ -101,7 +101,8 @@ module Applications
         :application,
         :draft,
         user: @dependent,
-        managing_guardian_id: @user.id
+        managing_guardian_id: @user.id,
+        household_size: 1
       )
 
       assert_no_difference -> { Application.count } do
@@ -175,8 +176,8 @@ module Applications
       assert_equal draft.id, result[:application_id]
     end
 
-    test 'falls back to find_or_create when provided id not found' do
-      existing_draft = FactoryBot.create(:application, :draft, user: @user)
+    test 'fails closed rather than substituting a different draft when the provided id is not found' do
+      FactoryBot.create(:application, :draft, user: @user)
 
       result = Applications::AutosaveService.new(
         current_user: @user,
@@ -187,9 +188,8 @@ module Applications
         }
       ).call
 
-      assert result[:success]
-      # Should find the existing draft instead of creating new
-      assert_equal existing_draft.id, result[:application_id]
+      assert_not result[:success]
+      assert_includes result[:errors][:base], 'Unable to find or create application'
     end
 
     test 'does not create new draft when active application exists' do
@@ -263,7 +263,8 @@ module Applications
         :application,
         :draft,
         user: @dependent,
-        managing_guardian_id: @user.id
+        managing_guardian_id: @user.id,
+        household_size: 1
       )
 
       result = Applications::AutosaveService.new(
@@ -309,6 +310,54 @@ module Applications
       assert_not @user.reload.hearing_disability, 'Guardian should not have hearing_disability set'
     end
 
+    test 'dependent autosave rejects a guardian whose locked role is no longer constituent' do
+      dependent_draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian_id: @user.id,
+        household_size: 1
+      )
+      @user.update_column(:type, 'Users::Administrator')
+
+      result = Applications::AutosaveService.new(
+        current_user: User.find(@user.id),
+        params: {
+          id: dependent_draft.id,
+          field_name: 'application[household_size]',
+          field_value: '4'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors][:base], 'Only constituent records can use the constituent application portal.'
+      assert_not_equal 4, dependent_draft.reload.household_size
+    end
+
+    test 'dependent autosave rejects an applicant whose locked role is no longer constituent' do
+      dependent_draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @dependent,
+        managing_guardian_id: @user.id,
+        household_size: 1
+      )
+      @dependent.update_column(:type, 'Users::Administrator')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: dependent_draft.id,
+          field_name: 'application[household_size]',
+          field_value: '4'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors][:base], 'Only constituent records can use the constituent application portal.'
+      assert_not_equal 4, dependent_draft.reload.household_size
+    end
+
     test 'handles maryland_resident checkbox for dependent applications' do
       # This tests the bug fix: maryland_resident checkbox should work for dependent applications
       dependent_draft = FactoryBot.create(
@@ -330,6 +379,76 @@ module Applications
 
       assert result[:success], "Expected autosave to succeed but got errors: #{result[:errors]}"
       assert dependent_draft.reload.maryland_resident, 'maryland_resident should be set to true'
+    end
+
+    test 'rolls back a new draft when application-created audit logging raises' do
+      application_count = Application.count
+      event_count = Event.count
+      AuditEventService.stubs(:log).raises(StandardError, 'simulated application-created audit failure')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          field_name: 'application[household_size]',
+          field_value: '3'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors]['application[household_size]'], 'simulated application-created audit failure'
+      assert_equal application_count, Application.count, 'the new draft must roll back with its required audit'
+      assert_equal event_count, Event.count
+      assert_nil Application.find_by(user: @user)
+    end
+
+    test 'rolls back a user-field write when updating the application step raises' do
+      draft = FactoryBot.create(:application, :draft, user: @user, last_visited_step: 'step_1')
+      Application.any_instance
+                 .stubs(:update_column)
+                 .with(:last_visited_step, 'hearing_disability')
+                 .raises(StandardError, 'simulated application step failure')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: draft.id,
+          field_name: 'application[hearing_disability]',
+          field_value: 'true'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors]['application[hearing_disability]'], 'simulated application step failure'
+      assert_not @user.reload.hearing_disability, 'the earlier user-field write must roll back'
+      assert_equal 'step_1', draft.reload.last_visited_step
+    end
+
+    test 'rolls back an application-field write when updating the application step raises' do
+      draft = FactoryBot.create(
+        :application,
+        :draft,
+        user: @user,
+        household_size: 2,
+        last_visited_step: 'step_1'
+      )
+      Application.any_instance
+                 .stubs(:update_column)
+                 .with(:last_visited_step, 'household_size')
+                 .raises(StandardError, 'simulated application step failure')
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: {
+          id: draft.id,
+          field_name: 'application[household_size]',
+          field_value: '5'
+        }
+      ).call
+
+      assert_not result[:success]
+      assert_includes result[:errors]['application[household_size]'], 'simulated application step failure'
+      assert_equal 2, draft.reload.household_size, 'the earlier application-field write must roll back'
+      assert_equal 'step_1', draft.last_visited_step
     end
   end
 end

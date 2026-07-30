@@ -154,6 +154,28 @@ module DuplicateReviewCases
       assert_includes result.data[:duplicate_review_case].metadata['reason_codes'], 'email_phone_split'
     end
 
+    test 'fails without side effects when the subject became merged before the lock was acquired' do
+      other = create(:constituent)
+      @subject.update!(merged_into_user: other, merged_at: Time.current, status: :inactive)
+
+      assert_no_workflow_side_effects do
+        result = create_case
+        assert result.failure?
+        assert_match(/subject is no longer an eligible active record/i, result.message)
+      end
+    end
+
+    test 'fails without side effects when a candidate became merged before the lock was acquired' do
+      other = create(:constituent)
+      @candidate.update!(merged_into_user: other, merged_at: Time.current, status: :inactive)
+
+      assert_no_workflow_side_effects do
+        result = create_case
+        assert result.failure?
+        assert_match(/candidate is no longer an eligible active record/i, result.message)
+      end
+    end
+
     test 'does not create case when called with empty reason codes' do
       assert_no_difference 'DuplicateReviewCase.count' do
         result = CreateService.new(

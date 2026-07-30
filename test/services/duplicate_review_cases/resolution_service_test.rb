@@ -57,6 +57,31 @@ module DuplicateReviewCases
       assert_equal 'open', @review_case.reload.status
     end
 
+    # Reason codes land in immutable resolution metadata and audit evidence, so they are checked
+    # against a server-owned vocabulary. Validating in preflight (not only at the model) matters
+    # here: resolve_case! writes with update!, and #call rescues StaleCaseError only, so a
+    # model-level rejection would surface as an unhandled RecordInvalid rather than a failure.
+    test 'rejects a reason code outside the server-owned vocabulary' do
+      result = resolve(action: :approve, determination: 'same_person_confirmed', reason_codes: ['name_dob', 'free text'])
+      assert result.failure?
+      assert_match(/unsupported reason/i, result.message)
+      assert_equal 'open', @review_case.reload.status
+    end
+
+    test 'rejects more reason codes than the cap allows' do
+      result = resolve(action: :approve, determination: 'same_person_confirmed',
+                       reason_codes: Array.new(DuplicateReviewCase::MAX_REASON_CODES + 1) { |i| "code-#{i}" })
+      assert result.failure?
+      assert_match(/too many reason/i, result.message)
+      assert_equal 'open', @review_case.reload.status
+    end
+
+    test 'accepts operator reason codes alongside detection match reasons' do
+      result = resolve(action: :approve, determination: 'same_person_confirmed', reason_codes: %w[name_dob admin_reviewed])
+      assert result.success?, result.message
+      assert_equal %w[name_dob admin_reviewed], @review_case.reload.resolution_metadata['reason_codes']
+    end
+
     test 'does not clear review flag when another open case remains' do
       open_case_for(@subject)
       resolve(action: :ignore, determination: 'keep_separate')
@@ -71,14 +96,14 @@ module DuplicateReviewCases
 
     private
 
-    def resolve(action:, determination:, rationale: 'reviewed and resolved')
+    def resolve(action:, determination:, rationale: 'reviewed and resolved', reason_codes: %w[name_dob])
       ResolutionService.new(
         duplicate_review_case: @review_case,
         actor: @admin,
         action: action,
         determination: determination,
         rationale: rationale,
-        reason_codes: %w[name_dob]
+        reason_codes: reason_codes
       ).call
     end
 

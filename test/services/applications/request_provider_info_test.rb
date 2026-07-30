@@ -88,6 +88,40 @@ module Applications
       assert_equal dependent, Notification.find_by!(notifiable: application, action: 'provider_info_requested').recipient
     end
 
+    test 'an unrelated inactive guardian does not block issuance to an eligible selected recipient' do
+      active_guardian = create(:constituent)
+      inactive_guardian = create(:constituent, status: :inactive)
+      create(:guardian_relationship, guardian_user: active_guardian, dependent_user: @application.user)
+      create(:guardian_relationship, guardian_user: inactive_guardian, dependent_user: @application.user)
+      @application.update!(managing_guardian: active_guardian)
+
+      result = RequestProviderInfo.new(
+        application: @application,
+        actor: @actor,
+        recipient_ids: [@application.user_id]
+      ).call
+
+      assert_predicate result, :success?
+      assert_equal [@application.user_id], result.data.fetch(:secure_request_forms).map(&:recipient_id)
+    end
+
+    test 'an inactive selected guardian fails closed without issuing a request' do
+      inactive_guardian = create(:constituent, status: :inactive)
+      create(:guardian_relationship, guardian_user: inactive_guardian, dependent_user: @application.user)
+      @application.update!(managing_guardian: inactive_guardian)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProviderInfo.new(
+          application: @application,
+          actor: @actor,
+          recipient_ids: [inactive_guardian.id]
+        ).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.recipient_no_longer_eligible'), result.message
+    end
+
     test 'alternate contact is not a provider info recipient' do
       application = create(
         :application,

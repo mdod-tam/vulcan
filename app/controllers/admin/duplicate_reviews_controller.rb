@@ -52,8 +52,8 @@ module Admin
         same_person_confirmed: params[:same_person_confirmed],
         rationale: params[:rationale],
         reason_codes: Array(params[:reason_codes]),
-        contact_choices: merge_contact_choices,
-        delivery_choice: params[:delivery_choice]
+        contact_choices: merge_contact_choices(canonical:, duplicate:),
+        delivery_choice: source_for_pair_user_id(params[:delivery_user_id], canonical:, duplicate:)
       ).call
 
       if result.success?
@@ -65,24 +65,13 @@ module Admin
 
     def clear_flag
       user = User.find(params[:user_id])
-      rationale = params[:rationale].to_s.strip
-      return redirect_to admin_duplicate_reviews_path, alert: 'A rationale is required to clear a review flag.' if rationale.blank?
+      result = DuplicateReviewCases::ClearFlagService.new(user: user, actor: current_user, rationale: params[:rationale]).call
 
-      # Keep flag and cases in sync: an open case owns the flag, so it must be resolved
-      # through the case (approve/ignore/keep-separate/merge), not cleared out from under it.
-      if DuplicateReviewCase.open_cases.for_subject(user).exists?
-        return redirect_to admin_duplicate_reviews_path,
-                           alert: 'This record has an open review case; resolve the case instead of clearing the flag.'
+      if result.success?
+        redirect_to admin_duplicate_reviews_path, notice: result.message
+      else
+        redirect_to admin_duplicate_reviews_path, alert: result.message
       end
-
-      user.update!(needs_duplicate_review: false)
-      AuditEventService.log(
-        action: 'duplicate_review_flag_cleared',
-        actor: current_user,
-        auditable: user,
-        metadata: { user_id: user.id, rationale: rationale }
-      )
-      redirect_to admin_duplicate_reviews_path, notice: 'Review flag cleared.'
     end
 
     private
@@ -122,13 +111,23 @@ module Admin
       ids.compact.uniq
     end
 
-    def merge_contact_choices
+    def merge_contact_choices(canonical:, duplicate:)
       {
-        email: params.dig(:contact, :email),
-        phone: params.dig(:contact, :phone),
+        # Login identity is never a transferable contact choice. The selected canonical
+        # always keeps its own email/password/MFA authority.
+        email: 'canonical',
+        phone: source_for_pair_user_id(params.dig(:contact, :phone_user_id), canonical:, duplicate:),
         phone_type: params.dig(:contact, :phone_type),
-        address: params.dig(:contact, :address)
+        address: source_for_pair_user_id(params.dig(:contact, :address_user_id), canonical:, duplicate:)
       }
+    end
+
+    def source_for_pair_user_id(value, canonical:, duplicate:)
+      selected_id = value.to_i
+      return 'canonical' if selected_id == canonical.id
+      return 'duplicate' if selected_id == duplicate.id
+
+      nil
     end
   end
 end

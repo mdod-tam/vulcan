@@ -54,20 +54,47 @@ module ConstituentPortal
     end
 
     # PATCH/PUT /constituent_portal/dependents/:id
+    #
+    # Locks the dependent and the guardian before requalifying and updating, so a concurrent
+    # merge and a concurrent dependent profile edit can never interleave: either the merge
+    # commits first and this reload sees the retired participant and refuses, or the edit
+    # commits first and the merge -- which takes the same lock -- waits. Also re-derives every
+    # authority fact under that lock (see dependent_edit_still_authorized?): set_dependent and
+    # require_constituent! both ran before the lock was granted.
     def update
-      params_to_update = dependent_attributes_with_contact_strategies
-      unless params_to_update
-        contact_strategy_errors.each { |error| @dependent.errors.add(:base, error) }
-        setup_edit_template_variables
-        render :edit, status: :unprocessable_content
-        return
-      end
+      ActiveRecord::Base.transaction do
+        locked_users = User.lock_for_merge_integrity!(@dependent, current_user)
+        locked_dependent = locked_users.fetch(@dependent.id)
+        locked_guardian = locked_users.fetch(current_user.id)
 
-      if @dependent.update(params_to_update)
-        redirect_after_successful_update
-      else
-        setup_edit_template_variables
-        render :edit, status: :unprocessable_content
+        unless dependent_edit_still_authorized?(locked_dependent, locked_guardian)
+          redirect_to constituent_portal_dashboard_path, alert: 'This dependent is no longer available to edit.'
+          raise ActiveRecord::Rollback
+        end
+
+        @dependent = locked_dependent
+
+        # Derived from the *locked* guardian, inside the lock. A guardian contact strategy
+        # snapshots the guardian's own email, phone, and delivery preference into the dependent's
+        # stored contact, and User#effective_phone prefers that stored dependent_phone -- so
+        # deriving these before the lock would let a merge that changed the guardian's contact in
+        # the meantime be overwritten by pre-lock values and become durable contact truth,
+        # routing the dependent's notifications to a number the merge just discarded.
+        params_to_update = dependent_attributes_with_contact_strategies(locked_guardian)
+        unless params_to_update
+          contact_strategy_errors.each { |error| @dependent.errors.add(:base, error) }
+          setup_edit_template_variables
+          render :edit, status: :unprocessable_content
+          raise ActiveRecord::Rollback
+        end
+
+        if @dependent.update(params_to_update)
+          redirect_after_successful_update
+        else
+          setup_edit_template_variables
+          render :edit, status: :unprocessable_content
+          raise ActiveRecord::Rollback
+        end
       end
     end
 
@@ -93,6 +120,36 @@ module ConstituentPortal
     end
 
     private
+
+    # Every authority fact behind this edit, re-derived against the locked rows instead of the
+    # pre-lock instances the request was authorized with.
+    #
+    # The two participants are deliberately held to different standards. The guardian is the
+    # authenticated actor, so it must still satisfy the same gates the request was admitted
+    # under: public_login_active? (an admin suspension or deactivation landing mid-request must
+    # end the actor's authority, exactly as it would have blocked sign-in) and constituent?
+    # (require_constituent! ran before the lock was granted, so a role conversion in that window
+    # would otherwise still be honored). The dependent is a managed record that never
+    # authenticates, so only merged? disqualifies it: an admin deactivating or suspending a
+    # dependent must not lock their guardian out of maintaining the profile, and the dependent's
+    # own STI type is not part of this authorization -- User.editable_by_guardian scopes on the
+    # relationship alone. See the "guardian can edit an unmerged inactive/suspended dependent"
+    # cases in test/controllers/constituent_portal/dependents_controller_test.rb.
+    #
+    # The guardian relationship is read FOR UPDATE rather than through an unlocked exists?: an
+    # unlocked check can be satisfied by a row that a concurrent removal deletes before the
+    # update below lands, whereas locking the row makes that removal wait for this transaction.
+    def dependent_edit_still_authorized?(locked_dependent, locked_guardian)
+      return false if locked_dependent.merged?
+      return false unless locked_guardian.public_login_active? && locked_guardian.constituent?
+
+      GuardianRelationship
+        .where(guardian_id: locked_guardian.id, dependent_id: locked_dependent.id)
+        .order(:id)
+        .lock
+        .first
+        .present?
+    end
 
     def set_dependent
       # Use Rails-centric scope for authorization
@@ -127,17 +184,21 @@ module ConstituentPortal
       Current.user = current_user
     end
 
-    def dependent_attributes_with_contact_strategies
+    # +guardian+ is the record whose own contact facts get snapshotted into the dependent's
+    # stored contact, so it must be the locked guardian on any path that writes under a lock --
+    # never the request's pre-lock current_user. Defaults to current_user for #create, which does
+    # not yet hold a lock across its writes (named exclusion; see service_architecture.md).
+    def dependent_attributes_with_contact_strategies(guardian = current_user)
       attrs = dependent_user_params.to_h
       # Portal contact strategies snapshot the submitted choice into User fields.
       # Omitted contact keys preserve existing contact on partial updates.
-      strategies = dependent_contact_strategy_params(attrs)
+      strategies = dependent_contact_strategy_params(attrs, guardian)
       return attrs if strategies.values_at(:email_strategy, :phone_strategy).all?(&:nil?)
 
       Applications::GuardianDependentManagementService
         .new(strategies)
         .tap { |service| @contact_strategy_service = service }
-        .apply_contact_strategies_for(current_user, attrs)
+        .apply_contact_strategies_for(guardian, attrs)
     ensure
       @contact_strategy_errors = @contact_strategy_service&.errors if @contact_strategy_service&.errors&.any?
     end
@@ -263,15 +324,15 @@ module ConstituentPortal
       }
     end
 
-    def dependent_contact_strategy_params(attrs)
+    def dependent_contact_strategy_params(attrs, guardian)
       {
-        email_strategy: contact_strategy_for(:email, :use_guardian_email, attrs),
-        phone_strategy: contact_strategy_for(:phone, :use_guardian_phone, attrs),
+        email_strategy: contact_strategy_for(:email, :use_guardian_email, attrs, guardian),
+        phone_strategy: contact_strategy_for(:phone, :use_guardian_phone, attrs, guardian),
         address_strategy: 'dependent'
       }
     end
 
-    def contact_strategy_for(field, checkbox_param, attrs)
+    def contact_strategy_for(field, checkbox_param, attrs, guardian)
       submitted = attrs.key?(field) || attrs.key?(field.to_s)
       value = attrs[field] || attrs[field.to_s]
 
@@ -279,27 +340,30 @@ module ConstituentPortal
       if action_name == 'update'
         return nil unless submitted
       elsif !submitted
-        return guardian_contact_strategy(checkbox_param, nil)
+        return guardian_contact_strategy(checkbox_param, nil, guardian)
       end
 
-      guardian_contact_strategy(checkbox_param, value)
+      guardian_contact_strategy(checkbox_param, value, guardian)
     end
 
-    def guardian_contact_strategy(param_name, dependent_value)
+    def guardian_contact_strategy(param_name, dependent_value, guardian)
       return 'guardian' if ActiveModel::Type::Boolean.new.cast(params[param_name])
       # Submitted blank contact on create/update applies guardian strategy and regenerates primary contact.
       return 'guardian' if dependent_value.blank?
-      return 'guardian' if matches_guardian_contact?(param_name, dependent_value)
+      return 'guardian' if matches_guardian_contact?(param_name, dependent_value, guardian)
 
       'dependent'
     end
 
-    def matches_guardian_contact?(param_name, dependent_value)
+    # Compares against the passed guardian, not current_user: deciding "the submitted value is
+    # the guardian's own contact, so use the guardian strategy" is only correct against the same
+    # guardian record whose values will then be snapshotted.
+    def matches_guardian_contact?(param_name, dependent_value, guardian)
       case param_name
       when :use_guardian_email
-        User.normalize_email(dependent_value) == User.normalize_email(current_user.email)
+        User.normalize_email(dependent_value) == User.normalize_email(guardian.email)
       when :use_guardian_phone
-        normalized_phone_digits(dependent_value) == normalized_phone_digits(current_user.phone)
+        normalized_phone_digits(dependent_value) == normalized_phone_digits(guardian.phone)
       else
         false
       end

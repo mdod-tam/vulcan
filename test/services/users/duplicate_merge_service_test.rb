@@ -56,6 +56,18 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
+    %i[inactive suspended].each do |status|
+      test "blocks merge for a #{status} admin actor" do
+        @admin.update!(status: status)
+
+        result = merge
+
+        assert result.failure?
+        assert_match(/admin actor is required/i, result.message)
+        assert_not @duplicate.reload.merged?
+      end
+    end
+
     test 'blocks merge when the duplicate has a pending recovery request' do
       @duplicate.recovery_requests.create!(status: 'pending', ip_address: '127.0.0.1', user_agent: 'test')
       result = merge
@@ -88,10 +100,9 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
-    test 'merges taking the duplicate email with a phone-only subject as canonical' do
+    test 'blocks choosing a phone-only record as canonical when the other record is email-backed' do
       phone_only_subject = phone_only_constituent(phone: '555-222-3333')
       email_backed = create(:constituent, email: "portal2-#{SecureRandom.hex(3)}@example.com")
-      surviving_email = email_backed.email
       review_case = open_case(subject: phone_only_subject, candidate: email_backed, reason: 'exact_phone')
 
       result = DuplicateMergeService.new(
@@ -106,13 +117,33 @@ module Users
         delivery_choice: 'canonical'
       ).call
 
-      assert result.success?, result.message
-      phone_only_subject.reload
-      email_backed.reload
-      assert phone_only_subject.real_email?, 'canonical took the email-backed email'
-      assert_equal surviving_email, phone_only_subject.email
-      assert email_backed.merged?
-      assert_nil email_backed.email, 'the retired email-backed duplicate released its email'
+      assert result.failure?
+      assert_match(/email-backed record must be chosen as canonical/i, result.message)
+      assert_not phone_only_subject.reload.merged?
+      assert_not email_backed.reload.merged?
+    end
+
+    test 'blocks merge when both records are email-backed and the duplicate email is chosen' do
+      other_canonical = create(:constituent, email: "portal4-#{SecureRandom.hex(3)}@example.com")
+      other_duplicate = create(:constituent, email: "portal5-#{SecureRandom.hex(3)}@example.com")
+      review_case = open_case(subject: other_duplicate, candidate: other_canonical, reason: 'name_dob')
+
+      result = DuplicateMergeService.new(
+        actor: @admin,
+        duplicate_review_case: review_case,
+        canonical_user: other_canonical,
+        duplicate_user: other_duplicate,
+        same_person_confirmed: true,
+        rationale: 'same person confirmed via support call',
+        reason_codes: %w[name_dob],
+        contact_choices: { email: 'duplicate', phone: 'canonical', phone_type: 'voice', address: 'canonical' },
+        delivery_choice: 'canonical'
+      ).call
+
+      assert result.failure?
+      assert_match(/canonical record's own login email must survive/i, result.message)
+      assert_not other_canonical.reload.merged?
+      assert_not other_duplicate.reload.merged?
     end
 
     test 'blocks merge when the canonical survivor is already merged' do
@@ -129,6 +160,22 @@ module Users
       result = merge
       assert result.failure?
       assert_match(/active record/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when the duplicate is inactive' do
+      @duplicate.update!(status: :inactive)
+      result = merge
+      assert result.failure?
+      assert_match(/duplicate record must be an active record/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when the duplicate is suspended' do
+      @duplicate.update!(status: :suspended)
+      result = merge
+      assert result.failure?
+      assert_match(/duplicate record must be an active record/i, result.message)
       assert_not @duplicate.reload.merged?
     end
 
@@ -156,6 +203,45 @@ module Users
       result = merge(contact_choices: { phone: 'duplicate', email: 'canonical', address: 'canonical' })
       assert result.failure?
       assert_not @duplicate.reload.merged?
+    end
+
+    # phone_type doubles as "preferred contact method", so its enum also carries the legacy
+    # non-phone modes contact_email => 'email' and contact_letter => 'letter'. The merge form
+    # offers only real telephone routes; a forged request must not be able to store "reach this
+    # person by email" as the canonical's phone preference, which then renders as their contact
+    # method in evaluator and trainer notifications.
+    %w[contact_email contact_letter email letter].each do |forged_phone_type|
+      test "blocks merge when phone type #{forged_phone_type} is not a real telephone route" do
+        result = merge(contact_choices: { phone: 'duplicate', phone_type: forged_phone_type,
+                                          email: 'canonical', address: 'canonical' })
+        assert result.failure?
+        assert_match(/phone type/i, result.message)
+        assert_not @duplicate.reload.merged?
+      end
+    end
+
+    # Reason codes become immutable resolution metadata and audit evidence, so they are validated
+    # against a server-owned vocabulary rather than accepted from the request.
+    test 'blocks merge when a reason code is outside the server-owned vocabulary' do
+      result = merge(reason_codes: ['exact_phone', 'attacker supplied note'])
+      assert result.failure?
+      assert_match(/unsupported reason/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when too many reason codes are submitted' do
+      result = merge(reason_codes: Array.new(DuplicateReviewCase::MAX_REASON_CODES + 1) { |i| "code-#{i}" })
+      assert result.failure?
+      assert_match(/too many reason/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    # The merge form falls back to 'admin_reviewed' for a case opened without detection reasons,
+    # so that operator code must stay in the vocabulary or every such merge would be rejected.
+    test 'accepts the admin_reviewed operator reason code the merge form falls back to' do
+      result = merge(reason_codes: %w[admin_reviewed])
+      assert result.success?, result.message
+      assert @duplicate.reload.merged?
     end
 
     test 'blocks merge when a contact choice is missing' do
@@ -186,18 +272,58 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
-    test 'resolves the retired duplicate other open cases and keeps unrelated canonical cases open' do
+    test 'blocks merge when another open case has the duplicate as its subject' do
       third_party = create(:constituent, email: "third-#{SecureRandom.hex(3)}@example.com")
-      duplicate_other_case = open_case(subject: @duplicate, candidate: third_party, reason: 'name_dob')
-      canonical_unrelated = open_case(subject: @canonical, candidate: third_party, reason: 'name_dob')
+      open_case(subject: @duplicate, candidate: third_party, reason: 'name_dob')
 
-      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' })
+      result = merge
+      assert result.failure?
+      assert_match(/another open duplicate review case/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when another open case has the canonical as its subject' do
+      third_party = create(:constituent, email: "third-#{SecureRandom.hex(3)}@example.com")
+      open_case(subject: @canonical, candidate: third_party, reason: 'name_dob')
+
+      result = merge
+      assert result.failure?
+      assert_match(/another open duplicate review case/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'blocks merge when another open case names either participant as a candidate' do
+      third_party = create(:constituent, email: "third-#{SecureRandom.hex(3)}@example.com")
+      open_case(subject: third_party, candidate: @duplicate, reason: 'name_dob')
+
+      result = merge
+      assert result.failure?
+      assert_match(/another open duplicate review case/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'resolves only the selected case, leaving a case naming neither participant untouched' do
+      third_party = create(:constituent, email: "third-#{SecureRandom.hex(3)}@example.com")
+      other_party = create(:constituent, email: "other-#{SecureRandom.hex(3)}@example.com")
+      unrelated_case = open_case(subject: third_party, candidate: other_party, reason: 'name_dob')
+
+      result = merge
       assert result.success?, result.message
 
-      assert_equal 'resolved_merged', duplicate_other_case.reload.status
-      assert_equal 'open', canonical_unrelated.reload.status, 'unrelated canonical case stays open'
-      assert DuplicateReviewCase.open_cases.for_subject(@duplicate).none?, 'retired duplicate has no open cases'
-      assert @canonical.reload.needs_duplicate_review, 'canonical flag reflects its remaining open case'
+      assert_equal 'resolved_merged', @review_case.reload.status
+      assert_equal 'open', unrelated_case.reload.status, 'a case involving neither participant stays open and unresolved'
+      assert_not @canonical.reload.needs_duplicate_review
+    end
+
+    test 'blocks merge when the case is not a registration_soft_match' do
+      subject = phone_only_constituent(phone: '555-333-4444')
+      candidate = create(:constituent, email: "portal3-#{SecureRandom.hex(3)}@example.com")
+      non_registration_case = open_case(subject: subject, candidate: candidate, reason: 'exact_phone', source: :support_claim)
+
+      result = merge(duplicate_review_case: non_registration_case, canonical_user: candidate, duplicate_user: subject)
+      assert result.failure?
+      assert_match(/registration_soft_match/i, result.message)
+      assert_not subject.reload.merged?
     end
 
     test 'does not emit profile audit events during a successful merge' do
@@ -294,6 +420,71 @@ module Users
       assert_not GuardianRelationship.exists?(dependent_id: @duplicate.id)
     end
 
+    test 'retirement clears all primary contact truth and invalidates an outstanding reset token' do
+      retiring_email = "retiring-#{SecureRandom.hex(4)}@example.com"
+      retiring_phone = @duplicate.phone
+      @duplicate.update!(email: retiring_email, phone_type: 'text')
+      password_reset_token = @duplicate.generate_token_for(:password_reset)
+
+      result = merge(
+        contact_choices: { phone: 'canonical', phone_type: nil, email: 'canonical', address: 'canonical' }
+      )
+
+      assert result.success?, result.message
+      @duplicate.reload
+      assert_nil @duplicate.email
+      assert_nil @duplicate.phone
+      assert_nil @duplicate.phone_type
+      assert_not User.exists_with_email?(retiring_email)
+      assert_not User.exists_with_phone?(retiring_phone)
+      assert_nil User.find_by_token_for(:password_reset, password_reset_token)
+    end
+
+    # The retirement case above covers the duplicate. This covers the survivor, which is the
+    # dangerous half: a merge that replaces the canonical's phone is the admin declaring the old
+    # number is not this person's, and an account-access reset link already texted to that number
+    # must stop working. Reset authority is revoked through the token fingerprint, not through
+    # lock ordering at issuance -- issuing the link before the merge was legitimate at the time,
+    # so no amount of locking the lookup would invalidate it afterwards.
+    test 'discarding the canonical phone invalidates a reset link already sent to that number' do
+      @canonical.update!(phone: '555-867-5309', phone_type: 'voice')
+      discarded_phone = @canonical.phone
+      token_texted_to_discarded_phone = @canonical.generate_token_for(:password_reset)
+
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' })
+
+      assert result.success?, result.message
+      @canonical.reload
+      assert_equal '555-777-8888', @canonical.phone, 'the merge moved the duplicate phone onto the survivor'
+      assert_not_equal discarded_phone, @canonical.phone
+      assert @canonical.real_email?, 'survivor keeps login email, so the digest and email halves are unchanged'
+      assert_nil User.find_by_token_for(:password_reset, token_texted_to_discarded_phone),
+                 'a reset link delivered to the discarded number must not survive the merge'
+    end
+
+    test 'keeping the canonical phone leaves an outstanding reset link usable' do
+      @canonical.update!(phone: '555-867-5309', phone_type: 'voice')
+      token = @canonical.generate_token_for(:password_reset)
+
+      result = merge(contact_choices: { phone: 'canonical', phone_type: 'voice', email: 'canonical', address: 'canonical' })
+
+      assert result.success?, result.message
+      assert_equal @canonical.id, User.find_by_token_for(:password_reset, token)&.id,
+                   'contact authority did not change, so the link must still work'
+    end
+
+    test 'clears a stale survivor phone type when the selected surviving phone is blank' do
+      @canonical.update!(phone: nil, phone_type: 'voice')
+
+      result = merge(
+        contact_choices: { phone: 'canonical', phone_type: nil, email: 'canonical', address: 'canonical' }
+      )
+
+      assert result.success?, result.message
+      assert_nil @canonical.reload.phone
+      assert_nil @canonical.phone_type
+    end
+
     private
 
     def merge(**overrides)
@@ -318,9 +509,12 @@ module Users
       Current.reset
     end
 
-    def open_case(subject:, candidate:, reason:)
+    # Defaults to registration_soft_match because that is the only source the merge path
+    # accepts (plan acceptance criteria); pass an explicit `source:` for cases that exist
+    # only to exercise the competing-open-case blocker rather than being merged themselves.
+    def open_case(subject:, candidate:, reason:, source: :registration_soft_match)
       review_case = DuplicateReviewCase.create!(
-        source: :support_claim,
+        source: source,
         subject_user: subject,
         deduplication_key: SecureRandom.hex(16),
         metadata: { 'reason_codes' => [reason] },

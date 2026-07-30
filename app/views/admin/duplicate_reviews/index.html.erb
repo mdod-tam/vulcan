@@ -1,6 +1,9 @@
 <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="duplicate-review-queue">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-semibold">Duplicate Review Queue</h1>
+    <div>
+      <h1 class="text-2xl font-semibold">Duplicate Review Queue</h1>
+      <p class="mt-1 text-sm text-gray-600">Review records that may belong to the same person.</p>
+    </div>
     <%= link_to 'Back to users', admin_users_path, class: 'text-indigo-600 hover:text-indigo-900 text-sm' %>
   </div>
 
@@ -23,16 +26,16 @@
                       <%= duplicate_review_source_label(review_case.source) %>
                     </span>
                     <% Array(review_case.metadata['reason_codes']).each do |code| %>
-                      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= code.humanize %></span>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= duplicate_review_reason_label(code) %></span>
                     <% end %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                      <%= pluralize(review_case.duplicate_review_case_candidates.size, 'candidate') %>
+                      <%= pluralize(review_case.duplicate_review_case_candidates.size, 'possible matching record') %>
                     </span>
                   </div>
                 </div>
                 <div class="text-sm text-right">
                   <div class="text-gray-500 mb-2">Opened <%= review_case.opened_at.strftime('%b %d, %Y') %></div>
-                  <%= link_to 'Review', admin_duplicate_review_path(review_case), class: 'text-indigo-600 hover:text-indigo-900 font-medium' %>
+                  <%= link_to 'Compare records', admin_duplicate_review_path(review_case), class: 'text-indigo-600 hover:text-indigo-900 font-medium' %>
                 </div>
               </div>
             </li>
@@ -45,7 +48,7 @@
   </section>
 
   <section aria-labelledby="legacy-heading">
-    <h2 id="legacy-heading" class="text-lg font-medium text-gray-900 mb-3">Flagged records without a case (manual / legacy)</h2>
+    <h2 id="legacy-heading" class="text-lg font-medium text-gray-900 mb-3">Other records flagged for review</h2>
 
     <% if @legacy_flagged_users.any? %>
       <div class="bg-white shadow overflow-hidden sm:rounded-md">
@@ -74,7 +77,7 @@
         </ul>
       </div>
     <% else %>
-      <div class="bg-white shadow sm:rounded-md p-6 text-center text-gray-500">No manual or legacy flags awaiting review.</div>
+      <div class="bg-white shadow sm:rounded-md p-6 text-center text-gray-500">No other records are awaiting review.</div>
     <% end %>
   </section>
 </div>

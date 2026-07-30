@@ -10,6 +10,7 @@ class User < ApplicationRecord
   include UserContactPredicates
   include UserGuardianship
   include UserEmailSearch
+  include UserMergeIntegrity
 
   # Ensure duplicate review flag is accessible
   attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')

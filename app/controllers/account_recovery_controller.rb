@@ -37,16 +37,32 @@ class AccountRecoveryController < ApplicationController
       return
     end
 
-    user.with_lock do
-      unless user.recovery_requests.pending.exists?
-        recovery_request = user.recovery_requests.create!(
-          status: 'pending',
-          details: params[:details],
-          ip_address: request.remote_ip,
-          user_agent: request.user_agent
-        )
-        notify_admins_of_recovery_request!(recovery_request)
-      end
+    admin_ids = User.admins.pluck(:id)
+
+    ActiveRecord::Base.transaction do
+      # Only the requester needs exclusive requalification. Notification inserts also take
+      # FK key-share locks on requester/admin rows, while merge locks its admin actor plus
+      # participants FOR UPDATE. Acquire every row once, in global id order, at its final
+      # strength: lower-id admins weakly, the requester exclusively, then higher-id admins
+      # weakly. This prevents requester↔actor inversion without a KEY SHARE -> UPDATE
+      # conversion that can deadlock two simultaneous recovery submissions.
+      notification_admin_ids = admin_ids.uniq - [user.id]
+      lower_admin_ids, higher_admin_ids = notification_admin_ids.partition { |id| id < user.id }
+      guarded_users = lock_recovery_notification_admins!(lower_admin_ids)
+      locked_user = User.lock_for_merge_integrity!(user.id).fetch(user.id)
+      guarded_users[locked_user.id] = locked_user
+      guarded_users.merge!(lock_recovery_notification_admins!(higher_admin_ids))
+      notification_admins = admin_ids.filter_map { |id| guarded_users[id] }.select(&:admin?)
+      next unless locked_user.public_login_active?
+      next if locked_user.recovery_requests.pending.exists?
+
+      recovery_request = locked_user.recovery_requests.create!(
+        status: 'pending',
+        details: params[:details],
+        ip_address: request.remote_ip,
+        user_agent: request.user_agent
+      )
+      notify_admins_of_recovery_request!(recovery_request, admins: notification_admins, requester: locked_user)
     end
   rescue ActiveRecord::RecordNotUnique
     # Concurrent duplicate pending — treat as coalesced (partial unique index)
@@ -55,6 +71,15 @@ class AccountRecoveryController < ApplicationController
     log_recovery_attempt(user, 'failed', error_class: e.class.name)
     Rails.logger.error "Failed to submit recovery request for user #{user.id}: #{e.message}"
     nil
+  end
+
+  def lock_recovery_notification_admins!(ids)
+    return {} if ids.empty?
+
+    locked_admins = User.unscoped.where(id: ids).order(:id).lock('FOR KEY SHARE').to_a
+    raise ActiveRecord::RecordNotFound, "Could not lock all recovery notification admins: #{ids}" if locked_admins.size != ids.size
+
+    locked_admins.index_by(&:id)
   end
 
   def pre_lookup_recovery_rate_limit_scope(contact)
@@ -108,20 +133,20 @@ class AccountRecoveryController < ApplicationController
     metadata
   end
 
-  def notify_admins_of_recovery_request!(recovery_request)
+  def notify_admins_of_recovery_request!(recovery_request, admins:, requester:)
     admin_count = 0
     notifications_created = 0
 
-    User.admins.find_each do |admin|
+    admins.each do |admin|
       admin_count += 1
       notification = NotificationService.build
                                         .type('security_key_recovery_requested')
                                         .recipient(admin)
-                                        .actor(recovery_request.user)
+                                        .actor(requester)
                                         .notifiable(recovery_request)
                                         .metadata(
                                           recovery_request_id: recovery_request.id,
-                                          requester_identifier: recovery_request.user.mfa_account_name
+                                          requester_identifier: requester.mfa_account_name
                                         )
                                         .channel(:email)
                                         .deliver(false)
