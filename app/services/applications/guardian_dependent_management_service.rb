@@ -8,12 +8,15 @@ module Applications
 
     attr_reader :params, :guardian_user, :dependent_user, :errors
 
-    def initialize(params = nil, actor: nil, **keyword_params)
+    def initialize(params = nil, actor: nil, guardian_user: nil, dependent_user: nil,
+                   preallocated_synthetic_phone: nil, **keyword_params)
       super()
       @params = (params || keyword_params).with_indifferent_access
       @actor = actor
-      @guardian_user = nil
-      @dependent_user = nil
+      @guardian_user = guardian_user
+      @dependent_user = dependent_user
+      @preallocated_synthetic_phone = preallocated_synthetic_phone if
+        User.synthetic_dependent_phone?(preallocated_synthetic_phone)
       @email_backed_portal_created_user_ids = []
       @errors = []
     end
@@ -187,7 +190,7 @@ module Applications
       case params[:phone_strategy]
       when 'guardian'
         data[:dependent_phone] = @guardian_user.phone
-        phone = unique_synthetic_phone
+        phone = @preallocated_synthetic_phone.presence || unique_synthetic_phone
         return false if phone.blank?
 
         data[:phone] = phone

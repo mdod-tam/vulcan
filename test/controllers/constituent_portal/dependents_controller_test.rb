@@ -94,6 +94,95 @@ module ConstituentPortal
       assert_equal @guardian.id, event.user_id
     end
 
+    test 'review case failure rolls back the dependent and relationship without compensating destroy' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Rollback',
+        last_name: 'Dependent',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-existing-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      dependent_email = "portal-dependent-rollback-#{SecureRandom.hex(4)}@example.com"
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+
+      # Counts alone are not a negative sensor for the former compensation path:
+      # User#destroy cascades both guardian relationship associations, so that path also
+      # finishes at zero rows. Keep this assertion to prove rollback replaced compensation.
+      User.any_instance.expects(:destroy).never
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count',
+                            'DuplicateReviewCaseCandidate.count'] do
+        assert_no_difference -> { Event.where(action: 'duplicate_review_case_opened').count } do
+          post constituent_portal_dependents_url, params: {
+            dependent: {
+              first_name: existing_dependent.first_name,
+              last_name: existing_dependent.last_name,
+              date_of_birth: '05/15/2010',
+              email: dependent_email,
+              phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+              hearing_disability: true
+            },
+            guardian_relationship: { relationship_type: 'Parent' }
+          }
+        end
+      end
+
+      assert_response :unprocessable_content
+      assert_select "form[action='#{constituent_portal_dependents_path}'][method='post']"
+      assert_not User.exists?(email: dependent_email)
+    end
+
+    test 'soft-match creation locks the lower-id candidate and guardian together in ascending order before writing' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Ordered',
+        last_name: 'Candidate',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "ordered-candidate-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      later_guardian = create(:constituent)
+      assert_operator existing_dependent.id, :<, later_guardian.id
+
+      sign_out
+      sign_in_for_controller_test(later_guardian)
+
+      user_lock_queries = []
+      subscriber = lambda do |_name, _started, _finished, _unique_id, payload|
+        sql = payload[:sql]
+        next unless sql.include?('"users"') && sql.include?('FOR UPDATE')
+
+        user_lock_queries << {
+          sql: sql,
+          binds: payload[:binds].map(&:value_for_database)
+        }
+      end
+
+      ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record') do
+        post constituent_portal_dependents_url, params: {
+          dependent: {
+            first_name: existing_dependent.first_name,
+            last_name: existing_dependent.last_name,
+            date_of_birth: '05/15/2010',
+            email: "ordered-subject-#{SecureRandom.hex(4)}@example.com",
+            phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+            hearing_disability: true
+          },
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      first_user_lock = user_lock_queries.first
+      assert first_user_lock, 'expected a User FOR UPDATE query before dependent persistence'
+      assert_equal [existing_dependent.id, later_guardian.id], first_user_lock[:binds].sort
+      assert_match(/ORDER BY "users"\."id" ASC FOR UPDATE\z/, first_user_lock[:sql])
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
     test 'should create dependent with MM/DD/YYYY date of birth' do
       dependent_attributes = {
         first_name: 'Date',

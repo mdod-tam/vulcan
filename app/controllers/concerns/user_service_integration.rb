@@ -44,9 +44,11 @@ module UserServiceIntegration
       relationship_type: relationship_type
     }.merge(default_strategies.merge(contact_strategies))
 
-    service = Applications::GuardianDependentManagementService.new(relationship_params)
-    service.instance_variable_set(:@guardian_user, guardian_user)
-    service.instance_variable_set(:@dependent_user, dependent_user)
+    service = Applications::GuardianDependentManagementService.new(
+      relationship_params,
+      guardian_user: guardian_user,
+      dependent_user: dependent_user
+    )
 
     service.create_guardian_relationship(relationship_type)
   end

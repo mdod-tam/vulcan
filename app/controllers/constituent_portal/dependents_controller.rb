@@ -43,14 +43,14 @@ module ConstituentPortal
       return unless duplicate_detection
       return if portal_dependent_duplicate_blocked?(duplicate_detection)
 
-      # Using UserServiceIntegration concern for consistent user creation
-      # Portal always creates NEW users for dependents (skip_user_lookup: true)
-      # Paper intake creates new guardians and self applicants with skip_user_lookup; explicit search selects existing users
-      # Require disability validation for portal-created dependents
-      result = create_portal_dependent_user(dependent_attrs)
-      return handle_portal_dependent_creation_failure(result) unless result.success?
+      participant_ids = portal_dependent_creation_participant_ids(duplicate_detection)
+      preallocated_synthetic_phone = preallocated_synthetic_phone_from(dependent_attrs)
 
-      handle_portal_dependent_creation_success(result.data[:user], duplicate_detection)
+      create_portal_dependent_atomically(
+        duplicate_detection,
+        participant_ids,
+        preallocated_synthetic_phone
+      )
     end
 
     # PATCH/PUT /constituent_portal/dependents/:id
@@ -186,9 +186,8 @@ module ConstituentPortal
 
     # +guardian+ is the record whose own contact facts get snapshotted into the dependent's
     # stored contact, so it must be the locked guardian on any path that writes under a lock --
-    # never the request's pre-lock current_user. Defaults to current_user for #create, which does
-    # not yet hold a lock across its writes (named exclusion; see service_architecture.md).
-    def dependent_attributes_with_contact_strategies(guardian = current_user)
+    # never the request's pre-lock current_user.
+    def dependent_attributes_with_contact_strategies(guardian = current_user, preallocated_synthetic_phone: nil)
       attrs = dependent_user_params.to_h
       # Portal contact strategies snapshot the submitted choice into User fields.
       # Omitted contact keys preserve existing contact on partial updates.
@@ -196,7 +195,7 @@ module ConstituentPortal
       return attrs if strategies.values_at(:email_strategy, :phone_strategy).all?(&:nil?)
 
       Applications::GuardianDependentManagementService
-        .new(strategies)
+        .new(strategies, preallocated_synthetic_phone: preallocated_synthetic_phone)
         .tap { |service| @contact_strategy_service = service }
         .apply_contact_strategies_for(guardian, attrs)
     ensure
@@ -233,53 +232,75 @@ module ConstituentPortal
                                require_disability_validation: true)
     end
 
-    def handle_portal_dependent_creation_failure(result)
-      log_user_service_error('to create dependent user', result.data[:errors] || [result.message])
-      handle_creation_failure(result.data[:errors] || [result.message])
-    end
+    # Duplicate detection must run before this boundary so the complete persisted participant
+    # inventory is known. The guardian and every candidate that will be written into a review
+    # case are then locked in one ascending-id call before any durable write. The new dependent
+    # cannot be included because it does not exist yet and is invisible outside this transaction.
+    def create_portal_dependent_atomically(duplicate_detection, participant_ids, preallocated_synthetic_phone)
+      failure_messages = nil
 
-    def handle_portal_dependent_creation_success(dependent_user, duplicate_detection)
-      @dependent_user = dependent_user
-      return if dependent_matches_current_user?
+      ActiveRecord::Base.transaction do
+        locked_users = User.lock_for_merge_integrity!(participant_ids)
+        locked_guardian = locked_users.fetch(current_user.id)
 
-      if create_guardian_relationship_with_service(current_user, @dependent_user, guardian_relationship_params[:relationship_type])
-        return unless open_required_portal_dependent_duplicate_review_case(duplicate_detection)
+        unless locked_guardian.public_login_active? && locked_guardian.constituent?
+          failure_messages = ['Unable to complete dependent creation. Please try again.']
+          raise ActiveRecord::Rollback
+        end
+
+        dependent_attrs = dependent_attributes_with_contact_strategies(
+          locked_guardian,
+          preallocated_synthetic_phone: preallocated_synthetic_phone
+        )
+        unless dependent_attrs
+          failure_messages = contact_strategy_errors
+          raise ActiveRecord::Rollback
+        end
+
+        # Using UserServiceIntegration for the existing portal contract: always create a new
+        # dependent, never reuse a lookup hit, and require the disability validation.
+        result = create_portal_dependent_user(dependent_attrs)
+        unless result.success?
+          failure_messages = result.data[:errors] || [result.message]
+          log_user_service_error('to create dependent user', failure_messages)
+          raise ActiveRecord::Rollback
+        end
+
+        @dependent_user = result.data[:user]
+        relationship_created = create_guardian_relationship_with_service(
+          locked_guardian,
+          @dependent_user,
+          guardian_relationship_params[:relationship_type]
+        )
+        unless relationship_created
+          log_user_service_error('to create guardian relationship', 'Relationship creation failed')
+          failure_messages = ['Failed to create guardian relationship']
+          raise ActiveRecord::Rollback
+        end
+
+        unless open_portal_dependent_duplicate_review_case(duplicate_detection, locked_guardian, locked_users)
+          log_user_service_error('to open duplicate review case', 'Duplicate review case creation failed')
+          failure_messages = ['Unable to complete dependent creation. Please try again.']
+          raise ActiveRecord::Rollback
+        end
 
         redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully created.'
-      else
-        @dependent_user.destroy
-        log_user_service_error('to create guardian relationship', 'Relationship creation failed')
-        handle_creation_failure(['Failed to create guardian relationship'])
       end
+
+      # Render only after rollback. In particular, CreateService may rescue a database error
+      # into a failure result; PostgreSQL rejects every query until that transaction ends.
+      handle_creation_failure(failure_messages) if failure_messages
     end
 
-    def dependent_matches_current_user?
-      return false unless @dependent_user.id == current_user.id
-
-      @dependent_user.destroy if @dependent_user.persisted?
-      log_user_service_error('to create dependent', 'Cannot add yourself as your own dependent')
-      handle_creation_failure(['You cannot add yourself as your own dependent. Please create a dependent with different contact information.'])
-      true
-    end
-
-    def open_required_portal_dependent_duplicate_review_case(duplicate_detection)
-      return true if open_portal_dependent_duplicate_review_case(duplicate_detection)
-
-      @dependent_user.destroy
-      log_user_service_error('to open duplicate review case', 'Duplicate review case creation failed')
-      handle_creation_failure(['Unable to complete dependent creation. Please try again.'])
-      false
-    end
-
-    def open_portal_dependent_duplicate_review_case(duplicate_detection)
+    def open_portal_dependent_duplicate_review_case(duplicate_detection, locked_guardian, locked_users)
       return true unless duplicate_detection.recommended_action == :flag
 
       result = DuplicateReviewCases::CreateService.new(
         source: :portal_dependent,
         subject_user: @dependent_user,
-        actor: current_user,
+        actor: locked_guardian,
         reason_codes: duplicate_detection.reasons,
-        candidates: duplicate_review_candidates_for(duplicate_detection),
+        candidates: duplicate_review_candidates_for(duplicate_detection, locked_users),
         metadata: { intake_context: 'portal_dependent' }
       ).call
       return true if result.success?
@@ -291,18 +312,39 @@ module ConstituentPortal
       false
     end
 
-    def duplicate_review_candidates_for(duplicate_detection)
+    def duplicate_review_candidates_for(duplicate_detection, locked_users)
       duplicate_detection.matched_users.map do |candidate|
+        locked_candidate = locked_users.fetch(candidate.id)
         DuplicateReviewCases::CreateService::CandidateInput.new(
-          candidate,
+          locked_candidate,
           duplicate_detection.reasons.first,
           {
-            email_backed_public_portal_account: candidate.email_backed_public_portal_account?,
-            real_email: candidate.real_email?,
-            real_phone: candidate.real_phone?
+            email_backed_public_portal_account: locked_candidate.email_backed_public_portal_account?,
+            real_email: locked_candidate.real_email?,
+            real_phone: locked_candidate.real_phone?
           }
         )
       end
+    end
+
+    def portal_dependent_creation_participant_ids(duplicate_detection)
+      candidate_ids = if duplicate_detection.recommended_action == :flag
+                        duplicate_detection.matched_users.filter_map(&:id)
+                      else
+                        []
+                      end
+      [current_user.id, *candidate_ids]
+    end
+
+    # The initial, pre-lock contact pass is needed for duplicate detection and already pays the
+    # bounded synthetic-phone allocation cost. Reuse only that opaque primary value if the locked
+    # pass still chooses the guardian strategy; the strategy itself and every guardian-derived
+    # contact fact are recalculated from the locked guardian.
+    def preallocated_synthetic_phone_from(dependent_attrs)
+      return unless @contact_strategy_service&.params&.[](:phone_strategy) == 'guardian'
+      return unless User.synthetic_dependent_phone?(dependent_attrs[:phone])
+
+      dependent_attrs[:phone]
     end
 
     def duplicate_detection_attrs(attrs)
@@ -395,6 +437,11 @@ module ConstituentPortal
       Rails.logger.error "#{error_prefix}Failed to create dependent: #{error_messages.join(', ')}"
 
       # Set up form variables for re-rendering
+      # A relationship/case failure reaches here while the new user is still persisted inside
+      # the transaction that is about to roll back. Do not render the new form with that
+      # transient persisted object: form_with would target the member PATCH route for a row
+      # that no longer exists after rollback.
+      @dependent_user = User.new(dependent_user_params) if @dependent_user&.persisted?
       @dependent_user ||= User.new(dependent_user_params)
       @guardian_relationship ||= GuardianRelationship.new(guardian_relationship_params)
 
