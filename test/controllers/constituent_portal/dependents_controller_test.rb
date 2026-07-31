@@ -94,6 +94,285 @@ module ConstituentPortal
       assert_equal @guardian.id, event.user_id
     end
 
+    test 'review case failure rolls back the dependent and relationship without compensating destroy' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Rollback',
+        last_name: 'Dependent',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-existing-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      dependent_email = "portal-dependent-rollback-#{SecureRandom.hex(4)}@example.com"
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+
+      # Counts alone are not a negative sensor for the former compensation path:
+      # User#destroy cascades both guardian relationship associations, so that path also
+      # finishes at zero rows. Keep this assertion to prove rollback replaced compensation.
+      User.any_instance.expects(:destroy).never
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count',
+                            'DuplicateReviewCaseCandidate.count'] do
+        assert_no_difference -> { Event.where(action: 'duplicate_review_case_opened').count } do
+          post constituent_portal_dependents_url, params: {
+            dependent: {
+              first_name: existing_dependent.first_name,
+              last_name: existing_dependent.last_name,
+              date_of_birth: '05/15/2010',
+              email: dependent_email,
+              phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+              hearing_disability: true
+            },
+            guardian_relationship: { relationship_type: 'Parent' }
+          }
+        end
+      end
+
+      assert_response :unprocessable_content
+      assert_select "form[action='#{constituent_portal_dependents_path}'][method='post']"
+      assert_not User.exists?(email: dependent_email)
+    end
+
+    # Rollback restores the attempted dependent to a new record but keeps the synthetic contact
+    # the guardian strategy wrote into it. Re-rendering that object would show internal
+    # placeholders as if the guardian had typed them, uncheck "use my email/phone", and let an
+    # unchanged retry store those placeholders as dependent-owned contact.
+    test 'guardian-strategy failure re-renders the submitted contact choice, never internal placeholders' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Placeholder',
+        last_name: 'Leak',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-leak-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+
+      post constituent_portal_dependents_url, params: {
+        # The guardian contact strategy: blank dependent contact plus the "use mine" checkboxes.
+        dependent: {
+          first_name: existing_dependent.first_name,
+          last_name: existing_dependent.last_name,
+          date_of_birth: '05/15/2010',
+          email: '',
+          phone: '',
+          hearing_disability: true
+        },
+        use_guardian_email: '1',
+        use_guardian_phone: '1',
+        guardian_relationship: { relationship_type: 'Parent' }
+      }
+
+      assert_response :unprocessable_content
+      assert_no_match(/@system\.matvulcan\.local/, response.body,
+                      'the synthetic primary email must never be rendered back into the form')
+      assert_no_match(/000-\d{3}-\d{4}/, response.body,
+                      'the synthetic primary phone must never be rendered back into the form')
+      assert_select 'input#use_guardian_email_checkbox[checked]', 1,
+                    'the guardian email choice must survive the failed attempt'
+      assert_select 'input#use_guardian_phone_checkbox[checked]', 1,
+                    'the guardian phone choice must survive the failed attempt'
+    end
+
+    # The failure re-render must show what the *locked* pass decided, not re-derive it from the
+    # pre-lock current_user. matches_guardian_contact? is the one strategy branch that reads the
+    # guardian's own contact, so a guardian contact change landing inside the lock window makes the
+    # same submitted value match under one instance and not the other.
+    #
+    # The change is injected just before the lock returns rather than through the concurrency
+    # harness: the failure has to be forced by stubbing CreateService, and mocha is not thread-safe,
+    # so stubbing across the harness's threads would be flaky. This drives the real controller
+    # single-threaded and reproduces the same stale-instance divergence deterministically.
+    test 'a failed attempt renders the contact choice the locked pass applied, not a re-derivation' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Locked', last_name: 'Choice', date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-locked-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      guardian_old_email = @guardian.email
+      rotated_email = "rotated-guardian-#{SecureRandom.hex(4)}@example.com"
+
+      # Submitted dependent email equals the guardian's CURRENT email, so the pre-lock derivation
+      # says "guardian". The lock then observes rotated contact, so the locked pass says
+      # "dependent" -- the divergence this guards.
+      rotate = lambda do
+        @guardian.update_columns(email: rotated_email)
+        rotate = nil
+      end
+      original = User.method(:lock_for_merge_integrity!)
+      User.define_singleton_method(:lock_for_merge_integrity!) do |*args|
+        rotate&.call
+        original.call(*args)
+      end
+
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+
+      post constituent_portal_dependents_url, params: {
+        dependent: {
+          first_name: existing_dependent.first_name, last_name: existing_dependent.last_name,
+          date_of_birth: '05/15/2010', email: guardian_old_email,
+          phone: "555-#{rand(100..999)}-#{rand(1000..9999)}", hearing_disability: true
+        },
+        guardian_relationship: { relationship_type: 'Parent' }
+      }
+
+      assert_response :unprocessable_content
+      assert_select 'input#use_guardian_email_checkbox[checked]', 0,
+                    'the locked pass chose dependent email routing, so the form must not offer guardian routing'
+    ensure
+      User.singleton_class.remove_method(:lock_for_merge_integrity!)
+    end
+
+    # A guardian may type dependent contact and *then* check "use my email/phone". The portal form
+    # declares no guardian-contact JS targets, so copyGuardianEmail/copyGuardianPhone return early
+    # and the typed value survives in params. If the failed re-render infers the checkbox from
+    # contact blankness, both boxes come back unchecked and an unchanged retry silently stores
+    # dependent-owned contact -- routing this dependent's communications to the dependent rather
+    # than the guardian.
+    test 'a failed attempt preserves the guardian contact choice made over typed contact' do
+      # A soft-match candidate, so creation reaches the review-case step that is forced to fail.
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Typed',
+        last_name: 'Contact',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-typed-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      typed_email = "typed-dependent-#{SecureRandom.hex(4)}@example.com"
+      typed_phone = '555-987-6543'
+      submitted = {
+        dependent: {
+          first_name: existing_dependent.first_name, last_name: existing_dependent.last_name,
+          date_of_birth: '05/15/2010',
+          email: typed_email, phone: typed_phone, hearing_disability: true
+        },
+        use_guardian_email: '1',
+        use_guardian_phone: '1',
+        guardian_relationship: { relationship_type: 'Parent' }
+      }
+
+      DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'case creation failed', data: {})
+      )
+      Rails.logger.stubs(:warn)
+      post constituent_portal_dependents_url, params: submitted
+
+      assert_response :unprocessable_content
+      assert_select 'input#use_guardian_email_checkbox[checked]', 1,
+                    'the guardian email choice must survive even though contact was typed'
+      assert_select 'input#use_guardian_phone_checkbox[checked]', 1,
+                    'the guardian phone choice must survive even though contact was typed'
+
+      # Retry exactly what the re-rendered form now submits, unchanged.
+      DuplicateReviewCases::CreateService.any_instance.unstub(:call)
+      post constituent_portal_dependents_url, params: submitted
+
+      dependent = GuardianRelationship.where(guardian_id: @guardian.id).order(:id).last.dependent_user
+      assert_equal 'Typed', dependent.first_name
+      assert_equal @guardian.email, dependent.effective_email,
+                   'communications must still route to the guardian after the failed attempt'
+      assert_equal User.normalize_phone(@guardian.phone), User.normalize_phone(dependent.effective_phone),
+                   'phone communications must still route to the guardian after the failed attempt'
+      assert_not_equal typed_email, dependent.effective_email
+    end
+
+    # The participant set is resolved by duplicate detection and locked afterwards.
+    # lock_for_merge_integrity! refuses a partial set, which is correct, but a candidate deleted
+    # in that window is an ordinary concurrent condition and must not surface as a 500.
+    test 'a candidate deleted before the lock fails closed with the ordinary retry response' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Vanishing',
+        last_name: 'Candidate',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "portal-dependent-vanish-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      dependent_email = "portal-dependent-vanish-new-#{SecureRandom.hex(4)}@example.com"
+
+      # Delete the matched candidate after detection resolves it but before the lock is taken.
+      User.stubs(:lock_for_merge_integrity!).with do |*|
+        User.where(id: existing_dependent.id).delete_all
+        true
+      end.raises(ActiveRecord::RecordNotFound)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count'] do
+        post constituent_portal_dependents_url, params: {
+          dependent: {
+            first_name: 'Vanishing',
+            last_name: 'Candidate',
+            date_of_birth: '05/15/2010',
+            email: dependent_email,
+            phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+            hearing_disability: true
+          },
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_select "form[action='#{constituent_portal_dependents_path}'][method='post']"
+      assert_not User.exists?(email: dependent_email)
+    end
+
+    test 'soft-match creation locks the lower-id candidate and guardian together in ascending order before writing' do
+      existing_dependent = create(
+        :constituent,
+        first_name: 'Ordered',
+        last_name: 'Candidate',
+        date_of_birth: Date.new(2010, 5, 15),
+        email: "ordered-candidate-#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      later_guardian = create(:constituent)
+      assert_operator existing_dependent.id, :<, later_guardian.id
+
+      sign_out
+      sign_in_for_controller_test(later_guardian)
+
+      user_lock_queries = []
+      subscriber = lambda do |_name, _started, _finished, _unique_id, payload|
+        sql = payload[:sql]
+        next unless sql.include?('"users"') && sql.include?('FOR UPDATE')
+
+        user_lock_queries << {
+          sql: sql,
+          binds: payload[:binds].map(&:value_for_database)
+        }
+      end
+
+      ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record') do
+        post constituent_portal_dependents_url, params: {
+          dependent: {
+            first_name: existing_dependent.first_name,
+            last_name: existing_dependent.last_name,
+            date_of_birth: '05/15/2010',
+            email: "ordered-subject-#{SecureRandom.hex(4)}@example.com",
+            phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+            hearing_disability: true
+          },
+          guardian_relationship: { relationship_type: 'Parent' }
+        }
+      end
+
+      first_user_lock = user_lock_queries.first
+      assert first_user_lock, 'expected a User FOR UPDATE query before dependent persistence'
+      assert_equal [existing_dependent.id, later_guardian.id], first_user_lock[:binds].sort
+      assert_match(/ORDER BY "users"\."id" ASC FOR UPDATE\z/, first_user_lock[:sql])
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
     test 'should create dependent with MM/DD/YYYY date of birth' do
       dependent_attributes = {
         first_name: 'Date',

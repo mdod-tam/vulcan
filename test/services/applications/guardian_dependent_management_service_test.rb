@@ -92,6 +92,47 @@ module Applications
       assert_equal @guardian.phone, dependent.dependent_phone
     end
 
+    test 'guardian phone strategy reuses a preallocated synthetic primary phone' do
+      User.expects(:exists_with_phone?).never
+      service = GuardianDependentManagementService.new(
+        {
+          email_strategy: 'guardian',
+          phone_strategy: 'guardian',
+          address_strategy: 'dependent'
+        },
+        preallocated_synthetic_phone: '000-123-4567'
+      )
+
+      result = service.apply_contact_strategies_for(
+        @guardian,
+        { first_name: 'Child', last_name: 'User', phone: '' }
+      )
+
+      assert_equal '000-123-4567', result[:phone]
+      assert_equal @guardian.phone, result[:dependent_phone]
+    end
+
+    test 'constructor-injected users create a guardian relationship without hidden instance mutation' do
+      dependent = create(:constituent)
+      service = GuardianDependentManagementService.new(
+        {
+          email_strategy: 'dependent',
+          phone_strategy: 'dependent',
+          address_strategy: 'dependent'
+        },
+        guardian_user: @guardian,
+        dependent_user: dependent
+      )
+
+      assert_difference 'GuardianRelationship.count', 1 do
+        assert service.create_guardian_relationship('Parent')
+      end
+
+      relationship = GuardianRelationship.order(:id).last
+      assert_equal @guardian.id, relationship.guardian_id
+      assert_equal dependent.id, relationship.dependent_id
+    end
+
     test 'guardian phone strategy skips occupied synthetic primary phone' do
       create(:constituent, phone: '000-000-0000')
       SecureRandom

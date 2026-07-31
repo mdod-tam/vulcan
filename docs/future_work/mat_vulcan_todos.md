@@ -50,6 +50,13 @@ Income threshold (FPL) validation follow-ups
 - [ ] Merge semantics: pick canonical user/application; record merge event  [AUDIT-002]
 - [ ] Tests: review queue controller actions and system flow with merge/ignore
 
+Portal dependent duplicate-submission idempotency  [DATA-002]
+- [ ] Re-run `DuplicateDetectionService` inside the guardian lock in `ConstituentPortal::DependentsController#create`. Detection runs before the lock and is never re-checked, so two identical submissions can both clear it and create two dependents. Nothing downstream catches the second: under the guardian contact strategy each dependent gets its own unique synthetic email and phone, so no unique index fires, and `guardian_relationships` is unique on `(guardian_id, dependent_id)`, which differs.
+- [ ] Add submit-disable to `app/views/constituent_portal/dependents/_form.html.erb` to kill the common double-click trigger; the form has no `disable_with` today.
+- [ ] Tests: two identical submissions create exactly one dependent, and the second is refused with no side effects.
+
+Notes: predates the PR4d atomicity work and is unchanged by it, but PR4d added the guardian lock that makes the first item possible. Cleanup is expensive today because duplicates created this way cannot be merged through the admin merge UI, which accepts only `registration_soft_match` cases.
+
 ## Notification System
 
 Analytics  [AUDIT-001][DATA-001]

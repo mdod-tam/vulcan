@@ -131,11 +131,12 @@ scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct
 1. Guardian uses `ConstituentPortal::DependentsController#create`
 2. Applies dependent contact strategies, then checks `DuplicateDetectionService` with context `:portal_new_dependent`
 3. Exact contact collisions block before persistence; soft name+DOB/address matches continue to new dependent creation
-4. Uses `UserServiceIntegration` concern for consistent user creation
-5. Flow: `create_user_with_service(params, is_managing_adult: false)` → handles password, disability validation
-6. Then: `create_guardian_relationship_with_service(guardian, dependent, relationship_type)` → creates GuardianRelationship
-7. Soft matches open a `DuplicateReviewCase` with source `:portal_dependent` after the dependent and relationship are persisted
-8. Application creation happens separately when dependent applies
+4. Before writing, locks the guardian plus every candidate needed by a soft-match review case in one ascending-ID `User.lock_for_merge_integrity!` call
+5. Requalifies the locked guardian as an active constituent and re-derives guardian contact snapshots from that locked row
+6. Uses `UserServiceIntegration` for `create_user_with_service(params, is_managing_adult: false, skip_user_lookup: true, require_disability_validation: true)` — which handles password generation, requires the disability validation, and always creates a new dependent rather than reusing a lookup hit — and then `create_guardian_relationship_with_service(guardian, dependent, relationship_type)`
+7. The whole review bundle commits or rolls back together: the dependent `User`, the `GuardianRelationship`, and — for a soft match — the `DuplicateReviewCase` with source `:portal_dependent`, its `DuplicateReviewCaseCandidate` rows, the subject's `needs_duplicate_review` flag, and the `duplicate_review_case_opened` audit event. No compensating delete is used; a failure at any step leaves nothing behind
+8. A participant deleted between duplicate detection and the lock fails closed with the ordinary retry response rather than a server error
+9. Application creation happens separately when the dependent applies
 
 ### 4.2 · Admin Paper Application
 
@@ -163,8 +164,9 @@ Existing dependent reuse should preserve the current relationship when possible,
 
 ## 5 · Database Constraints
 
-* Unique composite index on `(guardian_id, dependent_id)` (implemented in GuardianRelationship model)
-* FK constraints on both IDs with proper inverse_of associations
+* Unique composite index on `(guardian_id, dependent_id)`
+* FK constraints on both IDs with proper inverse-of associations
+* Guardian and dependent equality is rejected by `GuardianRelationship#guardian_and_dependent_must_be_different`; there is no database `CHECK` constraint for that invariant
 * `managing_guardian_id` nullable in applications table
 * Proper dependent: :destroy and dependent: :nullify for data integrity
 

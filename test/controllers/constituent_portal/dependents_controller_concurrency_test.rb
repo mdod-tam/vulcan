@@ -3,11 +3,9 @@
 require 'test_helper'
 
 module ConstituentPortal
-  # Focused concurrency evidence for the primary contact/profile edit boundary (plan section
-  # 4, row 3), guardian-managed-dependent variant:
-  # ConstituentPortal::DependentsController#update and the merge service must serialize
-  # through User.lock_for_merge_integrity! on the dependent -- the merge target here, since
-  # the *dependent* (not the guardian) is the one being retired.
+  # Focused transaction and concurrency evidence for the portal dependent write boundary:
+  # ConstituentPortal::DependentsController#create/#update and the merge service must
+  # serialize through User.lock_for_merge_integrity! on their shared participants.
   #
   # Exercises the real, private controller method directly (via a minimal
   # ActionDispatch::TestRequest/TestResponse pair, using set_request!/set_response! -- see
@@ -17,6 +15,237 @@ module ConstituentPortal
     self.use_transactional_tests = false
 
     include ConcurrencyTestHelper
+
+    # This is the primary sensor for the creation defect. Under the former three-transaction
+    # design the merge could retire the guardian after User creation but before relationship
+    # creation, leaving a real GuardianRelationship attached to that retired guardian.
+    test 'merge commits first: dependent creation by the retired guardian fails closed with zero durable effects' do
+      admin, canonical, retiring_guardian, review_case = build_guardian_creation_merge_fixtures
+      dependent_email = "race-loser-#{SecureRandom.hex(4)}@example.com"
+      initial_user_count = User.count
+      initial_relationship_count = GuardianRelationship.count
+      initial_portal_case_count = DuplicateReviewCase.where(source: :portal_dependent).count
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      merge_result = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          merge_result = run_merge(
+            admin:,
+            canonical:,
+            duplicate: retiring_guardian,
+            review_case:
+          )
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      create_response = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        create_response = run_dependent_create(
+          guardian: retiring_guardian,
+          dependent_email:
+        )
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert merge_result.success?, "expected the merge (holder) to succeed: #{merge_result&.message}"
+      assert_equal :render, create_response[:action]
+      assert_equal 422, create_response[:status]
+      assert_equal initial_user_count, User.count
+      assert_equal initial_relationship_count, GuardianRelationship.count
+      assert_equal initial_portal_case_count, DuplicateReviewCase.where(source: :portal_dependent).count
+      assert_not User.exists?(email: dependent_email)
+      assert_not GuardianRelationship.exists?(guardian_id: retiring_guardian.id),
+                 'the losing request must not attach a dependent to the retired guardian'
+    ensure
+      cleanup_duplicate_review_test_data!(
+        admin,
+        canonical,
+        retiring_guardian,
+        (User.find_by(email: dependent_email) if dependent_email)
+      )
+    end
+
+    test 'dependent creation commits first: the merge waits, then transfers the new relationship' do
+      admin, canonical, retiring_guardian, review_case = build_guardian_creation_merge_fixtures
+      dependent_email = "race-winner-#{SecureRandom.hex(4)}@example.com"
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      create_response = nil
+      guardian_lock_observed = false
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          subscriber = lambda do |_name, _started, _finished, _unique_id, payload|
+            next unless payload[:sql].include?('"users"') && payload[:sql].include?('FOR UPDATE')
+
+            bind_values = payload[:binds].map(&:value_for_database)
+            guardian_lock_observed ||= bind_values == [retiring_guardian.id]
+          end
+          ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record') do
+            create_response = run_dependent_create(
+              guardian: retiring_guardian,
+              dependent_email:
+            )
+          end
+          # The real create has returned, but this outer holder transaction supplies the
+          # deterministic commit barrier without adding a pause hook to production code.
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      merge_result = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        merge_result = run_merge(
+          admin:,
+          canonical:,
+          duplicate: retiring_guardian,
+          review_case:
+        )
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      dependent = User.find_by!(email: dependent_email)
+      assert guardian_lock_observed, 'create must lock the guardian before its first durable write'
+      assert_equal :redirect, create_response[:action]
+      assert merge_result.success?, "expected the merge to proceed normally once creation committed: #{merge_result&.message}"
+      assert GuardianRelationship.exists?(guardian_id: canonical.id, dependent_id: dependent.id),
+             'merge must transfer the relationship created by the winning request'
+      assert_not GuardianRelationship.exists?(guardian_id: retiring_guardian.id, dependent_id: dependent.id)
+    ensure
+      cleanup_duplicate_review_test_data!(
+        admin,
+        canonical,
+        retiring_guardian,
+        (User.find_by(email: dependent_email) if dependent_email)
+      )
+    end
+
+    test 'merge commits first: dependent creation snapshots the post-merge guardian phone' do
+      guardian, guardian_duplicate, admin, existing_dependent, review_case = build_guardian_merge_fixtures
+      dependent_email = "post-merge-contact-#{SecureRandom.hex(4)}@example.com"
+      discarded_guardian_phone = guardian.phone
+      surviving_guardian_phone = guardian_duplicate.phone
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      merge_result = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          merge_result = run_merge(admin:, canonical: guardian, duplicate: guardian_duplicate, review_case:)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      create_response = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        create_response = run_dependent_create(
+          guardian:,
+          dependent_email:,
+          extra_dependent_params: { phone: '' }
+        )
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      dependent = User.find_by!(email: dependent_email)
+      assert merge_result.success?, "expected the merge (holder) to succeed: #{merge_result&.message}"
+      assert_equal :redirect, create_response[:action]
+      assert_equal User.normalize_phone(surviving_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+                   'the snapshot must come from the locked guardian after merge contact selection'
+      assert_not_equal User.normalize_phone(discarded_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+                       'the pre-lock phone discarded by the merge must not become durable contact truth'
+    ensure
+      cleanup_duplicate_review_test_data!(
+        guardian,
+        guardian_duplicate,
+        admin,
+        existing_dependent,
+        (User.find_by(email: dependent_email) if dependent_email)
+      )
+    end
+
+    test 'review case database error rolls back before the create failure form renders' do
+      candidate = create(
+        :constituent,
+        first_name: 'Created',
+        last_name: 'Dependent',
+        date_of_birth: Date.new(2010, 5, 15)
+      )
+      guardian = create(:constituent)
+      dependent_email = "aborted-transaction-#{SecureRandom.hex(4)}@example.com"
+      failing_case_service_class = Class.new(DuplicateReviewCases::CreateService) do
+        private
+
+        # Keep the real CreateService#call, including its nested participant lock, and fail
+        # only afterward at the first case write.
+        def create_open_case!
+          ActiveRecord::Base.connection.execute('SELECT * FROM pr4d_intentionally_missing_relation')
+        end
+      end
+      failing_case_service_factory = lambda do |**kwargs|
+        failing_case_service_class.allocate.tap do |service|
+          service.send(:initialize, **kwargs)
+        end
+      end
+      Rails.logger.stubs(:warn)
+
+      response = nil
+      DuplicateReviewCases::CreateService.stub(:new, failing_case_service_factory) do
+        assert_no_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count',
+                              'DuplicateReviewCaseCandidate.count', 'Event.count'] do
+          response = run_dependent_create(
+            guardian:,
+            dependent_email:,
+            query_before_failure_render: true
+          )
+        end
+      end
+
+      assert_equal :render, response[:action]
+      assert_equal 422, response[:status]
+      assert_not User.exists?(email: dependent_email)
+    ensure
+      cleanup_duplicate_review_test_data!(
+        candidate,
+        guardian,
+        (User.find_by(email: dependent_email) if dependent_email)
+      )
+    end
 
     test 'merge commits first: dependent edit for the newly-merged duplicate dependent fails closed with zero writes' do
       guardian, admin, canonical, duplicate, review_case = build_fixtures
@@ -318,6 +547,31 @@ module ConstituentPortal
 
     private
 
+    def build_guardian_creation_merge_fixtures
+      admin = create(:admin)
+      canonical = create(:constituent, email: "canonical-guardian-#{SecureRandom.hex(3)}@example.com", phone: nil)
+      retiring_guardian = create(
+        :constituent,
+        email: "retiring-guardian-#{SecureRandom.hex(3)}@example.com",
+        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      )
+      review_case = DuplicateReviewCase.create!(
+        source: :registration_soft_match,
+        subject_user: retiring_guardian,
+        deduplication_key: SecureRandom.hex(16),
+        metadata: { 'reason_codes' => ['name_dob'] },
+        opened_at: Time.current,
+        status: :open
+      )
+      review_case.duplicate_review_case_candidates.create!(
+        candidate_user: canonical,
+        match_reason: 'name_dob',
+        snapshot: {}
+      )
+
+      [admin, canonical, retiring_guardian, review_case]
+    end
+
     # Guardian-as-canonical-survivor pair, plus a dependent of that guardian. The dependent is
     # not a merge participant, so the two transactions collide only on the guardian's user row.
     def build_guardian_merge_fixtures
@@ -415,11 +669,47 @@ module ConstituentPortal
       response_summary(controller)
     end
 
+    def run_dependent_create(guardian:, dependent_email:, extra_dependent_params: {}, query_before_failure_render: false)
+      fresh_guardian = User.find(guardian.id)
+
+      controller = ConstituentPortal::DependentsController.new
+      controller.set_request!(ActionDispatch::TestRequest.create)
+      controller.set_response!(ActionDispatch::TestResponse.new)
+      controller.instance_variable_set(:@_action_name, 'create')
+      controller.instance_variable_set(:@current_user, fresh_guardian)
+      controller.params = ActionController::Parameters.new(
+        dependent: {
+          first_name: 'Created',
+          last_name: 'Dependent',
+          date_of_birth: '05/15/2010',
+          email: dependent_email,
+          phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+          hearing_disability: true
+        }.merge(extra_dependent_params),
+        guardian_relationship: { relationship_type: 'Parent' }
+      )
+      if query_before_failure_render
+        controller.define_singleton_method(:handle_creation_failure) do |errors|
+          User.count
+          super(errors)
+        end
+      end
+
+      controller.send(:create)
+
+      response_summary(controller)
+    end
+
     def response_summary(controller)
       if controller.response.redirect?
-        { action: :redirect, notice: controller.send(:flash)[:notice], alert: controller.send(:flash)[:alert] }
+        {
+          action: :redirect,
+          status: controller.response.status,
+          notice: controller.send(:flash)[:notice],
+          alert: controller.send(:flash)[:alert]
+        }
       else
-        { action: :render }
+        { action: :render, status: controller.response.status }
       end
     end
   end
