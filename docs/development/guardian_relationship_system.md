@@ -138,6 +138,10 @@ scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct
 8. A participant deleted between duplicate detection and the lock fails closed with the ordinary retry response rather than a server error
 9. Application creation happens separately when the dependent applies
 
+**The `:portal_dependent` review case opened in step 7 does not gate that later application.** It is staff review work, not a submission blocker. What gates is an open case with source `:registration_soft_match` whose **subject is the applicant** — so a dependent who registered their own account and was soft-matched cannot have an application finally submitted for them until staff resolve it, whether the guardian or the dependent presses the button. The acting guardian's own open case never gates a dependent's application, and a dependent named only as a *candidate* on someone else's case is never gated for being matched. Draft creation, editing, autosave, and draft saves stay available throughout. See [User Management Features §3.2](user_management_features.md#32-name-and-dob-review-flag).
+
+Because the gate follows the applicant rather than the actor, the refusal copy is owner-neutral: a guardian reading it is not the account under review.
+
 ### 4.2 · Admin Paper Application
 
 Handled by `Applications::PaperApplicationService` with `GuardianDependentManagementService`:

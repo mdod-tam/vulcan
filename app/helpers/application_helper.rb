@@ -167,4 +167,21 @@ module ApplicationHelper
 
     application.present? && application.medical_release_authorized.present?
   end
+
+  # Checked state for one disability-type box on a re-render.
+  #
+  # These were compared against the string "1", but cast_boolean_params has already turned the
+  # submitted values into real booleans by the time the view runs -- so the comparison never
+  # matched and the form fell through to the applicant's *stored* selections. A refusal therefore
+  # reversed a deliberate edit: unchecking Hearing and checking Vision came back as Hearing.
+  #
+  # Presence of the key is what decides, not truthiness, because `false` is a real answer. Rails
+  # emits a hidden "0" alongside each checkbox, so an unchecked box is present-and-false rather
+  # than absent, and only a request that never carried the field at all falls back to stored state.
+  def disability_checked?(field, applicant)
+    submitted = params.dig(:application, field)
+    return ActiveModel::Type::Boolean.new.cast(submitted) unless submitted.nil?
+
+    applicant.present? && applicant.public_send(field).present?
+  end
 end

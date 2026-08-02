@@ -183,7 +183,7 @@
              <% disabilities.each do |disability| %>
                <div class="flex items-center">
                  <%= f.check_box "#{disability}_disability",
-                     checked: params.dig(:application, "#{disability}_disability") == "1" || applicant_user.send("#{disability}_disability"),
+                     checked: disability_checked?("#{disability}_disability", applicant_user),
                      class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                      "aria-describedby": "#{disability}-description" %>
                  <%= f.label "#{disability}_disability", disability.to_s.titleize,

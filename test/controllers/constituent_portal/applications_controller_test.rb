@@ -422,6 +422,96 @@ module ConstituentPortal
       assert_select 'form[data-final-submit-gate-blocked-message]', false
     end
 
+    # A refused dependent submission must stay the dependent's. The refusal re-render had no
+    # applicant context -- setup_applicant_context runs only on :new, and reads a top-level
+    # params[:user_id] the form does not post -- so the page told the guardian the application was
+    # theirs and dropped the hidden application[user_id]. Acting on that page attributed the
+    # dependent's answers and uploads to the guardian.
+    test 'a refused dependent submission keeps the application scoped to the dependent' do
+      guardian, dependent = guardian_and_dependent
+      sign_in_for_integration_test(guardian)
+      open_soft_match_case_for(dependent)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path,
+             params: pending_review_submission_params.deep_merge(
+               application: { user_id: dependent.id, use_guardian_address: '1' }
+             )
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#error-summary', false,
+                    'a form-only attribute must not reach Application and surface as a raw error'
+      assert_select "input[name='application[user_id]'][value='#{dependent.id}']", 1,
+                    'the refusal must keep the hidden dependent id, or a retry saves to the guardian'
+      assert_select 'p', text: /This application is for\s+#{Regexp.escape(dependent.full_name)}/,
+                         count: 1
+      assert_no_match(/unknown attribute/i, response.body)
+    end
+
+    # The id is never trusted as posted: it is resolved through current_user.dependents, so someone
+    # else's dependent cannot be named on the page or attached to the retry.
+    test 'a forged dependent id in a refused submission falls back to a self application' do
+      guardian, = guardian_and_dependent
+      stranger = create(:constituent, :with_disabilities,
+                        email: "stranger_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(guardian)
+      open_soft_match_case_for(guardian)
+
+      post constituent_portal_applications_path,
+           params: pending_review_submission_params.deep_merge(
+             application: { user_id: stranger.id }
+           )
+
+      assert_response :unprocessable_content
+      assert_select "input[name='application[user_id]'][value='#{stranger.id}']", false,
+                    'an unverified dependent id must not be echoed back into the form'
+      assert_no_match(/#{Regexp.escape(stranger.full_name)}/, response.body)
+    end
+
+    # cast_boolean_params turns these into real booleans before the view runs, so the old `== "1"`
+    # comparison never matched and the refusal restored stored selections over submitted ones.
+    test 'a refused submission keeps the submitted disability selections in both directions' do
+      unique_user = create(:constituent, email: "disability_#{Time.now.to_i}_#{rand(1000)}@example.com",
+                                         hearing_disability: true, vision_disability: false)
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      post constituent_portal_applications_path,
+           params: pending_review_submission_params.deep_merge(
+             application: { hearing_disability: checkbox_params(false),
+                            vision_disability: checkbox_params(true) }
+           )
+
+      assert_response :unprocessable_content
+      # false -> the stored `true` must not come back
+      assert_select "input[name='application[hearing_disability]'][checked]", false,
+                    'unchecking a stored disability must survive the refusal'
+      # true -> the submitted selection must be kept even though stored is false
+      assert_select "input[name='application[vision_disability]'][checked]", 1,
+                    'a newly checked disability must survive the refusal'
+    end
+
+    # Derived from persisted address blankness, the checkbox came back opposite to what was chosen,
+    # so a retry could hide or replace the dependent address just entered.
+    test 'a refused dependent submission keeps the submitted guardian-address choice' do
+      guardian, dependent = guardian_and_dependent
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(dependent)
+
+      patch constituent_portal_application_path(draft),
+            params: pending_review_submission_params.deep_merge(
+              application: { use_guardian_address: '0', physical_address_1: '9 Dependent Ln',
+                             city: 'Rockville', state: 'MD', zip_code: '20850' }
+            )
+
+      assert_response :unprocessable_content
+      assert_select 'input#use_guardian_address_checkbox[checked]', false,
+                    'an unchecked guardian-address box must not come back checked'
+      assert_select "input[name='application[physical_address_1]'][value='9 Dependent Ln']", 1
+    end
+
     # PR5a blocked-response contract, situation 2: the same refusal on an existing draft. Situation
     # 1 proves nothing is created; this proves nothing is destroyed -- the stored draft survives
     # untouched, and the form still shows the constituent's latest edits rather than reverting to
@@ -1191,6 +1281,17 @@ module ConstituentPortal
 
     def refused_documents_message
       I18n.t('applications.submission_gate.refused_documents_notice')
+    end
+
+    def guardian_and_dependent
+      stamp = "#{Time.now.to_i}_#{rand(10_000)}"
+      guardian = create(:constituent, :with_disabilities, first_name: 'Gina', last_name: 'Guardian',
+                                                          email: "guardian_#{stamp}@example.com")
+      dependent = create(:constituent, :with_disabilities, first_name: 'Dana', last_name: 'Dependent',
+                                                           email: "dependent_#{stamp}@example.com")
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'parent')
+      [guardian, dependent]
     end
 
     def open_soft_match_case_for(subject)

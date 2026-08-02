@@ -187,6 +187,42 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     take_evidence_screenshot('application-new-blocked-pending-review-es', full: true, html: true)
   end
 
+  # The refusal used to re-render a dependent application as the *guardian's*: setup_applicant_context
+  # runs only on :new and reads a top-level params[:user_id] the form does not post, so the page named
+  # the guardian and dropped the hidden application[user_id]. Following the on-screen instruction to
+  # reselect documents and save would then have attached the dependent's answers and uploads to the
+  # guardian. That was a visible defect, so it needs visible proof that it is gone.
+  test 'a refused dependent submission still shows the dependent as the applicant' do
+    system_test_sign_in(@user)
+    assert_text 'Dashboard', wait: 10
+
+    visit new_constituent_portal_application_path(user_id: @dependent.id)
+    assert_text "New Application for #{@dependent.full_name}", wait: 10
+    page.execute_script(<<~JS)
+      const form = document.querySelector('form[data-controller~="autosave"]');
+      form.dataset.controller = form.dataset.controller.split(/\\s+/)
+        .filter((name) => name !== 'autosave').join(' ');
+    JS
+
+    fill_complete_application_form
+
+    assert_selector 'input[name="submit_application"]:not([disabled])'
+    # Opened against the dependent, after the page rendered: the guardian is the actor, but the
+    # applicant is who the gate follows.
+    open_registration_soft_match_case_for(@dependent)
+    find('input[name="submit_application"]:not([disabled])').click
+
+    assert_selector '#pending-review-notice'
+    # The page must still be the dependent's, both in what it says and in what it would post.
+    assert_text "This application is for #{@dependent.full_name}"
+    assert_no_text "This application is for #{@user.full_name}"
+    assert_selector "input[name='application[user_id]'][value='#{@dependent.id}']", visible: :all
+    assert_no_selector '#error-summary'
+    assert_equal 0, Application.where(user: @user).count,
+                 'nothing may be attributed to the guardian'
+    take_evidence_screenshot('application-dependent-refused-pending-review', full: true, html: true)
+  end
+
   # The UI block cannot cover the case that opens after the page was rendered, and that is exactly
   # what the locked service gate is for. This drives that race in a real browser: the form loads
   # ungated and enables submission, the case opens, and the click is refused server-side.

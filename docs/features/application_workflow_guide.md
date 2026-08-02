@@ -41,8 +41,9 @@ All flows converge on **one Application record**, so every downstream service (e
 1. **Auth → Dashboard → "Create Application"**  
 2. **Form-based application** with autosave functionality.  
 3. **Autosave**: UI changes trigger `app/javascript/controllers/forms/autosave_controller.js` which calls the backend `Applications::AutosaveService` via `constituent_portal/applications_controller#autosave_field`. This flow saves individual fields (excluding file inputs), returns validation errors inline, and updates the form action/URLs when a new draft `Application` is created.  
-4. `Applications::ApplicationCreator` service:  
-   * Uses `ApplicationForm` for validation → updates user attributes → creates/updates Application → attaches file uploads → logs events via `AuditEventService` + sends notifications via `NotificationService`.
+4. `Applications::ApplicationCreator` service. The pipeline below is the **successful** path; every step after the eligibility gate is skipped entirely on a refusal:
+   * Uses `ApplicationForm` for validation → **locks the participants and evaluates eligibility** (requalification, the sibling/waiting-period policy, and — for a final submission — the identity-review gate) → updates user attributes → creates/updates Application → attaches file uploads → logs events via `AuditEventService` + sends notifications via `NotificationService`.
+   * The gate deliberately sits before the first mutation, so a refused submission leaves no application, lifecycle change, attachment, audit event, notification, or queued delivery behind, and the applicant's own attributes are untouched. See [Current Application Features §1](../current_application_features.md#1-application-lifecycle).
 
 ### 2.2 Paper (Admin)
 
