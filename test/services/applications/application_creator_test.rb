@@ -364,6 +364,24 @@ module Applications
       assert_equal 'draft', result.application.status
     end
 
+    # The refusal notice tells the constituent to reselect their documents and use "Save
+    # Application" to keep them. That instruction is only worth giving if it is true: the gate runs
+    # only for a submission, so a draft save still reaches attach_file_uploads and the documents
+    # really do land on the draft.
+    test 'a draft save while gated still attaches the selected documents' do
+      open_registration_soft_match_case_for(@user)
+      form = create_valid_form_with_proofs(@user)
+      form.is_submission = false
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?, result.error_messages.to_sentence
+      application = result.application.reload
+      assert application.residency_proof.attached?, 'the recovery the notice promises must work'
+      assert application.income_proof.attached?
+      assert_equal 'draft', application.status
+    end
+
     test 'an unchanged retry repeats the same refusal and creates no duplicate draft' do
       open_registration_soft_match_case_for(@user)
 

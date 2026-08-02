@@ -138,25 +138,17 @@ module Applications
     # separate or merges them. Without this the duplicate-review workflow is advisory: the account
     # can submit an application that bypasses the canonical record's history while the case is open.
     #
-    # The open case is the authority, not +needs_duplicate_review+. That flag is a denormalized
-    # badge/query aid and can be cleared independently of the case it describes.
+    # The rule itself lives on +Application.identity_review_pending_for?+ so the portal form can ask
+    # the same question on GET; this is the copy that decides, because only this one runs under lock.
     #
-    # Only +registration_soft_match+ gates. Cases from the other live sources (+admin_create+,
-    # +portal_dependent+, +paper_intake+) are staff review work rather than submission blockers, and
-    # the candidate account named by someone else's case is never gated merely for being matched.
-    #
-    # No additional lock is taken here. This transaction already holds the applicant's +User+ row
-    # through +lock_for_merge_integrity!+, and both writers that can resolve a case --
+    # No additional lock is taken for the read. This transaction already holds the applicant's
+    # +User+ row through +lock_for_merge_integrity!+, and both writers that can resolve a case --
     # +DuplicateReviewCases::ResolutionService+ and +Users::DuplicateMergeService+ -- acquire that
     # same row first. A resolution therefore cannot be mid-commit while this reads: it either
     # committed before this lock was granted, so the terminal state is visible, or it waits behind
     # this transaction.
     def pending_identity_review?(applicant)
-      return false if applicant.blank?
-
-      DuplicateReviewCase.open_cases
-                         .for_subject(applicant)
-                         .exists?(source: :registration_soft_match)
+      Application.identity_review_pending_for?(applicant)
     end
 
     # Resolved through the form's message_locale rather than ambient I18n.locale. The constituent

@@ -17,6 +17,11 @@
    end
    if @application.for_dependent?
      edit_form_data[:controller] = "dependent-fields #{edit_form_data[:controller]}"
+   end
+   # See the matching comment in new.html.erb: present only while an identity review is pending,
+   # and read by the submit gate as a hard block.
+   if @submission_blocked_message.present?
+     edit_form_data[:final_submit_gate_blocked_message] = @submission_blocked_message
    end %>
  <%= form_with(model: [:constituent_portal, @application], 
               local: true, 

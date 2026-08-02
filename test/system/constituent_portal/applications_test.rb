@@ -71,24 +71,23 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_success_message('Application submitted successfully', wait: 5)
   end
 
-  # PR5a: the subject of an open registration soft-match case may draft and save, but final
-  # submission is refused until staff resolve the case. Visible evidence that the refusal reads as
-  # an informational notice rather than a validation error, and that the form keeps what was typed.
+  # PR5a: the subject of an open registration soft-match case may draft and save, but may not
+  # finally submit until staff resolve the case. Two layers enforce that and both need evidence.
   #
-  # Every control below is required to reach the gate. final_submit_gate keeps "Submit Application"
-  # disabled until the form is complete, and ApplicationsController#create returns early on an
-  # invalid form -- so an incomplete fill means the click silently does nothing and the request is
-  # never made. The medical release is checked by label: its id is not its param name.
-  test 'pending identity review blocks final submission with an informational notice' do
-    system_test_sign_in(@user)
-    assert_text 'Dashboard', wait: 10
-    DuplicateReviewCase.create!(
-      source: :registration_soft_match, subject_user: @user,
-      deduplication_key: SecureRandom.hex(16), metadata: { 'reason_codes' => ['name_dob'] },
-      opened_at: Time.current, status: :open
-    )
+  # The portal asks on GET and, when a review is pending, renders the notice and hands the submit
+  # gate a hard block. That matters because the refusal alone arrives too late: by then the
+  # constituent has selected their income and residency documents, and no browser lets a re-render
+  # restore a file input, so they would have to find and choose those files again for a submission
+  # that will be refused identically. The first three tests cover that state.
+  #
+  # The locked server refusal is what actually decides, and it still has to be right for a case
+  # that opens after the form was rendered. The last test drives exactly that race.
 
-    visit new_constituent_portal_application_path
+  # Every control here is required to reach the submit gate: it keeps "Submit Application" disabled
+  # until the form is complete, so an incomplete fill would mean a click that silently does nothing
+  # and a test that passes for the wrong reason. The medical release is checked by label because
+  # its id is not its param name.
+  def fill_complete_application_form
     check 'I certify that I am a resident of Maryland'
     fill_in 'Household Size', with: 3
     fill_in 'Annual Income', with: 60_000
@@ -108,146 +107,133 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'terms_accepted'
     check 'information_verified'
     check 'I authorize the release and sharing of my disability-related information as described above'
-
-    # Proves the gate actually enabled the control, so a silent no-op click cannot pass this test.
-    assert_selector 'input[name="submit_application"]:not([disabled])'
-    find('input[name="submit_application"]:not([disabled])').click
-
-    assert_selector '#pending-review-notice'
-    assert_no_selector '#error-summary'
-    # The refusal must not cost the constituent their work.
-    assert_field 'Household Size', with: '3'
-    assert_field 'Annual Income', with: '60000'
-    assert_equal 0, Application.where(user: @user).where.not(status: 'draft').count,
-                 'a blocked submission must not create or advance a submitted application'
-    take_evidence_screenshot('application-submission-blocked-pending-review', full: true, html: true)
-
-    # The contract stated behaviourally. Asserting individual field values is too weak: this form
-    # renders from four independent sources, and a refusal that drops any required one leaves the
-    # submit gate disabled -- so the constituent cannot retry at all. This asserts the property
-    # that actually matters, which per-field assertions missed.
-    assert_selector 'input[name="submit_application"]:not([disabled])', wait: 5
-    find('input[name="submit_application"]:not([disabled])').click
-
-    assert_selector '#pending-review-notice', text: /information associated with this application/i
-    assert_equal 0, Application.where(user: @user).where.not(status: 'draft').count,
-                 'an unchanged retry must be refused identically, with no side effects'
-    # Captured separately from the first refusal: "the retry is refused identically" is a claim
-    # about what the constituent sees the second time, and only an artifact of that state can show
-    # the notice did not stack, degrade into an error summary, or leave the form unusable.
-    take_evidence_screenshot('application-submission-blocked-pending-review-retry', full: true, html: true)
   end
 
-  # Companion to the test above, which exercises the update path. This one captures the create
-  # path -- the refusal rendered through new.html.erb rather than edit.html.erb.
+  def open_registration_soft_match_case_for(subject)
+    DuplicateReviewCase.create!(
+      source: :registration_soft_match, subject_user: subject,
+      deduplication_key: SecureRandom.hex(16), metadata: { 'reason_codes' => ['name_dob'] },
+      opened_at: Time.current, status: :open
+    )
+  end
+
+  def submission_gate_blocked_message(locale: I18n.default_locale)
+    I18n.t('applications.submission_gate.pending_identity_review_status', locale: locale)
+  end
+
+  test 'a pending identity review warns on arrival and holds final submission disabled' do
+    system_test_sign_in(@user)
+    assert_text 'Dashboard', wait: 10
+    open_registration_soft_match_case_for(@user)
+
+    visit new_constituent_portal_application_path
+
+    # On screen before a single document is selected -- the whole point of asking on GET.
+    assert_selector '#pending-review-notice', text: /information associated with this application/i
+    assert_no_selector '#error-summary'
+    assert_selector 'input[name="submit_application"][disabled]'
+
+    fill_complete_application_form
+
+    # Completeness is what normally enables this control. It must not here, and the live region has
+    # to say why rather than leaving a silently dead button.
+    assert_selector 'input[name="submit_application"][disabled]'
+    assert_selector '#portal-submit-gate-status', text: submission_gate_blocked_message, visible: :all
+    take_evidence_screenshot('application-new-blocked-pending-review', full: true, html: true)
+
+    # Draft saving is deliberately untouched: the constituent keeps their work and can come back to
+    # it once staff resolve the case.
+    find('input[name="save_draft"]').click
+    assert Application.exists?(user: @user, status: 'draft'),
+           'saving a draft must still work while final submission is blocked'
+    assert_equal 0, Application.where(user: @user).where.not(status: 'draft').count,
+                 'nothing may advance past draft while the review is open'
+  end
+
+  test 'a pending identity review holds submission disabled on an existing draft' do
+    system_test_sign_in(@user)
+    assert_text 'Dashboard', wait: 10
+    draft = create(:application, :draft, user: @user, household_size: 2)
+    open_registration_soft_match_case_for(@user)
+
+    visit edit_constituent_portal_application_path(draft)
+
+    assert_selector '#pending-review-notice', text: /information associated with this application/i
+    assert_no_selector '#error-summary'
+    assert_selector 'input[name="submit_application"][disabled]'
+    take_evidence_screenshot('application-edit-blocked-pending-review', full: true, html: true)
+
+    assert_equal 'draft', draft.reload.status
+  end
+
+  # The notice resolves through the applicant's own locale rather than ambient I18n.locale -- the
+  # constituent portal never wraps requests in I18n.with_locale, so an ambient lookup would always
+  # render the default and this Spanish string would be unreachable. The surrounding form labels are
+  # still hardcoded English; that is a known gap in this surface, not a regression here.
+  test 'a Spanish-locale constituent sees the pending-review notice in Spanish' do
+    spanish = create(:constituent, first_name: 'Sofia', last_name: 'Aplicante', locale: 'es',
+                                   email: "sofia-#{SecureRandom.hex(3)}@example.com")
+    system_test_sign_in(spanish)
+    assert_text 'Dashboard', wait: 10
+    open_registration_soft_match_case_for(spanish)
+
+    visit new_constituent_portal_application_path
+
+    assert_selector '#pending-review-notice',
+                    text: /#{Regexp.escape(I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review', locale: :es))}/
+    assert_selector 'input[name="submit_application"][disabled]'
+    assert_selector '#portal-submit-gate-status',
+                    text: submission_gate_blocked_message(locale: :es), visible: :all
+    take_evidence_screenshot('application-new-blocked-pending-review-es', full: true, html: true)
+  end
+
+  # The UI block cannot cover the case that opens after the page was rendered, and that is exactly
+  # what the locked service gate is for. This drives that race in a real browser: the form loads
+  # ungated and enables submission, the case opens, and the click is refused server-side.
   #
-  # Reaching it takes deliberate work. The autosave controller creates a draft on the first
-  # debounced change and then rewrites the form's action to the member route and appends
-  # _method=patch, so by the time a real constituent finishes filling this form their click is a
-  # PATCH. Asserting the collection action before filling is not enough: it is still true then and
-  # false by the time of the click, which is exactly how an earlier version of this test captured
-  # edit.html.erb while claiming to prove new.html.erb. The window where create is genuinely
-  # reachable is the one before the first autosave lands, so this test holds the page in that
-  # window by detaching the autosave controller, and re-asserts the collection action immediately
-  # before and after the click.
-  test 'pending identity review blocks a first-time submission through the create path' do
+  # It is also the only remaining path to the create-path refusal through new.html.erb. The autosave
+  # controller creates a draft on the first debounced change and rewrites the form action to the
+  # member route, so a normal browser journey is a PATCH by the time of the click -- asserting the
+  # collection action before filling is not enough, because it is still true then and false at the
+  # click. Detaching autosave holds the page in the pre-first-autosave window, where create is
+  # genuinely reachable, and the collection action is re-asserted on both sides of the click.
+  test 'a review opened after the form loaded is still refused by the server' do
     fresh = create(:constituent, first_name: 'Fresh', last_name: 'Applicant',
                                  email: "fresh-#{SecureRandom.hex(3)}@example.com")
     system_test_sign_in(fresh)
     assert_text 'Dashboard', wait: 10
-    DuplicateReviewCase.create!(
-      source: :registration_soft_match, subject_user: fresh,
-      deduplication_key: SecureRandom.hex(16), metadata: { 'reason_codes' => ['name_dob'] },
-      opened_at: Time.current, status: :open
-    )
 
     visit new_constituent_portal_application_path
+    assert_no_selector '#pending-review-notice'
     assert_selector "form[action='#{constituent_portal_applications_path}']", wait: 5
-    # Detach only autosave; final-submit-gate and the rest must keep running, since the click below
-    # depends on the gate actually enabling the control.
+    # Detach only autosave; final-submit-gate must keep running, since the click below depends on
+    # the gate actually enabling the control.
     page.execute_script(<<~JS)
       const form = document.querySelector('form[data-controller~="autosave"]');
       form.dataset.controller = form.dataset.controller.split(/\\s+/)
         .filter((name) => name !== 'autosave').join(' ');
     JS
 
-    check 'I certify that I am a resident of Maryland'
-    fill_in 'Household Size', with: 3
-    fill_in 'Annual Income', with: 60_000
-    check 'I certify that I have a disability that affects my ability to access telecommunications services'
-    check 'Hearing'
-    find('input[name*="physical_address_1"]').set('456 Oak Ave')
-    find('input[name*="city"]').set('Annapolis')
-    select 'Maryland', from: 'State'
-    find('input[name*="zip_code"]').set('21401')
-    within '#medical-provider-fields' do
-      find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Jane Smith')
-      find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
-      find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
-    end
-    attach_file 'application_income_proof', @valid_pdf, make_visible: true
-    attach_file 'application_residency_proof', @valid_image, make_visible: true
-    check 'terms_accepted'
-    check 'information_verified'
-    check 'I authorize the release and sharing of my disability-related information as described above'
+    fill_complete_application_form
 
     assert_equal 0, Application.where(user: fresh).count,
                  'precondition: still no draft, so this click is a create and not an update'
-    assert_selector "form[action='#{constituent_portal_applications_path}']"
     assert_selector 'input[name="submit_application"]:not([disabled])'
+
+    # Opens after the page was rendered: the browser has no way to know, which is why the server
+    # gate cannot be replaced by the UI one.
+    open_registration_soft_match_case_for(fresh)
     find('input[name="submit_application"]:not([disabled])').click
 
     assert_selector '#pending-review-notice'
     assert_no_selector '#error-summary'
-    # The re-render is new.html.erb: still the collection action, and still nothing persisted.
+    # The re-render is new.html.erb: still the collection action, nothing persisted, and the submit
+    # control is now blocked too, so the constituent is not invited to repeat the attempt.
     assert_selector "form[action='#{constituent_portal_applications_path}']"
+    assert_selector 'input[name="submit_application"][disabled]'
     assert_equal 0, Application.where(user: fresh).count,
-                 'a blocked first-time submission must not create an application at all'
-    take_evidence_screenshot('application-create-blocked-pending-review', full: true, html: true)
-  end
-
-  # The refusal resolves through ApplicationForm#message_locale rather than ambient I18n.locale --
-  # the constituent portal never wraps requests in I18n.with_locale, so an ambient lookup would
-  # always render the default and this Spanish string would be unreachable. The surrounding form
-  # labels are still hardcoded English; that is a known gap in this surface, not a regression here.
-  test 'a Spanish-locale constituent sees the refusal in Spanish' do
-    spanish = create(:constituent, first_name: 'Sofia', last_name: 'Aplicante', locale: 'es',
-                                   email: "sofia-#{SecureRandom.hex(3)}@example.com")
-    system_test_sign_in(spanish)
-    assert_text 'Dashboard', wait: 10
-    DuplicateReviewCase.create!(
-      source: :registration_soft_match, subject_user: spanish,
-      deduplication_key: SecureRandom.hex(16), metadata: { 'reason_codes' => ['name_dob'] },
-      opened_at: Time.current, status: :open
-    )
-
-    visit new_constituent_portal_application_path
-    check 'I certify that I am a resident of Maryland'
-    fill_in 'Household Size', with: 3
-    fill_in 'Annual Income', with: 60_000
-    check 'I certify that I have a disability that affects my ability to access telecommunications services'
-    check 'Hearing'
-    find('input[name*="physical_address_1"]').set('456 Oak Ave')
-    find('input[name*="city"]').set('Annapolis')
-    select 'Maryland', from: 'State'
-    find('input[name*="zip_code"]').set('21401')
-    within '#medical-provider-fields' do
-      find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Jane Smith')
-      find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
-      find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
-    end
-    attach_file 'application_income_proof', @valid_pdf, make_visible: true
-    attach_file 'application_residency_proof', @valid_image, make_visible: true
-    check 'terms_accepted'
-    check 'information_verified'
-    check 'I authorize the release and sharing of my disability-related information as described above'
-
-    assert_selector 'input[name="submit_application"]:not([disabled])'
-    find('input[name="submit_application"]:not([disabled])').click
-
-    assert_selector '#pending-review-notice',
-                    text: /#{Regexp.escape(I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review', locale: :es))}/
-    take_evidence_screenshot('application-submission-blocked-pending-review-es', full: true, html: true)
+                 'a refused first-time submission must not create an application at all'
+    take_evidence_screenshot('application-create-refused-pending-review', full: true, html: true)
   end
 
   test 'shows validation errors for invalid submission' do

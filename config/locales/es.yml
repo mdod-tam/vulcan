@@ -159,6 +159,10 @@ es:
       followup_scheduled_for: "Seguimiento programado para"
       reason: "Motivo: %{reason}"
   applications:
+    submission_gate:
+      pending_identity_review_status: "El envío no está disponible mientras revisamos la información asociada con esta solicitud. Todavía puede guardar su borrador."
+      # El nombre del botón queda en inglés a propósito: este formulario todavía no está traducido.
+      refused_documents_notice: "Los documentos que había seleccionado no se adjuntaron. Selecciónelos de nuevo y use \"Save Application\" para conservarlos en su borrador."
     proof_resubmission_requests:
       create:
         failure: "No se pudo enviar la solicitud segura para subir el documento."

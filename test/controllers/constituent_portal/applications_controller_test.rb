@@ -260,6 +260,59 @@ module ConstituentPortal
                     'a pending review is not a validation error and must not render the error summary'
       # The refusal must not cost the constituent the values they typed.
       assert_select "input[name='application[household_size]'][value='3']"
+      # The one thing the re-render genuinely cannot give back is the file selections, so the
+      # notice has to say so and name the action that recovers them.
+      assert_select '#pending-review-documents-notice',
+                    text: /#{Regexp.escape(refused_documents_message)}/
+    end
+
+    # The same notice on arrival must not claim documents were lost: nothing has been selected yet.
+    test 'the arrival notice does not mention lost documents' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "arrival_docs_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      get new_constituent_portal_application_path
+
+      assert_response :success
+      assert_select '#pending-review-notice'
+      assert_select '#pending-review-documents-notice', false,
+                    'nothing has been selected on arrival, so nothing can have been lost'
+    end
+
+    # The recovery the reviewer asked about, end to end: once staff resolve the case the form stops
+    # warning, stops blocking, and the same submission that was refused now goes through.
+    test 'resolving the review unblocks the form and lets the submission through' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "resolved_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      review_case = open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: pending_review_submission_params
+      end
+      assert_select '#pending-review-notice'
+
+      review_case.update!(
+        status: :resolved_ignored,
+        resolution_determination: :keep_separate,
+        resolution_rationale: 'confirmed different people',
+        resolved_by: create(:admin),
+        resolved_at: Time.current
+      )
+
+      get new_constituent_portal_application_path
+      assert_response :success
+      assert_select '#pending-review-notice', false, 'a resolved case must stop warning'
+      assert_select 'form[data-final-submit-gate-blocked-message]', false,
+                    'a resolved case must stop blocking the submit control'
+
+      assert_difference('Application.count', 1) do
+        post constituent_portal_applications_path, params: pending_review_submission_params
+      end
+      assert_equal 'in_progress', Application.last.status,
+                   'the previously refused submission must now be accepted'
     end
 
     # The locale that decides this message comes from params and is never allowlisted on the way
@@ -282,6 +335,91 @@ module ConstituentPortal
       assert_select '#pending-review-notice', text: /#{Regexp.escape(pending_review_message)}/
       assert_select '#error-summary', false,
                     'a forged locale must not degrade the refusal into the red error summary'
+    end
+
+    # The refusal alone is too late to be the only signal. It arrives after the constituent has
+    # selected their income and residency documents, and no browser lets a re-render restore a file
+    # input -- so they would have to find and choose those files again, for a submission that will
+    # be refused identically until staff resolve the case. The form therefore asks on GET and says
+    # so before any of that work happens, and hands the submit gate a hard block so the control
+    # never becomes pressable. Draft saving is untouched.
+    test 'the new form warns and blocks submission before any upload while identity review is pending' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_new_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      get new_constituent_portal_application_path
+
+      assert_response :success
+      assert_select '#pending-review-notice', text: /#{Regexp.escape(pending_review_message)}/
+      assert_select 'form[data-final-submit-gate-blocked-message=?]', submission_gate_blocked_message
+      assert_select "input[name='save_draft']"
+      assert_select "input[name='save_draft'][disabled]", false,
+                    'draft saving must stay reachable: only final submission is gated'
+    end
+
+    test 'the new form carries no block when no identity review is pending' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "no_pending_new_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+
+      get new_constituent_portal_application_path
+
+      assert_response :success
+      assert_select '#pending-review-notice', false
+      assert_select 'form[data-final-submit-gate-blocked-message]', false
+    end
+
+    test 'the edit form warns and blocks submission while identity review is pending' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_edit_get_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      draft = create(:application, :draft, user: unique_user)
+      open_soft_match_case_for(unique_user)
+
+      get edit_constituent_portal_application_path(draft)
+
+      assert_response :success
+      assert_select '#pending-review-notice'
+      assert_select 'form[data-final-submit-gate-blocked-message=?]', submission_gate_blocked_message
+    end
+
+    # The gate follows the applicant, so a guardian gets the warning for a dependent's open case --
+    # and does not get it for their own, since their identity is not what the application turns on.
+    test 'a guardian editing a gated dependent application sees the block' do
+      guardian = create(:constituent, :with_disabilities,
+                        email: "guardian_gate_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      dependent = create(:constituent, :with_disabilities,
+                         email: "dependent_gate_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'parent')
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(dependent)
+
+      get edit_constituent_portal_application_path(draft)
+
+      assert_response :success
+      assert_select 'form[data-final-submit-gate-blocked-message=?]', submission_gate_blocked_message
+    end
+
+    test 'a guardian own open case does not block a dependent application' do
+      guardian = create(:constituent, :with_disabilities,
+                        email: "guardian_ungated_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      dependent = create(:constituent, :with_disabilities,
+                         email: "dependent_ungated_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'parent')
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(guardian)
+
+      get edit_constituent_portal_application_path(draft)
+
+      assert_response :success
+      assert_select '#pending-review-notice', false
+      assert_select 'form[data-final-submit-gate-blocked-message]', false
     end
 
     # PR5a blocked-response contract, situation 2: the same refusal on an existing draft. Situation
@@ -1045,6 +1183,14 @@ module ConstituentPortal
 
     def pending_review_message
       I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review')
+    end
+
+    def submission_gate_blocked_message
+      I18n.t('applications.submission_gate.pending_identity_review_status')
+    end
+
+    def refused_documents_message
+      I18n.t('applications.submission_gate.refused_documents_notice')
     end
 
     def open_soft_match_case_for(subject)

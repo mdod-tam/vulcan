@@ -108,13 +108,15 @@ class ApplicationForm
   # +I18n.t+ and +I18n.with_locale+, so it must always be a locale those accept.
   def message_locale
     supported_locale(locale) ||
-      supported_locale(applicant_user&.effective_locale) ||
-      supported_locale(current_user&.effective_locale) ||
+      applicant_user&.effective_message_locale ||
+      current_user&.effective_message_locale ||
       I18n.default_locale
   end
 
   private
 
+  # Only the submitted value needs this; the user-owned candidates allowlist themselves through
+  # User#effective_message_locale.
   def supported_locale(value)
     candidate = value.to_s
     return if candidate.blank?

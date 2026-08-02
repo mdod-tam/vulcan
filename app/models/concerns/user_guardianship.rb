@@ -128,6 +128,17 @@ module UserGuardianship
     end
   end
 
+  # +effective_locale+ narrowed to something I18n will actually accept, or nil when this user has
+  # none set or carries a value the app no longer ships. Stored locales are not validated against
+  # the available set, so callers that pass one to +I18n.t+ or +I18n.with_locale+ must go through
+  # here and supply their own fallback; an unsupported value raises I18n::InvalidLocale.
+  def effective_message_locale
+    candidate = effective_locale.to_s
+    return if candidate.blank?
+
+    candidate.to_sym if I18n.available_locales.include?(candidate.to_sym)
+  end
+
   # Get the primary guardian for contact purposes
   def guardian_for_contact
     return nil unless dependent?

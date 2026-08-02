@@ -15,6 +15,25 @@ module ApplicationSubmissionEligibility
   end
 
   class_methods do
+    # The identity-review admission rule, in one place so the locked writer and the portal form
+    # cannot drift. Applications::ApplicationCreator asks under lock and refuses; the portal form
+    # asks on GET so it can warn and disable submission before the constituent selects documents a
+    # refusal would silently discard -- browsers cannot repopulate a file input. The unlocked read
+    # is advisory only; the locked one still decides.
+    #
+    # Only the +applicant+ is checked, never the acting guardian, and only an open
+    # +registration_soft_match+ case gates. Cases from the other live sources are staff review work
+    # rather than submission blockers, and the candidate account named by someone else's case is
+    # never gated merely for being matched. The durable open case is the authority, not
+    # +users.needs_duplicate_review+, which is a denormalized badge and can be cleared on its own.
+    def identity_review_pending_for?(applicant)
+      return false if applicant.blank?
+
+      DuplicateReviewCase.open_cases
+                         .for_subject(applicant)
+                         .exists?(source: :registration_soft_match)
+    end
+
     # Shared eligibility policy for "one active application, waiting-period" so portal final
     # submission and portal autosave apply the same rule against their already-locked inventory.
     # +applications+ is the caller's locked inventory for the applicant (any enumerable of

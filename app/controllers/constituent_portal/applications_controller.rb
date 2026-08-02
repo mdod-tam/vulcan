@@ -31,6 +31,7 @@ module ConstituentPortal
     before_action :set_application, only: %i[show edit update]
     before_action :ensure_editable, only: %i[edit update]
     before_action :setup_address_for_form, only: %i[new edit]
+    before_action :flag_pending_identity_review, only: %i[new edit]
     # ParamCasting concern: Automatically converts checkbox values to proper boolean types
     before_action :cast_boolean_params, only: %i[create update]
     before_action :set_paper_application_context, if: -> { Rails.env.test? }
@@ -437,10 +438,51 @@ module ConstituentPortal
         # count -- nothing is wrong with the application, nothing failed to save, and the
         # constituent did nothing incorrect.
         @pending_identity_review_message = result.error_messages.first
+        locale = pending_review_locale(address_applicant_user)
+        @submission_blocked_message = submission_gate_blocked_message(locale)
+        # Only on this path. The GET notice fires before anything is selected, so there is nothing
+        # to have lost; here the constituent did select documents and the re-render cannot give
+        # them back.
+        @pending_identity_review_documents_message = I18n.t(
+          'applications.submission_gate.refused_documents_notice', locale: locale
+        )
         return
       end
 
       result.error_messages.each { |message| @application.errors.add(:base, message) }
+    end
+
+    # Asked on GET so the form can say so before the constituent starts work. Without this the only
+    # signal arrives on the refusal -- after they have selected their income and residency
+    # documents, which the re-render cannot repopulate because no browser lets a server set the
+    # value of a file input. They would have to find and choose those files again for a submission
+    # that is going to be refused identically until staff resolve the case.
+    #
+    # This read takes no lock and is deliberately advisory. Applications::ApplicationCreator asks
+    # the same question under lock and is what actually decides; a case that opens or resolves
+    # between this GET and the submit is handled there.
+    def flag_pending_identity_review
+      applicant = address_applicant_user
+      return unless Application.identity_review_pending_for?(applicant)
+
+      locale = pending_review_locale(applicant)
+      @pending_identity_review_message = I18n.t(
+        'activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+        locale: locale
+      )
+      @submission_blocked_message = submission_gate_blocked_message(locale)
+    end
+
+    def submission_gate_blocked_message(locale)
+      I18n.t('applications.submission_gate.pending_identity_review_status', locale: locale)
+    end
+
+    # No submitted locale to prefer on a GET, so this is ApplicationForm#message_locale minus its
+    # first candidate: the applicant's effective locale, then the actor's, then the default.
+    def pending_review_locale(applicant)
+      applicant&.effective_message_locale ||
+        current_user&.effective_message_locale ||
+        I18n.default_locale
     end
 
     def show_missing_provider_info_flash(form)

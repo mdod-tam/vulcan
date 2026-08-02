@@ -31,7 +31,9 @@ export default class extends Controller {
   update() {
     this._syncConditionalRequiredControls()
 
-    const disabled = this._incomeExceedsThreshold ||
+    const hardBlockMessage = this._hardBlockMessage()
+    const disabled = hardBlockMessage !== null ||
+      this._incomeExceedsThreshold ||
       this._requiredControlsBlockSubmit() ||
       this._requiredRadioGroupBlocksSubmit() ||
       this._checkboxGroupBlocksSubmit()
@@ -47,10 +49,24 @@ export default class extends Controller {
     })
 
     if (this.hasStatusTarget) {
-      this.statusTarget.textContent = disabled
-        ? this._incompleteMessage()
-        : this._readyMessage()
+      if (hardBlockMessage !== null) {
+        this.statusTarget.textContent = hardBlockMessage
+      } else {
+        this.statusTarget.textContent = disabled
+          ? this._incompleteMessage()
+          : this._readyMessage()
+      }
     }
+  }
+
+  // A server-set reason the form may not be submitted no matter how completely it is filled in --
+  // today, an identity review the constituent cannot resolve themselves. Completeness checks
+  // cannot express this: they only ever ask whether the person supplied everything, and here they
+  // have. Returns null when there is no such block, so an empty attribute cannot silently
+  // become one.
+  _hardBlockMessage() {
+    const message = this.element.dataset.finalSubmitGateBlockedMessage
+    return message ? message : null
   }
 
   _syncConditionalRequiredControls() {

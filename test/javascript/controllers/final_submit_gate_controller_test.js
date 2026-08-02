@@ -119,6 +119,57 @@ describe("FinalSubmitGateController", () => {
     expect(status.textContent).toBe("Application is ready to submit.")
   })
 
+  function completeEveryRequirement() {
+    document.querySelector('input[name="application[self_certify_disability]"]').checked = true
+    document.querySelector('input[name="application[terms_accepted]"]').checked = true
+    document.querySelector('input[name="application[hearing_disability]"]').checked = true
+    document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
+    document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
+    document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    attachRequiredFile()
+  }
+
+  // A server-set block outranks completeness. Without it the constituent can fill the form
+  // perfectly, watch the button enable, submit, and have the server refuse -- discarding the file
+  // selections no browser lets the re-render restore.
+  test("keeps final submit disabled while a server-set block is present", () => {
+    completeEveryRequirement()
+    form.dataset.finalSubmitGateBlockedMessage = "Submitting is unavailable while we review this application."
+
+    controller.update()
+
+    expect(submitButton.disabled).toBe(true)
+    expect(submitButton.getAttribute("aria-disabled")).toBe("true")
+    expect(status.textContent).toBe("Submitting is unavailable while we review this application.")
+  })
+
+  test("an empty block message is not a block", () => {
+    completeEveryRequirement()
+    form.dataset.finalSubmitGateBlockedMessage = ""
+
+    controller.update()
+
+    expect(submitButton.disabled).toBe(false)
+    expect(status.textContent).toBe("Application is ready to submit.")
+  })
+
+  test("clearing the block restores the ordinary completeness gate", () => {
+    form.dataset.finalSubmitGateBlockedMessage = "Submitting is unavailable while we review this application."
+    controller.update()
+    expect(submitButton.disabled).toBe(true)
+
+    delete form.dataset.finalSubmitGateBlockedMessage
+    controller.update()
+    // Still disabled, but now for the ordinary reason -- nothing has been filled in yet.
+    expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe("Complete all required confirmations before submitting.")
+
+    completeEveryRequirement()
+    controller.update()
+
+    expect(submitButton.disabled).toBe(false)
+  })
+
   test("requires visible required fields before final submit", () => {
     document.querySelector('input[name="application[self_certify_disability]"]').checked = true
     document.querySelector('input[name="application[terms_accepted]"]').checked = true

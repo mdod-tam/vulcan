@@ -1,7 +1,8 @@
-<%# Shown when final submission was refused because staff still need to resolve this account's
-    duplicate review. Deliberately NOT the #error-summary block: the constituent made no error,
-    nothing failed to save, and their draft is intact. So this is role="status" with a polite live
-    region and no focus seizure, rather than an assertive alert that grabs focus. %>
+<%# Shown while staff still need to resolve this account's duplicate review -- either on arrival,
+    before any work is done, or after a submission the server refused. Deliberately NOT the
+    #error-summary block: the constituent made no error, nothing failed to save, and their draft is
+    intact. So this is role="status" with a polite live region and no focus seizure, rather than an
+    assertive alert that grabs focus. %>
 <% if @pending_identity_review_message.present? %>
   <div id="pending-review-notice"
        class="bg-blue-50 border border-blue-200 p-4 rounded mb-6 text-blue-900"
@@ -9,5 +10,15 @@
        aria-live="polite"
        aria-atomic="true">
     <p><%= @pending_identity_review_message %></p>
+    <%# Only on the refusal path. A browser cannot repopulate a file input, so the documents this
+        constituent selected are gone from the form -- and unlike their typed answers, nothing
+        re-renders them. Saying so, with the one action that actually recovers them, is the
+        difference between a lost upload and a two-click fix. Never shown on arrival, where there
+        is nothing selected yet to have lost. %>
+    <% if @pending_identity_review_documents_message.present? %>
+      <p id="pending-review-documents-notice" class="mt-2">
+        <%= @pending_identity_review_documents_message %>
+      </p>
+    <% end %>
   </div>
 <% end %>
