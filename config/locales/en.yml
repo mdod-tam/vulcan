@@ -153,7 +153,7 @@ en:
           attributes:
             base:
               medical_provider_required: "Medical provider information is required for submission."
-              pending_identity_review: "This application cannot be submitted yet because we need to review some of your account information. You can keep editing and saving your draft in the meantime. Please contact the MAT Team if you have questions."
+              pending_identity_review: "This application cannot be submitted yet because we need to review some of the information associated with this application. You can keep editing and saving the draft in the meantime. Please contact the MAT Team if you have questions."
   activity_history:
     labels:
       training_scheduled: "Training Scheduled"

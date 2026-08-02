@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class ApplicationCreatorTest < ActiveSupport::TestCase
+    include ActionDispatch::TestProcess::FixtureFile
+
     setup do
       @timestamp = Time.current.to_f.to_s.gsub('.', '')
       @user = create_user
@@ -331,6 +333,25 @@ module Applications
                                  locale: :en)
     end
 
+    # The submitted locale reaches the form straight from params with no allowlisting on the way
+    # in, and this gate is the first thing to hand it to I18n. A locale this app does not carry
+    # must therefore fall back rather than raise: an I18n::InvalidLocale here would be swallowed by
+    # the generic rescue and the typed pending-review refusal would degrade into an ordinary
+    # validation error, which the portal renders as a red "you did something wrong" summary.
+    test 'an unsupported submitted locale falls back instead of degrading the refusal' do
+      open_registration_soft_match_case_for(@user)
+      form = create_valid_form(@user)
+      form.locale = 'xx'
+      form.is_submission = true
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert result.pending_identity_review?,
+             'an unsupported locale must not turn the refusal into a generic error'
+      assert_includes result.error_messages, pending_identity_review_message
+    end
+
     test 'allows a draft save while the applicant has an open registration soft match case' do
       open_registration_soft_match_case_for(@user)
       form = create_valid_form(@user)
@@ -395,7 +416,102 @@ module Applications
       assert result.success?, result.error_messages.to_sentence
     end
 
+    # The gate reads the applicant, not the actor. For a guardian-managed application those differ,
+    # and getting it backwards fails in both directions: it would let a gated dependent's
+    # application through whenever a guardian submits it, and would block a dependent whose own
+    # identity was never in question. The two tests below pin each direction.
+    test 'gates a guardian-managed application when the dependent applicant is the case subject' do
+      create_guardian_relationship(@user, @dependent)
+      open_registration_soft_match_case_for(@dependent)
+      form = create_valid_dependent_form(@user, @dependent)
+      form.is_submission = true
+
+      result = nil
+      assert_no_difference 'Application.count' do
+        result = ApplicationCreator.call(form)
+      end
+
+      assert result.failure?, 'the dependent applicant is the case subject, so the submission must be refused'
+      assert result.pending_identity_review?
+      assert_includes result.error_messages, pending_identity_review_message
+    end
+
+    test 'does not gate a dependent application merely because the acting guardian has an open case' do
+      create_guardian_relationship(@user, @dependent)
+      open_registration_soft_match_case_for(@user) # the guardian, who is the actor and not the applicant
+      form = create_valid_dependent_form(@user, @dependent)
+      form.is_submission = true
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?,
+             "only the applicant's own open case gates: #{result.error_messages.to_sentence}"
+      assert_equal @dependent, result.application.user
+    end
+
+    # The central safety claim of this gate is that a refusal costs nothing: the refusal is raised
+    # before any write, so the applicant's account, the draft, and every durable trail around them
+    # are exactly as they were. The two tests below assert that directly rather than inferring it
+    # from statement order, once for each entrypoint.
+    #
+    # Measured against a successful submission of the same form, the discriminating counters are
+    # Application (+1), ApplicationStatusChange (+1), Event (+2), ActiveStorage::Attachment (+2),
+    # and the applicant's own attributes, which the success path really does rewrite. Notification,
+    # enqueued jobs, and deliveries all stay at zero even on success at this level -- they are
+    # asserted anyway as forward-looking guards, not as currently discriminating evidence.
+    test 'a refused create leaves no application, lifecycle, audit, notification, attachment, or delivery trace' do
+      open_registration_soft_match_case_for(@user)
+      form = create_valid_form_with_proofs(@user)
+      form.is_submission = true
+      user_before = @user.reload.attributes
+
+      result = nil
+      assert_no_difference %w[Application.count ApplicationStatusChange.count Event.count
+                              Notification.count ActiveStorage::Attachment.count] do
+        assert_no_enqueued_jobs do
+          assert_no_emails do
+            result = ApplicationCreator.call(form)
+          end
+        end
+      end
+
+      assert result.failure?
+      assert result.pending_identity_review?
+      assert_equal user_before, @user.reload.attributes,
+                   'a refused submission must not write the submitted attributes onto the applicant'
+    end
+
+    test 'a refused update leaves the stored draft and its applicant untouched' do
+      open_registration_soft_match_case_for(@user)
+      application = create_application_for(@user)
+      form = create_form_with_application(@user, application)
+      form.is_submission = true
+      application_before = application.reload.attributes
+      user_before = @user.reload.attributes
+
+      result = nil
+      assert_no_difference %w[Application.count ApplicationStatusChange.count Event.count
+                              Notification.count ActiveStorage::Attachment.count] do
+        assert_no_enqueued_jobs do
+          assert_no_emails do
+            result = ApplicationCreator.call(form)
+          end
+        end
+      end
+
+      assert result.failure?
+      assert result.pending_identity_review?
+      assert_equal application_before, application.reload.attributes,
+                   'the stored draft must not absorb any part of the refused submission'
+      assert_equal user_before, @user.reload.attributes
+    end
+
     private
+
+    def pending_identity_review_message(locale: I18n.default_locale)
+      I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+             locale: locale)
+    end
 
     def open_registration_soft_match_case_for(subject, candidate: nil, source: :registration_soft_match)
       review_case = DuplicateReviewCase.create!(
@@ -474,6 +590,14 @@ module Applications
         information_verified: true,
         medical_release_authorized: true
       )
+    end
+
+    # Carries proofs so "no attachment was created" is a real assertion rather than a vacuous one.
+    def create_valid_form_with_proofs(user)
+      form = create_valid_form(user)
+      form.residency_proof = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
+      form.income_proof = fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf')
+      form
     end
 
     def create_valid_dependent_form(guardian, dependent)

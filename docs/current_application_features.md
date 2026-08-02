@@ -27,6 +27,8 @@ draft
 | `rejected` | Application was denied. | Constituent may reapply where policy allows. |
 | `archived` | Historical record. | No active workflow. |
 
+`draft -> in_progress` has one admission rule. `Applications::ApplicationCreator` refuses final submission while the **applicant** is the subject of an open `registration_soft_match` duplicate-review case, so an account whose identity is still being sorted out cannot submit an application that bypasses the canonical record's history. The refusal happens before any write, so the draft, its audit trail, and its notifications are untouched, and drafting, editing, autosave, and draft saves all stay available while the case is open. Staff clear it by resolving the case either way. See [User Management Features §3.2](development/user_management_features.md#32-name-and-dob-review-flag) for the case model and the sources that do not gate.
+
 Auto-approval runs through `Application#reconcile_workflow_state!` when all current requirements are met:
 
 - Residency proof is approved.
@@ -109,6 +111,8 @@ A managing guardian is the adult user responsible for a dependent's application.
 | `Application.managed_by(guardian)` | Applications whose `managing_guardian_id` is the guardian. |
 
 Portal submissions use `ApplicationForm` to verify that the selected dependent belongs to the current guardian, and `Applications::ApplicationCreator` sets `managing_guardian_id` for dependent applications.
+
+The pending-review submission gate described in [Section 1](#1-application-lifecycle) follows the applicant, not the actor. A guardian-managed application is refused when the **dependent** is the subject of an open `registration_soft_match` case, and is not refused merely because the acting guardian is. The guardian still sees the refusal, so its wording names the application rather than the reader's own account.
 
 Related doc: `docs/development/guardian_relationship_system.md`.
 

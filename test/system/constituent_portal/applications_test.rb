@@ -129,15 +129,28 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_selector 'input[name="submit_application"]:not([disabled])', wait: 5
     find('input[name="submit_application"]:not([disabled])').click
 
-    assert_selector '#pending-review-notice', text: /review some of your account information/i
+    assert_selector '#pending-review-notice', text: /information associated with this application/i
     assert_equal 0, Application.where(user: @user).where.not(status: 'draft').count,
                  'an unchanged retry must be refused identically, with no side effects'
+    # Captured separately from the first refusal: "the retry is refused identically" is a claim
+    # about what the constituent sees the second time, and only an artifact of that state can show
+    # the notice did not stack, degrade into an error summary, or leave the form unusable.
+    take_evidence_screenshot('application-submission-blocked-pending-review-retry', full: true, html: true)
   end
 
-  # Companion to the test above, which exercises the update path. This one asserts up front that
-  # the rendered form still targets the collection route -- if autosave has already created a
-  # draft, the browser journey is an update and there is no in-browser create refusal to capture.
-  test 'pending identity review blocks a first-time submission before any draft exists' do
+  # Companion to the test above, which exercises the update path. This one captures the create
+  # path -- the refusal rendered through new.html.erb rather than edit.html.erb.
+  #
+  # Reaching it takes deliberate work. The autosave controller creates a draft on the first
+  # debounced change and then rewrites the form's action to the member route and appends
+  # _method=patch, so by the time a real constituent finishes filling this form their click is a
+  # PATCH. Asserting the collection action before filling is not enough: it is still true then and
+  # false by the time of the click, which is exactly how an earlier version of this test captured
+  # edit.html.erb while claiming to prove new.html.erb. The window where create is genuinely
+  # reachable is the one before the first autosave lands, so this test holds the page in that
+  # window by detaching the autosave controller, and re-asserts the collection action immediately
+  # before and after the click.
+  test 'pending identity review blocks a first-time submission through the create path' do
     fresh = create(:constituent, first_name: 'Fresh', last_name: 'Applicant',
                                  email: "fresh-#{SecureRandom.hex(3)}@example.com")
     system_test_sign_in(fresh)
@@ -149,9 +162,14 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     )
 
     visit new_constituent_portal_application_path
-    assert_equal 0, Application.where(user: fresh).count, 'precondition: no draft yet'
-    assert_selector "form[action='#{constituent_portal_applications_path}']",
-                    wait: 5
+    assert_selector "form[action='#{constituent_portal_applications_path}']", wait: 5
+    # Detach only autosave; final-submit-gate and the rest must keep running, since the click below
+    # depends on the gate actually enabling the control.
+    page.execute_script(<<~JS)
+      const form = document.querySelector('form[data-controller~="autosave"]');
+      form.dataset.controller = form.dataset.controller.split(/\\s+/)
+        .filter((name) => name !== 'autosave').join(' ');
+    JS
 
     check 'I certify that I am a resident of Maryland'
     fill_in 'Household Size', with: 3
@@ -173,13 +191,18 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'information_verified'
     check 'I authorize the release and sharing of my disability-related information as described above'
 
+    assert_equal 0, Application.where(user: fresh).count,
+                 'precondition: still no draft, so this click is a create and not an update'
+    assert_selector "form[action='#{constituent_portal_applications_path}']"
     assert_selector 'input[name="submit_application"]:not([disabled])'
     find('input[name="submit_application"]:not([disabled])').click
 
     assert_selector '#pending-review-notice'
     assert_no_selector '#error-summary'
-    assert_equal 0, Application.where(user: fresh).where.not(status: 'draft').count,
-                 'a blocked first-time submission must not create a submitted application'
+    # The re-render is new.html.erb: still the collection action, and still nothing persisted.
+    assert_selector "form[action='#{constituent_portal_applications_path}']"
+    assert_equal 0, Application.where(user: fresh).count,
+                 'a blocked first-time submission must not create an application at all'
     take_evidence_screenshot('application-create-blocked-pending-review', full: true, html: true)
   end
 

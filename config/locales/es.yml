@@ -135,7 +135,7 @@ es:
           attributes:
             base:
               medical_provider_required: "Se requiere información del profesional certificante para enviar la solicitud."
-              pending_identity_review: "Esta solicitud aún no se puede enviar porque necesitamos revisar parte de la información de su cuenta. Mientras tanto, puede seguir editando y guardando su borrador. Comuníquese con el equipo de MAT si tiene preguntas."
+              pending_identity_review: "Esta solicitud aún no se puede enviar porque necesitamos revisar parte de la información asociada con esta solicitud. Mientras tanto, puede seguir editando y guardando el borrador. Comuníquese con el equipo de MAT si tiene preguntas."
   activity_history:
     labels:
       training_scheduled: "Capacitación programada"

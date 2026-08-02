@@ -100,14 +100,27 @@ class ApplicationForm
     @target_application ||= application || Application.new
   end
 
+  # The locale to render form-owned messages in, in preference order: what was submitted, then the
+  # applicant's effective locale (which follows the guardian for guardian-contact dependents), then
+  # the actor's. Every candidate is allowlisted -- the submitted one arrives as raw params and is
+  # never validated on the way in, and a locale this app does not carry would otherwise reach
+  # I18n as an I18n::InvalidLocale rather than as a message. Callers pass this straight to
+  # +I18n.t+ and +I18n.with_locale+, so it must always be a locale those accept.
   def message_locale
-    locale.presence ||
-      applicant_user&.effective_locale ||
-      current_user&.effective_locale ||
+    supported_locale(locale) ||
+      supported_locale(applicant_user&.effective_locale) ||
+      supported_locale(current_user&.effective_locale) ||
       I18n.default_locale
   end
 
   private
+
+  def supported_locale(value)
+    candidate = value.to_s
+    return if candidate.blank?
+
+    candidate.to_sym if I18n.available_locales.include?(candidate.to_sym)
+  end
 
   # Cast boolean parameters for the given params hash
   def cast_boolean_params_for(params)

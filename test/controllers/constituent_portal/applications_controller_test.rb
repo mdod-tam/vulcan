@@ -237,8 +237,9 @@ module ConstituentPortal
 
     # PR5a blocked-response contract, situation 1: "Submit Application" on the new form while the
     # applicant is the subject of an open registration_soft_match case. Nothing persists, the
-    # constituent lands back on the form with the localized explanation in #error-summary, and the
-    # values they typed survive the refusal.
+    # constituent lands back on the form with the localized explanation in #pending-review-notice
+    # -- deliberately not #error-summary, which is the red validation block -- and the values they
+    # typed survive the refusal.
     test 'blocked submission re-renders the form with the pending-review explanation and no application' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "pending_review_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -259,6 +260,28 @@ module ConstituentPortal
                     'a pending review is not a validation error and must not render the error summary'
       # The refusal must not cost the constituent the values they typed.
       assert_select "input[name='application[household_size]'][value='3']"
+    end
+
+    # The locale that decides this message comes from params and is never allowlisted on the way
+    # in, so it is reachable by hand. An unsupported value must fall back to a locale the app
+    # carries and still produce the typed refusal: if it instead reached I18n and raised, the
+    # generic rescue would render this as an ordinary validation error and tell a constituent who
+    # did nothing wrong that they did.
+    test 'a tampered locale still renders the pending-review notice rather than a validation error' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_locale_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path,
+             params: pending_review_submission_params.merge(constituent: { locale: 'xx' })
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#pending-review-notice', text: /#{Regexp.escape(pending_review_message)}/
+      assert_select '#error-summary', false,
+                    'a forged locale must not degrade the refusal into the red error summary'
     end
 
     # PR5a blocked-response contract, situation 2: the same refusal on an existing draft. Situation
