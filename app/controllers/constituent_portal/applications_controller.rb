@@ -294,7 +294,12 @@ module ConstituentPortal
       # AddressHelper concern: Uses standardized address creation from user data
       # Flow: address_from_user(user) -> creates ApplicationDataStructures::Address object
       applicant = address_applicant_user
-      @address = address_from_user(applicant)
+      # Prefer whatever address was just submitted, falling back to the applicant's stored address.
+      # These fields render from this @address local rather than from @application, and they are
+      # deliberately excluded from filtered_application_params because they belong to the user --
+      # so without this a refused submission silently reverted the constituent's address edits. On
+      # a GET there are no address params, which makes this identical to the previous behavior.
+      @address = address_with_fallback(params[:application] || {}, applicant)
       @guardian_address = address_from_user(current_user) if applicant != current_user
       @use_guardian_address = applicant != current_user && applicant.physical_address_1.blank? && current_user.physical_address_1.present?
       @address = @guardian_address if @use_guardian_address && @guardian_address.present?
@@ -370,9 +375,16 @@ module ConstituentPortal
 
     def handle_creation_failure(result)
       @application = result.application || Application.new(filtered_application_params)
-      result.error_messages.each do |message|
-        @application.errors.add(:base, message)
-      end
+      # ApplicationCreator refuses several conditions before the application is ever populated --
+      # pending identity review, sibling eligibility, participant requalification -- and its
+      # failure result carries ApplicationForm#target_application, which for a new application is a
+      # bare Application.new. That is always truthy, so the fallback above never fires and the form
+      # would re-render empty, silently discarding everything the constituent typed. Re-apply the
+      # submitted values so a refusal costs them an explanation, not their work.
+      @application.assign_attributes(filtered_application_params) if @application.new_record?
+      setup_address_for_form
+      restore_medical_provider_from_params
+      apply_failure_messages(result)
 
       # ApplicationFormHandling concern: Handles form validation errors consistently
       # Flow: render_form_errors -> adds errors to application + calls initialize_address_and_provider_for_form + renders with proper status
@@ -381,12 +393,54 @@ module ConstituentPortal
 
     def handle_update_failure(result)
       @application = result.application
-      result.error_messages.each do |message|
-        @application.errors.add(:base, message)
-      end
+      # Mirror image of the new-application case above. Here the returned application is the real
+      # persisted draft, and a refusal raised before the application was populated leaves it
+      # holding stored values -- so the form would re-render the *old* contents and silently
+      # discard the constituent's latest edits. Re-applying the submitted values keeps the form
+      # showing what they just typed; nothing is saved, this object is only rendered.
+      @application.assign_attributes(filtered_application_params)
+      apply_failure_messages(result)
 
+      # setup_address_for_form is a before_action for :new and :edit only, so on the update path
+      # @address is nil and rendering :edit raises inside _address_fields. Every ApplicationCreator
+      # refusal on update hits that -- rebuild the form state the template needs before rendering.
+      setup_address_for_form
+      restore_medical_provider_from_params
       prepare_medical_provider_for_edit
       render :edit, status: :unprocessable_content
+    end
+
+    # A pending-review refusal is not a validation error: the constituent did nothing wrong and
+    # their draft is intact. The views render it as an informational notice instead of listing it
+    # among errors, so this exposes the reason as typed state rather than making the view match on
+    # message text.
+    # The certifying-professional fields bind to @application.medical_provider_attributes. On a
+    # refusal that attribute holds either nothing (create) or stored values (update), so without
+    # this the constituent's freshly typed provider details are dropped -- and because they are
+    # required for submission, the retry then fails validation instead of repeating the original
+    # refusal. Note the submitted shape is application[medical_provider_attributes][...], which
+    # find_param_value does not look for. Deliberate blanks are preserved as blanks.
+    def restore_medical_provider_from_params
+      submitted = params.dig(:application, :medical_provider_attributes)
+      return if submitted.blank?
+
+      provider_struct = Struct.new(:name, :phone, :fax, :email)
+      @application.medical_provider_attributes = provider_struct.new(
+        submitted[:name], submitted[:phone], submitted[:fax], submitted[:email]
+      )
+    end
+
+    def apply_failure_messages(result)
+      if result.pending_identity_review?
+        # Rendered as a notice, deliberately not added to the error list: adding it would produce a
+        # red "N errors prohibited this application from being saved" block that is wrong on every
+        # count -- nothing is wrong with the application, nothing failed to save, and the
+        # constituent did nothing incorrect.
+        @pending_identity_review_message = result.error_messages.first
+        return
+      end
+
+      result.error_messages.each { |message| @application.errors.add(:base, message) }
     end
 
     def show_missing_provider_info_flash(form)

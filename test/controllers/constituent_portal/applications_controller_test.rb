@@ -235,6 +235,76 @@ module ConstituentPortal
       assert_equal 'not_reviewed', application.residency_proof_status
     end
 
+    # PR5a blocked-response contract, situation 1: "Submit Application" on the new form while the
+    # applicant is the subject of an open registration_soft_match case. Nothing persists, the
+    # constituent lands back on the form with the localized explanation in #error-summary, and the
+    # values they typed survive the refusal.
+    test 'blocked submission re-renders the form with the pending-review explanation and no application' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_review_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: pending_review_submission_params
+      end
+
+      assert_response :unprocessable_content
+      # An informational notice, not the red error summary: the constituent made no error, and
+      # nothing failed to save.
+      assert_select '#pending-review-notice[role=?]', 'status'
+      assert_select '#pending-review-notice',
+                    text: /#{Regexp.escape(pending_review_message)}/
+      assert_select '#error-summary', false,
+                    'a pending review is not a validation error and must not render the error summary'
+      # The refusal must not cost the constituent the values they typed.
+      assert_select "input[name='application[household_size]'][value='3']"
+    end
+
+    # PR5a blocked-response contract, situation 2: the same refusal on an existing draft. Situation
+    # 1 proves nothing is created; this proves nothing is destroyed -- the stored draft survives
+    # untouched, and the form still shows the constituent's latest edits rather than reverting to
+    # the stored values.
+    test 'blocked submission on an existing draft leaves the draft intact and keeps the edits shown' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_edit_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      draft = create(:application, :draft, user: unique_user, household_size: 2)
+      open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        patch constituent_portal_application_path(draft),
+              params: pending_review_submission_params.deep_merge(
+                application: { household_size: 7 }
+              )
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#pending-review-notice'
+
+      draft.reload
+      assert_equal 'draft', draft.status, 'the refused submission must not advance the draft'
+      assert_equal 2, draft.household_size, 'the stored draft must be untouched by the refusal'
+      # ...while the form still shows what they just typed, not the reverted stored value.
+      assert_select "input[name='application[household_size]'][value='7']"
+    end
+
+    # Situation 3: the same request without the submit_application param is a draft save, which
+    # pending review never blocks.
+    test 'a draft save is not blocked while a registration soft match case is open' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_draft_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      assert_difference('Application.count', 1) do
+        post constituent_portal_applications_path,
+             params: pending_review_submission_params.except(:submit_application)
+      end
+
+      assert_equal 'draft', Application.last.status
+    end
+
     test 'should not submit application without provider info when no provider flag is posted' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "missing_provider_submit_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -948,5 +1018,46 @@ module ConstituentPortal
       assert_equal 'Bethesda', guardian.city, 'Guardian city should not be affected'
     end
 
+    private
+
+    def pending_review_message
+      I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review')
+    end
+
+    def open_soft_match_case_for(subject)
+      DuplicateReviewCase.create!(
+        source: :registration_soft_match,
+        subject_user: subject,
+        deduplication_key: SecureRandom.hex(16),
+        metadata: { 'reason_codes' => ['name_dob'] },
+        opened_at: Time.current,
+        status: :open
+      )
+    end
+
+    def pending_review_submission_params
+      {
+        application: {
+          maryland_resident: true,
+          household_size: 3,
+          annual_income: 50_000,
+          self_certify_disability: checkbox_params(true),
+          hearing_disability: checkbox_params(true),
+          vision_disability: checkbox_params(false),
+          speech_disability: checkbox_params(false),
+          mobility_disability: checkbox_params(false),
+          cognition_disability: checkbox_params(false),
+          residency_proof: @valid_image,
+          income_proof: @valid_pdf,
+          terms_accepted: checkbox_params(true),
+          information_verified: checkbox_params(true),
+          medical_release_authorized: checkbox_params(true),
+          medical_provider_attributes: {
+            name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com'
+          }
+        },
+        submit_application: 'Submit Application'
+      }
+    end
   end
 end

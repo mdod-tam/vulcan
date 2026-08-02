@@ -40,6 +40,8 @@
         <!-- Autosave status indicator -->
         <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden" role="status" aria-live="polite"></div>
 
+        <%= render "pending_review_notice" %>
+
         <% if @application.errors.any? %>
           <div id="error-summary"
                class="bg-red-50 p-4 rounded mb-6 focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -179,7 +181,10 @@
           </section>
 
           <!-- Certifying Professional Information (Nested Attributes) -->
-          <%= form.fields_for :medical_provider_attributes do |mp| %>
+          <%# fields_for does not auto-fetch a non-association attribute: without an explicit object
+              it builds the fields against nil, which is why these inputs never rendered a value --
+              on the edit page or on any re-render after a refusal. %>
+          <%= form.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
             <%= render "medical_provider_form", form: mp %>
           <% end %>
         </div>

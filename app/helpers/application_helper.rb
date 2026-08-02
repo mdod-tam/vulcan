@@ -157,4 +157,14 @@ module ApplicationHelper
   def new_proof_constituent_portal_application_path(application, **)
     constituent_portal_application_new_proof_path(application, **)
   end
+
+  # Checked state for the medical-release authorization box. It is rendered with check_box_tag
+  # rather than through a form builder, so it has no automatic binding: prefer what was just
+  # submitted, then fall back to what is stored on the application being rendered.
+  def medical_release_authorized_checked?(application)
+    submitted = params.dig(:application, :medical_release_authorized)
+    return ActiveModel::Type::Boolean.new.cast(submitted) if submitted.present?
+
+    application.present? && application.medical_release_authorized.present?
+  end
 end

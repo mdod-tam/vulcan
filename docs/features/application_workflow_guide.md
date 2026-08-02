@@ -24,7 +24,7 @@ All flows converge on **one Application record**, so every downstream service (e
 
 | Component | Purpose | Notes |
 |-----------|---------|-------|
-| **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; fires events & notifications |
+| **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; fires events & notifications. Refuses final submission while the applicant is the subject of an open `registration_soft_match` duplicate-review case; draft saves and autosave are unaffected |
 | **Applications::PaperApplicationService** | Admin data-entry path | Sets `Current.paper_context` to bypass online-only validations |
 | **Applications::EventDeduplicationService** | 1-min window, priority pick | Used by audit views, dashboards, certification timelines |
 | **NotificationService** | Email notifications | Postmark integration; uses MAILER_MAP for routing |

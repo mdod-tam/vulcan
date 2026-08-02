@@ -289,7 +289,130 @@ module Applications
       mock_service.verify
     end
 
+    # --- Pending-review submission gate (PR5a) ---------------------------------
+    #
+    # A registration soft match creates a durable review case. Its subject may sign in, draft, and
+    # autosave, but must not finally submit until staff resolves the case -- otherwise the account
+    # submits an application that bypasses the canonical record's history.
+
+    test 'blocks final submission while the applicant has an open registration soft match case' do
+      open_registration_soft_match_case_for(@user)
+      form = create_valid_form(@user)
+      form.is_submission = true
+
+      result = nil
+      assert_no_difference 'Application.count' do
+        result = ApplicationCreator.call(form)
+      end
+
+      assert result.failure?
+      assert_includes result.error_messages,
+                      I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review')
+    end
+
+    # The constituent portal never wraps requests in I18n.with_locale -- that is applied only to
+    # the public auth flows -- so resolving this message from the ambient locale would always
+    # render English and make the Spanish translation unreachable. It resolves through
+    # ApplicationForm#message_locale instead.
+    test 'the refusal is rendered in the applicant locale, not the ambient one' do
+      spanish_user = create(:constituent, locale: 'es')
+      open_registration_soft_match_case_for(spanish_user)
+      form = create_valid_form(spanish_user)
+      form.is_submission = true
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      expected = I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+                        locale: :es)
+      assert_includes result.error_messages, expected
+      assert_not_includes result.error_messages,
+                          I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+                                 locale: :en)
+    end
+
+    test 'allows a draft save while the applicant has an open registration soft match case' do
+      open_registration_soft_match_case_for(@user)
+      form = create_valid_form(@user)
+      form.is_submission = false
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?, result.error_messages.to_sentence
+      assert result.application.persisted?
+      assert_equal 'draft', result.application.status
+    end
+
+    test 'an unchanged retry repeats the same refusal and creates no duplicate draft' do
+      open_registration_soft_match_case_for(@user)
+
+      first = ApplicationCreator.call(create_valid_form(@user).tap { |f| f.is_submission = true })
+      second = nil
+      assert_no_difference 'Application.count' do
+        second = ApplicationCreator.call(create_valid_form(@user).tap { |f| f.is_submission = true })
+      end
+
+      assert first.failure?
+      assert second.failure?
+      assert_equal first.error_messages, second.error_messages
+    end
+
+    test 'does not gate the candidate account named by someone else open case' do
+      candidate = create(:constituent) # the matched account, not the case subject
+      open_registration_soft_match_case_for(@user, candidate: candidate)
+      form = create_valid_form(candidate)
+      form.is_submission = true
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?, "the candidate must not be gated merely for being matched: #{result.error_messages.to_sentence}"
+    end
+
+    test 'does not gate cases from sources other than registration soft match' do
+      open_registration_soft_match_case_for(@user, source: :portal_dependent)
+      form = create_valid_form(@user)
+      form.is_submission = true
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?, "only registration_soft_match gates submission: #{result.error_messages.to_sentence}"
+    end
+
+    test 'allows final submission once the case is resolved' do
+      review_case = open_registration_soft_match_case_for(@user)
+      review_case.update!(
+        status: :resolved_ignored,
+        resolution_determination: :keep_separate,
+        resolution_rationale: 'confirmed different people',
+        resolved_by: create(:admin),
+        resolved_at: Time.current
+      )
+      form = create_valid_form(@user)
+      form.is_submission = true
+
+      result = ApplicationCreator.call(form)
+
+      assert result.success?, result.error_messages.to_sentence
+    end
+
     private
+
+    def open_registration_soft_match_case_for(subject, candidate: nil, source: :registration_soft_match)
+      review_case = DuplicateReviewCase.create!(
+        source: source,
+        subject_user: subject,
+        deduplication_key: SecureRandom.hex(16),
+        metadata: { 'reason_codes' => ['name_dob'] },
+        opened_at: Time.current,
+        status: :open
+      )
+      if candidate
+        review_case.duplicate_review_case_candidates.create!(
+          candidate_user: candidate, match_reason: 'name_dob', snapshot: {}
+        )
+      end
+      review_case
+    end
 
     def create_user
       Users::Constituent.create!(

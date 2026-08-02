@@ -118,6 +118,8 @@ Soft duplicate handling is service-owned:
 - Portal dependent creation uses context `:portal_new_dependent` and source `:portal_dependent`.
 - Admin quick-create uses context `:admin_create` and source `:admin_create`.
 - Paper self, guardian, and dependent creation use contexts `:paper_new_self`, `:paper_new_guardian`, and `:paper_new_dependent`; all paper-created review cases use source `:paper_intake`.
+- An open `registration_soft_match` case **gates final application submission for its subject**. `Applications::ApplicationCreator` refuses it inside the locked transaction it already opens, so a blocked attempt has zero lifecycle, audit, notification, or delivery side effects and the draft is untouched. The durable open case is the authority; `needs_duplicate_review` supports badges and queries but never decides eligibility by itself.
+- The gate is deliberately narrow. Only `registration_soft_match` gates — cases from `admin_create`, `portal_dependent`, and `paper_intake` are staff review work rather than submission blockers, and the candidate account named by someone else's case is never gated merely for being matched. Sign-in, draft creation, editing, autosave, and draft saves all stay available while review is pending.
 
 The flag is the real boolean column `users.needs_duplicate_review`, with default `false`.
 

@@ -1,0 +1,13 @@
+<%# Shown when final submission was refused because staff still need to resolve this account's
+    duplicate review. Deliberately NOT the #error-summary block: the constituent made no error,
+    nothing failed to save, and their draft is intact. So this is role="status" with a polite live
+    region and no focus seizure, rather than an assertive alert that grabs focus. %>
+<% if @pending_identity_review_message.present? %>
+  <div id="pending-review-notice"
+       class="bg-blue-50 border border-blue-200 p-4 rounded mb-6 text-blue-900"
+       role="status"
+       aria-live="polite"
+       aria-atomic="true">
+    <p><%= @pending_identity_review_message %></p>
+  </div>
+<% end %>

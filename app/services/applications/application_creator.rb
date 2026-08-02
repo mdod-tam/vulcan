@@ -6,16 +6,29 @@ module Applications
   class ApplicationCreator < BaseService
     class IneligibleApplicantError < StandardError; end
 
+    # A refusal that is not the constituent's fault: staff must still resolve their duplicate
+    # review before final submission. Typed separately so callers can present it as an
+    # informational notice instead of a validation error, without matching on message text.
+    class PendingIdentityReviewError < IneligibleApplicantError; end
+
     attr_reader :target_application
 
     # Result object that provides success/failure status and application access
     class Result
       attr_reader :application, :errors
 
-      def initialize(success:, application: nil, errors: [])
+      def initialize(success:, application: nil, errors: [], pending_identity_review: false)
         @success = success
         @application = application
         @errors = Array(errors)
+        @pending_identity_review = pending_identity_review
+      end
+
+      # True when the only reason this failed is that staff must still resolve the applicant's
+      # duplicate review. Callers surface that as an informational notice rather than a validation
+      # error: the constituent did nothing wrong and their draft is intact.
+      def pending_identity_review?
+        @pending_identity_review
       end
 
       def success?
@@ -60,6 +73,9 @@ module Applications
       end
 
       success_result
+    rescue PendingIdentityReviewError => e
+      @errors << e.message
+      failure_result(@errors, pending_identity_review: true)
     rescue IneligibleApplicantError => e
       @errors << e.message
       failure_result(@errors)
@@ -108,11 +124,50 @@ module Applications
 
       return unless @form.is_submission
 
+      raise PendingIdentityReviewError, pending_identity_review_message if pending_identity_review?(@applicant_user)
+
       error = Application.sibling_application_eligibility_error(
         locked_inventory,
         target_application: target_application
       )
       raise IneligibleApplicantError, error if error
+    end
+
+    # A registration soft match creates a durable review case, and its subject may sign in, build a
+    # draft, and autosave -- but may not finally submit until staff either keeps the accounts
+    # separate or merges them. Without this the duplicate-review workflow is advisory: the account
+    # can submit an application that bypasses the canonical record's history while the case is open.
+    #
+    # The open case is the authority, not +needs_duplicate_review+. That flag is a denormalized
+    # badge/query aid and can be cleared independently of the case it describes.
+    #
+    # Only +registration_soft_match+ gates. Cases from the other live sources (+admin_create+,
+    # +portal_dependent+, +paper_intake+) are staff review work rather than submission blockers, and
+    # the candidate account named by someone else's case is never gated merely for being matched.
+    #
+    # No additional lock is taken here. This transaction already holds the applicant's +User+ row
+    # through +lock_for_merge_integrity!+, and both writers that can resolve a case --
+    # +DuplicateReviewCases::ResolutionService+ and +Users::DuplicateMergeService+ -- acquire that
+    # same row first. A resolution therefore cannot be mid-commit while this reads: it either
+    # committed before this lock was granted, so the terminal state is visible, or it waits behind
+    # this transaction.
+    def pending_identity_review?(applicant)
+      return false if applicant.blank?
+
+      DuplicateReviewCase.open_cases
+                         .for_subject(applicant)
+                         .exists?(source: :registration_soft_match)
+    end
+
+    # Resolved through the form's message_locale rather than ambient I18n.locale. The constituent
+    # portal never wraps requests in I18n.with_locale -- that is only applied to the public auth
+    # flows -- so relying on the ambient locale would always render the default and the Spanish
+    # translation would be unreachable. message_locale prefers the submitted locale, then the
+    # applicant's effective locale (which follows the guardian for guardian-contact dependents),
+    # then the current user's.
+    def pending_identity_review_message
+      I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+             locale: @form.message_locale)
     end
 
     def initial_applicant_id
@@ -367,8 +422,9 @@ module Applications
       Result.new(success: true, application: target_application)
     end
 
-    def failure_result(errors)
-      Result.new(success: false, application: target_application, errors: errors)
+    def failure_result(errors, pending_identity_review: false)
+      Result.new(success: false, application: target_application, errors: errors,
+                 pending_identity_review: pending_identity_review)
     end
   end
 end

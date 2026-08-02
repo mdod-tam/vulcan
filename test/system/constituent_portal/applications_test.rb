@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
+require Rails.root.join('test/support/system_test_evidence')
 
 class ApplicationsSystemTest < ApplicationSystemTestCase
+  include SystemTestEvidence
+
   setup do
     # Force a clean browser session for each test
     Capybara.reset_sessions!
@@ -66,6 +69,162 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
 
     # Verify success
     assert_success_message('Application submitted successfully', wait: 5)
+  end
+
+  # PR5a: the subject of an open registration soft-match case may draft and save, but final
+  # submission is refused until staff resolve the case. Visible evidence that the refusal reads as
+  # an informational notice rather than a validation error, and that the form keeps what was typed.
+  #
+  # Every control below is required to reach the gate. final_submit_gate keeps "Submit Application"
+  # disabled until the form is complete, and ApplicationsController#create returns early on an
+  # invalid form -- so an incomplete fill means the click silently does nothing and the request is
+  # never made. The medical release is checked by label: its id is not its param name.
+  test 'pending identity review blocks final submission with an informational notice' do
+    system_test_sign_in(@user)
+    assert_text 'Dashboard', wait: 10
+    DuplicateReviewCase.create!(
+      source: :registration_soft_match, subject_user: @user,
+      deduplication_key: SecureRandom.hex(16), metadata: { 'reason_codes' => ['name_dob'] },
+      opened_at: Time.current, status: :open
+    )
+
+    visit new_constituent_portal_application_path
+    check 'I certify that I am a resident of Maryland'
+    fill_in 'Household Size', with: 3
+    fill_in 'Annual Income', with: 60_000
+    check 'I certify that I have a disability that affects my ability to access telecommunications services'
+    check 'Hearing'
+    find('input[name*="physical_address_1"]').set('456 Oak Ave')
+    find('input[name*="city"]').set('Annapolis')
+    select 'Maryland', from: 'State'
+    find('input[name*="zip_code"]').set('21401')
+    within '#medical-provider-fields' do
+      find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Jane Smith')
+      find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
+      find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
+    end
+    attach_file 'application_income_proof', @valid_pdf, make_visible: true
+    attach_file 'application_residency_proof', @valid_image, make_visible: true
+    check 'terms_accepted'
+    check 'information_verified'
+    check 'I authorize the release and sharing of my disability-related information as described above'
+
+    # Proves the gate actually enabled the control, so a silent no-op click cannot pass this test.
+    assert_selector 'input[name="submit_application"]:not([disabled])'
+    find('input[name="submit_application"]:not([disabled])').click
+
+    assert_selector '#pending-review-notice'
+    assert_no_selector '#error-summary'
+    # The refusal must not cost the constituent their work.
+    assert_field 'Household Size', with: '3'
+    assert_field 'Annual Income', with: '60000'
+    assert_equal 0, Application.where(user: @user).where.not(status: 'draft').count,
+                 'a blocked submission must not create or advance a submitted application'
+    take_evidence_screenshot('application-submission-blocked-pending-review', full: true, html: true)
+
+    # The contract stated behaviourally. Asserting individual field values is too weak: this form
+    # renders from four independent sources, and a refusal that drops any required one leaves the
+    # submit gate disabled -- so the constituent cannot retry at all. This asserts the property
+    # that actually matters, which per-field assertions missed.
+    assert_selector 'input[name="submit_application"]:not([disabled])', wait: 5
+    find('input[name="submit_application"]:not([disabled])').click
+
+    assert_selector '#pending-review-notice', text: /review some of your account information/i
+    assert_equal 0, Application.where(user: @user).where.not(status: 'draft').count,
+                 'an unchanged retry must be refused identically, with no side effects'
+  end
+
+  # Companion to the test above, which exercises the update path. This one asserts up front that
+  # the rendered form still targets the collection route -- if autosave has already created a
+  # draft, the browser journey is an update and there is no in-browser create refusal to capture.
+  test 'pending identity review blocks a first-time submission before any draft exists' do
+    fresh = create(:constituent, first_name: 'Fresh', last_name: 'Applicant',
+                                 email: "fresh-#{SecureRandom.hex(3)}@example.com")
+    system_test_sign_in(fresh)
+    assert_text 'Dashboard', wait: 10
+    DuplicateReviewCase.create!(
+      source: :registration_soft_match, subject_user: fresh,
+      deduplication_key: SecureRandom.hex(16), metadata: { 'reason_codes' => ['name_dob'] },
+      opened_at: Time.current, status: :open
+    )
+
+    visit new_constituent_portal_application_path
+    assert_equal 0, Application.where(user: fresh).count, 'precondition: no draft yet'
+    assert_selector "form[action='#{constituent_portal_applications_path}']",
+                    wait: 5
+
+    check 'I certify that I am a resident of Maryland'
+    fill_in 'Household Size', with: 3
+    fill_in 'Annual Income', with: 60_000
+    check 'I certify that I have a disability that affects my ability to access telecommunications services'
+    check 'Hearing'
+    find('input[name*="physical_address_1"]').set('456 Oak Ave')
+    find('input[name*="city"]').set('Annapolis')
+    select 'Maryland', from: 'State'
+    find('input[name*="zip_code"]').set('21401')
+    within '#medical-provider-fields' do
+      find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Jane Smith')
+      find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
+      find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
+    end
+    attach_file 'application_income_proof', @valid_pdf, make_visible: true
+    attach_file 'application_residency_proof', @valid_image, make_visible: true
+    check 'terms_accepted'
+    check 'information_verified'
+    check 'I authorize the release and sharing of my disability-related information as described above'
+
+    assert_selector 'input[name="submit_application"]:not([disabled])'
+    find('input[name="submit_application"]:not([disabled])').click
+
+    assert_selector '#pending-review-notice'
+    assert_no_selector '#error-summary'
+    assert_equal 0, Application.where(user: fresh).where.not(status: 'draft').count,
+                 'a blocked first-time submission must not create a submitted application'
+    take_evidence_screenshot('application-create-blocked-pending-review', full: true, html: true)
+  end
+
+  # The refusal resolves through ApplicationForm#message_locale rather than ambient I18n.locale --
+  # the constituent portal never wraps requests in I18n.with_locale, so an ambient lookup would
+  # always render the default and this Spanish string would be unreachable. The surrounding form
+  # labels are still hardcoded English; that is a known gap in this surface, not a regression here.
+  test 'a Spanish-locale constituent sees the refusal in Spanish' do
+    spanish = create(:constituent, first_name: 'Sofia', last_name: 'Aplicante', locale: 'es',
+                                   email: "sofia-#{SecureRandom.hex(3)}@example.com")
+    system_test_sign_in(spanish)
+    assert_text 'Dashboard', wait: 10
+    DuplicateReviewCase.create!(
+      source: :registration_soft_match, subject_user: spanish,
+      deduplication_key: SecureRandom.hex(16), metadata: { 'reason_codes' => ['name_dob'] },
+      opened_at: Time.current, status: :open
+    )
+
+    visit new_constituent_portal_application_path
+    check 'I certify that I am a resident of Maryland'
+    fill_in 'Household Size', with: 3
+    fill_in 'Annual Income', with: 60_000
+    check 'I certify that I have a disability that affects my ability to access telecommunications services'
+    check 'Hearing'
+    find('input[name*="physical_address_1"]').set('456 Oak Ave')
+    find('input[name*="city"]').set('Annapolis')
+    select 'Maryland', from: 'State'
+    find('input[name*="zip_code"]').set('21401')
+    within '#medical-provider-fields' do
+      find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Jane Smith')
+      find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
+      find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
+    end
+    attach_file 'application_income_proof', @valid_pdf, make_visible: true
+    attach_file 'application_residency_proof', @valid_image, make_visible: true
+    check 'terms_accepted'
+    check 'information_verified'
+    check 'I authorize the release and sharing of my disability-related information as described above'
+
+    assert_selector 'input[name="submit_application"]:not([disabled])'
+    find('input[name="submit_application"]:not([disabled])').click
+
+    assert_selector '#pending-review-notice',
+                    text: /#{Regexp.escape(I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review', locale: :es))}/
+    take_evidence_screenshot('application-submission-blocked-pending-review-es', full: true, html: true)
   end
 
   test 'shows validation errors for invalid submission' do

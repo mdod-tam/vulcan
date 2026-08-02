@@ -91,7 +91,13 @@
     
     <!-- Required Authorization Checkbox -->
     <div class="flex items-start pt-3 mt-3 border-t border-blue-200">
-      <%= check_box_tag "application[medical_release_authorized]", "1", false,
+<%# The checked state was hardcoded false, so this box could never render checked. On any
+    re-render -- validation failure, pending review, any refusal -- the constituent's
+    authorization was silently dropped, and because the box is `required`, final_submit_gate then
+    kept "Submit Application" disabled and made an unchanged retry impossible. Bind it to the
+    submitted value, falling back to what is stored on the application. %>
+      <%= check_box_tag "application[medical_release_authorized]", "1",
+          medical_release_authorized_checked?(@application),
           class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
           required: true,
           "aria-required": "true",
