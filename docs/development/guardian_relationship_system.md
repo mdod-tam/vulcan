@@ -76,8 +76,16 @@ dependent.effective_email  # prefers dependent_email, falls back to guardian's e
 dependent.effective_phone  # prefers dependent_phone, falls back to guardian's phone
 dependent.effective_phone_type  # handles phone type logic for dependents
 dependent.effective_communication_preference  # uses guardian's preference if dependent
+dependent.effective_locale  # see below
+dependent.effective_message_locale  # see below
 dependent.guardian_for_contact  # returns primary guardian for contact purposes
 ```
+
+**Locale resolution.** `effective_locale` follows the contact path rather than the record: a dependent whose `effective_email` is the guardian's email is reached *through* the guardian, so the guardian's `locale` is the one that matters. A dependent with their own `dependent_email` keeps their own `locale`. Getting this backwards writes messages in a language the actual reader does not use.
+
+`effective_message_locale` narrows that to something `I18n` will accept, returning `nil` when the user has no locale set or carries a value the app no longer ships. Stored locales are **not** validated against `I18n.available_locales`, so any caller passing one to `I18n.t` or `I18n.with_locale` must go through this method and supply its own fallback — an unsupported value otherwise raises `I18n::InvalidLocale` rather than rendering a message. `ApplicationForm#message_locale` composes it: the submitted locale (allowlisted the same way) first, then the applicant's, then the actor's, then `I18n.default_locale`.
+
+For a **persisted** application the form takes its applicant from `application.user` — the owner the actor was already authorized to open — never from a submitted `user_id`. The edit form posts no such field, so deriving it from params made every update resolve to the acting adult and rendered refusals in the guardian's language on a dependent's draft.
 
 These effective-contact helpers are for communication, display, and notification routing. They are not login identifiers. Public portal auth and recovery require an email-backed account (`real_email?` via `User.find_by_login_identifier`); phone is an alternate identifier only when the same user also has `real_phone?`.
 
@@ -137,6 +145,10 @@ scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct
 7. The whole review bundle commits or rolls back together: the dependent `User`, the `GuardianRelationship`, and — for a soft match — the `DuplicateReviewCase` with source `:portal_dependent`, its `DuplicateReviewCaseCandidate` rows, the subject's `needs_duplicate_review` flag, and the `duplicate_review_case_opened` audit event. No compensating delete is used; a failure at any step leaves nothing behind
 8. A participant deleted between duplicate detection and the lock fails closed with the ordinary retry response rather than a server error
 9. Application creation happens separately when the dependent applies
+
+**The `:portal_dependent` review case opened in step 7 does not gate that later application.** It is staff review work, not a submission blocker. What gates is an open case with source `:registration_soft_match` whose **subject is the applicant** — so a dependent who registered their own account and was soft-matched cannot have an application finally submitted for them until staff resolve it, whether the guardian or the dependent presses the button. The acting guardian's own open case never gates a dependent's application, and a dependent named only as a *candidate* on someone else's case is never gated for being matched. Draft creation, editing, autosave, and draft saves stay available throughout. See [User Management Features §3.2](user_management_features.md#32-name-and-dob-review-flag).
+
+Because the gate follows the applicant rather than the actor, the refusal copy is owner-neutral: a guardian reading it is not the account under review.
 
 ### 4.2 · Admin Paper Application
 

@@ -157,4 +157,31 @@ module ApplicationHelper
   def new_proof_constituent_portal_application_path(application, **)
     constituent_portal_application_new_proof_path(application, **)
   end
+
+  # Checked state for the medical-release authorization box. It is rendered with check_box_tag
+  # rather than through a form builder, so it has no automatic binding: prefer what was just
+  # submitted, then fall back to what is stored on the application being rendered.
+  def medical_release_authorized_checked?(application)
+    submitted = params.dig(:application, :medical_release_authorized)
+    return ActiveModel::Type::Boolean.new.cast(submitted) if submitted.present?
+
+    application.present? && application.medical_release_authorized.present?
+  end
+
+  # Checked state for one disability-type box on a re-render.
+  #
+  # These were compared against the string "1", but cast_boolean_params has already turned the
+  # submitted values into real booleans by the time the view runs -- so the comparison never
+  # matched and the form fell through to the applicant's *stored* selections. A refusal therefore
+  # reversed a deliberate edit: unchecking Hearing and checking Vision came back as Hearing.
+  #
+  # Presence of the key is what decides, not truthiness, because `false` is a real answer. Rails
+  # emits a hidden "0" alongside each checkbox, so an unchecked box is present-and-false rather
+  # than absent, and only a request that never carried the field at all falls back to stored state.
+  def disability_checked?(field, applicant)
+    submitted = params.dig(:application, field)
+    return ActiveModel::Type::Boolean.new.cast(submitted) unless submitted.nil?
+
+    applicant.present? && applicant.public_send(field).present?
+  end
 end

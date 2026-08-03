@@ -235,6 +235,352 @@ module ConstituentPortal
       assert_equal 'not_reviewed', application.residency_proof_status
     end
 
+    # PR5a blocked-response contract, situation 1: "Submit Application" on the new form while the
+    # applicant is the subject of an open registration_soft_match case. Nothing persists, the
+    # constituent lands back on the form with the localized explanation in #pending-review-notice
+    # -- deliberately not #error-summary, which is the red validation block -- and the values they
+    # typed survive the refusal.
+    test 'blocked submission re-renders the form with the pending-review explanation and no application' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_review_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: pending_review_submission_params
+      end
+
+      assert_response :unprocessable_content
+      # An informational notice, not the red error summary: the constituent made no error, and
+      # nothing failed to save.
+      assert_select '#pending-review-notice[role=?]', 'status'
+      assert_select '#pending-review-notice',
+                    text: /#{Regexp.escape(pending_review_message)}/
+      assert_select '#error-summary', false,
+                    'a pending review is not a validation error and must not render the error summary'
+      # The refusal must not cost the constituent the values they typed.
+      assert_select "input[name='application[household_size]'][value='3']"
+      # The one thing the re-render genuinely cannot give back is the file selections, so the
+      # notice has to say so and name the action that recovers them.
+      assert_select '#pending-review-documents-notice',
+                    text: /#{Regexp.escape(refused_documents_message)}/
+    end
+
+    # The same notice on arrival must not claim documents were lost: nothing has been selected yet.
+    test 'the arrival notice does not mention lost documents' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "arrival_docs_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      get new_constituent_portal_application_path
+
+      assert_response :success
+      assert_select '#pending-review-notice'
+      assert_select '#pending-review-documents-notice', false,
+                    'nothing has been selected on arrival, so nothing can have been lost'
+    end
+
+    # The recovery the reviewer asked about, end to end: once staff resolve the case the form stops
+    # warning, stops blocking, and the same submission that was refused now goes through.
+    test 'resolving the review unblocks the form and lets the submission through' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "resolved_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      review_case = open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: pending_review_submission_params
+      end
+      assert_select '#pending-review-notice'
+
+      review_case.update!(
+        status: :resolved_ignored,
+        resolution_determination: :keep_separate,
+        resolution_rationale: 'confirmed different people',
+        resolved_by: create(:admin),
+        resolved_at: Time.current
+      )
+
+      get new_constituent_portal_application_path
+      assert_response :success
+      assert_select '#pending-review-notice', false, 'a resolved case must stop warning'
+      assert_select 'form[data-final-submit-gate-blocked-message]', false,
+                    'a resolved case must stop blocking the submit control'
+
+      assert_difference('Application.count', 1) do
+        post constituent_portal_applications_path, params: pending_review_submission_params
+      end
+      assert_equal 'in_progress', Application.last.status,
+                   'the previously refused submission must now be accepted'
+    end
+
+    # The locale that decides this message comes from params and is never allowlisted on the way
+    # in, so it is reachable by hand. An unsupported value must fall back to a locale the app
+    # carries and still produce the typed refusal: if it instead reached I18n and raised, the
+    # generic rescue would render this as an ordinary validation error and tell a constituent who
+    # did nothing wrong that they did.
+    test 'a tampered locale still renders the pending-review notice rather than a validation error' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_locale_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path,
+             params: pending_review_submission_params.merge(constituent: { locale: 'xx' })
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#pending-review-notice', text: /#{Regexp.escape(pending_review_message)}/
+      assert_select '#error-summary', false,
+                    'a forged locale must not degrade the refusal into the red error summary'
+    end
+
+    # The refusal alone is too late to be the only signal. It arrives after the constituent has
+    # selected their income and residency documents, and no browser lets a re-render restore a file
+    # input -- so they would have to find and choose those files again, for a submission that will
+    # be refused identically until staff resolve the case. The form therefore asks on GET and says
+    # so before any of that work happens, and hands the submit gate a hard block so the control
+    # never becomes pressable. Draft saving is untouched.
+    test 'the new form warns and blocks submission before any upload while identity review is pending' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_new_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      get new_constituent_portal_application_path
+
+      assert_response :success
+      assert_select '#pending-review-notice', text: /#{Regexp.escape(pending_review_message)}/
+      assert_select 'form[data-final-submit-gate-blocked-message=?]', submission_gate_blocked_message
+      assert_select "input[name='save_draft']"
+      assert_select "input[name='save_draft'][disabled]", false,
+                    'draft saving must stay reachable: only final submission is gated'
+    end
+
+    test 'the new form carries no block when no identity review is pending' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "no_pending_new_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+
+      get new_constituent_portal_application_path
+
+      assert_response :success
+      assert_select '#pending-review-notice', false
+      assert_select 'form[data-final-submit-gate-blocked-message]', false
+    end
+
+    test 'the edit form warns and blocks submission while identity review is pending' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_edit_get_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      draft = create(:application, :draft, user: unique_user)
+      open_soft_match_case_for(unique_user)
+
+      get edit_constituent_portal_application_path(draft)
+
+      assert_response :success
+      assert_select '#pending-review-notice'
+      assert_select 'form[data-final-submit-gate-blocked-message=?]', submission_gate_blocked_message
+    end
+
+    # The gate follows the applicant, so a guardian gets the warning for a dependent's open case --
+    # and does not get it for their own, since their identity is not what the application turns on.
+    test 'a guardian editing a gated dependent application sees the block' do
+      guardian = create(:constituent, :with_disabilities,
+                        email: "guardian_gate_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      dependent = create(:constituent, :with_disabilities,
+                         email: "dependent_gate_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'parent')
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(dependent)
+
+      get edit_constituent_portal_application_path(draft)
+
+      assert_response :success
+      assert_select 'form[data-final-submit-gate-blocked-message=?]', submission_gate_blocked_message
+    end
+
+    test 'a guardian own open case does not block a dependent application' do
+      guardian = create(:constituent, :with_disabilities,
+                        email: "guardian_ungated_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      dependent = create(:constituent, :with_disabilities,
+                         email: "dependent_ungated_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'parent')
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(guardian)
+
+      get edit_constituent_portal_application_path(draft)
+
+      assert_response :success
+      assert_select '#pending-review-notice', false
+      assert_select 'form[data-final-submit-gate-blocked-message]', false
+    end
+
+    # A refused dependent submission must stay the dependent's. The refusal re-render had no
+    # applicant context -- setup_applicant_context runs only on :new, and reads a top-level
+    # params[:user_id] the form does not post -- so the page told the guardian the application was
+    # theirs and dropped the hidden application[user_id]. Acting on that page attributed the
+    # dependent's answers and uploads to the guardian.
+    test 'a refused dependent submission keeps the application scoped to the dependent' do
+      guardian, dependent = guardian_and_dependent
+      sign_in_for_integration_test(guardian)
+      open_soft_match_case_for(dependent)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path,
+             params: pending_review_submission_params.deep_merge(
+               application: { user_id: dependent.id, use_guardian_address: '1' }
+             )
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#error-summary', false,
+                    'a form-only attribute must not reach Application and surface as a raw error'
+      assert_select "input[name='application[user_id]'][value='#{dependent.id}']", 1,
+                    'the refusal must keep the hidden dependent id, or a retry saves to the guardian'
+      assert_select 'p', text: /This application is for\s+#{Regexp.escape(dependent.full_name)}/,
+                         count: 1
+      assert_no_match(/unknown attribute/i, response.body)
+    end
+
+    # The id is never trusted as posted: it is resolved through current_user.dependents, so someone
+    # else's dependent cannot be named on the page or attached to the retry.
+    test 'a forged dependent id in a refused submission falls back to a self application' do
+      guardian, = guardian_and_dependent
+      stranger = create(:constituent, :with_disabilities,
+                        email: "stranger_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(guardian)
+      open_soft_match_case_for(guardian)
+
+      post constituent_portal_applications_path,
+           params: pending_review_submission_params.deep_merge(
+             application: { user_id: stranger.id }
+           )
+
+      assert_response :unprocessable_content
+      assert_select "input[name='application[user_id]'][value='#{stranger.id}']", false,
+                    'an unverified dependent id must not be echoed back into the form'
+      assert_no_match(/#{Regexp.escape(stranger.full_name)}/, response.body)
+    end
+
+    # cast_boolean_params turns these into real booleans before the view runs, so the old `== "1"`
+    # comparison never matched and the refusal restored stored selections over submitted ones.
+    test 'a refused submission keeps the submitted disability selections in both directions' do
+      unique_user = create(:constituent, email: "disability_#{Time.now.to_i}_#{rand(1000)}@example.com",
+                                         hearing_disability: true, vision_disability: false)
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      post constituent_portal_applications_path,
+           params: pending_review_submission_params.deep_merge(
+             application: { hearing_disability: checkbox_params(false),
+                            vision_disability: checkbox_params(true) }
+           )
+
+      assert_response :unprocessable_content
+      # false -> the stored `true` must not come back
+      assert_select "input[name='application[hearing_disability]'][checked]", false,
+                    'unchecking a stored disability must survive the refusal'
+      # true -> the submitted selection must be kept even though stored is false
+      assert_select "input[name='application[vision_disability]'][checked]", 1,
+                    'a newly checked disability must survive the refusal'
+    end
+
+    # Derived from persisted address blankness, the checkbox came back opposite to what was chosen,
+    # so a retry could hide or replace the dependent address just entered.
+    test 'a refused dependent submission keeps the submitted guardian-address choice' do
+      guardian, dependent = guardian_and_dependent
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(dependent)
+
+      patch constituent_portal_application_path(draft),
+            params: pending_review_submission_params.deep_merge(
+              application: { use_guardian_address: '0', physical_address_1: '9 Dependent Ln',
+                             city: 'Rockville', state: 'MD', zip_code: '20850' }
+            )
+
+      assert_response :unprocessable_content
+      assert_select 'input#use_guardian_address_checkbox[checked]', false,
+                    'an unchecked guardian-address box must not come back checked'
+      assert_select "input[name='application[physical_address_1]'][value='9 Dependent Ln']", 1
+    end
+
+    # A refused update must speak the applicant's language, not the actor's. The edit form posts no
+    # application[user_id], so resolving the form's applicant from the submitted id made every
+    # update resolve to the acting guardian -- and this page then said one thing on GET (the
+    # dependent's Spanish, via the persisted application) and another on the POST refusal (the
+    # guardian's English). The dependent here carries their own contact, so their locale is their
+    # own; a guardian-contact dependent deliberately follows the guardian instead.
+    test 'a refused update on a Spanish dependent draft renders in the dependent locale' do
+      guardian, dependent = guardian_and_dependent
+      guardian.update!(locale: 'en')
+      dependent.update!(locale: 'es', dependent_email: "own_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(dependent)
+
+      patch constituent_portal_application_path(draft), params: pending_review_submission_params
+
+      assert_response :unprocessable_content
+      spanish = I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+                       locale: :es)
+      assert_select '#pending-review-notice', text: /#{Regexp.escape(spanish)}/
+      assert_no_match(/#{Regexp.escape(pending_review_message)}/, response.body,
+                      'the English copy must not appear alongside the Spanish refusal')
+      assert_equal 'draft', draft.reload.status
+    end
+
+    # PR5a blocked-response contract, situation 2: the same refusal on an existing draft. Situation
+    # 1 proves nothing is created; this proves nothing is destroyed -- the stored draft survives
+    # untouched, and the form still shows the constituent's latest edits rather than reverting to
+    # the stored values.
+    test 'blocked submission on an existing draft leaves the draft intact and keeps the edits shown' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_edit_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      draft = create(:application, :draft, user: unique_user, household_size: 2)
+      open_soft_match_case_for(unique_user)
+
+      assert_no_difference('Application.count') do
+        patch constituent_portal_application_path(draft),
+              params: pending_review_submission_params.deep_merge(
+                application: { household_size: 7 }
+              )
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#pending-review-notice'
+
+      draft.reload
+      assert_equal 'draft', draft.status, 'the refused submission must not advance the draft'
+      assert_equal 2, draft.household_size, 'the stored draft must be untouched by the refusal'
+      # ...while the form still shows what they just typed, not the reverted stored value.
+      assert_select "input[name='application[household_size]'][value='7']"
+    end
+
+    # Situation 3: the same request without the submit_application param is a draft save, which
+    # pending review never blocks.
+    test 'a draft save is not blocked while a registration soft match case is open' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "pending_draft_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      open_soft_match_case_for(unique_user)
+
+      assert_difference('Application.count', 1) do
+        post constituent_portal_applications_path,
+             params: pending_review_submission_params.except(:submit_application)
+      end
+
+      assert_equal 'draft', Application.last.status
+    end
+
     test 'should not submit application without provider info when no provider flag is posted' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "missing_provider_submit_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -948,5 +1294,65 @@ module ConstituentPortal
       assert_equal 'Bethesda', guardian.city, 'Guardian city should not be affected'
     end
 
+    private
+
+    def pending_review_message
+      I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review')
+    end
+
+    def submission_gate_blocked_message
+      I18n.t('applications.submission_gate.pending_identity_review_status')
+    end
+
+    def refused_documents_message
+      I18n.t('applications.submission_gate.refused_documents_notice')
+    end
+
+    def guardian_and_dependent
+      stamp = "#{Time.now.to_i}_#{rand(10_000)}"
+      guardian = create(:constituent, :with_disabilities, first_name: 'Gina', last_name: 'Guardian',
+                                                          email: "guardian_#{stamp}@example.com")
+      dependent = create(:constituent, :with_disabilities, first_name: 'Dana', last_name: 'Dependent',
+                                                           email: "dependent_#{stamp}@example.com")
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'parent')
+      [guardian, dependent]
+    end
+
+    def open_soft_match_case_for(subject)
+      DuplicateReviewCase.create!(
+        source: :registration_soft_match,
+        subject_user: subject,
+        deduplication_key: SecureRandom.hex(16),
+        metadata: { 'reason_codes' => ['name_dob'] },
+        opened_at: Time.current,
+        status: :open
+      )
+    end
+
+    def pending_review_submission_params
+      {
+        application: {
+          maryland_resident: true,
+          household_size: 3,
+          annual_income: 50_000,
+          self_certify_disability: checkbox_params(true),
+          hearing_disability: checkbox_params(true),
+          vision_disability: checkbox_params(false),
+          speech_disability: checkbox_params(false),
+          mobility_disability: checkbox_params(false),
+          cognition_disability: checkbox_params(false),
+          residency_proof: @valid_image,
+          income_proof: @valid_pdf,
+          terms_accepted: checkbox_params(true),
+          information_verified: checkbox_params(true),
+          medical_release_authorized: checkbox_params(true),
+          medical_provider_attributes: {
+            name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com'
+          }
+        },
+        submit_application: 'Submit Application'
+      }
+    end
   end
 end

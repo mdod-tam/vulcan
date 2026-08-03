@@ -31,6 +31,7 @@ module ConstituentPortal
     before_action :set_application, only: %i[show edit update]
     before_action :ensure_editable, only: %i[edit update]
     before_action :setup_address_for_form, only: %i[new edit]
+    before_action :flag_pending_identity_review, only: %i[new edit]
     # ParamCasting concern: Automatically converts checkbox values to proper boolean types
     before_action :cast_boolean_params, only: %i[create update]
     before_action :set_paper_application_context, if: -> { Rails.env.test? }
@@ -294,9 +295,14 @@ module ConstituentPortal
       # AddressHelper concern: Uses standardized address creation from user data
       # Flow: address_from_user(user) -> creates ApplicationDataStructures::Address object
       applicant = address_applicant_user
-      @address = address_from_user(applicant)
+      # Prefer whatever address was just submitted, falling back to the applicant's stored address.
+      # These fields render from this @address local rather than from @application, and they are
+      # deliberately excluded from filtered_application_params because they belong to the user --
+      # so without this a refused submission silently reverted the constituent's address edits. On
+      # a GET there are no address params, which makes this identical to the previous behavior.
+      @address = address_with_fallback(params[:application] || {}, applicant)
       @guardian_address = address_from_user(current_user) if applicant != current_user
-      @use_guardian_address = applicant != current_user && applicant.physical_address_1.blank? && current_user.physical_address_1.present?
+      @use_guardian_address = use_guardian_address_choice(applicant)
       @address = @guardian_address if @use_guardian_address && @guardian_address.present?
     end
 
@@ -370,9 +376,17 @@ module ConstituentPortal
 
     def handle_creation_failure(result)
       @application = result.application || Application.new(filtered_application_params)
-      result.error_messages.each do |message|
-        @application.errors.add(:base, message)
-      end
+      # ApplicationCreator refuses several conditions before the application is ever populated --
+      # pending identity review, sibling eligibility, participant requalification -- and its
+      # failure result carries ApplicationForm#target_application, which for a new application is a
+      # bare Application.new. That is always truthy, so the fallback above never fires and the form
+      # would re-render empty, silently discarding everything the constituent typed. Re-apply the
+      # submitted values so a refusal costs them an explanation, not their work.
+      @application.assign_attributes(filtered_application_params) if @application.new_record?
+      restore_applicant_context_from_params
+      setup_address_for_form
+      restore_medical_provider_from_params
+      apply_failure_messages(result)
 
       # ApplicationFormHandling concern: Handles form validation errors consistently
       # Flow: render_form_errors -> adds errors to application + calls initialize_address_and_provider_for_form + renders with proper status
@@ -381,12 +395,142 @@ module ConstituentPortal
 
     def handle_update_failure(result)
       @application = result.application
-      result.error_messages.each do |message|
-        @application.errors.add(:base, message)
-      end
+      # Mirror image of the new-application case above. Here the returned application is the real
+      # persisted draft, and a refusal raised before the application was populated leaves it
+      # holding stored values -- so the form would re-render the *old* contents and silently
+      # discard the constituent's latest edits. Re-applying the submitted values keeps the form
+      # showing what they just typed; nothing is saved, this object is only rendered.
+      @application.assign_attributes(filtered_application_params)
+      apply_failure_messages(result)
 
+      # setup_address_for_form is a before_action for :new and :edit only, so on the update path
+      # @address is nil and rendering :edit raises inside _address_fields. Every ApplicationCreator
+      # refusal on update hits that -- rebuild the form state the template needs before rendering.
+      setup_address_for_form
+      restore_medical_provider_from_params
       prepare_medical_provider_for_edit
       render :edit, status: :unprocessable_content
+    end
+
+    # A pending-review refusal is not a validation error: the constituent did nothing wrong and
+    # their draft is intact. The views render it as an informational notice instead of listing it
+    # among errors, so this exposes the reason as typed state rather than making the view match on
+    # message text.
+    # The certifying-professional fields bind to @application.medical_provider_attributes. On a
+    # refusal that attribute holds either nothing (create) or stored values (update), so without
+    # this the constituent's freshly typed provider details are dropped -- and because they are
+    # required for submission, the retry then fails validation instead of repeating the original
+    # refusal. Note the submitted shape is application[medical_provider_attributes][...], which
+    # find_param_value does not look for. Deliberate blanks are preserved as blanks.
+    # setup_applicant_context runs only on :new, and it reads the top-level params[:user_id] that
+    # the "apply for a dependent" link carries. A refusal re-render has neither: the form posts the
+    # dependent as application[user_id], so without this @applicant_type and @selected_dependent_name
+    # come back nil, new.html.erb takes its self-applicant branch, and the page tells a guardian the
+    # application is for them -- while dropping the hidden application[user_id] that made it the
+    # dependent's. Acting on the page from there attributes the dependent's answers and uploads to
+    # the guardian.
+    #
+    # The id is never trusted as submitted. It is resolved through current_user.dependents, so a
+    # forged or stale id resolves to nothing and the form falls back to a self application rather
+    # than naming someone else's dependent.
+    # Whether the "same address as guardian" box renders checked. The submitted choice wins when
+    # the request carried one: deriving it purely from stored blankness meant a refused dependent
+    # update re-rendered the opposite of what the constituent chose -- hiding an address they had
+    # just typed, or showing the guardian's in its place -- and a retry would then submit that.
+    # Only a request with no such field (a GET) falls back to inferring it from stored state.
+    def use_guardian_address_choice(applicant)
+      return false if applicant == current_user
+
+      submitted = params.dig(:application, :use_guardian_address)
+      return ActiveModel::Type::Boolean.new.cast(submitted) unless submitted.nil?
+
+      applicant.physical_address_1.blank? && current_user.physical_address_1.present?
+    end
+
+    def restore_applicant_context_from_params
+      submitted_id = params.dig(:application, :user_id).presence || params[:user_id].presence
+      dependent = current_user.dependents.find_by(id: submitted_id) if submitted_id.present?
+
+      if dependent.nil?
+        @applicant_type = 'self'
+        return
+      end
+
+      @applicant_type = 'dependent'
+      @selected_dependent_id = dependent.id
+      @selected_dependent_name = dependent.full_name
+      @applicant_user = dependent
+      @application.user_id = dependent.id
+      @application.managing_guardian_id = current_user.id
+    end
+
+    def restore_medical_provider_from_params
+      submitted = params.dig(:application, :medical_provider_attributes)
+      return if submitted.blank?
+
+      provider_struct = Struct.new(:name, :phone, :fax, :email)
+      @application.medical_provider_attributes = provider_struct.new(
+        submitted[:name], submitted[:phone], submitted[:fax], submitted[:email]
+      )
+    end
+
+    def apply_failure_messages(result)
+      if result.pending_identity_review?
+        # Rendered as a notice, deliberately not added to the error list: adding it would produce a
+        # red "N errors prohibited this application from being saved" block that is wrong on every
+        # count -- nothing is wrong with the application, nothing failed to save, and the
+        # constituent did nothing incorrect.
+        @pending_identity_review_message = result.error_messages.first
+        # The whole refusal resolves through the form's own message_locale, which is what produced
+        # the message above. Recomputing it from stored applicant state instead would disagree with
+        # that message whenever the same request also changed the language preference -- the
+        # headline would render in the newly chosen locale and these two supplements in the old one,
+        # on one screen. pending_review_locale stays for the GET notice, where there is no form.
+        locale = @form&.message_locale || pending_review_locale(address_applicant_user)
+        @submission_blocked_message = submission_gate_blocked_message(locale)
+        # Only on this path. The GET notice fires before anything is selected, so there is nothing
+        # to have lost; here the constituent did select documents and the re-render cannot give
+        # them back.
+        @pending_identity_review_documents_message = I18n.t(
+          'applications.submission_gate.refused_documents_notice', locale: locale
+        )
+        return
+      end
+
+      result.error_messages.each { |message| @application.errors.add(:base, message) }
+    end
+
+    # Asked on GET so the form can say so before the constituent starts work. Without this the only
+    # signal arrives on the refusal -- after they have selected their income and residency
+    # documents, which the re-render cannot repopulate because no browser lets a server set the
+    # value of a file input. They would have to find and choose those files again for a submission
+    # that is going to be refused identically until staff resolve the case.
+    #
+    # This read takes no lock and is deliberately advisory. Applications::ApplicationCreator asks
+    # the same question under lock and is what actually decides; a case that opens or resolves
+    # between this GET and the submit is handled there.
+    def flag_pending_identity_review
+      applicant = address_applicant_user
+      return unless Application.identity_review_pending_for?(applicant)
+
+      locale = pending_review_locale(applicant)
+      @pending_identity_review_message = I18n.t(
+        'activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+        locale: locale
+      )
+      @submission_blocked_message = submission_gate_blocked_message(locale)
+    end
+
+    def submission_gate_blocked_message(locale)
+      I18n.t('applications.submission_gate.pending_identity_review_status', locale: locale)
+    end
+
+    # No submitted locale to prefer on a GET, so this is ApplicationForm#message_locale minus its
+    # first candidate: the applicant's effective locale, then the actor's, then the default.
+    def pending_review_locale(applicant)
+      applicant&.effective_message_locale ||
+        current_user&.effective_message_locale ||
+        I18n.default_locale
     end
 
     def show_missing_provider_info_flash(form)
@@ -455,6 +599,11 @@ module ConstituentPortal
     def filtered_application_params
       application_params.except(
         :medical_provider_attributes,
+        # Form-only: the guardian-address checkbox drives which address block renders, and is not
+        # an Application column. Assigning it raises ActiveRecord::UnknownAttributeError, which on
+        # a refusal was caught by the generic rescue and re-rendered the form stripped of its
+        # dependent context -- see restore_applicant_context_from_params.
+        :use_guardian_address,
         :hearing_disability,
         :vision_disability,
         :speech_disability,

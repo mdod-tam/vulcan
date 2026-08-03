@@ -85,8 +85,17 @@ class ApplicationForm
     end
   end
 
-  # Check if this is for a dependent user
+  # Check if this is for a dependent user.
+  #
+  # For a persisted application the applicant is already settled: it is whoever owns the row the
+  # actor was authorized to open, and it cannot be changed by this form. Re-deriving it from a
+  # submitted user_id made the answer depend on a field the edit form does not post at all, so
+  # every update resolved to the acting adult -- which is how a refusal on a Spanish dependent's
+  # draft rendered in the English guardian's locale while the GET notice on that same page rendered
+  # in Spanish. The submitted id only decides for a new application, where there is no owner yet.
   def for_dependent?
+    return application.user_id.present? && application.user_id != current_user&.id if application&.persisted?
+
     user_id.present? && user_id != current_user&.id
   end
 
@@ -100,14 +109,29 @@ class ApplicationForm
     @target_application ||= application || Application.new
   end
 
+  # The locale to render form-owned messages in, in preference order: what was submitted, then the
+  # applicant's effective locale (which follows the guardian for guardian-contact dependents), then
+  # the actor's. Every candidate is allowlisted -- the submitted one arrives as raw params and is
+  # never validated on the way in, and a locale this app does not carry would otherwise reach
+  # I18n as an I18n::InvalidLocale rather than as a message. Callers pass this straight to
+  # +I18n.t+ and +I18n.with_locale+, so it must always be a locale those accept.
   def message_locale
-    locale.presence ||
-      applicant_user&.effective_locale ||
-      current_user&.effective_locale ||
+    supported_locale(locale) ||
+      applicant_user&.effective_message_locale ||
+      current_user&.effective_message_locale ||
       I18n.default_locale
   end
 
   private
+
+  # Only the submitted value needs this; the user-owned candidates allowlist themselves through
+  # User#effective_message_locale.
+  def supported_locale(value)
+    candidate = value.to_s
+    return if candidate.blank?
+
+    candidate.to_sym if I18n.available_locales.include?(candidate.to_sym)
+  end
 
   # Cast boolean parameters for the given params hash
   def cast_boolean_params_for(params)
@@ -235,6 +259,11 @@ class ApplicationForm
   end
 
   def determine_applicant_user
+    # The authorized owner of a persisted row, never a submitted id. ensure_editable has already
+    # decided this actor may open this application; nothing in the request can move it to someone
+    # else, and no hidden field has to be trusted (or added) to keep it right.
+    return application.user if application&.persisted?
+
     return current_user unless for_dependent?
 
     dependent = current_user.dependents.find_by(id: user_id)

@@ -118,6 +118,10 @@ Soft duplicate handling is service-owned:
 - Portal dependent creation uses context `:portal_new_dependent` and source `:portal_dependent`.
 - Admin quick-create uses context `:admin_create` and source `:admin_create`.
 - Paper self, guardian, and dependent creation use contexts `:paper_new_self`, `:paper_new_guardian`, and `:paper_new_dependent`; all paper-created review cases use source `:paper_intake`.
+- An open `registration_soft_match` case **gates final application submission for its subject**. `Applications::ApplicationCreator` refuses it inside the locked transaction it already opens, so a blocked attempt has zero lifecycle, audit, notification, or delivery side effects and the draft is untouched. The durable open case is the authority; `needs_duplicate_review` supports badges and queries but never decides eligibility by itself.
+- The rule itself lives on `Application.identity_review_pending_for?`. `ApplicationCreator` asks it under lock and decides; `ConstituentPortal::ApplicationsController` asks it on `new`/`edit` so the form can render the notice and hand the submit gate a hard block (`data-final-submit-gate-blocked-message`) before any document is selected. Draft saving stays enabled in that state.
+- The subject means the **applicant**, not the submitting actor. A guardian-managed application is refused when the dependent is the case subject, and is not refused merely because the acting guardian is. The refusal copy is therefore owner-neutral: the guardian reading it is not the account under review.
+- The gate is deliberately narrow. Only `registration_soft_match` gates — cases from `admin_create`, `portal_dependent`, `paper_intake`, and `support_claim` are staff review work rather than submission blockers, and the candidate account named by someone else's case is never gated merely for being matched. Sign-in, draft creation, editing, autosave, and draft saves all stay available while review is pending.
 
 The flag is the real boolean column `users.needs_duplicate_review`, with default `false`.
 

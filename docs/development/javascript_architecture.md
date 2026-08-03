@@ -116,11 +116,24 @@ const overLimit = exceeds({
 | `BaseFormController` | `app/javascript/controllers/base/form_controller.js` | Shared async form submit helper for controllers that opt into `railsRequest`; handles loading state, local status text, field errors, cancellation, and validation hooks. |
 | `autosave` | `app/javascript/controllers/forms/autosave_controller.js` | Saves individual fields on blur through the constituent autosave route. Updates form URLs after a new draft is created. |
 | `income-validation` | `app/javascript/controllers/forms/income_validation_controller.js` | Calculates FPL threshold state, owns the warning container, updates the income field group styling, and dispatches validation events. |
-| `final-submit-gate` | `app/javascript/controllers/forms/final_submit_gate_controller.js` | Gates constituent final submit buttons from required checkboxes, required visible non-file fields, checkbox groups, and income validation events. |
+| `final-submit-gate` | `app/javascript/controllers/forms/final_submit_gate_controller.js` | Gates constituent final submit buttons from required checkboxes, required visible non-file fields, checkbox groups, and income validation events. Also honors a server-set hard block — see below. |
 | `paper-application` | `app/javascript/controllers/forms/paper_application_controller.js` | Gates admin paper submit from income state, existing-adult verification, required attestations, visible required fields, required proof radio groups, checkbox groups, and medical provider requirements. Also populates the income-rejection dialog. |
 | `optional-phone-type` | `app/javascript/controllers/forms/optional_phone_type_controller.js` | Reveals the self-registration phone-type radio group only when a phone number is present and keeps radio disabled, required, and ARIA state aligned with the visible field. |
 | `applicant-type` | `app/javascript/controllers/users/applicant_type_controller.js` | Shows the adult or dependent-with-guardian path and dispatches `applicant-type:applicantTypeChanged`. |
 | `dependent-fields` | `app/javascript/controllers/forms/dependent_fields_controller.js` | Shows dependent fields and copies guardian address/email/phone values when requested. |
+
+### Server-set hard block on `final-submit-gate`
+
+`data-final-submit-gate-blocked-message` on the form element is a **hard block**: the gate keeps every `submitButton` target disabled no matter how completely the form is filled in, and announces the attribute's text through the `status` target instead of the usual incomplete/ready message.
+
+The contract:
+
+- **Presence decides, not truthiness of the form.** Completeness checks only ever ask whether the person supplied everything; a hard block expresses a reason they cannot act on at all. An empty attribute is *not* a block, so a nil-rendered value cannot silently disable the control.
+- **The message is rendered server-side and localized there.** The gate never composes user-facing text — it is shared with the constituent portal, where an English string built in JavaScript would bypass the view's own localization.
+- **Only final submission is gated.** Draft-save controls are separate submit buttons and are not `submitButton` targets, so they stay live.
+- **It is not the authority.** The server re-checks under lock and refuses independently; the attribute exists so a constituent is not invited to do work — notably selecting file uploads, which no re-render can restore — that a refusal would discard.
+
+Current producer: `ConstituentPortal::ApplicationsController` sets `@submission_blocked_message` when the applicant is the subject of an open `registration_soft_match` duplicate-review case, and `new.html.erb` / `edit.html.erb` pass it into the form's data hash.
 
 `BaseFormController#collectFormData` returns a flat object. It supports array fields named `field[]`, but it does not parse Rails nested parameter names into nested objects. A field named `guardian_attributes[name]` remains the key `"guardian_attributes[name]"`.
 

@@ -17,6 +17,11 @@
    end
    if @application.for_dependent?
      edit_form_data[:controller] = "dependent-fields #{edit_form_data[:controller]}"
+   end
+   # See the matching comment in new.html.erb: present only while an identity review is pending,
+   # and read by the submit gate as a hard block.
+   if @submission_blocked_message.present?
+     edit_form_data[:final_submit_gate_blocked_message] = @submission_blocked_message
    end %>
  <%= form_with(model: [:constituent_portal, @application], 
               local: true, 
@@ -27,6 +32,8 @@
    <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden"></div>
    <div class="bg-white shadow sm:rounded-lg">
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
+
+    <%= render "pending_review_notice" %>
 
     <% if @application.errors.any? %>
       <div id="error-summary"
@@ -176,7 +183,7 @@
              <% disabilities.each do |disability| %>
                <div class="flex items-center">
                  <%= f.check_box "#{disability}_disability",
-                     checked: params.dig(:application, "#{disability}_disability") == "1" || applicant_user.send("#{disability}_disability"),
+                     checked: disability_checked?("#{disability}_disability", applicant_user),
                      class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                      "aria-describedby": "#{disability}-description" %>
                  <%= f.label "#{disability}_disability", disability.to_s.titleize,
@@ -191,7 +198,10 @@
        </section>
 
        <!-- Certifying Professional Information -->
-       <%= f.fields_for :medical_provider_attributes do |mp| %>
+       <%# fields_for does not auto-fetch a non-association attribute: without an explicit object
+           it builds the fields against nil, which is why these inputs never rendered a value --
+           on the edit page or on any re-render after a refusal. %>
+       <%= f.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
          <%= render "medical_provider_form", form: mp %>
        <% end %>
 

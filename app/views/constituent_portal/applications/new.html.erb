@@ -30,6 +30,13 @@
         end
         if @applicant_type == "dependent"
           new_app_form_data[:controller] = "dependent-fields #{new_app_form_data[:controller]}"
+        end
+        # Present only while an identity review is pending. The submit gate treats it as a hard
+        # block and announces it, so the constituent is never invited to select documents that a
+        # refusal would discard. Localized here rather than in the gate, which must not compose a
+        # user-facing string in JavaScript.
+        if @submission_blocked_message.present?
+          new_app_form_data[:final_submit_gate_blocked_message] = @submission_blocked_message
         end %>
       <%= form_with(model: [:constituent_portal, @application],
           local: true,
@@ -39,6 +46,8 @@
 
         <!-- Autosave status indicator -->
         <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden" role="status" aria-live="polite"></div>
+
+        <%= render "pending_review_notice" %>
 
         <% if @application.errors.any? %>
           <div id="error-summary"
@@ -164,7 +173,7 @@
                 <% disabilities.each do |disability| %>
                   <div class="flex items-center">
                     <%= form.check_box "#{disability}_disability",
-                        checked: params.dig(:application, "#{disability}_disability") == "1" || (@applicant_user || current_user).send("#{disability}_disability"),
+                        checked: disability_checked?("#{disability}_disability", @applicant_user || current_user),
                         class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                         "aria-describedby": "#{disability}-description" %>
                     <%= form.label "#{disability}_disability", disability.to_s.titleize,
@@ -179,7 +188,10 @@
           </section>
 
           <!-- Certifying Professional Information (Nested Attributes) -->
-          <%= form.fields_for :medical_provider_attributes do |mp| %>
+          <%# fields_for does not auto-fetch a non-association attribute: without an explicit object
+              it builds the fields against nil, which is why these inputs never rendered a value --
+              on the edit page or on any re-render after a refusal. %>
+          <%= form.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
             <%= render "medical_provider_form", form: mp %>
           <% end %>
         </div>

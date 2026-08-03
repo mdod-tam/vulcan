@@ -153,6 +153,7 @@ en:
           attributes:
             base:
               medical_provider_required: "Medical provider information is required for submission."
+              pending_identity_review: "This application cannot be submitted yet because we need to review some of the information associated with this application. You can keep editing and saving the draft in the meantime. Please contact the MAT Team if you have questions."
   activity_history:
     labels:
       training_scheduled: "Training Scheduled"
@@ -176,6 +177,14 @@ en:
       followup_scheduled_for: "Follow-up scheduled for"
       reason: "Reason: %{reason}"
   applications:
+    submission_gate:
+      # Announced by the submit-gate live region when the control is held disabled. Short on
+      # purpose: the full explanation is already on screen in the pending-review notice, and this
+      # only has to say why the button cannot be pressed.
+      pending_identity_review_status: "Submitting is unavailable while we review information associated with this application. You can still save your draft."
+      # Shown only after a refused submission, never on arrival. The typed answers survive the
+      # re-render; file selections cannot, and a draft save is what actually attaches them.
+      refused_documents_notice: "Any documents you had selected were not attached. Choose them again and use \"Save Application\" to keep them with your draft."
     proof_resubmission_requests:
       create:
         failure: "Secure proof upload request could not be sent."
