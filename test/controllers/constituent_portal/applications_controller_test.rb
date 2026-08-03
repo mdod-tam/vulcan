@@ -512,6 +512,31 @@ module ConstituentPortal
       assert_select "input[name='application[physical_address_1]'][value='9 Dependent Ln']", 1
     end
 
+    # A refused update must speak the applicant's language, not the actor's. The edit form posts no
+    # application[user_id], so resolving the form's applicant from the submitted id made every
+    # update resolve to the acting guardian -- and this page then said one thing on GET (the
+    # dependent's Spanish, via the persisted application) and another on the POST refusal (the
+    # guardian's English). The dependent here carries their own contact, so their locale is their
+    # own; a guardian-contact dependent deliberately follows the guardian instead.
+    test 'a refused update on a Spanish dependent draft renders in the dependent locale' do
+      guardian, dependent = guardian_and_dependent
+      guardian.update!(locale: 'en')
+      dependent.update!(locale: 'es', dependent_email: "own_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(guardian)
+      draft = create(:application, :draft, user: dependent, managing_guardian: guardian)
+      open_soft_match_case_for(dependent)
+
+      patch constituent_portal_application_path(draft), params: pending_review_submission_params
+
+      assert_response :unprocessable_content
+      spanish = I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
+                       locale: :es)
+      assert_select '#pending-review-notice', text: /#{Regexp.escape(spanish)}/
+      assert_no_match(/#{Regexp.escape(pending_review_message)}/, response.body,
+                      'the English copy must not appear alongside the Spanish refusal')
+      assert_equal 'draft', draft.reload.status
+    end
+
     # PR5a blocked-response contract, situation 2: the same refusal on an existing draft. Situation
     # 1 proves nothing is created; this proves nothing is destroyed -- the stored draft survives
     # untouched, and the form still shows the constituent's latest edits rather than reverting to

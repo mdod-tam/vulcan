@@ -121,10 +121,36 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     I18n.t('applications.submission_gate.pending_identity_review_status', locale: locale)
   end
 
+  # The submit gate is what holds the control disabled, so a JavaScript error on these pages would
+  # not fail any assertion above -- it would silently stop the gate from running while the
+  # screenshot still looked plausible. Subscribe before navigating so "the gate ran" is an
+  # observation rather than an inference.
+  #
+  # Cuprite (the default driver here) streams console events to a subscription and has no Selenium
+  # -style log buffer to read afterwards, so this must be installed before the first visit. Flunks
+  # rather than skips when neither mechanism is available: a driver that stops exposing console
+  # output must not quietly turn this into a pass.
+  def collect_javascript_errors
+    errors = []
+    flunk 'console subscription unavailable, so JavaScript health is unverified' unless page.driver.respond_to?(:browser) && page.driver.browser.respond_to?(:on)
+
+    page.driver.browser.on(:console) do |message|
+      next unless message.respond_to?(:type) && message.type == :error
+
+      errors << message.text
+    end
+    errors
+  end
+
+  def assert_no_javascript_errors(errors, context)
+    assert_empty errors, "JavaScript errors present at #{context}"
+  end
+
   test 'a pending identity review warns on arrival and holds final submission disabled' do
     system_test_sign_in(@user)
     assert_text 'Dashboard', wait: 10
     open_registration_soft_match_case_for(@user)
+    js_errors = collect_javascript_errors
 
     visit new_constituent_portal_application_path
 
@@ -139,6 +165,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     # to say why rather than leaving a silently dead button.
     assert_selector 'input[name="submit_application"][disabled]'
     assert_selector '#portal-submit-gate-status', text: submission_gate_blocked_message, visible: :all
+    assert_no_javascript_errors(js_errors, 'the blocked new form')
     take_evidence_screenshot('application-new-blocked-pending-review', full: true, html: true)
 
     # Draft saving is deliberately untouched: the constituent keeps their work and can come back to
@@ -155,12 +182,14 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_text 'Dashboard', wait: 10
     draft = create(:application, :draft, user: @user, household_size: 2)
     open_registration_soft_match_case_for(@user)
+    js_errors = collect_javascript_errors
 
     visit edit_constituent_portal_application_path(draft)
 
     assert_selector '#pending-review-notice', text: /information associated with this application/i
     assert_no_selector '#error-summary'
     assert_selector 'input[name="submit_application"][disabled]'
+    assert_no_javascript_errors(js_errors, 'the blocked edit form')
     take_evidence_screenshot('application-edit-blocked-pending-review', full: true, html: true)
 
     assert_equal 'draft', draft.reload.status
@@ -176,6 +205,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     system_test_sign_in(spanish)
     assert_text 'Dashboard', wait: 10
     open_registration_soft_match_case_for(spanish)
+    js_errors = collect_javascript_errors
 
     visit new_constituent_portal_application_path
 
@@ -184,6 +214,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_selector 'input[name="submit_application"][disabled]'
     assert_selector '#portal-submit-gate-status',
                     text: submission_gate_blocked_message(locale: :es), visible: :all
+    assert_no_javascript_errors(js_errors, 'the Spanish blocked form')
     take_evidence_screenshot('application-new-blocked-pending-review-es', full: true, html: true)
   end
 
@@ -196,6 +227,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     system_test_sign_in(@user)
     assert_text 'Dashboard', wait: 10
 
+    js_errors = collect_javascript_errors
     visit new_constituent_portal_application_path(user_id: @dependent.id)
     assert_text "New Application for #{@dependent.full_name}", wait: 10
     page.execute_script(<<~JS)
@@ -220,6 +252,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_no_selector '#error-summary'
     assert_equal 0, Application.where(user: @user).count,
                  'nothing may be attributed to the guardian'
+    assert_no_javascript_errors(js_errors, 'the dependent refusal')
     take_evidence_screenshot('application-dependent-refused-pending-review', full: true, html: true)
   end
 
@@ -239,6 +272,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     system_test_sign_in(fresh)
     assert_text 'Dashboard', wait: 10
 
+    js_errors = collect_javascript_errors
     visit new_constituent_portal_application_path
     assert_no_selector '#pending-review-notice'
     assert_selector "form[action='#{constituent_portal_applications_path}']", wait: 5
@@ -269,6 +303,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_selector 'input[name="submit_application"][disabled]'
     assert_equal 0, Application.where(user: fresh).count,
                  'a refused first-time submission must not create an application at all'
+    assert_no_javascript_errors(js_errors, 'the create refusal')
     take_evidence_screenshot('application-create-refused-pending-review', full: true, html: true)
   end
 

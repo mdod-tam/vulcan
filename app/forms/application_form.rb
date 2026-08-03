@@ -85,8 +85,17 @@ class ApplicationForm
     end
   end
 
-  # Check if this is for a dependent user
+  # Check if this is for a dependent user.
+  #
+  # For a persisted application the applicant is already settled: it is whoever owns the row the
+  # actor was authorized to open, and it cannot be changed by this form. Re-deriving it from a
+  # submitted user_id made the answer depend on a field the edit form does not post at all, so
+  # every update resolved to the acting adult -- which is how a refusal on a Spanish dependent's
+  # draft rendered in the English guardian's locale while the GET notice on that same page rendered
+  # in Spanish. The submitted id only decides for a new application, where there is no owner yet.
   def for_dependent?
+    return application.user_id.present? && application.user_id != current_user&.id if application&.persisted?
+
     user_id.present? && user_id != current_user&.id
   end
 
@@ -250,6 +259,11 @@ class ApplicationForm
   end
 
   def determine_applicant_user
+    # The authorized owner of a persisted row, never a submitted id. ensure_editable has already
+    # decided this actor may open this application; nothing in the request can move it to someone
+    # else, and no hidden field has to be trusted (or added) to keep it right.
+    return application.user if application&.persisted?
+
     return current_user unless for_dependent?
 
     dependent = current_user.dependents.find_by(id: user_id)

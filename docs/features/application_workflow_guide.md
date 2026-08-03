@@ -24,7 +24,7 @@ All flows converge on **one Application record**, so every downstream service (e
 
 | Component | Purpose | Notes |
 |-----------|---------|-------|
-| **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; fires events & notifications. Refuses final submission while the applicant is the subject of an open `registration_soft_match` duplicate-review case; draft saves and autosave are unaffected |
+| **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; writes the application, its status history, and audit events. It sends **no** notifications and enqueues no delivery of its own — recipient messaging is triggered by later workflow steps, and its tests assert a zero notification delta. Refuses final submission while the applicant is the subject of an open `registration_soft_match` duplicate-review case; draft saves and autosave are unaffected |
 | **Applications::PaperApplicationService** | Admin data-entry path | Sets `Current.paper_context` to bypass online-only validations |
 | **Applications::EventDeduplicationService** | 1-min window, priority pick | Used by audit views, dashboards, certification timelines |
 | **NotificationService** | Email notifications | Postmark integration; uses MAILER_MAP for routing |
@@ -42,7 +42,7 @@ All flows converge on **one Application record**, so every downstream service (e
 2. **Form-based application** with autosave functionality.  
 3. **Autosave**: UI changes trigger `app/javascript/controllers/forms/autosave_controller.js` which calls the backend `Applications::AutosaveService` via `constituent_portal/applications_controller#autosave_field`. This flow saves individual fields (excluding file inputs), returns validation errors inline, and updates the form action/URLs when a new draft `Application` is created.  
 4. `Applications::ApplicationCreator` service. The pipeline below is the **successful** path; every step after the eligibility gate is skipped entirely on a refusal:
-   * Uses `ApplicationForm` for validation → **locks the participants and evaluates eligibility** (requalification, the sibling/waiting-period policy, and — for a final submission — the identity-review gate) → updates user attributes → creates/updates Application → attaches file uploads → logs events via `AuditEventService` + sends notifications via `NotificationService`.
+   * Uses `ApplicationForm` for validation → **locks the participants and evaluates eligibility** (requalification, the sibling/waiting-period policy, and — for a final submission — the identity-review gate) → updates user attributes → creates/updates Application → attaches file uploads → logs events via `Applications::EventService`.
    * The gate deliberately sits before the first mutation, so a refused submission leaves no application, lifecycle change, attachment, audit event, notification, or queued delivery behind, and the applicant's own attributes are untouched. See [Current Application Features §1](../current_application_features.md#1-application-lifecycle).
 
 ### 2.2 Paper (Admin)
