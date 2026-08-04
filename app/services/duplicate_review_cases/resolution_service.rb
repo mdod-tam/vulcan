@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 module DuplicateReviewCases
-  # Resolves an open duplicate review case without moving any data: approve, ignore,
-  # or keep-separate. Every resolution records the admin actor, the identity/linking
-  # determination, and a required rationale, then clears the subject review flag when
-  # no other open case remains. Same-person merges are handled by Users::DuplicateMergeService.
+  # Resolves an open duplicate review case without moving any data. There is exactly one such
+  # outcome: staff decided the records are different people. It records the admin actor, that fixed
+  # determination, and a required rationale, then clears the subject review flag when no other open
+  # case remains. Same-person merges are handled by Users::DuplicateMergeService.
   class ResolutionService < BaseService
     class StaleCaseError < StandardError; end
 
@@ -14,34 +14,48 @@ module DuplicateReviewCases
       keep_separate: :resolved_ignored
     }.freeze
 
-    # Determinations that describe an *undecided* case and therefore may not terminate it.
+    # The only determination this service may record, and it is server-owned rather than selected.
     #
-    # Every ACTION maps to a resolved status, and resolving releases the PR5a submission gate and
-    # clears the subject's `needs_duplicate_review` flag -- which also removes the case from the
-    # admin flagged list, the review-count badge, and the row/badge highlights. So recording "we
-    # still need more information" was closing the case, letting the subject submit, and hiding
-    # the case from the staff who needed to come back to it.
+    # Resolving a case is not a neutral bookkeeping act. It recomputes two *independent* effects
+    # from the cases that remain open:
     #
-    # This restates a product decision that already existed: staff who need more information leave
-    # the case open. An open case in the queue *is* that record; the rationale field belongs to
-    # resolutions.
+    # - the PR5a submission gate is released when no open `registration_soft_match` case remains
+    #   for the subject (the gate filters on that source);
+    # - `needs_duplicate_review` is cleared when no open case of *any* source remains, which also
+    #   removes the subject from the admin flagged list, the review-count badge, and the row/badge
+    #   highlights.
     #
-    # Deliberately narrow. Three other pairings are still unconstrained and under review --
-    # `same_person_confirmed` recorded without performing the merge it implies,
-    # `fraud_or_security_review`, and `authorized_relationship_confirmed`. Each needs its own
-    # answer to two separate questions (is it terminal, and if so does it release the gate), and
-    # guessing here would be worse than the gap.
-    NON_TERMINAL_DETERMINATIONS = %w[needs_more_information].freeze
+    # Neither is automatic on resolution, and they can diverge: a subject with another open case of
+    # a different source keeps the flag while the gate releases. So only a *completed identity
+    # decision* may close a case, and "these are different people" is the only such decision that
+    # does not move data.
+    #
+    # The rest of the matrix is deliberately unreachable from here:
+    #
+    # - `same_person_confirmed` means two records are one identity. Closing without consolidating
+    #   would release submission while knowingly keeping the duplicate, so it is reserved to
+    #   Users::DuplicateMergeService and written atomically with the merge itself. If the merge
+    #   cannot complete, the case stays open.
+    # - `needs_more_information` and `fraud_or_security_review` are not decisions at all. The
+    #   duplicate-review queue is the only durable queue that exists; closing either would remove
+    #   the work item *and* its staff visibility at the moment the risk materializes.
+    # - `authorized_relationship_confirmed` needs server-verifiable evidence, and there is nowhere
+    #   to verify it against yet: this service receives no selected candidate, and
+    #   `guardian_relationships` has no active/revoked state.
+    #
+    # This is an allowlist of one, not a denylist. A denylist fails open for anything not yet
+    # listed, which is how a determination nobody had triaged could terminate a case.
+    NON_MERGE_DETERMINATION = 'keep_separate'
 
-    NON_TERMINAL_DETERMINATION_MESSAGE =
-      'A case that still needs more information stays open. Leave it unresolved instead of recording a resolution.'
-
-    def initialize(duplicate_review_case:, actor:, action:, determination:, rationale:, reason_codes: [])
+    # `determination` is deliberately not a parameter. It was a staff-selected input offering five
+    # values where only one is legal, so the server owns it. A submitted value is not silently
+    # ignored either: Admin::DuplicateReviewsController rejects a conflicting legacy parameter
+    # before calling this service, so a stale form cannot resolve a case under the wrong intent.
+    def initialize(duplicate_review_case:, actor:, action:, rationale:, reason_codes: [])
       super()
       @duplicate_review_case = duplicate_review_case
       @actor = actor
       @action = action.to_s.to_sym
-      @determination = determination.to_s.presence
       @rationale = rationale.to_s.strip
       @reason_codes = Array(reason_codes).map(&:to_s).compact_blank.uniq
     end
@@ -76,9 +90,6 @@ module DuplicateReviewCases
       return 'Case is not open' unless @duplicate_review_case.open?
       return 'An admin actor is required' unless admin_actor?
       return 'Unsupported resolution action' unless ACTIONS.key?(@action)
-      return 'A resolution determination is required' if @determination.blank?
-      return 'Unsupported resolution determination' unless DuplicateReviewCase.resolution_determinations.key?(@determination)
-      return NON_TERMINAL_DETERMINATION_MESSAGE if NON_TERMINAL_DETERMINATIONS.include?(@determination)
       return 'A rationale is required' if @rationale.blank?
 
       reason_code_error
@@ -114,7 +125,7 @@ module DuplicateReviewCases
     def resolve_case!
       @duplicate_review_case.update!(
         status: ACTIONS.fetch(@action),
-        resolution_determination: @determination,
+        resolution_determination: NON_MERGE_DETERMINATION,
         resolution_rationale: @rationale,
         resolution_metadata: resolution_metadata,
         resolved_by: @actor,
@@ -143,7 +154,7 @@ module DuplicateReviewCases
         metadata: {
           duplicate_review_case_id: @duplicate_review_case.id,
           resolution_action: @action.to_s,
-          resolution_determination: @determination,
+          resolution_determination: NON_MERGE_DETERMINATION,
           rationale: @rationale,
           reason_codes: @reason_codes
         }

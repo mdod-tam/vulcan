@@ -39,19 +39,52 @@ module Admin
       assert_select 'input[type="submit"][data-final-submit-gate-target="submitButton"]:not([disabled])'
     end
 
-    # The server rejects a non-terminal determination, so offering it would walk staff into a
-    # dead-end submission. The enum keeps the value, because resolved cases already recorded with
-    # it must still render.
-    test 'the resolve form does not offer a determination the server will reject' do
+    # A non-merge resolution means exactly one thing, so the five-value control offered a fake
+    # choice. The outcome is now server-owned and shown as static text; a one-option select would
+    # have been no better. The enum keeps every value, because resolved cases already recorded with
+    # them must still render.
+    test 'the resolve form states the fixed outcome instead of offering a choice' do
       get admin_duplicate_review_path(@review_case)
 
       assert_response :success
-      assert_select 'select[name=determination] option[value=keep_separate]'
-      assert_select 'select[name=determination] option[value=needs_more_information]', false,
-                    'a determination the server rejects must not be offered'
-      # The guidance is only useful if it is announced with the control it describes.
-      assert_select 'select[name=determination][aria-describedby=determination-help]'
-      assert_select 'p#determination-help', text: /Leave this case open instead of resolving it/
+      assert_select 'select[name=determination]', false,
+                    'the determination must not be selectable'
+      assert_select '#identity-outcome', text: /Keep records separate/
+      assert_select '#identity-outcome', text: /leave this case open instead of resolving it/i
+    end
+
+    # A submitted determination cannot influence what is stored. The value is server-owned, so a
+    # hand-built request naming another determination must not reach the record.
+    test 'a forged determination cannot alter the stored determination' do
+      post resolve_admin_duplicate_review_path(@review_case),
+           params: { resolution_action: 'keep_separate', determination: 'fraud_or_security_review',
+                     rationale: 'different people' }
+
+      @review_case.reload
+      assert_not_equal 'fraud_or_security_review', @review_case.resolution_determination
+      assert @review_case.open?, 'a request carrying a stale determination must not resolve the case'
+    end
+
+    # Ignoring it outright would be worse than rejecting: an admin on a page rendered before this
+    # shipped could choose "Needs more information", submit, and silently get a keep-separate
+    # resolution -- the opposite of their intent.
+    test 'a stale form carrying needs_more_information does not resolve the case' do
+      post resolve_admin_duplicate_review_path(@review_case),
+           params: { resolution_action: 'keep_separate', determination: 'needs_more_information',
+                     rationale: 'still checking' }
+
+      assert @review_case.reload.open?
+      assert_nil @review_case.resolved_at
+      assert_match(/out of date/i, flash[:alert])
+    end
+
+    test 'a resolution with no determination parameter records the server-owned value' do
+      post resolve_admin_duplicate_review_path(@review_case),
+           params: { resolution_action: 'keep_separate', rationale: 'different people' }
+
+      @review_case.reload
+      assert @review_case.resolved?
+      assert_equal 'keep_separate', @review_case.resolution_determination
     end
 
     test 'show assigns unique control ids to every candidate merge form' do

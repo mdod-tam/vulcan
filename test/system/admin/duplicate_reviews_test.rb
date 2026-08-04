@@ -43,22 +43,61 @@ module Admin
       system_test_sign_in(@admin)
     end
 
-    # Resolving as "needs more information" used to close the case, which released the constituent's
-    # submission gate and cleared the subject's review flag -- removing the case from the queue and
-    # badges that staff rely on to come back to it. The determination is no longer offered, and the
-    # form says what to do instead.
-    test 'the resolve form does not offer a determination that would close an undecided case' do
+    # A non-merge resolution means exactly one thing -- staff decided these are different people --
+    # so the five-value determination control was offering a choice that did not exist. Resolving
+    # recomputes two independent effects from remaining open cases: the submission gate releases
+    # when no open registration soft-match case remains, and the review flag clears when no open
+    # case of any source remains -- taking the subject off the queue badges staff rely on. Only a
+    # completed identity decision may trigger either, so the outcome is server-owned and stated
+    # plainly.
+    test 'the resolve form states the fixed identity outcome instead of offering a choice' do
       visit admin_duplicate_review_path(@review_case)
       assert_selector '[data-testid="duplicate-review-detail"]'
 
-      within 'select[name=determination]' do
-        assert_selector 'option[value=keep_separate]'
-        assert_no_selector 'option[value=needs_more_information]'
+      assert_no_selector 'select[name=determination]'
+      within '#identity-outcome' do
+        assert_text 'Identity outcome: Keep records separate'
+        assert_text 'represent different people'
+        assert_text 'leave this case open instead of resolving it'
       end
-      assert_text 'Still gathering information? Leave this case open instead of resolving it.'
 
-      take_evidence_screenshot('duplicate-review-resolve-form-no-nonterminal-determination',
+      take_evidence_screenshot('duplicate-review-resolve-form-server-owned-outcome',
                                full: true, html: true)
+    end
+
+    # The rollover guard has its own visible state. A page rendered before this shipped still has the
+    # old determination select, so submitting it must not resolve the case under an intent the admin
+    # no longer expressed. The request test proves the server refuses; this proves the admin can see
+    # why and is left on a usable form.
+    test 'a stale determination is refused with a visible alert and the case stays open' do
+      visit admin_duplicate_review_path(@review_case)
+      assert_selector '[data-testid="duplicate-review-detail"]'
+
+      # Reconstruct the pre-5c-1 form: inject the determination control the old page carried.
+      page.execute_script(<<~JS)
+        const form = document.querySelector('form[action$="/resolve"]');
+        const select = document.createElement('select');
+        select.name = 'determination';
+        select.innerHTML = '<option value="needs_more_information" selected>Needs more information</option>';
+        form.appendChild(select);
+      JS
+
+      # Scoped: the merge form carries its own rationale field.
+      within 'form[action$="/resolve"]' do
+        choose 'Keep separate'
+        fill_in 'rationale', with: 'still gathering documents'
+        click_button 'Resolve case'
+      end
+
+      assert_text 'This form was out of date, so we reloaded the case.'
+      assert_selector '[data-testid="duplicate-review-detail"]', text: 'Duplicate Review Case'
+      assert @review_case.reload.open?, 'a stale submission must not resolve the case'
+      assert_nil @review_case.resolved_at
+      # The admin is left able to act, on the current form rather than the stale one.
+      assert_selector '#identity-outcome', text: 'Keep records separate'
+      assert_no_selector 'select[name=determination]'
+
+      take_evidence_screenshot('duplicate-review-stale-determination-refused', full: true, html: true)
     end
 
     test 'admin merge form keeps login authority fixed and gates conditional phone type' do

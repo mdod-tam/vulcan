@@ -21,11 +21,23 @@ module Admin
     end
 
     def resolve
+      # ResolutionService accepts no determination. This reads the legacy parameter purely as a
+      # rollover guard: absent or `keep_separate` proceeds, and any conflicting value is rejected
+      # without mutation. Treating a conflicting value as inert would be unsafe during the
+      # changeover -- an admin holding a page rendered before this shipped could pick "Needs more
+      # information", submit, and silently get a terminal keep-separate resolution instead.
+      if params[:determination].present? &&
+         params[:determination] != DuplicateReviewCases::ResolutionService::NON_MERGE_DETERMINATION
+        return redirect_to admin_duplicate_review_path(@review_case),
+                           alert: 'This form was out of date, so we reloaded the case. Review the current options and resolve it again.'
+      end
+
       result = DuplicateReviewCases::ResolutionService.new(
         duplicate_review_case: @review_case,
         actor: current_user,
         action: params[:resolution_action],
-        determination: params[:determination],
+        # No determination is passed: the service owns it. The only handling of a submitted value
+        # is the rollover guard above, which rejects conflicts rather than storing them.
         rationale: params[:rationale],
         reason_codes: Array(params[:reason_codes])
       ).call
