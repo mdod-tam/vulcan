@@ -43,6 +43,24 @@ module Admin
       system_test_sign_in(@admin)
     end
 
+    # Resolving as "needs more information" used to close the case, which released the constituent's
+    # submission gate and cleared the subject's review flag -- removing the case from the queue and
+    # badges that staff rely on to come back to it. The determination is no longer offered, and the
+    # form says what to do instead.
+    test 'the resolve form does not offer a determination that would close an undecided case' do
+      visit admin_duplicate_review_path(@review_case)
+      assert_selector '[data-testid="duplicate-review-detail"]'
+
+      within 'select[name=determination]' do
+        assert_selector 'option[value=keep_separate]'
+        assert_no_selector 'option[value=needs_more_information]'
+      end
+      assert_text 'Still gathering information? Leave this case open instead of resolving it.'
+
+      take_evidence_screenshot('duplicate-review-resolve-form-no-nonterminal-determination',
+                               full: true, html: true)
+    end
+
     test 'admin merge form keeps login authority fixed and gates conditional phone type' do
       visit admin_duplicate_reviews_path
       assert_selector '[data-testid="duplicate-review-queue"]'

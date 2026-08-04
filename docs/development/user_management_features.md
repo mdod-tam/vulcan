@@ -151,6 +151,17 @@ Merge is a separate workflow, not a `ResolutionService` action: the controller `
 
 Resolution state lives on `DuplicateReviewCase`: `resolution_determination` (`same_person_confirmed`, `authorized_relationship_confirmed`, `keep_separate`, `needs_more_information`, `fraud_or_security_review`), `resolution_rationale`, and `resolution_metadata`. The coarse `status` enum (`open`, `resolved_approved`, `resolved_ignored`, `resolved_merged`) is unchanged.
 
+**`needs_more_information` is not a resolution.** It is not a terminal outcome and cannot close a case:
+
+- it stays in the enum so cases already recorded with it keep rendering;
+- it is **not offered** in the resolve form's determination list;
+- `DuplicateReviewCases::ResolutionService#preflight` **rejects** it server-side, so removing it from the form is not the only guard — a hand-posted parameter fails closed too;
+- a rejected attempt leaves the case `open`, leaves `needs_duplicate_review` set, leaves the applicant's final submission blocked, and writes **no** `duplicate_review_case_resolved` audit event.
+
+Staff who need more information leave the case open; the open case in the queue is itself the record. There is currently no admin-note mechanism for duplicate-review cases.
+
+The other action/determination combinations are **unchanged**. `ResolutionService` still validates the action and the determination independently, so pairings such as `keep_separate` + `same_person_confirmed`, `fraud_or_security_review`, and `authorized_relationship_confirmed` remain accepted pending the outcome matrix that PR5c owns. Only the one determination with a previously recorded product decision is constrained today.
+
 Flag/case sync is enforced in both directions: resolving or merging recomputes the subject/canonical `needs_duplicate_review` flag from remaining open cases, a merge resolves only the case selected for that merge and refuses to proceed at all if any *other* open case involves either the duplicate or the canonical -- that other case blocks the merge until it is resolved first, rather than the merge going through and leaving it open -- and `DuplicateReviewCases::ClearFlagService` (invoked by the controller's `clear_flag` action) refuses to clear a flag while the record still has an open case, directing the admin to resolve the case instead. `ClearFlagService` locks the subject row, requalifies it as an active eligible record, and logs `duplicate_review_flag_cleared` on success.
 
 ### 3.2.2 Same-person merge service
