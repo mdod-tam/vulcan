@@ -39,6 +39,21 @@ module Admin
       assert_select 'input[type="submit"][data-final-submit-gate-target="submitButton"]:not([disabled])'
     end
 
+    # The server rejects a non-terminal determination, so offering it would walk staff into a
+    # dead-end submission. The enum keeps the value, because resolved cases already recorded with
+    # it must still render.
+    test 'the resolve form does not offer a determination the server will reject' do
+      get admin_duplicate_review_path(@review_case)
+
+      assert_response :success
+      assert_select 'select[name=determination] option[value=keep_separate]'
+      assert_select 'select[name=determination] option[value=needs_more_information]', false,
+                    'a determination the server rejects must not be offered'
+      # The guidance is only useful if it is announced with the control it describes.
+      assert_select 'select[name=determination][aria-describedby=determination-help]'
+      assert_select 'p#determination-help', text: /Leave this case open instead of resolving it/
+    end
+
     test 'show assigns unique control ids to every candidate merge form' do
       other_candidate = create(:constituent, email: "cand2-#{SecureRandom.hex(3)}@example.com")
       @review_case.duplicate_review_case_candidates.create!(

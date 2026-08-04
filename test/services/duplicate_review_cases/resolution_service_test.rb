@@ -10,6 +10,48 @@ module DuplicateReviewCases
       @review_case = open_case_for(@subject)
     end
 
+    # A case recorded as "needs more information" was being closed, which released the PR5a
+    # submission gate and cleared the subject's review flag -- so the subject could submit while
+    # their identity was still genuinely undecided, and the case vanished from the admin flagged
+    # list and badges at the same moment. Staff who need more information leave the case open.
+    test 'needs_more_information cannot resolve a case' do
+      result = nil
+      assert_no_changes -> { @subject.reload.needs_duplicate_review } do
+        result = resolve(action: :keep_separate, determination: 'needs_more_information')
+      end
+
+      assert_not result.success?
+      assert_match(/stays open/i, result.message)
+      assert @review_case.reload.open?, 'the case must remain open and in the queue'
+      assert_nil @review_case.resolved_at
+    end
+
+    # The gate is the reason the above matters, so assert it directly rather than inferring it
+    # from the case status -- and assert the refusal leaves no terminal-resolution audit event,
+    # since a case that was never decided must not carry a record saying it was.
+    test 'a rejected needs_more_information resolution leaves the submission gate closed' do
+      assert Application.identity_review_pending_for?(@subject)
+
+      assert_no_difference -> { Event.where(action: 'duplicate_review_case_resolved').count } do
+        resolve(action: :keep_separate, determination: 'needs_more_information')
+      end
+
+      assert Application.identity_review_pending_for?(@subject),
+             'final submission must stay blocked while the case is undecided'
+    end
+
+    # The narrowness is deliberate, but assert it against the constant rather than by exercising an
+    # untriaged determination. Asserting that `fraud_or_security_review` *succeeds* would encode an
+    # unanswered policy question as expected behavior, so making it non-terminal later — the
+    # currently recommended answer — would read as a regression rather than the intended fix.
+    #
+    # This fails if someone widens the block without deciding, and is simply updated when the
+    # PR5c matrix legitimately widens it.
+    test 'only the determination with a recorded decision is blocked' do
+      assert_equal %w[needs_more_information],
+                   DuplicateReviewCases::ResolutionService::NON_TERMINAL_DETERMINATIONS
+    end
+
     test 'approve resolves the case and clears the review flag' do
       result = nil
       assert_changes -> { @subject.reload.needs_duplicate_review }, from: true, to: false do

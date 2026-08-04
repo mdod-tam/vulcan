@@ -18,10 +18,21 @@
 
   <div>
     <%= label_tag :determination, 'Identity / linking determination', class: 'block text-sm font-medium text-gray-700' %>
+<%# Non-terminal determinations are excluded: the server rejects them, so offering them here
+    would walk staff into a dead-end submission. They stay in the enum so existing resolved cases
+    keep rendering. See DuplicateReviewCases::ResolutionService::NON_TERMINAL_DETERMINATIONS. %>
     <%= select_tag :determination,
-                   options_for_select(DuplicateReviewCase.resolution_determinations.keys.map { |d| [d.humanize, d] }),
+                   options_for_select(
+                     (DuplicateReviewCase.resolution_determinations.keys -
+                       DuplicateReviewCases::ResolutionService::NON_TERMINAL_DETERMINATIONS)
+                       .map { |d| [d.humanize, d] }
+                   ),
                    include_blank: 'Select a determination…', required: true,
+                   "aria-describedby": 'determination-help',
                    class: 'border-gray-300 rounded-md text-sm' %>
+    <p id="determination-help" class="mt-1 text-xs text-gray-500">
+      Still gathering information? Leave this case open instead of resolving it.
+    </p>
   </div>
 
   <fieldset>

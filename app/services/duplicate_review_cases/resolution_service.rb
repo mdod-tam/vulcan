@@ -14,6 +14,28 @@ module DuplicateReviewCases
       keep_separate: :resolved_ignored
     }.freeze
 
+    # Determinations that describe an *undecided* case and therefore may not terminate it.
+    #
+    # Every ACTION maps to a resolved status, and resolving releases the PR5a submission gate and
+    # clears the subject's `needs_duplicate_review` flag -- which also removes the case from the
+    # admin flagged list, the review-count badge, and the row/badge highlights. So recording "we
+    # still need more information" was closing the case, letting the subject submit, and hiding
+    # the case from the staff who needed to come back to it.
+    #
+    # This restates a product decision that already existed: staff who need more information leave
+    # the case open. An open case in the queue *is* that record; the rationale field belongs to
+    # resolutions.
+    #
+    # Deliberately narrow. Three other pairings are still unconstrained and under review --
+    # `same_person_confirmed` recorded without performing the merge it implies,
+    # `fraud_or_security_review`, and `authorized_relationship_confirmed`. Each needs its own
+    # answer to two separate questions (is it terminal, and if so does it release the gate), and
+    # guessing here would be worse than the gap.
+    NON_TERMINAL_DETERMINATIONS = %w[needs_more_information].freeze
+
+    NON_TERMINAL_DETERMINATION_MESSAGE =
+      'A case that still needs more information stays open. Leave it unresolved instead of recording a resolution.'
+
     def initialize(duplicate_review_case:, actor:, action:, determination:, rationale:, reason_codes: [])
       super()
       @duplicate_review_case = duplicate_review_case
@@ -56,6 +78,7 @@ module DuplicateReviewCases
       return 'Unsupported resolution action' unless ACTIONS.key?(@action)
       return 'A resolution determination is required' if @determination.blank?
       return 'Unsupported resolution determination' unless DuplicateReviewCase.resolution_determinations.key?(@determination)
+      return NON_TERMINAL_DETERMINATION_MESSAGE if NON_TERMINAL_DETERMINATIONS.include?(@determination)
       return 'A rationale is required' if @rationale.blank?
 
       reason_code_error

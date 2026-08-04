@@ -46,9 +46,18 @@ Income threshold (FPL) validation follow-ups
 
 ## Registration & Account Integrity  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 
-- [ ] Review queue: list `DuplicateReviewCase` records with candidate snapshots, reason codes, and actions (approve/merge/ignore) with rationale textarea  [AUTHZ-002]
-- [ ] Merge semantics: pick canonical user/application; record merge event  [AUDIT-002]
-- [ ] Tests: review queue controller actions and system flow with merge/ignore
+Duplicate-review outcome contract  [AUTHZ-002][AUDIT-002]
+
+`DuplicateReviewCases::ResolutionService` validates the resolution action and the determination independently, with no constraint on the pairing, so most combinations terminate a case. Terminating releases the applicant's final-submission gate and clears `needs_duplicate_review`, which also removes the case from the admin queue badges. `needs_more_information` is now rejected because a product decision for it already existed; the rest of the matrix has never been decided.
+
+- [ ] Define the complete allowed action/determination matrix. Each outcome needs two separate answers: is it terminal, and if terminal does it release the submission gate.
+- [ ] Decide whether `same_person_confirmed` may terminate a case without the merge that conclusion implies.
+- [ ] Decide whether `fraud_or_security_review` is terminal, and whether it releases submission. No security-review queue or handoff owner exists today, so closing the case removes it from the only queue there is.
+- [ ] Decide whether `authorized_relationship_confirmed` is terminal, and whether it requires an existing `GuardianRelationship`. It is currently a bare enum value with no supporting-relationship check.
+- [ ] Decide whether the `approve` and `ignore` actions carry operational or reporting meaning, or should be retired.
+- [ ] Verify — do not assume — whether any external consumer reads `status` or `resolution_action`. Migrate consumers before removing writers.
+- [ ] Preserve historical values, and inventory cases already resolved with a combination the matrix disallows. Do not auto-reopen terminal cases or retroactively re-block subjects.
+- [ ] Add one behavioral test per final outcome asserting its gate result.
 
 Portal dependent duplicate-submission idempotency  [DATA-002]
 - [ ] Re-run `DuplicateDetectionService` inside the guardian lock in `ConstituentPortal::DependentsController#create`. Detection runs before the lock and is never re-checked, so two identical submissions can both clear it and create two dependents. Nothing downstream catches the second: under the guardian contact strategy each dependent gets its own unique synthetic email and phone, so no unique index fires, and `guardian_relationships` is unique on `(guardian_id, dependent_id)`, which differs.
