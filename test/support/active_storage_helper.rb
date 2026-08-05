@@ -19,16 +19,11 @@ module ActiveStorageHelper
 
   # For use in test setup
   def setup_active_storage_test
+    # Keep the caller's DatabaseCleaner transaction intact. Disconnecting the Active Record
+    # pool here abandons the connection that owns the rollback boundary, so every fixture created
+    # afterward commits and contaminates later test runs.
     setup_test_storage
     clear_active_storage
-  end
-
-  # Disconnect any lingering connections to the test database
-  def disconnect_test_database_connections
-    ActiveRecord::Base.connection_pool.disconnect!
-
-    # Reconnect to the database
-    ActiveRecord::Base.establish_connection
   end
 
   # Helper to create and upload a blob directly (similar to our service implementation)

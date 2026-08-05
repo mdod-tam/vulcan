@@ -17,7 +17,6 @@ module Applications
 
     setup do
       # Set up Active Storage for testing
-      disconnect_test_database_connections
       setup_active_storage_test
 
       # Set thread context for paper applications
