@@ -7,8 +7,6 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
   include ProofResubmissionTestHelper
 
   setup do
-    # Disconnect any lingering database connections and set up Active Storage
-    disconnect_test_database_connections
     setup_active_storage_test
 
     # Use factories instead of fixtures
@@ -59,9 +57,6 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
 
     assert @application.income_proof.attached?, 'Expected income proof to be attached'
     assert @application.income_proof_status_approved?, 'Expected income proof status to be approved'
-
-    # Explicitly commit the transaction to ensure the event is persisted
-    ActiveRecord::Base.connection.commit_db_transaction if ActiveRecord::Base.connection.open_transactions.positive?
 
     # Verify audit event was created
     event = Event.last
