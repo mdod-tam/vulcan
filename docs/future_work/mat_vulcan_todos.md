@@ -48,16 +48,17 @@ Income threshold (FPL) validation follow-ups
 
 Duplicate-review outcome contract  [AUTHZ-002][AUDIT-002]
 
-`DuplicateReviewCases::ResolutionService` validates the resolution action and the determination independently, with no constraint on the pairing, so most combinations terminate a case. Terminating releases the applicant's final-submission gate and clears `needs_duplicate_review`, which also removes the case from the admin queue badges. `needs_more_information` is now rejected because a product decision for it already existed; the rest of the matrix has never been decided.
+The determination half of the matrix is **decided and enforced**: `ResolutionService` accepts no determination and always records `keep_separate`, so no other outcome can close a case. What remains is the *action* half — `approve` and `ignore` are still selectable and still written to `resolution_action` — plus the external-consumer inventory that gates retiring them.
 
-- [ ] Define the complete allowed action/determination matrix. Each outcome needs two separate answers: is it terminal, and if terminal does it release the submission gate.
-- [ ] Decide whether `same_person_confirmed` may terminate a case without the merge that conclusion implies.
-- [ ] Decide whether `fraud_or_security_review` is terminal, and whether it releases submission. No security-review queue or handoff owner exists today, so closing the case removes it from the only queue there is.
-- [ ] Decide whether `authorized_relationship_confirmed` is terminal, and whether it requires an existing `GuardianRelationship`. It is currently a bare enum value with no supporting-relationship check.
-- [ ] Decide whether the `approve` and `ignore` actions carry operational or reporting meaning, or should be retired.
-- [ ] Verify — do not assume — whether any external consumer reads `status` or `resolution_action`. Migrate consumers before removing writers.
+- [x] Define the complete allowed action/determination matrix. Each outcome needs two separate answers: is it terminal, and if terminal does it release the submission gate. *(Decided; the determination half is enforced — `keep_separate` is the only outcome `ResolutionService` records, and it is server-owned.)*
+- [ ] **Retire the `approve`/`ignore` actions and their UI together (5c-2).** Remove the action fieldset, stop accepting `resolution_action` from the request, derive the compatible metadata server-side, update the surrounding copy, and preserve historical values. These must land as one change: backend-first leaves Approve and Ignore visible while the server rejects them; UI-first changes which action values are newly written, which is what the external check gates.
+- [ ] **Blocks 5c-2:** verify — do not assume — whether any external consumer reads `status` or `resolution_action`. `resolution_action` has **zero in-repo readers**; it is written to audit metadata and submitted from the form, and nothing in `app/`, `lib/`, or `db/` reads it back. So this question is entirely about BI exports, warehouse queries, scheduled reports, and manual operational SQL.
+- [x] Decide whether `same_person_confirmed` may terminate a case without the merge that conclusion implies. *(No — reserved to the merge service, written atomically with it; enforced.)*
+- [x] Decide whether `fraud_or_security_review` is terminal, and whether it releases submission. *(Non-terminal — no security-review queue or handoff owner exists, so closing removes the case from the only queue there is; enforced.)*
+- [ ] Decide whether `authorized_relationship_confirmed` is terminal. *(Currently non-terminal and enforced as such.)* Enabling it needs a **candidate/pair identifier in the resolution contract** — the service receives no selected candidate — plus an exact verified `GuardianRelationship`, never created as a side effect. `guardian_relationships` has no active/revoked state.
+- [x] Decide whether the `approve` and `ignore` actions carry operational or reporting meaning. *(Retire both; the determination holds the durable semantics. Retirement itself is 5c-2 above.)*
 - [ ] Preserve historical values, and inventory cases already resolved with a combination the matrix disallows. Do not auto-reopen terminal cases or retroactively re-block subjects.
-- [ ] Add one behavioral test per final outcome asserting its gate result.
+- [ ] Add one behavioral test per final outcome asserting its gate result, replacing constant-shaped assertions with matrix-driven coverage.
 
 Portal dependent duplicate-submission idempotency  [DATA-002]
 - [ ] Re-run `DuplicateDetectionService` inside the guardian lock in `ConstituentPortal::DependentsController#create`. Detection runs before the lock and is never re-checked, so two identical submissions can both clear it and create two dependents. Nothing downstream catches the second: under the guardian contact strategy each dependent gets its own unique synthetic email and phone, so no unique index fires, and `guardian_relationships` is unique on `(guardian_id, dependent_id)`, which differs.

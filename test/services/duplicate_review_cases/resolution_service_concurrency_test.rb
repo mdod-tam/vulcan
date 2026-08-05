@@ -152,7 +152,6 @@ module DuplicateReviewCases
         duplicate_review_case: DuplicateReviewCase.find(review_case.id),
         actor: User.find(admin.id),
         action: :approve,
-        determination: :keep_separate,
         rationale: 'records verified as separate people',
         reason_codes: %w[manual_review]
       ).call

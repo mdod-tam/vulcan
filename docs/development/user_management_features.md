@@ -43,7 +43,7 @@ Admin user pages run through `Admin::BaseController`, which requires an authenti
 | User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_public_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
 | Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
 | Duplicate review workflow | `app/controllers/admin/duplicate_reviews_controller.rb`, `app/views/admin/duplicate_reviews/` | Review queue, case detail with grouped record comparison, and audited approve/ignore/keep-separate/merge actions. |
-| Duplicate resolution service | `app/services/duplicate_review_cases/resolution_service.rb` | Records approve/ignore/keep-separate determinations and clears the review flag when no other open case remains. |
+| Duplicate resolution service | `app/services/duplicate_review_cases/resolution_service.rb` | Records a non-merge resolution: the admin picks an *action* (approve / ignore / keep separate, which selects the coarse status), while the *determination* is server-owned and always `keep_separate`. Clears the review flag when no other open case remains. |
 | Same-person merge service | `app/services/users/duplicate_merge_service.rb` | Merges a duplicate constituent into a canonical survivor with explicit contact/delivery choices and one audit event. |
 
 ## 3 · Signup And Duplicate Handling
@@ -139,28 +139,39 @@ Flagged duplicates are resolved through an audited admin workflow. `DuplicateRev
 - Queue (`index`): lists open cases with a source label (`registration_soft_match`, `paper_intake`, `admin_create`, `support_claim`, `portal_dependent`) plus manual/legacy flagged users that have no open case.
 - Detail (`show`): groups each record's facts by login identity, delivery route, record truth, applications, relationships, and auth artifacts, and shows candidate link state (current, already merged, or record no longer exists).
 
-There are two distinct paths. `DuplicateReviewCases::ResolutionService` (controller `resolve` action) records a decision without moving any data; it takes an admin-selected `resolution_determination` and a required rationale:
+There are two distinct paths. `DuplicateReviewCases::ResolutionService` (controller `resolve` action) records a decision without moving any data. The determination is **server-owned, not admin-selected** — see below — so it takes only an action and a required rationale:
 
 | Resolution action | Resulting status | Effect |
 |-------------------|------------------|--------|
 | Approve | `resolved_approved` | Resolves the case and clears the review flag when no other open case remains. |
 | Ignore | `resolved_ignored` | Resolves the case; the duplicate signal is acceptable. |
-| Keep separate | `resolved_ignored` | Resolves the case; pair with the `keep_separate` determination to record that the records stay distinct. No contact is copied. |
+| Keep separate | `resolved_ignored` | Resolves the case, recording that the records stay distinct. No contact is copied. |
+
+All three actions now record the same determination. The action still selects the coarse status; retiring `approve`/`ignore` is PR5c phase 5c-2, gated on the external-consumer inventory.
 
 Merge is a separate workflow, not a `ResolutionService` action: the controller `merge` action is shown only for a selected, open `registration_soft_match` case and calls `Users::DuplicateMergeService` (see §3.2.2), which enforces the same source/status boundary server-side, produces status `resolved_merged`, and records the `same_person_confirmed` determination. Other open case sources can be resolved without moving data, but are not merge-eligible through this workflow. Merge requires the admin's explicit same-person confirmation and a rationale; it does not consume a pre-set determination on the case.
 
 Resolution state lives on `DuplicateReviewCase`: `resolution_determination` (`same_person_confirmed`, `authorized_relationship_confirmed`, `keep_separate`, `needs_more_information`, `fraud_or_security_review`), `resolution_rationale`, and `resolution_metadata`. The coarse `status` enum (`open`, `resolved_approved`, `resolved_ignored`, `resolved_merged`) is unchanged.
 
-**`needs_more_information` is not a resolution.** It is not a terminal outcome and cannot close a case:
+**Only a completed identity decision may close a case.** Resolving is not neutral bookkeeping: the gate reads *open cases*, so closing the last open case for a subject releases their final-submission gate, and `sync_subject_review_flag!` then recomputes `needs_duplicate_review` from whatever open cases remain. When this was the subject's only open case, that clears the flag and removes them from the admin flagged list, the review-count badge, and the row/badge highlights — ending the block and the staff visibility together. **When another open case remains, the flag stays set and the gate stays closed**, so the two are not synonyms.
 
-- it stays in the enum so cases already recorded with it keep rendering;
-- it is **not offered** in the resolve form's determination list;
-- `DuplicateReviewCases::ResolutionService#preflight` **rejects** it server-side, so removing it from the form is not the only guard — a hand-posted parameter fails closed too;
-- a rejected attempt leaves the case `open`, leaves `needs_duplicate_review` set, leaves the applicant's final submission blocked, and writes **no** `duplicate_review_case_resolved` audit event.
+`DuplicateReviewCases::ResolutionService::NON_MERGE_DETERMINATION` is `keep_separate`, and it is the **only** determination this service records. It is an allowlist of one, not a denylist: a denylist fails open for any determination nobody has triaged yet.
 
-Staff who need more information leave the case open; the open case in the queue is itself the record. There is currently no admin-note mechanism for duplicate-review cases.
+| Determination | Reachable via `ResolutionService`? | Why |
+|---|---|---|
+| `keep_separate` | **Yes** — always recorded | The one completed decision that moves no data |
+| `same_person_confirmed` | No | Means two records are one identity. Closing without consolidating would release submission while knowingly keeping the duplicate. Reserved to `Users::DuplicateMergeService`, written atomically with the merge. If the merge cannot complete, the case stays open |
+| `needs_more_information` | No | Not a decision. Staff who need more information leave the case open; the open case in the queue is the record |
+| `fraud_or_security_review` | No | Not a decision. The duplicate-review queue is the only durable queue that exists, so closing removes the work item and its visibility together |
+| `authorized_relationship_confirmed` | No | Needs server-verifiable evidence and there is nowhere to verify it: the service receives no selected candidate, and `guardian_relationships` has no active/revoked state |
 
-The other action/determination combinations are **unchanged**. `ResolutionService` still validates the action and the determination independently, so pairings such as `keep_separate` + `same_person_confirmed`, `fraud_or_security_review`, and `authorized_relationship_confirmed` remain accepted pending the outcome matrix that PR5c owns. Only the one determination with a previously recorded product decision is constrained today.
+Consequences for the request contract:
+
+- the determination is **not** an accepted input — `ResolutionService` takes no `determination` parameter. The controller reads `params[:determination]` only as a rollover guard (see below), never to decide what is stored;
+- the admin form shows static text (*"Identity outcome: Keep records separate"*) rather than a control, since a select offering five values where one is legal presented a fake choice;
+- a request carrying a determination other than `keep_separate` is **rejected**, not ignored. Ignoring it would let an admin on a page rendered before this shipped choose "Needs more information", submit, and silently get a keep-separate resolution — the opposite of their intent;
+- every enum value is preserved so cases already resolved with them still render.
+
 
 Flag/case sync is enforced in both directions: resolving or merging recomputes the subject/canonical `needs_duplicate_review` flag from remaining open cases, a merge resolves only the case selected for that merge and refuses to proceed at all if any *other* open case involves either the duplicate or the canonical -- that other case blocks the merge until it is resolved first, rather than the merge going through and leaving it open -- and `DuplicateReviewCases::ClearFlagService` (invoked by the controller's `clear_flag` action) refuses to clear a flag while the record still has an open case, directing the admin to resolve the case instead. `ClearFlagService` locks the subject row, requalifies it as an active eligible record, and logs `duplicate_review_flag_cleared` on success.
 
