@@ -73,4 +73,57 @@ class ApplicationSubmissionEligibilityTest < ActiveSupport::TestCase
     error = Application.sibling_application_eligibility_error([waiting_period_sibling, active_sibling], target_application: target)
     assert_match(/already have an active application/i, error)
   end
+
+  # `identity_review_pending_for?` is the shared source of truth for both the locked writer and the
+  # portal's advisory GET, so its source filter and its open-case filter are pinned directly here
+  # rather than only through ApplicationCreator. The source filter in particular is what makes the
+  # gate and the `needs_duplicate_review` flag diverge, so it is asserted rather than assumed.
+  test 'no identity review is pending for a blank applicant' do
+    assert_not Application.identity_review_pending_for?(nil)
+  end
+
+  test 'an open registration soft match case gates the applicant' do
+    open_review_case_for(@constituent)
+
+    assert Application.identity_review_pending_for?(@constituent)
+  end
+
+  test 'an open case from another source does not gate the applicant' do
+    open_review_case_for(@constituent, source: :paper_intake)
+
+    assert_not Application.identity_review_pending_for?(@constituent),
+               'only registration_soft_match gates; other sources are staff review work'
+  end
+
+  test 'a resolved registration soft match case does not gate the applicant' do
+    review_case = open_review_case_for(@constituent)
+    review_case.update!(
+      status: :resolved_ignored,
+      resolution_determination: :keep_separate,
+      resolution_rationale: 'confirmed different people',
+      resolved_by: create(:admin),
+      resolved_at: Time.current
+    )
+
+    assert_not Application.identity_review_pending_for?(@constituent)
+  end
+
+  test 'another user\'s open case does not gate this applicant' do
+    open_review_case_for(create(:constituent))
+
+    assert_not Application.identity_review_pending_for?(@constituent)
+  end
+
+  private
+
+  def open_review_case_for(user, source: :registration_soft_match)
+    DuplicateReviewCase.create!(
+      source: source,
+      subject_user: user,
+      deduplication_key: SecureRandom.hex(16),
+      metadata: { 'reason_codes' => ['name_dob'] },
+      opened_at: Time.current,
+      status: :open
+    )
+  end
 end

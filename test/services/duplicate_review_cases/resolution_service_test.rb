@@ -121,17 +121,53 @@ module DuplicateReviewCases
       assert @subject.reload.needs_duplicate_review
     end
 
+    # The review flag and the submission gate are recomputed from different sets and are not
+    # synonyms: the flag counts open cases of *any* source, while the gate counts only open
+    # `registration_soft_match` cases. Each half is covered elsewhere -- the flag above, the gate's
+    # source filter in ApplicationCreatorTest -- but only together do they pin the divergence, which
+    # is the state the resolving admin actually leaves behind. Documentation asserted the opposite
+    # (that a remaining case holds both) through PR198, so this asserts both in one sequence.
+    test 'resolving the last registration case releases the submission gate while another source keeps the flag' do
+      open_case_for(@subject, source: :paper_intake)
+
+      resolve(action: :keep_separate)
+
+      assert @subject.reload.needs_duplicate_review,
+             'an open case of any source keeps the subject on the admin flagged list'
+      assert_not Application.identity_review_pending_for?(@subject),
+                 'only an open registration_soft_match case gates submission, so the gate must release'
+    end
+
     test 'emits a resolution audit event' do
       assert_difference 'Event.where(action: \'duplicate_review_case_resolved\').count', 1 do
         resolve(action: :approve)
       end
     end
 
+    # A subject can hold several open cases at once, so an admin can resolve two of them inside
+    # AuditEventService::DEDUP_WINDOW. The fingerprint must carry the case id: without it both
+    # events collapse to the bare action name for the same auditable and the second resolution
+    # loses its audit event. Deliberately not time-travelled -- the point is that the real window
+    # is in force.
+    test 'resolving two cases for the same subject records an audit event for each' do
+      second_case = open_case_for(@subject)
+
+      assert_difference 'Event.where(action: \'duplicate_review_case_resolved\').count', 2 do
+        assert resolve(action: :keep_separate).success?
+        assert resolve(action: :keep_separate, review_case: second_case).success?
+      end
+
+      logged_case_ids = Event.where(action: 'duplicate_review_case_resolved')
+                             .map { |event| event.metadata['duplicate_review_case_id'] }
+      assert_equal [@review_case.id, second_case.id].sort, logged_case_ids.sort,
+                   'each resolution must be attributable to the case it closed'
+    end
+
     private
 
-    def resolve(action:, rationale: 'reviewed and resolved', reason_codes: %w[name_dob])
+    def resolve(action:, rationale: 'reviewed and resolved', reason_codes: %w[name_dob], review_case: @review_case)
       ResolutionService.new(
-        duplicate_review_case: @review_case,
+        duplicate_review_case: review_case,
         actor: @admin,
         action: action,
         rationale: rationale,
@@ -139,9 +175,9 @@ module DuplicateReviewCases
       ).call
     end
 
-    def open_case_for(user)
+    def open_case_for(user, source: :registration_soft_match)
       DuplicateReviewCase.create!(
-        source: :registration_soft_match,
+        source: source,
         subject_user: user,
         deduplication_key: SecureRandom.hex(16),
         metadata: { 'reason_codes' => ['name_dob'] },

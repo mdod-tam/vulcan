@@ -118,6 +118,17 @@ class AuditEventService < BaseService
       return "#{base}_#{merged_user_id}" if merged_user_id.present?
     end
 
+    # For duplicate review case events, include the case id. One subject can hold several open
+    # cases at once -- DuplicateReviewCases::CreateService keys deduplication on
+    # (source, subject, reason_codes, candidate_ids), so cases from different sources or with
+    # different candidate sets coexist by design. Without the id the fingerprint collapses to just
+    # the action name, and a second case event for the same subject within the dedup window would
+    # silently suppress its audit event even though the open or resolution itself succeeded.
+    if %w[duplicate_review_case_opened duplicate_review_case_resolved].include?(action.to_s)
+      review_case_id = metadata['duplicate_review_case_id'] || metadata[:duplicate_review_case_id]
+      return "#{base}_#{review_case_id}" if review_case_id.present?
+    end
+
     # For feature flag toggles, include flag name, old/new values, and actor.
     # Use key?-based lookup because || collapses `false` to nil after JSON round-trip.
     if action.to_s == 'feature_flag_toggled'
