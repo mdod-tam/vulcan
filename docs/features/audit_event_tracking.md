@@ -66,9 +66,13 @@ Current creation deduplication:
 
 - does not run when there is no auditable record
 - never suppresses `application_created`
-- uses action plus selected metadata for proof submissions, proof attachments, profile updates, feature flag toggles, and secure-request revocation/expiration events
+- uses action plus selected metadata for proof submissions, proof attachments, profile updates, feature flag toggles, secure-request revocation/expiration events, duplicate user merges, and duplicate review case events
 - returns `nil` when a duplicate is suppressed
 - raises validation errors when an event cannot be saved
+
+`duplicate_review_case_opened` and `duplicate_review_case_resolved` are fingerprinted by `duplicate_review_case_id`. One subject can hold several open cases at once — `DuplicateReviewCases::CreateService` keys deduplication on `(source, subject, reason_codes, candidate_ids)`, so cases from different sources or with different candidate sets coexist by design. Without the case id in the fingerprint, both events collapse to the bare action name for the same auditable, and a second case event for that subject inside the five-second window is silently suppressed even though the open or resolution itself succeeded. `duplicate_user_merged` carries the merged user id for the same reason.
+
+The general rule: when one auditable record can legitimately produce several distinct events of the same action in quick succession, the fingerprint must carry whatever distinguishes them, or the audit timeline loses events that the underlying operation actually performed.
 
 This layer protects the database from obvious duplicate writes. It is separate from display deduplication.
 
