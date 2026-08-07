@@ -68,7 +68,7 @@
   <% if @review_case.open? %>
     <section class="bg-white shadow sm:rounded-md p-4 mt-8" aria-labelledby="resolve-heading">
       <h2 id="resolve-heading" class="text-lg font-medium text-gray-900 mb-3">Resolve without merging</h2>
-      <p class="text-sm text-gray-500 mb-4">Approve, ignore, or keep the records separate. Every resolution records the determination and rationale, and does not move any contact facts.</p>
+      <p class="text-sm text-gray-500 mb-4">Record that these records represent different people. Every resolution records the determination and rationale, and does not move any contact facts. If the records are the same person, merge them instead; if you are still gathering information, leave the case open.</p>
       <%= render 'resolve_form', review_case: @review_case %>
     </section>
   <% else %>

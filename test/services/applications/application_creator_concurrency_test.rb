@@ -412,7 +412,6 @@ module Applications
       DuplicateReviewCases::ResolutionService.new(
         duplicate_review_case: DuplicateReviewCase.find(review_case.id),
         actor: User.find(admin.id),
-        action: :keep_separate,
         rationale: 'confirmed different people',
         reason_codes: %w[exact_phone]
       ).call

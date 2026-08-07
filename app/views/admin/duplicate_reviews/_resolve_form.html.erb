@@ -1,27 +1,10 @@
 <%# locals: review_case %>
 <%= form_with url: resolve_admin_duplicate_review_path(review_case), method: :post, class: 'space-y-4' do |f| %>
-  <fieldset>
-    <legend class="text-sm font-medium text-gray-700">Action</legend>
-    <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :resolution_action, 'approve', false, required: true %>
-      <span class="ml-1">Approve</span>
-    </label>
-    <label class="inline-flex items-center mr-4 text-sm">
-      <%= radio_button_tag :resolution_action, 'ignore' %>
-      <span class="ml-1">Ignore</span>
-    </label>
-    <label class="inline-flex items-center text-sm">
-      <%= radio_button_tag :resolution_action, 'keep_separate' %>
-      <span class="ml-1">Keep separate</span>
-    </label>
-  </fieldset>
-
-  <%# The identity outcome is server-owned, not selected. A non-merge resolution means exactly one
-      thing -- staff decided these are different people -- so a control offering five values where
-      only one is legal was presenting a fake choice. Rendered as static text so staff can see what
-      they are recording. The server persists its own value; a request carrying a conflicting
-      legacy determination is rejected rather than accepted, so a page rendered before this shipped
-      cannot resolve a case under the wrong intent.
+  <%# The outcome and the status are server-owned rather than selected: a non-merge resolution
+      means exactly one thing, that staff decided these are different people. Shown as static text
+      so staff can see what they are recording. A request carrying a conflicting determination or
+      resolution_action is rejected rather than accepted, so a stale page cannot resolve a case
+      under an intent the server would otherwise reinterpret.
       See DuplicateReviewCases::ResolutionService::NON_MERGE_DETERMINATION. %>
   <div id="identity-outcome" class="rounded-md bg-gray-50 border border-gray-200 p-3">
     <p class="text-sm font-medium text-gray-900">Identity outcome: Keep records separate</p>

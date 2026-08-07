@@ -55,6 +55,11 @@ module Admin
       assert_selector '[data-testid="duplicate-review-detail"]'
 
       assert_no_selector 'select[name=determination]'
+      # The action is server-owned, so the form offers no action control at all.
+      within 'form[action$="/resolve"]' do
+        assert_no_selector 'input[type=radio][name=resolution_action]'
+        assert_no_selector 'legend', text: 'Action'
+      end
       within '#identity-outcome' do
         assert_text 'Identity outcome: Keep records separate'
         assert_text 'represent different people'
@@ -84,7 +89,6 @@ module Admin
 
       # Scoped: the merge form carries its own rationale field.
       within 'form[action$="/resolve"]' do
-        choose 'Keep separate'
         fill_in 'rationale', with: 'still gathering documents'
         click_button 'Resolve case'
       end
