@@ -159,6 +159,53 @@ module Admin
       end
     end
 
+    # The other half of the rollover contract. The guard must reject only *conflicting* values, so a
+    # page rendered between the two changes -- carrying the values the server would choose anyway --
+    # still resolves normally. A guard that refused these would strand every admin holding an
+    # intermediate form until they reloaded.
+    test 'a compatible stale form still resolves the case' do
+      post resolve_admin_duplicate_review_path(@review_case),
+           params: { resolution_action: 'keep_separate', determination: 'keep_separate',
+                     rationale: 'different people' }
+
+      assert_redirected_to admin_duplicate_reviews_path
+      @review_case.reload
+      assert @review_case.resolved?
+      assert_equal 'resolved_ignored', @review_case.status
+      assert_equal 'keep_separate', @review_case.resolution_determination
+    end
+
+    # The status label and the determination are shown side by side on the resolution summary, so a
+    # label that contradicts the determination misreports the decision staff recorded.
+    test 'a resolved case reports the outcome without contradicting the determination' do
+      post resolve_admin_duplicate_review_path(@review_case), params: { rationale: 'different people' }
+      get admin_duplicate_review_path(@review_case)
+
+      assert_response :success
+      assert_select '[data-testid="resolution-summary"]' do
+        assert_select 'dd', text: 'Resolved without merge'
+        assert_select 'dd', text: 'Keep separate'
+        assert_select 'dd', text: 'Ignored', count: 0
+      end
+    end
+
+    # Nothing writes resolved_approved any more, but rows that already carry it must keep rendering
+    # their own label rather than being retitled after the fact.
+    test 'a historical resolved_approved case still displays Approved' do
+      @review_case.update!(
+        status: :resolved_approved,
+        resolution_determination: :keep_separate,
+        resolution_rationale: 'resolved under the retired approve action',
+        resolved_by: @admin,
+        resolved_at: Time.current
+      )
+
+      get admin_duplicate_review_path(@review_case)
+
+      assert_response :success
+      assert_select '[data-testid="resolution-summary"] dd', text: 'Approved'
+    end
+
     test 'resolve surfaces failure without a rationale' do
       post resolve_admin_duplicate_review_path(@review_case), params: { rationale: '' }
       assert_redirected_to admin_duplicate_review_path(@review_case)

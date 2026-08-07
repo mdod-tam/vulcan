@@ -70,6 +70,28 @@ module Admin
                                full: true, html: true)
     end
 
+    # The resolution summary shows the outcome and the determination side by side, so the two must
+    # agree. This is the state an admin is left looking at after deciding, and it is the only place
+    # the status label is read back to them.
+    test 'the resolved summary reports an outcome that agrees with the determination' do
+      visit admin_duplicate_review_path(@review_case)
+
+      within 'form[action$="/resolve"]' do
+        fill_in 'rationale', with: 'confirmed these are different people'
+        click_button 'Resolve case'
+      end
+
+      visit admin_duplicate_review_path(@review_case)
+      within '[data-testid="resolution-summary"]' do
+        assert_text 'Resolved without merge'
+        assert_text 'Keep separate'
+        assert_no_text 'Ignored'
+      end
+      assert_no_selector 'form[action$="/resolve"]'
+
+      take_evidence_screenshot('duplicate-review-resolved-summary', full: true, html: true)
+    end
+
     # The rollover guard has its own visible state. A page rendered before this shipped still has the
     # old determination select, so submitting it must not resolve the case under an intent the admin
     # no longer expressed. The request test proves the server refuses; this proves the admin can see

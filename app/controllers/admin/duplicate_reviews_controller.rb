@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module Admin
-  # Admin workflow for resolving flagged duplicate records: review queue, case detail,
-  # audited approve/ignore/keep-separate resolutions, and same-person merge. All data
-  # mutation happens in the service layer; this controller only translates the form.
+  # Admin workflow for resolving flagged duplicate records: review queue, case detail, the audited
+  # non-merge resolution that records the two records as different people, and same-person merge.
+  # All data mutation happens in the service layer; this controller only translates the form.
   class DuplicateReviewsController < BaseController
     before_action :set_review_case, only: %i[show resolve merge]
 
