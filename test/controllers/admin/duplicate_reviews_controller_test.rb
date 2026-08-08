@@ -57,7 +57,7 @@ module Admin
     # hand-built request naming another determination must not reach the record.
     test 'a forged determination cannot alter the stored determination' do
       post resolve_admin_duplicate_review_path(@review_case),
-           params: { resolution_action: 'keep_separate', determination: 'fraud_or_security_review',
+           params: { determination: 'fraud_or_security_review',
                      rationale: 'different people' }
 
       @review_case.reload
@@ -70,7 +70,7 @@ module Admin
     # resolution -- the opposite of their intent.
     test 'a stale form carrying needs_more_information does not resolve the case' do
       post resolve_admin_duplicate_review_path(@review_case),
-           params: { resolution_action: 'keep_separate', determination: 'needs_more_information',
+           params: { determination: 'needs_more_information',
                      rationale: 'still checking' }
 
       assert @review_case.reload.open?
@@ -80,7 +80,7 @@ module Admin
 
     test 'a resolution with no determination parameter records the server-owned value' do
       post resolve_admin_duplicate_review_path(@review_case),
-           params: { resolution_action: 'keep_separate', rationale: 'different people' }
+           params: { rationale: 'different people' }
 
       @review_case.reload
       assert @review_case.resolved?
@@ -129,8 +129,7 @@ module Admin
     end
 
     test 'show hides the forms and renders a read-only summary for a resolved case' do
-      post resolve_admin_duplicate_review_path(@review_case),
-           params: { resolution_action: 'approve', determination: 'keep_separate', rationale: 'not a match' }
+      post resolve_admin_duplicate_review_path(@review_case), params: { rationale: 'not a match' }
       get admin_duplicate_review_path(@review_case)
       assert_response :success
       assert_select '[data-testid="resolution-summary"]'
@@ -138,17 +137,77 @@ module Admin
       assert_no_match(/Resolve without merging/, response.body)
     end
 
-    test 'resolve approves the case' do
-      post resolve_admin_duplicate_review_path(@review_case),
-           params: { resolution_action: 'approve', determination: 'keep_separate', rationale: 'not a match' }
+    test 'resolve records the server-owned status and clears the flag' do
+      post resolve_admin_duplicate_review_path(@review_case), params: { rationale: 'not a match' }
       assert_redirected_to admin_duplicate_reviews_path
-      assert_equal 'resolved_approved', @review_case.reload.status
+      assert_equal 'resolved_ignored', @review_case.reload.status
+      assert_equal 'keep_separate', @review_case.resolution_determination
       assert_not @subject.reload.needs_duplicate_review
     end
 
-    test 'resolve surfaces failure without a rationale' do
+    # The action is server-owned, so a hand-built or cached request naming a retired one must be
+    # refused rather than quietly resolved as keep-separate: the admin asked for an outcome the
+    # server no longer offers, on a decision that releases a submission gate.
+    test 'a stale form carrying a retired resolution_action does not resolve the case' do
+      %w[approve ignore].each do |retired_action|
+        post resolve_admin_duplicate_review_path(@review_case),
+             params: { resolution_action: retired_action, rationale: 'not a match' }
+
+        assert @review_case.reload.open?, "#{retired_action} must not resolve the case"
+        assert_nil @review_case.resolved_at
+        assert_match(/out of date/i, flash[:alert])
+      end
+    end
+
+    # The other half of the rollover contract. The guard must reject only *conflicting* values, so a
+    # page rendered between the two changes -- carrying the values the server would choose anyway --
+    # still resolves normally. A guard that refused these would strand every admin holding an
+    # intermediate form until they reloaded.
+    test 'a compatible stale form still resolves the case' do
       post resolve_admin_duplicate_review_path(@review_case),
-           params: { resolution_action: 'approve', determination: 'keep_separate', rationale: '' }
+           params: { resolution_action: 'keep_separate', determination: 'keep_separate',
+                     rationale: 'different people' }
+
+      assert_redirected_to admin_duplicate_reviews_path
+      @review_case.reload
+      assert @review_case.resolved?
+      assert_equal 'resolved_ignored', @review_case.status
+      assert_equal 'keep_separate', @review_case.resolution_determination
+    end
+
+    # The status label and the determination are shown side by side on the resolution summary, so a
+    # label that contradicts the determination misreports the decision staff recorded.
+    test 'a resolved case reports the outcome without contradicting the determination' do
+      post resolve_admin_duplicate_review_path(@review_case), params: { rationale: 'different people' }
+      get admin_duplicate_review_path(@review_case)
+
+      assert_response :success
+      assert_select '[data-testid="resolution-summary"]' do
+        assert_select 'dd', text: 'Resolved without merge'
+        assert_select 'dd', text: 'Keep separate'
+        assert_select 'dd', text: 'Ignored', count: 0
+      end
+    end
+
+    # Nothing writes resolved_approved any more, but rows that already carry it must keep rendering
+    # their own label rather than being retitled after the fact.
+    test 'a historical resolved_approved case still displays Approved' do
+      @review_case.update!(
+        status: :resolved_approved,
+        resolution_determination: :keep_separate,
+        resolution_rationale: 'resolved under the retired approve action',
+        resolved_by: @admin,
+        resolved_at: Time.current
+      )
+
+      get admin_duplicate_review_path(@review_case)
+
+      assert_response :success
+      assert_select '[data-testid="resolution-summary"] dd', text: 'Approved'
+    end
+
+    test 'resolve surfaces failure without a rationale' do
+      post resolve_admin_duplicate_review_path(@review_case), params: { rationale: '' }
       assert_redirected_to admin_duplicate_review_path(@review_case)
       assert_equal 'open', @review_case.reload.status
     end

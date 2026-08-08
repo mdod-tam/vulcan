@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module Admin
-  # Admin workflow for resolving flagged duplicate records: review queue, case detail,
-  # audited approve/ignore/keep-separate resolutions, and same-person merge. All data
-  # mutation happens in the service layer; this controller only translates the form.
+  # Admin workflow for resolving flagged duplicate records: review queue, case detail, the audited
+  # non-merge resolution that records the two records as different people, and same-person merge.
+  # All data mutation happens in the service layer; this controller only translates the form.
   class DuplicateReviewsController < BaseController
     before_action :set_review_case, only: %i[show resolve merge]
 
@@ -21,23 +21,14 @@ module Admin
     end
 
     def resolve
-      # ResolutionService accepts no determination. This reads the legacy parameter purely as a
-      # rollover guard: absent or `keep_separate` proceeds, and any conflicting value is rejected
-      # without mutation. Treating a conflicting value as inert would be unsafe during the
-      # changeover -- an admin holding a page rendered before this shipped could pick "Needs more
-      # information", submit, and silently get a terminal keep-separate resolution instead.
-      if params[:determination].present? &&
-         params[:determination] != DuplicateReviewCases::ResolutionService::NON_MERGE_DETERMINATION
-        return redirect_to admin_duplicate_review_path(@review_case),
-                           alert: 'This form was out of date, so we reloaded the case. Review the current options and resolve it again.'
-      end
+      return if reject_stale_resolution_form?
 
       result = DuplicateReviewCases::ResolutionService.new(
         duplicate_review_case: @review_case,
         actor: current_user,
-        action: params[:resolution_action],
-        # No determination is passed: the service owns it. The only handling of a submitted value
-        # is the rollover guard above, which rejects conflicts rather than storing them.
+        # Neither the determination nor the action is passed: the service owns both. The only
+        # handling of a submitted value is the rollover guard above, which rejects conflicts
+        # rather than storing them.
         rationale: params[:rationale],
         reason_codes: Array(params[:reason_codes])
       ).call
@@ -87,6 +78,29 @@ module Admin
     end
 
     private
+
+    # Rollover guard for the resolve form. `ResolutionService` accepts neither a determination nor
+    # an action -- the server owns both -- so these two parameters are read only to decide whether
+    # the submitting page is stale. Absent, or carrying the value the server would choose anyway,
+    # proceeds; any conflicting value is rejected without mutation.
+    #
+    # Rejecting rather than ignoring is the point. A cached or long-open page can still offer
+    # outcomes the server no longer accepts, and treating those as inert would hand the admin a
+    # keep-separate resolution when they asked for something else -- the opposite of their stated
+    # intent, on a decision that releases a submission gate. The guard is inert once every rendered
+    # form is current.
+    def reject_stale_resolution_form?
+      determination = params[:determination]
+      action = params[:resolution_action]
+
+      stale = (determination.present? && determination != DuplicateReviewCases::ResolutionService::NON_MERGE_DETERMINATION) ||
+              (action.present? && action != 'keep_separate')
+      return false unless stale
+
+      redirect_to admin_duplicate_review_path(@review_case),
+                  alert: 'This form was out of date, so we reloaded the case. Review the current options and resolve it again.'
+      true
+    end
 
     def set_review_case
       @review_case = DuplicateReviewCase.find(params[:id])

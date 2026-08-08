@@ -8,11 +8,15 @@ module DuplicateReviewCases
   class ResolutionService < BaseService
     class StaleCaseError < StandardError; end
 
-    ACTIONS = {
-      approve: :resolved_approved,
-      ignore: :resolved_ignored,
-      keep_separate: :resolved_ignored
-    }.freeze
+    # The status every non-merge resolution records, server-owned like the determination beside it.
+    # There is one non-merge outcome, so there is one status; the durable semantics live in
+    # `resolution_determination`, not in a separate staff-selected action.
+    #
+    # `resolved_approved` remains mapped on the model as a legacy **readable** status so existing
+    # rows keep rendering, but nothing writes it. Do not remove that mapping: the schema's
+    # `status = ANY (ARRAY[0, 1, 2, 3])` check constraint means unmapping the Rails key would load
+    # those rows as `nil` rather than removing the state.
+    NON_MERGE_STATUS = :resolved_ignored
 
     # The only determination this service may record, and it is server-owned rather than selected.
     #
@@ -47,15 +51,15 @@ module DuplicateReviewCases
     # listed, which is how a determination nobody had triaged could terminate a case.
     NON_MERGE_DETERMINATION = 'keep_separate'
 
-    # `determination` is deliberately not a parameter. It was a staff-selected input offering five
-    # values where only one is legal, so the server owns it. A submitted value is not silently
-    # ignored either: Admin::DuplicateReviewsController rejects a conflicting legacy parameter
-    # before calling this service, so a stale form cannot resolve a case under the wrong intent.
-    def initialize(duplicate_review_case:, actor:, action:, rationale:, reason_codes: [])
+    # Neither `determination` nor `action` is a parameter: a non-merge resolution has exactly one
+    # outcome and one status, so the server owns both rather than accepting them as input. A
+    # submitted value is not silently ignored either -- Admin::DuplicateReviewsController rejects a
+    # conflicting `determination` or `resolution_action` before calling this service, so a stale
+    # page cannot resolve a case under an intent the server would otherwise reinterpret.
+    def initialize(duplicate_review_case:, actor:, rationale:, reason_codes: [])
       super()
       @duplicate_review_case = duplicate_review_case
       @actor = actor
-      @action = action.to_s.to_sym
       @rationale = rationale.to_s.strip
       @reason_codes = Array(reason_codes).map(&:to_s).compact_blank.uniq
     end
@@ -89,7 +93,6 @@ module DuplicateReviewCases
       return 'Duplicate review case is required' if @duplicate_review_case.blank?
       return 'Case is not open' unless @duplicate_review_case.open?
       return 'An admin actor is required' unless admin_actor?
-      return 'Unsupported resolution action' unless ACTIONS.key?(@action)
       return 'A rationale is required' if @rationale.blank?
 
       reason_code_error
@@ -124,7 +127,7 @@ module DuplicateReviewCases
 
     def resolve_case!
       @duplicate_review_case.update!(
-        status: ACTIONS.fetch(@action),
+        status: NON_MERGE_STATUS,
         resolution_determination: NON_MERGE_DETERMINATION,
         resolution_rationale: @rationale,
         resolution_metadata: resolution_metadata,
@@ -153,7 +156,6 @@ module DuplicateReviewCases
         auditable: @locked_subject || @duplicate_review_case.subject_user,
         metadata: {
           duplicate_review_case_id: @duplicate_review_case.id,
-          resolution_action: @action.to_s,
           resolution_determination: NON_MERGE_DETERMINATION,
           rationale: @rationale,
           reason_codes: @reason_codes

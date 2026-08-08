@@ -85,7 +85,7 @@ module DuplicateReviewCases
       assert resolution_result.success?, resolution_result.message
       assert merge_result.failure?
       assert_match(/no longer open/i, merge_result.message)
-      assert_equal 'resolved_approved', review_case.reload.status
+      assert_equal 'resolved_ignored', review_case.reload.status
       assert_not duplicate.reload.merged?
       assert_equal 1, Event.where(action: 'duplicate_review_case_resolved', auditable: duplicate).count
       assert_equal 0, Event.where(action: 'duplicate_user_merged', auditable: canonical).count
@@ -151,7 +151,6 @@ module DuplicateReviewCases
       ResolutionService.new(
         duplicate_review_case: DuplicateReviewCase.find(review_case.id),
         actor: User.find(admin.id),
-        action: :approve,
         rationale: 'records verified as separate people',
         reason_codes: %w[manual_review]
       ).call

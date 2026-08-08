@@ -55,6 +55,11 @@ module Admin
       assert_selector '[data-testid="duplicate-review-detail"]'
 
       assert_no_selector 'select[name=determination]'
+      # The action is server-owned, so the form offers no action control at all.
+      within 'form[action$="/resolve"]' do
+        assert_no_selector 'input[type=radio][name=resolution_action]'
+        assert_no_selector 'legend', text: 'Action'
+      end
       within '#identity-outcome' do
         assert_text 'Identity outcome: Keep records separate'
         assert_text 'represent different people'
@@ -63,6 +68,28 @@ module Admin
 
       take_evidence_screenshot('duplicate-review-resolve-form-server-owned-outcome',
                                full: true, html: true)
+    end
+
+    # The resolution summary shows the outcome and the determination side by side, so the two must
+    # agree. This is the state an admin is left looking at after deciding, and it is the only place
+    # the status label is read back to them.
+    test 'the resolved summary reports an outcome that agrees with the determination' do
+      visit admin_duplicate_review_path(@review_case)
+
+      within 'form[action$="/resolve"]' do
+        fill_in 'rationale', with: 'confirmed these are different people'
+        click_button 'Resolve case'
+      end
+
+      visit admin_duplicate_review_path(@review_case)
+      within '[data-testid="resolution-summary"]' do
+        assert_text 'Resolved without merge'
+        assert_text 'Keep separate'
+        assert_no_text 'Ignored'
+      end
+      assert_no_selector 'form[action$="/resolve"]'
+
+      take_evidence_screenshot('duplicate-review-resolved-summary', full: true, html: true)
     end
 
     # The rollover guard has its own visible state. A page rendered before this shipped still has the
@@ -84,7 +111,6 @@ module Admin
 
       # Scoped: the merge form carries its own rationale field.
       within 'form[action$="/resolve"]' do
-        choose 'Keep separate'
         fill_in 'rationale', with: 'still gathering documents'
         click_button 'Resolve case'
       end
