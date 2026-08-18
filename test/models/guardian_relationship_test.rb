@@ -85,4 +85,59 @@ class GuardianRelationshipTest < ActiveSupport::TestCase
     )
     assert_equal(@dependent, relationship.dependent_user)
   end
+
+  # The replay pair's integrity guarantees live in the database, not only in the writer. These pin
+  # them directly: application code could regress without either constraint being noticed by the
+  # controller tests, which always travel the happy path.
+
+  test 'a portal creation key cannot be stored without its fingerprint' do
+    error = assert_raises(ActiveRecord::StatementInvalid) do
+      GuardianRelationship.create!(guardian_user: @guardian, dependent_user: @dependent,
+                                   relationship_type: 'Parent', portal_creation_key: SecureRandom.hex(16))
+    end
+    assert_match(/portal_creation_pair_check/, error.message)
+  end
+
+  test 'a fingerprint cannot be stored without its key' do
+    error = assert_raises(ActiveRecord::StatementInvalid) do
+      GuardianRelationship.create!(guardian_user: @guardian, dependent_user: @dependent,
+                                   relationship_type: 'Parent', portal_creation_fingerprint: 'v1:abc')
+    end
+    assert_match(/portal_creation_pair_check/, error.message)
+  end
+
+  test 'one guardian cannot spend the same creation key twice' do
+    key = SecureRandom.hex(16)
+    GuardianRelationship.create!(guardian_user: @guardian, dependent_user: @dependent,
+                                 relationship_type: 'Parent', portal_creation_key: key,
+                                 portal_creation_fingerprint: 'v1:abc')
+
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      GuardianRelationship.create!(guardian_user: @guardian, dependent_user: create(:constituent),
+                                   relationship_type: 'Parent', portal_creation_key: key,
+                                   portal_creation_fingerprint: 'v1:def')
+    end
+  end
+
+  # The index is scoped, so the same raw key is a different request under a different guardian.
+  test 'two guardians may each spend the same raw creation key' do
+    key = SecureRandom.hex(16)
+    2.times do
+      GuardianRelationship.create!(guardian_user: create(:constituent), dependent_user: create(:constituent),
+                                   relationship_type: 'Parent', portal_creation_key: key,
+                                   portal_creation_fingerprint: 'v1:abc')
+    end
+
+    assert_equal 2, GuardianRelationship.where(portal_creation_key: key).count
+  end
+
+  # Rows written by paper and admin intake carry neither half, which the partial index permits.
+  test 'many relationships may carry no creation key at all' do
+    2.times do
+      GuardianRelationship.create!(guardian_user: create(:constituent), dependent_user: create(:constituent),
+                                   relationship_type: 'Parent')
+    end
+
+    assert_equal 2, GuardianRelationship.where(portal_creation_key: nil).count
+  end
 end

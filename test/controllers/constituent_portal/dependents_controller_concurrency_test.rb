@@ -545,6 +545,65 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, guardian_duplicate, admin, dependent)
     end
 
+    # Both requests clear pre-lock detection, then contend for the guardian row. Under the former
+    # design both proceeded and created a dependent each; the key must collapse them to one.
+    test 'concurrent identical replays create exactly one dependent and one replay outcome' do
+      guardian = create(:constituent)
+      key = SecureRandom.hex(16)
+      identity = unique_race_identity
+      email = "replay-race-#{SecureRandom.hex(4)}@example.com"
+      phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
+      initial_users = User.count
+      initial_relationships = GuardianRelationship.count
+
+      results = run_creation_race(count: 2) do |at_barrier|
+        run_dependent_create(
+          guardian: guardian,
+          dependent_email: email,
+          portal_creation_key: key,
+          extra_dependent_params: identity.merge(phone: phone),
+          before_lock: at_barrier
+        )
+      end
+
+      assert_equal 1, User.count - initial_users, 'exactly one dependent may survive the race'
+      assert_equal 1, GuardianRelationship.count - initial_relationships
+      assert_equal 1, GuardianRelationship.where(portal_creation_key: key).count
+      assert(results.any? { |r| r[:notice].to_s.match?(/already added/i) },
+             "one request must report the replay: #{results.inspect}")
+    ensure
+      cleanup_race_participants(guardian)
+    end
+
+    # Different keys means two genuine requests, so this is the admission rule rather than a replay:
+    # one creation succeeds and the other is refused with the support escape hatch.
+    test 'concurrent distinct requests for one identity create exactly one dependent' do
+      guardian = create(:constituent)
+      identity = unique_race_identity
+      initial_users = User.count
+
+      results = run_creation_race(count: 2) do |at_barrier|
+        run_dependent_create(
+          guardian: guardian,
+          dependent_email: "admission-race-#{SecureRandom.hex(4)}@example.com",
+          portal_creation_key: SecureRandom.hex(16),
+          extra_dependent_params: identity.merge(phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"),
+          before_lock: at_barrier
+        )
+      end
+
+      assert_equal 1, User.count - initial_users, 'the identity rule must admit only one'
+      # A refusal re-renders the form, and response_summary reports flash only for redirects, so the
+      # observable split here is one 302 success against one 422. The refusal copy itself is asserted
+      # at the request level in DependentsControllerTest.
+      assert_equal 1, results.count { |r| r[:action] == :redirect },
+                   "exactly one request may succeed: #{results.inspect}"
+      assert_equal 1, results.count { |r| r[:action] == :render && r[:status] == 422 },
+                   "the other must be refused: #{results.inspect}"
+    ensure
+      cleanup_race_participants(guardian)
+    end
+
     private
 
     def build_guardian_creation_merge_fixtures
@@ -669,7 +728,9 @@ module ConstituentPortal
       response_summary(controller)
     end
 
-    def run_dependent_create(guardian:, dependent_email:, extra_dependent_params: {}, query_before_failure_render: false)
+    def run_dependent_create(guardian:, dependent_email:, extra_dependent_params: {},
+                             query_before_failure_render: false, portal_creation_key: nil,
+                             before_lock: nil)
       fresh_guardian = User.find(guardian.id)
 
       controller = ConstituentPortal::DependentsController.new
@@ -686,8 +747,18 @@ module ConstituentPortal
           phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
           hearing_disability: true
         }.merge(extra_dependent_params),
-        guardian_relationship: { relationship_type: 'Parent' }
+        guardian_relationship: { relationship_type: 'Parent' },
+        portal_creation_key: portal_creation_key
       )
+      # The seam between pre-lock duplicate detection and the locked write. Pausing here is what
+      # makes the race real: both requests have already cleared detection and are about to contend
+      # for the same guardian row, which is exactly the window the defect lived in.
+      if before_lock
+        controller.define_singleton_method(:create_portal_dependent_atomically) do |*args|
+          before_lock.call
+          super(*args)
+        end
+      end
       if query_before_failure_render
         controller.define_singleton_method(:handle_creation_failure) do |errors|
           User.count
@@ -698,6 +769,73 @@ module ConstituentPortal
       controller.send(:create)
 
       response_summary(controller)
+    end
+
+    # Two guardians spending the same raw key at the same moment. They lock different rows, so
+    # nothing serializes them against each other -- which is exactly why the unique index must be
+    # scoped to the guardian. A global index would let one of these raise RecordNotUnique purely
+    # because an unrelated account holds the same random value.
+    test 'concurrent identical keys from different guardians are independently spendable' do
+      guardian_a = create(:constituent)
+      guardian_b = create(:constituent)
+      key = SecureRandom.hex(16)
+      identity_a = unique_race_identity
+      identity_b = unique_race_identity
+      initial_users = User.count
+
+      # A Queue, not an Array: both racers draw from this concurrently.
+      assignments = Queue.new
+      assignments << [guardian_a, identity_a] << [guardian_b, identity_b]
+      results = run_creation_race(count: 2) do |at_barrier|
+        guardian, identity = assignments.pop
+        run_dependent_create(
+          guardian: guardian,
+          dependent_email: "cross-guardian-#{SecureRandom.hex(4)}@example.com",
+          portal_creation_key: key,
+          extra_dependent_params: identity.merge(phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"),
+          before_lock: at_barrier
+        )
+      end
+
+      assert_equal 2, User.count - initial_users, 'both guardians must be able to spend the same raw key'
+      assert_equal 2, results.count { |r| r[:action] == :redirect }, results.inspect
+      assert_equal 1, GuardianRelationship.where(guardian_id: guardian_a.id, portal_creation_key: key).count
+      assert_equal 1, GuardianRelationship.where(guardian_id: guardian_b.id, portal_creation_key: key).count
+    ensure
+      cleanup_race_participants(guardian_a)
+      cleanup_race_participants(guardian_b)
+    end
+
+    # This file runs non-transactionally, so anything a race leaves behind is visible to its
+    # siblings. A dependent sharing the default 'Created Dependent' identity would become a
+    # soft-match candidate for the merge-race tests above, widening the participant set they lock
+    # and breaking their bind-exact assertion. Each race therefore uses an identity of its own.
+    def unique_race_identity
+      token = SecureRandom.hex(4)
+      { first_name: "Racer#{token}", last_name: "Case#{token}", date_of_birth: '03/09/2013' }
+    end
+
+    def cleanup_race_participants(guardian)
+      return if guardian.blank?
+
+      dependent_ids = GuardianRelationship.where(guardian_id: guardian.id).pluck(:dependent_id)
+      cleanup_duplicate_review_test_data!([guardian, *User.where(id: dependent_ids)])
+    end
+
+    # Releases every racer only once all of them have cleared pre-lock detection, so the contention
+    # happens at the guardian lock rather than being serialized earlier by chance.
+    def run_creation_race(count:)
+      arrived = Queue.new
+      release = Queue.new
+      at_barrier = lambda do
+        arrived << :ready
+        release.pop
+      end
+
+      threads = Array.new(count) { on_own_connection { yield(at_barrier) } }
+      count.times { arrived.pop }
+      count.times { release << :go }
+      threads.map(&:value)
     end
 
     def response_summary(controller)

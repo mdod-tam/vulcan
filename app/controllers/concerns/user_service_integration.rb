@@ -32,7 +32,9 @@ module UserServiceIntegration
   # @param relationship_type [String] The type of relationship
   # @param contact_strategies [Hash] Email, phone, and address strategies (defaults to 'dependent')
   # @return [Boolean] Whether the relationship was created successfully
-  def create_guardian_relationship_with_service(guardian_user, dependent_user, relationship_type, contact_strategies: {})
+  def create_guardian_relationship_with_service(guardian_user, dependent_user, relationship_type,
+                                                contact_strategies: {}, portal_creation_key: nil,
+                                                portal_creation_fingerprint: nil)
     default_strategies = {
       email_strategy: 'dependent',
       phone_strategy: 'dependent',
@@ -41,7 +43,9 @@ module UserServiceIntegration
 
     relationship_params = {
       applicant_type: 'dependent',
-      relationship_type: relationship_type
+      relationship_type: relationship_type,
+      portal_creation_key: portal_creation_key,
+      portal_creation_fingerprint: portal_creation_fingerprint
     }.merge(default_strategies.merge(contact_strategies))
 
     service = Applications::GuardianDependentManagementService.new(

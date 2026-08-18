@@ -8,9 +8,70 @@ Explicit `GuardianRelationship` records replace the old boolean flags, allowing 
 
 | Table | Key Columns | Notes |
 |-------|-------------|-------|
-| **guardian_relationships** | `guardian_id`, `dependent_id`, `relationship_type` | Unique index on `[guardian_id, dependent_id]`. |
+| **guardian_relationships** | `guardian_id`, `dependent_id`, `relationship_type`, `portal_creation_key`, `portal_creation_fingerprint` | Unique index on `[guardian_id, dependent_id]`. The replay pair is nullable, set only by portal dependent creation, with a **partial composite** unique index on `[guardian_id, portal_creation_key]` (`WHERE portal_creation_key IS NOT NULL`) and a check constraint keeping both halves present or absent together. |
 | **applications** | `user_id`, `managing_guardian_id` | `user_id` = applicant; `managing_guardian_id` set only for dependents. |
 | **users** (associations) | see below | |
+
+
+## Portal dependent creation: replay and admission
+
+Portal creation answers two independent questions inside the guardian lock, before any write. They
+are separate mechanisms because they answer different things, and neither can answer the other's
+question.
+
+**Request replay** — *is this the same request the server already completed?* Answered by
+`portal_creation_key`, a per-form value carried in a hidden field and persisted atomically with the
+relationship by `Applications::GuardianDependentManagementService`. A replay returns the original
+successful outcome with zero writes. Only a request key can distinguish a retransmission (double
+click, lost response, browser retry) from a guardian deliberately adding another person; identity
+comparison cannot, because those two look identical.
+
+Replay identity is `(authenticated guardian, request key)`, and the index is scoped to match. A key
+is one guardian's request namespace rather than a global value, so the same raw key held by another
+guardian is simply a different request: independently spendable, with no coupling between accounts
+and nothing that could surface their record. A global index would let one guardian's creation be
+refused — or raise `RecordNotUnique` under concurrency — because of a random value an unrelated
+account happens to hold.
+
+The key is paired with `portal_creation_fingerprint`, a versioned server-keyed HMAC over everything
+semantically submitted: names, normalized date of birth, contact strategy choices, dependent-owned
+contact when the dependent owns it, phone type, every disability selection, newsletter consent, and
+relationship type. Transport and derived values are excluded — CSRF tokens, submit labels, the key
+itself, synthetic contact values, guardian contact snapshots, and contact fields a guardian strategy
+ignores. It is an HMAC rather than a plain digest because the inputs are partly low-entropy PII and
+a bare SHA of them would be a searchable index into that data.
+
+| Submitted | Outcome |
+|---|---|
+| unspent key | normal creation |
+| spent key, matching fingerprint | original outcome returned, zero writes |
+| spent key, different fingerprint | stale-form refusal, zero writes |
+
+The strict form is deliberate: a replay key means "repeat this creation operation", so any change to
+what would be persisted must refuse rather than be silently discarded. It costs no normal-path
+friction, because a *failed* submission persists nothing and leaves the key unspent — fields stay
+freely editable until that key has actually completed an operation.
+
+`Users::DuplicateMergeService` accommodates the scoped index rather than dictating a global one, and
+its two repoints are asymmetric: retiring a **guardian** ends that request namespace, so the pair is
+cleared as the rows move; retiring a **dependent** leaves the guardian intact, so the pair is
+preserved.
+
+Because a replay resends the contact details of the record it already created, exact-contact
+duplicate detection sees a hard block against that record. That check runs *before* the lock, so a
+submission that resolves to a replay is allowed past it; the in-transaction check remains
+authoritative and the pre-lock read is advisory only.
+
+**Admission** — *may this guardian hold this dependent at all?* One dependent per guardian per
+canonical name and date of birth. Equivalence is delegated to `Users::Constituent.find_duplicates`,
+the single definition of "same person" in the application, which lower-cases names in SQL and
+handles the encrypted `date_of_birth` column. A refusal names the existing dependent and points at
+MAT support, because a guardian who genuinely has two different people with the same name and
+birthdate cannot resolve it themselves.
+
+This is a portal-side admission rule, not a system-wide invariant: it reads relationships written by
+paper and admin intake, but it does not constrain those writers, and a concurrent sibling write is
+not serialized by this lock.
 
 ```ruby
 # Implemented in UserGuardianship concern (app/models/concerns/user_guardianship.rb)
@@ -138,15 +199,17 @@ scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct
 
 1. Guardian uses `ConstituentPortal::DependentsController#create`
 2. Applies dependent contact strategies, then checks `DuplicateDetectionService` with context `:portal_new_dependent`
-3. Exact contact collisions block before persistence; soft name+DOB/address matches continue to new dependent creation
+3. Exact contact collisions block before persistence — **except for a resolved replay**, which legitimately carries the contact details of the record it already created, and would otherwise be refused with a support-contact dead end before its key was ever read. The pre-lock replay lookup used for that exception is advisory; step 6 repeats replay resolution under the lock and is authoritative
 4. Before writing, locks the guardian plus every candidate needed by a soft-match review case in one ascending-ID `User.lock_for_merge_integrity!` call
 5. Requalifies the locked guardian as an active constituent and re-derives guardian contact snapshots from that locked row
-6. Uses `UserServiceIntegration` for `create_user_with_service(params, is_managing_adult: false, skip_user_lookup: true, require_disability_validation: true)` — which handles password generation, requires the disability validation, and always creates a new dependent rather than reusing a lookup hit — and then `create_guardian_relationship_with_service(guardian, dependent, relationship_type)`
-7. The whole review bundle commits or rolls back together: the dependent `User`, the `GuardianRelationship`, and — for a soft match — the `DuplicateReviewCase` with source `:portal_dependent`, its `DuplicateReviewCaseCandidate` rows, the subject's `needs_duplicate_review` flag, and the `duplicate_review_case_opened` audit event. No compensating delete is used; a failure at any step leaves nothing behind
-8. A participant deleted between duplicate detection and the lock fails closed with the ordinary retry response rather than a server error
-9. Application creation happens separately when the dependent applies
+6. **Resolves the replay key under that lock.** A `portal_creation_key` already spent by this guardian with a matching `portal_creation_fingerprint` returns the original outcome with zero writes; the same key with a different fingerprint is a stale form and is refused without mutation. A key belonging to another guardian is simply a different request and resolves to nothing here
+7. **Applies the guardian-scoped identity rule.** A soft name+DOB match against a dependent *this guardian already holds* is refused, naming that dependent and pointing at MAT support. Soft matches against unrelated records are not refused — they continue into dependent creation and open the review case in the step below
+8. Uses `UserServiceIntegration` for `create_user_with_service(params, is_managing_adult: false, skip_user_lookup: true, require_disability_validation: true)` — which handles password generation, requires the disability validation, and always creates a new dependent rather than reusing a lookup hit — and then `create_guardian_relationship_with_service(guardian, dependent, relationship_type)`
+9. The whole review bundle commits or rolls back together: the dependent `User`, the `GuardianRelationship` (with the replay pair when a key was submitted), and — for a soft match — the `DuplicateReviewCase` with source `:portal_dependent`, its `DuplicateReviewCaseCandidate` rows, the subject's `needs_duplicate_review` flag, and the `duplicate_review_case_opened` audit event. No compensating delete is used; a failure at any step leaves nothing behind
+10. A participant deleted between duplicate detection and the lock fails closed with the ordinary retry response rather than a server error
+11. Application creation happens separately when the dependent applies
 
-**The `:portal_dependent` review case opened in step 7 does not gate that later application.** It is staff review work, not a submission blocker. What gates is an open case with source `:registration_soft_match` whose **subject is the applicant** — so a dependent who registered their own account and was soft-matched cannot have an application finally submitted for them until staff resolve it, whether the guardian or the dependent presses the button. The acting guardian's own open case never gates a dependent's application, and a dependent named only as a *candidate* on someone else's case is never gated for being matched. Draft creation, editing, autosave, and draft saves stay available throughout. See [User Management Features §3.2](user_management_features.md#32-name-and-dob-review-flag).
+**The `:portal_dependent` review case opened in step 9 does not gate that later application.** It is staff review work, not a submission blocker. What gates is an open case with source `:registration_soft_match` whose **subject is the applicant** — so a dependent who registered their own account and was soft-matched cannot have an application finally submitted for them until staff resolve it, whether the guardian or the dependent presses the button. The acting guardian's own open case never gates a dependent's application, and a dependent named only as a *candidate* on someone else's case is never gated for being matched. Draft creation, editing, autosave, and draft saves stay available throughout. See [User Management Features §3.2](user_management_features.md#32-name-and-dob-review-flag).
 
 Because the gate follows the applicant rather than the actor, the refusal copy is owner-neutral: a guardian reading it is not the account under review.
 
