@@ -869,9 +869,289 @@ module ConstituentPortal
       assert_equal 'Access denied. Constituent-only area.', flash[:alert]
     end
 
+    # --- Request-replay idempotency -------------------------------------------------------------
+    #
+    # A replay is the *same request* arriving twice, so these tests resend a byte-for-byte identical
+    # body. That matters: a real replay carries the same email and phone as the record it already
+    # created, which exact-contact detection sees as a hard block. Varying the contact details per
+    # call would sidestep that entirely and test nothing.
+
+    test 'replaying an identical request creates exactly one dependent' do
+      key = SecureRandom.hex(16)
+      body = dependent_body
+
+      assert_difference ['User.count', 'GuardianRelationship.count'], 1 do
+        2.times { post_dependent(body, portal_creation_key: key) }
+      end
+
+      assert_redirected_to constituent_portal_dashboard_url
+      assert_match(/already added/i, flash[:notice])
+    end
+
+    # The exact-contact hard block runs before the lock and would otherwise refuse the replay with a
+    # support-contact dead end, never consulting the key.
+    test 'a replay is not refused by exact-contact duplicate detection' do
+      key = SecureRandom.hex(16)
+      body = dependent_body
+      post_dependent(body, portal_creation_key: key)
+
+      post_dependent(body, portal_creation_key: key)
+
+      assert_nil flash[:alert]
+      assert_match(/already added/i, flash[:notice])
+    end
+
+    # The fingerprint must depend on submitted intent alone. Re-deriving the contact strategy by
+    # comparing submitted contact against the guardian's *current* email or phone would make it a
+    # function of mutable state: the guardian edits their own contact, and a byte-identical replay
+    # hashes differently and is wrongly refused as stale.
+    test 'a replay still resolves after the guardian changes their own contact' do
+      key = SecureRandom.hex(16)
+      # Submitted contact that *matches* the guardian's current contact is the case that exposes the
+      # defect: a strategy re-derived by comparison reads this as 'guardian' now and 'dependent'
+      # after the guardian edits their own record, so the same bytes would hash two ways.
+      body = dependent_body(email: @guardian.email, phone: @guardian.phone)
+      post_dependent(body, portal_creation_key: key)
+
+      @guardian.update!(email: "moved-#{SecureRandom.hex(3)}@example.com", phone: '555-555-7788')
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post_dependent(body, portal_creation_key: key)
+      end
+      assert_match(/already added/i, flash[:notice])
+      assert_nil flash[:alert]
+    end
+
+    test 'a replay writes nothing at all' do
+      key = SecureRandom.hex(16)
+      body = dependent_body
+      post_dependent(body, portal_creation_key: key)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        post_dependent(body, portal_creation_key: key)
+      end
+    end
+
+    # A replay key means "repeat this creation operation", so the key is spent against everything
+    # semantically submitted -- not just who the dependent is. Each of these would otherwise be
+    # reported as "already added" while the change was silently discarded.
+    {
+      'a changed first name' => { first_name: 'Robert' },
+      'a changed date of birth' => { date_of_birth: '2012-03-03' },
+      'a changed dependent email' => { email: 'someone.else@example.com' },
+      'a changed dependent phone' => { phone: '5555559999' },
+      'a changed phone type' => { phone_type: 'videophone' },
+      'a changed disability selection' => { vision_disability: true },
+      'a changed newsletter choice' => { newsletter_signup: true }
+    }.each do |description, change|
+      test "the same key with #{description} is refused without mutation" do
+        key = SecureRandom.hex(16)
+        body = dependent_body(phone_type: 'voice', newsletter_signup: false)
+        post_dependent(body, portal_creation_key: key)
+
+        assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+          post_dependent(body.merge(change), portal_creation_key: key)
+        end
+        assert_match(/out of date/i, flash[:alert])
+      end
+    end
+
+    test 'the same key with a changed relationship type is refused without mutation' do
+      key = SecureRandom.hex(16)
+      body = dependent_body
+      post_dependent(body, portal_creation_key: key)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post_dependent(body, portal_creation_key: key, relationship_type: 'Legal Guardian')
+      end
+      assert_match(/out of date/i, flash[:alert])
+    end
+
+    # The fingerprint is stored beside the key, and the two are meaningless apart.
+    test 'a successful creation stores the key and its fingerprint together' do
+      key = SecureRandom.hex(16)
+      post_dependent(dependent_body, portal_creation_key: key)
+
+      relationship = GuardianRelationship.find_by!(guardian_id: @guardian.id, portal_creation_key: key)
+      assert relationship.portal_creation_fingerprint.present?
+      assert_match(/\Av1:[a-f0-9]{64}\z/, relationship.portal_creation_fingerprint,
+                   'the fingerprint must be versioned and keyed, not a bare digest')
+    end
+
+    # A creation without a key stores neither half, satisfying the check constraint.
+    test 'a creation without a key stores neither half of the replay pair' do
+      post_dependent(dependent_body)
+
+      relationship = GuardianRelationship.where(guardian_id: @guardian.id).order(:id).last
+      assert_nil relationship.portal_creation_key
+      assert_nil relationship.portal_creation_fingerprint
+    end
+
+    # Replay identity is (authenticated guardian, request key), so a key is one guardian's request
+    # namespace rather than a global value. The same raw key held by another guardian is simply a
+    # different request: it must be independently spendable here, with no coupling between accounts
+    # and nothing that could surface their record.
+    test 'the same raw key is independently spendable by a different guardian' do
+      other_guardian = create(:constituent)
+      other_dependent = create(:constituent, first_name: 'Someone', last_name: 'Else')
+      key = SecureRandom.hex(16)
+      GuardianRelationship.create!(guardian_user: other_guardian, dependent_user: other_dependent,
+                                   relationship_type: 'Parent', portal_creation_key: key,
+                                   portal_creation_fingerprint: fake_fingerprint)
+
+      assert_difference ['User.count', 'GuardianRelationship.count'], 1 do
+        post_dependent(dependent_body, portal_creation_key: key)
+      end
+
+      assert_redirected_to constituent_portal_dashboard_url
+      assert_equal 1, GuardianRelationship.where(guardian_id: @guardian.id, portal_creation_key: key).count
+      # The other guardian's row is untouched, and nothing about it was disclosed.
+      assert_equal 1, GuardianRelationship.where(guardian_id: other_guardian.id, portal_creation_key: key).count
+    end
+
+    test 'a malformed key is treated as absent rather than queried' do
+      assert_difference 'User.count', 1 do
+        post_dependent(dependent_body, portal_creation_key: "' OR 1=1 --")
+      end
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
+    # The most-travelled real path: the first attempt fails validation, so nothing persisted and the
+    # key is unspent. Correcting the error and resubmitting must proceed, not fail closed.
+    test 'a corrected retry carrying the same key still creates the dependent' do
+      key = SecureRandom.hex(16)
+      body = dependent_body
+
+      assert_no_difference 'User.count' do
+        post_dependent(body.merge(hearing_disability: false), portal_creation_key: key)
+      end
+
+      assert_difference 'User.count', 1 do
+        post_dependent(body, portal_creation_key: key)
+      end
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
+    # --- Guardian-scoped duplicate prevention ---------------------------------------------------
+    #
+    # A different key means a different request, so these are admission decisions rather than
+    # replays. Contact details differ between submissions so exact-contact detection stays out of
+    # the way and the identity rule is what is actually under test.
+
+    test 'a new request for an identity the guardian already holds is refused with a way forward' do
+      post_dependent(dependent_body, portal_creation_key: SecureRandom.hex(16))
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post_dependent(dependent_body, portal_creation_key: SecureRandom.hex(16))
+      end
+
+      assert_match(/already associated with your account/i, flash[:alert])
+      assert_match(/contact the MAT Team/i, flash[:alert])
+    end
+
+    # Equivalence comes from Users::Constituent.find_duplicates, which lower-cases both names in
+    # SQL. A guard comparing raw strings would let this through.
+    test 'the identity rule is case and whitespace insensitive' do
+      post_dependent(dependent_body(first_name: 'Jane', last_name: 'Doe'),
+                     portal_creation_key: SecureRandom.hex(16))
+
+      assert_no_difference 'User.count' do
+        post_dependent(dependent_body(first_name: '  jane  ', last_name: 'DOE'),
+                       portal_creation_key: SecureRandom.hex(16))
+      end
+      assert_match(/already associated/i, flash[:alert])
+    end
+
+    # The portal submits MM/DD/YYYY. find_duplicates parses string dates with Date.iso8601, so
+    # passing the raw submitted value would silently match nothing and admit the duplicate.
+    test 'the identity rule holds for the portal MM/DD/YYYY date format' do
+      post_dependent(dependent_body(date_of_birth: '05/15/2010'),
+                     portal_creation_key: SecureRandom.hex(16))
+
+      assert_no_difference 'User.count' do
+        post_dependent(dependent_body(date_of_birth: '05/15/2010'),
+                       portal_creation_key: SecureRandom.hex(16))
+      end
+      assert_match(/already associated/i, flash[:alert])
+    end
+
+    test 'the rule reads dependents created by other writers, not only portal ones' do
+      paper_dependent = create(:constituent, first_name: 'Paper', last_name: 'Child',
+                                             date_of_birth: Date.new(2011, 4, 2))
+      GuardianRelationship.create!(guardian_user: @guardian, dependent_user: paper_dependent,
+                                   relationship_type: 'Parent')
+
+      assert_no_difference 'User.count' do
+        post_dependent(dependent_body(first_name: 'Paper', last_name: 'Child',
+                                      date_of_birth: '04/02/2011'),
+                       portal_creation_key: SecureRandom.hex(16))
+      end
+      assert_match(/already associated/i, flash[:alert])
+    end
+
+    test 'genuinely distinct dependents are still allowed' do
+      post_dependent(dependent_body(date_of_birth: '2010-05-15'), portal_creation_key: SecureRandom.hex(16))
+
+      assert_difference 'User.count', 1 do
+        post_dependent(dependent_body(date_of_birth: '2012-09-01'), portal_creation_key: SecureRandom.hex(16))
+      end
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
+    # The rule is guardian-scoped. Unrelated people sharing a name and birthdate are a soft match
+    # for review, not a block -- which is why find_duplicates flags rather than refuses.
+    test 'another guardian may hold a dependent with the same name and birthdate' do
+      other_guardian = create(:constituent)
+      post_dependent(dependent_body, portal_creation_key: SecureRandom.hex(16))
+
+      sign_out
+      sign_in_for_controller_test(other_guardian)
+
+      assert_difference 'User.count', 1 do
+        post_dependent(dependent_body, portal_creation_key: SecureRandom.hex(16))
+      end
+      assert_redirected_to constituent_portal_dashboard_url
+    end
+
     teardown do
       # Clean up Current.user to avoid affecting other tests
       Current.user = nil
+    end
+
+    private
+
+    # Builds one submission body. Email and phone are distinct per body unless overridden, because
+    # an exact email or phone match is a *hard block* in DuplicateDetectionService and refuses before
+    # the lock. Replay tests deliberately reuse one body so the second POST really is the same
+    # request, contact details included.
+    # The replay pair is meaningless split, and a check constraint enforces that, so fixtures that
+    # set a key directly must supply a fingerprint too. The value is opaque here: these tests are
+    # about the key's scope and the merge repoints, not about fingerprint comparison.
+    def fake_fingerprint
+      "v1:#{SecureRandom.hex(32)}"
+    end
+
+    def dependent_body(**overrides)
+      unique = SecureRandom.hex(4)
+      {
+        first_name: 'Jane',
+        last_name: 'Doe',
+        date_of_birth: '2010-05-15',
+        email: "jane.doe.#{unique}@example.com",
+        phone: "555#{format('%07d', SecureRandom.random_number(10_000_000))}",
+        hearing_disability: true
+      }.merge(overrides)
+    end
+
+    def post_dependent(body, portal_creation_key: nil, relationship_type: 'Parent')
+      params = {
+        dependent: body,
+        guardian_relationship: { relationship_type: relationship_type }
+      }
+      params[:portal_creation_key] = portal_creation_key if portal_creation_key
+
+      post constituent_portal_dependents_url, params: params
     end
   end
 end

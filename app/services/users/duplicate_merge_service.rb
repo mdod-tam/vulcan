@@ -496,7 +496,20 @@ module Users
       # Pair conflicts are blocked in preflight and direct pair relationships are dissolved
       # above, so these repoints cannot violate the (guardian_id, dependent_id) uniqueness
       # or self-relationship constraints.
-      as_guardian.update_all(guardian_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+      #
+      # The two repoints are not symmetric for the replay pair (`portal_creation_key` and its
+      # `portal_creation_fingerprint`). The key identifies one portal request within one guardian's
+      # namespace, and the partial unique index is scoped (guardian_id, portal_creation_key) to
+      # match. The pair moves or clears together; a check constraint forbids splitting it.
+      #
+      # - Retiring a *guardian* ends its request namespace, so the keys are cleared as the rows move.
+      #   Carrying them over would silently re-file the retired guardian's requests under the
+      #   canonical guardian, where they could collide with that guardian's own keys and would in any
+      #   case claim a replay history that never happened on this account.
+      # - Retiring a *dependent* leaves the guardian and their namespace intact, so the key still
+      #   truthfully identifies that guardian's request and is preserved.
+      as_guardian.update_all(guardian_id: @canonical_user.id, portal_creation_key: nil, # rubocop:disable Rails/SkipsModelValidations
+                             portal_creation_fingerprint: nil, updated_at: Time.current)
       as_dependent.update_all(dependent_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 

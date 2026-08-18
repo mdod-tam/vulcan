@@ -138,13 +138,20 @@ module Applications
       true
     end
 
+    # The replay pair is written here rather than by a follow-up update from the caller, so the key,
+    # its fingerprint, and the relationship they identify commit together. Persisted separately,
+    # either could outlive a rolled-back creation or be missing from a committed one, and a later
+    # replay would resolve to the wrong answer. The two are meaningless apart -- a check constraint
+    # keeps them present or absent together -- and both are absent for every non-portal writer.
     def create_relationship(relationship_type)
       return add_error?('Relationship type required') if relationship_type.blank?
 
       GuardianRelationship.create!(
         guardian_user: @guardian_user,
         dependent_user: @dependent_user,
-        relationship_type: relationship_type
+        relationship_type: relationship_type,
+        portal_creation_key: params[:portal_creation_key].presence,
+        portal_creation_fingerprint: params[:portal_creation_fingerprint].presence
       )
       true
     rescue ActiveRecord::RecordInvalid => e

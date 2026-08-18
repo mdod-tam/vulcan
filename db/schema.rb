@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -292,9 +292,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
     t.datetime "created_at", null: false
     t.bigint "dependent_id", null: false
     t.bigint "guardian_id", null: false
+    t.string "portal_creation_fingerprint"
+    t.string "portal_creation_key"
     t.string "relationship_type"
     t.datetime "updated_at", null: false
     t.index ["dependent_id"], name: "index_guardian_relationships_on_dependent_id"
+    t.index ["guardian_id", "portal_creation_key"], name: "index_guardian_relationships_on_guardian_and_creation_key", unique: true, where: "(portal_creation_key IS NOT NULL)"
+    t.check_constraint "(portal_creation_key IS NULL) = (portal_creation_fingerprint IS NULL)", name: "guardian_relationships_portal_creation_pair_check"
     t.index ["guardian_id", "dependent_id"], name: "index_guardian_relationships_on_guardian_id_and_dependent_id", unique: true
     t.index ["guardian_id"], name: "index_guardian_relationships_on_guardian_id"
   end

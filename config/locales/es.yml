@@ -158,6 +158,17 @@ es:
     details:
       followup_scheduled_for: "Seguimiento programado para"
       reason: "Motivo: %{reason}"
+  constituent_portal:
+    dependents:
+      form:
+        # Shown on the submit control while the request is in flight. Turbo already disables the
+        # submitter; this only tells the guardian why it went quiet.
+        adding: "Agregando…"
+        saving: "Guardando…"
+      create:
+        already_added: "%{name} ya fue agregado a su cuenta."
+        stale_request: "Este formulario estaba desactualizado, por lo que no se cambió nada. Vuelva a cargar la página e inténtelo de nuevo."
+        duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
     submission_gate:
       pending_identity_review_status: "El envío no está disponible mientras revisamos la información asociada con esta solicitud. Todavía puede guardar su borrador."

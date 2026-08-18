@@ -485,7 +485,76 @@ module Users
       assert_nil @canonical.phone_type
     end
 
+    # portal_creation_key identifies one portal request inside one guardian's namespace, and the
+    # partial unique index is scoped (guardian_id, portal_creation_key) to match. The two repoints
+    # in transfer_guardian_relationships! are therefore asymmetric, and both directions are pinned
+    # here: a wrong choice either strands a key under an account that never made the request, or
+    # discards replay history that is still true.
+
+    test 'retiring a guardian clears the replay keys on the relationships it transfers' do
+      dependent = create(:constituent)
+      key = SecureRandom.hex(16)
+      relationship = GuardianRelationship.create!(guardian_user: @duplicate, dependent_user: dependent,
+                                                  relationship_type: 'Parent', portal_creation_key: key,
+                                                  portal_creation_fingerprint: fake_fingerprint)
+
+      result = merge
+      assert result.success?, result.message
+
+      relationship.reload
+      assert_equal @canonical.id, relationship.guardian_id, 'the relationship must transfer'
+      assert_nil relationship.portal_creation_key,
+                 "the retired guardian's request namespace ends with it, so its keys must not become the canonical guardian's"
+      assert_nil relationship.portal_creation_fingerprint,
+                 'the pair clears together; a stranded fingerprint would violate the pair constraint'
+    end
+
+    # The same key may legitimately exist under the canonical guardian already. Carrying the retired
+    # guardian's copy across unchanged would collide on the scoped index; clearing it must let the
+    # merge complete.
+    test 'a key already held by the canonical guardian does not block the merge' do
+      key = SecureRandom.hex(16)
+      GuardianRelationship.create!(guardian_user: @canonical, dependent_user: create(:constituent),
+                                   relationship_type: 'Parent', portal_creation_key: key,
+                                   portal_creation_fingerprint: fake_fingerprint)
+      transferring = GuardianRelationship.create!(guardian_user: @duplicate, dependent_user: create(:constituent),
+                                                  relationship_type: 'Parent', portal_creation_key: key,
+                                                  portal_creation_fingerprint: fake_fingerprint)
+
+      result = merge
+      assert result.success?, result.message
+
+      assert_nil transferring.reload.portal_creation_key
+      assert_equal 1, GuardianRelationship.where(guardian_id: @canonical.id, portal_creation_key: key).count
+    end
+
+    test 'retiring a dependent preserves the replay pair on the relationships it transfers' do
+      guardian = create(:constituent)
+      key = SecureRandom.hex(16)
+      fingerprint = fake_fingerprint
+      relationship = GuardianRelationship.create!(guardian_user: guardian, dependent_user: @duplicate,
+                                                  relationship_type: 'Parent', portal_creation_key: key,
+                                                  portal_creation_fingerprint: fingerprint)
+
+      result = merge
+      assert result.success?, result.message
+
+      relationship.reload
+      assert_equal @canonical.id, relationship.dependent_id, 'the relationship must transfer'
+      assert_equal key, relationship.portal_creation_key,
+                   'the guardian and their request namespace are unchanged, so the key is still true'
+      assert_equal fingerprint, relationship.portal_creation_fingerprint,
+                   'the pair moves together: a preserved key with a cleared fingerprint would break the pair constraint'
+    end
+
     private
+
+    # The replay pair is meaningless split, and a check constraint enforces that, so fixtures that
+    # set a key directly must supply a fingerprint too. The value is opaque here: these tests are
+    # about the key's scope and the merge repoints, not about fingerprint comparison.
+    def fake_fingerprint
+      "v1:#{SecureRandom.hex(32)}"
+    end
 
     def merge(**overrides)
       defaults = {

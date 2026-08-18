@@ -9,6 +9,10 @@ module ConstituentPortal
     before_action :set_current_user
     before_action :set_dependent, only: %i[show edit update destroy]
 
+    # Format guard only. A key is an opaque per-form value, so anything that is not one is treated
+    # as absent rather than queried; a malformed key must never widen a lookup.
+    PORTAL_CREATION_KEY_FORMAT = /\A[a-f0-9]{32}\z/
+
     # GET /constituent_portal/dependents/:id
     def show
       # @dependent is set by before_action
@@ -41,7 +45,7 @@ module ConstituentPortal
       end
       duplicate_detection = detect_portal_dependent_duplicates(dependent_attrs)
       return unless duplicate_detection
-      return if portal_dependent_duplicate_blocked?(duplicate_detection)
+      return if portal_dependent_duplicate_blocked?(duplicate_detection, dependent_attrs)
 
       participant_ids = portal_dependent_creation_participant_ids(duplicate_detection)
       preallocated_synthetic_phone = preallocated_synthetic_phone_from(dependent_attrs)
@@ -218,8 +222,124 @@ module ConstituentPortal
       nil
     end
 
-    def portal_dependent_duplicate_blocked?(duplicate_detection)
+    def submitted_portal_creation_key
+      key = params[:portal_creation_key].to_s
+      key.match?(PORTAL_CREATION_KEY_FORMAT) ? key : nil
+    end
+
+    # The refusal has to leave the guardian somewhere to go: they cannot self-serve past a
+    # same-name/same-birthdate block when the two really are different people.
+    def duplicate_identity_message(existing_dependent)
+      t('constituent_portal.dependents.create.duplicate_identity',
+        name: existing_dependent.full_name,
+        support_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
+        support_phone: Policy.get('support_phone') || '410-767-6960')
+    end
+
+    # A replay already succeeded once, so it redirects to the outcome the guardian was waiting on;
+    # anything else is a refusal and returns messages for the caller to render after rollback.
+    def apply_portal_dependent_admission(admission)
+      return admission[:errors] if admission[:notice].blank?
+
+      redirect_to constituent_portal_dashboard_path, notice: admission[:notice]
+      nil
+    end
+
+    # Answers both admission questions in one place and returns what the caller should do:
+    # a notice to redirect with on a replay, errors to fail with, or nil to proceed.
+    def portal_dependent_admission(locked_guardian, dependent_attrs)
+      replay = replayed_dependent_creation(locked_guardian, dependent_attrs)
+      return { errors: [t('constituent_portal.dependents.create.stale_request')] } if replay == :conflict
+
+      if replay
+        return { notice: t('constituent_portal.dependents.create.already_added',
+                           name: replay.dependent_user.full_name) }
+      end
+
+      existing = guardian_scoped_identity_match(locked_guardian, dependent_attrs)
+      return { errors: [duplicate_identity_message(existing)] } if existing
+
+      nil
+    end
+
+    # Resolves the submitted key within this guardian's own request namespace, which is what replay
+    # identity means: (authenticated guardian, request key). The index is scoped the same way, so
+    # the same raw key held by another guardian is simply a different request and resolves to
+    # nothing here -- no coupling between accounts, and nothing that could surface their record.
+    #
+    # Returns the original relationship on a true replay, :conflict when this guardian already spent
+    # the key on materially different input, and nil when the key is absent or unspent by them.
+    #
+    # A form rendered before this shipped carries no key. That returns nil, so it falls through to
+    # the identity guard with degraded replay semantics -- admitted or refused on policy, never
+    # silently past both checks.
+    def replayed_dependent_creation(guardian, _dependent_attrs)
+      key = submitted_portal_creation_key
+      return nil if key.blank?
+
+      existing = GuardianRelationship.includes(:dependent_user)
+                                     .find_by(guardian_id: guardian.id, portal_creation_key: key)
+      return nil if existing.blank?
+
+      existing.portal_creation_fingerprint == submitted_request_fingerprint ? existing : :conflict
+    end
+
+    # Fingerprint of everything semantically submitted, built from the request rather than from the
+    # persisted dependent. Comparing against the stored record cannot work: under a guardian contact
+    # choice the dependent's stored contact is *derived from the guardian*, so the submitted value
+    # was never persisted verbatim and is unrecoverable afterwards.
+    #
+    # Note this passes the raw `use_guardian_*` choices rather than the resolved strategies.
+    # `contact_strategy_for` decides the strategy partly by comparing submitted contact against the
+    # guardian's *current* email and phone, so feeding it here would make the fingerprint a function
+    # of mutable guardian state: the guardian edits their own email and a byte-identical replay
+    # hashes differently, then gets refused as stale. Submitted intent is the only stable input.
+    def submitted_request_fingerprint
+      DependentRequestFingerprint.new(
+        dependent_params: dependent_user_params.to_h,
+        relationship_type: guardian_relationship_params[:relationship_type],
+        use_guardian_email: params[:use_guardian_email],
+        use_guardian_phone: params[:use_guardian_phone]
+      ).to_s
+    end
+
+    # Guardian-scoped admission rule: one dependent per canonical name and date of birth.
+    #
+    # Equivalence is delegated to Users::Constituent.find_duplicates -- the single definition of
+    # "same person" this application has -- rather than restated here. That matters beyond tidiness:
+    # find_duplicates lower-cases both names in SQL and parses string dates with Date.iso8601, so a
+    # hand-rolled comparison against the portal's MM/DD/YYYY input would silently match nothing.
+    # duplicate_detection_attrs casts the submitted value through a Users::Constituent instance, so
+    # what is passed here is an already-parsed Date.
+    #
+    # Portal-side admission, not a system-wide invariant: it reads relationships written by paper
+    # and admin intake, but it does not constrain those writers, and a concurrent sibling write is
+    # not serialized by this lock.
+    def guardian_scoped_identity_match(locked_guardian, dependent_attrs)
+      attrs = duplicate_detection_attrs(dependent_attrs)
+      first_name = attrs[:first_name].to_s.strip
+      last_name = attrs[:last_name].to_s.strip
+      date_of_birth = attrs[:date_of_birth]
+      return nil if first_name.blank? || last_name.blank? || date_of_birth.blank?
+
+      dependent_ids = GuardianRelationship.where(guardian_id: locked_guardian.id).select(:dependent_id)
+      Users::Constituent.find_duplicates(first_name, last_name, date_of_birth)
+                        .where(id: dependent_ids)
+                        .first
+    end
+
+    # A replay resends the contact details of the record it already created, so exact-contact
+    # detection sees a hard block -- against that record. Refusing there would answer a request the
+    # server already completed with a support-contact dead end, and the key would never be consulted
+    # because this runs before the lock.
+    #
+    # So a submission that looks like a replay is allowed through to the locked path, which resolves
+    # the key and returns the original outcome. This read is unlocked and therefore advisory only,
+    # exactly like the portal's pre-lock identity-review read: the in-transaction check still
+    # decides, and a concurrent first request that has not committed yet simply falls through to it.
+    def portal_dependent_duplicate_blocked?(duplicate_detection, dependent_attrs)
       return false unless duplicate_detection.hard_block
+      return false if replayed_dependent_creation(current_user, dependent_attrs).present?
 
       handle_creation_failure(['Unable to complete dependent creation. Please contact the MAT Team for assistance.'])
       true
@@ -262,6 +382,22 @@ module ConstituentPortal
           raise ActiveRecord::Rollback
         end
 
+        # Two independent admission questions, both asked under the lock and before any write, in
+        # this order because they answer different things:
+        #
+        #   1. replay -- is this the same *request* the server already completed? Only the per-form
+        #      key can distinguish a retransmission from a guardian deliberately adding someone
+        #      else; two identical-looking submissions and one submission sent twice are the same
+        #      thing to an identity comparison.
+        #   2. admission -- may this guardian hold this dependent at all? Answered by canonical
+        #      name+DOB equivalence, which is policy about people rather than about requests. A
+        #      fresh form legitimately carries a new key, so the key cannot answer this.
+        admission = portal_dependent_admission(locked_guardian, dependent_attrs)
+        if admission
+          failure_messages = apply_portal_dependent_admission(admission)
+          raise ActiveRecord::Rollback
+        end
+
         record_applied_contact_choices
 
         # Using UserServiceIntegration for the existing portal contract: always create a new
@@ -277,7 +413,9 @@ module ConstituentPortal
         relationship_created = create_guardian_relationship_with_service(
           locked_guardian,
           @dependent_user,
-          guardian_relationship_params[:relationship_type]
+          guardian_relationship_params[:relationship_type],
+          portal_creation_key: submitted_portal_creation_key,
+          portal_creation_fingerprint: (submitted_request_fingerprint if submitted_portal_creation_key)
         )
         unless relationship_created
           log_user_service_error('to create guardian relationship', 'Relationship creation failed')

@@ -69,10 +69,49 @@ Customer import — decide before building  [DATA-001][DATA-002]
 
 - [ ] Before building the customer importer, decide whether reconciliation creates duplicate-review cases and, if so, define its `source`, its submission-gate consequence, queue ownership, throughput, and audit behavior. An importer opening `registration_soft_match` cases blocks every matched imported constituent from final submission; any other source blocks nobody but flags the whole imported population. No importer exists today, and this is general-purpose identity reconciliation, which sits outside the Contact Foundation epic's boundary.
 
-Portal dependent duplicate-submission idempotency  [DATA-002]
-- [ ] Re-run `DuplicateDetectionService` inside the guardian lock in `ConstituentPortal::DependentsController#create`. Detection runs before the lock and is never re-checked, so two identical submissions can both clear it and create two dependents. Nothing downstream catches the second: under the guardian contact strategy each dependent gets its own unique synthetic email and phone, so no unique index fires, and `guardian_relationships` is unique on `(guardian_id, dependent_id)`, which differs.
-- [ ] Add submit-disable to `app/views/constituent_portal/dependents/_form.html.erb` to kill the common double-click trigger; the form has no `disable_with` today.
-- [ ] Tests: two identical submissions create exactly one dependent, and the second is refused with no side effects.
+Signed-in portal locale routing  [DATA-002]
+
+- [ ] Constituent-facing portal pages render in `I18n.default_locale` for signed-in users regardless
+  of `users.locale`. `I18n.with_locale` is applied only in public auth flows
+  (`ApplicationController#with_public_request_locale`), so nothing routes a signed-in guardian to the
+  Spanish strings that already exist for their pages. Decide whether the portal should follow the
+  account locale, a request parameter, or both, then apply it once rather than per-controller.
+  Surfaced while adding `constituent_portal.dependents.*`: the `es` entries are correct and
+  unreachable.
+
+Portal dependent creation: two separate outcomes  [DATA-002]
+
+These were previously tracked as one item called "idempotency", which conflated two different
+questions. They stay listed separately so neither can be marked done by the other.
+
+Guardian-scoped duplicate prevention — *may this guardian hold this dependent at all?*
+- [x] Refuse a second dependent with the same canonical name and date of birth for one guardian,
+  inside the existing guardian lock and before any write. *(Done. Equivalence is delegated to
+  `Users::Constituent.find_duplicates` rather than restated — it lower-cases names in SQL and
+  handles the encrypted `date_of_birth`, so a hand-rolled check against the portal's MM/DD/YYYY
+  input silently matches nothing. The refusal names the existing dependent and points at MAT
+  support, since a guardian with two genuinely different same-name/same-birthdate people cannot
+  resolve it themselves.)*
+
+Request-replay idempotency — *is this the same request the server already completed?*
+- [x] Persist a per-form `portal_creation_key` atomically with the relationship and return the
+  original outcome on a replay with zero writes. *(Done.)*
+- [x] Scope replay identity to `(authenticated guardian, request key)`, enforced by a partial
+  composite unique index. *(Done. A key is one guardian's request namespace, not a global value, so
+  the same raw key is independently spendable by another guardian. A global index would couple
+  unrelated accounts and could raise `RecordNotUnique` under concurrency.)*
+- [x] Distinguish a true replay from a reused key carrying changed input. *(Done via
+  `portal_creation_fingerprint`, a versioned server-keyed HMAC over everything semantically
+  submitted. HMAC rather than a plain digest because the inputs are partly low-entropy PII. A reused
+  key with different input is refused as a stale form rather than silently discarding the change.)*
+- [x] Resolve the replay ahead of the pre-lock exact-contact hard block. *(Done. A replay resends the
+  contact details of the record it already created, so detection sees a hard block against that
+  record; refusing there gave the lost-response retry a support-contact dead end.)*
+- [x] Define merge behaviour for the scoped index. *(Done, and asymmetric: retiring a guardian ends
+  that request namespace so the pair is cleared as rows are repointed; retiring a dependent leaves
+  the guardian intact so the pair is preserved.)*
+- [x] Cover both concurrently, with a barrier after pre-lock detection. *(Done: identical replays,
+  distinct requests for one identity, and the same raw key from two guardians.)*
 
 Notes: predates the PR4d atomicity work and is unchanged by it, but PR4d added the guardian lock that makes the first item possible. Cleanup is expensive today because duplicates created this way cannot be merged through the admin merge UI, which accepts only `registration_soft_match` cases.
 

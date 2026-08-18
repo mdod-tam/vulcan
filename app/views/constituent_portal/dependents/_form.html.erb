@@ -13,6 +13,14 @@
       "aria-labelledby": "form-title",
       data: { controller: "dependent-fields" }) do |form| %>
 
+  <%# Identifies this submission so the server can tell a retransmitted request -- double click,
+      lost response, browser retry -- from a guardian deliberately adding another person. Generated
+      once per rendered form and carried across a failed re-render, so correcting a validation error
+      and resubmitting stays the same request. Creation only; an update is not a creation replay. %>
+  <% if dependent_user.new_record? %>
+    <%= hidden_field_tag :portal_creation_key, portal_creation_key_for_form %>
+  <% end %>
+
   <% if dependent_user.errors.any? %>
     <div class="bg-red-50 p-4 rounded mb-6 text-red-600" role="alert" aria-atomic="true">
       <h2 class="font-medium">
@@ -229,8 +237,11 @@
         role: "button",
         "aria-label": "Cancel and return to dashboard" %>
 
+    <%# data-turbo-submits-with is visible feedback only. Turbo already disables the submitter while
+        the request is in flight; neither prevents a duplicate, which the server-side key does. %>
     <%= form.submit dependent_user.new_record? ? "Add Dependent" : "Update Dependent",
         class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+        data: { turbo_submits_with: dependent_user.new_record? ? t('constituent_portal.dependents.form.adding') : t('constituent_portal.dependents.form.saving') },
         "aria-label": dependent_user.new_record? ? "Add new dependent" : "Update dependent information" %>
   </div>
 <% end %>

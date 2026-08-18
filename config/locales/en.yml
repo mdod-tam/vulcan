@@ -176,6 +176,26 @@ en:
     details:
       followup_scheduled_for: "Follow-up scheduled for"
       reason: "Reason: %{reason}"
+  constituent_portal:
+    dependents:
+      form:
+        # Shown on the submit control while the request is in flight. Turbo already disables the
+        # submitter; this only tells the guardian why it went quiet.
+        adding: "Adding…"
+        saving: "Saving…"
+      create:
+        # Shown when the same submission reaches the server twice. The guardian asked for one
+        # dependent and got one, so this reports the success they were waiting on rather than an
+        # error about a request they did not knowingly send twice.
+        already_added: "%{name} was already added to your account."
+        # The same request key arriving with different identity details means the page that sent it
+        # no longer reflects what the server has. Refused rather than guessed at.
+        stale_request: "This form was out of date, so nothing was changed. Please reload the page and try again."
+        # Guardian-scoped admission rule: one dependent per name and birthdate. The escape hatch
+        # matters -- a guardian who genuinely has two different people with the same name and
+        # birthdate cannot resolve this themselves, and a refusal with no route forward is a dead
+        # end.
+        duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
     submission_gate:
       # Announced by the submit-gate live region when the control is held disabled. Short on
