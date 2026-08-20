@@ -156,6 +156,11 @@ Rails.application.routes.draw do
         post :reject_for_income
         get :dependent_form
         get :recipient_preference
+        # Read-only identity check the form runs before submitting. POST rather than GET because it
+        # carries the applicant's identity facts, which must stay out of URLs -- and therefore out of
+        # browser history, Referer headers, and proxy access logs. Keeping them out of Rails' own
+        # request logs is a separate mechanism: config.filter_parameters.
+        post :identity_review
       end
     end
 

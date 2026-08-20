@@ -1509,5 +1509,242 @@ module Admin
       assert_select 'input[name=?][checked]', 'no_email_address'
       assert_select 'input[name=?][checked]', 'no_phone_number'
     end
+
+    # Wiring regression. The service enforces the identity decision, but the parameter has to
+    # survive the controller's own params plumbing to reach it -- `base_params_from` slices an
+    # explicit list, so permitting the key is not the same as passing it on. A service test cannot
+    # catch that gap because it constructs params directly; only an HTTP round trip can.
+    #
+    # No valid token is needed to prove it: a submission carrying a *forged* token must be refused
+    # differently from one carrying none at all. If the parameter were dropped, both would produce
+    # the identical "possible matches found" message.
+    test 'the identity decision parameter reaches the service' do
+      existing = create(:constituent, first_name: 'Wiring', last_name: 'Probe',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      body = {
+        constituent: {
+          first_name: existing.first_name, last_name: existing.last_name, date_of_birth: '04/02/1990',
+          email: "wiring-#{SecureRandom.hex(4)}@example.com", phone: '555-000-0777',
+          physical_address_1: '9 Probe St', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          hearing_disability: '1'
+        },
+        application: { household_size: '2', annual_income: '15000', maryland_resident: '1',
+                       self_certify_disability: '1', medical_provider_name: 'Dr. Probe',
+                       medical_provider_phone: '2025559876',
+                       medical_provider_email: 'probe@example.com' }
+      }
+
+      assert_no_difference 'User.count' do
+        post admin_paper_applications_path, headers: default_headers, params: body
+      end
+      without_token = flash[:alert].to_s + response.body
+
+      assert_no_difference 'User.count' do
+        post admin_paper_applications_path, headers: default_headers,
+                                            params: body.merge(identity_decision: "v1:#{Time.current.to_i}:#{'0' * 64}")
+      end
+      with_forged_token = flash[:alert].to_s + response.body
+
+      assert_match(/possible match/i, without_token)
+      assert_match(/changed since you reviewed them/i, with_forged_token)
+    end
+
+    # --- Identity review endpoint ----------------------------------------------------------------
+    #
+    # The form calls this before every submission, including the ordinary case where nothing
+    # matches: the browser cannot know which outcome applies until it asks, and submitting first
+    # would surface a soft match only through a server-rendered failure that discards the four
+    # selected proof files.
+
+    test 'identity review reports a clear result when nothing matches' do
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+
+      assert_response :success
+      body = response.parsed_body
+      assert_equal 'clear', body['state']
+      assert_empty body['candidates']
+      assert_nil body['token'], 'nothing was decided, so nothing should be signed'
+    end
+
+    test 'identity review reports possible matches with a token and an expiry' do
+      existing = create(:constituent, first_name: 'Preview', last_name: 'Subject',
+                                      date_of_birth: Date.new(1990, 4, 2))
+
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+
+      body = response.parsed_body
+      assert_equal 'needs_confirmation', body['state']
+      assert_equal([existing.id], body['candidates'].pluck('id'))
+      assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, body['token'])
+      assert body['expires_at'].present?, 'the form needs to know when an open review goes stale'
+      assert_includes body['reasons'], 'name_dob'
+    end
+
+    test 'identity review reports a contact conflict without offering a token' do
+      existing = create(:constituent, email: "conflict-#{SecureRandom.hex(3)}@example.com")
+
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts.merge(email: existing.email) }
+
+      body = response.parsed_body
+      assert_equal 'blocked', body['state']
+      assert_nil body['token'], 'a contact conflict is not a decision staff may take'
+      assert_includes body['reasons'], 'exact_email'
+    end
+
+    # The endpoint answers a question about identity; it must not become a way to read arbitrary
+    # constituent contact details out of the admin form.
+    test 'identity review returns only distinguishing facts, never contact details' do
+      existing = create(:constituent, first_name: 'Preview', last_name: 'Subject',
+                                      date_of_birth: Date.new(1990, 4, 2),
+                                      email: "leak-probe-#{SecureRandom.hex(3)}@example.com",
+                                      phone: '555-000-6543')
+
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+
+      assert_not_includes response.body, existing.email
+      assert_not_includes response.body, '5550006543'
+      assert_equal %w[city date_of_birth id name selectable state zip_code],
+                   response.parsed_body['candidates'].first.keys.sort
+    end
+
+    # The no-contact flags change the facts before detection, so a review that ignored them would
+    # answer about a different applicant than the writer verifies.
+    test 'identity review honours the no-contact flags' do
+      existing = create(:constituent, email: "flagged-#{SecureRandom.hex(3)}@example.com")
+
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts.merge(email: existing.email), no_email_address: '1' }
+
+      assert_equal 'clear', response.parsed_body['state'],
+                   'with no email submitted there is no email to collide'
+    end
+
+    # The candidate-key test would not catch a top-level leak, so the whole response shape is
+    # pinned per state. `identity_facts` living on the result makes that a live risk if anyone ever
+    # renders the result directly.
+    test 'identity review returns only the expected top-level keys' do
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+      assert_equal %w[candidates reasons state], response.parsed_body.keys.sort
+
+      create(:constituent, first_name: 'Preview', last_name: 'Subject', date_of_birth: Date.new(1990, 4, 2))
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+      assert_equal %w[candidates expires_at reasons state token], response.parsed_body.keys.sort
+    end
+
+    # The expiry the browser is told must be the one verification will enforce, not "roughly now
+    # plus the window" computed after the token was signed.
+    test 'the reported expiry is derived from the token that was issued' do
+      create(:constituent, first_name: 'Preview', last_name: 'Subject', date_of_birth: Date.new(1990, 4, 2))
+
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+      body = response.parsed_body
+
+      assert_equal Applications::PaperIdentityDecision.expires_at(body['token']).iso8601,
+                   body['expires_at']
+    end
+
+    # Read-only by contract: a check must never become a write.
+    test 'identity review writes nothing' do
+      create(:constituent, first_name: 'Preview', last_name: 'Subject', date_of_birth: Date.new(1990, 4, 2))
+
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count',
+                            'Event.count', 'Notification.count'] do
+        post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                            params: { constituent: identity_facts }
+      end
+    end
+
+    test 'identity review is refused for a signed-in non-admin' do
+      sign_out
+      sign_in_for_controller_test(create(:constituent))
+
+      post identity_review_admin_paper_applications_path, params: { constituent: identity_facts }
+
+      assert_response :redirect
+      assert_no_match(/needs_confirmation|candidates/, response.body)
+    end
+
+    # Stimulus needs a pinned shape for the failure path too, or it has nothing to branch on.
+    test 'a detection failure reports an error state without a token' do
+      DuplicateDetectionService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'detector unavailable', data: nil)
+      )
+
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+
+      body = response.parsed_body
+      assert_equal 'error', body['state']
+      assert_empty body['candidates']
+      assert_nil body['token']
+    end
+
+    test 'identity review is not cached' do
+      post identity_review_admin_paper_applications_path, headers: default_headers,
+                                                          params: { constituent: identity_facts }
+
+      assert_equal 'no-store', response.headers['Cache-Control']
+    end
+
+    test 'identity review requires an authenticated admin' do
+      sign_out
+
+      post identity_review_admin_paper_applications_path, params: { constituent: identity_facts }
+
+      assert_response :redirect
+    end
+
+    # The browser sends exactly this. Redirecting it instead sends the fetch to SessionsController#new,
+    # which has no JSON responder and raises ActionController::UnknownFormat -- so an ordinary expired
+    # session logged a server exception on every preflight. 401 is also what the client acts on.
+    test 'an expired session answers a JSON identity review with 401 rather than a redirect' do
+      sign_out
+
+      post identity_review_admin_paper_applications_path,
+           params: { constituent: identity_facts },
+           headers: { 'Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest' }
+
+      assert_response :unauthorized
+      assert_equal 'no-store', response.headers['Cache-Control']
+      assert_equal 'authentication_required', response.parsed_body['error']
+      assert_equal sign_in_path, response.parsed_body['sign_in_path']
+    end
+
+    # The redirect is still right for a browser navigation, and for Turbo, whose requests are also
+    # XHR but whose sign-in target renders a turbo_stream perfectly well.
+    test 'an expired session still redirects an ordinary HTML request' do
+      sign_out
+
+      post identity_review_admin_paper_applications_path,
+           params: { constituent: identity_facts }, headers: { 'Accept' => 'text/html' }
+
+      assert_redirected_to sign_in_path
+    end
+
+    # Nothing about the applicant may travel in a refusal that is not authenticated.
+    test 'the unauthenticated refusal echoes no identity facts' do
+      sign_out
+      facts = identity_facts
+
+      post identity_review_admin_paper_applications_path,
+           params: { constituent: facts }, headers: { 'Accept' => 'application/json' }
+
+      [facts[:first_name], facts[:last_name], facts[:email], facts[:phone], facts[:zip_code]].each do |secret|
+        assert_not_includes response.body, secret
+      end
+    end
+
+    def identity_facts
+      { first_name: 'Preview', last_name: 'Subject', date_of_birth: '04/02/1990',
+        email: "preview-#{SecureRandom.hex(4)}@example.com", phone: '555-000-1212',
+        physical_address_1: '3 Preview Way', city: 'Baltimore', state: 'MD', zip_code: '21201' }
+    end
   end
 end

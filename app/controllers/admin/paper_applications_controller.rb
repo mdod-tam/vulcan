@@ -15,6 +15,13 @@ module Admin
       preferred_means_of_communication referral_source newsletter_signup
     ].freeze
 
+    # Only the ten facts detection scores. Everything else the form holds -- application answers,
+    # proof files, provider details -- is irrelevant here and must not be uploaded to a check.
+    IDENTITY_REVIEW_FIELDS = %i[
+      first_name last_name date_of_birth email phone
+      physical_address_1 physical_address_2 city state zip_code
+    ].freeze
+
     USER_DISABILITY_FIELDS = %i[
       self_certify_disability hearing_disability vision_disability speech_disability
       mobility_disability cognition_disability
@@ -34,6 +41,34 @@ module Admin
       medical_release_authorized
       alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
     ].freeze
+
+    # Read-only identity check the admin form runs before it submits.
+    #
+    # POST keeps the applicant's facts out of the URL; keeping them out of the *logs* is the
+    # parameter filtering in config/initializers/filter_parameter_logging.rb, which covers the
+    # names, contact, date of birth, address and the decision token.
+    #
+    # Every submission calls this, including the ordinary case where nothing matches: the browser
+    # cannot know which outcome applies until it asks, and submitting first would mean discovering a
+    # soft match or contact conflict only through a server-rendered failure -- which discards the
+    # four selected proof files, since these are native file inputs with no direct upload.
+    #
+    # So the form sends *only* identity facts here, never the files. A `clear` answer submits
+    # natively straight afterwards; the other answers put a decision in front of staff while the
+    # completed form, and its file selections, stay untouched in the DOM.
+    #
+    # Nothing here writes, and the answer is advisory: PaperApplicationService recomputes the same
+    # review at the write boundary and that recomputation decides.
+    def identity_review
+      review = Applications::PaperIdentityReview.new(
+        constituent_params: identity_review_facts,
+        admin: current_user,
+        contact_flag_params: identity_review_flags
+      ).call
+
+      response.headers['Cache-Control'] = 'no-store'
+      render json: identity_review_payload(review)
+    end
 
     def new
       @paper_application = {
@@ -328,7 +363,7 @@ module Admin
     def build_submitted_params
       params.permit(
         :applicant_type, :relationship_type, :guardian_id, :dependent_id,
-        :existing_constituent_id, :contact_info_mode, :contact_info_verified,
+        :existing_constituent_id, :identity_decision, :contact_info_mode, :contact_info_verified,
         :no_email_address, :no_phone_number,
         :guardian_no_email_address, :guardian_no_phone_number,
         :email_strategy, :phone_strategy, :address_strategy,
@@ -389,7 +424,7 @@ module Admin
     def permitted_paper_params
       params.permit(
         :relationship_type, :guardian_id, :dependent_id, :applicant_type, :existing_constituent_id,
-        :contact_info_mode, :contact_info_verified,
+        :identity_decision, :contact_info_mode, :contact_info_verified,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         :no_email_address,
@@ -412,10 +447,36 @@ module Admin
       ).to_h.with_indifferent_access
     end
 
+    def identity_review_facts
+      params.expect(constituent: IDENTITY_REVIEW_FIELDS)
+    end
+
+    # The no-contact flags live outside the constituent hash but change the facts before detection,
+    # so the check has to see them or it would review a different applicant than the writer verifies.
+    def identity_review_flags
+      params.permit(:no_email_address, :no_phone_number)
+    end
+
+    # Built field by field rather than serializing the review result. The result carries
+    # `identity_facts` and whole candidate records; rendering it wholesale would ship far more PII to
+    # the browser than a decision needs -- and would quietly grow whenever the result gains a field.
+    # The candidate rows are rendered exactly as the review presented them, never rebuilt here. The
+    # decision token is signed over that snapshot, so a second serializer on this side would be a
+    # second definition of "what staff were shown" and could drift out of agreement with the one the
+    # write boundary verifies against.
+    def identity_review_payload(review)
+      payload = { state: review.state, reasons: review.reasons, candidates: review.presented_candidates }
+      if review.token.present?
+        payload[:token] = review.token
+        payload[:expires_at] = Applications::PaperIdentityDecision.expires_at(review.token)&.iso8601
+      end
+      payload
+    end
+
     def base_params_from(permitted)
       base = permitted.slice(
         :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
-        :existing_constituent_id, :contact_info_mode, :contact_info_verified,
+        :existing_constituent_id, :identity_decision, :contact_info_mode, :contact_info_verified,
         :no_email_address, :no_phone_number,
         :guardian_no_email_address, :guardian_no_phone_number
       )
