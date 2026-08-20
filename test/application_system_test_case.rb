@@ -423,7 +423,108 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     # 4. Clear any pending network connections from previous tests
     clear_pending_network_connections if respond_to?(:clear_pending_network_connections, true)
     track_chrome_processes('AFTER_CONNECTION_CLEAR')
+
+    # 5. Start collecting runtime JavaScript errors for the screenshot sidecar.
+    install_runtime_js_error_collector
   end
+
+  # The driver runs with js_errors: false, so a controller that throws on connect does not fail the
+  # test -- it just silently does nothing, and a screenshot of the resulting page looks like a
+  # perfectly good screenshot of a feature that is not working. This records what actually happened
+  # at runtime so the sidecar can answer it instead of leaving it unverified.
+  #
+  # Four channels, because they are genuinely different mechanisms and each one alone misses errors
+  # the others catch:
+  #
+  #   error event          -- ordinary uncaught exceptions
+  #   window.onerror       -- Stimulus's own error handling *calls* this function directly rather
+  #                           than dispatching an event, so an addEventListener("error") collector
+  #                           never sees a controller that threw on connect. That is precisely the
+  #                           failure this harness exists to catch.
+  #   unhandledrejection   -- rejected promises, which fetch-driven controllers produce
+  #   console.error        -- how most application code reports a caught-but-fatal condition
+  #
+  # Entries are keyed by message and list the channels that saw them, so a real uncaught error --
+  # which legitimately arrives on both the event and window.onerror -- is one finding, not two.
+  #
+  # Registered through CDP's addScriptToEvaluateOnNewDocument rather than an injected script tag,
+  # because it has to be installed before the page's own scripts run and it has to survive every
+  # subsequent navigation within the test.
+  def install_runtime_js_error_collector
+    @cdp_js_exceptions = []
+    driver = page.driver
+    return unless driver.respond_to?(:browser)
+
+    browser_page = driver.browser.page
+    return unless browser_page.respond_to?(:command)
+
+    subscribe_to_cdp_exceptions(browser_page)
+    browser_page.command('Page.addScriptToEvaluateOnNewDocument', source: RUNTIME_JS_COLLECTOR)
+  rescue StandardError => e
+    puts "Runtime JS error collector unavailable: #{e.message}" if ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+  end
+
+  # The in-page listeners cannot see everything. Verified in this driver: headless Chrome under
+  # Cuprite never fires `unhandledrejection` at all -- a listener installed by hand in the page does
+  # not receive it either -- so a controller whose fetch rejects would be recorded nowhere.
+  # `Runtime.exceptionThrown` is Chrome's own report of uncaught exceptions *and* unhandled
+  # rejections, delivered over the protocol rather than through the page, and it does not have that
+  # gap. Kept alongside the in-page collector rather than replacing it, because console.error and
+  # Stimulus's direct window.onerror call are not exceptions and never reach this event.
+  def subscribe_to_cdp_exceptions(browser_page)
+    return unless browser_page.respond_to?(:on)
+
+    collected = @cdp_js_exceptions
+    browser_page.on('Runtime.exceptionThrown') do |params, _index|
+      details = params['exceptionDetails'] || {}
+      message = details.dig('exception', 'description') || details['text'] || 'unknown exception'
+      collected << message.to_s[0, 500]
+    end
+  end
+
+  RUNTIME_JS_COLLECTOR = <<~JS
+    (function () {
+      if (window.__runtimeJs) return;
+      window.__runtimeJs = { errors: [] };
+
+      function record(channel, message) {
+        var text = String(message == null ? "unknown error" : message);
+        var existing = null;
+        for (var i = 0; i < window.__runtimeJs.errors.length; i++) {
+          if (window.__runtimeJs.errors[i].message === text) { existing = window.__runtimeJs.errors[i]; break; }
+        }
+        if (existing) {
+          if (existing.channels.indexOf(channel) === -1) existing.channels.push(channel);
+          existing.count += 1;
+          return;
+        }
+        window.__runtimeJs.errors.push({ message: text.slice(0, 500), channels: [channel], count: 1 });
+      }
+
+      window.addEventListener("error", function (event) {
+        record("error-event", event && (event.message || event.error));
+      });
+      window.addEventListener("unhandledrejection", function (event) {
+        record("unhandledrejection", event && event.reason);
+      });
+
+      // Stimulus calls this as a plain function; chained so anything already installed still runs.
+      var priorOnError = window.onerror;
+      window.onerror = function (message, source, lineno, colno, error) {
+        record("window.onerror", message || error);
+        if (typeof priorOnError === "function") return priorOnError.apply(this, arguments);
+        return false;
+      };
+
+      var priorConsoleError = console.error;
+      console.error = function () {
+        try {
+          record("console.error", Array.prototype.map.call(arguments, String).join(" "));
+        } catch (e) {}
+        return priorConsoleError.apply(console, arguments);
+      };
+    })();
+  JS
 
   teardown do
     # 0. Track Chrome processes at teardown start
@@ -627,7 +728,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
         screenshot_path: path,
         html_path: html_saved ? html_path : nil,
         browser_state: state,
-        viewport_analysis: blank_analysis
+        viewport_analysis: blank_analysis,
+        stimulus: screenshot_stimulus_state,
+        js_errors: screenshot_js_errors
       )
     )
   rescue StandardError => e
@@ -645,6 +748,77 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     "Screenshot saved but marked QA-unusable: #{path} (#{reasons}; sidecar: #{sidecar})"
   rescue StandardError
     "Screenshot saved: #{path}"
+  end
+
+  # "The controllers were connected and nothing threw" is the claim a screenshot cannot make on its
+  # own.
+  #
+  # `declared` comes from the DOM's data-controller attributes -- what the page asked for. `connected`
+  # comes from the Stimulus router's live contexts -- what actually attached. Neither alone answers
+  # the question: attributes are present whether or not Stimulus ever picked them up, and a list of
+  # connected controllers cannot reveal the one that was asked for and silently failed. The
+  # difference, `declared_not_connected`, is the finding, and it is what the evidence reader prints.
+  def screenshot_stimulus_state
+    page.evaluate_script(<<~JS)
+      (function () {
+        var declared = [];
+        try {
+          Array.prototype.forEach.call(document.querySelectorAll("[data-controller]"), function (element) {
+            (element.getAttribute("data-controller") || "").split(/\\s+/).forEach(function (name) {
+              if (name && declared.indexOf(name) === -1) declared.push(name);
+            });
+          });
+        } catch (error) {}
+
+        var connected = [];
+        var routerRead = false;
+        try {
+          Array.prototype.forEach.call(window.Stimulus.router.modules, function (mod) {
+            if (mod.contexts && mod.contexts.length > 0 && connected.indexOf(mod.definition.identifier) === -1) {
+              connected.push(mod.definition.identifier);
+            }
+          });
+          routerRead = true;
+        } catch (error) {}
+
+        var missing = declared.filter(function (name) { return connected.indexOf(name) === -1; });
+        return {
+          router_read: routerRead,
+          declared: declared.sort(),
+          connected: connected.sort(),
+          declared_not_connected: missing.sort()
+        };
+      })()
+    JS
+  rescue StandardError => e
+    { 'router_read' => false, 'declared' => [], 'connected' => [], 'declared_not_connected' => nil,
+      'read_error' => e.message }
+  end
+
+  # nil rather than [] when nothing was watching, so "no errors recorded" is never confused with "no
+  # collector installed". The evidence reader prints an absent value as "not captured".
+  #
+  # Merges the two sources by message: a real uncaught exception is seen by the in-page listener and
+  # reported by Chrome as well, and one failure must read as one finding.
+  def screenshot_js_errors
+    in_page = begin
+      page.evaluate_script('window.__runtimeJs ? window.__runtimeJs.errors.slice(0, 20) : null')
+    rescue StandardError
+      nil
+    end
+    from_cdp = Array(@cdp_js_exceptions)
+    return nil if in_page.nil? && !defined?(@cdp_js_exceptions)
+
+    merged = Array(in_page).map(&:dup)
+    from_cdp.each do |message|
+      existing = merged.find { |error| error['message'] == message }
+      if existing
+        existing['channels'] |= ['cdp-exception']
+      else
+        merged << { 'message' => message, 'channels' => ['cdp-exception'], 'count' => 1 }
+      end
+    end
+    merged.first(20)
   end
 
   def screenshot_browser_state

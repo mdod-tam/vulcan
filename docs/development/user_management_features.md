@@ -113,7 +113,7 @@ Name+DOB and matching address/ZIP are soft duplicate signals, not signup blocker
 Soft duplicate handling is service-owned:
 
 - `DuplicateDetectionService` evaluates exact contact matches and soft name+DOB/address signals. Public signup uses context `:public_registration`.
-- Soft matches create `DuplicateReviewCase` rows through `DuplicateReviewCases::CreateService` after the subject user is persisted. Public registration uses source `:registration_soft_match`.
+- Soft matches create `DuplicateReviewCase` rows through `DuplicateReviewCases::CreateService` after the subject user is persisted. Public registration uses source `:registration_soft_match`. **Paper new-self intake is the exception**: it adjudicates inline instead, so staff either select the surfaced constituent or record that this is a different person, and no `paper_intake` case is opened. Paper guardian and dependent intake still open cases; aligning them is PR A2.
 - `users.needs_duplicate_review` is set by `DuplicateReviewCases::CreateService`, not by controller helpers or model callbacks.
 - Portal dependent creation uses context `:portal_new_dependent` and source `:portal_dependent`.
 - Admin quick-create uses context `:admin_create` and source `:admin_create`.
