@@ -5,6 +5,8 @@ require 'action_dispatch/testing/test_process'
 
 module Applications
   class PaperApplicationServiceTest < ActiveSupport::TestCase
+    include PaperIdentityConfirmationHelper
+
     include ActionDispatch::TestProcess::FixtureFile
 
     # Disable parallelization for this test to avoid Active Storage conflicts
@@ -112,7 +114,7 @@ module Applications
       ).returns({ success: true })
 
       # Create the application via the service
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
       assert result, "Service creation failed: #{service.errors.inspect}"
 
@@ -137,7 +139,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
 
       assert_equal Date.new(1980, 1, 15), Constituent.find_by!(email: unique_email).date_of_birth
@@ -149,7 +151,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
       assert_not service.create
       assert service.errors.any? { |error| error.include?('Date of birth must be in MM/DD/YYYY format') },
              "Expected DOB format error, got: #{service.errors.inspect}"
@@ -187,7 +189,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_predicate service.application, :persisted?
     end
@@ -215,7 +217,7 @@ module Applications
         ).returns({ success: true })
       end
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_nil service.application.household_size
       assert_nil service.application.annual_income
@@ -230,7 +232,7 @@ module Applications
 
       ProofAttachmentService.expects(:attach_proof).never
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert_not service.create
       assert_includes service.errors, 'Please upload a file for income proof before sending it for review'
     end
@@ -244,7 +246,7 @@ module Applications
 
       MedicalCertificationAttachmentService.expects(:attach_certification).never
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert_not service.create
       assert_includes service.errors, 'Please upload a file for medical certification before sending it for review'
     end
@@ -271,7 +273,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
 
       assert result, "Failed to create application for existing self applicant: #{service.errors.inspect}"
@@ -303,7 +305,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
 
       assert result, "Failed to create application for existing dependent: #{service.errors.inspect}"
@@ -335,7 +337,7 @@ module Applications
       ).returns({ success: true })
 
       # Create via service
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
       assert result, "Failed to create application with rejected proof: #{service.errors.inspect}"
 
@@ -384,7 +386,7 @@ module Applications
       request_mail.expects(:deliver_later).once
       MedicalProviderMailer.expects(:request_certification).with(instance_of(Application)).returns(request_mail).once
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
 
       assert result, "Failed to create paper application that should request certification: #{service.errors.inspect}"
@@ -418,7 +420,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
       assert result, "Failed to create application with custom rejection reason: #{service.errors.inspect}"
     end
@@ -444,7 +446,7 @@ module Applications
         rejection_reason_code: nil
       ).returns(reviewer_result)
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
       assert result, "Failed to create application with medical custom rejection reason: #{service.errors.inspect}"
     end
@@ -471,7 +473,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
       assert result, "Failed to create application with medical certification marked none provided: #{service.errors.inspect}"
     end
@@ -494,7 +496,7 @@ module Applications
         .with(application: kind_of(Application), actor: @admin)
         .returns(request_service)
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
 
       assert result, "Failed to create paper application without provider info: #{service.errors.inspect}"
@@ -525,7 +527,7 @@ module Applications
       NotificationService.stubs(:create_and_deliver!).returns(true)
       Applications::RequestProviderInfo.expects(:new).never
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
 
       assert result, "Failed to create auto-approvable paper application: #{service.errors.inspect}"
@@ -566,7 +568,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.update(application)
       assert result, "Failed to update application with missing provider contact info: #{service.errors.inspect}"
     end
@@ -604,7 +606,7 @@ module Applications
       }
 
       # This should fail because of income threshold
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
 
       # Mock Application create to force a transaction rollback
       Applications::PaperApplicationService.any_instance.stubs(:income_within_threshold?).returns(false)
@@ -627,7 +629,7 @@ module Applications
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone)
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
 
       assert_no_difference ['User.count', 'Application.count'] do
         assert_not service.create
@@ -666,7 +668,7 @@ module Applications
       ).returns({ success: true })
 
       # Create via service
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
       assert result, "Failed to create application with multiple proof types: #{service.errors.inspect}"
 
@@ -729,7 +731,7 @@ module Applications
       NotificationService.stubs(:create_and_deliver!).returns(true)
       NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_predicate service.application, :fulfillment_type_equipment?
     end
@@ -748,7 +750,7 @@ module Applications
       NotificationService.stubs(:create_and_deliver!).returns(true)
       NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).at_least_once
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_predicate service.application, :fulfillment_type_voucher?
     ensure
@@ -809,7 +811,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
       assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count',
                             'DuplicateReviewCaseCandidate.count', 'Event.count'] do
         assert_not service.create
@@ -822,7 +824,12 @@ module Applications
       assert_not existing.needs_duplicate_review
     end
 
-    test 'paper self soft match persists user and opens duplicate review case through create service' do
+    # Previously this asserted that a paper soft match persisted the user and opened a
+    # `paper_intake` review case. That contract is retired: staff now review the candidates and
+    # attest that none is this applicant, so queuing the same decision for someone to make again is
+    # redundant -- and those cases are resolvable but never mergeable, so the entry could be closed
+    # without ever remediating anything.
+    test 'paper self soft match is decided by staff rather than queued for review' do
       existing = create(
         :constituent,
         first_name: 'Paper',
@@ -847,25 +854,29 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      # Without a decision: nothing is written, and staff are shown what to decide about. Note this
+      # deliberately does *not* go through confirmed_params -- the missing confirmation is the
+      # behaviour under test.
+      first = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'] do
+        assert_not first.create
+      end
+      assert_equal [existing.id], first.pending_identity_decision[:candidates].map(&:id)
 
-      assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count',
-                         'DuplicateReviewCaseCandidate.count'], 1 do
-        assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
-          assert service.create, "Service creation failed: #{service.errors.inspect}"
+      # With it: the constituent is created and no review case is opened.
+      decided = service_params.merge(identity_decision: first.pending_identity_decision[:token])
+      second = PaperApplicationService.new(params: decided, admin: @admin, skip_proof_processing: true)
+
+      assert_difference ['User.count', 'Application.count'], 1 do
+        assert_no_difference ['DuplicateReviewCase.count',
+                              %(Event.where(action: 'duplicate_review_case_opened').count)] do
+          assert second.create, "Service creation failed: #{second.errors.inspect}"
         end
       end
 
-      subject = service.constituent.reload
-      assert subject.needs_duplicate_review
-
-      duplicate_case = DuplicateReviewCase.find_by!(subject_user: subject)
-      assert_equal 'paper_intake', duplicate_case.source
-      assert_equal ['name_dob'], duplicate_case.metadata['reason_codes']
-      assert_equal [existing.id], duplicate_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
-
-      event = Event.find_by!(action: 'duplicate_review_case_opened', auditable: subject)
-      assert_equal @admin.id, event.user_id
+      subject = second.constituent.reload
+      assert_not subject.needs_duplicate_review,
+                 'a decided no-match must not flag the new constituent for review'
     end
 
     test 'process_self_applicant does not attach application when duplicate contact blocks creation' do
@@ -892,7 +903,7 @@ module Applications
           application: @application_params
         }
 
-        service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+        service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
         assert_not service.create
         assert(service.errors.any? { |error| error.match?(/phone|taken|create user/i) })
       ensure
@@ -932,7 +943,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
 
       dependent.reload
@@ -970,7 +981,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
 
       dependent.reload
@@ -1094,6 +1105,274 @@ module Applications
       assert_includes service.reconciliation_note,
                       'Income proof resubmission form could not be automatically sent'
       assert_includes service.reconciliation_note, 'You can send it from the application page.'
+    end
+
+    # --- Paper no-match decision -----------------------------------------------------------------
+    #
+    # Paper intake asks staff to decide only where the computer is unsure. Selecting a surfaced
+    # constituent was already enforced; these cover the other half -- recording that the surfaced
+    # candidates are different people. The
+    # decision is server-signed and bound to the identity it was made about, because the failure
+    # being closed is ordinary rather than adversarial: search one name, get interrupted, submit a
+    # different name, and the "I checked" silently carries over to someone it was never about.
+
+    test 'a soft match refuses creation until staff decide, and writes nothing' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+
+      service = paper_service(soft_match_params(existing))
+
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'] do
+        assert_not service.create
+      end
+      assert_match(/possible match/i, service.errors.join(' '))
+    end
+
+    test 'a refusal offers the candidates and a decision staff can return' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+
+      service = paper_service(soft_match_params(existing))
+      service.create
+      pending = service.pending_identity_decision
+
+      assert pending.present?, 'staff must be shown what they are deciding about'
+      assert_includes pending[:candidates].map(&:id), existing.id
+      assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, pending[:token])
+    end
+
+    test 'a valid decision creates the constituent and opens no paper_intake case' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      params = soft_match_params(existing)
+
+      first = paper_service(params)
+      first.create
+      token = first.pending_identity_decision[:token]
+
+      second = paper_service(params.merge(identity_decision: token))
+      assert_difference 'User.count', 1 do
+        assert_no_difference 'DuplicateReviewCase.count' do
+          assert second.create, second.errors.inspect
+        end
+      end
+    end
+
+    # The decision was about one applicant. Reusing it for another is the exact failure this exists
+    # to stop, and it must not depend on the admin noticing.
+    test 'a decision cannot be carried onto a different applicant' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      other_existing = create(:constituent, first_name: 'Another', last_name: 'Person',
+                                            date_of_birth: Date.new(1988, 7, 9))
+      params = soft_match_params(existing)
+
+      first = paper_service(params)
+      first.create
+      token = first.pending_identity_decision[:token]
+
+      # The second applicant has candidates of their own, so a decision *is* required here -- which
+      # is what makes carrying the first one over an actual bypass attempt rather than a no-op.
+      other = soft_match_params(other_existing).merge(identity_decision: token)
+
+      assert_no_difference 'User.count' do
+        assert_not paper_service(other).create
+      end
+    end
+
+    test 'a forged decision is refused' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      params = soft_match_params(existing).merge(identity_decision: "v1:#{Time.current.to_i}:#{'0' * 64}")
+
+      assert_no_difference 'User.count' do
+        assert_not paper_service(params).create
+      end
+    end
+
+    # Nothing surfaced, so there is nothing to decide. Asking staff to confirm here would be
+    # friction that proves nothing the server's own search -- run against the completed applicant
+    # immediately before the write -- has not already established.
+    test 'an applicant with no possible matches is created without any confirmation' do
+      service = paper_service(base_paper_params)
+
+      assert_difference 'User.count', 1 do
+        assert service.create, service.errors.inspect
+      end
+      assert_equal 0, DuplicateReviewCase.where(source: :paper_intake).count
+    end
+
+    # Evidence records a decision. With nothing to decide there is nothing to record, and logging it
+    # anyway would make the audit trail claim staff adjudicated something they were never shown.
+    test 'an application with no possible matches records no confirmation evidence' do
+      assert_no_difference "Event.where(action: 'paper_identity_no_match_confirmed').count" do
+        assert paper_service(base_paper_params).create
+      end
+    end
+
+    # Exact contact collisions were never acknowledgeable and must stay that way.
+    test 'an exact contact collision is refused and cannot be acknowledged away' do
+      existing = create(:constituent, email: "collide-#{SecureRandom.hex(3)}@example.com")
+      params = base_paper_params
+      params[:constituent] = params[:constituent].merge(email: existing.email)
+
+      service = paper_service(params)
+      assert_no_difference 'User.count' do
+        assert_not service.create
+      end
+      assert_match(/already exists/i, service.errors.join(' '))
+      assert_nil service.pending_identity_decision,
+                 'a hard block is not a reviewable decision'
+    end
+
+    # Removing the automatic review case removed the only durable record of who decided what, so a
+    # successful confirmation writes its own. Only successes: a missing, forged, expired or
+    # abandoned review must leave no trace, so the trail records decisions taken rather than
+    # attempts made.
+    test 'a confirmed no-match records one audit event naming what was reviewed' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      params = soft_match_params(existing)
+      first = paper_service(params)
+      first.create
+      confirmed = params.merge(identity_decision: first.pending_identity_decision[:token])
+
+      assert_difference "Event.where(action: 'paper_identity_no_match_confirmed').count", 1 do
+        assert paper_service(confirmed).create
+      end
+
+      event = Event.where(action: 'paper_identity_no_match_confirmed').order(:id).last
+      assert_equal @admin.id, event.user_id
+      assert_equal [existing.id], event.metadata['candidate_ids']
+      assert_equal 1, event.metadata['candidate_count']
+      assert_equal ['name_dob'], event.metadata['reason_codes']
+    end
+
+    # The unit matrix proves the HMAC covers every displayed field. This proves the *writer* acts on
+    # it: that PaperApplicationService rebuilds the presented snapshot from current data and refuses
+    # a decision made about a screen that no longer exists.
+    #
+    # The candidate id and the reason codes are deliberately untouched -- only what the panel showed
+    # changes. That is the case an id-and-reasons binding accepted, and it is the realistic one:
+    # staff review "Soft Match, Baltimore", someone corrects that record's city, and the person the
+    # decision was about is no longer the person on screen.
+    #
+    # Non-vacuity: the sibling test above creates successfully with a token obtained exactly this
+    # way, so the refusal here is caused by the mutation and not by the token never having worked.
+    test 'a decision about a candidate whose displayed facts changed is refused with zero writes' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2), city: 'Baltimore')
+      params = soft_match_params(existing)
+      first = paper_service(params)
+      first.create
+      token = first.pending_identity_decision[:token]
+      assert token.present?, 'the test needs a real decision to invalidate'
+
+      existing.update!(city: 'Annapolis')
+
+      confirmed = params.merge(identity_decision: token)
+      counters = ['User.count', 'Application.count', 'DuplicateReviewCase.count',
+                  "Event.where(action: 'paper_identity_no_match_confirmed').count"]
+      assert_no_difference counters do
+        service = paper_service(confirmed)
+
+        assert_not service.create
+        assert_match(/changed since you reviewed them/i, service.errors.join(' '))
+      end
+    end
+
+    # The panel refuses to offer a retired record, but the panel is not the boundary:
+    # existing_constituent_id is a plain form field, so the write path has to refuse it on its own
+    # rather than trusting that the browser only ever sends back ids it was shown.
+    test 'a forged existing_constituent_id naming a retired merged record is refused' do
+      survivor = create(:constituent)
+      retired = create(:constituent, merged_into_user: survivor)
+      params = base_paper_params.merge(existing_constituent_id: retired.id, contact_info_verified: '1')
+
+      assert_no_difference ['Application.count', 'User.count'] do
+        service = paper_service(params)
+
+        assert_not service.create
+        assert_includes service.errors.join(' '), 'not eligible as an applicant'
+      end
+    end
+
+    # The event is attached to the constituent, whose record already holds the identity facts, so
+    # repeating them here would duplicate PII into the audit trail for no gain. The token is a
+    # credential-shaped value with no meaning after the request that spent it.
+    test 'the confirmation event carries no raw identity facts and no token' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      params = soft_match_params(existing)
+      first = paper_service(params)
+      first.create
+      token = first.pending_identity_decision[:token]
+
+      paper_service(params.merge(identity_decision: token)).create
+      event = Event.where(action: 'paper_identity_no_match_confirmed').order(:id).last
+
+      serialized = event.metadata.to_json
+      assert_not_includes serialized, token
+      [params[:constituent][:first_name], params[:constituent][:email],
+       params[:constituent][:phone]].each do |fact|
+        assert_not_includes serialized, fact.to_s
+      end
+    end
+
+    # The event is written mid-transaction, before the application and proofs exist. If a later step
+    # fails, the audit trail must not keep a confirmation for a constituent who was never created --
+    # that would be evidence of a decision about a record nobody can look at.
+    test 'a failure after the confirmation rolls the event back with everything else' do
+      # A soft match, because only an override writes evidence -- there is no event to roll back on
+      # the path where nothing surfaced.
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      params = soft_match_params(existing)
+      first = paper_service(params)
+      first.create
+      confirmed = params.merge(identity_decision: first.pending_identity_decision[:token])
+
+      service = paper_service(confirmed)
+      service.stubs(:create_application).returns(false)
+
+      assert_no_difference ['User.count', 'Application.count',
+                            "Event.where(action: 'paper_identity_no_match_confirmed').count"] do
+        assert_not service.create
+      end
+    end
+
+    test 'a refused review writes no confirmation evidence' do
+      existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
+                                      date_of_birth: Date.new(1990, 4, 2))
+
+      assert_no_difference "Event.where(action: 'paper_identity_no_match_confirmed').count" do
+        paper_service(soft_match_params(existing)).create
+        paper_service(soft_match_params(existing).merge(identity_decision: "v1:#{Time.current.to_i}:#{'0' * 64}")).create
+      end
+    end
+
+    private
+
+    def paper_service(params)
+      PaperApplicationService.new(params: params, admin: @admin, skip_proof_processing: true)
+    end
+
+    def base_paper_params
+      { constituent: @constituent_params.merge(email: "paper-#{SecureRandom.hex(4)}@example.com",
+                                               phone: "202555#{rand(1000..9999)}"),
+        application: @application_params }
+    end
+
+    # Same name and date of birth as an existing constituent, but distinct contact, so detection
+    # returns a soft match rather than an exact-contact hard block.
+    def soft_match_params(existing)
+      params = base_paper_params
+      params[:constituent] = params[:constituent].merge(
+        first_name: existing.first_name,
+        last_name: existing.last_name,
+        date_of_birth: existing.date_of_birth
+      )
+      params
     end
   end
 end

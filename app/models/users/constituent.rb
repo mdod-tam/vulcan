@@ -51,55 +51,39 @@ module Users
     end
 
     # Class methods for encrypted lookups
+    # Diagnostics here are deliberately PII-free. This is the identity-matching path -- its
+    # arguments are a name and a date of birth, and its results are the people who matched -- and
+    # paper intake now calls it on every new-applicant submission. `config.filter_parameters`
+    # redacts params, not strings a developer interpolated into a log message, so anything named
+    # here would land in the log in the clear. Counts and shapes are what debugging actually needs.
+    # Identifying *which* records matched is deliberately not obtainable from the log at all -- run
+    # the same query in a console against the request's own parameters instead.
     def self.find_duplicates(first_name, last_name, date_of_birth)
-      log_duplicate_search_params(first_name, last_name, date_of_birth)
       return none if invalid_duplicate_params?(first_name, last_name, date_of_birth)
 
       formatted_date = format_date_for_encryption(date_of_birth)
-      return none if formatted_date.nil?
+      if formatted_date.nil?
+        Rails.logger.debug { "find_duplicates: unusable date_of_birth (#{date_of_birth.class})" }
+        return none
+      end
 
-      log_debug_matches(first_name, last_name) if Rails.logger.debug?
       build_duplicate_query(first_name, last_name, formatted_date)
     end
 
     class << self
       private
 
-      def log_duplicate_search_params(first_name, last_name, date_of_birth)
-        Rails.logger.debug do
-          "*** find_duplicates called with: first_name=#{first_name}, last_name=#{last_name}, date_of_birth=#{date_of_birth} (#{date_of_birth.class})"
-        end
-      end
-
       def invalid_duplicate_params?(first_name, last_name, date_of_birth)
         first_name.blank? || last_name.blank? || date_of_birth.blank?
       end
 
       def format_date_for_encryption(date_of_birth)
-        formatted_date = case date_of_birth
-                         when String
-                           Date.iso8601(date_of_birth)
-                         when Date
-                           date_of_birth
-                         end
-
-        Rails.logger.debug { "*** Using formatted_date: #{formatted_date} (#{formatted_date.class})" } if formatted_date
-        formatted_date
+        case date_of_birth
+        when String then Date.iso8601(date_of_birth)
+        when Date then date_of_birth
+        end
       rescue ArgumentError
         nil
-      end
-
-      def log_debug_matches(first_name, last_name)
-        all_matching_name = where('LOWER(first_name) = ? AND LOWER(last_name) = ?',
-                                  first_name.downcase, last_name.downcase)
-
-        return unless all_matching_name.exists?
-
-        Rails.logger.debug { "*** Found #{all_matching_name.count} name matches" }
-        all_matching_name.each do |user|
-          user_dob_formatted = user.date_of_birth.is_a?(Date) ? user.date_of_birth.strftime('%Y-%m-%d') : user.date_of_birth
-          Rails.logger.debug { "*** User #{user.id}: DOB=#{user.date_of_birth} (#{user.date_of_birth.class}), formatted=#{user_dob_formatted}" }
-        end
       end
 
       def build_duplicate_query(first_name, last_name, formatted_date)
@@ -107,11 +91,9 @@ module Users
                       first_name.downcase, last_name.downcase)
                 .where(date_of_birth: formatted_date)
 
-        if Rails.logger.debug?
-          Rails.logger.debug { "*** Duplicate query SQL: #{query.to_sql}" }
-          results = query.pluck(:id, :first_name, :last_name)
-          Rails.logger.debug { "*** Duplicate query results: #{results.inspect}, count: #{results.count}" }
-        end
+        # Counting is a second query, so it stays inside the level check rather than running
+        # unconditionally to build a message that is usually discarded.
+        Rails.logger.debug { "find_duplicates: #{query.count} match(es)" } if Rails.logger.debug?
 
         query
       end

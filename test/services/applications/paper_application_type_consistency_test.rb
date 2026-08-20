@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class PaperApplicationTypeConsistencyTest < ActiveSupport::TestCase
+    include PaperIdentityConfirmationHelper
+
     include ActiveJob::TestHelper
 
     setup do
@@ -43,7 +45,7 @@ module Applications
       NotificationService.stubs(:create_and_deliver!).returns(nil)
 
       service = PaperApplicationService.new(
-        params: @valid_params,
+        params: confirmed_paper_params(@valid_params, admin: @admin),
         admin: @admin
       )
 

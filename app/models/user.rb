@@ -211,7 +211,14 @@ class User < ApplicationRecord
 
   # Subject of a paper application (existing-adult flow). Used at trust boundaries;
   # do not rely on UI-only filtering or raw +existing_constituent_id+.
+  #
+  # A merge retires the duplicate by pointing it at a survivor, but leaves it a Constituent, so
+  # +constituent?+ alone keeps offering the retired record as a valid applicant. Attaching a new
+  # application to it would hang that application off a record the merge just declared is not the
+  # person -- and every later lookup resolves to the survivor instead.
   def paper_applicant_candidate?
+    return false if merged?
+
     constituent?
   end
 
