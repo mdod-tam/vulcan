@@ -9,6 +9,7 @@ export default class extends Controller {
   static targets = [
     "searchPane",
     "selectedPane",
+    "selectedHeading",
     "constituentIdField",
     "selectedAdultDisplay",
     "displaySelection",
@@ -45,6 +46,141 @@ export default class extends Controller {
     this.togglePanes()
     this.fetchAdultContext(id)
     this.dispatchSelectionChange()
+  }
+
+  /**
+   * Selection entry point for the paper identity review.
+   *
+   * Deliberately not `selectAdult`, for two reasons. That method takes display *markup* and writes
+   * it with innerHTML, and these values are names and addresses that arrived as JSON. And it selects
+   * unconditionally, whereas a candidate surfaced by an identity review may be ineligible -- an
+   * active application, or inside the waiting period -- in which case it must be left unselected
+   * with the reason reported rather than quietly chosen.
+   *
+   * @param {{id: number, name: string, date_of_birth: string}} candidate
+   * @returns {Promise<{selected: boolean, reason?: string}>}
+   */
+  async selectAdultFromIdentityReview(candidate, { signal } = {}) {
+    if (!candidate || !candidate.id) return { selected: false, reason: 'That record could not be selected.' }
+
+    const context = await this.fetchAdultEligibility(candidate.id, { signal })
+    if (!context) {
+      return { selected: false, reason: 'That record could not be checked right now. Try again.' }
+    }
+    // Aborted while the answer was in flight: staff have moved on, so nothing may be selected.
+    if (signal && signal.aborted) return { selected: false }
+    // Fails closed. An earlier version refused only an explicit `false`, so a response missing the
+    // field entirely -- a shape change, a partial payload -- was treated as eligible.
+    if (context.eligible_now !== true) {
+      return { selected: false, reason: this._ineligibleReason(context) }
+    }
+
+    // The context is applied from the response already in hand rather than started again and left
+    // running. A second unawaited fetch would announce the selection before the verification
+    // control existed, and submit gating would conclude verification was unnecessary -- or, if that
+    // fetch failed, leave a half-selected record with no verification UI at all.
+    this._applyAdultContext(context)
+
+    if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = candidate.id
+    this._renderSelectedCandidate(candidate)
+
+    this.selectedValue = true
+    this.togglePanes()
+    // Announced only once the contact mode and verification controls are actually in place.
+    this.dispatchSelectionChange()
+
+    // The button that had focus was inside the review panel, which selecting has just torn down.
+    // Without this, focus falls back to <body>: a keyboard or screen-reader user is returned to the
+    // top of a long form with no indication that anything happened, and the contact-verification
+    // step they now have to complete is somewhere below them. Moved after togglePanes, because a
+    // hidden element cannot take focus.
+    this._focusSelectionOutcome()
+
+    return { selected: true }
+  }
+
+  /** @private */
+  _focusSelectionOutcome() {
+    const destination = this.hasSelectedHeadingTarget ? this.selectedHeadingTarget : this.selectedPaneTarget
+    if (destination && typeof destination.focus === "function") destination.focus()
+  }
+
+  /** @private */
+  async fetchAdultEligibility(userId, { signal } = {}) {
+    try {
+      const response = await fetch(`/admin/users/${userId}/adult_application_context`, {
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin',
+        signal
+      })
+      if (!response.ok) return null
+
+      const data = await response.json()
+      return data && data.success ? data : null
+    } catch (e) {
+      console.warn('fetchAdultEligibility failed', e)
+      return null
+    }
+  }
+
+  /**
+   * Reads the explicit reason the server sends rather than inferring one from a date. The payload
+   * carries `ineligibility_reason` ('active_application' or 'waiting_period') and, for the waiting
+   * period only, `eligible_after` -- an earlier version read a non-existent `eligible_date`, so
+   * every waiting-period candidate was described as having an active application.
+   * @private
+   */
+  _ineligibleReason(context) {
+    if (context.ineligibility_reason === 'waiting_period') {
+      const date = this._formatEligibleAfter(context.eligible_after)
+      return date
+        ? `That constituent is within the waiting period and is not eligible for a new application until ${date}.`
+        : 'That constituent is within the waiting period and is not yet eligible for a new application.'
+    }
+    if (context.ineligibility_reason === 'active_application') {
+      return 'That constituent already has an active application and cannot start another.'
+    }
+    return 'That constituent is not eligible for a new application.'
+  }
+
+  /**
+   * `eligible_after` is a calendar date, not an instant. `new Date('2027-04-02')` parses as UTC
+   * midnight, which in any western timezone renders as the *previous* day -- telling staff a
+   * constituent is eligible a day earlier than they are. Formatted in UTC so the date shown is the
+   * date the server sent.
+   * @private
+   */
+  _formatEligibleAfter(value) {
+    if (!value) return null
+
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return String(value)
+
+    return parsed.toLocaleDateString(undefined, {
+      year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
+    })
+  }
+
+  /**
+   * Text nodes rather than markup: these values came from JSON and are rendered as data.
+   * @private
+   */
+  _renderSelectedCandidate(candidate) {
+    const box = this.selectedPaneTarget.querySelector('.adult-details-container')
+    if (!box) return
+
+    box.replaceChildren()
+    const name = document.createElement('div')
+    name.className = 'font-medium'
+    name.textContent = String(candidate.name || '')
+    box.appendChild(name)
+
+    if (candidate.date_of_birth) {
+      const dob = document.createElement('div')
+      dob.className = 'text-sm text-gray-600'
+      dob.textContent = String(candidate.date_of_birth)
+      box.appendChild(dob)
+    }
   }
 
   clearSelection({ dispatch = true } = {}) {
@@ -111,17 +247,27 @@ export default class extends Controller {
       const data = await response.json()
       if (!data.success) return
 
-      this._adultApplicationContext = data
-      this._storeOnFileData(data.user)
-      this._autopopulateFields(data.user)
-      this._showOnFileSummary(data)
-      this._showContactMode()
-      this._showVerification()
-      this._applyCurrentContactMode()
-      this._toggleCopyButtons(data)
+      this._applyAdultContext(data)
     } catch (e) {
       console.warn('fetchAdultContext failed', e)
     }
+  }
+
+  /**
+   * Installs everything a selected adult needs: on-file summary, contact mode, and the verification
+   * control submit gating depends on. Shared by the search-driven path and the identity-review path
+   * so a selection can never be announced with only some of it in place.
+   * @private
+   */
+  _applyAdultContext(data) {
+    this._adultApplicationContext = data
+    this._storeOnFileData(data.user)
+    this._autopopulateFields(data.user)
+    this._showOnFileSummary(data)
+    this._showContactMode()
+    this._showVerification()
+    this._applyCurrentContactMode()
+    this._toggleCopyButtons(data)
   }
 
   useLastApplicationIncomeInfo() {
