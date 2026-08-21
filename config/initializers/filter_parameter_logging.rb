@@ -13,6 +13,16 @@ Rails.application.config.filter_parameters += [
   :email, :phone, :contact, :details, :email_hint, :ssn_last4, :date_of_birth,
   :physical_address_1, :physical_address_2, :city, :state, :zip_code,
 
+  # Names. A name alone is weak, but these travel alongside a date of birth and an address in
+  # identity review and paper intake, and the combination is exactly what identifies a person.
+  :first_name, :middle_initial, :last_name,
+
+  # Short-lived authorization artifact for a paper identity decision. It is not a credential for any
+  # account, but it authorizes a specific creation, so it should not sit in logs after the request
+  # that spent it. Listed explicitly because none of the legacy patterns below match this name --
+  # /\btoken\z/ is anchored and this parameter is not called "token".
+  :identity_decision,
+
   # SMS credential specific field
   :phone_number,
 

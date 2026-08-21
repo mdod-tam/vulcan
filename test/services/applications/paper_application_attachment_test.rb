@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class PaperApplicationAttachmentTest < ActiveSupport::TestCase
+    include PaperIdentityConfirmationHelper
+
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
@@ -44,7 +46,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
       assert service.create, "Paper application creation failed with errors: #{service.errors.join(', ')}"
     end
 
@@ -79,7 +81,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: params, admin: @admin)
+      service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
       assert service.create, "Paper application creation failed with errors: #{service.errors.join(', ')}"
 
       # Since we're mocking the attachment service, we can't assert on actual attachments

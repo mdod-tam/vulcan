@@ -103,6 +103,7 @@ This is display behavior only. It does not delete records and should not be used
 | Proof secure requests | `proof_resubmission_requested`, `proof_submitted_via_secure_form`, request revoked/expired events | Secure request services own these. |
 | Disability certification | `medical_certification_requested`, `medical_certification_received`, approved/rejected/status events, secure upload and DocuSeal events | Code names still use `medical_certification_*`; user-facing prose should say disability certification. |
 | Duplicate review | `duplicate_review_case_opened`, `duplicate_review_case_resolved`, `duplicate_user_merged`, `duplicate_review_flag_cleared` | `DuplicateReviewCases::CreateService` owns case-opened rows; `DuplicateReviewCases::ResolutionService` owns non-merge resolutions and records the server-owned determination without a `resolution_action` key (historical events keep theirs); `Users::DuplicateMergeService` emits exactly one `duplicate_user_merged` per merge; `DuplicateReviewCases::ClearFlagService` (invoked by `Admin::DuplicateReviewsController#clear_flag`) locks the subject row, requalifies it, and logs legacy-flag clears. |
+| Paper identity decision | `paper_identity_no_match_confirmed` | `Applications::PaperApplicationService` emits exactly one per override, attached to the created constituent with the admin as actor. Written **only** when staff overrode surfaced candidates; a submission with nothing matching creates normally and logs nothing, because there was no decision to record. Metadata carries `candidate_ids`, `candidate_count`, and `reason_codes` — never raw identity facts (they are already on the auditable record) and never the decision token. |
 | Notifications | `notification_<action>_created`, `notification_<action>_sent`, `notification_<action>_failed` when notification auditing is enabled | Domain workflows usually leave `audit: false`. |
 | Email provider webhooks | `email_bounced` for matched provider outbound emails | Spam complaints update notification delivery state without a separate audit event today. |
 | Vouchers | `voucher_assigned`, `voucher_redeemed`, `voucher_expired`, `voucher_cancelled` | Voucher model and services own these. |
@@ -112,6 +113,8 @@ This is display behavior only. It does not delete records and should not be used
 Treat event action names as API. Before adding a new one, search for existing events and displays that already cover the same logical action.
 
 Duplicate-review case audit actor selection is flow-specific: public registration uses `PublicAuditActor` and rolls back account creation if no system actor can open the required case; portal dependent creation uses the signed-in guardian; admin quick-create and paper intake use the current admin/operator.
+
+Paper **self-applicant** intake no longer opens a `paper_intake` duplicate-review case. Staff resolve the question inline before the write, so a case would queue a decision that had just been made — and paper cases are resolvable but never mergeable, so it could be closed without ever being remediated. `paper_identity_no_match_confirmed` replaces the case as the durable record of who decided what. Guardian/dependent paper intake still opens cases; bringing it onto the same inline decision is PR A2.
 
 ---
 

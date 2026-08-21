@@ -159,6 +159,33 @@ The app does not store plain SMS codes. It stores Twilio Verify metadata such as
 
 ---
 
+## 7b. Unauthenticated Responses By Format
+
+`Authentication#authenticate_user!` answers an unauthenticated request differently depending on what
+the caller can actually read. This is application-wide, not specific to any one controller.
+
+| Request format | Response |
+|----------------|----------|
+| JSON (`request.format.json?`) | **401 Unauthorized**, `Cache-Control: no-store`, body `{ "error": "authentication_required", "sign_in_path": "/sign_in" }` |
+| HTML | 302 redirect to `sign_in_path` with the "Please sign in to continue" alert, and the attempted GET/HEAD path stored in `session[:return_to]` |
+| Turbo / other XHR | Unchanged — still redirected, because `SessionsController#new` renders a turbo_stream |
+
+The JSON case is deliberately keyed on format rather than on `request.xhr?`: Turbo requests are also
+XHR, and redirecting those is correct. Redirecting a JSON request is not — `SessionsController#new`
+has no JSON responder, so the redirect raised `ActionController::UnknownFormat` and turned an
+ordinary expired session into a server exception on every such request, while telling the caller
+nothing it could act on.
+
+`no-store` because the body describes one session at one moment; a cached "your session ended" is
+wrong the instant the user signs back in. The body carries no user data — only the fact and where to
+go — so it is safe to return to a caller that is by definition unauthenticated.
+
+Clients should treat 401 as "reauthenticate, then retry", not as a transient error. The paper
+identity preflight and the adult-applicant eligibility lookup both do, and both tell staff to sign in
+in another tab rather than reloading, because reloading discards selected file inputs.
+
+---
+
 ## 8. Logging And Audit Notes
 
 MFA success and failure are logged through Rails logs via `TwoFactorAuth.log_verification_success` and `log_verification_failure`.

@@ -75,10 +75,20 @@ module Admin
       assert_flash_message(:alert, 'Please select a file to upload')
     end
 
+    # A JSON caller is answered with 401 rather than redirected: the sign-in page has no JSON
+    # representation, so redirecting it raised ActionController::UnknownFormat instead of telling
+    # the caller anything it could act on.
     def test_requires_authentication
       delete sign_out_path
       get new_admin_application_scanned_proof_path(@application, proof_type: 'income'),
           headers: { 'Accept' => 'application/json' }
+      assert_response :unauthorized
+      assert_equal sign_in_path, response.parsed_body['sign_in_path']
+    end
+
+    def test_requires_authentication_for_an_html_request
+      delete sign_out_path
+      get new_admin_application_scanned_proof_path(@application, proof_type: 'income')
       assert_redirected_to sign_in_path
     end
   end

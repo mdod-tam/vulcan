@@ -107,12 +107,31 @@ module Authentication
     Session.find_by(session_token: cookies[:session_token])
   end
 
-  # Redirects unauthenticated users to the sign-in page with an alert message
+  # Redirects unauthenticated users to the sign-in page with an alert message.
+  #
+  # A JSON caller is answered with 401 instead. Redirecting it sends the fetch to SessionsController#new,
+  # which has no JSON responder and raises ActionController::UnknownFormat -- so an ordinary expired
+  # session produced a server exception on every such request, and the client had to infer what
+  # happened from the fact that it had been redirected. 401 is the answer the question deserves, and
+  # it is what the caller can act on.
+  #
+  # Deliberately scoped to JSON rather than to `xhr?`: Turbo requests are also XHR, and they *do*
+  # want the redirect, because SessionsController#new renders a turbo_stream.
   def authenticate_user!
     return if current_user.present?
 
+    return render_json_authentication_required if request.format.json?
+
     store_location
     redirect_to sign_in_path, alert: 'Please sign in to continue' and return
+  end
+
+  # no-store because the body describes the state of one session at one moment; a cached "your
+  # session ended" is wrong the instant the user signs back in.
+  def render_json_authentication_required
+    response.headers['Cache-Control'] = 'no-store'
+    render json: { error: 'authentication_required', sign_in_path: sign_in_path },
+           status: :unauthorized
   end
 
   def store_location

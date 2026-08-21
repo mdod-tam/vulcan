@@ -2,6 +2,12 @@ import { Controller } from "@hotwired/stimulus"
 import { setVisible, setFieldValue } from "../../utils/visibility"
 import { debouncedDispatch } from "../../utils/debounce"
 
+// Same bound as the identity preflight, for the same reason. While this lookup is pending the paper
+// form has disabled every candidate button and is still blocking Submit, so a request that never
+// settles traps a completed application -- including four selected files a reload would discard --
+// with no way forward at all.
+const ELIGIBILITY_TIMEOUT_MS = 15000
+
 // Manages adult applicant search-and-select for paper applications.
 // Mirrors guardian_picker_controller pattern but adds contact mode switching,
 // on-file data tracking, and changed-field highlighting.
@@ -9,6 +15,7 @@ export default class extends Controller {
   static targets = [
     "searchPane",
     "selectedPane",
+    "selectedHeading",
     "constituentIdField",
     "selectedAdultDisplay",
     "displaySelection",
@@ -45,6 +52,189 @@ export default class extends Controller {
     this.togglePanes()
     this.fetchAdultContext(id)
     this.dispatchSelectionChange()
+  }
+
+  /**
+   * Selection entry point for the paper identity review.
+   *
+   * Deliberately not `selectAdult`, for two reasons. That method takes display *markup* and writes
+   * it with innerHTML, and these values are names and addresses that arrived as JSON. And it selects
+   * unconditionally, whereas a candidate surfaced by an identity review may be ineligible -- an
+   * active application, or inside the waiting period -- in which case it must be left unselected
+   * with the reason reported rather than quietly chosen.
+   *
+   * @param {{id: number, name: string, date_of_birth: string}} candidate
+   * @returns {Promise<{selected: boolean, reason?: string}>}
+   */
+  async selectAdultFromIdentityReview(candidate, { signal } = {}) {
+    if (!candidate || !candidate.id) return { selected: false, reason: 'That record could not be selected.' }
+
+    const outcome = await this.fetchAdultEligibility(candidate.id, { signal })
+    // Aborted while the answer was in flight: staff have moved on, so nothing may be selected and
+    // nothing may be said about it. Checked first, because an abort is not a failure to report.
+    if (outcome.reason === 'aborted' || (signal && signal.aborted)) return { selected: false }
+    if (!outcome.ok) return { selected: false, reason: this._lookupFailureReason(outcome.reason) }
+
+    const context = outcome.context
+    // Fails closed. An earlier version refused only an explicit `false`, so a response missing the
+    // field entirely -- a shape change, a partial payload -- was treated as eligible.
+    if (context.eligible_now !== true) {
+      return { selected: false, reason: this._ineligibleReason(context) }
+    }
+
+    // The context is applied from the response already in hand rather than started again and left
+    // running. A second unawaited fetch would announce the selection before the verification
+    // control existed, and submit gating would conclude verification was unnecessary -- or, if that
+    // fetch failed, leave a half-selected record with no verification UI at all.
+    this._applyAdultContext(context)
+
+    if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = candidate.id
+    this._renderSelectedCandidate(candidate)
+
+    this.selectedValue = true
+    this.togglePanes()
+    // Announced only once the contact mode and verification controls are actually in place.
+    this.dispatchSelectionChange()
+
+    // The button that had focus was inside the review panel, which selecting has just torn down.
+    // Without this, focus falls back to <body>: a keyboard or screen-reader user is returned to the
+    // top of a long form with no indication that anything happened, and the contact-verification
+    // step they now have to complete is somewhere below them. Moved after togglePanes, because a
+    // hidden element cannot take focus.
+    this._focusSelectionOutcome()
+
+    return { selected: true }
+  }
+
+  /** @private */
+  _focusSelectionOutcome() {
+    const destination = this.hasSelectedHeadingTarget ? this.selectedHeadingTarget : this.selectedPaneTarget
+    if (destination && typeof destination.focus === "function") destination.focus()
+  }
+
+  /**
+   * Bounded and session-aware, matching the identity preflight's contract, because this lookup sits
+   * inside the same trap: the form is gated while it runs.
+   *
+   * Returns a discriminated outcome rather than a context-or-null. Collapsing every failure into
+   * null made an expired session indistinguishable from a transient error, so staff were told to
+   * "try again" when trying again is exactly what cannot work.
+   *
+   * @private
+   * @returns {Promise<{ok: true, context: object}|{ok: false, reason: string}>}
+   */
+  async fetchAdultEligibility(userId, { signal } = {}) {
+    if (signal && signal.aborted) return { ok: false, reason: 'aborted' }
+
+    // One controller for both ways this can stop early, so the fetch has a single signal.
+    const controller = new AbortController()
+    const abortFromCaller = () => controller.abort()
+    if (signal) signal.addEventListener('abort', abortFromCaller, { once: true })
+
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, ELIGIBILITY_TIMEOUT_MS)
+
+    try {
+      const response = await fetch(`/admin/users/${userId}/adult_application_context`, {
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin',
+        signal: controller.signal
+      })
+
+      // The server answers an unauthenticated JSON request with 401; `redirected` covers a caller
+      // or intermediary that redirects to sign-in anyway.
+      if (response.status === 401 || response.redirected) return { ok: false, reason: 'session_expired' }
+      if (!response.ok) return { ok: false, reason: 'error' }
+
+      const data = await response.json()
+      if (!data || data.success !== true) return { ok: false, reason: 'error' }
+
+      return { ok: true, context: data }
+    } catch (e) {
+      if (timedOut) return { ok: false, reason: 'timed_out' }
+      if (e && e.name === 'AbortError') return { ok: false, reason: 'aborted' }
+      console.warn('fetchAdultEligibility failed', e)
+      return { ok: false, reason: 'error' }
+    } finally {
+      clearTimeout(timer)
+      if (signal) signal.removeEventListener('abort', abortFromCaller)
+    }
+  }
+
+  /**
+   * Each failure gets the recovery that actually applies to it.
+   * @private
+   */
+  _lookupFailureReason(reason) {
+    switch (reason) {
+      case 'session_expired':
+        return 'Your session has expired. Sign in again in another browser tab, then try again ' +
+               'here. Your entries and selected documents stay on this page.'
+      case 'timed_out':
+        return 'Checking that record took too long. Try again.'
+      default:
+        return 'That record could not be checked right now. Try again.'
+    }
+  }
+
+  /**
+   * Reads the explicit reason the server sends rather than inferring one from a date. The payload
+   * carries `ineligibility_reason` ('active_application' or 'waiting_period') and, for the waiting
+   * period only, `eligible_after` -- an earlier version read a non-existent `eligible_date`, so
+   * every waiting-period candidate was described as having an active application.
+   * @private
+   */
+  _ineligibleReason(context) {
+    if (context.ineligibility_reason === 'waiting_period') {
+      const date = this._formatEligibleAfter(context.eligible_after)
+      return date
+        ? `That constituent is within the waiting period and is not eligible for a new application until ${date}.`
+        : 'That constituent is within the waiting period and is not yet eligible for a new application.'
+    }
+    if (context.ineligibility_reason === 'active_application') {
+      return 'That constituent already has an active application and cannot start another.'
+    }
+    return 'That constituent is not eligible for a new application.'
+  }
+
+  /**
+   * `eligible_after` is a calendar date, not an instant. `new Date('2027-04-02')` parses as UTC
+   * midnight, which in any western timezone renders as the *previous* day -- telling staff a
+   * constituent is eligible a day earlier than they are. Formatted in UTC so the date shown is the
+   * date the server sent.
+   * @private
+   */
+  _formatEligibleAfter(value) {
+    if (!value) return null
+
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return String(value)
+
+    return parsed.toLocaleDateString(undefined, {
+      year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
+    })
+  }
+
+  /**
+   * Text nodes rather than markup: these values came from JSON and are rendered as data.
+   * @private
+   */
+  _renderSelectedCandidate(candidate) {
+    const box = this.selectedPaneTarget.querySelector('.adult-details-container')
+    if (!box) return
+
+    box.replaceChildren()
+    const name = document.createElement('div')
+    name.className = 'font-medium'
+    name.textContent = String(candidate.name || '')
+    box.appendChild(name)
+
+    if (candidate.date_of_birth) {
+      const dob = document.createElement('div')
+      dob.className = 'text-sm text-gray-600'
+      dob.textContent = String(candidate.date_of_birth)
+      box.appendChild(dob)
+    }
   }
 
   clearSelection({ dispatch = true } = {}) {
@@ -111,17 +301,27 @@ export default class extends Controller {
       const data = await response.json()
       if (!data.success) return
 
-      this._adultApplicationContext = data
-      this._storeOnFileData(data.user)
-      this._autopopulateFields(data.user)
-      this._showOnFileSummary(data)
-      this._showContactMode()
-      this._showVerification()
-      this._applyCurrentContactMode()
-      this._toggleCopyButtons(data)
+      this._applyAdultContext(data)
     } catch (e) {
       console.warn('fetchAdultContext failed', e)
     }
+  }
+
+  /**
+   * Installs everything a selected adult needs: on-file summary, contact mode, and the verification
+   * control submit gating depends on. Shared by the search-driven path and the identity-review path
+   * so a selection can never be announced with only some of it in place.
+   * @private
+   */
+  _applyAdultContext(data) {
+    this._adultApplicationContext = data
+    this._storeOnFileData(data.user)
+    this._autopopulateFields(data.user)
+    this._showOnFileSummary(data)
+    this._showContactMode()
+    this._showVerification()
+    this._applyCurrentContactMode()
+    this._toggleCopyButtons(data)
   }
 
   useLastApplicationIncomeInfo() {

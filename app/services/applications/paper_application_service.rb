@@ -9,7 +9,8 @@ module Applications
 
     class TransactionFailure < StandardError; end
 
-    attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note
+    attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note,
+                :pending_identity_decision
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false,
                    quick_created_portal_user_ids: [])
@@ -23,6 +24,8 @@ module Applications
       @created_portal_user_ids = []
       @quick_created_portal_user_ids = quick_created_portal_user_ids.map(&:to_s)
       @reconciliation_note = nil
+      @pending_identity_decision = nil
+      @confirmed_no_match = nil
       @skip_income_validation = skip_income_validation
       @skip_proof_processing = skip_proof_processing
     end
@@ -307,10 +310,10 @@ module Applications
 
     def process_self_applicant(applicant_data)
       contact_flags = paper_contact_flags(:constituent)
+      review = review_paper_identity(applicant_data)
+      return false unless identity_review_permits_creation?(review)
+
       applicant_data = contact_flags.apply_to(applicant_data)
-      duplicate_detection = detect_paper_self_duplicates(applicant_data)
-      return false if duplicate_detection.blank?
-      return block_paper_self_duplicate if duplicate_detection.hard_block
 
       result = UserCreationService.new(
         applicant_data,
@@ -323,7 +326,16 @@ module Applications
       if result.success?
         @constituent = result.data[:user]
         track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
-        return false unless open_paper_duplicate_review_case(@constituent, duplicate_detection)
+
+        # Deliberately no duplicate-review case here. Staff have just reviewed this exact candidate
+        # set and attested that none of them is this applicant; opening a case would queue that same
+        # decision for someone to make again. Paper cases are also resolvable but never mergeable,
+        # so the queue entry could be closed and never remediated.
+        #
+        # The case was, however, the only durable record of who decided what. Removing it without
+        # replacement would leave the enforcement provable only for the length of one request, so a
+        # successful confirmation writes its own evidence instead.
+        record_no_match_confirmation(@constituent)
 
         return false unless validate_no_active_application('constituent')
         return false unless waiting_period_eligible?(@constituent)
@@ -335,71 +347,150 @@ module Applications
       end
     end
 
-    def detect_paper_self_duplicates(attrs)
-      result = DuplicateDetectionService.new(
-        context: :paper_new_self,
-        attrs: duplicate_detection_attrs(attrs)
-      ).call
-      return result.data if result.success?
+    # The whole identity question is answered by PaperIdentityReview, which the preview endpoint
+    # calls too. Nothing about detection, hard blocks, candidates, reasons or decision verification
+    # is re-derived here: a second implementation is exactly how a preview and a write boundary come
+    # to disagree.
+    def review_paper_identity(applicant_data)
+      review = Applications::PaperIdentityReview.new(
+        constituent_params: applicant_data,
+        admin: @admin,
+        contact_flag_params: params,
+        submitted_token: params[:identity_decision]
+      )
 
-      add_error("Duplicate detection failed: #{result.message}")
-      nil
+      # Taken from the review's own facts, before it runs, so the thing being locked and the thing
+      # being searched for are the same by construction.
+      lock_identity_for_creation(review.identity_facts)
+      review.call
     end
 
-    def block_paper_self_duplicate
-      add_error('An applicant with this email or phone already exists. Select the existing applicant instead of creating a new one.')
-      false
+    # The review answers a question about the rows that exist *now*, and the creation immediately
+    # afterwards adds one. Between those two steps another request can do exactly the same thing, so
+    # two concurrent submissions of the same person each see a clean search and each create: one
+    # signed decision spent twice on the override path, and on the zero-match path a duplicate with
+    # no decision involved at all. Recomputing at the write boundary closes stale *client* state; it
+    # does nothing about two writers racing.
+    #
+    # There is no row to lock for an identity that does not exist yet, so the lock is taken on the
+    # identity itself -- a transaction-scoped Postgres advisory lock keyed by the same canonical
+    # facts detection runs on. Transaction-scoped means Postgres releases it on commit *or*
+    # rollback, so a failed or rolled-back write can never strand the key.
+    #
+    # The key is the *matching* identity -- canonical name and date of birth -- not the whole fact
+    # set. Keying on everything looked safer and was strictly worse: two submissions for the same
+    # person carrying different emails would hash to different keys, take different locks, and race
+    # exactly as before. Name and date of birth is the equivalence Users::Constituent.find_duplicates
+    # itself uses, so the lock covers precisely the pairs detection would call the same person.
+    # Identical contact values are already excluded by the unique index; this covers the case that
+    # index cannot see.
+    #
+    # This serializes same-identity submissions only. Two different applicants hash to different
+    # keys and never wait on each other, so ordinary concurrent paper intake is unaffected.
+    def lock_identity_for_creation(identity_facts)
+      # Cast to text because pg_advisory_xact_lock returns void, whose OID the adapter's type map
+      # does not carry -- it logs an "unknown OID" warning on every call otherwise.
+      ActiveRecord::Base.connection.exec_query(
+        'SELECT pg_advisory_xact_lock($1)::text',
+        'Paper identity lock',
+        [ActiveRecord::Relation::QueryAttribute.new(
+          'key', identity_lock_key(identity_facts), ActiveRecord::Type::BigInteger.new
+        )]
+      )
     end
 
-    def open_paper_duplicate_review_case(user, duplicate_detection)
-      return true unless duplicate_detection.recommended_action == :flag
-
-      result = DuplicateReviewCases::CreateService.new(
-        source: :paper_intake,
-        subject_user: user,
-        actor: @admin,
-        reason_codes: duplicate_detection.reasons,
-        candidates: duplicate_review_candidates_for(duplicate_detection),
-        metadata: { intake_context: 'paper_intake' }
-      ).call
-      return true if result.success?
-
-      add_error(result.message)
-      false
+    # Postgres advisory locks are keyed by a signed 64-bit integer, so the matching facts are hashed
+    # down to one. A collision would only ever make two unrelated submissions take turns.
+    def identity_lock_key(identity_facts)
+      facts = identity_facts.to_h.with_indifferent_access
+      canonical = JSON.generate(
+        [facts[:first_name].to_s.downcase.strip,
+         facts[:last_name].to_s.downcase.strip,
+         facts[:date_of_birth].to_s]
+      )
+      Digest::SHA256.digest(canonical).unpack1('q>')
     end
 
-    def duplicate_review_candidates_for(duplicate_detection)
-      duplicate_detection.matched_users.map do |candidate|
-        DuplicateReviewCases::CreateService::CandidateInput.new(
-          candidate,
-          duplicate_detection.reasons.first
-        )
+    # Paper intake asks staff to decide only where the computer is unsure. Selecting a surfaced
+    # constituent is enforced by existing_self_applicant_scenario?; this is the other half of that
+    # choice -- recording that the surfaced candidates are different people.
+    #
+    #   error              -> detection itself failed; refuse rather than guess
+    #   blocked            -> exact contact collision; never acknowledgeable
+    #   clear              -> nothing surfaced; create
+    #   needs_confirmation -> staff must decide about what surfaced; write nothing
+    #   confirmed          -> staff decided these are different people; create
+    #
+    # Staff are asked only where the computer is genuinely unsure. Two people can legitimately share
+    # a name and date of birth, so a soft match is a real decision: creating automatically risks a
+    # duplicate, refusing automatically turns away a legitimate applicant. Nothing surfacing is not
+    # a decision, and asking for a click there would prove nothing the server's own search -- run
+    # against the completed applicant immediately before this write -- has not already established.
+    #
+    # The review recomputes from the *submitted* facts rather than trusting the request, so a form
+    # searched under one name and submitted under another presents a candidate set the decision was
+    # never issued for. That closes stale client state; concurrent writers racing between the read
+    # and the write are closed separately, by lock_identity_for_creation.
+    def identity_review_permits_creation?(review)
+      return add_error('Duplicate detection failed. Try again.') if review.error?
+
+      if review.blocked?
+        return add_error('An applicant with this email or phone already exists. ' \
+                         'Select the existing applicant instead of creating a new one.')
       end
-    end
 
-    def duplicate_detection_attrs(attrs)
-      data = hash_for_duplicate_detection(attrs)
-      dob_holder = Users::Constituent.new
-      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
+      # Evidence is recorded only for an actual override: who looked at which records and said they
+      # are different people. An ordinary application with nothing to decide has no decision to log.
+      if review.confirmed?
+        @confirmed_no_match = { candidate_ids: review.candidate_ids, reason_codes: review.reasons }
+        return true
+      end
 
-      {
-        email: User.normalize_email(data[:email]),
-        phone: User.normalize_phone(data[:phone]),
-        first_name: data[:first_name],
-        last_name: data[:last_name],
-        date_of_birth: dob_holder.date_of_birth,
-        physical_address_1: data[:physical_address_1],
-        physical_address_2: data[:physical_address_2],
-        city: data[:city],
-        state: data[:state],
-        zip_code: data[:zip_code]
+      return true if review.clear?
+
+      @pending_identity_decision = {
+        candidates: review.candidates,
+        selectable_candidates: review.selectable_candidates,
+        reasons: review.reasons,
+        token: review.token,
+        reason: review.decision_reason
       }
+      add_error(no_match_decision_error(review.decision_reason, review.candidates.size))
+      false
     end
 
-    def hash_for_duplicate_detection(attrs)
-      return attrs.to_unsafe_h.with_indifferent_access if attrs.respond_to?(:to_unsafe_h)
+    def no_match_decision_error(reason, candidate_count)
+      return 'This review expired. Search again before creating a new constituent.' if reason == :expired
 
-      attrs.to_h.with_indifferent_access
+      if reason == :mismatched
+        return 'The applicant details or the possible matches changed since you reviewed them. ' \
+               'Search again before creating a new constituent.'
+      end
+
+      "#{candidate_count} possible #{'match'.pluralize(candidate_count)} found. " \
+        'Review them and either select the existing constituent or confirm this is a different person.'
+    end
+
+    # One event per *successful* confirmation. Missing, forged, expired and abandoned reviews write
+    # nothing, so the trail records decisions taken rather than attempts made.
+    #
+    # Carries who confirmed, what they were shown, and why those records surfaced -- but no raw
+    # identity facts and no token. The facts are already on the constituent record this event is
+    # attached to, and the token is a credential-shaped value with no business meaning after the
+    # request that spent it.
+    def record_no_match_confirmation(constituent)
+      return if @confirmed_no_match.blank?
+
+      AuditEventService.log(
+        action: 'paper_identity_no_match_confirmed',
+        actor: @admin,
+        auditable: constituent,
+        metadata: {
+          candidate_ids: @confirmed_no_match[:candidate_ids],
+          candidate_count: @confirmed_no_match[:candidate_ids].size,
+          reason_codes: @confirmed_no_match[:reason_codes]
+        }
+      )
     end
 
     def no_email_address?(scope = :constituent)

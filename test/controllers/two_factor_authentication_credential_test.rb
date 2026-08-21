@@ -247,11 +247,14 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     post webauthn_creation_options_two_factor_authentication_path, xhr: true
     assert_redirected_to sign_in_path, "Options endpoint should require authentication, but got status #{response.status}"
 
-    # Try creating a credential directly
+    # Try creating a credential directly. This one is JSON, and a JSON caller is answered with 401
+    # rather than redirected -- the sign-in page has no JSON representation, so redirecting it raised
+    # ActionController::UnknownFormat instead of telling the caller anything it could act on. The
+    # two assertions above are HTML and plain XHR, and both still redirect.
     post create_credential_two_factor_authentication_path(type: 'webauthn'),
          params: { id: 'test-id' },
          as: :json
-    assert_redirected_to sign_in_path, "Credential creation should require authentication, but got status #{response.status}"
+    assert_response :unauthorized, "Credential creation should require authentication, but got status #{response.status}"
   end
 
   test 'should destroy credential' do

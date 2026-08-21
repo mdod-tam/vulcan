@@ -33,6 +33,8 @@ Relevant routes:
 | `PATCH /constituent_portal/applications/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
 | `PATCH /constituent_portal/applications/:id/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
 | `GET /admin/paper_applications/recipient_preference` | `Admin::PaperApplicationsController#recipient_preference` | `forms/paper_application_controller.js` |
+| `POST /admin/paper_applications/identity_review` | `Admin::PaperApplicationsController#identity_review` | `forms/paper_application_controller.js` (submit-time preflight) |
+| `GET /admin/users/:id/adult_application_context` | `Admin::UsersController#adult_application_context` | `users/adult_picker_controller.js` |
 | `GET /admin/applications/charts` | `Admin::ApplicationsController#charts` | Lazy Turbo frame that mounts `reports-chart` |
 
 ---
@@ -117,7 +119,8 @@ const overLimit = exceeds({
 | `autosave` | `app/javascript/controllers/forms/autosave_controller.js` | Saves individual fields on blur through the constituent autosave route. Updates form URLs after a new draft is created. |
 | `income-validation` | `app/javascript/controllers/forms/income_validation_controller.js` | Calculates FPL threshold state, owns the warning container, updates the income field group styling, and dispatches validation events. |
 | `final-submit-gate` | `app/javascript/controllers/forms/final_submit_gate_controller.js` | Gates constituent final submit buttons from required checkboxes, required visible non-file fields, checkbox groups, and income validation events. Also honors a server-set hard block — see below. |
-| `paper-application` | `app/javascript/controllers/forms/paper_application_controller.js` | Gates admin paper submit from income state, existing-adult verification, required attestations, visible required fields, required proof radio groups, checkbox groups, and medical provider requirements. Also populates the income-rejection dialog. |
+| `paper-application` | `app/javascript/controllers/forms/paper_application_controller.js` | Gates admin paper submit from income state, existing-adult verification, required attestations, visible required fields, required proof radio groups, checkbox groups, and medical provider requirements. Also runs the identity review preflight (see below) and populates the income-rejection dialog. |
+| `adult-picker` | `app/javascript/controllers/users/adult_picker_controller.js` | Searches for and selects an existing adult applicant, applies the returned eligibility context, and renders the selected-applicant summary. `selectAdultFromIdentityReview` is the identity-review entry point — unlike the ordinary `selectAdult`, it takes a candidate object rather than display markup and refuses anything not currently eligible. |
 | `optional-phone-type` | `app/javascript/controllers/forms/optional_phone_type_controller.js` | Reveals the self-registration phone-type radio group only when a phone number is present and keeps radio disabled, required, and ARIA state aligned with the visible field. |
 | `applicant-type` | `app/javascript/controllers/users/applicant_type_controller.js` | Shows the adult or dependent-with-guardian path and dispatches `applicant-type:applicantTypeChanged`. |
 | `dependent-fields` | `app/javascript/controllers/forms/dependent_fields_controller.js` | Shows dependent fields and copies guardian address/email/phone values when requested. |
@@ -134,6 +137,24 @@ The contract:
 - **It is not the authority.** The server re-checks under lock and refuses independently; the attribute exists so a constituent is not invited to do work — notably selecting file uploads, which no re-render can restore — that a refusal would discard.
 
 Current producer: `ConstituentPortal::ApplicationsController` sets `@submission_blocked_message` when the applicant is the subject of an open `registration_soft_match` duplicate-review case, and `new.html.erb` / `edit.html.erb` pass it into the form's data hash.
+
+### Paper identity review preflight on `paper-application`
+
+New **self-applicant** paper submissions are checked for an existing constituent *before* the form is submitted. This is a preflight rather than a server-rendered failure because the form holds four native file inputs with no direct upload: any re-render discards documents staff already selected, and nothing can restore them.
+
+- **Route.** `POST /admin/paper_applications/identity_review`, read-only, `Cache-Control: no-store`. The URL arrives as `data-paper-application-identity-review-url-value`; it is never hardcoded.
+- **Payload.** Exactly ten identity facts plus the two no-contact flags — never a `File`, and never the application answers. The flags are read from the live checkbox, not a hidden field, because they change the facts before detection runs.
+- **Every submission calls it**, including one that will turn out to have no matches: the browser cannot know the outcome without asking.
+- **States.** `idle` → `checking` → one of `clear` (resumes the native submission once), `possible_matches`, `blocked`, `error`, `timed_out`, `session_expired`, `expired`.
+- **Gating.** `_identityReviewBlocksSubmit()` is a sixth predicate in `_applySubmitGating`, which recomputes `disabled` from scratch on every input/change event — so setting `disabled` directly anywhere else would simply be undone. Only `checking`, `possible_matches`, and `blocked` gate. The failure states deliberately leave Submit live: Submit *is* the retry, and `beforeSubmit` intercepts it again, so a retry can never fall through to an unreviewed native submission.
+- **Bounded.** The request times out after 15s. Without that, a request that never settles left the form in `checking` with Submit disabled permanently.
+- **Session expiry is distinct.** A JSON request whose session has ended is answered with **401 and `Cache-Control: no-store`** by `Authentication#authenticate_user!`, not redirected — the sign-in page has no JSON representation, so redirecting a `fetch` there raised `ActionController::UnknownFormat` and made an ordinary expired session log a server exception. The client also still treats a followed redirect (`response.redirected`) as session expiry, so a non-JSON caller or an intermediary that redirects anyway is classified correctly rather than becoming a generic error. Treated as a generic error it produced an unbreakable "submit again to retry" loop, since retrying is exactly what does not work. The recovery offered is to sign in in **another tab** and resubmit, because this page cannot be reloaded without losing the selected files.
+- **Visible, not only announced.** Every notice state — including `checking` — renders into `identityReviewNotice`. `checking` alone does not take focus, since it resolves on its own and staff may still be typing.
+- **Invalidation.** Any edit to a bound identity fact clears the panel, the in-flight request, the expiry timer, the hidden `identity_decision` field, and any pending candidate selection. Generation counter plus a snapshot comparison, so a response already in flight cannot paint a panel for an applicant staff have since edited past.
+- **Decision carrier.** The override token is written to a hidden `identity_decision` field only when staff actually override. It is filtered from logs.
+- **Adult-picker handoff.** "Use this constituent" calls `adult-picker#selectAdultFromIdentityReview`, which re-checks eligibility server-side, applies the context *before* announcing the selection (announcing first would let gating conclude verification was unnecessary), and moves focus to the selected-applicant heading — the button that had focus is torn down with the panel.
+
+Client-side state is convenience, never authority: `PaperIdentityReview` recomputes the same answer at the write boundary from the submitted facts.
 
 `BaseFormController#collectFormData` returns a flat object. It supports array fields named `field[]`, but it does not parse Rails nested parameter names into nested objects. A field named `guardian_attributes[name]` remains the key `"guardian_attributes[name]"`.
 
