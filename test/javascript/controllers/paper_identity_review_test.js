@@ -40,7 +40,7 @@ function buildForm({ existingConstituentId = "", applicantType = "self" } = {}) 
         <p class="hidden" style="display: none;" tabindex="-1" data-paper-application-target="identityReviewNotice"></p>
       </section>
       <input type="hidden" name="identity_decision" data-paper-application-target="identityDecision">
-      <p data-paper-application-target="status"></p>
+      <p class="sr-only" aria-live="polite" data-paper-application-target="status"></p>
       <button type="submit" data-paper-application-target="submitButton">Submit</button>
     </form>`
   return document.querySelector("form")
@@ -417,7 +417,9 @@ describe("paper identity review", () => {
 
       const notice = form.querySelector('[data-paper-application-target="identityReviewNotice"]')
       expect(notice.classList.contains("hidden")).toBe(false)
-      expect(notice.textContent).toMatch(/Review expired/i)
+      expect(form.querySelector('[data-paper-application-target="identityReviewHeading"]').textContent)
+        .toMatch(/Review expired/i)
+      expect(notice.textContent).toMatch(/refresh the matches/i)
       expect(form.querySelector('[data-paper-application-target="submitButton"]').disabled).toBe(false)
       expect(form.querySelector('[data-paper-application-target="identityDecision"]').value).toBe("")
     })
@@ -468,7 +470,10 @@ describe("paper identity review", () => {
       const notice = form.querySelector('[data-paper-application-target="identityReviewNotice"]')
       expect(controller._identityReviewState).toBe("checking")
       expect(notice.classList.contains("hidden")).toBe(false)
-      expect(notice.textContent).toMatch(/Checking for existing/i)
+      // Heading names the condition, body carries the action; staff read them together.
+      const heading = form.querySelector('[data-paper-application-target="identityReviewHeading"]')
+      expect(heading.textContent).toMatch(/Checking for existing/i)
+      expect(notice.textContent).toMatch(/nothing has been submitted yet/i)
 
       settle(jsonResponse({ state: "clear", candidates: [] }))
     })
@@ -507,8 +512,10 @@ describe("paper identity review", () => {
       const controller = controllerFor(application, form)
       expect(controller._identityReviewState).toBe("timed_out")
       expect(controller._identityReviewBlocksSubmit()).toBe(false)
+      const heading = form.querySelector('[data-paper-application-target="identityReviewHeading"]')
+      expect(heading.textContent).toMatch(/timed out/i)
       const notice = form.querySelector('[data-paper-application-target="identityReviewNotice"]')
-      expect(notice.textContent).toMatch(/took too long/i)
+      expect(notice.textContent).toMatch(/submit again to retry/i)
     })
 
     // An ended session answers with a redirect to sign-in, which fetch reports as a successful HTML
@@ -582,6 +589,85 @@ describe("paper identity review", () => {
         deferred.resolve({ selected: false, reason: "not eligible" })
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect([...buttons].every((button) => !button.disabled)).toBe(true)
+      })
+
+      // The panel body is an ordinary paragraph, so a screen-reader user gets nothing from it
+      // changing: the click simply appears to do nothing. The refusal has to reach the live region.
+      test("a refused selection is announced, not only shown", async () => {
+        await showCandidates()
+        const button = form.querySelector('[data-paper-application-target="identityReviewCandidates"] button')
+        const status = form.querySelector('[data-paper-application-target="status"]')
+
+        button.click()
+        await Promise.resolve()
+        deferred.resolve({ selected: false, reason: "That constituent already has an active application." })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(status.getAttribute("aria-live")).toBe("polite")
+        expect(status.textContent).toMatch(/already has an active application/i)
+        const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+        expect(body.textContent).toMatch(/already has an active application/i)
+      })
+
+      // Gating recomputes the status region on every input event, so a refusal that did not survive
+      // that would be announced and then immediately overwritten by "complete all required
+      // confirmations" -- which is not what just happened.
+      test("the announced refusal survives an unrelated edit and clears on invalidation", async () => {
+        await showCandidates()
+        const button = form.querySelector('[data-paper-application-target="identityReviewCandidates"] button')
+        const status = form.querySelector('[data-paper-application-target="status"]')
+
+        button.click()
+        await Promise.resolve()
+        deferred.resolve({ selected: false, reason: "That constituent already has an active application." })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const unrelated = document.createElement("input")
+        unrelated.name = "application[annual_income]"
+        form.appendChild(unrelated)
+        unrelated.dispatchEvent(new Event("input", { bubbles: true }))
+        expect(status.textContent).toMatch(/already has an active application/i)
+
+        const firstName = form.querySelector('[name="constituent[first_name]"]')
+        firstName.value = "Someone Else"
+        firstName.dispatchEvent(new Event("input", { bubbles: true }))
+        expect(status.textContent).not.toMatch(/already has an active application/i)
+      })
+
+      // The refusal outranks the state description on purpose, which means it must not outlive the
+      // candidates it was about. On these paths nothing is edited, so an edit-triggered clear never
+      // fires: the panel said one thing while the live region went on announcing the old refusal.
+      async function refuseASelection() {
+        await showCandidates()
+        form.querySelector('[data-paper-application-target="identityReviewCandidates"] button').click()
+        await Promise.resolve()
+        deferred.resolve({ selected: false, reason: "That constituent already has an active application." })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+
+      test("expiry replaces the refusal instead of announcing both", async () => {
+        await refuseASelection()
+        const status = form.querySelector('[data-paper-application-target="status"]')
+        expect(status.textContent).toMatch(/already has an active application/i)
+
+        controllerFor(application, form)._expireIdentityReview()
+
+        expect(status.textContent).not.toMatch(/already has an active application/i)
+        expect(status.textContent).toMatch(/expired/i)
+      })
+
+      test("submitting again replaces the refusal instead of announcing both", async () => {
+        await refuseASelection()
+        const status = form.querySelector('[data-paper-application-target="status"]')
+        expect(status.textContent).toMatch(/already has an active application/i)
+
+        // No identity edit in between -- the same applicant, submitted again.
+        jest.spyOn(global, "fetch").mockImplementation(() => new Promise(() => {}))
+        form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(status.textContent).not.toMatch(/already has an active application/i)
+        expect(status.textContent).toMatch(/checking for existing/i)
       })
 
       test("buttons are restored when the check fails", async () => {

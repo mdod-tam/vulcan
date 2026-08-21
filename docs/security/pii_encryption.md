@@ -114,8 +114,25 @@ Currently filtered categories include:
 - medical provider contact fields
 - encrypted-column suffixes
 - TOTP secrets and broad token/key/certificate patterns
+- applicant names (`first_name`, `middle_initial`, `last_name`) — filtered because paper identity
+  review posts them alongside a date of birth and an address, and that combination is what
+  identifies a person
+- `identity_decision`, the paper identity decision token, which authorizes a creation and must not
+  outlive its request in a log
 
 Do not add new PII fields without updating both encryption declarations and parameter filtering.
+
+### Filtering covers query binds too, but only named ones
+
+`filter_parameters` matches on an attribute name, and Active Record logs a *positional* bind as
+`[nil, "smith"]` — no name, nothing to match, value written to the query log in the clear. A hash
+condition (`where(date_of_birth: value)`) carries its column name and is filtered; a string
+condition (`where('LOWER(first_name) = ?', value)`) is not.
+
+Any query that compares a filtered column must therefore bind by name. `Users::Constituent.find_duplicates`
+builds its case-insensitive name comparison through Arel with an explicit
+`ActiveRecord::Relation::QueryAttribute` for exactly this reason, and
+`test/config/filter_parameter_logging_test.rb` asserts the names do not reach the query log.
 
 Reset URLs, verification URLs, and secure upload URLs are bearer delivery artifacts, not durable record truth. Mailer and SMS failure logs must pass exception messages and backtraces through `SecureErrorSanitizer`; SMS paths carrying those links must also use `sensitive: true` so message bodies and full phone numbers are not written to logs.
 

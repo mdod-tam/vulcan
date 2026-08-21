@@ -74,6 +74,7 @@ export default class extends Controller {
     this._identityReviewTimer = null;
     this._candidateSelectionInFlight = false;
     this._candidateSelectionAbort = null;
+    this._candidateSelectionRefusal = null;
     this._identityReviewToken = null;
     this._identityReviewExpiresAt = null;
 
@@ -434,7 +435,7 @@ export default class extends Controller {
   _renderIdentityReviewNotice(state) {
     if (!this.hasIdentityReviewNoticeTarget) return;
 
-    const message = this.constructor.NOTICE_STATES.includes(state) ? this._identityReviewStatusText() : null;
+    const message = this.constructor.NOTICE_STATES.includes(state) ? this._identityReviewNoticeBody(state) : null;
     if (!message) {
       setVisible(this.identityReviewNoticeTarget, false);
       return;
@@ -467,6 +468,11 @@ export default class extends Controller {
 
   /** @private */
   _identityReviewStatusText() {
+    // A refused candidate selection outranks the state description: the state has not changed --
+    // staff are still looking at the same possible matches -- but something just happened, and it
+    // is the only thing they need to hear. Cleared by the next attempt or by invalidation.
+    if (this._candidateSelectionRefusal) return this._candidateSelectionRefusal;
+
     switch (this._identityReviewState) {
       case "checking": return "Checking for existing constituents…";
       case "possible_matches": return "Review the possible matches before submitting.";
@@ -480,6 +486,22 @@ export default class extends Controller {
                "here. Your entries and selected documents stay on this page.";
       case "expired": return "Review expired. Submit again to refresh the matches.";
       default: return null;
+    }
+  }
+
+  /**
+   * The visible body, which sits directly under a heading that already names the condition -- so it
+   * carries the action rather than repeating the condition. The status text above stays a complete
+   * sentence because it is announced on its own, with no heading beside it.
+   * @private
+   */
+  _identityReviewNoticeBody(state) {
+    switch (state) {
+      case "checking": return "This only takes a moment. Nothing has been submitted yet.";
+      case "error": return "Submit again to retry.";
+      case "timed_out": return "Submit again to retry.";
+      case "expired": return "Submit again to refresh the matches.";
+      default: return this._identityReviewStatusText();
     }
   }
 
@@ -521,9 +543,10 @@ export default class extends Controller {
     this._clearIdentityReviewTimer();
     this._identityReviewToken = null;
     this._clearIdentityDecisionField();
-    if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren();
-    if (this.hasIdentityReviewOverrideTarget) setVisible(this.identityReviewOverrideTarget, false);
-    if (this.hasIdentityReviewBodyTarget) this.identityReviewBodyTarget.textContent = "";
+    // The shared reset rather than a partial copy of it. Setting the state immediately afterwards
+    // rebuilds the panel around the expiry notice, so nothing is lost by clearing all of it -- and
+    // the copy was already drifting: it never cleared the candidate-selection refusal.
+    this._clearIdentityReviewContent();
     this._setIdentityReviewState("expired");
   }
 
@@ -542,7 +565,6 @@ export default class extends Controller {
     if (this._identityReviewState === "idle" && !holdsDecision && !this._identityReviewToken && !selecting) return;
 
     this._abortCandidateSelection();
-
     this._abortIdentityReview();
     this._identityReviewGeneration += 1;
     this._clearIdentityReviewTimer();
@@ -666,6 +688,12 @@ export default class extends Controller {
    * @private
    */
   _clearIdentityReviewContent() {
+    // The refusal was about candidates that are being discarded along with everything else here, so
+    // it dies with them. Cleared in this one place rather than at each call site: it outlived the
+    // panel on every path that reset content without an identity edit -- an expiry, or simply
+    // submitting again -- and the live region went on announcing "already has an active
+    // application" while the panel said "Review expired".
+    this._candidateSelectionRefusal = null;
     if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren();
     if (this.hasIdentityReviewBodyTarget) this.identityReviewBodyTarget.textContent = "";
     if (this.hasIdentityReviewOverrideTarget) setVisible(this.identityReviewOverrideTarget, false);
@@ -712,6 +740,7 @@ export default class extends Controller {
     if (!picker || typeof picker.selectAdultFromIdentityReview !== "function") return;
 
     this._candidateSelectionInFlight = true;
+    this._candidateSelectionRefusal = null;
     this._setCandidateActionsDisabled(true);
     // Single-flight stops a second click, but not staff editing the applicant while eligibility is
     // loading. Without this the request resolves afterwards and selects a candidate for an identity
@@ -734,8 +763,15 @@ export default class extends Controller {
       return;
     }
 
-    if (this.hasIdentityReviewBodyTarget && outcome && outcome.reason) {
-      this.identityReviewBodyTarget.textContent = outcome.reason;
+    if (outcome && outcome.reason) {
+      if (this.hasIdentityReviewBodyTarget) this.identityReviewBodyTarget.textContent = outcome.reason;
+      // The panel body is an ordinary paragraph, so replacing its text tells a screen-reader user
+      // nothing: the click appears to do nothing at all. Focus cannot move here either -- staff are
+      // still choosing between candidates, and the buttons they are moving through have just been
+      // re-enabled. So the refusal is announced through the form's existing polite status region,
+      // which gating already owns and which is the one live region on the page.
+      this._candidateSelectionRefusal = outcome.reason;
+      this._applySubmitGating();
     }
   }
 

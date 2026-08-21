@@ -58,6 +58,10 @@ module Users
     # here would land in the log in the clear. Counts and shapes are what debugging actually needs.
     # Identifying *which* records matched is deliberately not obtainable from the log at all -- run
     # the same query in a console against the request's own parameters instead.
+    #
+    # The explicit messages are only half of it: the query itself sends these names to the database,
+    # and a positional bind is logged without an attribute name for the filter to match. See
+    # case_insensitive_match below.
     def self.find_duplicates(first_name, last_name, date_of_birth)
       return none if invalid_duplicate_params?(first_name, last_name, date_of_birth)
 
@@ -87,8 +91,8 @@ module Users
       end
 
       def build_duplicate_query(first_name, last_name, formatted_date)
-        query = where('LOWER(first_name) = ? AND LOWER(last_name) = ?',
-                      first_name.downcase, last_name.downcase)
+        query = where(case_insensitive_match(:first_name, first_name))
+                .where(case_insensitive_match(:last_name, last_name))
                 .where(date_of_birth: formatted_date)
 
         # Counting is a second query, so it stays inside the level check rather than running
@@ -96,6 +100,22 @@ module Users
         Rails.logger.debug { "find_duplicates: #{query.count} match(es)" } if Rails.logger.debug?
 
         query
+      end
+
+      # Built through Arel with a *named* bind rather than `where('LOWER(col) = ?', value)`.
+      #
+      # A positional bind is anonymous: Active Record logs it as `[nil, "smith"]`, and
+      # `config.filter_parameters` matches on the attribute name, so it has nothing to match and the
+      # value is written to the query log in the clear. The date of birth beside it was filtered the
+      # whole time precisely because a hash condition carries its column name. Naming the bind is
+      # what lets the existing filter do its job -- the same query, logged as
+      # `["first_name", "[FILTERED]"]`.
+      def case_insensitive_match(column, value)
+        bind = ActiveRecord::Relation::QueryAttribute.new(
+          column.to_s, value.to_s.downcase, ActiveRecord::Type::String.new
+        )
+        Arel::Nodes::NamedFunction.new('LOWER', [arel_table[column]])
+                                  .eq(Arel::Nodes::BindParam.new(bind))
       end
     end
 

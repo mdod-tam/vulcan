@@ -42,4 +42,48 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
                  'the decision token authorizes a creation and must not outlive its request in a log'
     assert_equal 'identity_review', filtered['action']
   end
+
+  # Filtering the request parameters is only half of it. The identity-matching query puts the same
+  # names back on their way to the database, and `filter_parameters` matches on a bind's attribute
+  # name -- so a positional bind, which Active Record logs as `[nil, "smith"]`, has no name to match
+  # and lands in the query log in the clear. The date of birth was filtered the whole time only
+  # because a hash condition carries its column name.
+  #
+  # Asserts the values are absent rather than that the binds are named: the requirement is that the
+  # name does not reach the log, not that any particular construction is used to achieve it.
+  test 'the duplicate-matching query does not write names to the query log' do
+    log = capture_active_record_log do
+      Users::Constituent.find_duplicates('SqlBindProbeFirst', 'SqlBindProbeLast', Date.new(1990, 4, 2)).to_a
+    end
+
+    assert_no_match(/sqlbindprobefirst/i, log, 'the first name reached the query log')
+    assert_no_match(/sqlbindprobelast/i, log, 'the last name reached the query log')
+    assert_match(/\["first_name", "\[FILTERED\]"\]/, log, 'the first name bind should be named and redacted')
+    assert_match(/\["last_name", "\[FILTERED\]"\]/, log, 'the last name bind should be named and redacted')
+  end
+
+  # Redaction is worthless if it changed what the query matches, and this query decides whether two
+  # people are the same person.
+  test 'the duplicate-matching query still matches case-insensitively on name and date of birth' do
+    existing = create(:constituent, first_name: 'Casing', last_name: 'Probe',
+                                    date_of_birth: Date.new(1990, 4, 2))
+
+    assert_includes Users::Constituent.find_duplicates('cAsInG', 'pRoBe', Date.new(1990, 4, 2)).map(&:id),
+                    existing.id
+    assert_not_includes Users::Constituent.find_duplicates('Casing', 'Probe', Date.new(1991, 4, 2)).map(&:id),
+                        existing.id
+  end
+
+  private
+
+  def capture_active_record_log
+    io = StringIO.new
+    original = ActiveRecord::Base.logger
+    ActiveRecord::Base.logger = ActiveSupport::Logger.new(io)
+    ActiveRecord::Base.logger.level = :debug
+    yield
+    io.string
+  ensure
+    ActiveRecord::Base.logger = original
+  end
 end

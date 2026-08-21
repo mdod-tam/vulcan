@@ -144,6 +144,40 @@ module Admin
              'the documents chosen before the session expired must be the ones that arrive'
     end
 
+    # The one state that also disables Submit, so if it is not visible the button appears to have
+    # stopped working for no reason.
+    test 'the checking state is visible while the review is in flight' do
+      fill_paper_form(first_name: 'Checking', last_name: 'State')
+      attach_proofs
+      hold_identity_review_open
+
+      click_button 'Submit Paper Application'
+      assert_selector '[data-paper-application-target="identityReviewPanel"]',
+                      text: /Checking for existing/i, wait: 10
+      assert_button 'Submit Paper Application', disabled: true
+      take_evidence_screenshot('paper-identity-review-checking', full: true, html: true)
+
+      release_identity_review
+      assert_no_selector '[data-paper-application-target="identityReviewPanel"]',
+                         text: /Checking for existing/i, wait: 20
+    end
+
+    # A request that never settles used to leave the form gated forever, with four selected files a
+    # reload would discard. The wait is the real 15s bound rather than a shortened one, because the
+    # bound is the behaviour under test.
+    test 'a review that never answers times out and returns the form to usable' do
+      fill_paper_form(first_name: 'Timeout', last_name: 'State')
+      attach_proofs
+      hold_identity_review_open
+
+      click_button 'Submit Paper Application'
+      assert_selector '[data-paper-application-target="identityReviewPanel"]',
+                      text: /timed out/i, wait: 25
+      assert_button 'Submit Paper Application', disabled: false
+      assert_filenames_survived
+      take_evidence_screenshot('paper-identity-review-timed-out', full: true, html: true)
+    end
+
     test 'a failed review shows a visible retry and preserves the form' do
       fill_paper_form(first_name: 'Retry', last_name: 'Case')
       attach_proofs
@@ -173,8 +207,9 @@ module Admin
 
       expire_open_review
 
-      notice = find('[data-paper-application-target="identityReviewNotice"]')
-      assert_match(/Review expired/i, notice.text)
+      panel = find('[data-paper-application-target="identityReviewPanel"]')
+      assert_match(/Review expired/i, panel.text)
+      assert_match(/refresh the matches/i, panel.text)
       assert_equal '', find('[data-paper-application-target="identityDecision"]', visible: :all).value
       assert_filenames_survived
       take_evidence_screenshot('paper-identity-review-expired', full: true, html: true)
@@ -328,6 +363,34 @@ module Admin
       within_window(other_tab) { system_test_sign_in(@admin) }
       other_tab.close
       switch_to_window(windows.first)
+    end
+
+    # Holds the review request open without failing it, so `checking` can be observed and so the
+    # timeout has something to time out on. The real endpoint is left untouched; only the browser's
+    # fetch is intercepted.
+    def hold_identity_review_open
+      page.execute_script(<<~JS)
+        window.__originalFetch = window.fetch;
+        window.__releaseIdentityReview = null;
+        window.fetch = (url, options) => {
+          if (!String(url).includes('identity_review')) return window.__originalFetch(url, options);
+          return new Promise((resolve, reject) => {
+            window.__releaseIdentityReview = () => resolve(window.__originalFetch(url, options));
+            if (options && options.signal) {
+              options.signal.addEventListener('abort', () => {
+                const error = new Error('aborted');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            }
+          });
+        };
+      JS
+    end
+
+    def release_identity_review
+      page.execute_script('if (window.__releaseIdentityReview) window.__releaseIdentityReview();')
+      restore_identity_review
     end
 
     def stub_identity_review_failure

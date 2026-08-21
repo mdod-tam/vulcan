@@ -2,6 +2,12 @@ import { Controller } from "@hotwired/stimulus"
 import { setVisible, setFieldValue } from "../../utils/visibility"
 import { debouncedDispatch } from "../../utils/debounce"
 
+// Same bound as the identity preflight, for the same reason. While this lookup is pending the paper
+// form has disabled every candidate button and is still blocking Submit, so a request that never
+// settles traps a completed application -- including four selected files a reload would discard --
+// with no way forward at all.
+const ELIGIBILITY_TIMEOUT_MS = 15000
+
 // Manages adult applicant search-and-select for paper applications.
 // Mirrors guardian_picker_controller pattern but adds contact mode switching,
 // on-file data tracking, and changed-field highlighting.
@@ -63,12 +69,13 @@ export default class extends Controller {
   async selectAdultFromIdentityReview(candidate, { signal } = {}) {
     if (!candidate || !candidate.id) return { selected: false, reason: 'That record could not be selected.' }
 
-    const context = await this.fetchAdultEligibility(candidate.id, { signal })
-    if (!context) {
-      return { selected: false, reason: 'That record could not be checked right now. Try again.' }
-    }
-    // Aborted while the answer was in flight: staff have moved on, so nothing may be selected.
-    if (signal && signal.aborted) return { selected: false }
+    const outcome = await this.fetchAdultEligibility(candidate.id, { signal })
+    // Aborted while the answer was in flight: staff have moved on, so nothing may be selected and
+    // nothing may be said about it. Checked first, because an abort is not a failure to report.
+    if (outcome.reason === 'aborted' || (signal && signal.aborted)) return { selected: false }
+    if (!outcome.ok) return { selected: false, reason: this._lookupFailureReason(outcome.reason) }
+
+    const context = outcome.context
     // Fails closed. An earlier version refused only an explicit `false`, so a response missing the
     // field entirely -- a shape change, a partial payload -- was treated as eligible.
     if (context.eligible_now !== true) {
@@ -105,21 +112,68 @@ export default class extends Controller {
     if (destination && typeof destination.focus === "function") destination.focus()
   }
 
-  /** @private */
+  /**
+   * Bounded and session-aware, matching the identity preflight's contract, because this lookup sits
+   * inside the same trap: the form is gated while it runs.
+   *
+   * Returns a discriminated outcome rather than a context-or-null. Collapsing every failure into
+   * null made an expired session indistinguishable from a transient error, so staff were told to
+   * "try again" when trying again is exactly what cannot work.
+   *
+   * @private
+   * @returns {Promise<{ok: true, context: object}|{ok: false, reason: string}>}
+   */
   async fetchAdultEligibility(userId, { signal } = {}) {
+    if (signal && signal.aborted) return { ok: false, reason: 'aborted' }
+
+    // One controller for both ways this can stop early, so the fetch has a single signal.
+    const controller = new AbortController()
+    const abortFromCaller = () => controller.abort()
+    if (signal) signal.addEventListener('abort', abortFromCaller, { once: true })
+
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, ELIGIBILITY_TIMEOUT_MS)
+
     try {
       const response = await fetch(`/admin/users/${userId}/adult_application_context`, {
         headers: { Accept: 'application/json' },
         credentials: 'same-origin',
-        signal
+        signal: controller.signal
       })
-      if (!response.ok) return null
+
+      // The server answers an unauthenticated JSON request with 401; `redirected` covers a caller
+      // or intermediary that redirects to sign-in anyway.
+      if (response.status === 401 || response.redirected) return { ok: false, reason: 'session_expired' }
+      if (!response.ok) return { ok: false, reason: 'error' }
 
       const data = await response.json()
-      return data && data.success ? data : null
+      if (!data || data.success !== true) return { ok: false, reason: 'error' }
+
+      return { ok: true, context: data }
     } catch (e) {
+      if (timedOut) return { ok: false, reason: 'timed_out' }
+      if (e && e.name === 'AbortError') return { ok: false, reason: 'aborted' }
       console.warn('fetchAdultEligibility failed', e)
-      return null
+      return { ok: false, reason: 'error' }
+    } finally {
+      clearTimeout(timer)
+      if (signal) signal.removeEventListener('abort', abortFromCaller)
+    }
+  }
+
+  /**
+   * Each failure gets the recovery that actually applies to it.
+   * @private
+   */
+  _lookupFailureReason(reason) {
+    switch (reason) {
+      case 'session_expired':
+        return 'Your session has expired. Sign in again in another browser tab, then try again ' +
+               'here. Your entries and selected documents stay on this page.'
+      case 'timed_out':
+        return 'Checking that record took too long. Try again.'
+      default:
+        return 'That record could not be checked right now. Try again.'
     }
   }
 

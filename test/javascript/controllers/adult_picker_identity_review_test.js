@@ -91,6 +91,55 @@ describe("selectAdultFromIdentityReview", () => {
     expect(document.activeElement.id).toBe("use-this-constituent")
   })
 
+  // The paper form disables every candidate button and keeps Submit blocked while this runs, so a
+  // request that never settles traps the whole application -- four selected files included.
+  test("a lookup that never settles times out instead of hanging the form", async () => {
+    jest.useFakeTimers()
+    global.fetch = jest.fn((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        const error = new Error("aborted")
+        error.name = "AbortError"
+        reject(error)
+      })
+    }))
+
+    const pending = controller.selectAdultFromIdentityReview({ id: 7, name: "Jane Doe" })
+    await Promise.resolve()
+    jest.advanceTimersByTime(15000)
+    jest.useRealTimers()
+    const outcome = await pending
+
+    expect(outcome.selected).toBe(false)
+    expect(outcome.reason).toMatch(/took too long/i)
+  })
+
+  // "Try again" is false advice when the session is gone -- trying again is exactly what cannot work.
+  test("an expired session is told apart from a transient failure", async () => {
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: false,
+      status: 401,
+      json: () => Promise.reject(new Error("should not be called"))
+    }))
+
+    const outcome = await controller.selectAdultFromIdentityReview({ id: 7, name: "Jane Doe" })
+
+    expect(outcome.selected).toBe(false)
+    expect(outcome.reason).toMatch(/another browser tab/i)
+  })
+
+  test("a redirect to sign-in is also treated as an expired session", async () => {
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      redirected: true,
+      status: 200,
+      json: () => Promise.reject(new Error("should not be called"))
+    }))
+
+    const outcome = await controller.selectAdultFromIdentityReview({ id: 7, name: "Jane Doe" })
+
+    expect(outcome.reason).toMatch(/another browser tab/i)
+  })
+
   test("an active application leaves the candidate unselected", async () => {
     global.fetch = jest.fn(() => contextResponse({
       eligible_now: false, ineligibility_reason: "active_application"
