@@ -83,6 +83,120 @@ module Admin
       assert_match(/data-applicant-type-initial-create-new-adult-value="true"/, response.body)
     end
 
+    # A proof step can fail after `Application#save`, rolling the whole transaction back. These pin
+    # what staff get when that happens: the real reason, on a form they can correct and resubmit.
+    #
+    # They are characterization tests for behaviour that already holds -- a rollback clears the id,
+    # so the controller's removed `persisted?` branch was never entered -- and regression tests
+    # against it being reintroduced. Neither claims to reproduce a live production failure.
+    test 'a proof failure after the application saves re-renders the form with the real error' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      assert_no_difference ['Application.count', 'User.count'] do
+        post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
+      end
+
+      assert_response :unprocessable_content
+      assert_match(/Income proof was rejected by storage/, response.body)
+      assert_no_match(/app_not_found/, response.body)
+      assert_no_match(/Translation missing/, response.body)
+    end
+
+    # Every proof workflow input, in one pass. Deliberately non-default choices throughout --
+    # medical especially, whose "approved" option is the fresh-form default and would otherwise mask
+    # a failure to restore anything at all.
+    test 'the retry form restores every proof action and rejection field' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      post admin_paper_applications_path, headers: default_headers,
+                                          params: rollback_probe_params.merge(proof_workflow_params)
+
+      {
+        'income_proof' => 'reject', 'residency_proof' => 'reject', 'id_proof' => 'reject',
+        'medical_certification' => 'upload_only'
+      }.each do |group, action|
+        assert_restored "input[name='#{group}_action'][value='#{action}'][checked]",
+                        "#{group}_action was not restored"
+        assert_restored "select[name='#{group}_rejection_reason'] option[value='none_provided'][selected]",
+                        "#{group}_rejection_reason was not restored"
+      end
+
+      %w[income_proof residency_proof id_proof].each do |proof|
+        assert_select "textarea[name='#{proof}_custom_rejection_reason']", text: "why #{proof} was refused"
+      end
+      assert_select "textarea[name='medical_certification_custom_rejection_reason']",
+                    text: 'why the certification was refused'
+    end
+
+    # `self_certify_disability` posts under `applicant_attributes` but is a column on Application, so
+    # it never arrives in the application params. Reading it off `service.application` alone worked
+    # only when the failure happened after the application was built. This forces a failure *before*
+    # that -- which is the shape every A2 identity refusal will take -- and pins that the required
+    # checkbox still comes back.
+    test 'self-certification survives a failure that happens before the application is built' do
+      params = rollback_probe_params.merge(
+        constituent: rollback_probe_params[:constituent].merge(email: 'not-an-email')
+      )
+
+      assert_no_difference ['Application.count', 'User.count'] do
+        post admin_paper_applications_path, headers: default_headers, params: params
+      end
+
+      assert_response :unprocessable_content
+      assert_nil assigns(:paper_application)[:application].id,
+                 'this test is only meaningful if no application was built'
+      assert_restored "input[name='applicant_attributes[self_certify_disability]'][checked]",
+                      'self-certification was not restored'
+    end
+
+    # The most permissive disposition must never be reached by accident.
+    test 'the medical default applies to a fresh form but not to a retry' do
+      get new_admin_paper_application_path, headers: default_headers
+
+      assert_restored "input[name='medical_certification_action'][value='approved'][checked]",
+                      'a fresh form should default to approved'
+
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+      # A retry whose medical action did not come back at all: staff must choose again rather than
+      # have the form settle on "approved" for them.
+      post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
+
+      assert_select "input[name='medical_certification_action'][value='approved'][checked]", false,
+                    'a retry must not silently default the medical disposition to approved'
+    end
+
+    # The redirect is the specific thing that destroyed the message, so it is asserted separately
+    # from the message: a future change could restore one without the other.
+    test 'a rolled-back create never redirects to the application it rolled back' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
+
+      assert_not response.redirect?, "expected a re-render, got a redirect to #{response.location}"
+    end
+
+    # Staff retype the whole applicant by hand otherwise. Files cannot be restored by the server --
+    # that limitation is real and is not what this asserts.
+    test 'the retry form keeps the submitted non-file values and still posts as a new create' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
+
+      assert_select 'form[action=?][method=?]', admin_paper_applications_path, 'post'
+      assert_match(/RollbackProbe/, response.body)
+      assert_match(/rollback-probe@example.com/, response.body)
+    end
+
     test 'should create paper application for self-applicant with valid data' do
       # Ensure we're using a unique email for the new constituent
       unique_email = "self.applicant.#{Time.now.to_i}@example.com"
@@ -1739,6 +1853,56 @@ module Admin
       [facts[:first_name], facts[:last_name], facts[:email], facts[:phone], facts[:zip_code]].each do |secret|
         assert_not_includes response.body, secret
       end
+    end
+
+    # A complete, otherwise-valid self-applicant submission whose only problem is the stubbed proof
+    # failure -- so the transaction gets as far as saving the application before rolling back.
+    # Deliberately a name nothing matches, so identity review is clear and needs no decision token.
+    def rollback_probe_params
+      {
+        applicant_type: 'self',
+        constituent: {
+          first_name: 'RollbackProbe', last_name: 'Applicant',
+          date_of_birth: '1980-01-15',
+          email: 'rollback-probe@example.com', phone: '2025550142',
+          physical_address_1: '9 Rollback Way', city: 'Baltimore', state: 'MD', zip_code: '21201',
+          hearing_disability: '1'
+        },
+        # Posted the way the form posts it -- under applicant_attributes, not under application.
+        applicant_attributes: { self_certify_disability: '1', hearing_disability: '1' },
+        application: {
+          household_size: 1, annual_income: 10_000,
+          maryland_resident: '1',
+          medical_provider_name: 'Dr. Rollback',
+          medical_provider_phone: '2025559876',
+          medical_provider_email: 'dr.rollback@example.com'
+        },
+        income_proof_action: 'upload_only',
+        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+      }
+    end
+
+    # assert_select treats a trailing String as expected *text*, not as a failure message, so a
+    # message passed that way turns the assertion into a text comparison that always fails. Passing
+    # `true` as the equality argument keeps the message a message.
+    def assert_restored(selector, message)
+      assert_select selector, true, message
+    end
+
+    # Non-default choices for all four proof groups, with reasons, so a restore that silently falls
+    # back to defaults cannot pass.
+    def proof_workflow_params
+      params = {
+        medical_certification_action: 'upload_only',
+        medical_certification_rejection_reason: 'none_provided',
+        medical_certification_custom_rejection_reason: 'why the certification was refused'
+      }
+      %w[income_proof residency_proof id_proof].each do |proof|
+        params[:"#{proof}_action"] = 'reject'
+        params[:"#{proof}_rejection_reason"] = 'none_provided'
+        params[:"#{proof}_custom_rejection_reason"] = "why #{proof} was refused"
+      end
+      params
     end
 
     def identity_facts

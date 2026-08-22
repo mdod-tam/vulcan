@@ -37,7 +37,7 @@ module Applications
       ActiveRecord::Base.transaction do
         rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
         rollback_failure('Application creation failed') unless create_application
-        rollback_failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
+        rollback_failure_unless_explained('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
 
         application_created = @application.persisted?
       end
@@ -75,7 +75,7 @@ module Applications
         @constituent = application.user
 
         rollback_failure('Application update failed') unless update_application_attributes
-        rollback_failure('Proof upload failed') unless process_proof_uploads
+        rollback_failure_unless_explained('Proof upload failed') unless process_proof_uploads
 
         update_succeeded = true
       end

@@ -139,7 +139,7 @@
       </section>
 
       <%# ============================================================ %>
-      <% submitted_params = @paper_application[:submitted_params] || {} %>
+      <% submitted_params = (@paper_application[:submitted_params] || {}).to_h.with_indifferent_access %>
       <% existing_constituent_id = submitted_params[:existing_constituent_id].presence %>
       <% contact_info_mode = submitted_params[:contact_info_mode].presence || "update" %>
       <% contact_info_verified = ActiveModel::Type::Boolean.new.cast(submitted_params[:contact_info_verified]) %>
@@ -518,9 +518,16 @@
               <legend class="text-base font-medium text-gray-900 px-2 required-label">Disability Information (for the Applicant)</legend>
               <p class="text-sm text-gray-600 mb-4">Required for program eligibility</p>
 
-              <%= fields_for :applicant_attributes do |app_f| %>
+              <%= fields_for :applicant_attributes, @paper_application[:constituent] do |app_f| %>
                 <div class="flex items-start mb-4">
-                  <%= app_f.check_box :self_certify_disability,
+                  <%# Posted under applicant_attributes with the disability booleans, but it is a
+                      column on Application rather than on the user, so it cannot be read from the
+                      object this group is bound to. Rendered explicitly, keeping the same name, id
+                      and hidden-unchecked field, so only its source differs. %>
+                  <%= hidden_field_tag "applicant_attributes[self_certify_disability]", "0", id: nil %>
+                  <%= check_box_tag "applicant_attributes[self_certify_disability]", "1",
+                      @paper_application[:application]&.self_certify_disability,
+                      id: "applicant_attributes_self_certify_disability",
                       class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
                       required: true,
                       "aria-required": "true",
@@ -563,7 +570,7 @@
                 <%= label_tag :no_medical_provider_information, "No certifying professional information provided", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
             </div>
 
-              <%= fields_for :application do |a| %>
+              <%= fields_for :application, @paper_application[:application] do |a| %>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="md:col-span-2">
                     <%= a.label :medical_provider_name, "Provider Name", class: "block text-sm font-medium text-gray-700 required-label" %>
@@ -618,6 +625,7 @@
 	                             id="upload_only_medical_certification"
 	                             name="medical_certification_action"
 	                             value="upload_only"
+	                             <%= 'checked' if submitted_params[:medical_certification_action] == 'upload_only' %>
 	                             class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
 	                             data-action="change->document-proof-handler#toggleProofAction"
 	                             data-document-proof-handler-target="uploadOnlyRadio">
@@ -628,8 +636,15 @@
 	                             id="accept_medical_certification"
                              name="medical_certification_action"
                              value="approved"
+	                             <%# Approved is the fresh-form default, but only on a genuinely fresh
+                                 form. Keyed on there being no submitted state at all rather than on a
+                                 blank action: a retry whose action did not come back must render
+                                 unselected and make staff choose, not silently settle on the most
+                                 permissive disposition. An unconditional `checked` here also won
+                                 outright over the restored value, because a radio group takes the
+                                 last checked input in document order. %>
+	                             <%= 'checked' if submitted_params[:medical_certification_action] == 'approved' || submitted_params.blank? %>
                              class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
-                             checked
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="acceptRadio">
                       <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
@@ -639,6 +654,7 @@
                              id="reject_medical_certification"
                              name="medical_certification_action"
                              value="rejected"
+                             <%= 'checked' if submitted_params[:medical_certification_action] == 'rejected' %>
                              class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="rejectRadio">
@@ -682,13 +698,13 @@
                               data-action="change->document-proof-handler#handleReasonSelectionChanged"
                               data-document-proof-handler-target="rejectionReasonSelect">
                         <option value="">Select a reason</option>
-                        <option value="none_provided"
+                        <option value="none_provided" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == 'none_provided' %>
                                 data-reason-text="No disability certification was provided with the application.">None Provided</option>
                         <% medical_reason_options.each do |reason| %>
-                          <option value="<%= reason.code %>"
+                          <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == reason.code %>
                                   data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
                         <% end %>
-                        <option value="other">Other</option>
+                        <option value="other" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == 'other' %>>Other</option>
                       </select>
                     </div>
                     <div id="medical_certification_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
@@ -707,7 +723,7 @@
                                 disabled
                                 placeholder="Enter the rejection reason that will be sent to the certifying professional"
                                 class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                                data-document-proof-handler-target="customReasonField"></textarea>
+                                data-document-proof-handler-target="customReasonField"><%= submitted_params[:medical_certification_custom_rejection_reason] %></textarea>
                     </div>
                   </div>
                 </div>
@@ -730,7 +746,7 @@
           </div>
 
           <div class="p-6">
-            <%= fields_for :application do |a| %>
+            <%= fields_for :application, @paper_application[:application] do |a| %>
               <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <%= a.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
@@ -804,6 +820,7 @@
                            id="upload_only_income_proof"
                            name="income_proof_action"
                            value="upload_only"
+                           <%= 'checked' if submitted_params[:income_proof_action] == 'upload_only' %>
                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
@@ -815,6 +832,7 @@
                            id="accept_income_proof"
                            name="income_proof_action"
                            value="accept"
+                           <%= 'checked' if submitted_params[:income_proof_action] == 'accept' %>
                            class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
@@ -826,6 +844,7 @@
                            id="reject_income_proof"
                            name="income_proof_action"
                            value="reject"
+                           <%= 'checked' if submitted_params[:income_proof_action] == 'reject' %>
                            class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
@@ -871,7 +890,7 @@
                       } %>
                   <%= label_tag :no_income_information, "Benefits information was provided that satisfies the income requirement", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
                 </div>
-                <%= fields_for :application do |a| %>
+                <%= fields_for :application, @paper_application[:application] do |a| %>
                   <div class="mb-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg transition-colors duration-200"
                       data-income-validation-target="incomeFieldsContainer">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -920,13 +939,13 @@
                             data-action="change->document-proof-handler#handleReasonSelectionChanged"
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
-                      <option value="none_provided"
+                      <option value="none_provided" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == 'none_provided' %>
                               data-reason-text="No income proof was provided with the application.">None Provided</option>
                       <% income_reason_options.each do |reason| %>
-                        <option value="<%= reason.code %>"
+                        <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == reason.code %>
                                 data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
                       <% end %>
-                      <option value="other">Other</option>
+                      <option value="other" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == 'other' %>>Other</option>
                     </select>
                   </div>
                   <div id="income_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
@@ -945,7 +964,7 @@
                               disabled
                               placeholder="Enter the rejection reason that will be sent to the constituent"
                               class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                              data-document-proof-handler-target="customReasonField"></textarea>
+                              data-document-proof-handler-target="customReasonField"><%= submitted_params[:income_proof_custom_rejection_reason] %></textarea>
                   </div>
                 </div>
               </div>
@@ -965,7 +984,7 @@
               </h3>
 
               <%# Maryland Residency Attestation %>
-              <%= fields_for :application do |a| %>
+              <%= fields_for :application, @paper_application[:application] do |a| %>
                 <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div class="flex items-start">
                     <%= a.check_box :maryland_resident,
@@ -989,6 +1008,7 @@
                            id="upload_only_residency_proof"
                            name="residency_proof_action"
                            value="upload_only"
+                           <%= 'checked' if submitted_params[:residency_proof_action] == 'upload_only' %>
                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction"
@@ -1000,6 +1020,7 @@
                            id="accept_residency_proof"
                            name="residency_proof_action"
                            value="accept"
+                           <%= 'checked' if submitted_params[:residency_proof_action] == 'accept' %>
                            class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction"
@@ -1011,6 +1032,7 @@
                            id="reject_residency_proof"
                            name="residency_proof_action"
                            value="reject"
+                           <%= 'checked' if submitted_params[:residency_proof_action] == 'reject' %>
                            class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction"
@@ -1056,13 +1078,13 @@
                             data-action="change->document-proof-handler#handleReasonSelectionChanged"
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
-                      <option value="none_provided"
+                      <option value="none_provided" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == 'none_provided' %>
                               data-reason-text="No residency proof was provided with the application.">None Provided</option>
                       <% residency_reason_options.each do |reason| %>
-                        <option value="<%= reason.code %>"
+                        <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == reason.code %>
                                 data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
                       <% end %>
-                      <option value="other">Other</option>
+                      <option value="other" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == 'other' %>>Other</option>
                     </select>
                   </div>
                   <div id="residency_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
@@ -1081,7 +1103,7 @@
                               disabled
                               placeholder="Enter the rejection reason that will be sent to the constituent"
                               class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                              data-document-proof-handler-target="customReasonField"></textarea>
+                              data-document-proof-handler-target="customReasonField"><%= submitted_params[:residency_proof_custom_rejection_reason] %></textarea>
                   </div>
                 </div>
               </div>
@@ -1108,6 +1130,7 @@
                          id="upload_only_id_proof"
                          name="id_proof_action"
                          value="upload_only"
+                         <%= 'checked' if submitted_params[:id_proof_action] == 'upload_only' %>
                          class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                          required
                          data-action="change->document-proof-handler#toggleProofAction"
@@ -1119,6 +1142,7 @@
                          id="accept_id_proof"
                          name="id_proof_action"
                          value="accept"
+                         <%= 'checked' if submitted_params[:id_proof_action] == 'accept' %>
                          class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
                          required
                          data-action="change->document-proof-handler#toggleProofAction"
@@ -1130,6 +1154,7 @@
                          id="reject_id_proof"
                          name="id_proof_action"
                          value="reject"
+                         <%= 'checked' if submitted_params[:id_proof_action] == 'reject' %>
                          class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
                          required
                          data-action="change->document-proof-handler#toggleProofAction"
@@ -1174,13 +1199,13 @@
                           data-action="change->document-proof-handler#handleReasonSelectionChanged"
                           data-document-proof-handler-target="rejectionReasonSelect">
                     <option value="">Select a reason</option>
-                    <option value="none_provided"
+                    <option value="none_provided" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == 'none_provided' %>
                             data-reason-text="No ID proof was provided with the application.">None Provided</option>
                     <% id_reason_options.each do |reason| %>
-                      <option value="<%= reason.code %>"
+                      <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == reason.code %>
                               data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
                     <% end %>
-                    <option value="other">Other</option>
+                    <option value="other" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == 'other' %>>Other</option>
                   </select>
                 </div>
                 <div id="id_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
@@ -1199,7 +1224,7 @@
                             disabled
                             placeholder="Enter the rejection reason that will be sent to the constituent"
                             class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
-                            data-document-proof-handler-target="customReasonField"></textarea>
+                            data-document-proof-handler-target="customReasonField"><%= submitted_params[:id_proof_custom_rejection_reason] %></textarea>
                 </div>
               </div>
             </div>

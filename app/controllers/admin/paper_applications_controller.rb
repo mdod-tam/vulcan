@@ -34,6 +34,17 @@ module Admin
       preferred_means_of_communication referral_source
     ].freeze
 
+    # Every proof input a re-rendered form has to put back. The controller owns this allowlist
+    # because it is the same kind of decision as the rest of `build_submitted_params` -- what may be
+    # echoed back to staff -- and not something a view should be deciding for itself.
+    PROOF_WORKFLOW_FIELDS = %i[
+      income_proof_action residency_proof_action id_proof_action medical_certification_action
+      income_proof_rejection_reason income_proof_custom_rejection_reason
+      residency_proof_rejection_reason residency_proof_custom_rejection_reason
+      id_proof_rejection_reason id_proof_custom_rejection_reason
+      medical_certification_rejection_reason medical_certification_custom_rejection_reason
+    ].freeze
+
     APPLICATION_FIELDS = %i[
       household_size annual_income maryland_resident self_certify_disability
       medical_provider_name medical_provider_phone medical_provider_fax
@@ -117,17 +128,18 @@ module Admin
       else
         Rails.logger.info "[PaperApplicationsController] Handling service failure, request format: #{request.format}"
 
-        # If the application was persisted but reconciliation failed, redirect to the application
-        # with an alert instead of re-rendering the form.
-        if service.application&.persisted?
-          error_msg = service.errors.any? ? service.errors.join('; ') : 'An unexpected error occurred.'
-          handle_error_response(
-            html_redirect_path: admin_application_path(service.application),
-            error_message: error_msg
-          )
-        else
-          handle_service_failure(service)
-        end
+        # The service result owns the transaction outcome, so a false result always re-renders the
+        # form with the real error.
+        #
+        # This used to branch on `service.application&.persisted?` first, meaning to catch
+        # "committed but reconciliation failed" -- a state the service does not produce, because a
+        # reconciliation problem returns true with a reconciliation_note. The branch was therefore
+        # dead: a rollback clears the id, so the guard was never satisfied. It is removed rather
+        # than kept as insurance because *if* that mixed state were ever introduced, this branch
+        # would redirect to an id the rollback had taken away, and the show action's "application
+        # not found" would replace the only message explaining the failure. The service-level
+        # invariants that keep it unreachable are pinned in paper_application_service_test.rb.
+        handle_service_failure(service)
       end
     end
 
@@ -344,10 +356,22 @@ module Admin
 
       # Re-render the form with the submitted values, even for persisted records.
       constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
+      # The disability booleans post under `applicant_attributes` but are columns on the user, and
+      # the form binds that group to this object. Without them a failed create returns a form with
+      # every disability checkbox cleared. Sliced to the user's own columns because the group also
+      # carries self_certify_disability, which belongs to Application and is rendered from there.
+      constituent.assign_attributes(user_owned_disability_attributes(submitted_params))
 
       # Get or build application with submitted data
       application = service.application || existing_application || Application.new
       application.assign_attributes(submitted_params[:application]) if submitted_params[:application].present?
+      # `self_certify_disability` posts under `applicant_attributes` alongside the disability
+      # booleans, but it is a column on Application, so it never arrives in `submitted_params[:application]`.
+      # Reading it off `service.application` alone worked only when the failure happened *after* the
+      # application was built; a failure before that -- constituent processing today, an identity
+      # refusal under A2 -- left the required checkbox cleared on the retry form.
+      application.self_certify_disability = submitted_self_certification(submitted_params) unless
+        submitted_self_certification(submitted_params).nil?
 
       @paper_application = {
         application: application,
@@ -360,6 +384,23 @@ module Admin
       }
     end
 
+    # nil when the field was not submitted at all, so a fresh form is left untouched rather than
+    # being told the applicant did not self-certify.
+    def submitted_self_certification(submitted_params)
+      submitted = submitted_params[:applicant_attributes]
+      return nil if submitted.blank?
+
+      value = submitted.to_h.symbolize_keys[:self_certify_disability]
+      value.nil? ? nil : ActiveModel::Type::Boolean.new.cast(value)
+    end
+
+    def user_owned_disability_attributes(submitted_params)
+      submitted = submitted_params[:applicant_attributes]
+      return {} if submitted.blank?
+
+      submitted.to_h.symbolize_keys.slice(*(USER_DISABILITY_FIELDS & Constituent.column_names.map(&:to_sym)))
+    end
+
     def build_submitted_params
       params.permit(
         :applicant_type, :relationship_type, :guardian_id, :dependent_id,
@@ -368,6 +409,10 @@ module Admin
         :guardian_no_email_address, :guardian_no_phone_number,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
+        # Proof workflow inputs are instructions rather than attributes of any record, so nothing
+        # else carries them back into a re-rendered form. All three parts are needed together: the
+        # action alone restores "Reject" while losing the reason that made it meaningful.
+        *PROOF_WORKFLOW_FIELDS,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),

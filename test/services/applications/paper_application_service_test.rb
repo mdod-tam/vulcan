@@ -1281,6 +1281,93 @@ module Applications
       end
     end
 
+    # Two properties, together, are what make "create returned false but the application committed"
+    # impossible. That state is what the controller's removed branch tried to handle by asking a
+    # rolled-back object whether it was persisted. They are pinned here because if either one ever
+    # stops holding, the controller's simple "false means re-render" contract silently becomes wrong.
+    #
+    # Asserted against the database, never against `service.application.persisted?`: in-memory state
+    # is exactly the authority the removed branch trusted.
+    test 'a failure after the application saves leaves nothing durable and no ghost id' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('storage refused the proof') }
+      )
+      params = base_paper_params.merge(
+        income_proof_action: 'upload_only',
+        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+      )
+
+      service = paper_service_with_proofs(params)
+
+      # Every table the request could have written, not just the two obvious ones: a rollback that
+      # left an orphaned attachment, event, or case behind would still satisfy a user/application
+      # count check while leaving real debris.
+      counters = ['Application.count', 'User.count', 'Event.count', 'Notification.count',
+                  'DuplicateReviewCase.count', 'GuardianRelationship.count',
+                  'ProofReview.count', 'ActiveStorage::Attachment.count', 'ActiveStorage::Blob.count']
+      assert_no_difference counters do
+        assert_no_enqueued_jobs do
+          assert_not service.create
+        end
+      end
+      assert_includes service.errors.join(' '), 'storage refused the proof'
+      # The rollback must also take the id back off the in-memory record, or any caller that trusts
+      # it is handed an id that resolves to nothing.
+      assert_nil service.application&.id
+    end
+
+    # The suffix is not merely untidy: it is the last thing staff read, and it describes an internal
+    # step rather than what went wrong. The helper for this already existed and was used for
+    # constituent failures; proof failures simply were not routed through it.
+    test 'an explained proof failure is not followed by the generic step name' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('storage refused the proof') }
+      )
+      params = base_paper_params.merge(
+        income_proof_action: 'upload_only',
+        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+      )
+
+      service = paper_service_with_proofs(params)
+      service.create
+
+      assert_includes service.errors.join(' '), 'storage refused the proof'
+      assert_not_includes service.errors, 'Proof upload failed'
+    end
+
+    # The same change was made on both call sites, so both are pinned. Admins hit the update path
+    # when correcting an existing paper application, and the message matters there for the same
+    # reason it matters on create.
+    test 'an explained proof failure on update is also not followed by the generic step name' do
+      application = create(:application, user: create(:constituent))
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('storage refused the proof') }
+      )
+      params = { income_proof_action: 'upload_only',
+                 income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf') }
+
+      service = paper_service_with_proofs(params)
+
+      assert_not service.update(application)
+      assert_includes service.errors.join(' '), 'storage refused the proof'
+      assert_not_includes service.errors, 'Proof upload failed'
+    end
+
+    # The other leg: once the transaction commits, a later reconciliation problem is a *success* with
+    # a warning. It must never turn into a false result, because then a committed application would
+    # be reported as a failure.
+    test 'a reconciliation failure after commit still reports success with a warning' do
+      Application.any_instance.stubs(:reconcile_workflow_state!).raises(StandardError, 'reconciliation exploded')
+
+      service = paper_service(base_paper_params)
+
+      assert_difference ['Application.count', 'User.count'], 1 do
+        assert service.create, "expected success with a warning, got errors: #{service.errors.inspect}"
+      end
+      assert_includes service.reconciliation_note.to_s, 'verify this application status'
+      assert Application.exists?(service.application.id), 'the committed application must still be there'
+    end
+
     # The panel refuses to offer a retired record, but the panel is not the boundary:
     # existing_constituent_id is a plain form field, so the write path has to refuse it on its own
     # rather than trusting that the browser only ever sends back ids it was shown.
@@ -1355,6 +1442,11 @@ module Applications
 
     def paper_service(params)
       PaperApplicationService.new(params: params, admin: @admin, skip_proof_processing: true)
+    end
+
+    # Proof processing left on, because the failure being pinned happens inside it.
+    def paper_service_with_proofs(params)
+      PaperApplicationService.new(params: params, admin: @admin)
     end
 
     def base_paper_params
