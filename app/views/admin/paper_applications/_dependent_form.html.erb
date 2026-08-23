@@ -136,6 +136,8 @@
           which is different from having been submitted as unchecked. %>
       <% submitted_use_guardian_email = submitted_dependent_params.key?(:use_guardian_email) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_email]) : nil %>
       <% submitted_use_guardian_phone = submitted_dependent_params.key?(:use_guardian_phone) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_phone]) : nil %>
+      <% submitted_use_guardian_address = submitted_dependent_params.key?(:use_guardian_address) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_address]) : nil %>
+      <% use_guardian_address_default = submitted_use_guardian_address.nil? ? (dependent.blank? || dependent&.physical_address_1.blank?) : submitted_use_guardian_address %>
       <% use_guardian_email_default = submitted_use_guardian_email.nil? ? (dependent.blank? || dependent.paper_intake_uses_guardian_email?) : submitted_use_guardian_email %>
       <% use_guardian_phone_default = submitted_use_guardian_phone.nil? ? (dependent.blank? || dependent.paper_intake_uses_guardian_phone?) : submitted_use_guardian_phone %>
 
@@ -254,7 +256,11 @@
       <%# Address Section %>
       <div class="p-3 bg-white rounded border border-gray-200">
         <div class="flex items-start mb-3">
-          <%= check_box_tag :use_guardian_address, "1", (dependent.blank? || dependent&.physical_address_1.blank?), {
+          <%# Hidden companion so an unchecked box is still submitted as "0". Without it a retry
+              cannot distinguish a deliberate uncheck from an absent parameter, and "Same address as
+              guardian" silently flips back on after a failure. %>
+          <%= hidden_field_tag :use_guardian_address, "0", id: nil %>
+          <%= check_box_tag :use_guardian_address, "1", use_guardian_address_default, {
             id: "use_guardian_address_checkbox",
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
             data: { 

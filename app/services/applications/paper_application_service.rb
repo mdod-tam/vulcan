@@ -39,7 +39,13 @@ module Applications
         begin
           handle_successful_application(:create)
         rescue StandardError => e
-          log_error(e, 'Failed to send notifications after successful application creation')
+          # Logged *and* surfaced. This method sequences notifications, proof-delivery checks, audit
+          # logging and provider follow-up, so one exception can also skip everything after it --
+          # silently succeeding here tells the admin the paper intake finished when part of it did
+          # not.
+          log_error(e, 'Failed to finish post-creation steps after a successful application creation')
+          add_warning('The application was created, but a follow-up step did not finish. ' \
+                      'Review this application before treating it as complete.')
         end
 
         # Reconcile outside the transaction so proof writes are committed regardless of
@@ -132,26 +138,44 @@ module Applications
     rescue TransactionFailure
       raise
     rescue StandardError => e
-      raise unless application_committed?
+      state = commit_state
+      # Only a *confirmed* rollback may become a failure, because failure sends the admin back to a
+      # retry form. Anything else stays on the success side.
+      raise if state == :rolled_back
 
-      log_error(e, 'Paper application committed, but a post-commit step failed')
-      add_warning('The application was created, but a follow-up step did not finish. ' \
-                  'Review this application before treating it as complete.')
+      log_error(e, 'Paper application post-commit step failed')
+      add_warning(post_commit_warning_for(state))
       true
     end
 
+    def post_commit_warning_for(state)
+      if state == :unknown
+        'The application may have been created, but that could not be confirmed. Check the ' \
+          'applications list before entering it again -- submitting again could create a duplicate.'
+      else
+        'The application was created, but a follow-up step did not finish. ' \
+          'Review this application before treating it as complete.'
+      end
+    end
+
+    # Three answers, not two. Collapsing "I could not tell" into "not committed" is what would
+    # recreate the duplicate risk: the post-commit callback raises, the verification query then fails
+    # transiently, and an application that exists gets offered back as a retry.
+    #
     # Asked of the database on the same connection that just performed the write, which is the
     # writer: this application configures no reader role. If one is ever added, this query must stay
-    # on the writer -- replica lag answering "no" about a row committed moments ago would turn a
-    # committed application back into a retry form, which is the exact duplicate-creating mistake
-    # this method exists to prevent.
-    def application_committed?
+    # on the writer -- replica lag answering "no" about a row committed moments ago is the same
+    # mistake by a different route.
+    #
+    # @return [Symbol] :committed, :rolled_back, or :unknown
+    def commit_state
       id = @application&.id
-      return false if id.blank?
+      return :rolled_back if id.blank?
 
-      Application.exists?(id)
-    rescue StandardError
-      false
+      Application.exists?(id) ? :committed : :rolled_back
+    rescue StandardError => e
+      log_error(e, 'Could not confirm whether the paper application committed')
+      :unknown
     end
 
     def add_warning(message)

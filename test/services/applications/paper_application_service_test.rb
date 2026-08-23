@@ -1370,6 +1370,34 @@ module Applications
       assert_match(/follow-up step did not finish/i, service.warning_message)
     end
 
+    # The nastier ordering: the callback raises *and* the query that would confirm the commit also
+    # fails. Collapsing that uncertainty into "not committed" hands the admin a retry form for an
+    # application that may well exist -- the exact duplicate risk this path is meant to remove. An
+    # unconfirmed commit is reported on the success side, with copy that says so.
+    test 'an unverifiable commit is not reported as a failure' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert service.create, 'an unconfirmed commit must not be reported as a failure'
+      assert_match(/could not be confirmed/i, service.warning_message)
+      assert_match(/could create a duplicate/i, service.warning_message)
+    end
+
+    # A post-creation step failing is not a reason to call the intake finished. These run in
+    # sequence, so one exception can also skip everything after it.
+    test 'a failure in the post-creation steps is surfaced as a warning' do
+      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
+                                           .raises(StandardError, 'notification exploded')
+
+      service = paper_service(base_paper_params)
+
+      assert service.create
+      assert_match(/follow-up step did not finish/i, service.warning_message)
+    end
+
     # The two warning channels name different situations, so a request that hits both must not
     # silently drop one of them.
     test 'a post-commit failure and a reconciliation failure are both reported' do

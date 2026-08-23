@@ -299,10 +299,13 @@ end
 
 private
 
+# Income, residency, ID and the disability certification are each processed in turn; a failure in
+# any one of them rolls the whole create back.
 def process_proof(type)
   # 'upload_only', 'accept' or 'reject' for income/residency/ID.
   # Disability certification uses 'upload_only', 'approved' or 'rejected'.
-  action = extract_proof_action(type)
+  action_key = type == :medical_certification ? "#{type}_action" : "#{type}_proof_action"
+  action = params[action_key]
 
   case action
   when 'upload_only'

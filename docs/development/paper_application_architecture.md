@@ -149,11 +149,14 @@ resolved reason text and its `rejection_reason_code`.
 
 ### Disability certification
 
-Current disability certification actions are:
+Current disability certification actions, posted in `medical_certification_action`, are:
 
-- `approved`
-- `rejected`
-- `not_requested`
+- `upload_only`
+- `approved` — the default on a *fresh* form only; a re-rendered retry never defaults it
+- `rejected` — requires `medical_certification_rejection_reason`, plus
+  `medical_certification_custom_rejection_reason` when that reason is `other`
+
+`not_requested` is not one of them.
 
 Disability certification attachments and rejection handling go through `MedicalCertificationAttachmentService`.
 

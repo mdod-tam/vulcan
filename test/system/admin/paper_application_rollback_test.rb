@@ -214,6 +214,40 @@ module Admin
       take_evidence_screenshot('paper-application-rollback-existing-adult-succeeded', full: true, html: true)
     end
 
+    # The suppression is scoped to the restored selection. Replacing that selection means the newer
+    # answer is the *new* adult's on-file record, so autopopulation has to come back -- otherwise
+    # staff get a selected applicant whose name, date of birth and contact fields are all blank.
+    test 'changing the selection after a failed retry autopopulates the replacement adult' do
+      original = create(:constituent, first_name: 'OnFile', last_name: 'Applicant', phone: '202-555-0101')
+      replacement = create(:constituent, first_name: 'Replacement', last_name: 'Adult',
+                                         phone: '202-555-0123')
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      select_existing_adult_through_the_ui(original)
+      verify_existing_adult_contact
+      fill_in_application_details(household_size: 2, annual_income: 20_000)
+      fill_in_disability_information
+      fill_in_medical_provider_information
+      attach_and_accept_proofs
+      complete_paper_application_attestations
+
+      assert_no_difference ['User.count', 'Application.count'] do
+        click_button 'Submit Paper Application'
+        assert_text(/rejected by storage/i, wait: 20)
+      end
+      assert_selector '[data-adult-picker-target="onFileSummary"]', visible: true, wait: 15
+
+      click_button 'Change Selection'
+      select_existing_adult_through_the_ui(replacement)
+
+      assert_equal 'Replacement', enabled_field('constituent[first_name]').value,
+                   'the replacement adult was not autopopulated'
+      assert_equal replacement.id.to_s, first("input[name='existing_constituent_id']", visible: :all).value
+      take_evidence_screenshot('paper-application-rollback-changed-selection', full: true, html: true)
+    end
+
     private
 
     def select_existing_adult_through_the_ui(applicant)
@@ -265,6 +299,9 @@ module Admin
         # required, and a browser omits the unchecked boxes from the submission entirely.
         uncheck 'use_guardian_email' if has_checked_field?('use_guardian_email', wait: 2)
         uncheck 'use_guardian_phone' if has_checked_field?('use_guardian_phone', wait: 2)
+        # Address too: it has the same absent-when-unchecked problem, and silently flipping
+        # "same address as guardian" back on after a failure changes where documents are sent.
+        uncheck 'use_guardian_address_checkbox' if has_checked_field?('use_guardian_address_checkbox', wait: 2)
         find('input[name="constituent[dependent_email]"]:not([disabled])').set('dependent.child@example.com')
         find('input[name="constituent[dependent_phone]"]:not([disabled])').set('202-555-0177')
         assert_equal 'dependent.child@example.com',
@@ -302,6 +339,8 @@ module Admin
                  'an unchecked guardian-email choice must stay unchecked'
       assert_not enabled_checkbox('use_guardian_phone').checked?,
                  'an unchecked guardian-phone choice must stay unchecked'
+      assert_not first("input[type='checkbox'][name='use_guardian_address']", visible: :all).checked?,
+                 'an unchecked guardian-address choice must stay unchecked'
 
       assert enabled_checkbox('no_medical_provider_information').checked?,
              'the no-provider flag was not restored'

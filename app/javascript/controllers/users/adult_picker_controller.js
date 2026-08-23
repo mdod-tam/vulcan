@@ -244,6 +244,10 @@ export default class extends Controller {
   clearSelection({ dispatch = true } = {}) {
     if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = ""
 
+    // The restored submission is being discarded along with the selection it belonged to, so the
+    // guard goes with it. Leaving it set would suppress autopopulation for the *replacement* adult
+    // too, handing staff a selected record whose name, date of birth and contact fields are blank.
+    this._restoredFromSubmission = false
     this._onFileData = {}
     this._adultApplicationContext = null
     this.selectedValue = false
