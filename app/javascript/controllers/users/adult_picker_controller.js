@@ -33,6 +33,10 @@ export default class extends Controller {
     this.selectedValue = !!(this.hasConstituentIdFieldTarget && this.constituentIdFieldTarget.value)
     this._adultApplicationContext = null
     this._onFileData = {}
+    // Set by the server when it re-renders the form after a failed submission. On that render the
+    // fields already hold what staff typed, including corrections to the on-file record, so the
+    // context fetch below must not paste database values back over them.
+    this._restoredFromSubmission = this.element.dataset.adultPickerRestoredValue === "true"
     this.togglePanes()
 
     if (this.selectedValue) {
@@ -316,7 +320,11 @@ export default class extends Controller {
   _applyAdultContext(data) {
     this._adultApplicationContext = data
     this._storeOnFileData(data.user)
-    this._autopopulateFields(data.user)
+    // Everything else here is still needed on a retry -- the on-file summary, contact mode,
+    // verification control and submit gating all depend on it. Only the field overwrite is skipped,
+    // because on a retry the submitted values are the newer ones and silently replacing them with
+    // what is on file loses a correction staff had already made once.
+    if (!this._restoredFromSubmission) this._autopopulateFields(data.user)
     this._showOnFileSummary(data)
     this._showContactMode()
     this._showVerification()

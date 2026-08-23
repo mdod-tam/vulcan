@@ -153,6 +153,75 @@ module Admin
                       'self-certification was not restored'
     end
 
+    # The dependent branch had no retry coverage at all, and it turned out to restore nothing: the
+    # applicant-type radios, guardian selection, and dependent fields are all keyed off state the
+    # failure render never set, so a dependent submission came back as a blank adult form.
+    test 'a failed dependent submission comes back on the dependent branch with its selection intact' do
+      guardian = create(:constituent)
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      post admin_paper_applications_path, headers: default_headers, params: dependent_probe_params(guardian)
+
+      assert_response :unprocessable_content
+      assert_restored "input[name='applicant_type'][value='dependent'][checked]",
+                      'the dependent branch was not restored'
+      assert_select "input[name='applicant_type'][value='self'][checked]", false,
+                    'the adult branch must not be selected on a dependent retry'
+      assert_restored "input[name='guardian_id'][value='#{guardian.id}']",
+                      'the selected guardian was not restored'
+      assert_restored "input[name='constituent[first_name]'][value='Dependent']",
+                      'the dependent first name was not restored'
+    end
+
+    # The picker refetches the selected adult on connect and pastes the on-file record over the
+    # fields. On a retry the submitted values are newer -- they may be the correction staff came to
+    # make -- so the server tells the picker to leave them alone.
+    test 'a retry tells the adult picker not to overwrite submitted values' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      get new_admin_paper_application_path, headers: default_headers
+      assert_select "[data-controller='adult-picker'][data-adult-picker-restored-value='false']", true,
+                    'a fresh form should autopopulate normally'
+
+      post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
+      assert_restored "[data-controller='adult-picker'][data-adult-picker-restored-value='true']",
+                      'a retry must suppress the on-file overwrite'
+    end
+
+    # Both flags switch whole sections off; losing them re-imposes the requirements they suppressed.
+    test 'the retry form restores the no-provider and no-income flags' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+      params = rollback_probe_params.merge(no_medical_provider_information: '1', no_income_information: '1')
+
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_restored "input[name='no_medical_provider_information'][checked]",
+                      'the no-provider flag was not restored'
+      assert_restored "input[name='no_income_information'][checked]",
+                      'the no-income flag was not restored'
+    end
+
+    # A submitted "0" is a deliberate unchecked, not a truthy string.
+    test 'an unchecked no-information flag stays unchecked on a retry' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+      params = rollback_probe_params.merge(no_medical_provider_information: '0', no_income_information: '0')
+
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_select "input[name='no_medical_provider_information'][checked]", false,
+                    'a submitted "0" must not come back checked'
+      assert_select "input[name='no_income_information'][checked]", false,
+                    'a submitted "0" must not come back checked'
+    end
+
     # The most permissive disposition must never be reached by accident.
     test 'the medical default applies to a fresh form but not to a retry' do
       get new_admin_paper_application_path, headers: default_headers
@@ -1887,6 +1956,19 @@ module Admin
     # `true` as the equality argument keeps the message a message.
     def assert_restored(selector, message)
       assert_select selector, true, message
+    end
+
+    # A dependent submission with an already-selected guardian: the branch, the selection, and the
+    # dependent's own fields all have to come back together to be worth anything.
+    def dependent_probe_params(guardian)
+      rollback_probe_params.merge(
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        relationship_type: 'parent',
+        constituent: rollback_probe_params[:constituent].merge(
+          first_name: 'Dependent', last_name: 'Child'
+        )
+      )
     end
 
     # Non-default choices for all four proof groups, with reasons, so a restore that silently falls

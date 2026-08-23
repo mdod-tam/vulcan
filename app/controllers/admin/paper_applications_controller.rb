@@ -94,6 +94,8 @@ module Admin
       # For simplicity with the current hash structure:
 
       @show_create_guardian_form = params[:show_create_guardian_form].present?
+      @applicant_type = params[:applicant_type].presence || (@show_create_guardian_form ? 'dependent' : 'self')
+      @restored_from_submission = false
     end
 
     def create
@@ -111,11 +113,13 @@ module Admin
       if service_result
         clear_quick_created_portal_user_markers!
         success_message = generate_success_message(service.application)
-        if service.reconciliation_note.present?
+        # Every warning the write produced, not just reconciliation: a post-commit callback can fail
+        # for reasons that have nothing to do with workflow state, and the admin still needs telling.
+        if service.warning_message.present?
           handle_reconciliation_warning_response(
             application: service.application,
             success_message: success_message,
-            warning_message: service.reconciliation_note
+            warning_message: service.warning_message
           )
         else
           handle_success_response(
@@ -133,12 +137,12 @@ module Admin
         #
         # This used to branch on `service.application&.persisted?` first, meaning to catch
         # "committed but reconciliation failed" -- a state the service does not produce, because a
-        # reconciliation problem returns true with a reconciliation_note. The branch was therefore
-        # dead: a rollback clears the id, so the guard was never satisfied. It is removed rather
-        # than kept as insurance because *if* that mixed state were ever introduced, this branch
-        # would redirect to an id the rollback had taken away, and the show action's "application
-        # not found" would replace the only message explaining the failure. The service-level
-        # invariants that keep it unreachable are pinned in paper_application_service_test.rb.
+        # reconciliation problem returns true with a warning, and a post-commit callback failure now
+        # does too -- the service checks durable existence before deciding, so a committed
+        # application is never reported as a failure. Inferring commit state here from
+        # `service.application&.persisted?` was wrong in both directions: false after a rollback
+        # restores the record, true after a commit whose callback then raised. The invariants that
+        # keep this branch honest are pinned in paper_application_service_test.rb.
         handle_service_failure(service)
       end
     end
@@ -351,27 +355,10 @@ module Admin
     def repopulate_form_data(service, existing_application)
       submitted_params = build_submitted_params
 
-      # Get or build constituent with submitted data
-      constituent = service.constituent || existing_application&.user || Constituent.new
+      constituent = rebuilt_constituent(service, existing_application, submitted_params)
+      application = rebuilt_application(service, existing_application, submitted_params)
 
-      # Re-render the form with the submitted values, even for persisted records.
-      constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
-      # The disability booleans post under `applicant_attributes` but are columns on the user, and
-      # the form binds that group to this object. Without them a failed create returns a form with
-      # every disability checkbox cleared. Sliced to the user's own columns because the group also
-      # carries self_certify_disability, which belongs to Application and is rendered from there.
-      constituent.assign_attributes(user_owned_disability_attributes(submitted_params))
-
-      # Get or build application with submitted data
-      application = service.application || existing_application || Application.new
-      application.assign_attributes(submitted_params[:application]) if submitted_params[:application].present?
-      # `self_certify_disability` posts under `applicant_attributes` alongside the disability
-      # booleans, but it is a column on Application, so it never arrives in `submitted_params[:application]`.
-      # Reading it off `service.application` alone worked only when the failure happened *after* the
-      # application was built; a failure before that -- constituent processing today, an identity
-      # refusal under A2 -- left the required checkbox cleared on the retry form.
-      application.self_certify_disability = submitted_self_certification(submitted_params) unless
-        submitted_self_certification(submitted_params).nil?
+      restore_applicant_branch_state(submitted_params)
 
       @paper_application = {
         application: application,
@@ -382,6 +369,54 @@ module Admin
         submitted_params: submitted_params,
         show_create_new_adult: show_create_new_adult_from?(submitted_params)
       }
+    end
+
+    def rebuilt_constituent(service, existing_application, submitted_params)
+      constituent = service.constituent || existing_application&.user || Constituent.new
+      # Re-render the form with the submitted values, even for persisted records.
+      constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
+      # The disability booleans post under `applicant_attributes` but are columns on the user, and
+      # the form binds that group to this object. Without them a failed create returns a form with
+      # every disability checkbox cleared. Sliced to the user's own columns because the group also
+      # carries self_certify_disability, which belongs to Application and is rendered from there.
+      constituent.assign_attributes(user_owned_disability_attributes(submitted_params))
+      constituent
+    end
+
+    def rebuilt_application(service, existing_application, submitted_params)
+      application = service.application || existing_application || Application.new
+      application.assign_attributes(submitted_params[:application]) if submitted_params[:application].present?
+      # `self_certify_disability` posts under `applicant_attributes` alongside the disability
+      # booleans, but it is a column on Application, so it never arrives in
+      # `submitted_params[:application]`. Reading it off `service.application` alone worked only when
+      # the failure happened *after* the application was built; a failure before that -- constituent
+      # processing today, an identity refusal under A2 -- left the required checkbox cleared.
+      certification = submitted_self_certification(submitted_params)
+      application.self_certify_disability = certification unless certification.nil?
+      application
+    end
+
+    # Which branch of the form staff were on. Without this a dependent submission comes back as a
+    # blank adult form: the applicant-type radios, the guardian creation form, and the dependent
+    # fields are all keyed off it, so losing it discards the whole identity selection.
+    def restore_applicant_branch_state(submitted_params)
+      # The applicant-type radios are disabled once a branch is locked in, so a resubmission from the
+      # retry form omits the parameter entirely. Falling back to 'self' there would silently move a
+      # dependent application onto the adult branch on its second failure. The writer already infers
+      # the branch from the guardian selection; the re-render uses the same rule.
+      @applicant_type = submitted_params[:applicant_type].presence ||
+                        (inferred_dependent_application_from(submitted_params) ? 'dependent' : 'self')
+      @show_create_guardian_form = submitted_params[:show_create_guardian_form].present? ||
+                                   creating_guardian_inline?(submitted_params)
+      # The picker refetches the selected adult on connect; tell it the fields already hold newer,
+      # submitted values so it does not paste the on-file record back over them.
+      @restored_from_submission = true
+    end
+
+    def creating_guardian_inline?(submitted_params)
+      @applicant_type == 'dependent' &&
+        submitted_params[:guardian_attributes].present? &&
+        submitted_params[:guardian_id].blank?
     end
 
     # nil when the field was not submitted at all, so a fresh form is left untouched rather than
@@ -413,6 +448,10 @@ module Admin
         # else carries them back into a re-rendered form. All three parts are needed together: the
         # action alone restores "Reject" while losing the reason that made it meaningful.
         *PROOF_WORKFLOW_FIELDS,
+        # These two switch whole sections off. Losing them on a retry does not merely blank a field:
+        # the JavaScript re-imposes the provider and income requirements they were suppressing, so an
+        # otherwise unchanged retry becomes unsubmittable.
+        :no_medical_provider_information, :no_income_information, :show_create_guardian_form,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),

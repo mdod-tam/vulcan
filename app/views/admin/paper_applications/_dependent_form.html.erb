@@ -8,6 +8,10 @@
   - Guardian relationship type
 %>
 
+<%# The submission being re-rendered, if any. Hoisted so every section below -- contact strategy,
+    the dependent's own contact values, and the relationship select -- reads one source. %>
+<% submitted_dependent_params = (@paper_application.is_a?(Hash) ? @paper_application[:submitted_params] : nil).to_h.with_indifferent_access %>
+
 <fieldset id="dependent-info-section" class="mb-6 p-4 border border-gray-200 rounded-lg bg-white shadow-sm" data-controller="dependent-fields">
   <legend class="text-lg font-semibold text-gray-900 px-2">
     <% if mode == :edit && dependent.present? %>
@@ -119,14 +123,28 @@
         </label>
       </div>
       
-      <% dependent_own_email = dependent&.paper_intake_own_email %>
-      <% dependent_own_phone = dependent&.paper_intake_own_phone %>
-      <% use_guardian_email_default = dependent.blank? || dependent.paper_intake_uses_guardian_email? %>
-      <% use_guardian_phone_default = dependent.blank? || dependent.paper_intake_uses_guardian_phone? %>
+      <%# `dependent_email` / `dependent_phone` are submitted parameters rather than columns, so
+          assigning them to the rebuilt record does nothing -- they have to be read back from the
+          submission directly or a retry renders them blank. %>
+      <% submitted_dependent_constituent = submitted_dependent_params[:constituent] || {} %>
+      <% dependent_own_email = submitted_dependent_constituent[:dependent_email].presence ||
+                               dependent&.paper_intake_own_email %>
+      <% dependent_own_phone = submitted_dependent_constituent[:dependent_phone].presence ||
+                               dependent&.paper_intake_own_phone %>
+      <%# On a re-render after a failed submission the submitted values are the newer answer, so they
+          win over whatever the record implies. `nil` means not submitted at all -- a fresh form --
+          which is different from having been submitted as unchecked. %>
+      <% submitted_use_guardian_email = submitted_dependent_params.key?(:use_guardian_email) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_email]) : nil %>
+      <% submitted_use_guardian_phone = submitted_dependent_params.key?(:use_guardian_phone) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_phone]) : nil %>
+      <% use_guardian_email_default = submitted_use_guardian_email.nil? ? (dependent.blank? || dependent.paper_intake_uses_guardian_email?) : submitted_use_guardian_email %>
+      <% use_guardian_phone_default = submitted_use_guardian_phone.nil? ? (dependent.blank? || dependent.paper_intake_uses_guardian_phone?) : submitted_use_guardian_phone %>
 
       <%# Email Section %>
       <div class="mb-5 p-3 bg-white rounded border border-gray-200">
         <div class="flex items-start mb-3">
+          <%# Hidden companion so an unchecked box is still submitted as "0". Without it a retry
+              cannot distinguish a deliberate uncheck from an absent parameter. %>
+          <%= hidden_field_tag :use_guardian_email, "0", id: nil %>
           <%= check_box_tag :use_guardian_email, "1", use_guardian_email_default, {
             id: "use_guardian_email_checkbox",
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
@@ -158,6 +176,9 @@
       <%# Phone Section %>
       <div class="mb-5 p-3 bg-white rounded border border-gray-200">
         <div class="flex items-start mb-3">
+          <%# Hidden companion so an unchecked box is still submitted as "0". Without it a retry
+              cannot distinguish a deliberate uncheck from an absent parameter. %>
+          <%= hidden_field_tag :use_guardian_phone, "0", id: nil %>
           <%= check_box_tag :use_guardian_phone, "1", use_guardian_phone_default, {
             id: "use_guardian_phone_checkbox",
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
@@ -424,13 +445,13 @@
             aria-required="true"
             data-dependent-fields-target="relationshipType">
       <option value="">Select Relationship</option>
-      <option value="Parent">Parent</option>
-      <option value="Grandparent">Grandparent</option>
-      <option value="Foster Parent">Foster Parent</option>
-      <option value="Legal Guardian">Legal Guardian</option>
-      <option value="Relative Caregiver">Relative Caregiver</option>
-      <option value="Power of Attorney">Power of Attorney</option>
-      <option value="Other">Other</option>
+      <option value="Parent" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Parent' %>>Parent</option>
+      <option value="Grandparent" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Grandparent' %>>Grandparent</option>
+      <option value="Foster Parent" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Foster Parent' %>>Foster Parent</option>
+      <option value="Legal Guardian" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Legal Guardian' %>>Legal Guardian</option>
+      <option value="Relative Caregiver" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Relative Caregiver' %>>Relative Caregiver</option>
+      <option value="Power of Attorney" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Power of Attorney' %>>Power of Attorney</option>
+      <option value="Other" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Other' %>>Other</option>
     </select>
     <p class="mt-1 text-xs text-gray-600">This helps us understand who is authorized to manage this application</p>
   </div>

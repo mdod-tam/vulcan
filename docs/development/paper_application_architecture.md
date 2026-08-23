@@ -33,6 +33,37 @@ Admin::PaperApplicationsController
 
 That flag matters because downstream proof-review and validation behavior changes when paper intake is in progress. Do not assume after-write notification or reconciliation code still has paper context; the service clears the flag in `ensure` blocks around the write phases.
 
+## Create Result Contract
+
+`PaperApplicationService#create` owns the transaction outcome, and the controller trusts it rather
+than inspecting the in-memory record:
+
+| Result | Meaning | Controller response |
+|--------|---------|---------------------|
+| `true`, no warning | Committed cleanly | Redirect to the application |
+| `true`, `warning_message` present | Committed, but a post-commit step failed — reconciliation, notification, or a model `after_commit` | Redirect to the real application with the warning alongside the success notice |
+| `false` | **Nothing committed** | Re-render the paper form with the original service error |
+
+`false` unambiguously means nothing was written. That is not free: `after_commit` callbacks run as
+the transaction block exits, so a raise from one — `ProofReview#handle_post_review_actions` fires on
+every rejected proof — escapes *after* the data is durable. The service checks durable existence
+before classifying, so a committed application is never reported as a failure. Reporting it as one
+would invite the admin to submit again and create a duplicate.
+
+Never infer commit state from `service.application.persisted?`. It is wrong in both directions: false
+after a rollback restores the record, true after a commit whose callback then raised.
+
+### What a re-rendered form restores
+
+Everything submitted except the files. Applicant and application fields, disability selections and
+self-certification, attestations, contact strategies, applicant-type branch, guardian/dependent
+selection, all four proof dispositions, and their rejection reasons. The four native file inputs
+cannot be repopulated by a server render, so staff reselect only the documents their restored
+dispositions still require — a rejected proof needs none.
+
+The retry-field allowlist lives in `build_submitted_params`. A field that is accepted for processing
+but missing from that list will be silently dropped on a retry.
+
 ## What The Controller Owns
 
 `Admin::PaperApplicationsController` currently:
@@ -104,13 +135,17 @@ If that follow-up fails, the application still persists and the admin gets a rec
 
 ### Income, residency, and ID
 
-Current paper-proof actions are:
+Current paper-proof actions, as posted by the form in `<proof>_proof_action`, are:
 
-- `accept`
-- `reject`
-- `none`
+- `upload_only` — attach now, review later
+- `accept` — attach and approve
+- `reject` — no attachment; requires `<proof>_proof_rejection_reason`, and `<proof>_proof_custom_rejection_reason` when that reason is `other`
 
-Accepted proofs go through `ProofAttachmentService`. Rejected proofs go through the explicit rejection path without requiring an attachment.
+"None Provided" is not a fourth action: it is `reject` with the reason `none_provided`.
+
+Accepted and upload-only proofs go through `ProofAttachmentService`. Rejected proofs go through the
+explicit rejection path without requiring an attachment, and record a `ProofReview` carrying the
+resolved reason text and its `rejection_reason_code`.
 
 ### Disability certification
 

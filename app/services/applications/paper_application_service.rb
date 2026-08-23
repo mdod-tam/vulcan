@@ -10,7 +10,7 @@ module Applications
     class TransactionFailure < StandardError; end
 
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note,
-                :pending_identity_decision
+                :pending_identity_decision, :warnings
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false,
                    quick_created_portal_user_ids: [])
@@ -24,6 +24,7 @@ module Applications
       @created_portal_user_ids = []
       @quick_created_portal_user_ids = quick_created_portal_user_ids.map(&:to_s)
       @reconciliation_note = nil
+      @warnings = []
       @pending_identity_decision = nil
       @confirmed_no_match = nil
       @skip_income_validation = skip_income_validation
@@ -32,15 +33,7 @@ module Applications
 
     def create
       Current.paper_context = true
-      application_created = false
-
-      ActiveRecord::Base.transaction do
-        rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
-        rollback_failure('Application creation failed') unless create_application
-        rollback_failure_unless_explained('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
-
-        application_created = @application.persisted?
-      end
+      application_created = run_create_transaction
 
       if application_created
         begin
@@ -93,6 +86,14 @@ module Applications
       Current.paper_context = nil
     end
 
+    # Everything the admin should be told about a *successful* write, in one place. Reconciliation
+    # keeps its own note because it names a specific recoverable state ("advance it manually"); a
+    # post-commit callback failure is a different thing and should not borrow that label. Both are
+    # surfaced together so a request that hit each one does not silently drop the first.
+    def warning_message
+      [@reconciliation_note, *@warnings].compact_blank.join(' ').presence
+    end
+
     ADULT_CONTACT_FIELDS = %i[
       email phone phone_type physical_address_1 physical_address_2
       city state zip_code communication_preference locale
@@ -104,6 +105,58 @@ module Applications
     ].freeze
 
     private
+
+    # Owns the one question the caller cannot answer for itself: did this commit?
+    #
+    # `after_commit` callbacks run as the transaction block exits, so an exception from one -- for
+    # instance ProofReview's post-review actions, which every rejected proof triggers -- escapes the
+    # block *after* the data is durable. Left to the outer rescue that becomes "false" for an
+    # application that exists, and a caller that treats false as "nothing happened" invites the admin
+    # to submit again and create a duplicate.
+    #
+    # Durable existence is asked of the database rather than of the in-memory record, because
+    # `persisted?` is exactly the authority that was wrong here in both directions: false after a
+    # rollback restores the record, and true after a commit whose callback then blew up.
+    #
+    # The callback is deliberately not retried. It raised partway through, so some of its side
+    # effects may already have happened; running it again could duplicate them. The failure is
+    # recorded as a warning and the ordinary post-commit path continues once.
+    def run_create_transaction
+      ActiveRecord::Base.transaction do
+        rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
+        rollback_failure('Application creation failed') unless create_application
+        rollback_failure_unless_explained('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
+
+        @application.persisted?
+      end
+    rescue TransactionFailure
+      raise
+    rescue StandardError => e
+      raise unless application_committed?
+
+      log_error(e, 'Paper application committed, but a post-commit step failed')
+      add_warning('The application was created, but a follow-up step did not finish. ' \
+                  'Review this application before treating it as complete.')
+      true
+    end
+
+    # Asked of the database on the same connection that just performed the write, which is the
+    # writer: this application configures no reader role. If one is ever added, this query must stay
+    # on the writer -- replica lag answering "no" about a row committed moments ago would turn a
+    # committed application back into a retry form, which is the exact duplicate-creating mistake
+    # this method exists to prevent.
+    def application_committed?
+      id = @application&.id
+      return false if id.blank?
+
+      Application.exists?(id)
+    rescue StandardError
+      false
+    end
+
+    def add_warning(message)
+      @warnings << message unless @warnings.include?(message)
+    end
 
     def failure(message)
       @errors << message

@@ -111,7 +111,7 @@
                        name="applicant_type"
                        value="self"
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                       <%= 'checked' unless @show_create_guardian_form %>
+                       <%= 'checked' unless @applicant_type == 'dependent' %>
                        data-applicant-type-target="radio">
                 <span class="ml-3">
                   <span class="block text-sm font-medium text-gray-900">An Adult (applying for themselves)</span>
@@ -125,7 +125,7 @@
                        name="applicant_type"
                        value="dependent"
                        class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                       <%= 'checked' if @show_create_guardian_form %>
+                       <%= 'checked' if @applicant_type == 'dependent' %>
                        data-applicant-type-target="radio"
                        data-guardian-picker-target="applicantTypeRadioDependent">
                 <span class="ml-3">
@@ -146,7 +146,8 @@
 
       <%# Adult self flow: one Stimulus controller wraps search + applicant sections so targets resolve. %>
       <%# ============================================================ %>
-      <div class="contents" data-controller="adult-picker">
+      <div class="contents" data-controller="adult-picker"
+           data-adult-picker-restored-value="<%= @restored_from_submission ? 'true' : 'false' %>">
       <%# STEP 2: Adult Search (shown for adults) %>
       <%# ============================================================ %>
       <section id="adult-search-section"
@@ -466,8 +467,10 @@
                   Change Selection
                 </button>
               </div>
-              <input type="hidden" name="guardian_id" data-guardian-picker-target="guardianIdField">
-              <input type="hidden" name="dependent_id" data-guardian-picker-target="dependentIdField">
+              <input type="hidden" name="guardian_id" value="<%= submitted_params[:guardian_id] %>"
+                     data-guardian-picker-target="guardianIdField">
+              <input type="hidden" name="dependent_id" value="<%= submitted_params[:dependent_id] %>"
+                     data-guardian-picker-target="dependentIdField">
             </div>
           </div>
         </div>
@@ -488,8 +491,11 @@
           </div>
           <div class="p-6">
             <%= turbo_frame_tag "dependent_info_form", target: "_top" do %>
+              <%# On a retry the rebuilt constituent carries the submitted dependent fields, so the
+                  partial restores them instead of rendering blank. %>
               <%= render partial: 'admin/paper_applications/dependent_form',
-                         locals: { dependent: nil, mode: :new } %>
+                         locals: { dependent: (@restored_from_submission ? @paper_application[:constituent] : nil),
+                                   mode: :new } %>
             <% end %>
           </div>
         </section>
@@ -561,7 +567,7 @@
               <div class="flex items-center gap-3 mb-6 pb-4">
                 <%= check_box_tag :no_medical_provider_information,
                         nil,
-                        false,
+                        ActiveModel::Type::Boolean.new.cast(submitted_params[:no_medical_provider_information]),
                         id: "no_medical_provider_information",
                         class: "h-4 w-4 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer",
                         data: {
@@ -882,7 +888,7 @@
                 <div class="flex items-center gap-3 mb-4 pb-4 mt-4">
                   <%= check_box_tag :no_income_information,
                       nil,
-                      false,
+                      ActiveModel::Type::Boolean.new.cast(submitted_params[:no_income_information]),
                       class: "mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500",
                       data: {
                         "income-validation-target": "noIncomeProvided",

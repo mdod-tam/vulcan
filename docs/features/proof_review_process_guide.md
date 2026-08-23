@@ -300,14 +300,21 @@ end
 private
 
 def process_proof(type)
-  action = extract_proof_action(type) # 'accept' or 'reject'
+  # 'upload_only', 'accept' or 'reject' for income/residency/ID.
+  # Disability certification uses 'upload_only', 'approved' or 'rejected'.
+  action = extract_proof_action(type)
 
   case action
+  when 'upload_only'
+    # Attaches now and leaves the proof unreviewed
+    process_upload_only_proof(type)
   when 'accept'
     # Calls ProofAttachmentService.attach_proof internally
     process_accept_proof(type)
   when 'reject'
-    # Calls ProofAttachmentService.reject_proof_without_attachment internally
+    # Calls ProofAttachmentService.reject_proof_without_attachment internally, using
+    # <type>_proof_rejection_reason (and _custom_rejection_reason when that reason is 'other').
+    # "None Provided" is this branch with the reason 'none_provided', not a separate action.
     process_reject_proof(type)
   else
     true # No action specified, proceed

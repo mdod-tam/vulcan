@@ -1353,6 +1353,37 @@ module Applications
       assert_not_includes service.errors, 'Proof upload failed'
     end
 
+    # `after_commit` callbacks run as the transaction block exits, so a raise from one escapes
+    # *after* the data is durable. ProofReview has such a callback and every rejected proof creates a
+    # ProofReview, so this is an ordinary path, not an exotic one. Reporting it as failure invites
+    # the admin to submit again and create a duplicate.
+    test 'a post-commit callback failure reports success with a warning, not failure' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert_difference ['Application.count', 'User.count'], 1 do
+        assert service.create, "a committed application must not be reported as a failure: #{service.errors.inspect}"
+      end
+      assert Application.exists?(service.application.id), 'the application really did commit'
+      assert_match(/follow-up step did not finish/i, service.warning_message)
+    end
+
+    # The two warning channels name different situations, so a request that hits both must not
+    # silently drop one of them.
+    test 'a post-commit failure and a reconciliation failure are both reported' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.any_instance.stubs(:reconcile_workflow_state!).raises(StandardError, 'reconciliation exploded')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert service.create
+      assert_match(/follow-up step did not finish/i, service.warning_message)
+      assert_match(/verify this application status/i, service.warning_message)
+    end
+
     # The other leg: once the transaction commits, a later reconciliation problem is a *success* with
     # a warning. It must never turn into a false result, because then a committed application would
     # be reported as a failure.
