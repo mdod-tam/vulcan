@@ -301,6 +301,11 @@ private
 
 # Income, residency, ID and the disability certification are each processed in turn; a failure in
 # any one of them rolls the whole create back.
+#
+#   %i[income residency id medical_certification].each { |type| return false unless process_proof(type) }
+#
+# The disability certification uses its own action names: 'approved' and 'rejected' rather than
+# 'accept' and 'reject'.
 def process_proof(type)
   # 'upload_only', 'accept' or 'reject' for income/residency/ID.
   # Disability certification uses 'upload_only', 'approved' or 'rejected'.
@@ -311,13 +316,15 @@ def process_proof(type)
   when 'upload_only'
     # Attaches now and leaves the proof unreviewed
     process_upload_only_proof(type)
-  when 'accept'
-    # Calls ProofAttachmentService.attach_proof internally
+  when 'accept', 'approved'
+    # Calls ProofAttachmentService.attach_proof internally.
+    # 'approved' is the disability certification's spelling of the same action.
     process_accept_proof(type)
-  when 'reject'
+  when 'reject', 'rejected'
     # Calls ProofAttachmentService.reject_proof_without_attachment internally, using
     # <type>_proof_rejection_reason (and _custom_rejection_reason when that reason is 'other').
     # "None Provided" is this branch with the reason 'none_provided', not a separate action.
+    # 'rejected' is the disability certification's spelling of the same action.
     process_reject_proof(type)
   else
     true # No action specified, proceed

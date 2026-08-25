@@ -160,7 +160,8 @@ module Applications
           "action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ? OR (auditable_type = 'Application' AND auditable_id = ?))",
           %w[
             voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
-            application_created evaluator_assigned trainer_assigned
+            application_created application_post_creation_step_failed
+            evaluator_assigned trainer_assigned
             medical_certification_requested medical_certification_status_changed
             alternate_contact_updated
             provider_info_request_revoked proof_resubmission_request_revoked

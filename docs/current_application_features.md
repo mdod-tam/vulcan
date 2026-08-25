@@ -199,6 +199,7 @@ Common event families:
 | Family | Example actions |
 | --- | --- |
 | Application lifecycle | `application_created`, `application_updated`, `application_status_changed`, `application_approved` |
+| Paper follow-up | `application_post_creation_step_failed` — one per follow-up step that failed after the application committed |
 | Proofs | `income_proof_attached`, `id_proof_attached`, `proof_submitted`, `proof_approved`, `proof_rejected` |
 | Disability certification | `medical_certification_requested`, `medical_certification_status_changed` |
 | DocuSeal | `document_signing_request_sent`, `document_signing_started`, `document_signing_viewed`, `document_signing_completed`, `document_signing_declined`, `document_signing_attachment_failed` |

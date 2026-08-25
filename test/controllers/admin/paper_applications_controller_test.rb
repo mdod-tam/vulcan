@@ -222,6 +222,97 @@ module Admin
                     'a submitted "0" must not come back checked'
     end
 
+    # The inline guardian branch is handed a Constituent on a fresh form and a plain params hash on
+    # a re-render. A binding that assumed the model raised NoMethodError and took the whole page
+    # down. The state is deliberately not MD, because the default would hide a value never restored.
+    test 'a failed inline-guardian submission renders and restores its guardian fields' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+      params = rollback_probe_params.merge(
+        applicant_type: 'dependent',
+        relationship_type: 'Parent',
+        show_create_guardian_form: 'true',
+        guardian_attributes: {
+          first_name: 'Inline', last_name: 'Guardian',
+          email: 'inline-guardian@example.com', phone: '202-555-0188',
+          physical_address_1: '1 Inline Way', city: 'Arlington', state: 'VA', zip_code: '22201'
+        }
+      )
+
+      # Rendering at all is the first thing being asserted: this used to raise.
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_response :unprocessable_content
+      assert_restored "input[name='guardian_attributes[first_name]'][value='Inline']",
+                      'the inline guardian first name was not restored'
+      assert_restored "input[name='guardian_attributes[state]'][value='VA']",
+                      'a non-default guardian state was not restored'
+    end
+
+    # A preserved dependent_id means the next POST reuses that record, so the form must not call it
+    # new. Staff acting on "New Dependent Information" would believe they were creating someone.
+    test 'a retry naming an existing dependent does not present it as a new one' do
+      guardian = create(:constituent, first_name: 'Existing', last_name: 'Guardian')
+      dependent = create(:constituent, first_name: 'Existing', last_name: 'Dependent')
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+      params = dependent_probe_params(guardian).merge(dependent_id: dependent.id)
+
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_response :unprocessable_content
+      assert_select 'body', text: /New Dependent Information/i, count: 0
+      assert_restored "input[name='dependent_id'][value='#{dependent.id}']",
+                      'the existing dependent selection was not restored'
+      assert_restored "input[name='guardian_id'][value='#{guardian.id}']",
+                      'the guardian selection was not restored'
+
+      # Identity is on-file fact for an existing dependent, so there is no editable control at all.
+      # Selected by id, not by name: the self-applicant fieldset carries the same field names, and
+      # matching on those found *its* input and proved nothing about this section.
+      assert_select '#dependent_constituent_first_name', false,
+                    'an existing dependent must not offer an editable first name'
+      assert_select '#dependent_constituent_last_name', false,
+                    'an existing dependent must not offer an editable last name'
+      assert_select '#dependent_constituent_date_of_birth', false,
+                    'an existing dependent must not offer an editable date of birth'
+
+      # The identity that *is* shown is the record's, and it is stated as on-file.
+      assert_select 'body', text: /Using existing dependent/i
+      assert_select 'body', text: /Existing Dependent/i
+      assert_select 'body', text: /cannot be changed during paper intake/i
+    end
+
+    # An unconfirmed write must not be routed to the record's own page: if the row is not there, the
+    # show action's "application not found" replaces the very guidance telling staff to check before
+    # entering it again.
+    test 'an unconfirmed commit redirects to the list with the warning and no success notice' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+      params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_redirected_to admin_applications_path
+      assert_match(/could not be confirmed/i, flash[:alert])
+      assert_match(/could create a duplicate/i, flash[:alert])
+      assert_nil flash[:notice], 'an unconfirmed write must not be announced as a success'
+    end
+
+    # A confirmed post-commit failure is different: the row is known to exist, so staff belong on it.
+    test 'a confirmed post-commit failure still redirects to the application' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_response :redirect
+      assert_match(%r{/admin/applications/\d+}, response.location)
+      assert_match(/follow-up step did not finish/i, flash[:alert])
+    end
+
     # The most permissive disposition must never be reached by accident.
     test 'the medical default applies to a fresh form but not to a retry' do
       get new_admin_paper_application_path, headers: default_headers

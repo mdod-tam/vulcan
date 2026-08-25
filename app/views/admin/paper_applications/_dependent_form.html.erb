@@ -10,6 +10,11 @@
 
 <%# The submission being re-rendered, if any. Hoisted so every section below -- contact strategy,
     the dependent's own contact values, and the relationship select -- reads one source. %>
+<% on_file_dependent = defined?(on_file_dependent) ? on_file_dependent : nil %>
+<%# An existing dependent's identity is on-file fact, not paper-intake input. See
+    docs/development/paper_application_retry_contract.md for why this is read-only. %>
+<% identity_record = on_file_dependent || dependent %>
+<% identity_read_only = mode == :edit && identity_record.present? %>
 <% submitted_dependent_params = (@paper_application.is_a?(Hash) ? @paper_application[:submitted_params] : nil).to_h.with_indifferent_access %>
 
 <fieldset id="dependent-info-section" class="mb-6 p-4 border border-gray-200 rounded-lg bg-white shadow-sm" data-controller="dependent-fields">
@@ -17,7 +22,7 @@
     <% if mode == :edit && dependent.present? %>
       Dependent Information 
       <span class="text-sm font-normal text-indigo-600 ml-2">
-        (Reviewing: <%= dependent.full_name %>)
+        (Reviewing: <%= (on_file_dependent || dependent).full_name %>)
       </span>
     <% else %>
       New Dependent Information
@@ -31,8 +36,13 @@
           <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
         </svg>
         <div>
-          <strong>Selected existing dependent:</strong> <%= dependent.full_name %>.
-          <span class="block text-blue-700">Review and update their information below if needed.</span>
+          <strong>Using existing dependent:</strong>
+          <%= identity_record.full_name %>, date of birth <%= identity_record.date_of_birth&.to_fs(:long) %>
+          <span class="block text-blue-700">
+            These are the identity details currently on file and cannot be changed during paper
+            intake. If they do not match the paper application, change the selected dependent or stop
+            and correct the record before continuing.
+          </span>
         </div>
       </div>
     </div>
@@ -50,6 +60,32 @@
         Dependent's Personal Information
       </h3>
       
+      <% if identity_read_only %>
+        <%# Read-only by decision, not by omission. Name and date of birth are the identity tuple
+            duplicate detection matches on and the identity decision is signed over, and the paper
+            writer does not own identity changes -- it never persisted edits to these fields. They
+            were rendered as inputs anyway, so a correction looked accepted and was silently
+            discarded. No hidden copies are submitted either: `dependent_id` alone says which record
+            this is. %>
+        <dl class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <dt class="block text-sm font-medium text-gray-700">First Name</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= identity_record.first_name %></dd>
+          </div>
+          <div>
+            <dt class="block text-sm font-medium text-gray-700">Last Name</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= identity_record.last_name %></dd>
+          </div>
+          <div>
+            <dt class="block text-sm font-medium text-gray-700">Date of Birth</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= identity_record.date_of_birth&.to_fs(:long) %></dd>
+          </div>
+        </dl>
+        <p class="text-xs text-gray-500 mb-4">
+          On file and not editable here. To use different identity details, select a different
+          dependent.
+        </p>
+      <% else %>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <%= d.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_first_name" %>
@@ -93,6 +129,7 @@
           <% end %>
         </div>
       </div>
+      <% end %>
     </div>
 
     <%# ================================================================ %>
@@ -127,10 +164,15 @@
           assigning them to the rebuilt record does nothing -- they have to be read back from the
           submission directly or a retry renders them blank. %>
       <% submitted_dependent_constituent = submitted_dependent_params[:constituent] || {} %>
-      <% dependent_own_email = submitted_dependent_constituent[:dependent_email].presence ||
-                               dependent&.paper_intake_own_email %>
-      <% dependent_own_phone = submitted_dependent_constituent[:dependent_phone].presence ||
-                               dependent&.paper_intake_own_phone %>
+      <%# `key?`, not `.presence`: staff clearing a field on purpose is an answer, and falling back
+          to the on-file value would quietly put back the contact they just removed. Absent means the
+          form was never submitted; present-but-blank means blank. %>
+      <% dependent_own_email = submitted_dependent_constituent.key?(:dependent_email) ?
+                                 submitted_dependent_constituent[:dependent_email] :
+                                 dependent&.paper_intake_own_email %>
+      <% dependent_own_phone = submitted_dependent_constituent.key?(:dependent_phone) ?
+                                 submitted_dependent_constituent[:dependent_phone] :
+                                 dependent&.paper_intake_own_phone %>
       <%# On a re-render after a failed submission the submitted values are the newer answer, so they
           win over whatever the record implies. `nil` means not submitted at all -- a fresh form --
           which is different from having been submitted as unchecked. %>

@@ -78,6 +78,10 @@ module Admin
       reattach_files_required_by_restored_dispositions
       sync_paper_submit_gate
 
+      # Readiness is the whole promise: files back, nothing else touched, Submit live again.
+      assert_button 'Submit Paper Application', disabled: false, wait: 10
+      take_evidence_screenshot('paper-application-rollback-submit-ready', full: true, html: true)
+
       # The dispositions must still be exactly what was restored, immediately before submitting.
       assert_restored_dispositions
 
@@ -248,7 +252,105 @@ module Admin
       take_evidence_screenshot('paper-application-rollback-changed-selection', full: true, html: true)
     end
 
+    # When the write cannot be verified, staff must not be sent to the record's own page: if the row
+    # is not there, "application not found" replaces the very guidance telling them to check before
+    # entering it again. The list is somewhere they can act on either way.
+    test 'an unconfirmed write lands on the applications list with the warning and no success notice' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+
+      choose_adult_branch_through_the_ui
+      fill_paper_form
+      choose 'reject_id_proof', allow_label_click: true
+      select 'None Provided', from: 'id_proof_rejection_reason'
+      sync_paper_submit_gate
+
+      click_button 'Submit Paper Application'
+
+      assert_current_path admin_applications_path, ignore_query: true, wait: 20
+      assert_text(/could not be confirmed/i)
+      assert_text(/could create a duplicate/i)
+      assert_no_text(/successfully submitted/i)
+      assert_no_text(/not found/i)
+      take_evidence_screenshot('paper-application-unconfirmed-write', full: true, html: true)
+    end
+
+    # The branch where identity is on-file fact rather than paper-intake input. Also the browser
+    # proof of that decision: the fields must not be editable, and no hidden copy may be submitted.
+    test 'an existing-dependent retry shows on-file identity and keeps editable contact' do
+      guardian = create(:constituent, first_name: 'Existing', last_name: 'Guardian')
+      dependent = create(:constituent, first_name: 'Jonathan', last_name: 'Smith',
+                                       date_of_birth: Date.new(2011, 4, 3))
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'Parent')
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('Income proof was rejected by storage') }
+      )
+
+      select_guardian_through_the_ui(guardian)
+      select_existing_dependent_through_the_ui(dependent)
+      fill_in_application_details(household_size: 2, annual_income: 20_000)
+      fill_in_disability_information
+      fill_in_medical_provider_information
+      attach_and_accept_proofs
+      complete_paper_application_attestations
+
+      sync_paper_submit_gate
+      assert_no_difference ['User.count', 'Application.count'] do
+        click_button 'Submit Paper Application'
+        assert_text(/rejected by storage/i, wait: 20)
+      end
+
+      # Identity is stated, not offered for editing, and nothing hidden carries it back.
+      assert_text(/Using existing dependent/i)
+      assert_text(/Jonathan Smith/)
+      assert_text(/cannot be changed during paper intake/i)
+      assert_no_selector '#dependent_constituent_first_name', visible: :all
+      assert_no_selector '#dependent_constituent_date_of_birth', visible: :all
+      assert_equal dependent.id.to_s, first("input[name='dependent_id']", visible: :all).value
+
+      assert_file_inputs_empty
+      take_evidence_screenshot('paper-application-rollback-existing-dependent', full: true, html: true)
+
+      # The common sections -- application details, disability, proofs, attestations -- must come
+      # back with the rest of the form, because a retry that cannot reach them cannot be submitted.
+      # This regressed once while the read-only identity block was being added: a misplaced `<% end %>`
+      # closed the form before `commonSections`, so the target rendered outside the element its
+      # controller owns and stayed hidden no matter how long the test waited. Asserted here because
+      # the symptom looks like a controller timing bug and is actually unbalanced markup.
+      assert_selector '[data-applicant-type-target="commonSections"]', visible: true, wait: 10
+      assert_file_inputs_empty
+
+      ProofAttachmentService.unstub(:attach_proof)
+      reattach_files_required_by_restored_dispositions
+      attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      sync_paper_submit_gate
+      assert_button 'Submit Paper Application', disabled: false, wait: 10
+
+      assert_difference 'Application.count', 1 do
+        assert_no_difference 'User.count' do
+          click_button 'Submit Paper Application'
+          assert_selector 'h1', text: 'Application #', wait: 20
+        end
+      end
+
+      application = Application.order(:id).last
+      assert_equal dependent.id, application.user_id, 'the retry must attach to the selected dependent'
+      # The read-only contract, proved durably: paper intake does not touch identity.
+      assert_equal 'Jonathan', dependent.reload.first_name
+      assert_equal Date.new(2011, 4, 3), dependent.date_of_birth
+      take_evidence_screenshot('paper-application-rollback-existing-dependent-succeeded', full: true, html: true)
+    end
+
     private
+
+    # Real controls only: the applicant-type radio and the "Create New Applicant" button, letting
+    # Stimulus reveal and enable the sections itself.
+    def choose_adult_branch_through_the_ui
+      choose 'An Adult (applying for themselves)', allow_label_click: true
+      click_button 'Create New Applicant'
+      assert_selector '#self-info-section', text: "Applicant's Information", wait: 10
+    end
 
     def select_existing_adult_through_the_ui(applicant)
       choose 'An Adult (applying for themselves)', allow_label_click: true
@@ -268,12 +370,14 @@ module Admin
       box.click
     end
 
-    # Real controls only: the applicant-type radio and the "Create New Applicant" button, letting
-    # Stimulus reveal and enable the sections itself.
-    def choose_adult_branch_through_the_ui
-      choose 'An Adult (applying for themselves)', allow_label_click: true
-      click_button 'Create New Applicant'
-      assert_selector '#self-info-section', text: "Applicant's Information", wait: 10
+    def select_existing_dependent_through_the_ui(dependent)
+      within '[data-guardian-picker-target="dependentsFrame"]' do
+        click_button 'Select', match: :first, wait: 15
+      end
+      assert_selector '#dependent-info-section', wait: 10
+      assert_equal dependent.id.to_s, first("input[name='dependent_id']", visible: :all).value
+      # Required, and not prefilled from the existing relationship.
+      select 'Parent', from: 'relationship_type'
     end
 
     def select_guardian_through_the_ui(guardian)
@@ -329,6 +433,10 @@ module Admin
       assert_equal guardian.id.to_s,
                    first("input[name='guardian_id']", visible: :all).value,
                    'the selected guardian was not restored'
+      # A hidden id is not a restored selection as far as staff are concerned: the panel has to say
+      # which guardian it means.
+      assert_selector '[data-guardian-picker-target="selectedGuardianDisplay"]',
+                      text: guardian.full_name, wait: 10
 
       assert_equal 'Dependent', enabled_field('constituent[first_name]').value
       assert_equal 'Child', enabled_field('constituent[last_name]').value

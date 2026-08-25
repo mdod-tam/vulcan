@@ -1382,20 +1382,72 @@ module Applications
       service = paper_service_with_proofs(params)
 
       assert service.create, 'an unconfirmed commit must not be reported as a failure'
+      assert_not service.commit_confirmed?, 'the caller must be told the write was not verified'
       assert_match(/could not be confirmed/i, service.warning_message)
       assert_match(/could create a duplicate/i, service.warning_message)
     end
 
-    # A post-creation step failing is not a reason to call the intake finished. These run in
-    # sequence, so one exception can also skip everything after it.
-    test 'a failure in the post-creation steps is surfaced as a warning' do
+    # A post-creation step failing is not a reason to call the intake finished, and it must not
+    # cancel the steps after it either. Each is isolated and named, so the admin learns which part
+    # did not run rather than being told something vague went wrong.
+    test 'a failure in one post-creation step is named and does not cancel the others' do
       Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
                                            .raises(StandardError, 'notification exploded')
 
       service = paper_service(base_paper_params)
 
+      # Explicit expectations, not the absence of a warning: "no warning" also holds when the method
+      # was never called at all, which is the failure this is meant to exclude.
+      Applications::PaperApplicationService.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
+      Applications::PaperApplicationService.any_instance.expects(:request_provider_info_if_missing).once
+
       assert service.create
-      assert_match(/follow-up step did not finish/i, service.warning_message)
+      assert_match(/notifications did not finish/i, service.warning_message)
+      assert Event.exists?(action: 'application_created', auditable_id: service.application.id),
+             'the audit event runs first and must be unaffected'
+
+      # The flash lasts one page view; whoever opens this application tomorrow still needs to know.
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure, 'the incomplete step should be recorded durably'
+      assert_equal 'notifications', failure.metadata['step']
+    end
+
+    # The audit event is the durable record that this application was created. It used to run after
+    # notifications, so a mail failure skipped it entirely -- leaving a committed application with
+    # no `application_created` event and nothing durable saying the follow-up had not finished.
+    test 'the creation audit event survives a notification failure' do
+      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
+                                           .raises(StandardError, 'notification exploded')
+
+      service = nil
+      assert_difference "Event.where(action: 'application_created').count", 1 do
+        service = paper_service(base_paper_params)
+        assert service.create
+      end
+
+      event = Event.where(action: 'application_created').order(:id).last
+      assert_equal service.application.id, event.auditable_id
+    end
+
+    # Two different follow-up failures on one application are two findings. Fingerprinting the event
+    # by action alone made the second look like a repeat of the first inside the dedup window, so
+    # staff were told about half of what went wrong.
+    test 'two different post-creation failures are recorded separately' do
+      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
+                                           .raises(StandardError, 'notification exploded')
+      Applications::PaperApplicationService.any_instance.stubs(:append_proof_resubmission_delivery_warnings)
+                                           .raises(StandardError, 'delivery check exploded')
+
+      service = paper_service(base_paper_params)
+
+      assert service.create
+      steps = Event.where(action: 'application_post_creation_step_failed',
+                          auditable_id: service.application.id).map { |event| event.metadata['step'] }
+      assert_equal ['notifications', 'proof delivery checks'].sort, steps.sort,
+                   "both failures should be recorded, got: #{steps.inspect}"
+      assert_match(/notifications did not finish/i, service.warning_message)
+      assert_match(/proof delivery checks did not finish/i, service.warning_message)
     end
 
     # The two warning channels name different situations, so a request that hits both must not

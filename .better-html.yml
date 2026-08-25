@@ -2,4 +2,3 @@
 javascript_safe_methods:
   - to_json
   - html_safe
-report_errors: true

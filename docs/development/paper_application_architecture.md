@@ -41,8 +41,9 @@ than inspecting the in-memory record:
 | Result | Meaning | Controller response |
 |--------|---------|---------------------|
 | `true`, no warning | Committed cleanly | Redirect to the application |
-| `true`, `warning_message` present | Committed, but a post-commit step failed — reconciliation, notification, or a model `after_commit` | Redirect to the real application with the warning alongside the success notice |
-| `false` | **Nothing committed** | Re-render the paper form with the original service error |
+| `true`, warning, `commit_confirmed?` | Committed, but a post-commit step failed — reconciliation, a named post-creation step, or a model `after_commit` | Redirect to the real application with the warning alongside the success notice |
+| `true`, warning, **not** `commit_confirmed?` | The write could not be verified — the callback raised *and* the confirming query failed | Redirect to the applications **list** with the warning. Never to the record's own page: if the row is not there, "application not found" replaces the guidance |
+| `false` | **Nothing committed** (a confirmed rollback) | Re-render the paper form with the original service error |
 
 `false` unambiguously means nothing was written. That is not free: `after_commit` callbacks run as
 the transaction block exits, so a raise from one — `ProofReview#handle_post_review_actions` fires on
@@ -55,7 +56,18 @@ after a rollback restores the record, true after a commit whose callback then ra
 
 ### What a re-rendered form restores
 
-Everything submitted except the files. Applicant and application fields, disability selections and
+Everything submitted except the files, on the paths listed below. This is a real contract, not an
+aspiration: a field accepted for processing but missing from `build_submitted_params`, or rendered
+from the record rather than the submission, is silently dropped on a retry. Both mistakes have
+happened here.
+
+Coverage is split deliberately, and [`paper_application_retry_contract.md`](paper_application_retry_contract.md) records which field is
+proved where: request tests own value binding and the blank/false/absent distinctions, while the
+system matrix in `test/system/admin/paper_application_rollback_test.rb` owns picker behaviour, branch
+reveal, and the cases where the browser's own submission rules matter -- an unchecked box is omitted
+entirely, and a disabled control is not submitted, neither of which a request test can reproduce.
+
+The inline-guardian and existing-dependent branches are currently covered at request level only. Applicant and application fields, disability selections and
 self-certification, attestations, contact strategies, applicant-type branch, guardian/dependent
 selection, all four proof dispositions, and their rejection reasons. The four native file inputs
 cannot be repopulated by a server render, so staff reselect only the documents their restored

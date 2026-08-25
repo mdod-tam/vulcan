@@ -96,6 +96,8 @@ module Admin
       @show_create_guardian_form = params[:show_create_guardian_form].present?
       @applicant_type = params[:applicant_type].presence || (@show_create_guardian_form ? 'dependent' : 'self')
       @restored_from_submission = false
+      @selected_guardian = nil
+      @selected_dependent = nil
     end
 
     def create
@@ -119,7 +121,8 @@ module Admin
           handle_reconciliation_warning_response(
             application: service.application,
             success_message: success_message,
-            warning_message: service.warning_message
+            warning_message: service.warning_message,
+            commit_confirmed: service.commit_confirmed?
           )
         else
           handle_success_response(
@@ -278,17 +281,22 @@ module Admin
 
     private
 
-    def handle_reconciliation_warning_response(application:, success_message:, warning_message:)
+    def handle_reconciliation_warning_response(application:, success_message:, warning_message:, commit_confirmed: true)
+      # An unconfirmed write must not be routed to its own detail page: if the row is not there, the
+      # show action's "application not found" replaces the very guidance telling staff to check
+      # before entering it again. The list is somewhere they can act on either way.
+      target = commit_confirmed ? admin_application_path(application) : admin_applications_path
+      notice = commit_confirmed ? success_message : nil
+
       respond_to do |format|
         format.html do
-          redirect_to admin_application_path(application),
-                      flash: { notice: success_message, alert: warning_message }
+          redirect_to target, flash: { notice: notice, alert: warning_message }
         end
 
         format.turbo_stream do
-          redirect_to admin_application_path(application),
+          redirect_to target,
                       status: :see_other,
-                      flash: { notice: success_message, alert: warning_message }
+                      flash: { notice: notice, alert: warning_message }
         end
       end
     end
@@ -365,10 +373,21 @@ module Admin
         constituent: constituent,
         guardian_user_for_app: service.guardian_user_for_app,
         applicant_attributes: submitted_params[:applicant_attributes] || {},
-        guardian_attributes: submitted_params[:guardian_attributes] || {},
+        guardian_attributes: rebuilt_guardian_attributes(submitted_params),
         submitted_params: submitted_params,
         show_create_new_adult: show_create_new_adult_from?(submitted_params)
       }
+    end
+
+    # A record, not the raw params hash. The guardian form is a `fields_for` bound to this value, so
+    # every field on it calls a reader -- `first_name`, `state`, and the rest -- and a hash answers
+    # none of them. Handing over the hash raised NoMethodError and took the whole re-render down, so
+    # the inline-guardian branch could never be retried at all.
+    def rebuilt_guardian_attributes(submitted_params)
+      submitted = submitted_params[:guardian_attributes]
+      return Users::Constituent.new if submitted.blank?
+
+      Users::Constituent.new.tap { |guardian| guardian.assign_attributes(submitted) }
     end
 
     def rebuilt_constituent(service, existing_application, submitted_params)
@@ -411,6 +430,13 @@ module Admin
       # The picker refetches the selected adult on connect; tell it the fields already hold newer,
       # submitted values so it does not paste the on-file record back over them.
       @restored_from_submission = true
+      # The guardian picker shows its selected pane on connect but only fills the identity box when
+      # staff click a search result, so a retry rendered "a guardian is selected" without saying
+      # which one. Looked up here so the re-render can name them.
+      @selected_guardian = User.find_by(id: submitted_params[:guardian_id])
+      # A preserved dependent_id means the next POST will reuse and update that record. Rendering it
+      # as "New Dependent Information" tells staff the opposite of what the form is about to do.
+      @selected_dependent = User.find_by(id: submitted_params[:dependent_id])
     end
 
     def creating_guardian_inline?(submitted_params)
@@ -501,8 +527,12 @@ module Admin
     end
 
     def inferred_dependent_application_from(permitted)
-      (permitted[:guardian_id].present? || permitted[:guardian_attributes].present?) &&
-        permitted.dig(:constituent, :first_name).present?
+      return false if permitted[:guardian_id].blank? && permitted[:guardian_attributes].blank?
+
+      # A selected existing dependent submits no identity fields at all -- those are on-file facts,
+      # not paper-intake input -- so the presence of a name cannot be the only signal. `dependent_id`
+      # is the more direct one and is checked first.
+      permitted[:dependent_id].present? || permitted.dig(:constituent, :first_name).present?
     end
 
     def permitted_paper_params

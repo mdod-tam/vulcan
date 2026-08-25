@@ -25,6 +25,7 @@ module Applications
       @quick_created_portal_user_ids = quick_created_portal_user_ids.map(&:to_s)
       @reconciliation_note = nil
       @warnings = []
+      @commit_confirmed = true
       @pending_identity_decision = nil
       @confirmed_no_match = nil
       @skip_income_validation = skip_income_validation
@@ -100,6 +101,12 @@ module Applications
       [@reconciliation_note, *@warnings].compact_blank.join(' ').presence
     end
 
+    # False only when the write could not be verified. A true result is still not a retry -- but the
+    # caller must not route an unconfirmed write to the record's own page.
+    def commit_confirmed?
+      @commit_confirmed
+    end
+
     ADULT_CONTACT_FIELDS = %i[
       email phone phone_type physical_address_1 physical_address_2
       city state zip_code communication_preference locale
@@ -144,6 +151,10 @@ module Applications
       raise if state == :rolled_back
 
       log_error(e, 'Paper application post-commit step failed')
+      # Recorded so the caller can avoid routing to a record it cannot be sure exists. Sending staff
+      # to an application detail page that 404s would replace "check before retrying" with
+      # "application not found" -- the same substitution this whole change set exists to stop.
+      @commit_confirmed = (state == :committed)
       add_warning(post_commit_warning_for(state))
       true
     end
@@ -202,16 +213,51 @@ module Applications
       raise TransactionFailure, message
     end
 
+    # The audit event goes first, and on its own, because it is the durable record that this
+    # application was created at all. It used to run after notifications; a mail failure therefore
+    # skipped it, leaving a committed application with no `application_created` event and nothing
+    # durable to say the follow-up had not finished.
+    #
+    # Each remaining step is isolated so one failure cannot silently cancel the ones after it. They
+    # are independent -- a notification problem is no reason to skip the provider request -- and the
+    # caller is told which ones did not run.
     def handle_successful_application(operation = :create)
-      send_notifications
-      append_proof_resubmission_delivery_warnings
       case operation
-      when :create
-        log_application_creation
-        request_provider_info_if_missing
-      when :update
-        log_application_update
+      when :create then log_application_creation
+      when :update then log_application_update
       end
+
+      run_post_creation_step('notifications') { send_notifications }
+      run_post_creation_step('proof delivery checks') { append_proof_resubmission_delivery_warnings }
+      run_post_creation_step('the certifying provider request') { request_provider_info_if_missing } if operation == :create
+    end
+
+    def run_post_creation_step(description)
+      yield
+    rescue StandardError => e
+      log_error(e, "Paper application post-creation step failed: #{description}")
+      add_warning("The application was created, but #{description} did not finish. " \
+                  'Review this application before treating it as complete.')
+      record_incomplete_follow_up(description, e)
+    end
+
+    # A flash message lasts one page view. Whoever picks this application up tomorrow needs to know
+    # a step did not finish, so it is written to the audit trail beside the creation event. Best
+    # effort by design: if the audit write itself fails there is nothing further to fall back on, and
+    # it must not turn a committed application into an error.
+    def record_incomplete_follow_up(description, error)
+      AuditEventService.log(
+        action: 'application_post_creation_step_failed',
+        actor: @admin,
+        auditable: @application,
+        metadata: {
+          submission_method: 'paper',
+          step: description,
+          error_class: error.class.name
+        }
+      )
+    rescue StandardError => e
+      log_error(e, 'Could not record the incomplete paper follow-up step')
     end
 
     def log_application_creation
@@ -680,29 +726,32 @@ module Applications
       end
     end
 
+    # Backfills an existing dependent's own contact from their record, but only where the form did
+    # not speak. Keyed on presence, not blankness: staff clearing the email is an answer, and
+    # treating it as "nothing submitted" put the old address back and kept delivering to it. The
+    # field is absent -- rather than blank -- when the guardian-contact checkbox disabled it, which
+    # is the case this backfill actually exists for.
     def merge_existing_dependent_contact(attrs, dependent)
       data = attrs.deep_dup.with_indifferent_access
       return data unless dependent
 
-      if data[:dependent_email].blank? && data[:email].blank?
-        if dependent.dependent_email.present?
-          data[:dependent_email] = dependent.dependent_email
-        elsif dependent.real_email?
-          data[:email] = dependent.email
-          data[:dependent_email] = dependent.email
-        end
-      end
-
-      if data[:dependent_phone].blank? && data[:phone].blank?
-        if dependent.dependent_phone.present?
-          data[:dependent_phone] = dependent.dependent_phone
-        elsif dependent.real_phone?
-          data[:phone] = dependent.phone
-          data[:dependent_phone] = dependent.phone
-        end
-      end
-
+      backfill_dependent_contact(data, dependent, :email) unless dependent_contact_answered?(data, :email)
+      backfill_dependent_contact(data, dependent, :phone) unless dependent_contact_answered?(data, :phone)
       data
+    end
+
+    def dependent_contact_answered?(data, kind)
+      data.key?(:"dependent_#{kind}") || data.key?(kind)
+    end
+
+    def backfill_dependent_contact(data, dependent, kind)
+      own = dependent.public_send(:"dependent_#{kind}")
+      if own.present?
+        data[:"dependent_#{kind}"] = own
+      elsif dependent.public_send(:"real_#{kind}?")
+        data[kind] = dependent.public_send(kind)
+        data[:"dependent_#{kind}"] = dependent.public_send(kind)
+      end
     end
 
     def guardian_for_dependent_contact_update
