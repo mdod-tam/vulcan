@@ -9,6 +9,11 @@ module Applications
 
     class TransactionFailure < StandardError; end
 
+    # A post-creation step that knows why it failed. The wrapper names the step; this carries the
+    # actionable detail with it, so a step can report a failed *result* -- not only a raised
+    # exception -- and still get the named warning and the durable event.
+    class PostCreationStepFailure < StandardError; end
+
     # Named distinctly from the post-creation steps so the timeline separates "a callback raised
     # after the data was already durable" from "a follow-up step we run ourselves did not finish".
     # The two need different handling: the callback is deliberately not retried, because it may have
@@ -85,7 +90,7 @@ module Applications
         @constituent = application.user
 
         rollback_failure('Application update failed') unless update_application_attributes
-        rollback_failure_unless_explained('Proof upload failed') unless process_proof_uploads
+        rollback_failure('Proof upload failed') unless process_proof_uploads
 
         update_succeeded = true
       end
@@ -259,10 +264,17 @@ module Applications
     def run_post_creation_step(description)
       yield
     rescue StandardError => e
-      log_error(e, "Paper application post-creation step failed: #{description}")
-      add_warning("The application was created, but #{description} did not finish. " \
+      # Two different audiences, two different exceptions. The typed wrapper carries the sentence
+      # staff need; its `cause` carries the diagnosis. `log_error` reads only `message` and
+      # `backtrace`, so logging the wrapper would report `PostCreationStepFailure` with the
+      # wrapper's own backtrace and the real error would never reach the log -- and `error_class`
+      # on the audit event would name the wrapper rather than what actually failed.
+      diagnostic = e.cause || e
+      log_error(diagnostic, "Paper application post-creation step failed: #{description}")
+      detail = e.is_a?(PostCreationStepFailure) ? "#{e.message} " : ''
+      add_warning("The application was created, but #{description} did not finish. #{detail}" \
                   'Review this application before treating it as complete.')
-      record_incomplete_follow_up(description, e)
+      record_incomplete_follow_up(description, diagnostic)
     end
 
     # A flash message lasts one page view. Whoever picks this application up tomorrow needs to know
@@ -750,32 +762,41 @@ module Applications
       end
     end
 
-    # Backfills an existing dependent's own contact from their record, but only where the form did
-    # not speak. Keyed on presence, not blankness: staff clearing the email is an answer, and
-    # treating it as "nothing submitted" put the old address back and kept delivering to it. The
-    # field is absent -- rather than blank -- when the guardian-contact checkbox disabled it, which
-    # is the case this backfill actually exists for.
+    # Backfills an existing dependent's own contact from their record when the form supplied none.
+    #
+    # Deliberately keyed on blankness, not key presence. Key presence would make a cleared field
+    # authoritative, and that is not a restoration change -- it is a contact policy change. A blank
+    # dependent contact reaches `GuardianDependentManagementService#apply_email_strategy`, which
+    # falls back to the guardian strategy and mints a synthetic
+    # `dependent-<uuid>@system.matvulcan.local` primary identifier. Clearing the field would then
+    # silently revoke the dependent's portal access and hand delivery to the guardian, while the
+    # re-rendered form still showed "use guardian" unchecked beside an empty box.
+    #
+    # Honouring a deliberate clear is a real gap, but it belongs with that fallback -- refusing
+    # blank-plus-dependent rather than converting it -- not here.
     def merge_existing_dependent_contact(attrs, dependent)
       data = attrs.deep_dup.with_indifferent_access
       return data unless dependent
 
-      backfill_dependent_contact(data, dependent, :email) unless dependent_contact_answered?(data, :email)
-      backfill_dependent_contact(data, dependent, :phone) unless dependent_contact_answered?(data, :phone)
-      data
-    end
-
-    def dependent_contact_answered?(data, kind)
-      data.key?(:"dependent_#{kind}") || data.key?(kind)
-    end
-
-    def backfill_dependent_contact(data, dependent, kind)
-      own = dependent.public_send(:"dependent_#{kind}")
-      if own.present?
-        data[:"dependent_#{kind}"] = own
-      elsif dependent.public_send(:"real_#{kind}?")
-        data[kind] = dependent.public_send(kind)
-        data[:"dependent_#{kind}"] = dependent.public_send(kind)
+      if data[:dependent_email].blank? && data[:email].blank?
+        if dependent.dependent_email.present?
+          data[:dependent_email] = dependent.dependent_email
+        elsif dependent.real_email?
+          data[:email] = dependent.email
+          data[:dependent_email] = dependent.email
+        end
       end
+
+      if data[:dependent_phone].blank? && data[:phone].blank?
+        if dependent.dependent_phone.present?
+          data[:dependent_phone] = dependent.dependent_phone
+        elsif dependent.real_phone?
+          data[:phone] = dependent.phone
+          data[:dependent_phone] = dependent.phone
+        end
+      end
+
+      data
     end
 
     def guardian_for_dependent_contact_update
@@ -1223,8 +1244,12 @@ module Applications
 
     # Automatically sends a provider info secure form to the constituent/guardian
     # when an admin creates a paper application without certifying professional info.
-    # Failure is non-blocking: the application is already saved; the admin can send
-    # the form manually from the application show page if delivery fails.
+    #
+    # Failure stays non-blocking -- the application is already saved and the admin can send the form
+    # manually -- but it is reported through the post-creation wrapper rather than swallowed here.
+    # Catching its own errors and turning a failed result into a note meant this step alone produced
+    # no named warning and no `application_post_creation_step_failed` event, so the one follow-up
+    # most likely to fail was the one least visible afterwards.
     def request_provider_info_if_missing
       return unless params[:no_medical_provider_information]
       return if @application.medical_certification_status_approved?
@@ -1236,15 +1261,17 @@ module Applications
 
       return if result.success?
 
-      note = "Certifying professional info form could not be automatically sent: #{result.message} " \
-             'You can send it from the application page.'
-      @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
-    rescue StandardError => e
-      log_error(e, "Failed to auto-send provider info secure form after paper app #{@application&.id}")
-      @reconciliation_note = [
-        @reconciliation_note,
-        'Certifying professional info form delivery failed. You can send it manually from the application page.'
-      ].compact.join(' ')
+      raise PostCreationStepFailure,
+            "It could not be sent automatically: #{result.message} You can send it from the application page."
+    rescue PostCreationStepFailure
+      raise
+    rescue StandardError
+      # A raised failure is no less actionable than a returned one -- staff still need telling that
+      # they can send the form by hand. Re-raised as the typed error so the wrapper keeps that
+      # guidance; `raise` inside a rescue records the original as this exception's `cause`, which
+      # `run_post_creation_step` unwraps for the log and the audit event.
+      raise PostCreationStepFailure,
+            'It could not be sent automatically. You can send it from the application page.'
     end
 
     # Income/residency/id proof rejections are delivered through ProofReview ->

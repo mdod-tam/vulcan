@@ -92,9 +92,9 @@ unless result[:success]
 end
 ```
 
-**Audit events**: `ProofAttachmentService` logs `#{proof_type}_proof_attached` for attachment submissions, and logs a typed `#{proof_type}_proof_rejected` only for the rejection paths it owns directly, such as `reject_proof_without_attachment`.
+**Audit events**: `ProofAttachmentService` logs `#{proof_type}_proof_attached` for attachment submissions (`#{proof_type}_proof_submitted` when the submission method is email), and `#{proof_type}_proof_attachment_failed` on failure.
 
-It deliberately emits no typed event when the rejection came from a `ProofReview`: that record's own `after_commit` callback owns the generic `proof_rejected` event and the constituent-facing notification, and duplicating them here would double-count the rejection. Secure proof resubmission submission is logged by `Applications::SubmitProofResubmission` as `proof_submitted_via_secure_form`.
+It emits **no** rejection audit event of its own. Its rejection entry point, `reject_proof_without_attachment`, creates a `ProofReview`, and that record's `after_commit` callback is the canonical owner of the generic `proof_rejected` event and of constituent-facing resubmission delivery. Emitting a typed `#{proof_type}_proof_rejected` here would duplicate both, so nothing does -- there is no typed rejection audit event in the codebase. Secure proof resubmission submission is logged by `Applications::SubmitProofResubmission` as `proof_submitted_via_secure_form`.
 
 **Common Error Scenarios**:
 - Invalid file types or sizes
@@ -173,7 +173,7 @@ The service creates standardized audit events:
 
 - **Attachment Events**: `#{proof_type}_proof_attached` (for :web and :paper)
 - **Secure Form Events**: `proof_resubmission_requested`, `proof_submitted_via_secure_form`, `proof_resubmission_request_revoked`, `proof_resubmission_request_expired`
-- **Rejection Events**: `#{proof_type}_proof_rejected` (typed, from `ProofAttachmentService`'s own rejection paths) and `proof_rejected` (generic, from the `ProofReview` `after_commit` callback)
+- **Rejection Events**: `proof_rejected` -- generic, emitted by the `ProofReview` `after_commit` callback. There is no typed `#{proof_type}_proof_rejected` audit event.
 - **Failure Events**: `#{proof_type}_proof_attachment_failed`
 
 All events include comprehensive metadata:

@@ -327,6 +327,25 @@ module Admin
       assert_nil flash[:notice], 'an unconfirmed write must not be announced as a success'
     end
 
+    # These session markers are what identify a quick-created portal account for the account-created
+    # notice and the no-password access warning. On an unconfirmed commit the post-creation work
+    # that consumes them is deliberately skipped, so clearing them anyway destroyed the only record
+    # a retry had -- whether the write later turned out to be committed or rolled back.
+    test 'an unconfirmed commit keeps the quick-created portal markers for a retry' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+      params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      # Asserted as "never cleared" rather than by reading the session back: this scenario creates
+      # no quick-created account, so an assertion on the stored value would pass vacuously against
+      # a key that was nil the whole time.
+      Admin::PaperApplicationsController.any_instance.expects(:clear_quick_created_portal_user_markers!).never
+
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_redirected_to admin_applications_path
+    end
+
     # A confirmed post-commit failure is different: the row is known to exist, so staff belong on it.
     test 'a confirmed post-commit failure still redirects to the application' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')

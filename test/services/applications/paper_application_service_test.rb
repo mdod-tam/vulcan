@@ -1335,24 +1335,6 @@ module Applications
       assert_not_includes service.errors, 'Proof upload failed'
     end
 
-    # The same change was made on both call sites, so both are pinned. Admins hit the update path
-    # when correcting an existing paper application, and the message matters there for the same
-    # reason it matters on create.
-    test 'an explained proof failure on update is also not followed by the generic step name' do
-      application = create(:application, user: create(:constituent))
-      ProofAttachmentService.stubs(:attach_proof).returns(
-        { success: false, error: StandardError.new('storage refused the proof') }
-      )
-      params = { income_proof_action: 'upload_only',
-                 income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf') }
-
-      service = paper_service_with_proofs(params)
-
-      assert_not service.update(application)
-      assert_includes service.errors.join(' '), 'storage refused the proof'
-      assert_not_includes service.errors, 'Proof upload failed'
-    end
-
     # `after_commit` callbacks run as the transaction block exits, so a raise from one escapes
     # *after* the data is durable. ProofReview has such a callback and every rejected proof creates a
     # ProofReview, so this is an ordinary path, not an exotic one. Reporting it as failure invites
@@ -1431,6 +1413,53 @@ module Applications
 
       assert service.create
       assert_match(/creation audit event did not finish/i, service.warning_message)
+    end
+
+    # The provider request reported its own failures into the reconciliation note and returned
+    # normally, so the isolation wrapper never saw one. Staff got generic copy, and the step most
+    # likely to fail was the only one that produced no durable event.
+    test 'a failed provider request is named and recorded like any other step' do
+      Applications::RequestProviderInfo.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'the secure form could not be delivered.', data: nil)
+      )
+      params = base_paper_params.merge(no_medical_provider_information: '1')
+
+      service = paper_service(params)
+
+      assert service.create
+      assert_match(/certifying provider request did not finish/i, service.warning_message)
+      # The actionable detail survives the move; naming the step is not a reason to lose it.
+      assert_match(/You can send it from the application page/i, service.warning_message)
+
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure, 'a failed provider request must outlive the flash'
+      assert_equal 'the certifying provider request', failure.metadata['step']
+    end
+
+    # The same must hold when it raises rather than returning a failed result -- it used to catch
+    # its own exceptions too.
+    test 'a raised provider request failure is named and recorded like any other step' do
+      Applications::RequestProviderInfo.any_instance.stubs(:call).raises(StandardError, 'delivery exploded')
+      params = base_paper_params.merge(no_medical_provider_information: '1')
+
+      service = paper_service(params)
+
+      assert service.create
+      assert_match(/certifying provider request did not finish/i, service.warning_message)
+      # A raised failure is as actionable as a returned one, so the manual-send guidance must
+      # survive it too -- an untyped StandardError would reach the wrapper without it.
+      assert_match(/You can send it from the application page/i, service.warning_message)
+
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure
+      assert_equal 'the certifying provider request', failure.metadata['step']
+      # The typed wrapper is for staff; the audit event has to name what actually failed. Recording
+      # `PostCreationStepFailure` here would make every wrapped failure look identical and send
+      # whoever investigates to the re-raise site instead of the real one.
+      assert_equal 'StandardError', failure.metadata['error_class'],
+                   'the audit event must record the underlying error, not the typed wrapper'
     end
 
     # The path that started all of this: a callback raises after the data is already durable. The

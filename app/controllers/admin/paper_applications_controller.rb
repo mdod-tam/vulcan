@@ -123,12 +123,17 @@ module Admin
       service_result = service.create
 
       if service_result
-        clear_quick_created_portal_user_markers!
         # Checked before anything reads the record. `generate_success_message` queries
         # `proof_reviews`, and on an unconfirmed write the database is exactly what just failed --
         # that query would raise and replace the "check the list before retrying" warning with a
         # 500, which is the substitution this path exists to prevent.
         return handle_unconfirmed_commit_response(service.warning_message) unless service.commit_confirmed?
+
+        # Cleared only once the write is confirmed. These session markers are what identify a
+        # quick-created portal account for the account-created notice and the no-password access
+        # warning, and on an unconfirmed commit the post-creation work that consumes them is
+        # deliberately skipped -- so clearing them here destroyed the only record a retry had.
+        clear_quick_created_portal_user_markers!
 
         success_message = generate_success_message(service.application)
         # Every warning the write produced, not just reconciliation: a post-commit callback can fail
