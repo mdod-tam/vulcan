@@ -164,6 +164,29 @@ describe("AdultPickerController", () => {
     expect(setVisible).toHaveBeenCalledWith(controller.medicalCopyButtonTarget, true)
   })
 
+  // Only the click path used to fill this card, from the search result's markup. A restored retry
+  // has no search result, so the pane announced a selected applicant without ever naming them.
+  it("names the selected applicant when the card was not filled by a click", async () => {
+    const box = fixture.querySelector(".adult-details-container")
+    expect(box.textContent).toBe("")
+
+    await controller.fetchAdultContext("42")
+
+    expect(box.textContent).toContain("Pat Q Applicant")
+    expect(box.childElementCount).toBeGreaterThan(0)
+  })
+
+  // The click path writes richer markup than we can rebuild from JSON, so restoration must not
+  // overwrite it.
+  it("leaves a card the click path already filled alone", async () => {
+    const box = fixture.querySelector(".adult-details-container")
+    box.innerHTML = '<div class="chosen">Chosen by click</div>'
+
+    await controller.fetchAdultContext("42")
+
+    expect(box.textContent).toContain("Chosen by click")
+  })
+
   it("copies household and income fields only when explicitly requested", () => {
     controller._adultApplicationContext = {
       household_size: 2,

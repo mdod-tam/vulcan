@@ -37,6 +37,16 @@ module Admin
     # Every proof input a re-rendered form has to put back. The controller owns this allowlist
     # because it is the same kind of decision as the rest of `build_submitted_params` -- what may be
     # echoed back to staff -- and not something a view should be deciding for itself.
+    # The four proof groups that carry a file input, and the dispositions that need one. The
+    # medical certification uses its own action names ('approved' rather than 'accept').
+    PROOF_FILE_GROUPS = {
+      income_proof_action: 'Income proof',
+      residency_proof_action: 'Residency proof',
+      id_proof_action: 'Identity proof',
+      medical_certification_action: 'Disability certification'
+    }.freeze
+    ACTIONS_NEEDING_A_FILE = %w[accept approved upload_only].freeze
+
     PROOF_WORKFLOW_FIELDS = %i[
       income_proof_action residency_proof_action id_proof_action medical_certification_action
       income_proof_rejection_reason income_proof_custom_rejection_reason
@@ -114,6 +124,12 @@ module Admin
 
       if service_result
         clear_quick_created_portal_user_markers!
+        # Checked before anything reads the record. `generate_success_message` queries
+        # `proof_reviews`, and on an unconfirmed write the database is exactly what just failed --
+        # that query would raise and replace the "check the list before retrying" warning with a
+        # 500, which is the substitution this path exists to prevent.
+        return handle_unconfirmed_commit_response(service.warning_message) unless service.commit_confirmed?
+
         success_message = generate_success_message(service.application)
         # Every warning the write produced, not just reconciliation: a post-commit callback can fail
         # for reasons that have nothing to do with workflow state, and the admin still needs telling.
@@ -122,7 +138,7 @@ module Admin
             application: service.application,
             success_message: success_message,
             warning_message: service.warning_message,
-            commit_confirmed: service.commit_confirmed?
+            commit_confirmed: true
           )
         else
           handle_success_response(
@@ -281,22 +297,38 @@ module Admin
 
     private
 
+    # The unconfirmed-write response. Deliberately takes no application and touches no record: the
+    # caller reaches this precisely when the database could not answer whether the row exists, so
+    # any read here could raise. It routes to the list -- somewhere staff can act either way -- and
+    # carries no success notice, because we do not know that anything succeeded.
+    def handle_unconfirmed_commit_response(warning_message)
+      alert = warning_message.presence ||
+              'The application may have been created, but that could not be confirmed. Check the ' \
+              'applications list before entering it again -- submitting again could create a duplicate.'
+
+      respond_to do |format|
+        format.html { redirect_to admin_applications_path, flash: { alert: alert } }
+        format.turbo_stream do
+          redirect_to admin_applications_path, status: :see_other, flash: { alert: alert }
+        end
+      end
+    end
+
     def handle_reconciliation_warning_response(application:, success_message:, warning_message:, commit_confirmed: true)
-      # An unconfirmed write must not be routed to its own detail page: if the row is not there, the
-      # show action's "application not found" replaces the very guidance telling staff to check
-      # before entering it again. The list is somewhere they can act on either way.
-      target = commit_confirmed ? admin_application_path(application) : admin_applications_path
-      notice = commit_confirmed ? success_message : nil
+      # An unconfirmed write never reaches here -- `create` diverts it before anything reads the
+      # record. The parameter stays so a caller cannot route one here by accident.
+      return handle_unconfirmed_commit_response(warning_message) unless commit_confirmed
 
       respond_to do |format|
         format.html do
-          redirect_to target, flash: { notice: notice, alert: warning_message }
+          redirect_to admin_application_path(application),
+                      flash: { notice: success_message, alert: warning_message }
         end
 
         format.turbo_stream do
-          redirect_to target,
+          redirect_to admin_application_path(application),
                       status: :see_other,
-                      flash: { notice: notice, alert: warning_message }
+                      flash: { notice: success_message, alert: warning_message }
         end
       end
     end
@@ -437,6 +469,17 @@ module Admin
       # A preserved dependent_id means the next POST will reuse and update that record. Rendering it
       # as "New Dependent Information" tells staff the opposite of what the form is about to do.
       @selected_dependent = User.find_by(id: submitted_params[:dependent_id])
+      @proofs_needing_reattachment = proof_groups_needing_reattachment(submitted_params)
+    end
+
+    # No browser repopulates a file input, so a restored retry always needs its documents attached
+    # again. Which ones depends on the disposition that came back: accepting or uploading a proof
+    # needs the file, rejecting it does not. Named rather than counted, because the submit button
+    # goes disabled with no visible reason on a form this long.
+    def proof_groups_needing_reattachment(submitted_params)
+      PROOF_FILE_GROUPS.filter_map do |field, label|
+        label if ACTIONS_NEEDING_A_FILE.include?(submitted_params[field])
+      end
     end
 
     def creating_guardian_inline?(submitted_params)

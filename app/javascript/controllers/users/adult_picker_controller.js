@@ -223,6 +223,25 @@ export default class extends Controller {
    * Text nodes rather than markup: these values came from JSON and are rendered as data.
    * @private
    */
+  /**
+   * Names the selected applicant on a restored retry, where no click supplied display markup.
+   * @private
+   */
+  _fillSelectedCardIfEmpty(user) {
+    if (!user || !this.hasSelectedPaneTarget) return
+
+    const box = this.selectedPaneTarget.querySelector('.adult-details-container')
+    if (!box || box.childElementCount > 0) return
+
+    const name = [user.first_name, user.middle_initial, user.last_name].filter(Boolean).join(' ')
+    if (!name) return
+
+    this._renderSelectedCandidate({
+      name,
+      date_of_birth: this._formatDateForInput(user.date_of_birth)
+    })
+  }
+
   _renderSelectedCandidate(candidate) {
     const box = this.selectedPaneTarget.querySelector('.adult-details-container')
     if (!box) return
@@ -324,6 +343,11 @@ export default class extends Controller {
   _applyAdultContext(data) {
     this._adultApplicationContext = data
     this._storeOnFileData(data.user)
+    // The click path fills the selected card with the search result's markup. A restored retry has
+    // no search result, so the card rendered empty: the pane announced that an applicant was
+    // selected without ever naming them. Filled from the context the rest of the restore already
+    // uses, and only when empty, so the click path's richer markup is left alone.
+    this._fillSelectedCardIfEmpty(data.user)
     // Everything else here is still needed on a retry -- the on-file summary, contact mode,
     // verification control and submit gating all depend on it. Only the field overwrite is skipped,
     // because on a retry the submitted values are the newer ones and silently replacing them with

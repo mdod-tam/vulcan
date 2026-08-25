@@ -141,7 +141,7 @@ Equipment-fulfillment applications skip account-created messaging even when an e
 
 When `params[:no_medical_provider_information]` is present during create, the service currently attempts to auto-send a secure provider-info request by calling `Applications::RequestProviderInfo` after the application write succeeds.
 
-If that follow-up fails, the application still persists and the admin gets a reconciliation note telling them to send it manually from the application page.
+If that follow-up fails, the application still persists. The request runs as an isolated post-creation step, so its failure does not cancel the steps around it, and the admin gets a warning naming the step -- "the certifying provider request did not finish" -- rather than a generic reconciliation note. The same failure is written to the audit trail as an `application_post_creation_step_failed` event carrying the step name, so it is still visible after the flash is gone.
 
 ## Proof Actions
 

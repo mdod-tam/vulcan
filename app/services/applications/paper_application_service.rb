@@ -9,6 +9,12 @@ module Applications
 
     class TransactionFailure < StandardError; end
 
+    # Named distinctly from the post-creation steps so the timeline separates "a callback raised
+    # after the data was already durable" from "a follow-up step we run ourselves did not finish".
+    # The two need different handling: the callback is deliberately not retried, because it may have
+    # completed some of its side effects before raising.
+    POST_COMMIT_CALLBACK_STEP = 'a post-commit callback'
+
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note,
                 :pending_identity_decision, :warnings
 
@@ -36,7 +42,11 @@ module Applications
       Current.paper_context = true
       application_created = run_create_transaction
 
-      if application_created
+      # An unverified write gets no further work against the same record. Whatever stopped us
+      # confirming the commit would raise again here, and that exception is caught below as a
+      # *failure* -- turning a possibly-committed application into a retry form, which is the
+      # duplicate this path exists to prevent. The warning already tells staff to check the list.
+      if application_created && commit_confirmed?
         begin
           handle_successful_application(:create)
         rescue StandardError => e
@@ -156,6 +166,11 @@ module Applications
       # "application not found" -- the same substitution this whole change set exists to stop.
       @commit_confirmed = (state == :committed)
       add_warning(post_commit_warning_for(state))
+      # A confirmed commit left durable data behind, so the record of unfinished work has to be
+      # durable too -- the flash is gone after one page view, and this is the path that motivated
+      # the whole contract. Only when confirmed: on an unknown commit the database is the thing
+      # that just failed, and there may be no application row to hang the event on.
+      record_incomplete_follow_up(POST_COMMIT_CALLBACK_STEP, e) if @commit_confirmed
       true
     end
 
@@ -213,18 +228,27 @@ module Applications
       raise TransactionFailure, message
     end
 
-    # The audit event goes first, and on its own, because it is the durable record that this
-    # application was created at all. It used to run after notifications; a mail failure therefore
-    # skipped it, leaving a committed application with no `application_created` event and nothing
-    # durable to say the follow-up had not finished.
+    # The audit event goes first because it is the durable record that this application was created
+    # at all. It used to run after notifications; a mail failure therefore skipped it, leaving a
+    # committed application with no `application_created` event.
     #
-    # Each remaining step is isolated so one failure cannot silently cancel the ones after it. They
-    # are independent -- a notification problem is no reason to skip the provider request -- and the
-    # caller is told which ones did not run.
+    # First, but not unguarded: every step on the create path is isolated, including the audit
+    # itself. Running it bare simply moved the hazard -- `AuditEventService` writes with
+    # `Event.create!`, so a failed audit raised straight past notifications, proof-delivery checks
+    # and the provider request, and past the durable record that any of them had been skipped.
+    #
+    # The steps are independent: a notification problem is no reason to skip the provider request,
+    # and a missing audit row is no reason to skip all three. The caller is told which ones did not
+    # finish.
+    #
+    # `:update` is left as it was. Paper applications route only `new` and `create`, the controller
+    # defines only those two actions, and `#update` has no production caller -- so changing its
+    # behavior here would be an untestable claim about a path nothing reaches.
     def handle_successful_application(operation = :create)
       case operation
-      when :create then log_application_creation
-      when :update then log_application_update
+      when :create then run_post_creation_step('the creation audit event') { log_application_creation }
+      when :update
+        log_application_update
       end
 
       run_post_creation_step('notifications') { send_notifications }

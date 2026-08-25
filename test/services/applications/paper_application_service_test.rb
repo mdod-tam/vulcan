@@ -1413,6 +1413,62 @@ module Applications
       assert_equal 'notifications', failure.metadata['step']
     end
 
+    # Running the audit first stopped a mail failure from skipping it, but running it *unguarded*
+    # only moved the hazard. `AuditEventService` writes with `Event.create!`, so a failed audit
+    # raised past notifications, the delivery checks and the provider request in one go -- and past
+    # the durable record that any of them had been skipped. A committed application could end up
+    # with no creation event, no follow-ups, and nothing but a generic flash.
+    test 'a failed creation audit does not cancel the steps after it' do
+      Applications::PaperApplicationService.any_instance.stubs(:log_application_creation)
+                                           .raises(StandardError, 'audit write exploded')
+
+      service = paper_service(base_paper_params)
+
+      # Explicit expectations: "no warning" would also hold if these were never called at all.
+      Applications::PaperApplicationService.any_instance.expects(:send_notifications).once
+      Applications::PaperApplicationService.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
+      Applications::PaperApplicationService.any_instance.expects(:request_provider_info_if_missing).once
+
+      assert service.create
+      assert_match(/creation audit event did not finish/i, service.warning_message)
+    end
+
+    # The path that started all of this: a callback raises after the data is already durable. The
+    # service kept the application and warned, but recorded nothing -- and a flash is gone after one
+    # page view, so tomorrow's reviewer had no sign the callback work might be incomplete.
+    test 'a confirmed post-commit callback failure is recorded durably' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert service.create
+      assert service.commit_confirmed?, 'this scenario is the confirmed-commit one'
+
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure, 'a confirmed callback failure must outlive the flash'
+      assert_equal 'a post-commit callback', failure.metadata['step'],
+                   'the callback path must stay distinguishable from the steps we run ourselves'
+    end
+
+    # An unconfirmed commit means the database just failed to answer a question about this record.
+    # Continuing to work against it would raise again -- and that exception is caught as a *failure*,
+    # which would hand back a retry form for an application that may well exist.
+    test 'an unverifiable commit does no further work against the record' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      Applications::PaperApplicationService.any_instance.expects(:send_notifications).never
+      Applications::PaperApplicationService.any_instance.expects(:reconcile_after_paper_write).never
+
+      assert service.create, 'an unconfirmed commit stays on the success side'
+      assert_not service.commit_confirmed?
+    end
+
     # The audit event is the durable record that this application was created. It used to run after
     # notifications, so a mail failure skipped it entirely -- leaving a committed application with
     # no `application_created` event and nothing durable saying the follow-up had not finished.

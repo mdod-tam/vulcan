@@ -15,8 +15,14 @@ Two allowlists exist in `Admin::PaperApplicationsController`:
 - **processing** — `permitted_paper_params`, what the service may act on.
 - **retry** — `build_submitted_params`, what the re-render may put back.
 
-Every field in *processing* is either in *retry* or deliberately excluded for a stated reason. The
-only standing exclusions are the four native file inputs, which no server render can repopulate.
+Every field in *processing* is either in *retry* or deliberately excluded for a stated reason. There
+are two standing exclusions, eight fields in total:
+
+- The four native file inputs (`income_proof`, `residency_proof`, `id_proof`,
+  `medical_certification`), which no server render can repopulate.
+- The four matching `*_signed_id` fields, which are processing-only: each names a blob already
+  uploaded directly to storage. Echoing one back would claim an attachment the form cannot show and
+  staff cannot verify, and reattaching the file mints a new signed id anyway.
 
 A field in processing but not in retry is a silent data-loss bug. That is exactly how the proof
 actions, the two no-information flags, and the guardian/dependent selection were each lost.

@@ -92,7 +92,9 @@ unless result[:success]
 end
 ```
 
-**Audit events**: `ProofAttachmentService` logs `#{proof_type}_proof_attached` for attachment submissions and `#{proof_type}_proof_rejected` for explicit rejection paths. Secure proof resubmission submission is logged by `Applications::SubmitProofResubmission` as `proof_submitted_via_secure_form`.
+**Audit events**: `ProofAttachmentService` logs `#{proof_type}_proof_attached` for attachment submissions, and logs a typed `#{proof_type}_proof_rejected` only for the rejection paths it owns directly, such as `reject_proof_without_attachment`.
+
+It deliberately emits no typed event when the rejection came from a `ProofReview`: that record's own `after_commit` callback owns the generic `proof_rejected` event and the constituent-facing notification, and duplicating them here would double-count the rejection. Secure proof resubmission submission is logged by `Applications::SubmitProofResubmission` as `proof_submitted_via_secure_form`.
 
 **Common Error Scenarios**:
 - Invalid file types or sizes
@@ -171,7 +173,7 @@ The service creates standardized audit events:
 
 - **Attachment Events**: `#{proof_type}_proof_attached` (for :web and :paper)
 - **Secure Form Events**: `proof_resubmission_requested`, `proof_submitted_via_secure_form`, `proof_resubmission_request_revoked`, `proof_resubmission_request_expired`
-- **Rejection Events**: `#{proof_type}_proof_rejected`
+- **Rejection Events**: `#{proof_type}_proof_rejected` (typed, from `ProofAttachmentService`'s own rejection paths) and `proof_rejected` (generic, from the `ProofReview` `after_commit` callback)
 - **Failure Events**: `#{proof_type}_proof_attachment_failed`
 
 All events include comprehensive metadata:
@@ -299,8 +301,13 @@ end
 
 private
 
-# Income, residency, ID and the disability certification are each processed in turn; a failure in
-# any one of them rolls the whole create back.
+# Income, residency, ID and the disability certification are each processed in turn. A failure
+# raised *inside* the transaction rolls the whole create back.
+#
+# A failure raised by an `after_commit` callback does not: by then the data is durable. The paper
+# service verifies the commit rather than trusting `persisted?`, keeps the application, warns the
+# admin, and records a `application_post_creation_step_failed` event so the unfinished work
+# outlives the flash. See docs/development/paper_application_retry_contract.md.
 #
 #   %i[income residency id medical_certification].each { |type| return false unless process_proof(type) }
 #

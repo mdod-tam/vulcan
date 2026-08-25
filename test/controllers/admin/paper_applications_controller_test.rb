@@ -301,6 +301,32 @@ module Admin
       assert_nil flash[:notice], 'an unconfirmed write must not be announced as a success'
     end
 
+    # The test above stubs only `Application.exists?`, so every unrelated query keeps working. A real
+    # outage does not behave that way: whatever stopped the commit check stops the next query too.
+    # `generate_success_message` reads `proof_reviews`, and it used to be built *before* the
+    # confirmation branch -- so on a continuing failure it raised, and the careful "check the list"
+    # warning became a 500.
+    #
+    # The stub targets that method rather than the association because the association is also
+    # written inside the transaction (ProofAttachmentService creates the reviews through it), so
+    # failing it would break the create itself instead of the response path under test. What is
+    # being asserted is the ordering contract: on an unconfirmed write the controller must not reach
+    # any record-backed read at all.
+    test 'a continuing database failure still reaches the list warning rather than an error' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+      Admin::PaperApplicationsController.any_instance
+                                        .stubs(:generate_success_message)
+                                        .raises(ActiveRecord::ConnectionNotEstablished, 'database still gone')
+      params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      post admin_paper_applications_path, headers: default_headers, params: params
+
+      assert_redirected_to admin_applications_path
+      assert_match(/could not be confirmed/i, flash[:alert])
+      assert_nil flash[:notice], 'an unconfirmed write must not be announced as a success'
+    end
+
     # A confirmed post-commit failure is different: the row is known to exist, so staff belong on it.
     test 'a confirmed post-commit failure still redirects to the application' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')

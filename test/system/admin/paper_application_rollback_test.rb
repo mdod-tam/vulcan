@@ -199,6 +199,17 @@ module Admin
                    'the correction was overwritten by the on-file value'
       assert_equal existing.id.to_s, first("input[name='existing_constituent_id']", visible: :all).value
 
+      # The card must name who is selected, not merely report that someone is. Only the click path
+      # used to fill it, so a restored retry showed an empty green "selected applicant" box.
+      within '[data-adult-picker-target="selectedPane"]' do
+        assert_text existing.full_name
+      end
+
+      # Files are the one thing a retry cannot put back, and the submit button goes disabled with no
+      # visible reason on a form this long. The sr-only live region is not enough for sighted staff.
+      assert_text(/documents need reattaching/i)
+      assert_text(/Income proof/i)
+
       take_evidence_screenshot('paper-application-rollback-existing-adult', full: true, html: true)
 
       ProofAttachmentService.unstub(:attach_proof)

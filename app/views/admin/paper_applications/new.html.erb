@@ -88,6 +88,27 @@
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
       data: paper_form_data) do |form| %>
 
+      <%# The one thing a retry cannot restore. Everything else staff typed is back in place, but no
+          browser repopulates a file input, so the submit button stays disabled until the documents
+          are attached again -- and on a form this long the reason is off-screen. The sr-only live
+          region below announces the gate to screen readers; this says the same thing visibly, and
+          names the groups so staff are not hunting for which upload is missing. %>
+      <% if @restored_from_submission %>
+        <div class="rounded-md bg-amber-50 border border-amber-300 p-4" role="status">
+          <h2 class="text-sm font-semibold text-amber-900">Your entries were restored -- documents need reattaching</h2>
+          <p class="mt-1 text-sm text-amber-800">
+            Everything you entered has been put back. Files cannot be restored by the browser, so any
+            document you had attached must be selected again before this can be submitted.
+          </p>
+          <% if @proofs_needing_reattachment.present? %>
+            <p class="mt-2 text-sm text-amber-800">
+              Based on the selections restored above, reattach:
+              <strong><%= @proofs_needing_reattachment.to_sentence %></strong>.
+            </p>
+          <% end %>
+        </div>
+      <% end %>
+
       <%# ============================================================ %>
       <%# STEP 1: Applicant Type Selection %>
       <%# ============================================================ %>
