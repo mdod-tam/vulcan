@@ -34,6 +34,27 @@ module Admin
       preferred_means_of_communication referral_source
     ].freeze
 
+    # Every proof input a re-rendered form has to put back. The controller owns this allowlist
+    # because it is the same kind of decision as the rest of `build_submitted_params` -- what may be
+    # echoed back to staff -- and not something a view should be deciding for itself.
+    # The four proof groups that carry a file input, and the dispositions that need one. The
+    # medical certification uses its own action names ('approved' rather than 'accept').
+    PROOF_FILE_GROUPS = {
+      income_proof_action: 'Income proof',
+      residency_proof_action: 'Residency proof',
+      id_proof_action: 'Identity proof',
+      medical_certification_action: 'Disability certification'
+    }.freeze
+    ACTIONS_NEEDING_A_FILE = %w[accept approved upload_only].freeze
+
+    PROOF_WORKFLOW_FIELDS = %i[
+      income_proof_action residency_proof_action id_proof_action medical_certification_action
+      income_proof_rejection_reason income_proof_custom_rejection_reason
+      residency_proof_rejection_reason residency_proof_custom_rejection_reason
+      id_proof_rejection_reason id_proof_custom_rejection_reason
+      medical_certification_rejection_reason medical_certification_custom_rejection_reason
+    ].freeze
+
     APPLICATION_FIELDS = %i[
       household_size annual_income maryland_resident self_certify_disability
       medical_provider_name medical_provider_phone medical_provider_fax
@@ -83,6 +104,10 @@ module Admin
       # For simplicity with the current hash structure:
 
       @show_create_guardian_form = params[:show_create_guardian_form].present?
+      @applicant_type = params[:applicant_type].presence || (@show_create_guardian_form ? 'dependent' : 'self')
+      @restored_from_submission = false
+      @selected_guardian = nil
+      @selected_dependent = nil
     end
 
     def create
@@ -98,13 +123,27 @@ module Admin
       service_result = service.create
 
       if service_result
+        # Checked before anything reads the record. `generate_success_message` queries
+        # `proof_reviews`, and on an unconfirmed write the database is exactly what just failed --
+        # that query would raise and replace the "check the list before retrying" warning with a
+        # 500, which is the substitution this path exists to prevent.
+        return handle_unconfirmed_commit_response(service.warning_message) unless service.commit_confirmed?
+
+        # Cleared only once the write is confirmed. These session markers are what identify a
+        # quick-created portal account for the account-created notice and the no-password access
+        # warning, and on an unconfirmed commit the post-creation work that consumes them is
+        # deliberately skipped -- so clearing them here destroyed the only record a retry had.
         clear_quick_created_portal_user_markers!
+
         success_message = generate_success_message(service.application)
-        if service.reconciliation_note.present?
+        # Every warning the write produced, not just reconciliation: a post-commit callback can fail
+        # for reasons that have nothing to do with workflow state, and the admin still needs telling.
+        if service.warning_message.present?
           handle_reconciliation_warning_response(
             application: service.application,
             success_message: success_message,
-            warning_message: service.reconciliation_note
+            warning_message: service.warning_message,
+            commit_confirmed: true
           )
         else
           handle_success_response(
@@ -117,17 +156,18 @@ module Admin
       else
         Rails.logger.info "[PaperApplicationsController] Handling service failure, request format: #{request.format}"
 
-        # If the application was persisted but reconciliation failed, redirect to the application
-        # with an alert instead of re-rendering the form.
-        if service.application&.persisted?
-          error_msg = service.errors.any? ? service.errors.join('; ') : 'An unexpected error occurred.'
-          handle_error_response(
-            html_redirect_path: admin_application_path(service.application),
-            error_message: error_msg
-          )
-        else
-          handle_service_failure(service)
-        end
+        # The service result owns the transaction outcome, so a false result always re-renders the
+        # form with the real error.
+        #
+        # This used to branch on `service.application&.persisted?` first, meaning to catch
+        # "committed but reconciliation failed" -- a state the service does not produce, because a
+        # reconciliation problem returns true with a warning, and a post-commit callback failure now
+        # does too -- the service checks durable existence before deciding, so a committed
+        # application is never reported as a failure. Inferring commit state here from
+        # `service.application&.persisted?` was wrong in both directions: false after a rollback
+        # restores the record, true after a commit whose callback then raised. The invariants that
+        # keep this branch honest are pinned in paper_application_service_test.rb.
+        handle_service_failure(service)
       end
     end
 
@@ -142,7 +182,12 @@ module Admin
         @mode = :new
       end
 
-      render turbo_stream: turbo_stream.replace(
+      # `update`, not `replace`. `replace` swaps out the <turbo-frame> element itself, so the first
+      # dependent selection destroyed the very frame the picker reloads through -- every later call
+      # to `loadDependentForm` then found no frame and silently did nothing. Selecting a dependent
+      # appeared to work because that first load happened while the frame still existed; changing
+      # or clearing the selection afterwards could not work at all.
+      render turbo_stream: turbo_stream.update(
         'dependent_info_form',
         partial: 'admin/paper_applications/dependent_form',
         locals: { dependent: @dependent, mode: @mode }
@@ -262,7 +307,28 @@ module Admin
 
     private
 
-    def handle_reconciliation_warning_response(application:, success_message:, warning_message:)
+    # The unconfirmed-write response. Deliberately takes no application and touches no record: the
+    # caller reaches this precisely when the database could not answer whether the row exists, so
+    # any read here could raise. It routes to the list -- somewhere staff can act either way -- and
+    # carries no success notice, because we do not know that anything succeeded.
+    def handle_unconfirmed_commit_response(warning_message)
+      alert = warning_message.presence ||
+              'The application may have been created, but that could not be confirmed. Check the ' \
+              'applications list before entering it again -- submitting again could create a duplicate.'
+
+      respond_to do |format|
+        format.html { redirect_to admin_applications_path, flash: { alert: alert } }
+        format.turbo_stream do
+          redirect_to admin_applications_path, status: :see_other, flash: { alert: alert }
+        end
+      end
+    end
+
+    def handle_reconciliation_warning_response(application:, success_message:, warning_message:, commit_confirmed: true)
+      # An unconfirmed write never reaches here -- `create` diverts it before anything reads the
+      # record. The parameter stays so a caller cannot route one here by accident.
+      return handle_unconfirmed_commit_response(warning_message) unless commit_confirmed
+
       respond_to do |format|
         format.html do
           redirect_to admin_application_path(application),
@@ -339,25 +405,114 @@ module Admin
     def repopulate_form_data(service, existing_application)
       submitted_params = build_submitted_params
 
-      # Get or build constituent with submitted data
-      constituent = service.constituent || existing_application&.user || Constituent.new
+      constituent = rebuilt_constituent(service, existing_application, submitted_params)
+      application = rebuilt_application(service, existing_application, submitted_params)
 
-      # Re-render the form with the submitted values, even for persisted records.
-      constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
-
-      # Get or build application with submitted data
-      application = service.application || existing_application || Application.new
-      application.assign_attributes(submitted_params[:application]) if submitted_params[:application].present?
+      restore_applicant_branch_state(submitted_params)
 
       @paper_application = {
         application: application,
         constituent: constituent,
         guardian_user_for_app: service.guardian_user_for_app,
         applicant_attributes: submitted_params[:applicant_attributes] || {},
-        guardian_attributes: submitted_params[:guardian_attributes] || {},
+        guardian_attributes: rebuilt_guardian_attributes(submitted_params),
         submitted_params: submitted_params,
         show_create_new_adult: show_create_new_adult_from?(submitted_params)
       }
+    end
+
+    # A record, not the raw params hash. The guardian form is a `fields_for` bound to this value, so
+    # every field on it calls a reader -- `first_name`, `state`, and the rest -- and a hash answers
+    # none of them. Handing over the hash raised NoMethodError and took the whole re-render down, so
+    # the inline-guardian branch could never be retried at all.
+    def rebuilt_guardian_attributes(submitted_params)
+      submitted = submitted_params[:guardian_attributes]
+      return Users::Constituent.new if submitted.blank?
+
+      Users::Constituent.new.tap { |guardian| guardian.assign_attributes(submitted) }
+    end
+
+    def rebuilt_constituent(service, existing_application, submitted_params)
+      constituent = service.constituent || existing_application&.user || Constituent.new
+      # Re-render the form with the submitted values, even for persisted records.
+      constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
+      # The disability booleans post under `applicant_attributes` but are columns on the user, and
+      # the form binds that group to this object. Without them a failed create returns a form with
+      # every disability checkbox cleared. Sliced to the user's own columns because the group also
+      # carries self_certify_disability, which belongs to Application and is rendered from there.
+      constituent.assign_attributes(user_owned_disability_attributes(submitted_params))
+      constituent
+    end
+
+    def rebuilt_application(service, existing_application, submitted_params)
+      application = service.application || existing_application || Application.new
+      application.assign_attributes(submitted_params[:application]) if submitted_params[:application].present?
+      # `self_certify_disability` posts under `applicant_attributes` alongside the disability
+      # booleans, but it is a column on Application, so it never arrives in
+      # `submitted_params[:application]`. Reading it off `service.application` alone worked only when
+      # the failure happened *after* the application was built; a failure before that -- constituent
+      # processing today, an identity refusal under A2 -- left the required checkbox cleared.
+      certification = submitted_self_certification(submitted_params)
+      application.self_certify_disability = certification unless certification.nil?
+      application
+    end
+
+    # Which branch of the form staff were on. Without this a dependent submission comes back as a
+    # blank adult form: the applicant-type radios, the guardian creation form, and the dependent
+    # fields are all keyed off it, so losing it discards the whole identity selection.
+    def restore_applicant_branch_state(submitted_params)
+      # The applicant-type radios are disabled once a branch is locked in, so a resubmission from the
+      # retry form omits the parameter entirely. Falling back to 'self' there would silently move a
+      # dependent application onto the adult branch on its second failure. The writer already infers
+      # the branch from the guardian selection; the re-render uses the same rule.
+      @applicant_type = submitted_params[:applicant_type].presence ||
+                        (inferred_dependent_application_from(submitted_params) ? 'dependent' : 'self')
+      @show_create_guardian_form = submitted_params[:show_create_guardian_form].present? ||
+                                   creating_guardian_inline?(submitted_params)
+      # The picker refetches the selected adult on connect; tell it the fields already hold newer,
+      # submitted values so it does not paste the on-file record back over them.
+      @restored_from_submission = true
+      # The guardian picker shows its selected pane on connect but only fills the identity box when
+      # staff click a search result, so a retry rendered "a guardian is selected" without saying
+      # which one. Looked up here so the re-render can name them.
+      @selected_guardian = User.find_by(id: submitted_params[:guardian_id])
+      # A preserved dependent_id means the next POST will reuse and update that record. Rendering it
+      # as "New Dependent Information" tells staff the opposite of what the form is about to do.
+      @selected_dependent = User.find_by(id: submitted_params[:dependent_id])
+      @proofs_needing_reattachment = proof_groups_needing_reattachment(submitted_params)
+    end
+
+    # No browser repopulates a file input, so a restored retry always needs its documents attached
+    # again. Which ones depends on the disposition that came back: accepting or uploading a proof
+    # needs the file, rejecting it does not. Named rather than counted, because the submit button
+    # goes disabled with no visible reason on a form this long.
+    def proof_groups_needing_reattachment(submitted_params)
+      PROOF_FILE_GROUPS.filter_map do |field, label|
+        label if ACTIONS_NEEDING_A_FILE.include?(submitted_params[field])
+      end
+    end
+
+    def creating_guardian_inline?(submitted_params)
+      @applicant_type == 'dependent' &&
+        submitted_params[:guardian_attributes].present? &&
+        submitted_params[:guardian_id].blank?
+    end
+
+    # nil when the field was not submitted at all, so a fresh form is left untouched rather than
+    # being told the applicant did not self-certify.
+    def submitted_self_certification(submitted_params)
+      submitted = submitted_params[:applicant_attributes]
+      return nil if submitted.blank?
+
+      value = submitted.to_h.symbolize_keys[:self_certify_disability]
+      value.nil? ? nil : ActiveModel::Type::Boolean.new.cast(value)
+    end
+
+    def user_owned_disability_attributes(submitted_params)
+      submitted = submitted_params[:applicant_attributes]
+      return {} if submitted.blank?
+
+      submitted.to_h.symbolize_keys.slice(*(USER_DISABILITY_FIELDS & Constituent.column_names.map(&:to_sym)))
     end
 
     def build_submitted_params
@@ -368,6 +523,14 @@ module Admin
         :guardian_no_email_address, :guardian_no_phone_number,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
+        # Proof workflow inputs are instructions rather than attributes of any record, so nothing
+        # else carries them back into a re-rendered form. All three parts are needed together: the
+        # action alone restores "Reject" while losing the reason that made it meaningful.
+        *PROOF_WORKFLOW_FIELDS,
+        # These two switch whole sections off. Losing them on a retry does not merely blank a field:
+        # the JavaScript re-imposes the provider and income requirements they were suppressing, so an
+        # otherwise unchanged retry becomes unsubmittable.
+        :no_medical_provider_information, :no_income_information, :show_create_guardian_form,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),
@@ -417,8 +580,12 @@ module Admin
     end
 
     def inferred_dependent_application_from(permitted)
-      (permitted[:guardian_id].present? || permitted[:guardian_attributes].present?) &&
-        permitted.dig(:constituent, :first_name).present?
+      return false if permitted[:guardian_id].blank? && permitted[:guardian_attributes].blank?
+
+      # A selected existing dependent submits no identity fields at all -- those are on-file facts,
+      # not paper-intake input -- so the presence of a name cannot be the only signal. `dependent_id`
+      # is the more direct one and is checked first.
+      permitted[:dependent_id].present? || permitted.dig(:constituent, :first_name).present?
     end
 
     def permitted_paper_params

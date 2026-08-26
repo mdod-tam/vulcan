@@ -144,6 +144,22 @@ SMS alignment  [DATA-001][DATA-002][AUTHZ-003]
 
 ## UI/UX Enhancements
 
+Guardian selected pane fails WCAG 1.4.10 Reflow at 320 CSS pixels
+- [ ] `#guardian-info-section` renders 364px wide at a 320px viewport, overflowing the document by
+      60px and forcing horizontal scrolling to read. Measured on `/admin/paper_applications/new`
+      with a guardian selected. The bare page is clean (`scrollWidth == clientWidth == 320`); the
+      overflow appears only once the selected pane renders, so the pane's own layout is the
+      suspect, not the page shell.
+- [ ] Inventory every surface that renders the guardian selected pane before fixing — the paper
+      intake form is where it was found, not necessarily the only place it appears.
+- [ ] Reflow conformance is a whole-page property, so this failure is the page's regardless of
+      which component causes it. The adjacent existing-dependent summary was measured at the same
+      width and does not contribute (238px, no inner overflow); see the 320px assertion in
+      `test/system/admin/paper_application_rollback_test.rb`.
+- [ ] Note 320 CSS px ≡ 400% zoom from a 1280px viewport. A 375–390px phone capture is useful
+      mobile evidence but is not this claim, and a 200% text check addresses 1.4.4 Resize Text
+      rather than Reflow.
+
 - [ ] Tooltip/inline-help component: Stimulus controller + Tailwind styles
 - [ ] Data API: `data-help` attributes on inputs; ARIA compliance
 - [ ] Seed initial help copy for income/residency/medical fields (i18n YAML)

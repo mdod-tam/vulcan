@@ -33,6 +33,49 @@ Admin::PaperApplicationsController
 
 That flag matters because downstream proof-review and validation behavior changes when paper intake is in progress. Do not assume after-write notification or reconciliation code still has paper context; the service clears the flag in `ensure` blocks around the write phases.
 
+## Create Result Contract
+
+`PaperApplicationService#create` owns the transaction outcome, and the controller trusts it rather
+than inspecting the in-memory record:
+
+| Result | Meaning | Controller response |
+|--------|---------|---------------------|
+| `true`, no warning | Committed cleanly | Redirect to the application |
+| `true`, warning, `commit_confirmed?` | Committed, but a post-commit step failed — reconciliation, a named post-creation step, or a model `after_commit` | Redirect to the real application with the warning alongside the success notice |
+| `true`, warning, **not** `commit_confirmed?` | The write could not be verified — the callback raised *and* the confirming query failed | Redirect to the applications **list** with the warning. Never to the record's own page: if the row is not there, "application not found" replaces the guidance |
+| `false` | **Nothing committed** (a confirmed rollback) | Re-render the paper form with the original service error |
+
+`false` unambiguously means nothing was written. That is not free: `after_commit` callbacks run as
+the transaction block exits, so a raise from one — `ProofReview#handle_post_review_actions` fires on
+every rejected proof — escapes *after* the data is durable. The service checks durable existence
+before classifying, so a committed application is never reported as a failure. Reporting it as one
+would invite the admin to submit again and create a duplicate.
+
+Never infer commit state from `service.application.persisted?`. It is wrong in both directions: false
+after a rollback restores the record, true after a commit whose callback then raised.
+
+### What a re-rendered form restores
+
+Everything submitted except the files, on the paths listed below. This is a real contract, not an
+aspiration: a field accepted for processing but missing from `build_submitted_params`, or rendered
+from the record rather than the submission, is silently dropped on a retry. Both mistakes have
+happened here.
+
+Coverage is split deliberately, and [`paper_application_retry_contract.md`](paper_application_retry_contract.md) records which field is
+proved where: request tests own value binding and the blank/false/absent distinctions, while the
+system matrix in `test/system/admin/paper_application_rollback_test.rb` owns picker behaviour, branch
+reveal, and the cases where the browser's own submission rules matter -- an unchecked box is omitted
+entirely, and a disabled control is not submitted, neither of which a request test can reproduce.
+
+The existing-dependent branch is covered end to end in that system test -- selecting an on-file dependent, failing, and retrying to success. The inline-guardian branch is still request level only. Applicant and application fields, disability selections and
+self-certification, attestations, contact strategies, applicant-type branch, guardian/dependent
+selection, all four proof dispositions, and their rejection reasons. The four native file inputs
+cannot be repopulated by a server render, so staff reselect only the documents their restored
+dispositions still require — a rejected proof needs none.
+
+The retry-field allowlist lives in `build_submitted_params`. A field that is accepted for processing
+but missing from that list will be silently dropped on a retry.
+
 ## What The Controller Owns
 
 `Admin::PaperApplicationsController` currently:
@@ -98,27 +141,34 @@ Equipment-fulfillment applications skip account-created messaging even when an e
 
 When `params[:no_medical_provider_information]` is present during create, the service currently attempts to auto-send a secure provider-info request by calling `Applications::RequestProviderInfo` after the application write succeeds.
 
-If that follow-up fails, the application still persists and the admin gets a reconciliation note telling them to send it manually from the application page.
+If that follow-up fails, the application still persists. The request runs as an isolated post-creation step, so its failure does not cancel the steps around it, and the admin gets a warning naming the step -- "the certifying provider request did not finish" -- rather than a generic reconciliation note. The same failure is written to the audit trail as an `application_post_creation_step_failed` event carrying the step name, so it is still visible after the flash is gone.
 
 ## Proof Actions
 
 ### Income, residency, and ID
 
-Current paper-proof actions are:
+Current paper-proof actions, as posted by the form in `<proof>_proof_action`, are:
 
-- `accept`
-- `reject`
-- `none`
+- `upload_only` — attach now, review later
+- `accept` — attach and approve
+- `reject` — no attachment; requires `<proof>_proof_rejection_reason`, and `<proof>_proof_custom_rejection_reason` when that reason is `other`
 
-Accepted proofs go through `ProofAttachmentService`. Rejected proofs go through the explicit rejection path without requiring an attachment.
+"None Provided" is not a fourth action: it is `reject` with the reason `none_provided`.
+
+Accepted and upload-only proofs go through `ProofAttachmentService`. Rejected proofs go through the
+explicit rejection path without requiring an attachment, and record a `ProofReview` carrying the
+resolved reason text and its `rejection_reason_code`.
 
 ### Disability certification
 
-Current disability certification actions are:
+Current disability certification actions, posted in `medical_certification_action`, are:
 
-- `approved`
-- `rejected`
-- `not_requested`
+- `upload_only`
+- `approved` — the default on a *fresh* form only; a re-rendered retry never defaults it
+- `rejected` — requires `medical_certification_rejection_reason`, plus
+  `medical_certification_custom_rejection_reason` when that reason is `other`
+
+`not_requested` is not one of them.
 
 Disability certification attachments and rejection handling go through `MedicalCertificationAttachmentService`.
 

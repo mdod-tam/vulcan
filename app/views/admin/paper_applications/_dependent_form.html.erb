@@ -8,29 +8,83 @@
   - Guardian relationship type
 %>
 
+<%# The submission being re-rendered, if any. Hoisted so every section below -- contact strategy,
+    the dependent's own contact values, and the relationship select -- reads one source. %>
+<% on_file_dependent = defined?(on_file_dependent) ? on_file_dependent : nil %>
+<%# An existing dependent's identity is on-file fact, not paper-intake input. See
+    docs/development/paper_application_retry_contract.md for why this is read-only. %>
+<% identity_record = on_file_dependent || dependent %>
+<% identity_read_only = mode == :edit && identity_record.present? %>
+<% submitted_dependent_params = (@paper_application.is_a?(Hash) ? @paper_application[:submitted_params] : nil).to_h.with_indifferent_access %>
+
 <fieldset id="dependent-info-section" class="mb-6 p-4 border border-gray-200 rounded-lg bg-white shadow-sm" data-controller="dependent-fields">
+  <%# Short by design. The status card below already announces which dependent is selected, and
+      repeating the name here made a screen reader read it twice before reaching the details. %>
   <legend class="text-lg font-semibold text-gray-900 px-2">
-    <% if mode == :edit && dependent.present? %>
-      Dependent Information 
-      <span class="text-sm font-normal text-indigo-600 ml-2">
-        (Reviewing: <%= dependent.full_name %>)
-      </span>
-    <% else %>
-      New Dependent Information
-    <% end %>
+    <%= mode == :edit && dependent.present? ? 'Dependent Information' : 'New Dependent Information' %>
   </legend>
 
-  <% if mode == :edit && dependent.present? %>
-    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm" role="status">
-      <div class="flex items-start gap-2">
-        <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-        </svg>
+  <%# One summary card, not four restatements. The identity used to appear in the legend, a banner,
+      the <dl>, and a trailing note; a screen reader read the name four times before the form. %>
+  <% if identity_read_only %>
+    <div id="existing-dependent-summary"
+         class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md text-sm">
+      <h3 class="text-sm font-semibold text-blue-900">Existing dependent selected</h3>
+
+      <%# Only the selection is announced. The guidance and the change-selection control sit outside
+          this region deliberately: inside it, every Turbo re-render would replay the whole
+          paragraph. %>
+      <p class="mt-1 text-blue-900" role="status">
+        Existing dependent selected: <%= identity_record.full_name %><% if identity_record.date_of_birth.present? %>, date of birth <%= identity_record.date_of_birth.to_fs(:long) %><% end %>.
+      </p>
+
+      <p class="mt-2 text-blue-800">
+        The name and date of birth below come from the dependent's existing record. This paper
+        application will not change them.
+      </p>
+
+      <dl class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
         <div>
-          <strong>Selected existing dependent:</strong> <%= dependent.full_name %>.
-          <span class="block text-blue-700">Review and update their information below if needed.</span>
+          <dt class="block text-sm font-medium text-gray-700">First Name</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= identity_record.first_name %></dd>
         </div>
-      </div>
+        <div>
+          <dt class="block text-sm font-medium text-gray-700">Last Name</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= identity_record.last_name %></dd>
+        </div>
+        <div>
+          <dt class="block text-sm font-medium text-gray-700">Date of Birth</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= identity_record.date_of_birth&.to_fs(:long) %></dd>
+        </div>
+      </dl>
+
+      <%# Two different problems, two different answers. Telling staff to pick someone else when it
+          is the *record* that is wrong would push them toward creating a duplicate. %>
+      <p class="mt-3 text-blue-800">
+        If this paper application is for someone else, change the selection. If this is the correct
+        dependent but the record is wrong, contact the MAT support team before submitting.
+        <strong>Do not create a new dependent to work around incorrect details.</strong>
+      </p>
+
+      <%# Clears the dependent only. The picker's own control higher up calls `clearSelection`,
+          which also drops `guardian_id`, the dependents frame and the last-application context --
+          far more than a button in the dependent card should do.
+          Labelled "Change Dependent", not "Change Selection", because the guardian card already
+          owns that exact label with the wider meaning. Two identically named buttons doing
+          different things is precisely the confusion this card exists to remove, and a screen
+          reader listing controls would announce the same name twice.
+          Addressed to `applicant-type`, which wraps the whole form, rather than to guardian-picker
+          directly: this frame renders *outside* the guardian-picker element on initial selection
+          (and inside it on retry), so a guardian-picker action would bind on one path only.
+          applicant-type already declares the picker as an outlet and forwards the intent. %>
+      <button type="button"
+              class="mt-3 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              data-action="applicant-type#changeDependent">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Change Dependent
+      </button>
     </div>
   <% end %>
 
@@ -46,6 +100,14 @@
         Dependent's Personal Information
       </h3>
       
+      <%# Read-only by decision, not by omission. Name and date of birth are the identity tuple
+          duplicate detection matches on and the identity decision is signed over, and the paper
+          writer does not own identity changes -- it never persisted edits to these fields. They
+          were rendered as inputs anyway, so a correction looked accepted and was silently
+          discarded. No hidden copies are submitted either: `dependent_id` alone says which record
+          this is.
+          The values themselves render in the summary card above, so nothing appears here. %>
+      <% unless identity_read_only %>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <%= d.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700", for: "dependent_constituent_first_name" %>
@@ -89,6 +151,7 @@
           <% end %>
         </div>
       </div>
+      <% end %>
     </div>
 
     <%# ================================================================ %>
@@ -119,14 +182,35 @@
         </label>
       </div>
       
-      <% dependent_own_email = dependent&.paper_intake_own_email %>
-      <% dependent_own_phone = dependent&.paper_intake_own_phone %>
-      <% use_guardian_email_default = dependent.blank? || dependent.paper_intake_uses_guardian_email? %>
-      <% use_guardian_phone_default = dependent.blank? || dependent.paper_intake_uses_guardian_phone? %>
+      <%# `dependent_email` / `dependent_phone` are submitted parameters rather than columns, so
+          assigning them to the rebuilt record does nothing -- they have to be read back from the
+          submission directly or a retry renders them blank. %>
+      <% submitted_dependent_constituent = submitted_dependent_params[:constituent] || {} %>
+      <%# `key?`, not `.presence`: staff clearing a field on purpose is an answer, and falling back
+          to the on-file value would quietly put back the contact they just removed. Absent means the
+          form was never submitted; present-but-blank means blank. %>
+      <% dependent_own_email = submitted_dependent_constituent.key?(:dependent_email) ?
+                                 submitted_dependent_constituent[:dependent_email] :
+                                 dependent&.paper_intake_own_email %>
+      <% dependent_own_phone = submitted_dependent_constituent.key?(:dependent_phone) ?
+                                 submitted_dependent_constituent[:dependent_phone] :
+                                 dependent&.paper_intake_own_phone %>
+      <%# On a re-render after a failed submission the submitted values are the newer answer, so they
+          win over whatever the record implies. `nil` means not submitted at all -- a fresh form --
+          which is different from having been submitted as unchecked. %>
+      <% submitted_use_guardian_email = submitted_dependent_params.key?(:use_guardian_email) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_email]) : nil %>
+      <% submitted_use_guardian_phone = submitted_dependent_params.key?(:use_guardian_phone) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_phone]) : nil %>
+      <% submitted_use_guardian_address = submitted_dependent_params.key?(:use_guardian_address) ? ActiveModel::Type::Boolean.new.cast(submitted_dependent_params[:use_guardian_address]) : nil %>
+      <% use_guardian_address_default = submitted_use_guardian_address.nil? ? (dependent.blank? || dependent&.physical_address_1.blank?) : submitted_use_guardian_address %>
+      <% use_guardian_email_default = submitted_use_guardian_email.nil? ? (dependent.blank? || dependent.paper_intake_uses_guardian_email?) : submitted_use_guardian_email %>
+      <% use_guardian_phone_default = submitted_use_guardian_phone.nil? ? (dependent.blank? || dependent.paper_intake_uses_guardian_phone?) : submitted_use_guardian_phone %>
 
       <%# Email Section %>
       <div class="mb-5 p-3 bg-white rounded border border-gray-200">
         <div class="flex items-start mb-3">
+          <%# Hidden companion so an unchecked box is still submitted as "0". Without it a retry
+              cannot distinguish a deliberate uncheck from an absent parameter. %>
+          <%= hidden_field_tag :use_guardian_email, "0", id: nil %>
           <%= check_box_tag :use_guardian_email, "1", use_guardian_email_default, {
             id: "use_guardian_email_checkbox",
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
@@ -158,6 +242,9 @@
       <%# Phone Section %>
       <div class="mb-5 p-3 bg-white rounded border border-gray-200">
         <div class="flex items-start mb-3">
+          <%# Hidden companion so an unchecked box is still submitted as "0". Without it a retry
+              cannot distinguish a deliberate uncheck from an absent parameter. %>
+          <%= hidden_field_tag :use_guardian_phone, "0", id: nil %>
           <%= check_box_tag :use_guardian_phone, "1", use_guardian_phone_default, {
             id: "use_guardian_phone_checkbox",
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
@@ -233,7 +320,11 @@
       <%# Address Section %>
       <div class="p-3 bg-white rounded border border-gray-200">
         <div class="flex items-start mb-3">
-          <%= check_box_tag :use_guardian_address, "1", (dependent.blank? || dependent&.physical_address_1.blank?), {
+          <%# Hidden companion so an unchecked box is still submitted as "0". Without it a retry
+              cannot distinguish a deliberate uncheck from an absent parameter, and "Same address as
+              guardian" silently flips back on after a failure. %>
+          <%= hidden_field_tag :use_guardian_address, "0", id: nil %>
+          <%= check_box_tag :use_guardian_address, "1", use_guardian_address_default, {
             id: "use_guardian_address_checkbox",
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", 
             data: { 
@@ -424,13 +515,13 @@
             aria-required="true"
             data-dependent-fields-target="relationshipType">
       <option value="">Select Relationship</option>
-      <option value="Parent">Parent</option>
-      <option value="Grandparent">Grandparent</option>
-      <option value="Foster Parent">Foster Parent</option>
-      <option value="Legal Guardian">Legal Guardian</option>
-      <option value="Relative Caregiver">Relative Caregiver</option>
-      <option value="Power of Attorney">Power of Attorney</option>
-      <option value="Other">Other</option>
+      <option value="Parent" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Parent' %>>Parent</option>
+      <option value="Grandparent" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Grandparent' %>>Grandparent</option>
+      <option value="Foster Parent" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Foster Parent' %>>Foster Parent</option>
+      <option value="Legal Guardian" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Legal Guardian' %>>Legal Guardian</option>
+      <option value="Relative Caregiver" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Relative Caregiver' %>>Relative Caregiver</option>
+      <option value="Power of Attorney" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Power of Attorney' %>>Power of Attorney</option>
+      <option value="Other" <%= 'selected' if submitted_dependent_params[:relationship_type] == 'Other' %>>Other</option>
     </select>
     <p class="mt-1 text-xs text-gray-600">This helps us understand who is authorized to manage this application</p>
   </div>

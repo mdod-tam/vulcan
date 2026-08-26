@@ -9,8 +9,19 @@ module Applications
 
     class TransactionFailure < StandardError; end
 
+    # A post-creation step that knows why it failed. The wrapper names the step; this carries the
+    # actionable detail with it, so a step can report a failed *result* -- not only a raised
+    # exception -- and still get the named warning and the durable event.
+    class PostCreationStepFailure < StandardError; end
+
+    # Named distinctly from the post-creation steps so the timeline separates "a callback raised
+    # after the data was already durable" from "a follow-up step we run ourselves did not finish".
+    # The two need different handling: the callback is deliberately not retried, because it may have
+    # completed some of its side effects before raising.
+    POST_COMMIT_CALLBACK_STEP = 'a post-commit callback'
+
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note,
-                :pending_identity_decision
+                :pending_identity_decision, :warnings
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false,
                    quick_created_portal_user_ids: [])
@@ -24,6 +35,8 @@ module Applications
       @created_portal_user_ids = []
       @quick_created_portal_user_ids = quick_created_portal_user_ids.map(&:to_s)
       @reconciliation_note = nil
+      @warnings = []
+      @commit_confirmed = true
       @pending_identity_decision = nil
       @confirmed_no_match = nil
       @skip_income_validation = skip_income_validation
@@ -32,21 +45,23 @@ module Applications
 
     def create
       Current.paper_context = true
-      application_created = false
+      application_created = run_create_transaction
 
-      ActiveRecord::Base.transaction do
-        rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
-        rollback_failure('Application creation failed') unless create_application
-        rollback_failure('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
-
-        application_created = @application.persisted?
-      end
-
-      if application_created
+      # An unverified write gets no further work against the same record. Whatever stopped us
+      # confirming the commit would raise again here, and that exception is caught below as a
+      # *failure* -- turning a possibly-committed application into a retry form, which is the
+      # duplicate this path exists to prevent. The warning already tells staff to check the list.
+      if application_created && commit_confirmed?
         begin
           handle_successful_application(:create)
         rescue StandardError => e
-          log_error(e, 'Failed to send notifications after successful application creation')
+          # Logged *and* surfaced. This method sequences notifications, proof-delivery checks, audit
+          # logging and provider follow-up, so one exception can also skip everything after it --
+          # silently succeeding here tells the admin the paper intake finished when part of it did
+          # not.
+          log_error(e, 'Failed to finish post-creation steps after a successful application creation')
+          add_warning('The application was created, but a follow-up step did not finish. ' \
+                      'Review this application before treating it as complete.')
         end
 
         # Reconcile outside the transaction so proof writes are committed regardless of
@@ -93,6 +108,20 @@ module Applications
       Current.paper_context = nil
     end
 
+    # Everything the admin should be told about a *successful* write, in one place. Reconciliation
+    # keeps its own note because it names a specific recoverable state ("advance it manually"); a
+    # post-commit callback failure is a different thing and should not borrow that label. Both are
+    # surfaced together so a request that hit each one does not silently drop the first.
+    def warning_message
+      [@reconciliation_note, *@warnings].compact_blank.join(' ').presence
+    end
+
+    # False only when the write could not be verified. A true result is still not a retry -- but the
+    # caller must not route an unconfirmed write to the record's own page.
+    def commit_confirmed?
+      @commit_confirmed
+    end
+
     ADULT_CONTACT_FIELDS = %i[
       email phone phone_type physical_address_1 physical_address_2
       city state zip_code communication_preference locale
@@ -104,6 +133,85 @@ module Applications
     ].freeze
 
     private
+
+    # Owns the one question the caller cannot answer for itself: did this commit?
+    #
+    # `after_commit` callbacks run as the transaction block exits, so an exception from one -- for
+    # instance ProofReview's post-review actions, which every rejected proof triggers -- escapes the
+    # block *after* the data is durable. Left to the outer rescue that becomes "false" for an
+    # application that exists, and a caller that treats false as "nothing happened" invites the admin
+    # to submit again and create a duplicate.
+    #
+    # Durable existence is asked of the database rather than of the in-memory record, because
+    # `persisted?` is exactly the authority that was wrong here in both directions: false after a
+    # rollback restores the record, and true after a commit whose callback then blew up.
+    #
+    # The callback is deliberately not retried. It raised partway through, so some of its side
+    # effects may already have happened; running it again could duplicate them. The failure is
+    # recorded as a warning and the ordinary post-commit path continues once.
+    def run_create_transaction
+      ActiveRecord::Base.transaction do
+        rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
+        rollback_failure('Application creation failed') unless create_application
+        rollback_failure_unless_explained('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
+
+        @application.persisted?
+      end
+    rescue TransactionFailure
+      raise
+    rescue StandardError => e
+      state = commit_state
+      # Only a *confirmed* rollback may become a failure, because failure sends the admin back to a
+      # retry form. Anything else stays on the success side.
+      raise if state == :rolled_back
+
+      log_error(e, 'Paper application post-commit step failed')
+      # Recorded so the caller can avoid routing to a record it cannot be sure exists. Sending staff
+      # to an application detail page that 404s would replace "check before retrying" with
+      # "application not found" -- the same substitution this whole change set exists to stop.
+      @commit_confirmed = (state == :committed)
+      add_warning(post_commit_warning_for(state))
+      # A confirmed commit left durable data behind, so the record of unfinished work has to be
+      # durable too -- the flash is gone after one page view, and this is the path that motivated
+      # the whole contract. Only when confirmed: on an unknown commit the database is the thing
+      # that just failed, and there may be no application row to hang the event on.
+      record_incomplete_follow_up(POST_COMMIT_CALLBACK_STEP, e) if @commit_confirmed
+      true
+    end
+
+    def post_commit_warning_for(state)
+      if state == :unknown
+        'The application may have been created, but that could not be confirmed. Check the ' \
+          'applications list before entering it again -- submitting again could create a duplicate.'
+      else
+        'The application was created, but a follow-up step did not finish. ' \
+          'Review this application before treating it as complete.'
+      end
+    end
+
+    # Three answers, not two. Collapsing "I could not tell" into "not committed" is what would
+    # recreate the duplicate risk: the post-commit callback raises, the verification query then fails
+    # transiently, and an application that exists gets offered back as a retry.
+    #
+    # Asked of the database on the same connection that just performed the write, which is the
+    # writer: this application configures no reader role. If one is ever added, this query must stay
+    # on the writer -- replica lag answering "no" about a row committed moments ago is the same
+    # mistake by a different route.
+    #
+    # @return [Symbol] :committed, :rolled_back, or :unknown
+    def commit_state
+      id = @application&.id
+      return :rolled_back if id.blank?
+
+      Application.exists?(id) ? :committed : :rolled_back
+    rescue StandardError => e
+      log_error(e, 'Could not confirm whether the paper application committed')
+      :unknown
+    end
+
+    def add_warning(message)
+      @warnings << message unless @warnings.include?(message)
+    end
 
     def failure(message)
       @errors << message
@@ -125,16 +233,67 @@ module Applications
       raise TransactionFailure, message
     end
 
+    # The audit event goes first because it is the durable record that this application was created
+    # at all. It used to run after notifications; a mail failure therefore skipped it, leaving a
+    # committed application with no `application_created` event.
+    #
+    # First, but not unguarded: every step on the create path is isolated, including the audit
+    # itself. Running it bare simply moved the hazard -- `AuditEventService` writes with
+    # `Event.create!`, so a failed audit raised straight past notifications, proof-delivery checks
+    # and the provider request, and past the durable record that any of them had been skipped.
+    #
+    # The steps are independent: a notification problem is no reason to skip the provider request,
+    # and a missing audit row is no reason to skip all three. The caller is told which ones did not
+    # finish.
+    #
+    # `:update` is left as it was. Paper applications route only `new` and `create`, the controller
+    # defines only those two actions, and `#update` has no production caller -- so changing its
+    # behavior here would be an untestable claim about a path nothing reaches.
     def handle_successful_application(operation = :create)
-      send_notifications
-      append_proof_resubmission_delivery_warnings
       case operation
-      when :create
-        log_application_creation
-        request_provider_info_if_missing
+      when :create then run_post_creation_step('the creation audit event') { log_application_creation }
       when :update
         log_application_update
       end
+
+      run_post_creation_step('notifications') { send_notifications }
+      run_post_creation_step('proof delivery checks') { append_proof_resubmission_delivery_warnings }
+      run_post_creation_step('the certifying provider request') { request_provider_info_if_missing } if operation == :create
+    end
+
+    def run_post_creation_step(description)
+      yield
+    rescue StandardError => e
+      # Two different audiences, two different exceptions. The typed wrapper carries the sentence
+      # staff need; its `cause` carries the diagnosis. `log_error` reads only `message` and
+      # `backtrace`, so logging the wrapper would report `PostCreationStepFailure` with the
+      # wrapper's own backtrace and the real error would never reach the log -- and `error_class`
+      # on the audit event would name the wrapper rather than what actually failed.
+      diagnostic = e.cause || e
+      log_error(diagnostic, "Paper application post-creation step failed: #{description}")
+      detail = e.is_a?(PostCreationStepFailure) ? "#{e.message} " : ''
+      add_warning("The application was created, but #{description} did not finish. #{detail}" \
+                  'Review this application before treating it as complete.')
+      record_incomplete_follow_up(description, diagnostic)
+    end
+
+    # A flash message lasts one page view. Whoever picks this application up tomorrow needs to know
+    # a step did not finish, so it is written to the audit trail beside the creation event. Best
+    # effort by design: if the audit write itself fails there is nothing further to fall back on, and
+    # it must not turn a committed application into an error.
+    def record_incomplete_follow_up(description, error)
+      AuditEventService.log(
+        action: 'application_post_creation_step_failed',
+        actor: @admin,
+        auditable: @application,
+        metadata: {
+          submission_method: 'paper',
+          step: description,
+          error_class: error.class.name
+        }
+      )
+    rescue StandardError => e
+      log_error(e, 'Could not record the incomplete paper follow-up step')
     end
 
     def log_application_creation
@@ -591,6 +750,7 @@ module Applications
     def apply_dependent_contact_strategies!(attrs, dependent: nil)
       guardian = guardian_for_dependent_contact_update
       return attrs.deep_dup if guardian.blank?
+      return nil unless dependent_contact_instructions_consistent?(attrs)
 
       strategy_service = GuardianDependentManagementService.new(params)
       merged = merge_existing_dependent_contact(attrs, dependent)
@@ -603,6 +763,45 @@ module Applications
       end
     end
 
+    # "Use the guardian's email" unchecked, with the dependent's own email deliberately cleared, is
+    # a contradiction rather than an instruction -- and resolving it silently has gone wrong in both
+    # directions. Backfilling from the record undoes the clear while the re-rendered form still
+    # shows blank, so an unchanged retry persists something staff cannot see. Letting the blank
+    # through instead reaches `apply_email_strategy`'s guardian fallback, which mints a synthetic
+    # primary identifier and moves delivery to the guardian.
+    #
+    # Neither is what was asked for, so it is refused with a message staff can act on. Keyed on the
+    # field being *submitted* blank: absent means the checkbox disabled it, which is a real
+    # instruction and still backfills below.
+    def dependent_contact_instructions_consistent?(attrs)
+      data = attrs.to_h.with_indifferent_access
+      consistent = true
+
+      { email: 'email address', phone: 'phone number' }.each do |kind, label|
+        next unless params[:"#{kind}_strategy"].to_s == 'dependent'
+        next unless data.key?(:"dependent_#{kind}") || data.key?(kind)
+        next if data[:"dependent_#{kind}"].present? || data[kind].present?
+
+        add_error("Enter the dependent's own #{label}, or select the option to use the guardian's " \
+                  "#{label}. It cannot be blank while the dependent is set to use their own.")
+        consistent = false
+      end
+
+      consistent
+    end
+
+    # Backfills an existing dependent's own contact from their record when the form supplied none.
+    #
+    # Deliberately keyed on blankness, not key presence. Key presence would make a cleared field
+    # authoritative, and that is not a restoration change -- it is a contact policy change. A blank
+    # dependent contact reaches `GuardianDependentManagementService#apply_email_strategy`, which
+    # falls back to the guardian strategy and mints a synthetic
+    # `dependent-<uuid>@system.matvulcan.local` primary identifier. Clearing the field would then
+    # silently revoke the dependent's portal access and hand delivery to the guardian, while the
+    # re-rendered form still showed "use guardian" unchecked beside an empty box.
+    #
+    # Honouring a deliberate clear is a real gap, but it belongs with that fallback -- refusing
+    # blank-plus-dependent rather than converting it -- not here.
     def merge_existing_dependent_contact(attrs, dependent)
       data = attrs.deep_dup.with_indifferent_access
       return data unless dependent
@@ -1073,8 +1272,12 @@ module Applications
 
     # Automatically sends a provider info secure form to the constituent/guardian
     # when an admin creates a paper application without certifying professional info.
-    # Failure is non-blocking: the application is already saved; the admin can send
-    # the form manually from the application show page if delivery fails.
+    #
+    # Failure stays non-blocking -- the application is already saved and the admin can send the form
+    # manually -- but it is reported through the post-creation wrapper rather than swallowed here.
+    # Catching its own errors and turning a failed result into a note meant this step alone produced
+    # no named warning and no `application_post_creation_step_failed` event, so the one follow-up
+    # most likely to fail was the one least visible afterwards.
     def request_provider_info_if_missing
       return unless params[:no_medical_provider_information]
       return if @application.medical_certification_status_approved?
@@ -1086,15 +1289,17 @@ module Applications
 
       return if result.success?
 
-      note = "Certifying professional info form could not be automatically sent: #{result.message} " \
-             'You can send it from the application page.'
-      @reconciliation_note = [@reconciliation_note, note].compact.join(' ')
-    rescue StandardError => e
-      log_error(e, "Failed to auto-send provider info secure form after paper app #{@application&.id}")
-      @reconciliation_note = [
-        @reconciliation_note,
-        'Certifying professional info form delivery failed. You can send it manually from the application page.'
-      ].compact.join(' ')
+      raise PostCreationStepFailure,
+            "It could not be sent automatically: #{result.message} You can send it from the application page."
+    rescue PostCreationStepFailure
+      raise
+    rescue StandardError
+      # A raised failure is no less actionable than a returned one -- staff still need telling that
+      # they can send the form by hand. Re-raised as the typed error so the wrapper keeps that
+      # guidance; `raise` inside a rescue records the original as this exception's `cause`, which
+      # `run_post_creation_step` unwraps for the log and the audit event.
+      raise PostCreationStepFailure,
+            'It could not be sent automatically. You can send it from the application page.'
     end
 
     # Income/residency/id proof rejections are delivered through ProofReview ->

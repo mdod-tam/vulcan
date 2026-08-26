@@ -226,8 +226,10 @@
           </div>
           <div>
             <%= c.label :state, "State", class: "block text-sm font-medium text-gray-700 required-label" %>
-            <%= c.text_field :state, 
-                value: "MD", 
+            <%# Defaults to MD, but a submitted value wins -- a hardcoded value silently discards a
+                correction on a retry. %>
+            <%= c.text_field :state,
+                value: (c.object&.state.presence || "MD"),
                 required: true,
                 autocomplete: "address-level1",
                 data: { contact_feedback_target: "state" },

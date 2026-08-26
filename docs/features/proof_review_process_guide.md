@@ -92,7 +92,9 @@ unless result[:success]
 end
 ```
 
-**Audit events**: `ProofAttachmentService` logs `#{proof_type}_proof_attached` for attachment submissions and `#{proof_type}_proof_rejected` for explicit rejection paths. Secure proof resubmission submission is logged by `Applications::SubmitProofResubmission` as `proof_submitted_via_secure_form`.
+**Audit events**: `ProofAttachmentService` logs `#{proof_type}_proof_attached` for attachment submissions (`#{proof_type}_proof_submitted` when the submission method is email), and `#{proof_type}_proof_attachment_failed` on failure.
+
+It emits **no** rejection audit event of its own. Its rejection entry point, `reject_proof_without_attachment`, creates a `ProofReview`, and that record's `after_commit` callback is the canonical owner of the generic `proof_rejected` event and of constituent-facing resubmission delivery. Emitting a typed `#{proof_type}_proof_rejected` here would duplicate both, so nothing does -- there is no typed rejection audit event in the codebase. Secure proof resubmission submission is logged by `Applications::SubmitProofResubmission` as `proof_submitted_via_secure_form`.
 
 **Common Error Scenarios**:
 - Invalid file types or sizes
@@ -171,7 +173,7 @@ The service creates standardized audit events:
 
 - **Attachment Events**: `#{proof_type}_proof_attached` (for :web and :paper)
 - **Secure Form Events**: `proof_resubmission_requested`, `proof_submitted_via_secure_form`, `proof_resubmission_request_revoked`, `proof_resubmission_request_expired`
-- **Rejection Events**: `#{proof_type}_proof_rejected`
+- **Rejection Events**: `proof_rejected` -- generic, emitted by the `ProofReview` `after_commit` callback. There is no typed `#{proof_type}_proof_rejected` audit event.
 - **Failure Events**: `#{proof_type}_proof_attachment_failed`
 
 All events include comprehensive metadata:
@@ -299,15 +301,37 @@ end
 
 private
 
+# Income, residency, ID and the disability certification are each processed in turn. A failure
+# raised *inside* the transaction rolls the whole create back.
+#
+# A failure raised by an `after_commit` callback does not: by then the data is durable. The paper
+# service verifies the commit rather than trusting `persisted?`, keeps the application, warns the
+# admin, and records a `application_post_creation_step_failed` event so the unfinished work
+# outlives the flash. See docs/development/paper_application_retry_contract.md.
+#
+#   %i[income residency id medical_certification].each { |type| return false unless process_proof(type) }
+#
+# The disability certification uses its own action names: 'approved' and 'rejected' rather than
+# 'accept' and 'reject'.
 def process_proof(type)
-  action = extract_proof_action(type) # 'accept' or 'reject'
+  # 'upload_only', 'accept' or 'reject' for income/residency/ID.
+  # Disability certification uses 'upload_only', 'approved' or 'rejected'.
+  action_key = type == :medical_certification ? "#{type}_action" : "#{type}_proof_action"
+  action = params[action_key]
 
   case action
-  when 'accept'
-    # Calls ProofAttachmentService.attach_proof internally
+  when 'upload_only'
+    # Attaches now and leaves the proof unreviewed
+    process_upload_only_proof(type)
+  when 'accept', 'approved'
+    # Calls ProofAttachmentService.attach_proof internally.
+    # 'approved' is the disability certification's spelling of the same action.
     process_accept_proof(type)
-  when 'reject'
-    # Calls ProofAttachmentService.reject_proof_without_attachment internally
+  when 'reject', 'rejected'
+    # Calls ProofAttachmentService.reject_proof_without_attachment internally, using
+    # <type>_proof_rejection_reason (and _custom_rejection_reason when that reason is 'other').
+    # "None Provided" is this branch with the reason 'none_provided', not a separate action.
+    # 'rejected' is the disability certification's spelling of the same action.
     process_reject_proof(type)
   else
     true # No action specified, proceed
@@ -316,7 +340,9 @@ end
 
 # Note on Audit Events in PaperApplicationService:
 # - When a proof is accepted with a file, `ProofAttachmentService` creates a `#{type}_proof_attached` audit event.
-# - When a proof is rejected (no file required), `ProofAttachmentService` creates a `#{type}_proof_rejected` audit event.
+# - When a proof is rejected (no file required), the `ProofReview` that `ProofAttachmentService`
+#   creates emits the generic `proof_rejected` audit event from its `after_commit` callback.
+#   There is no typed `#{type}_proof_rejected` audit event -- see section 1 above.
 # - Selecting approve without a file returns a validation error surfaced via flash.
 ```
 

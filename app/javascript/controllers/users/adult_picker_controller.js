@@ -33,6 +33,10 @@ export default class extends Controller {
     this.selectedValue = !!(this.hasConstituentIdFieldTarget && this.constituentIdFieldTarget.value)
     this._adultApplicationContext = null
     this._onFileData = {}
+    // Set by the server when it re-renders the form after a failed submission. On that render the
+    // fields already hold what staff typed, including corrections to the on-file record, so the
+    // context fetch below must not paste database values back over them.
+    this._restoredFromSubmission = this.element.dataset.adultPickerRestoredValue === "true"
     this.togglePanes()
 
     if (this.selectedValue) {
@@ -219,6 +223,25 @@ export default class extends Controller {
    * Text nodes rather than markup: these values came from JSON and are rendered as data.
    * @private
    */
+  /**
+   * Names the selected applicant on a restored retry, where no click supplied display markup.
+   * @private
+   */
+  _fillSelectedCardIfEmpty(user) {
+    if (!user || !this.hasSelectedPaneTarget) return
+
+    const box = this.selectedPaneTarget.querySelector('.adult-details-container')
+    if (!box || box.childElementCount > 0) return
+
+    const name = [user.first_name, user.middle_initial, user.last_name].filter(Boolean).join(' ')
+    if (!name) return
+
+    this._renderSelectedCandidate({
+      name,
+      date_of_birth: this._formatDateForInput(user.date_of_birth)
+    })
+  }
+
   _renderSelectedCandidate(candidate) {
     const box = this.selectedPaneTarget.querySelector('.adult-details-container')
     if (!box) return
@@ -240,6 +263,10 @@ export default class extends Controller {
   clearSelection({ dispatch = true } = {}) {
     if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = ""
 
+    // The restored submission is being discarded along with the selection it belonged to, so the
+    // guard goes with it. Leaving it set would suppress autopopulation for the *replacement* adult
+    // too, handing staff a selected record whose name, date of birth and contact fields are blank.
+    this._restoredFromSubmission = false
     this._onFileData = {}
     this._adultApplicationContext = null
     this.selectedValue = false
@@ -316,7 +343,16 @@ export default class extends Controller {
   _applyAdultContext(data) {
     this._adultApplicationContext = data
     this._storeOnFileData(data.user)
-    this._autopopulateFields(data.user)
+    // The click path fills the selected card with the search result's markup. A restored retry has
+    // no search result, so the card rendered empty: the pane announced that an applicant was
+    // selected without ever naming them. Filled from the context the rest of the restore already
+    // uses, and only when empty, so the click path's richer markup is left alone.
+    this._fillSelectedCardIfEmpty(data.user)
+    // Everything else here is still needed on a retry -- the on-file summary, contact mode,
+    // verification control and submit gating all depend on it. Only the field overwrite is skipped,
+    // because on a retry the submitted values are the newer ones and silently replacing them with
+    // what is on file loses a correction staff had already made once.
+    if (!this._restoredFromSubmission) this._autopopulateFields(data.user)
     this._showOnFileSummary(data)
     this._showContactMode()
     this._showVerification()

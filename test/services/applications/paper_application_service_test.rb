@@ -989,6 +989,163 @@ module Applications
       assert dependent.phone.start_with?('000-')
     end
 
+    # Clearing an existing dependent's own email while leaving them set to use their own is a
+    # contradiction, and both silent resolutions were wrong: backfilling from the record undid the
+    # clear behind a form that still showed blank, and letting it through reached the guardian
+    # fallback, which replaced the login identifier with a synthetic address. Refused instead.
+    test 'a cleared own-contact with the dependent strategy is refused, not silently resolved' do
+      guardian = create(:constituent,
+                        email: "guardian-clear-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      original_email = "dependent-own-#{SecureRandom.hex(4)}@example.com"
+      dependent = create(:constituent, dependent_email: original_email, phone: unique_paper_phone)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'dependent',
+        phone_strategy: 'guardian',
+        # Submitted blank -- a deliberate clear, not an absent field.
+        constituent: { locale: 'en', dependent_email: '' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert_not service.create, 'a contradictory contact instruction must not be resolved silently'
+      assert_match(/use the guardian's email address/i, service.errors.join(' '))
+      # The old address must not have been quietly reinstated behind the refusal.
+      assert_equal original_email, dependent.reload.dependent_email
+    end
+
+    # Phone independently of email: the two strategies are separate fields, and a guard that only
+    # covered email would leave the phone path silently resolving as before.
+    test 'a cleared own-phone with the dependent strategy is refused independently of email' do
+      guardian = create(:constituent,
+                        email: "guardian-phone-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      original_phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      dependent = create(:constituent,
+                         dependent_email: "dependent-own-#{SecureRandom.hex(4)}@example.com",
+                         dependent_phone: original_phone)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'dependent',
+        constituent: { locale: 'en', dependent_phone: '' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert_not service.create
+      assert_match(/use the guardian's phone number/i, service.errors.join(' '))
+      assert_equal original_phone, dependent.reload.dependent_phone
+    end
+
+    # The control for the guard: choosing the guardian's contact is the *supported* way to leave a
+    # dependent without their own, and must keep working. Without this, the refusal above could be
+    # satisfied by rejecting every blank contact, which would break ordinary paper intake.
+    test 'choosing guardian contact still succeeds with no own contact submitted' do
+      guardian = create(:constituent,
+                        email: "guardian-ok-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      dependent = create(:constituent, dependent_email: nil, dependent_phone: nil)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        constituent: { locale: 'en' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert service.create, "guardian contact must remain supported: #{service.errors.inspect}"
+      assert_equal guardian.email, dependent.reload.dependent_email
+    end
+
+    # The control that actually exercises the strategy condition. A blank own-contact is only a
+    # contradiction when the dependent is set to use their own; with the guardian's contact chosen
+    # it is the normal submission, because the form still posts the emptied field. A guard that
+    # ignored the strategy would reject ordinary paper intake here.
+    test 'a blank own-contact submitted alongside the guardian strategy is accepted' do
+      guardian = create(:constituent,
+                        email: "guardian-blankok-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      dependent = create(:constituent, dependent_email: nil, dependent_phone: nil)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        # Submitted blank *and* the guardian's contact chosen -- consistent, not contradictory.
+        constituent: { locale: 'en', dependent_email: '', dependent_phone: '' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert service.create, "a blank field is fine when guardian contact is chosen: #{service.errors.inspect}"
+      assert_equal guardian.email, dependent.reload.dependent_email
+    end
+
+    # The other control: a field the form never submitted is absent, not blank. That is what the
+    # guardian-contact checkbox produces when it disables the input, and it must still backfill
+    # rather than trip the refusal.
+    test 'an absent own-contact field still backfills rather than being refused' do
+      guardian = create(:constituent,
+                        email: "guardian-absent-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      on_file = "dependent-onfile-#{SecureRandom.hex(4)}@example.com"
+      dependent = create(:constituent, dependent_email: on_file, phone: unique_paper_phone)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'dependent',
+        phone_strategy: 'guardian',
+        # No dependent_email key at all -- the field was never submitted.
+        constituent: { locale: 'en' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert service.create, "an absent field is not a cleared one: #{service.errors.inspect}"
+      assert_equal on_file, dependent.reload.dependent_email
+    end
+
     test 'new_user_accounts excludes existing user with force_password_change but no submission handoff' do
       existing = create(:constituent, phone: unique_paper_phone, force_password_change: true)
 
@@ -1281,6 +1438,289 @@ module Applications
       end
     end
 
+    # Two properties, together, are what make "create returned false but the application committed"
+    # impossible. That state is what the controller's removed branch tried to handle by asking a
+    # rolled-back object whether it was persisted. They are pinned here because if either one ever
+    # stops holding, the controller's simple "false means re-render" contract silently becomes wrong.
+    #
+    # Asserted against the database, never against `service.application.persisted?`: in-memory state
+    # is exactly the authority the removed branch trusted.
+    test 'a failure after the application saves leaves nothing durable and no ghost id' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('storage refused the proof') }
+      )
+      params = base_paper_params.merge(
+        income_proof_action: 'upload_only',
+        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+      )
+
+      service = paper_service_with_proofs(params)
+
+      # Every table the request could have written, not just the two obvious ones: a rollback that
+      # left an orphaned attachment, event, or case behind would still satisfy a user/application
+      # count check while leaving real debris.
+      counters = ['Application.count', 'User.count', 'Event.count', 'Notification.count',
+                  'DuplicateReviewCase.count', 'GuardianRelationship.count',
+                  'ProofReview.count', 'ActiveStorage::Attachment.count', 'ActiveStorage::Blob.count']
+      assert_no_difference counters do
+        assert_no_enqueued_jobs do
+          assert_not service.create
+        end
+      end
+      assert_includes service.errors.join(' '), 'storage refused the proof'
+      # The rollback must also take the id back off the in-memory record, or any caller that trusts
+      # it is handed an id that resolves to nothing.
+      assert_nil service.application&.id
+    end
+
+    # The suffix is not merely untidy: it is the last thing staff read, and it describes an internal
+    # step rather than what went wrong. The helper for this already existed and was used for
+    # constituent failures; proof failures simply were not routed through it.
+    test 'an explained proof failure is not followed by the generic step name' do
+      ProofAttachmentService.stubs(:attach_proof).returns(
+        { success: false, error: StandardError.new('storage refused the proof') }
+      )
+      params = base_paper_params.merge(
+        income_proof_action: 'upload_only',
+        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+      )
+
+      service = paper_service_with_proofs(params)
+      service.create
+
+      assert_includes service.errors.join(' '), 'storage refused the proof'
+      assert_not_includes service.errors, 'Proof upload failed'
+    end
+
+    # `after_commit` callbacks run as the transaction block exits, so a raise from one escapes
+    # *after* the data is durable. ProofReview has such a callback and every rejected proof creates a
+    # ProofReview, so this is an ordinary path, not an exotic one. Reporting it as failure invites
+    # the admin to submit again and create a duplicate.
+    test 'a post-commit callback failure reports success with a warning, not failure' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert_difference ['Application.count', 'User.count'], 1 do
+        assert service.create, "a committed application must not be reported as a failure: #{service.errors.inspect}"
+      end
+      assert Application.exists?(service.application.id), 'the application really did commit'
+      assert_match(/follow-up step did not finish/i, service.warning_message)
+    end
+
+    # The nastier ordering: the callback raises *and* the query that would confirm the commit also
+    # fails. Collapsing that uncertainty into "not committed" hands the admin a retry form for an
+    # application that may well exist -- the exact duplicate risk this path is meant to remove. An
+    # unconfirmed commit is reported on the success side, with copy that says so.
+    test 'an unverifiable commit is not reported as a failure' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert service.create, 'an unconfirmed commit must not be reported as a failure'
+      assert_not service.commit_confirmed?, 'the caller must be told the write was not verified'
+      assert_match(/could not be confirmed/i, service.warning_message)
+      assert_match(/could create a duplicate/i, service.warning_message)
+    end
+
+    # A post-creation step failing is not a reason to call the intake finished, and it must not
+    # cancel the steps after it either. Each is isolated and named, so the admin learns which part
+    # did not run rather than being told something vague went wrong.
+    test 'a failure in one post-creation step is named and does not cancel the others' do
+      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
+                                           .raises(StandardError, 'notification exploded')
+
+      service = paper_service(base_paper_params)
+
+      # Explicit expectations, not the absence of a warning: "no warning" also holds when the method
+      # was never called at all, which is the failure this is meant to exclude.
+      Applications::PaperApplicationService.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
+      Applications::PaperApplicationService.any_instance.expects(:request_provider_info_if_missing).once
+
+      assert service.create
+      assert_match(/notifications did not finish/i, service.warning_message)
+      assert Event.exists?(action: 'application_created', auditable_id: service.application.id),
+             'the audit event runs first and must be unaffected'
+
+      # The flash lasts one page view; whoever opens this application tomorrow still needs to know.
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure, 'the incomplete step should be recorded durably'
+      assert_equal 'notifications', failure.metadata['step']
+    end
+
+    # Running the audit first stopped a mail failure from skipping it, but running it *unguarded*
+    # only moved the hazard. `AuditEventService` writes with `Event.create!`, so a failed audit
+    # raised past notifications, the delivery checks and the provider request in one go -- and past
+    # the durable record that any of them had been skipped. A committed application could end up
+    # with no creation event, no follow-ups, and nothing but a generic flash.
+    test 'a failed creation audit does not cancel the steps after it' do
+      Applications::PaperApplicationService.any_instance.stubs(:log_application_creation)
+                                           .raises(StandardError, 'audit write exploded')
+
+      service = paper_service(base_paper_params)
+
+      # Explicit expectations: "no warning" would also hold if these were never called at all.
+      Applications::PaperApplicationService.any_instance.expects(:send_notifications).once
+      Applications::PaperApplicationService.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
+      Applications::PaperApplicationService.any_instance.expects(:request_provider_info_if_missing).once
+
+      assert service.create
+      assert_match(/creation audit event did not finish/i, service.warning_message)
+    end
+
+    # The provider request reported its own failures into the reconciliation note and returned
+    # normally, so the isolation wrapper never saw one. Staff got generic copy, and the step most
+    # likely to fail was the only one that produced no durable event.
+    test 'a failed provider request is named and recorded like any other step' do
+      Applications::RequestProviderInfo.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: false, message: 'the secure form could not be delivered.', data: nil)
+      )
+      params = base_paper_params.merge(no_medical_provider_information: '1')
+
+      service = paper_service(params)
+
+      assert service.create
+      assert_match(/certifying provider request did not finish/i, service.warning_message)
+      # The actionable detail survives the move; naming the step is not a reason to lose it.
+      assert_match(/You can send it from the application page/i, service.warning_message)
+
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure, 'a failed provider request must outlive the flash'
+      assert_equal 'the certifying provider request', failure.metadata['step']
+    end
+
+    # The same must hold when it raises rather than returning a failed result -- it used to catch
+    # its own exceptions too.
+    test 'a raised provider request failure is named and recorded like any other step' do
+      Applications::RequestProviderInfo.any_instance.stubs(:call).raises(StandardError, 'delivery exploded')
+      params = base_paper_params.merge(no_medical_provider_information: '1')
+
+      service = paper_service(params)
+
+      assert service.create
+      assert_match(/certifying provider request did not finish/i, service.warning_message)
+      # A raised failure is as actionable as a returned one, so the manual-send guidance must
+      # survive it too -- an untyped StandardError would reach the wrapper without it.
+      assert_match(/You can send it from the application page/i, service.warning_message)
+
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure
+      assert_equal 'the certifying provider request', failure.metadata['step']
+      # The typed wrapper is for staff; the audit event has to name what actually failed. Recording
+      # `PostCreationStepFailure` here would make every wrapped failure look identical and send
+      # whoever investigates to the re-raise site instead of the real one.
+      assert_equal 'StandardError', failure.metadata['error_class'],
+                   'the audit event must record the underlying error, not the typed wrapper'
+    end
+
+    # The path that started all of this: a callback raises after the data is already durable. The
+    # service kept the application and warned, but recorded nothing -- and a flash is gone after one
+    # page view, so tomorrow's reviewer had no sign the callback work might be incomplete.
+    test 'a confirmed post-commit callback failure is recorded durably' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert service.create
+      assert service.commit_confirmed?, 'this scenario is the confirmed-commit one'
+
+      failure = Event.where(action: 'application_post_creation_step_failed',
+                            auditable_id: service.application.id).order(:id).last
+      assert_not_nil failure, 'a confirmed callback failure must outlive the flash'
+      assert_equal 'a post-commit callback', failure.metadata['step'],
+                   'the callback path must stay distinguishable from the steps we run ourselves'
+    end
+
+    # An unconfirmed commit means the database just failed to answer a question about this record.
+    # Continuing to work against it would raise again -- and that exception is caught as a *failure*,
+    # which would hand back a retry form for an application that may well exist.
+    test 'an unverifiable commit does no further work against the record' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      Applications::PaperApplicationService.any_instance.expects(:send_notifications).never
+      Applications::PaperApplicationService.any_instance.expects(:reconcile_after_paper_write).never
+
+      assert service.create, 'an unconfirmed commit stays on the success side'
+      assert_not service.commit_confirmed?
+    end
+
+    # The audit event is the durable record that this application was created. It used to run after
+    # notifications, so a mail failure skipped it entirely -- leaving a committed application with
+    # no `application_created` event and nothing durable saying the follow-up had not finished.
+    test 'the creation audit event survives a notification failure' do
+      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
+                                           .raises(StandardError, 'notification exploded')
+
+      service = nil
+      assert_difference "Event.where(action: 'application_created').count", 1 do
+        service = paper_service(base_paper_params)
+        assert service.create
+      end
+
+      event = Event.where(action: 'application_created').order(:id).last
+      assert_equal service.application.id, event.auditable_id
+    end
+
+    # Two different follow-up failures on one application are two findings. Fingerprinting the event
+    # by action alone made the second look like a repeat of the first inside the dedup window, so
+    # staff were told about half of what went wrong.
+    test 'two different post-creation failures are recorded separately' do
+      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
+                                           .raises(StandardError, 'notification exploded')
+      Applications::PaperApplicationService.any_instance.stubs(:append_proof_resubmission_delivery_warnings)
+                                           .raises(StandardError, 'delivery check exploded')
+
+      service = paper_service(base_paper_params)
+
+      assert service.create
+      steps = Event.where(action: 'application_post_creation_step_failed',
+                          auditable_id: service.application.id).map { |event| event.metadata['step'] }
+      assert_equal ['notifications', 'proof delivery checks'].sort, steps.sort,
+                   "both failures should be recorded, got: #{steps.inspect}"
+      assert_match(/notifications did not finish/i, service.warning_message)
+      assert_match(/proof delivery checks did not finish/i, service.warning_message)
+    end
+
+    # The two warning channels name different situations, so a request that hits both must not
+    # silently drop one of them.
+    test 'a post-commit failure and a reconciliation failure are both reported' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Application.any_instance.stubs(:reconcile_workflow_state!).raises(StandardError, 'reconciliation exploded')
+      params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
+
+      service = paper_service_with_proofs(params)
+
+      assert service.create
+      assert_match(/follow-up step did not finish/i, service.warning_message)
+      assert_match(/verify this application status/i, service.warning_message)
+    end
+
+    # The other leg: once the transaction commits, a later reconciliation problem is a *success* with
+    # a warning. It must never turn into a false result, because then a committed application would
+    # be reported as a failure.
+    test 'a reconciliation failure after commit still reports success with a warning' do
+      Application.any_instance.stubs(:reconcile_workflow_state!).raises(StandardError, 'reconciliation exploded')
+
+      service = paper_service(base_paper_params)
+
+      assert_difference ['Application.count', 'User.count'], 1 do
+        assert service.create, "expected success with a warning, got errors: #{service.errors.inspect}"
+      end
+      assert_includes service.reconciliation_note.to_s, 'verify this application status'
+      assert Application.exists?(service.application.id), 'the committed application must still be there'
+    end
+
     # The panel refuses to offer a retired record, but the panel is not the boundary:
     # existing_constituent_id is a plain form field, so the write path has to refuse it on its own
     # rather than trusting that the browser only ever sends back ids it was shown.
@@ -1355,6 +1795,11 @@ module Applications
 
     def paper_service(params)
       PaperApplicationService.new(params: params, admin: @admin, skip_proof_processing: true)
+    end
+
+    # Proof processing left on, because the failure being pinned happens inside it.
+    def paper_service_with_proofs(params)
+      PaperApplicationService.new(params: params, admin: @admin)
     end
 
     def base_paper_params
