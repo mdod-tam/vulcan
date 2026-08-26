@@ -47,6 +47,22 @@ export default class extends Controller {
     }
   }
 
+  /**
+   * Relay for the "Change Dependent" button in the existing-dependent card.
+   *
+   * The button cannot address guardian-picker directly: the dependent Turbo frame sits outside the
+   * guardian-picker element on the initial-selection render and inside it on retry, so a
+   * `guardian-picker#…` action would bind on one path only. This controller wraps the whole form
+   * and already declares guardian-picker as an outlet. Selection stays owned by guardian-picker;
+   * this only forwards the intent.
+   *
+   * Deliberately unguarded. The button exists only where the outlet does, so a missing outlet is a
+   * wiring fault that should surface loudly rather than silently restore an inert button.
+   */
+  changeDependent() {
+    this.guardianPickerOutlet.changeDependent();
+  }
+
   // This can be called by an action on the guardian-picker if its selection changes, or if this controller needs to react to external changes.
   guardianPickerOutletConnected(_outlet, _element) {
     if (process.env.NODE_ENV !== 'production') {

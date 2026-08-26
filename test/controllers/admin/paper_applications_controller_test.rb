@@ -279,10 +279,15 @@ module Admin
       assert_select '#dependent_constituent_date_of_birth', false,
                     'an existing dependent must not offer an editable date of birth'
 
-      # The identity that *is* shown is the record's, and it is stated as on-file.
-      assert_select 'body', text: /Using existing dependent/i
-      assert_select 'body', text: /Existing Dependent/i
-      assert_select 'body', text: /cannot be changed during paper intake/i
+      # The identity that *is* shown is the record's, stated as on-file, with both mismatch cases
+      # answered separately -- wrong person versus wrong record.
+      assert_select 'body', text: /Existing dependent selected/i
+      assert_select 'body', text: /come from the dependent's existing record/i
+      assert_select 'body', text: /will not change them/i
+      assert_select 'body', text: /contact the MAT support team/i
+      assert_select 'body', text: /Do not create a new dependent/i
+      # A named action, not just advice to "change the selection" with nothing to press.
+      assert_select "button[data-action='applicant-type#changeDependent']", text: /Change Dependent/i
     end
 
     # An unconfirmed write must not be routed to the record's own page: if the row is not there, the

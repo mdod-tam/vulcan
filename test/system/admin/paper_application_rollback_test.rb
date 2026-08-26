@@ -286,6 +286,119 @@ module Admin
       take_evidence_screenshot('paper-application-unconfirmed-write', full: true, html: true)
     end
 
+    # The policy applies from the moment a dependent is selected, not only after a failure, so the
+    # ordinary path needs its own browser proof. Without this, the only evidence would be a retry
+    # screen, and a reader could reasonably conclude read-only was a failure-mode behaviour.
+    test 'selecting an existing dependent shows on-file identity before any submission' do
+      guardian = create(:constituent, first_name: 'Initial', last_name: 'Guardian')
+      # Deliberately long but entirely plausible, so the same capture answers both the long-name and
+      # the narrow-width question rather than needing a viewport matrix.
+      dependent = create(:constituent, first_name: 'Aleksandra-Wilhelmina',
+                                       last_name: 'Oyelaran-Fitzgerald',
+                                       date_of_birth: Date.new(2012, 9, 14))
+      GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                                   relationship_type: 'Parent')
+
+      select_guardian_through_the_ui(guardian)
+      select_existing_dependent_through_the_ui(dependent)
+
+      # No submission has happened: this is the plain selection state.
+      assert_text(/Existing dependent selected/i)
+      assert_text(/Aleksandra-Wilhelmina Oyelaran-Fitzgerald/)
+      assert_text(/will not change them/i)
+      assert_text(/contact the MAT support team/i)
+      assert_no_selector '#dependent_constituent_first_name', visible: :all
+      assert_no_selector '#dependent_constituent_date_of_birth', visible: :all
+
+      # Contact stays editable -- the writer does persist that.
+      assert_selector "input[name='constituent[dependent_email]']", visible: :all
+
+      take_evidence_screenshot('paper-application-existing-dependent-initial-selection',
+                               full: true, html: true)
+
+      # 320 CSS pixels: WCAG 1.4.10 Reflow's reference width, equivalent to 400% zoom from a 1280px
+      # viewport. A 375-390px phone capture is useful mobile evidence but is not this claim, and a
+      # 200% text check answers enlargement rather than reflow.
+      original_size = page.current_window.size
+      begin
+        page.current_window.resize_to(320, 900)
+        assert_text(/Existing dependent selected/i)
+        assert_text(/Aleksandra-Wilhelmina Oyelaran-Fitzgerald/)
+        # Deliberately NOT a page-level WCAG claim. 1.4.10 conformance applies to a complete page,
+        # and this page still fails: measured at 320px, `#guardian-info-section` is 364px wide, so
+        # the document overflows by 60px. That is untouched guardian markup, tracked separately.
+        # What is asserted here is narrower and is this PR's to own -- the summary card introduces
+        # no overflow of its own.
+        #
+        # Scoped to the card itself rather than `#dependent-info-section`, which wraps a great deal
+        # of unchanged form. Both checks matter: the bounding rectangle proves the outer box fits in
+        # the viewport, while scrollWidth proves no descendant spills out of it -- an outer box can
+        # sit inside the viewport while its contents overflow.
+        card = evaluate_script(<<~JS)
+          (() => {
+            const el = document.getElementById('existing-dependent-summary');
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return {
+              inner_overflow: el.scrollWidth - el.clientWidth,
+              right: Math.round(r.right),
+              left: Math.round(r.left),
+              viewport: document.documentElement.clientWidth
+            };
+          })()
+        JS
+        assert_not_nil card, 'the summary card must be present to measure'
+        assert card['inner_overflow'] <= 1,
+               "the summary card's contents overflow it at 320px by #{card['inner_overflow']}px"
+        assert card['right'] <= card['viewport'] + 1 && card['left'] >= -1,
+               "the summary card escapes the 320px viewport (left #{card['left']}, right #{card['right']})"
+        take_evidence_screenshot('paper-application-existing-dependent-reflow-320',
+                                 full: true, html: true)
+      ensure
+        page.current_window.resize_to(original_size[0], original_size[1])
+      end
+
+      # Pressed, not merely present. Asserting the action attribute proves only that a name was
+      # typed into the markup; it cannot show what that name does. The picker's own control calls
+      # `clearSelection`, which would also drop the guardian -- from a button whose copy promises
+      # only to change the dependent.
+      # Scoped to the card, and named distinctly from the guardian card's own "Change Selection".
+      within '#dependent-info-section' do
+        click_button 'Change Dependent'
+      end
+
+      assert_no_text(/Existing dependent selected/i, wait: 10)
+      assert_equal guardian.id.to_s, first("input[name='guardian_id']", visible: :all).value,
+                   'changing the dependent must not clear the guardian'
+      assert_equal '', first("input[name='dependent_id']", visible: :all).value
+
+      # And the path forward is genuinely usable: the blank new-dependent form is back.
+      assert_selector '#dependent_constituent_first_name', wait: 10
+      assert_text(/New Dependent Information/i)
+
+      # Turbo destroyed the clicked button, so focus must land somewhere deliberate rather than
+      # falling back to <body> and stranding a keyboard user at the top of a very long form.
+      #
+      # The destination is the on-file dependent list, not the blank name field: "Change Dependent"
+      # usually means "wrong person, pick the right one", and the card just dismissed warns against
+      # creating a duplicate to work around a bad record.
+      landed = evaluate_script(<<~JS)
+        (() => {
+          const a = document.activeElement;
+          if (!a || a === document.body) return 'body';
+          const frame = document.getElementById('guardian_dependents');
+          if (frame && frame.contains(a)) return 'dependents-list';
+          if (a.id === 'dependent_constituent_first_name') return 'new-dependent-first-name';
+          return a.tagName + '#' + (a.id || '');
+        })()
+      JS
+      # This guardian has an on-file dependent list, so that is where focus belongs. The
+      # new-dependent field is only the fallback when no list exists, and accepting either here
+      # would let the intended destination regress unnoticed.
+      assert_equal 'dependents-list', landed,
+                   "focus went to #{landed} instead of the on-file dependent list"
+    end
+
     # The branch where identity is on-file fact rather than paper-intake input. Also the browser
     # proof of that decision: the fields must not be editable, and no hidden copy may be submitted.
     test 'an existing-dependent retry shows on-file identity and keeps editable contact' do
@@ -313,15 +426,47 @@ module Admin
       end
 
       # Identity is stated, not offered for editing, and nothing hidden carries it back.
-      assert_text(/Using existing dependent/i)
+      assert_text(/Existing dependent selected/i)
       assert_text(/Jonathan Smith/)
-      assert_text(/cannot be changed during paper intake/i)
+      assert_text(/will not change them/i)
+      assert_text(/contact the MAT support team/i)
       assert_no_selector '#dependent_constituent_first_name', visible: :all
       assert_no_selector '#dependent_constituent_date_of_birth', visible: :all
       assert_equal dependent.id.to_s, first("input[name='dependent_id']", visible: :all).value
 
       assert_file_inputs_empty
       take_evidence_screenshot('paper-application-rollback-existing-dependent', full: true, html: true)
+
+      # The same control, exercised on the *other* production render. This frame is nested inside
+      # the guardian-picker element here and outside it on initial selection, so an action bound to
+      # guardian-picker worked on this path and silently did nothing on that one. Both paths are
+      # driven because one passing path proved nothing about the other.
+      within '#dependent-info-section' do
+        click_button 'Change Dependent'
+      end
+      assert_no_text(/Existing dependent selected/i, wait: 10)
+      assert_equal guardian.id.to_s, first("input[name='guardian_id']", visible: :all).value,
+                   'changing the dependent on a retry must not clear the guardian'
+      assert_equal '', first("input[name='dependent_id']", visible: :all).value
+
+      # Focus asserted here too. This frame is nested differently on this render, and focus after a
+      # Turbo swap is exactly the kind of behaviour that can hold on one path and not the other.
+      retry_focus = evaluate_script(<<~JS)
+        (() => {
+          const a = document.activeElement;
+          if (!a || a === document.body) return 'body';
+          const frame = document.getElementById('guardian_dependents');
+          if (frame && frame.contains(a)) return 'dependents-list';
+          if (a.id === 'dependent_constituent_first_name') return 'new-dependent-first-name';
+          return a.tagName + '#' + (a.id || '');
+        })()
+      JS
+      assert_equal 'dependents-list', retry_focus,
+                   "focus went to #{retry_focus} instead of the on-file dependent list on retry"
+
+      # Put the dependent back so the rest of the scenario continues against the same record.
+      select_existing_dependent_through_the_ui(dependent)
+      assert_text(/Existing dependent selected/i, wait: 10)
 
       # The common sections -- application details, disability, proofs, attestations -- must come
       # back with the rest of the form, because a retry that cannot reach them cannot be submitted.

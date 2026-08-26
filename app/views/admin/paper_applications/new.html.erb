@@ -460,7 +460,10 @@
                     <div class="text-sm text-gray-600"><%= @selected_guardian.email %></div>
                   <% end %></div>
                   <div data-guardian-picker-target="displaySelection" class="text-xs text-gray-700 mt-2"></div>
-                  <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block" do %>
+                  <%# tabindex/label so this frame can receive focus when "Change Dependent" is
+                      pressed before its chooser has rendered -- focus lands somewhere a screen
+                      reader announces rather than falling back to <body>. %>
+                  <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block", tabindex: "-1", "aria-label": "Dependents on file for the selected guardian" do %>
                     <%# dependents list will load here when guardian is selected %>
                   <% end %>
                   <div data-guardian-picker-target="lastApplicationSummary" class="hidden mt-4 rounded-md bg-blue-50 p-3">

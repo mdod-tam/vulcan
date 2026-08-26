@@ -182,7 +182,12 @@ module Admin
         @mode = :new
       end
 
-      render turbo_stream: turbo_stream.replace(
+      # `update`, not `replace`. `replace` swaps out the <turbo-frame> element itself, so the first
+      # dependent selection destroyed the very frame the picker reloads through -- every later call
+      # to `loadDependentForm` then found no frame and silently did nothing. Selecting a dependent
+      # appeared to work because that first load happened while the frame still existed; changing
+      # or clearing the selection afterwards could not work at all.
+      render turbo_stream: turbo_stream.update(
         'dependent_info_form',
         partial: 'admin/paper_applications/dependent_form',
         locals: { dependent: @dependent, mode: @mode }
