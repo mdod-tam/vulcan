@@ -750,6 +750,7 @@ module Applications
     def apply_dependent_contact_strategies!(attrs, dependent: nil)
       guardian = guardian_for_dependent_contact_update
       return attrs.deep_dup if guardian.blank?
+      return nil unless dependent_contact_instructions_consistent?(attrs)
 
       strategy_service = GuardianDependentManagementService.new(params)
       merged = merge_existing_dependent_contact(attrs, dependent)
@@ -760,6 +761,33 @@ module Applications
         @errors.concat(strategy_service.errors)
         nil
       end
+    end
+
+    # "Use the guardian's email" unchecked, with the dependent's own email deliberately cleared, is
+    # a contradiction rather than an instruction -- and resolving it silently has gone wrong in both
+    # directions. Backfilling from the record undoes the clear while the re-rendered form still
+    # shows blank, so an unchanged retry persists something staff cannot see. Letting the blank
+    # through instead reaches `apply_email_strategy`'s guardian fallback, which mints a synthetic
+    # primary identifier and moves delivery to the guardian.
+    #
+    # Neither is what was asked for, so it is refused with a message staff can act on. Keyed on the
+    # field being *submitted* blank: absent means the checkbox disabled it, which is a real
+    # instruction and still backfills below.
+    def dependent_contact_instructions_consistent?(attrs)
+      data = attrs.to_h.with_indifferent_access
+      consistent = true
+
+      { email: 'email address', phone: 'phone number' }.each do |kind, label|
+        next unless params[:"#{kind}_strategy"].to_s == 'dependent'
+        next unless data.key?(:"dependent_#{kind}") || data.key?(kind)
+        next if data[:"dependent_#{kind}"].present? || data[kind].present?
+
+        add_error("Enter the dependent's own #{label}, or select the option to use the guardian's " \
+                  "#{label}. It cannot be blank while the dependent is set to use their own.")
+        consistent = false
+      end
+
+      consistent
     end
 
     # Backfills an existing dependent's own contact from their record when the form supplied none.

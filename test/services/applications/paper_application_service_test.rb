@@ -989,6 +989,163 @@ module Applications
       assert dependent.phone.start_with?('000-')
     end
 
+    # Clearing an existing dependent's own email while leaving them set to use their own is a
+    # contradiction, and both silent resolutions were wrong: backfilling from the record undid the
+    # clear behind a form that still showed blank, and letting it through reached the guardian
+    # fallback, which replaced the login identifier with a synthetic address. Refused instead.
+    test 'a cleared own-contact with the dependent strategy is refused, not silently resolved' do
+      guardian = create(:constituent,
+                        email: "guardian-clear-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      original_email = "dependent-own-#{SecureRandom.hex(4)}@example.com"
+      dependent = create(:constituent, dependent_email: original_email, phone: unique_paper_phone)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'dependent',
+        phone_strategy: 'guardian',
+        # Submitted blank -- a deliberate clear, not an absent field.
+        constituent: { locale: 'en', dependent_email: '' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert_not service.create, 'a contradictory contact instruction must not be resolved silently'
+      assert_match(/use the guardian's email address/i, service.errors.join(' '))
+      # The old address must not have been quietly reinstated behind the refusal.
+      assert_equal original_email, dependent.reload.dependent_email
+    end
+
+    # Phone independently of email: the two strategies are separate fields, and a guard that only
+    # covered email would leave the phone path silently resolving as before.
+    test 'a cleared own-phone with the dependent strategy is refused independently of email' do
+      guardian = create(:constituent,
+                        email: "guardian-phone-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      original_phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
+      dependent = create(:constituent,
+                         dependent_email: "dependent-own-#{SecureRandom.hex(4)}@example.com",
+                         dependent_phone: original_phone)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'dependent',
+        constituent: { locale: 'en', dependent_phone: '' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert_not service.create
+      assert_match(/use the guardian's phone number/i, service.errors.join(' '))
+      assert_equal original_phone, dependent.reload.dependent_phone
+    end
+
+    # The control for the guard: choosing the guardian's contact is the *supported* way to leave a
+    # dependent without their own, and must keep working. Without this, the refusal above could be
+    # satisfied by rejecting every blank contact, which would break ordinary paper intake.
+    test 'choosing guardian contact still succeeds with no own contact submitted' do
+      guardian = create(:constituent,
+                        email: "guardian-ok-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      dependent = create(:constituent, dependent_email: nil, dependent_phone: nil)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        constituent: { locale: 'en' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert service.create, "guardian contact must remain supported: #{service.errors.inspect}"
+      assert_equal guardian.email, dependent.reload.dependent_email
+    end
+
+    # The control that actually exercises the strategy condition. A blank own-contact is only a
+    # contradiction when the dependent is set to use their own; with the guardian's contact chosen
+    # it is the normal submission, because the form still posts the emptied field. A guard that
+    # ignored the strategy would reject ordinary paper intake here.
+    test 'a blank own-contact submitted alongside the guardian strategy is accepted' do
+      guardian = create(:constituent,
+                        email: "guardian-blankok-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      dependent = create(:constituent, dependent_email: nil, dependent_phone: nil)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        # Submitted blank *and* the guardian's contact chosen -- consistent, not contradictory.
+        constituent: { locale: 'en', dependent_email: '', dependent_phone: '' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert service.create, "a blank field is fine when guardian contact is chosen: #{service.errors.inspect}"
+      assert_equal guardian.email, dependent.reload.dependent_email
+    end
+
+    # The other control: a field the form never submitted is absent, not blank. That is what the
+    # guardian-contact checkbox produces when it disables the input, and it must still backfill
+    # rather than trip the refusal.
+    test 'an absent own-contact field still backfills rather than being refused' do
+      guardian = create(:constituent,
+                        email: "guardian-absent-#{SecureRandom.hex(4)}@example.com",
+                        phone: unique_paper_phone)
+      on_file = "dependent-onfile-#{SecureRandom.hex(4)}@example.com"
+      dependent = create(:constituent, dependent_email: on_file, phone: unique_paper_phone)
+      create(:guardian_relationship,
+             guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'dependent',
+        phone_strategy: 'guardian',
+        # No dependent_email key at all -- the field was never submitted.
+        constituent: { locale: 'en' },
+        application: @application_params
+      }
+
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
+                                            admin: @admin, skip_proof_processing: true)
+
+      assert service.create, "an absent field is not a cleared one: #{service.errors.inspect}"
+      assert_equal on_file, dependent.reload.dependent_email
+    end
+
     test 'new_user_accounts excludes existing user with force_password_change but no submission handoff' do
       existing = create(:constituent, phone: unique_paper_phone, force_password_change: true)
 

@@ -60,6 +60,22 @@ actions, the two no-information flags, and the guardian/dependent selection were
 
 ## Decided: existing-dependent identity is read-only
 
+### Scope
+
+Retry reliability remains this work's primary purpose. Alongside it, this change ratifies one
+identity decision, stated here so reviewers see the full boundary:
+
+- **Read-only existing-dependent identity, on both initial selection and retry.** Selecting an
+  on-file dependent through the ordinary `dependent_form` Turbo endpoint renders name and date of
+  birth as text, and so does the retry re-render. Both, because the writer behaves identically
+  either way — a form that claimed otherwise on one path would be lying on that path.
+- **No duplicate detection, merge, case, or import behaviour is added.** This decides which identity
+  facts staff may edit for someone already on file. Nothing here detects duplicates, merges records,
+  opens or resolves duplicate-review cases, or imports anyone.
+- **Paper A2 inherits this existing-dependent contract** and owns the new guardian/dependent identity
+  decisions. Changing identity editing for an *existing* dependent later would be a separate
+  decision needing its own review.
+
 For an **existing dependent**, first name, last name, and date of birth render as on-file text, not
 inputs. They were editable while the writer never persisted them, so a correction looked accepted
 and was silently discarded on success. Retry restoration made the *failure* path truthful; the
@@ -83,6 +99,7 @@ Consequences, all implemented:
 |---|---|
 | New dependent | Identity fields stay editable |
 | Existing dependent | Identity rendered as text; **no hidden copies submitted** -- `dependent_id` alone identifies the record |
+| Where it applies | Initial selection (`dependent_form` Turbo endpoint, `mode == :edit`) **and** the retry re-render |
 | Copy | "Using existing dependent: … These are the identity details currently on file and cannot be changed during paper intake." The former "Review and update their information" and "Verify carefully before changing" are gone |
 | Contact, address, preferences | Remain editable, because the writer genuinely persists them |
 | Branch inference | `inferred_dependent_application_from` accepts `dependent_id`, since a selected dependent now submits no name |

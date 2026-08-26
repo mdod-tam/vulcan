@@ -340,7 +340,9 @@ end
 
 # Note on Audit Events in PaperApplicationService:
 # - When a proof is accepted with a file, `ProofAttachmentService` creates a `#{type}_proof_attached` audit event.
-# - When a proof is rejected (no file required), `ProofAttachmentService` creates a `#{type}_proof_rejected` audit event.
+# - When a proof is rejected (no file required), the `ProofReview` that `ProofAttachmentService`
+#   creates emits the generic `proof_rejected` audit event from its `after_commit` callback.
+#   There is no typed `#{type}_proof_rejected` audit event -- see section 1 above.
 # - Selecting approve without a file returns a validation error surfaced via flash.
 ```
 
