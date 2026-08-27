@@ -15,11 +15,13 @@ module Admin
       preferred_means_of_communication referral_source newsletter_signup
     ].freeze
 
-    # Only the ten facts detection scores. Everything else the form holds -- application answers,
-    # proof files, provider details -- is irrelevant here and must not be uploaded to a check.
+    # Only facts that determine the ten scored identity values. Dependent contact is carried under
+    # its paper field names and mapped by PaperIdentityReview according to the selected strategy.
+    # Application answers, proof files, and provider details must never be uploaded to this check.
     IDENTITY_REVIEW_FIELDS = %i[
       first_name last_name date_of_birth email phone
       physical_address_1 physical_address_2 city state zip_code
+      dependent_email dependent_phone
     ].freeze
 
     USER_DISABILITY_FIELDS = %i[
@@ -81,10 +83,19 @@ module Admin
     # Nothing here writes, and the answer is advisory: PaperApplicationService recomputes the same
     # review at the write boundary and that recomputation decides.
     def identity_review
+      context = params[:identity_context].presence_in(%w[self_applicant dependent]) || 'self_applicant'
+      guardian = identity_review_guardian(context)
+      if context == 'dependent' && guardian.blank?
+        response.headers['Cache-Control'] = 'no-store'
+        return render json: { state: :error, reasons: [], candidates: [] }, status: :unprocessable_content
+      end
+
       review = Applications::PaperIdentityReview.new(
         constituent_params: identity_review_facts,
         admin: current_user,
-        contact_flag_params: identity_review_flags
+        contact_flag_params: identity_review_flags,
+        context: context,
+        context_data: { guardian: guardian, relationship_type: params[:relationship_type] }
       ).call
 
       response.headers['Cache-Control'] = 'no-store'
@@ -621,7 +632,15 @@ module Admin
     # The no-contact flags live outside the constituent hash but change the facts before detection,
     # so the check has to see them or it would review a different applicant than the writer verifies.
     def identity_review_flags
-      params.permit(:no_email_address, :no_phone_number)
+      params.permit(:no_email_address, :no_phone_number,
+                    :email_strategy, :phone_strategy, :address_strategy)
+    end
+
+    def identity_review_guardian(context)
+      return unless context == 'dependent'
+
+      guardian = User.find_by(id: params[:guardian_id])
+      guardian if guardian&.paper_guardian_candidate?
     end
 
     # Built field by field rather than serializing the review result. The result carries
@@ -648,19 +667,33 @@ module Admin
         :guardian_no_email_address, :guardian_no_phone_number
       )
       base[:applicant_type] = compute_applicant_type(permitted)
+      # The final writer no longer receives unsaved guardian attributes: quick-create is the only
+      # path allowed to persist them. It still needs to distinguish a bypassed/failed quick-create
+      # from an unrelated incomplete application so staff get the truthful recovery instruction.
+      base[:unsaved_guardian_present] = submitted_guardian_attributes_present?(permitted)
       base
     end
 
     def compute_applicant_type(permitted)
       return 'dependent' if inferred_dependent_application_from(permitted)
 
-      raw = permitted[:applicant_type].presence || 'self'
+      raw = permitted[:applicant_type].presence
+      # The radio is locked (and therefore omitted by native form submission) after staff enter the
+      # dependent branch. Meaningful unsaved guardian fields are enough to classify that refusal,
+      # but never override an explicit self selection.
+      raw = 'dependent' if raw.blank? && submitted_guardian_attributes_present?(permitted)
+      raw ||= 'self'
 
       # Defensive: if "guardian" was submitted but no guardian/dependent IDs present,
       # the admin selected the adult radio (legacy value bug). Normalize to "self".
       return 'self' if raw == 'guardian' && permitted[:guardian_id].blank? && permitted[:dependent_id].blank?
 
       raw
+    end
+
+    def submitted_guardian_attributes_present?(permitted)
+      attributes = permitted[:guardian_attributes]
+      attributes.present? && attributes.to_h.values.any?(&:present?)
     end
 
     def apply_strategies!(service_params, permitted)
@@ -689,10 +722,6 @@ module Admin
     def merge_user_params!(service_params, permitted, disability_attrs)
       constituent_attrs = (permitted[:constituent] || {}).dup
       service_params[:constituent] = constituent_attrs.deep_merge(disability_attrs)
-
-      return unless service_params[:applicant_type] == 'dependent'
-
-      service_params[:new_guardian_attributes] = permitted[:guardian_attributes] if service_params[:guardian_id].blank? && permitted[:guardian_attributes].present?
     end
 
     def add_proof_params_from!(service_params, permitted)

@@ -168,6 +168,26 @@ export default class extends Controller {
     this.dispatchSelectionChange();
   }
 
+  async selectDependentFromIdentityReview(candidate) {
+    const dependentId = String(candidate?.id || '');
+    if (!dependentId || !candidate?.selectable) {
+      return { selected: false, reason: 'This record is not an eligible on-file dependent for the selected guardian.' };
+    }
+
+    const frame = document.getElementById('dependent_info_form');
+    if (frame) {
+      frame.addEventListener('turbo:frame-load', () => {
+        frame.querySelector('#existing-dependent-summary')?.focus();
+      }, { once: true });
+    }
+
+    if (this.hasDependentIdFieldTarget) this.dependentIdFieldTarget.value = dependentId;
+    if (this.hasApplicantTypeRadioDependentTarget) this.applicantTypeRadioDependentTarget.checked = true;
+    this.loadDependentForm(dependentId);
+    this.dispatchSelectionChange();
+    return { selected: true };
+  }
+
   // Load dependent form via Turbo Frame
   loadDependentForm(dependentId) {
     const frame = document.getElementById('dependent_info_form');

@@ -31,6 +31,16 @@ function buildForm({ existingConstituentId = "", applicantType = "self" } = {}) 
       <input type="checkbox" name="no_email_address" value="1">
       <input type="hidden" name="no_phone_number" value="0">
       <input type="checkbox" name="no_phone_number" value="1">
+      ${applicantType === "dependent" ? `
+        <input type="hidden" name="guardian_id" value="42">
+        <input type="hidden" name="dependent_id" value="">
+        <input name="relationship_type" value="Parent">
+        <input name="constituent[dependent_email]" value="dependent@example.com">
+        <input name="constituent[dependent_phone]" value="555-0102">
+        <input name="email_strategy" value="dependent">
+        <input name="phone_strategy" value="guardian">
+        <input name="address_strategy" value="guardian">
+      ` : ""}
       <input type="file" name="income_proof">
       <section class="hidden" style="display: none;" data-paper-application-target="identityReviewPanel">
         <h3 tabindex="-1" data-paper-application-target="identityReviewHeading"></h3>
@@ -102,6 +112,62 @@ describe("paper identity review", () => {
         "no_phone_number"
       ].sort())
       expect([...body.values()].some((value) => value instanceof File)).toBe(false)
+    })
+
+    test("a new dependent sends only scoped identity context and resumes after a clear answer", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      const fetchMock = jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({ state: "clear", candidates: [] }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = fetchMock.mock.calls[0][1].body
+      expect([...body.keys()].sort()).toEqual([
+        ...IDENTITY_FIELDS.map((f) => `constituent[${f}]`),
+        "constituent[dependent_email]", "constituent[dependent_phone]",
+        "no_email_address", "no_phone_number", "identity_context", "guardian_id",
+        "relationship_type", "email_strategy", "phone_strategy", "address_strategy"
+      ].sort())
+      expect(body.get("identity_context")).toBe("dependent")
+      expect(body.get("guardian_id")).toBe("42")
+      expect(body.get("email_strategy")).toBe("dependent")
+      expect(body.get("phone_strategy")).toBe("guardian")
+      expect([...body.values()].some((value) => value instanceof File)).toBe(false)
+      expect(form.requestSubmit).toHaveBeenCalledTimes(1)
+    })
+
+    test("a dependent preview reads the enabled dependent identity instead of disabled adult copies", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      const dependentFields = document.createElement("fieldset")
+      dependentFields.id = "dependent-info-section"
+      IDENTITY_FIELDS.forEach((field) => {
+        const adultCopy = form.querySelector(`[name="constituent[${field}]"]`)
+        adultCopy.disabled = true
+        adultCopy.value = `stale-adult-${field}`
+        const dependentCopy = document.createElement("input")
+        dependentCopy.name = `constituent[${field}]`
+        dependentCopy.value = `active-dependent-${field}`
+        dependentFields.appendChild(dependentCopy)
+      })
+      form.appendChild(dependentFields)
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      const fetchMock = jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "needs_confirmation", candidates: [], reasons: ["name_dob"], token: "v1:1:abc"
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = fetchMock.mock.calls[0][1].body
+      IDENTITY_FIELDS.forEach((field) => {
+        expect(body.get(`constituent[${field}]`)).toBe(`active-dependent-${field}`)
+      })
+      expect(form.requestSubmit).not.toHaveBeenCalled()
     })
 
     test("reads the no-contact flags from the checkbox, not the hidden field before it", async () => {
@@ -716,7 +782,7 @@ describe("paper identity review", () => {
     })
   })
 
-  describe("when the branch does not create a new self applicant", () => {
+  describe("when the branch selects an on-file constituent", () => {
     test("selecting an existing constituent submits without a review", async () => {
       form = buildForm({ existingConstituentId: "42" })
       application = await startApplication()
@@ -729,8 +795,9 @@ describe("paper identity review", () => {
       expect(event.defaultPrevented).toBe(false)
     })
 
-    test("a dependent application submits without a review", async () => {
+    test("an on-file dependent submits without a new-person review", async () => {
       form = buildForm({ applicantType: "dependent" })
+      form.querySelector('[name="dependent_id"]').value = "99"
       application = await startApplication()
       const fetchMock = jest.spyOn(global, "fetch")
 

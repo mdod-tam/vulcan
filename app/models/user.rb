@@ -222,6 +222,18 @@ class User < ApplicationRecord
     constituent?
   end
 
+  # Managing guardians receive paper-application notifications and may own a public portal
+  # account, so a retired, suspended, or inactive constituent is not an eligible selection.
+  def paper_guardian_candidate?
+    constituent? && public_login_active?
+  end
+
+  # Dependents may intentionally use guardian contact and synthetic credentials, so public-login
+  # status is not part of this role boundary. Application eligibility is checked separately.
+  def paper_dependent_candidate?
+    paper_applicant_candidate?
+  end
+
   # True once this record has been retired into a canonical survivor by a same-person merge.
   def merged?
     merged_into_user_id.present?

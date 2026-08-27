@@ -18,7 +18,6 @@ module Applications
 
       result = service.process_guardian_scenario(
         nil,
-        {},
         { first_name: 'Child', last_name: 'User', date_of_birth: '2015-01-01', hearing_disability: true },
         'Parent'
       )
@@ -38,7 +37,6 @@ module Applications
 
       result = service.process_guardian_scenario(
         -1,
-        {},
         { first_name: 'Child', last_name: 'User', date_of_birth: '2015-01-01', hearing_disability: true },
         'Parent'
       )
@@ -57,7 +55,6 @@ module Applications
 
       result = service.process_guardian_scenario(
         @guardian.id,
-        {},
         { first_name: 'Child', last_name: 'User', date_of_birth: '2015-01-01', hearing_disability: true },
         nil
       )
@@ -81,7 +78,6 @@ module Applications
 
       result = service.process_guardian_scenario(
         @guardian.id,
-        {},
         { first_name: 'Child', last_name: 'User', date_of_birth: '2015-01-01', hearing_disability: true },
         'Parent'
       )
@@ -148,7 +144,6 @@ module Applications
 
       result = service.process_guardian_scenario(
         @guardian.id,
-        {},
         { first_name: 'Child', last_name: 'User', date_of_birth: '2015-01-01', hearing_disability: true },
         'Parent'
       )
@@ -173,7 +168,6 @@ module Applications
       assert_no_difference 'User.count' do
         result = service.process_guardian_scenario(
           @guardian.id,
-          {},
           { first_name: 'Child', last_name: 'User', date_of_birth: '2015-01-01', hearing_disability: true },
           'Parent'
         )
@@ -200,7 +194,6 @@ module Applications
       assert_no_difference ['User.count', 'GuardianRelationship.count'] do
         result = service.process_guardian_scenario(
           @guardian.id,
-          {},
           {
             first_name: 'New',
             last_name: 'Dependent',
@@ -213,53 +206,9 @@ module Applications
         )
 
         assert_not result.success?
-        assert_equal 'Failed to create dependent', result.message
+        assert_equal 'Dependent identity review refused the write', result.message
         assert_not_equal existing_dependent, service.dependent_user
       end
-    end
-
-    test 'paper guardian hard duplicate contact blocks before persistence without workflow side effects' do
-      existing_guardian = create(
-        :constituent,
-        email: "existing-guardian-hard-#{SecureRandom.hex(4)}@example.com",
-        phone: unique_service_phone
-      )
-
-      service = GuardianDependentManagementService.new(
-        {
-          email_strategy: 'dependent',
-          phone_strategy: 'dependent',
-          address_strategy: 'dependent'
-        },
-        actor: @admin
-      )
-
-      assert_no_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count',
-                            'DuplicateReviewCaseCandidate.count', 'Event.count'] do
-        result = service.process_guardian_scenario(
-          nil,
-          {
-            first_name: 'New',
-            last_name: 'Guardian',
-            email: existing_guardian.email,
-            phone: unique_service_phone,
-            date_of_birth: '01/01/1980',
-            physical_address_1: '101 Guardian Lane',
-            city: 'Baltimore',
-            state: 'MD',
-            zip_code: '21201',
-            communication_preference: 'email'
-          },
-          dependent_creation_attrs,
-          'Parent'
-        )
-
-        assert_not result.success?
-        assert_equal 'Failed to setup guardian', result.message
-      end
-
-      assert(service.errors.any? { |error| error.match?(/guardian.*already exists/i) })
-      assert_not existing_guardian.reload.needs_duplicate_review
     end
 
     test 'paper dependent hard duplicate contact blocks before persistence without workflow side effects' do
@@ -282,7 +231,6 @@ module Applications
                             'DuplicateReviewCaseCandidate.count', 'Event.count'] do
         result = service.process_guardian_scenario(
           @guardian.id,
-          {},
           dependent_creation_attrs(
             dependent_email: "new-dependent-hard-#{SecureRandom.hex(4)}@example.com",
             dependent_phone: existing_dependent.phone
@@ -291,73 +239,14 @@ module Applications
         )
 
         assert_not result.success?
-        assert_equal 'Failed to create dependent', result.message
+        assert_equal 'Dependent identity review refused the write', result.message
       end
 
       assert(service.errors.any? { |error| error.match?(/dependent.*already exists/i) })
       assert_not existing_dependent.reload.needs_duplicate_review
     end
 
-    test 'paper guardian soft match opens duplicate review case through create service' do
-      existing_guardian = create(
-        :constituent,
-        first_name: 'Soft',
-        last_name: 'Guardian',
-        date_of_birth: Date.new(1984, 2, 3),
-        email: "existing-guardian-soft-#{SecureRandom.hex(4)}@example.com",
-        phone: unique_service_phone
-      )
-
-      service = GuardianDependentManagementService.new(
-        {
-          email_strategy: 'dependent',
-          phone_strategy: 'dependent',
-          address_strategy: 'dependent'
-        },
-        actor: @admin
-      )
-
-      assert_difference 'User.count', 2 do
-        assert_difference 'GuardianRelationship.count', 1 do
-          assert_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'], 1 do
-            assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
-              result = service.process_guardian_scenario(
-                nil,
-                {
-                  first_name: existing_guardian.first_name,
-                  last_name: existing_guardian.last_name,
-                  email: "new-guardian-soft-#{SecureRandom.hex(4)}@example.com",
-                  phone: unique_service_phone,
-                  date_of_birth: '02/03/1984',
-                  physical_address_1: '303 Guardian Lane',
-                  city: 'Baltimore',
-                  state: 'MD',
-                  zip_code: '21201',
-                  communication_preference: 'email'
-                },
-                dependent_creation_attrs,
-                'Parent'
-              )
-
-              assert result.success?, "Expected guardian/dependent creation to succeed: #{service.errors.inspect}"
-            end
-          end
-        end
-      end
-
-      subject = service.guardian_user.reload
-      assert subject.needs_duplicate_review
-
-      duplicate_case = DuplicateReviewCase.find_by!(subject_user: subject)
-      assert_equal 'paper_intake', duplicate_case.source
-      assert_equal ['name_dob'], duplicate_case.metadata['reason_codes']
-      assert_equal [existing_guardian.id], duplicate_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
-
-      event = Event.find_by!(action: 'duplicate_review_case_opened', auditable: subject)
-      assert_equal @admin.id, event.user_id
-    end
-
-    test 'paper dependent soft match opens duplicate review case through create service' do
+    test 'paper dependent soft match requires a signed override and opens no case' do
       existing_dependent = create(
         :constituent,
         first_name: 'Soft',
@@ -367,30 +256,63 @@ module Applications
         phone: unique_service_phone
       )
 
-      service = GuardianDependentManagementService.new(
-        {
-          email_strategy: 'dependent',
-          phone_strategy: 'dependent',
-          address_strategy: 'dependent'
-        },
-        actor: @admin
+      attrs = dependent_creation_attrs(
+        first_name: existing_dependent.first_name,
+        last_name: existing_dependent.last_name,
+        date_of_birth: '08/09/2014'
       )
+      preview = PaperIdentityReview.new(
+        constituent_params: attrs,
+        contact_flag_params: {
+          email_strategy: 'dependent', phone_strategy: 'dependent', address_strategy: 'dependent'
+        },
+        admin: @admin,
+        context: :dependent,
+        context_data: { guardian: @guardian, relationship_type: 'Parent' }
+      ).call
+      assert preview.needs_confirmation?
+
+      service_for = lambda do |decision:, relationship_type: 'Parent'|
+        GuardianDependentManagementService.new(
+          {
+            email_strategy: 'dependent',
+            phone_strategy: 'dependent',
+            address_strategy: 'dependent',
+            relationship_type: relationship_type,
+            identity_decision: decision
+          },
+          actor: @admin
+        )
+      end
+
+      refused_writes = ['User.count', 'GuardianRelationship.count', 'Application.count',
+                        'DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count',
+                        'Event.count', 'Notification.count']
+      [{ decision: nil, relationship_type: 'Parent' },
+       { decision: "#{preview.token}tampered", relationship_type: 'Parent' },
+       { decision: preview.token, relationship_type: 'Legal Guardian' }].each do |attempt|
+        assert_no_difference refused_writes do
+          refused = service_for.call(**attempt)
+          result = refused.process_guardian_scenario(@guardian.id, attrs, attempt[:relationship_type])
+          assert_not result.success?, "expected #{attempt.inspect} to be refused"
+        end
+      end
+
+      travel 31.minutes do
+        assert_no_difference refused_writes do
+          expired = service_for.call(decision: preview.token)
+          result = expired.process_guardian_scenario(@guardian.id, attrs, 'Parent')
+          assert_not result.success?, 'an expired dependent decision must be refused'
+        end
+      end
+
+      service = service_for.call(decision: preview.token)
 
       assert_difference 'User.count', 1 do
         assert_difference 'GuardianRelationship.count', 1 do
-          assert_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'], 1 do
-            assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
-              result = service.process_guardian_scenario(
-                @guardian.id,
-                {},
-                dependent_creation_attrs(
-                  first_name: existing_dependent.first_name,
-                  last_name: existing_dependent.last_name,
-                  date_of_birth: '08/09/2014'
-                ),
-                'Parent'
-              )
-
+          assert_no_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'] do
+            assert_difference -> { Event.where(action: 'paper_identity_no_match_confirmed').count }, 1 do
+              result = service.process_guardian_scenario(@guardian.id, attrs, 'Parent')
               assert result.success?, "Expected dependent creation to succeed: #{service.errors.inspect}"
             end
           end
@@ -398,15 +320,53 @@ module Applications
       end
 
       subject = service.dependent_user.reload
-      assert subject.needs_duplicate_review
+      assert_not subject.needs_duplicate_review
 
-      duplicate_case = DuplicateReviewCase.find_by!(subject_user: subject)
-      assert_equal 'paper_intake', duplicate_case.source
-      assert_equal ['name_dob'], duplicate_case.metadata['reason_codes']
-      assert_equal [existing_dependent.id], duplicate_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
-
-      event = Event.find_by!(action: 'duplicate_review_case_opened', auditable: subject)
+      event = Event.find_by!(action: 'paper_identity_no_match_confirmed', auditable: subject)
       assert_equal @admin.id, event.user_id
+      assert_equal 'paper_new_dependent', event.metadata['decision_context']
+      assert_equal [existing_dependent.id], event.metadata['candidate_ids']
+    end
+
+    test 'new dependent own-contact strategies refuse blank email and phone independently' do
+      base_params = {
+        email_strategy: 'dependent', phone_strategy: 'dependent', address_strategy: 'guardian',
+        relationship_type: 'Parent'
+      }
+
+      [{ dependent_email: '', dependent_phone: unique_service_phone },
+       { dependent_email: "dependent-#{SecureRandom.hex(4)}@example.com", dependent_phone: '' }].each do |contacts|
+        service = GuardianDependentManagementService.new(base_params, actor: @admin)
+        attrs = dependent_creation_attrs.merge(contacts)
+
+        assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                              'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+          result = service.process_guardian_scenario(@guardian.id, attrs, 'Parent')
+          assert_not result.success?
+          assert_match(/enter the dependent's (email|phone)/i, service.errors.join(' '))
+        end
+      end
+    end
+
+    test 'new dependent guardian-contact strategies accept blank submitted contact' do
+      service = GuardianDependentManagementService.new(
+        {
+          email_strategy: 'guardian', phone_strategy: 'guardian', address_strategy: 'guardian',
+          relationship_type: 'Parent'
+        },
+        actor: @admin
+      )
+      attrs = dependent_creation_attrs.merge(dependent_email: '', dependent_phone: '')
+
+      assert_difference 'User.count', 1 do
+        assert_difference 'GuardianRelationship.count', 1 do
+          result = service.process_guardian_scenario(@guardian.id, attrs, 'Parent')
+          assert result.success?, service.errors.inspect
+        end
+      end
+
+      assert_equal @guardian.email, service.dependent_user.dependent_email
+      assert_equal @guardian.phone, service.dependent_user.dependent_phone
     end
 
     private

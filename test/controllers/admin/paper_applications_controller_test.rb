@@ -535,7 +535,7 @@ module Admin
       assert_equal 'es', created_user.locale
     end
 
-    test 'should create paper application for dependent with NEW guardian' do
+    test 'final submit refuses an unsaved new guardian and preserves the retry fields' do
       dependent_email = "dependent.newguardian.#{Time.now.to_i}@example.com"
       guardian_email = "new.guardian.#{Time.now.to_i}@example.com"
       income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
@@ -544,87 +544,82 @@ module Admin
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
 
-      # Separate assert_difference blocks for clarity
-      assert_difference 'User.count', 2, 'User.count should increase by 2 (guardian and dependent)' do
-        assert_difference 'Application.count', 1, 'Application.count should increase by 1' do
-          assert_difference 'GuardianRelationship.count', 1, 'GuardianRelationship.count should increase by 1' do
-            post admin_paper_applications_path, headers: default_headers, params: {
-              guardian_attributes: { # Indicates new guardian
-                first_name: 'NewGuard',
-                last_name: 'Ian',
-                email: guardian_email,
-                phone: '555-000-0002',
-                physical_address_1: '200 Guardian Rd',
-                city: 'Guardville',
-                state: 'MD',
-                zip_code: '21002'
-                # Guardians are not expected to have disability flags set by default in this form
-              },
-              constituent: {
-                first_name: 'Depend',
-                last_name: 'Ent',
-                dependent_email: dependent_email, # Dependent has their own email
-                date_of_birth: 10.years.ago.to_date.to_s,
-                hearing_disability: '1' # Ensure at least one disability for dependent
-              },
-              use_guardian_email: false, # Dependent has their own email (unchecked checkbox)
-              relationship_type: 'Parent',
-              application: {
-                household_size: 2, # Guardian + Dependent
-                annual_income: 15_000,
-                maryland_resident: '1',
-                self_certify_disability: '1',
-                medical_provider_name: 'Dr. ChildWell',
-                medical_provider_phone: '555-333-4444',
-                medical_provider_email: 'dr.childwell@example.com'
-              },
-              income_proof: income_proof_file,
-              residency_proof: residency_proof_file,
-              income_proof_action: 'accept',
-              residency_proof_action: 'accept'
-            }
-          end
-        end
+      assert_no_difference ['User.count', 'Application.count', 'GuardianRelationship.count',
+                            'DuplicateReviewCase.count', 'Event.count'] do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          guardian_attributes: { # Indicates new guardian
+            first_name: 'NewGuard',
+            last_name: 'Ian',
+            email: guardian_email,
+            phone: '555-000-0002',
+            physical_address_1: '200 Guardian Rd',
+            city: 'Guardville',
+            state: 'MD',
+            zip_code: '21002'
+            # Guardians are not expected to have disability flags set by default in this form
+          },
+          constituent: {
+            first_name: 'Depend',
+            last_name: 'Ent',
+            dependent_email: dependent_email, # Dependent has their own email
+            date_of_birth: 10.years.ago.to_date.to_s,
+            hearing_disability: '1' # Ensure at least one disability for dependent
+          },
+          use_guardian_email: false, # Dependent has their own email (unchecked checkbox)
+          relationship_type: 'Parent',
+          application: {
+            household_size: 2, # Guardian + Dependent
+            annual_income: 15_000,
+            maryland_resident: '1',
+            self_certify_disability: '1',
+            medical_provider_name: 'Dr. ChildWell',
+            medical_provider_phone: '555-333-4444',
+            medical_provider_email: 'dr.childwell@example.com'
+          },
+          income_proof: income_proof_file,
+          residency_proof: residency_proof_file,
+          income_proof_action: 'accept',
+          residency_proof_action: 'accept'
+        }
       end
 
-      new_guardian = User.find_by(email: guardian_email)
-      # For dependents with their own email, dependent_email should match the provided email
-      new_dependent = User.find_by(dependent_email: dependent_email)
-      assert new_guardian, "New guardian should have been created with email #{guardian_email}"
-      assert new_dependent, "New dependent should have been created with dependent_email #{dependent_email}"
-
-      # Verify the dependent has their own email in both fields since they provided one
-      assert_equal dependent_email, new_dependent.email, 'Dependent should keep their own email when provided'
-      assert_equal dependent_email, new_dependent.dependent_email, 'Dependent should have their own email in dependent_email'
-
-      created_application = Application.find_by(user_id: new_dependent.id)
-      assert created_application, "Application should have been created for dependent #{new_dependent.id}"
-      assert_equal new_guardian.id, created_application.managing_guardian_id, 'Application should be linked to the new guardian'
-      assert_response :redirect
-      assert_redirected_to admin_application_path(created_application)
+      assert_response :unprocessable_content
+      assert_match(/Save or select the guardian before submitting the paper application/i, response.body)
+      assert_select "input[name='guardian_attributes[first_name]'][value='NewGuard']"
+      assert_select "input[name='constituent[dependent_email]'][value='#{dependent_email}']"
+      assert_nil User.find_by(email: guardian_email)
     end
 
-    test 'should persist locale separately for new guardian and dependent' do
+    test 'final submit recognizes an unsaved guardian when locked dependent controls are omitted' do
+      assert_no_difference ['User.count', 'Application.count', 'GuardianRelationship.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        post admin_paper_applications_path, headers: default_headers, params: {
+          guardian_attributes: {
+            first_name: 'Unsubmitted',
+            last_name: 'Guardian',
+            date_of_birth: '1980-02-16',
+            email: 'unsubmitted.guardian@example.com'
+          }
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_match(/Save or select the guardian before submitting the paper application/i, response.body)
+    end
+
+    test 'should preserve a selected guardian locale and persist the dependent locale' do
       dependent_email = "dependent.locale.newguardian.#{Time.now.to_i}@example.com"
       guardian_email = "new.guardian.locale.#{Time.now.to_i}@example.com"
+      guardian = create(:constituent, first_name: 'LocaleGuardian', last_name: 'Primary',
+                                      email: guardian_email, locale: 'en')
 
       NotificationService.stubs(:create_and_deliver!).returns(true)
 
-      assert_difference 'User.count', 2 do
+      assert_difference 'User.count', 1 do
         assert_difference 'Application.count', 1 do
           assert_difference 'GuardianRelationship.count', 1 do
             post admin_paper_applications_path, headers: default_headers, params: {
-              guardian_attributes: {
-                first_name: 'LocaleGuardian',
-                last_name: 'Primary',
-                email: guardian_email,
-                phone: '555-000-0092',
-                physical_address_1: '920 Guardian Rd',
-                city: 'Guardville',
-                state: 'MD',
-                zip_code: '21002',
-                locale: 'en'
-              },
+              guardian_id: guardian.id,
               constituent: {
                 first_name: 'LocaleDependent',
                 last_name: 'Secondary',
@@ -634,6 +629,7 @@ module Admin
                 locale: 'es'
               },
               use_guardian_email: false,
+              use_guardian_phone: true,
               relationship_type: 'Parent',
               application: {
                 household_size: 2,
@@ -649,7 +645,6 @@ module Admin
         end
       end
 
-      guardian = User.find_by(email: guardian_email)
       dependent = User.find_by(dependent_email: dependent_email)
       assert_not_nil guardian
       assert_not_nil dependent
@@ -659,6 +654,10 @@ module Admin
 
     test 'should create paper application for dependent using guardian email' do
       guardian_email = "shared.guardian.#{Time.now.to_i}@example.com"
+      new_guardian = create(:constituent, first_name: 'SharedContact', last_name: 'Guardian',
+                                          email: guardian_email, phone: '555-000-0003',
+                                          physical_address_1: '300 Shared Contact Ave',
+                                          city: 'Shareville', state: 'MD', zip_code: '21003')
       income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
       residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
 
@@ -666,20 +665,11 @@ module Admin
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
 
       # Dependent shares guardian's contact info
-      assert_difference 'User.count', 2, 'User.count should increase by 2 (guardian and dependent)' do
+      assert_difference 'User.count', 1, 'User.count should increase by 1 (the dependent)' do
         assert_difference 'Application.count', 1, 'Application.count should increase by 1' do
           assert_difference 'GuardianRelationship.count', 1, 'GuardianRelationship.count should increase by 1' do
             post admin_paper_applications_path, headers: default_headers, params: {
-              guardian_attributes: {
-                first_name: 'SharedContact',
-                last_name: 'Guardian',
-                email: guardian_email,
-                phone: '555-000-0003',
-                physical_address_1: '300 Shared Contact Ave',
-                city: 'Shareville',
-                state: 'MD',
-                zip_code: '21003'
-              },
+              guardian_id: new_guardian.id,
               constituent: {
                 first_name: 'Dependent',
                 last_name: 'SharesEmail',
@@ -688,6 +678,7 @@ module Admin
                 # NOTE: No dependent_email provided - they'll use guardian's
               },
               email_strategy: 'guardian', # Explicitly set to use guardian's email
+              phone_strategy: 'guardian',
               relationship_type: 'Parent',
               application: {
                 household_size: 2,
@@ -707,7 +698,6 @@ module Admin
         end
       end
 
-      new_guardian = User.find_by(email: guardian_email)
       # For dependents using guardian's email, find by dependent_email matching guardian's email
       new_dependent = User.find_by(dependent_email: guardian_email)
 
@@ -755,6 +745,7 @@ module Admin
                 hearing_disability: '1'
               },
               use_guardian_email: false, # Dependent has their own email (unchecked checkbox)
+              use_guardian_phone: true,
               relationship_type: 'Legal Guardian',
               application: {
                 household_size: 2,
@@ -1916,6 +1907,44 @@ module Admin
       assert_equal 'blocked', body['state']
       assert_nil body['token'], 'a contact conflict is not a decision staff may take'
       assert_includes body['reasons'], 'exact_email'
+    end
+
+    test 'dependent identity review is guardian scoped and offers only an on-file eligible dependent' do
+      guardian = create(:constituent)
+      other_guardian = create(:constituent)
+      on_file = create(:constituent, first_name: 'Preview', last_name: 'Subject',
+                                     date_of_birth: Date.new(1990, 4, 2))
+      unrelated = create(:constituent, first_name: 'Preview', last_name: 'Subject',
+                                       date_of_birth: Date.new(1990, 4, 2))
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: on_file)
+      create(:guardian_relationship, guardian_user: other_guardian, dependent_user: unrelated)
+
+      post identity_review_admin_paper_applications_path, headers: default_headers, params: {
+        identity_context: 'dependent', guardian_id: guardian.id, relationship_type: 'Parent',
+        email_strategy: 'dependent', phone_strategy: 'dependent', address_strategy: 'dependent',
+        constituent: identity_facts.merge(dependent_email: identity_facts[:email], dependent_phone: identity_facts[:phone])
+      }
+
+      assert_response :success
+      body = response.parsed_body
+      assert_equal 'needs_confirmation', body['state']
+      assert_equal [on_file.id], body['candidates'].select { |candidate| candidate['selectable'] }.pluck('id')
+      assert_includes body['candidates'].pluck('id'), unrelated.id
+      assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, body['token'])
+    end
+
+    test 'dependent identity review fails closed for an invalid guardian and writes nothing' do
+      assert_no_difference ['User.count', 'Application.count', 'GuardianRelationship.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        post identity_review_admin_paper_applications_path, headers: default_headers, params: {
+          identity_context: 'dependent', guardian_id: -1, relationship_type: 'Parent',
+          constituent: identity_facts
+        }
+      end
+
+      assert_response :unprocessable_content
+      assert_equal 'error', response.parsed_body['state']
+      assert_empty response.parsed_body['candidates']
     end
 
     # The endpoint answers a question about identity; it must not become a way to read arbitrary

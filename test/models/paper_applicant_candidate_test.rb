@@ -8,6 +8,16 @@ class PaperApplicantCandidateTest < ActiveSupport::TestCase
     assert user.paper_applicant_candidate?
   end
 
+  test 'guardian candidate requires an active unmerged constituent' do
+    active = create(:constituent)
+    suspended = create(:constituent, status: :suspended)
+    admin = create(:admin)
+
+    assert active.paper_guardian_candidate?
+    assert_not suspended.paper_guardian_candidate?
+    assert_not admin.paper_guardian_candidate?
+  end
+
   test 'admin without applicant history is not a candidate' do
     user = create(:admin, email: generate(:email))
     assert_not user.paper_applicant_candidate?

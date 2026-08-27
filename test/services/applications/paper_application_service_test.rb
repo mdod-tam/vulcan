@@ -953,6 +953,32 @@ module Applications
       assert dependent.phone.start_with?('000-')
     end
 
+    test 'a submitted existing dependent without an on-file guardian relationship is refused before writes' do
+      guardian = create(:constituent, email: "guardian-unrelated-#{SecureRandom.hex(4)}@example.com")
+      dependent = create(:constituent, email: "dependent-unrelated-#{SecureRandom.hex(4)}@example.com")
+      original_dependent = dependent.attributes.deep_dup
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        constituent: { locale: 'es', communication_preference: 'letter', hearing_disability: true },
+        application: @application_params
+      }
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count',
+                            'Event.count', 'Notification.count'] do
+        assert_not service.create
+      end
+      assert_match(/not on file|not eligible/i, service.errors.join(' '))
+      assert_equal original_dependent, dependent.reload.attributes,
+                   'contact and disability facts must not change before relationship requalification'
+    end
+
     test 'process_existing_dependent clears stale dependent_phone when guardian has no phone' do
       guardian = create(:constituent,
                         email: "guardian-nophone-#{SecureRandom.hex(4)}@example.com",

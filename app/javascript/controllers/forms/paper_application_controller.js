@@ -165,7 +165,7 @@ export default class extends Controller {
     }
 
     if (this._identityReviewBypass) return;
-    if (!this._isNewSelfApplicant()) return;
+    if (!this._identityReviewContext()) return;
     if (!event || typeof event.preventDefault !== "function") return;
 
     // Synchronously, before any await: the native submission must not start.
@@ -184,17 +184,21 @@ export default class extends Controller {
     const name = event && event.target ? String(event.target.name || "") : "";
     if (!name) return;
 
-    const isFact = this.constructor.IDENTITY_FIELDS.some((field) => name === `constituent[${field}]`);
+    const isFact = this.constructor.IDENTITY_FIELDS.some((field) => name === `constituent[${field}]`) ||
+      name === "constituent[dependent_email]" || name === "constituent[dependent_phone]";
     const isFlag = name === "no_email_address" || name === "no_phone_number";
     const isApplicantType = name === "applicant_type";
-    if (!isFact && !isFlag && !isApplicantType) return;
+    const isDependentContext = ["guardian_id", "relationship_type", "email_strategy",
+      "phone_strategy", "address_strategy", "use_guardian_email", "use_guardian_phone",
+      "use_guardian_address"].includes(name);
+    if (!isFact && !isFlag && !isApplicantType && !isDependentContext) return;
 
     this.invalidateIdentityReview();
   }
 
   /**
-   * Only the branch that creates a brand-new self applicant needs a review. Selecting an existing
-   * constituent is already the other disposition, and guardian/dependent intake is PR A2.
+   * Selecting an existing constituent or existing dependent is already the other disposition.
+   * New self applicants and new dependents are the final-submit branches that require review.
    * @private
    */
   _isNewSelfApplicant() {
@@ -209,6 +213,19 @@ export default class extends Controller {
     return !!this.element.querySelector('[name="constituent[first_name]"]');
   }
 
+  _identityReviewContext() {
+    if (this._isNewSelfApplicant()) return "self_applicant";
+
+    const type = this.element.querySelector('[name="applicant_type"]:checked');
+    const guardian = this.element.querySelector('[name="guardian_id"]');
+    const dependent = this.element.querySelector('[name="dependent_id"]');
+    const firstName = this.element.querySelector('[name="constituent[first_name]"]');
+    if (type?.value === "dependent" && String(guardian?.value || "").trim() &&
+        !String(dependent?.value || "").trim() && firstName) return "dependent";
+
+    return null;
+  }
+
   /**
    * Builds a fresh FormData rather than serializing the form, so no File and no unrelated answer
    * can be transported to a check. Flags are read from the checkbox itself: each has a hidden "0"
@@ -218,9 +235,10 @@ export default class extends Controller {
   _identityReviewPayload() {
     const body = new FormData();
     const snapshot = {};
+    const context = this._identityReviewContext() || "self_applicant";
 
     this.constructor.IDENTITY_FIELDS.forEach((field) => {
-      const input = this.element.querySelector(`[name="constituent[${field}]"]`);
+      const input = this._activeIdentityInput(field, context);
       const value = input ? String(input.value || "") : "";
       body.append(`constituent[${field}]`, value);
       snapshot[field] = value;
@@ -233,7 +251,53 @@ export default class extends Controller {
       snapshot[flag] = value;
     });
 
+    snapshot.identity_context = context;
+    if (context === "dependent") {
+      body.append("identity_context", context);
+      ["dependent_email", "dependent_phone"].forEach((field) => {
+        const input = this.element.querySelector(`[name="constituent[${field}]"]`);
+        const value = input ? String(input.value || "") : "";
+        body.append(`constituent[${field}]`, value);
+        snapshot[field] = value;
+      });
+
+      ["guardian_id", "relationship_type"].forEach((name) => {
+        const input = this.element.querySelector(`[name="${name}"]`);
+        const value = input ? String(input.value || "") : "";
+        body.append(name, value);
+        snapshot[name] = value;
+      });
+
+      [["email_strategy", "use_guardian_email"], ["phone_strategy", "use_guardian_phone"],
+        ["address_strategy", "use_guardian_address"]].forEach(([strategy, checkbox]) => {
+        const explicit = this.element.querySelector(`[name="${strategy}"]`);
+        const useGuardian = this.element.querySelector(`input[type="checkbox"][name="${checkbox}"]`);
+        const value = explicit?.value || (useGuardian?.checked ? "guardian" : "dependent");
+        body.append(strategy, value);
+        snapshot[strategy] = value;
+      });
+    }
+
     return { body, snapshot };
+  }
+
+  /**
+   * The self and dependent fieldsets intentionally use the same submitted names. Only one copy is
+   * enabled, but querySelector returns the earlier disabled self input on the dependent branch.
+   * Previewing that stale copy as clear and then submitting the enabled dependent copy makes the
+   * durable writer refuse after the browser has uploaded every file. Read from the active branch,
+   * with the fieldset as an explicit tie-breaker so a test helper or future transition that briefly
+   * enables both copies cannot silently choose the other person's identity.
+   * @private
+   */
+  _activeIdentityInput(field, context) {
+    const inputs = Array.from(this.element.querySelectorAll(`[name="constituent[${field}]"]`));
+    const enabled = inputs.filter((input) => !input.disabled);
+    if (context === "dependent") {
+      return enabled.find((input) => input.closest("#dependent-info-section")) || enabled[0] || inputs[0];
+    }
+
+    return enabled.find((input) => !input.closest("#dependent-info-section")) || enabled[0] || inputs[0];
   }
 
   /**
@@ -372,7 +436,7 @@ export default class extends Controller {
 
     const current = this._identityReviewPayload().snapshot;
     const changed = Object.keys(snapshot).some((key) => snapshot[key] !== current[key]);
-    if (!changed && this._isNewSelfApplicant()) return false;
+    if (!changed && this._identityReviewContext()) return false;
 
     this._clearIdentityReviewContent();
     this._setIdentityReviewState("idle");
@@ -595,12 +659,15 @@ export default class extends Controller {
     });
 
     if (this.hasIdentityReviewBodyTarget) {
-      this.identityReviewBodyTarget.textContent = "Are any of these people the applicant?";
+      this.identityReviewBodyTarget.textContent = this._identityReviewContext() === "dependent"
+        ? "Is one of these people the dependent on this paper application?"
+        : "Are any of these people the applicant?";
     }
     if (this.hasIdentityReviewOverrideTarget) {
       setVisible(this.identityReviewOverrideTarget, true);
     }
-    this._showIdentityReviewPanel("Possible matching constituents");
+    this._showIdentityReviewPanel(this._identityReviewContext() === "dependent"
+      ? "Possible matching dependents" : "Possible matching constituents");
   }
 
   /** @private */
@@ -622,17 +689,20 @@ export default class extends Controller {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "px-3 py-1 border rounded text-sm";
-      button.textContent = "Use this constituent";
+      const dependent = this._identityReviewContext() === "dependent";
+      button.textContent = dependent ? "Use this dependent" : "Use this constituent";
       // Every row's visible label is identical, so the accessible name carries the distinguishing
       // fact. Otherwise a screen-reader user hears the same button repeated N times.
-      button.setAttribute("aria-label", `Use this constituent: ${String(candidate.name || "")}`);
+      button.setAttribute("aria-label", `Use this ${dependent ? "dependent" : "constituent"}: ${String(candidate.name || "")}`);
       button.addEventListener("click", () => this._selectIdentityReviewCandidate(candidate));
       row.appendChild(button);
     } else {
       // Reported so staff understand the block, but not offered as a choice.
       const note = document.createElement("span");
       note.className = "text-sm text-gray-600";
-      note.textContent = "Not available as a paper applicant";
+      note.textContent = this._identityReviewContext() === "dependent"
+        ? "Not an eligible on-file dependent for this guardian"
+        : "Not available as a paper applicant";
       row.appendChild(note);
     }
 
@@ -733,11 +803,15 @@ export default class extends Controller {
     // eligibility answer overwrite the later choice.
     if (this._candidateSelectionInFlight) return;
 
-    const root = this.element.querySelector("[data-controller~='adult-picker']");
+    const dependentContext = this._identityReviewContext() === "dependent";
+    const root = this.element.querySelector(dependentContext
+      ? "[data-controller~='guardian-picker']" : "[data-controller~='adult-picker']");
     if (!root || !this.application) return;
 
-    const picker = this.application.getControllerForElementAndIdentifier(root, "adult-picker");
-    if (!picker || typeof picker.selectAdultFromIdentityReview !== "function") return;
+    const identifier = dependentContext ? "guardian-picker" : "adult-picker";
+    const method = dependentContext ? "selectDependentFromIdentityReview" : "selectAdultFromIdentityReview";
+    const picker = this.application.getControllerForElementAndIdentifier(root, identifier);
+    if (!picker || typeof picker[method] !== "function") return;
 
     this._candidateSelectionInFlight = true;
     this._candidateSelectionRefusal = null;
@@ -749,7 +823,7 @@ export default class extends Controller {
     this._candidateSelectionAbort = abort;
     let outcome;
     try {
-      outcome = await picker.selectAdultFromIdentityReview(candidate, { signal: abort.signal });
+      outcome = await picker[method](candidate, { signal: abort.signal });
     } finally {
       this._candidateSelectionInFlight = false;
       this._candidateSelectionAbort = null;
@@ -817,8 +891,9 @@ export default class extends Controller {
     const proofActionBlocks = this._requiredRadioGroupBlocksSubmit();
     const checkboxGroupBlocks = this._checkboxGroupBlocksSubmit();
     const reviewBlocks = this._identityReviewBlocksSubmit();
+    const guardianSelectionBlocks = this._guardianSelectionBlocksSubmit();
     const disable = incomeBlocks || verifyBlocks || requiredControlBlocks || proofActionBlocks ||
-      checkboxGroupBlocks || reviewBlocks;
+      checkboxGroupBlocks || reviewBlocks || guardianSelectionBlocks;
 
     if (this.hasSubmitButtonTarget) {
       this.submitButtonTarget.disabled = disable;
@@ -844,6 +919,14 @@ export default class extends Controller {
     } else if (incomeBlocks) {
       console.warn("Missing rejectionButton target - check HTML structure");
     }
+  }
+
+  _guardianSelectionBlocksSubmit() {
+    const type = this.element.querySelector('[name="applicant_type"]:checked');
+    if (type?.value !== "dependent") return false;
+
+    const guardian = this.element.querySelector('[name="guardian_id"]');
+    return !String(guardian?.value || "").trim();
   }
 
   /**

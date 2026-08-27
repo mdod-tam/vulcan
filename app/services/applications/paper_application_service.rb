@@ -326,7 +326,6 @@ module Applications
 
     def process_constituent
       guardian_id = params[:guardian_id]
-      new_guardian_attrs = params[:new_guardian_attributes]
       applicant_data = params[:constituent]
       relationship_type = params[:relationship_type]
       dependent_id = params[:dependent_id]
@@ -336,10 +335,12 @@ module Applications
         process_existing_self_applicant(existing_constituent_id)
       elsif existing_dependent_scenario?(guardian_id, dependent_id)
         process_existing_dependent(guardian_id, dependent_id, relationship_type)
-      elsif guardian_scenario?(guardian_id, new_guardian_attrs, applicant_data)
-        process_guardian_dependent(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
+      elsif guardian_scenario?(guardian_id, applicant_data)
+        process_guardian_dependent(guardian_id, applicant_data, relationship_type)
       elsif self_applicant_scenario?(applicant_data)
         process_self_applicant(applicant_data)
+      elsif dependent_with_unsaved_guardian?(applicant_data)
+        add_error('Save or select the guardian before submitting the paper application.')
       else
         add_error('Sufficient constituent or guardian/dependent parameters missing.')
         false
@@ -382,9 +383,8 @@ module Applications
       params[:contact_info_mode].to_s != 'on_file'
     end
 
-    def guardian_scenario?(guardian_id, new_guardian_attrs, applicant_data)
-      (guardian_id.present? || attributes_present?(new_guardian_attrs)) &&
-        attributes_present?(applicant_data) &&
+    def guardian_scenario?(guardian_id, applicant_data)
+      guardian_id.present? && attributes_present?(applicant_data) &&
         params[:applicant_type] == 'dependent'
     end
 
@@ -392,14 +392,17 @@ module Applications
       guardian_id.present? && dependent_id.present? && params[:applicant_type] == 'dependent'
     end
 
-    def process_existing_dependent(guardian_id, dependent_id, relationship_type)
-      guardian = User.find_by(id: guardian_id)
-      dependent = User.find_by(id: dependent_id)
+    def process_existing_dependent(guardian_id, dependent_id, _relationship_type)
+      locked_users = User.lock.where(id: [guardian_id, dependent_id]).order(:id).index_by { |user| user.id.to_s }
+      guardian = locked_users[guardian_id.to_s]
+      dependent = locked_users[dependent_id.to_s]
 
       return add_error('Guardian not found') unless guardian
       return add_error('Dependent not found') unless dependent
+      return add_error('Selected guardian is not an eligible active constituent.') unless guardian.paper_guardian_candidate?
+      return add_error('Selected dependent is not an eligible constituent.') unless dependent.paper_dependent_candidate?
 
-      return false unless ensure_guardian_relationship(guardian, dependent, relationship_type)
+      return false unless ensure_guardian_relationship(guardian, dependent)
       return false unless update_dependent_and_validate_eligibility(dependent)
 
       @guardian_user_for_app = guardian
@@ -407,31 +410,23 @@ module Applications
       true
     end
 
-    def ensure_guardian_relationship(guardian, dependent, relationship_type)
-      rel = GuardianRelationship.find_by(guardian_id: guardian.id, dependent_id: dependent.id)
+    def ensure_guardian_relationship(guardian, dependent)
+      rel = GuardianRelationship.lock.find_by(guardian_id: guardian.id, dependent_id: dependent.id)
       return true if rel.present?
 
-      return add_error('Relationship type required to relate guardian and dependent') if relationship_type.blank?
-
-      begin
-        GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent, relationship_type: relationship_type)
-        true
-      rescue ActiveRecord::RecordInvalid => e
-        add_error("Failed to create relationship: #{e.record.errors.full_messages.join(', ')}")
-        false
-      end
+      add_error('The selected dependent is not on file for this guardian. Choose an on-file dependent or contact MAT support.')
     end
 
     def update_dependent_and_validate_eligibility(dependent)
+      return add_error('This dependent already has an active or pending application.') if dependent.applications.blocking_new_submission.exists?
+      return false unless waiting_period_eligible?(dependent)
+
       return false unless update_existing_applicant_disability_info(dependent)
 
       # Update dependent information if provided (contact info may have changed)
       return false if params[:constituent].present? && attributes_present?(params[:constituent]) && !update_dependent_contact_info(dependent)
 
-      # Validate no active application for dependent
-      return add_error('This dependent already has an active or pending application.') if Application.where(user_id: dependent.id).blocking_new_submission.exists?
-
-      waiting_period_eligible?(dependent)
+      true
     end
 
     def waiting_period_eligible?(user)
@@ -450,9 +445,15 @@ module Applications
       attributes_present?(applicant_data) && params[:applicant_type] != 'dependent'
     end
 
-    def process_guardian_dependent(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
+    def dependent_with_unsaved_guardian?(applicant_data)
+      params[:applicant_type] == 'dependent' &&
+        (ActiveModel::Type::Boolean.new.cast(params[:unsaved_guardian_present]) ||
+         attributes_present?(applicant_data) || attributes_present?(params[:guardian_attributes]))
+    end
+
+    def process_guardian_dependent(guardian_id, applicant_data, relationship_type)
       service = GuardianDependentManagementService.new(params, actor: @admin)
-      result = service.process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
+      result = service.process_guardian_scenario(guardian_id, applicant_data, relationship_type)
 
       if result.success?
         @guardian_user_for_app = result.data[:guardian]
@@ -520,7 +521,7 @@ module Applications
 
       # Taken from the review's own facts, before it runs, so the thing being locked and the thing
       # being searched for are the same by construction.
-      lock_identity_for_creation(review.identity_facts)
+      Applications::PaperIdentityCreationLock.lock!(review.identity_facts)
       review.call
     end
 
@@ -546,30 +547,6 @@ module Applications
     #
     # This serializes same-identity submissions only. Two different applicants hash to different
     # keys and never wait on each other, so ordinary concurrent paper intake is unaffected.
-    def lock_identity_for_creation(identity_facts)
-      # Cast to text because pg_advisory_xact_lock returns void, whose OID the adapter's type map
-      # does not carry -- it logs an "unknown OID" warning on every call otherwise.
-      ActiveRecord::Base.connection.exec_query(
-        'SELECT pg_advisory_xact_lock($1)::text',
-        'Paper identity lock',
-        [ActiveRecord::Relation::QueryAttribute.new(
-          'key', identity_lock_key(identity_facts), ActiveRecord::Type::BigInteger.new
-        )]
-      )
-    end
-
-    # Postgres advisory locks are keyed by a signed 64-bit integer, so the matching facts are hashed
-    # down to one. A collision would only ever make two unrelated submissions take turns.
-    def identity_lock_key(identity_facts)
-      facts = identity_facts.to_h.with_indifferent_access
-      canonical = JSON.generate(
-        [facts[:first_name].to_s.downcase.strip,
-         facts[:last_name].to_s.downcase.strip,
-         facts[:date_of_birth].to_s]
-      )
-      Digest::SHA256.digest(canonical).unpack1('q>')
-    end
-
     # Paper intake asks staff to decide only where the computer is unsure. Selecting a surfaced
     # constituent is enforced by existing_self_applicant_scenario?; this is the other half of that
     # choice -- recording that the surfaced candidates are different people.
@@ -589,9 +566,10 @@ module Applications
     # The review recomputes from the *submitted* facts rather than trusting the request, so a form
     # searched under one name and submitted under another presents a candidate set the decision was
     # never issued for. That closes stale client state; concurrent writers racing between the read
-    # and the write are closed separately, by lock_identity_for_creation.
+    # and the write are closed separately, by PaperIdentityCreationLock.
     def identity_review_permits_creation?(review)
       return add_error('Duplicate detection failed. Try again.') if review.error?
+      return add_error('The applicant details or possible matches changed since you reviewed them. Review again.') if review.invalid_decision?
 
       if review.blocked?
         return add_error('An applicant with this email or phone already exists. ' \
