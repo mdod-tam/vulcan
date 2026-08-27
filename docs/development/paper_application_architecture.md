@@ -114,7 +114,10 @@ Paper intake deliberately branches before it writes the application:
 | Guardian/dependent | Admin first saves or selects a guardian, then selects an on-file dependent or enters a new dependent. | `PaperGuardianQuickCreateService` owns new-guardian JSON creation. Final submission requires the saved/selected `guardian_id`; `PaperApplicationService` reuses only an eligible dependent already related to that guardian, while `GuardianDependentManagementService` creates one new dependent plus its relationship. Neither path manufactures a relationship to an unrelated existing record from a submitted id. |
 | New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Supports phone-only and address-only adults with NULL stored contacts when appropriate. Email-backed portal users get internal forced-change account setup; phone-only and address-only users do not. No-phone intake sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
 
-New paper self, guardian, and dependent records run through `DuplicateDetectionService` before the application write. Exact email or phone collisions hard-block new-record creation so paper intake cannot silently attach an unrelated user.
+New paper self and dependent records run through `DuplicateDetectionService` before the application
+write. A new guardian runs the same review before its separate JSON quick-create write. Exact email
+or phone collisions hard-block new-record creation so paper intake cannot silently attach an
+unrelated user.
 
 Soft name+DOB/address matches are handled differently by branch:
 

@@ -251,6 +251,59 @@ describe("paper identity review", () => {
       expect(form.requestSubmit).not.toHaveBeenCalled()
     })
 
+    test("a selectable self-applicant contact collision offers the existing constituent", async () => {
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "blocked",
+        candidates: [{ id: 2, name: "Existing Person", selectable: true }],
+        reasons: ["exact_email"]
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(body.textContent).toMatch(/Select the existing constituent/i)
+    })
+
+    test("a selectable dependent contact collision names the on-file dependent", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "blocked",
+        candidates: [{ id: 2, name: "Existing Dependent", selectable: true }],
+        reasons: ["exact_phone"]
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(body.textContent).toMatch(/Select the eligible on-file dependent shown below/i)
+      expect(body.textContent).not.toMatch(/Select the existing constituent/i)
+    })
+
+    test("a dependent contact collision without a selectable row offers only truthful exits", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "blocked",
+        candidates: [{ id: 2, name: "Unrelated Record", selectable: false }],
+        reasons: ["exact_email"]
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(body.textContent).toMatch(/no eligible on-file dependent for this guardian/i)
+      expect(body.textContent).toMatch(/Correct the dependent's entered contact information/i)
+      expect(body.textContent).not.toMatch(/Select the existing/i)
+    })
+
     test("a stale response cannot repaint the panel", async () => {
       jest.spyOn(global, "fetch").mockImplementation(() => new Promise((resolve) => {
         setTimeout(() => resolve({

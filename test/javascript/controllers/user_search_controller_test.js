@@ -57,7 +57,9 @@ describe("UserSearchController", () => {
             <h4 id="identityReviewHeading" tabindex="-1"></h4>
             <p id="identityReviewBody"></p>
             <ul id="identityReviewCandidates"></ul>
-            <div id="identityReviewOverride" class="hidden"></div>
+            <div id="identityReviewOverride" class="hidden">
+              <button type="button" id="identityReviewOverrideButton">Create a new guardian</button>
+            </div>
           </section>
           <p id="identityReviewStatus" aria-live="polite"></p>
           
@@ -445,6 +447,52 @@ describe("UserSearchController", () => {
       expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
       expect(controller.identityReviewHeadingTarget.textContent).toBe('Identity review unavailable')
       expect(controller.identityReviewStatusTarget.textContent).toBe('Guardian identity review must be run again.')
+    })
+
+    it("keeps edit invalidation visible without moving focus from the changed field", () => {
+      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
+      controller._renderGuardianIdentityReview({
+        state: 'needs_confirmation',
+        candidates: [{ id: 17, name: 'John Doe', selectable: true }],
+        token: 'signed-review',
+        expires_at: new Date(Date.now() + 60000).toISOString()
+      })
+
+      const firstName = fixture.querySelector('[name="guardian_attributes[first_name]"]')
+      firstName.focus()
+      firstName.value = 'Jonathan'
+      firstName.dispatchEvent(new Event('input', { bubbles: true }))
+
+      expect(controller._guardianReviewData).toBeNull()
+      expect(controller._guardianReviewToken).toBeNull()
+      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
+      expect(controller.identityReviewHeadingTarget.textContent).toBe('Guardian details changed')
+      expect(controller.identityReviewBodyTarget.textContent).toBe('Save Guardian to review again.')
+      expect(controller.identityReviewCandidatesTarget.children).toHaveLength(0)
+      expect(controller.identityReviewOverrideTarget.classList.contains('hidden')).toBe(true)
+      expect(controller.identityReviewStatusTarget.textContent).toContain('Guardian details changed')
+      expect(document.activeElement).toBe(firstName)
+    })
+
+    it("shows an expired review visibly and moves focus from the removed override action", async () => {
+      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
+      controller._guardianReviewToken = 'signed-review'
+      controller._guardianReviewExpiresAt = Date.now() - 1000
+      const overrideButton = fixture.querySelector('#identityReviewOverrideButton')
+      overrideButton.focus()
+
+      await controller.overrideGuardianIdentityReview()
+
+      expect(railsRequest.perform).not.toHaveBeenCalled()
+      expect(controller._guardianReviewData).toBeNull()
+      expect(controller._guardianReviewToken).toBeNull()
+      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
+      expect(controller.identityReviewHeadingTarget.textContent).toBe('Review expired')
+      expect(controller.identityReviewBodyTarget.textContent).toBe(
+        'This review expired. Save Guardian to review again.'
+      )
+      expect(controller.identityReviewOverrideTarget.classList.contains('hidden')).toBe(true)
+      expect(document.activeElement).toBe(controller.identityReviewHeadingTarget)
     })
 
     it("explains a split contact conflict without calling either guardian ineligible", () => {

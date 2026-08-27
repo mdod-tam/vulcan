@@ -718,17 +718,38 @@ export default class extends Controller {
     if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren();
     if (this.hasIdentityReviewOverrideTarget) setVisible(this.identityReviewOverrideTarget, false);
 
+    const candidates = payload.candidates || [];
     if (this.hasIdentityReviewBodyTarget) {
       const split = (payload.reasons || []).includes("email_phone_split");
-      this.identityReviewBodyTarget.textContent = split
-        ? "The email and the phone number each already belong to a different existing record. " +
+      const dependent = this._identityReviewContext() === "dependent";
+      const hasSelectableCandidate = candidates.some((candidate) => candidate.selectable);
+      if (split) {
+        this.identityReviewBodyTarget.textContent =
+          "The email and the phone number each already belong to a different existing record. " +
           "Selecting one of them will not resolve the other. Correct the entered contact information, " +
-          "or contact the MAT Team for assistance."
-        : "This email or phone is already associated with an existing record. Select the existing " +
+          "or contact the MAT Team for assistance.";
+      } else if (dependent && hasSelectableCandidate) {
+        this.identityReviewBodyTarget.textContent =
+          "This email or phone is already associated with an existing record. Select the eligible " +
+          "on-file dependent shown below, correct the dependent's entered contact information, or " +
+          "contact the MAT Team for assistance.";
+      } else if (dependent) {
+        this.identityReviewBodyTarget.textContent =
+          "This email or phone is already associated with an existing record, but no eligible on-file " +
+          "dependent for this guardian is available to select. Correct the dependent's entered contact " +
+          "information or contact the MAT Team for assistance.";
+      } else if (hasSelectableCandidate) {
+        this.identityReviewBodyTarget.textContent =
+          "This email or phone is already associated with an existing record. Select the existing " +
           "constituent, correct the entered contact information, or contact the MAT Team for assistance.";
+      } else {
+        this.identityReviewBodyTarget.textContent =
+          "This email or phone is already associated with an existing record, but no eligible constituent " +
+          "is available to select. Correct the entered contact information or contact the MAT Team for assistance.";
+      }
     }
 
-    (payload.candidates || []).forEach((candidate) => {
+    candidates.forEach((candidate) => {
       if (this.hasIdentityReviewCandidatesTarget) {
         this.identityReviewCandidatesTarget.appendChild(this._candidateRow(candidate));
       }

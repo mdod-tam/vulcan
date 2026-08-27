@@ -222,10 +222,16 @@ class User < ApplicationRecord
     constituent?
   end
 
-  # Managing guardians receive paper-application notifications and may own a public portal
-  # account, so a retired, suspended, or inactive constituent is not an eligible selection.
+  # A selected guardian owns paper-application context and may receive notifications, so paper
+  # intake requires an active, non-retired constituent. This paper-domain authority is explicit:
+  # duplicate-review visibility does not gate paper intake, and authentication policy is owned by
+  # +public_login_active?+ below. Legacy NULL status remains eligible, matching the standing rule.
   def paper_guardian_candidate?
-    constituent? && public_login_active?
+    return false unless constituent?
+    return false if merged?
+    return false if suspended? || inactive?
+
+    true
   end
 
   # Dependents may intentionally use guardian contact and synthetic credentials, so public-login

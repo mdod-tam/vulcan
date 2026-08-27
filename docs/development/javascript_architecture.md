@@ -34,6 +34,7 @@ Relevant routes:
 | `PATCH /constituent_portal/applications/:id/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
 | `GET /admin/paper_applications/recipient_preference` | `Admin::PaperApplicationsController#recipient_preference` | `forms/paper_application_controller.js` |
 | `POST /admin/paper_applications/identity_review` | `Admin::PaperApplicationsController#identity_review` | `forms/paper_application_controller.js` (submit-time preflight) |
+| `POST /admin/users` | `Admin::UsersController#create` | `admin/user_search_controller.js` (paper guardian quick-create review, selection, or override) |
 | `GET /admin/users/:id/adult_application_context` | `Admin::UsersController#adult_application_context` | `users/adult_picker_controller.js` |
 | `GET /admin/applications/charts` | `Admin::ApplicationsController#charts` | Lazy Turbo frame that mounts `reports-chart` |
 
@@ -153,10 +154,11 @@ New **self-applicant and dependent** paper submissions are checked for an existi
 - **Invalidation.** Any edit to a bound identity fact clears the panel, the in-flight request, the expiry timer, the hidden `identity_decision` field, and any pending candidate selection. Generation counter plus a snapshot comparison, so a response already in flight cannot paint a panel for an applicant staff have since edited past.
 - **Decision carrier.** The override token is written to a hidden `identity_decision` field only when staff actually override. It is filtered from logs.
 - **Adult-picker handoff.** "Use this constituent" calls `adult-picker#selectAdultFromIdentityReview`, which re-checks eligibility server-side, applies the context *before* announcing the selection (announcing first would let gating conclude verification was unnecessary), and moves focus to the selected-applicant heading — the button that had focus is torn down with the panel.
+- **Dependent-picker handoff.** "Use this dependent" calls `guardian-picker#selectDependentFromIdentityReview`. The server-owned candidate must already be selectable for the selected guardian; the picker loads that dependent through the existing Turbo frame, dispatches the ordinary guardian selection-change event, and moves focus to the on-file identity summary after the frame loads.
 
 Client-side state is convenience, never authority: `PaperIdentityReview` recomputes the same answer at the write boundary from the submitted facts.
 
-Guardian quick-create uses `admin-user-search` for the corresponding JSON interaction. A 422 review
+Guardian quick-create posts to `POST /admin/users` through `admin-user-search`. A 422 review
 response is an expected identity state, not a generic transport failure: the controller renders the
 server candidate snapshot, allows only an eligible server-marked selection or explicit override,
 invalidates that decision on any bound edit, and submits the selection/token back to the canonical

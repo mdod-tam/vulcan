@@ -260,14 +260,46 @@ module Admin
 
     test 'A2 dependent decisions remain visible through refusal correction and on-file selection' do
       guardian = create(:constituent, first_name: 'A2', last_name: 'Guardian',
+                                      date_of_birth: Date.new(1980, 1, 15),
                                       email: "a2-guardian-#{SecureRandom.hex(3)}@example.com",
-                                      phone: '202-555-0181')
+                                      phone: '202-555-0181', needs_duplicate_review: true)
       on_file = create(:constituent, first_name: 'Onfile', last_name: 'Dependent',
                                      date_of_birth: Date.new(2012, 9, 14))
       GuardianRelationship.create!(guardian_user: guardian, dependent_user: on_file,
                                    relationship_type: 'Parent')
       soft_candidate = create(:constituent, first_name: 'Possible', last_name: 'Dependent',
                                             date_of_birth: Date.new(2010, 1, 15))
+
+      choose 'A Dependent (minor or adult requiring guardian)', allow_label_click: true
+      within '#guardian-info-section' do
+        click_link 'Create New Guardian'
+        fill_in 'guardian_attributes[first_name]', with: guardian.first_name
+        fill_in 'guardian_attributes[last_name]', with: guardian.last_name
+        fill_in 'guardian_attributes[date_of_birth]', with: guardian.date_of_birth.strftime('%m/%d/%Y')
+        fill_in 'guardian_attributes[email]', with: "new-#{guardian.email}"
+        fill_in 'guardian_attributes[phone]', with: '202-555-0199'
+        fill_in 'guardian_attributes[physical_address_1]', with: '456 Review Avenue'
+        fill_in 'guardian_attributes[city]', with: 'Baltimore'
+        fill_in 'guardian_attributes[state]', with: 'MD'
+        fill_in 'guardian_attributes[zip_code]', with: '21202'
+        choose 'guardian_phone_type_voice'
+        choose 'guardian_communication_preference_email'
+
+        assert_no_difference ['User.count', 'DuplicateReviewCase.count', 'Event.count'] do
+          click_button 'Save Guardian'
+          assert_selector '#guardian-identity-review-heading',
+                          text: 'Possible matching guardians', wait: 10
+        end
+
+        address = find_field('guardian_attributes[physical_address_1]')
+        address.click
+        address.set('457 Review Avenue')
+        assert_selector '#guardian-identity-review-heading', text: 'Guardian details changed'
+        assert_text 'Save Guardian to review again.'
+        assert_no_button 'These are different people — create a new guardian'
+        assert_equal address[:id], page.evaluate_script('document.activeElement.id')
+        take_evidence_screenshot('paper-a2-guardian-review-invalidated-by-edit', full: true, html: true)
+      end
 
       start_new_dependent_application(guardian)
       fill_new_dependent_identity(first_name: 'Possible', last_name: 'Dependent',
@@ -306,6 +338,8 @@ module Admin
       end
       assert_selector '#identity-review-heading', text: 'Existing contact information'
       assert_text(/already associated with an existing record/i)
+      assert_text(/no eligible on-file dependent for this guardian is available to select/i)
+      assert_text "Correct the dependent's entered contact information"
       assert_text 'Not an eligible on-file dependent for this guardian'
       assert_no_selector '[data-paper-application-target="identityReviewOverride"]', visible: true
       assert_filenames_survived

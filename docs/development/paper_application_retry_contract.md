@@ -124,9 +124,9 @@ condition: `hasCommonSectionsTarget: false` alongside `showCommonWouldBe: true` 
 nesting rather than logic. Both branches of that partial now render balanced markup, asserted by
 rendering each and counting tags.
 
-## Known gaps
-
-- The inline-guardian **retry** is covered at request level only. A browser test reaches the inline
-  guardian form itself (`paper_application_dependent_guardian_test.rb`), but nothing captures that
-  form failing and coming back with its fields restored; doing so needs the guardian creation flow,
-  which A2 is about to replace.
+Guardian retry behavior is split across its two live boundaries. The JSON `Save Guardian` step
+keeps identity-review refusal and correction inside the existing page. Final paper submission
+requires a saved or selected `guardian_id`; if a direct request carries only unsaved guardian
+fields, the server refuses it and rebuilds those non-file values so staff can complete `Save
+Guardian` or select an on-file guardian. Request tests cover that rebuild, and the guardian browser
+matrix covers JSON refusal, refreshed review, and successful selection or creation.

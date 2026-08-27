@@ -79,8 +79,9 @@ module Applications
       assert_equal 'text', dependent.effective_phone_type
     end
 
-    test 'creates dependent with their own email when email_strategy is dependent' do
+    test 'creates dependent with their own contact when dependent strategies are selected' do
       dependent_email = "dependent_#{Time.now.to_i}@example.com"
+      dependent_phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
 
       # Create parameters for a paper application with email_strategy set to 'dependent'
       service = PaperApplicationService.new(
@@ -95,6 +96,7 @@ module Applications
             last_name: 'User',
             date_of_birth: '2015-01-01',
             dependent_email: dependent_email, # Providing a distinct email for the dependent
+            dependent_phone: dependent_phone,
             hearing_disability: '1' # Ensure at least one disability
           },
           application: {
@@ -129,6 +131,10 @@ module Applications
                    'Dependent should have their own email in dependent_email field'
       assert_equal dependent_email, dependent.effective_email,
                    'Dependent effective_email should return their own email'
+      assert_equal dependent_phone, dependent.dependent_phone,
+                   'Dependent should have their own phone in dependent_phone when phone strategy is dependent'
+      assert_equal dependent_phone, dependent.effective_phone,
+                   'Dependent effective_phone should return their own phone'
     end
 
     test 'mixed guardian email and dependent phone strategy does not reuse existing phone owner' do

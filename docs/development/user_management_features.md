@@ -208,6 +208,10 @@ Admin paper intake uses user lookup results as submission candidates, not just i
 Current paper candidate behavior includes:
 
 - `paper_applicant_candidate?` marks users that can be considered by the paper intake flow.
+- `paper_guardian_candidate?` is paper-domain authority for a managing guardian: the record must be
+  an active, non-merged constituent. Suspended and inactive records are not selectable; legacy NULL
+  status remains eligible. The predicate does not delegate to the public-login gate, and duplicate-
+  review flags or case sources are not inputs, so review visibility never becomes a paper gate.
 - Admin paper search decorates candidates with waiting-period and `blocking_new_submission` state so the UI and service can block ineligible submissions.
 - Existing adult self-applications require contact verification before the service writes a new application.
 - Existing dependent submissions reuse the dependent and guardian relationship, apply the selected contact strategies before persisting contact updates, and still check waiting-period eligibility and `blocking_new_submission`.

@@ -315,7 +315,11 @@ class UserSearchController extends BaseFormController {
   async overrideGuardianIdentityReview() {
     if (!this._guardianReviewToken ||
         (this._guardianReviewExpiresAt && Date.now() >= this._guardianReviewExpiresAt)) {
-      this._clearGuardianIdentityReview('This review expired. Save Guardian to review again.')
+      this._invalidateGuardianIdentityReview({
+        heading: 'Review expired',
+        message: 'This review expired. Save Guardian to review again.',
+        focus: true
+      })
       return
     }
 
@@ -358,17 +362,35 @@ class UserSearchController extends BaseFormController {
         name !== 'guardian_no_email_address' && name !== 'guardian_no_phone_number') return
     if (!this._guardianReviewData) return
 
-    this._clearGuardianIdentityReview('Guardian details changed. Save Guardian to review again.')
+    this._invalidateGuardianIdentityReview({
+      heading: 'Guardian details changed',
+      message: 'Save Guardian to review again.'
+    })
   }
 
-  _clearGuardianIdentityReview(message = '') {
+  _resetGuardianIdentityReviewState() {
     this._guardianReviewData = null
     this._guardianReviewToken = null
     this._guardianReviewExpiresAt = null
     if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren()
     if (this.hasIdentityReviewOverrideTarget) setVisible(this.identityReviewOverrideTarget, false)
+  }
+
+  _invalidateGuardianIdentityReview({ heading, message, focus = false }) {
+    this._resetGuardianIdentityReviewState()
+    if (this.hasIdentityReviewHeadingTarget) this.identityReviewHeadingTarget.textContent = heading
+    if (this.hasIdentityReviewBodyTarget) this.identityReviewBodyTarget.textContent = message
+    if (this.hasIdentityReviewPanelTarget) setVisible(this.identityReviewPanelTarget, true)
+    if (this.hasIdentityReviewStatusTarget) {
+      this.identityReviewStatusTarget.textContent = `${heading}. ${message}`
+    }
+    if (focus && this.hasIdentityReviewHeadingTarget) this.identityReviewHeadingTarget.focus()
+  }
+
+  _clearGuardianIdentityReview() {
+    this._resetGuardianIdentityReviewState()
     if (this.hasIdentityReviewPanelTarget) setVisible(this.identityReviewPanelTarget, false)
-    if (this.hasIdentityReviewStatusTarget) this.identityReviewStatusTarget.textContent = message
+    if (this.hasIdentityReviewStatusTarget) this.identityReviewStatusTarget.textContent = ''
   }
 
   selectUser(event) {

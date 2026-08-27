@@ -51,6 +51,18 @@ module Admin
         assert_field 'guardian_attributes[email]', with: 'new.review.guardian@example.com'
         take_evidence_screenshot('paper-a2-guardian-soft-match', full: true, html: true)
 
+        address = find_field('guardian_attributes[physical_address_1]')
+        address.click
+        address.set('457 Review Avenue')
+        assert_selector '#guardian-identity-review-heading', text: 'Guardian details changed'
+        assert_text 'Save Guardian to review again.'
+        assert_no_button 'These are different people — create a new guardian'
+        assert_equal address[:id], page.evaluate_script('document.activeElement.id')
+        take_evidence_screenshot('paper-a2-guardian-review-invalidated-by-edit', full: true, html: true)
+
+        click_button 'Save Guardian'
+        assert_selector '#guardian-identity-review-heading', text: 'Possible matching guardians', wait: 10
+
         existing.update!(last_name: 'Former Guardian')
         assert_no_difference ['User.count', "Event.where(action: 'paper_identity_no_match_confirmed').count"] do
           click_button 'These are different people — create a new guardian'
@@ -285,7 +297,8 @@ module Admin
 
       assert_difference 'User.count', 1 do
         click_button 'Save Guardian'
-        assert_selector '#selected-guardian-info', text: 'Fallback Guardian', wait: 5
+        assert_selector '[data-guardian-picker-target="selectedPane"]',
+                        text: 'Fallback Guardian', visible: true, wait: 5
       end
       guardian = User.find_by!(first_name: 'Fallback', last_name: 'Guardian')
       assert_field 'guardian_id', type: :hidden, with: guardian.id, visible: :all
