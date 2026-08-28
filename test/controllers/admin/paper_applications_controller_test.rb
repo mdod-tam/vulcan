@@ -1914,10 +1914,14 @@ module Admin
       other_guardian = create(:constituent)
       on_file = create(:constituent, first_name: 'Preview', last_name: 'Subject',
                                      date_of_birth: Date.new(1990, 4, 2))
+      blocked_on_file = create(:constituent, first_name: 'Preview', last_name: 'Subject',
+                                             date_of_birth: Date.new(1990, 4, 2))
       unrelated = create(:constituent, first_name: 'Preview', last_name: 'Subject',
                                        date_of_birth: Date.new(1990, 4, 2))
       create(:guardian_relationship, guardian_user: guardian, dependent_user: on_file)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: blocked_on_file)
       create(:guardian_relationship, guardian_user: other_guardian, dependent_user: unrelated)
+      create(:application, :in_progress, user: blocked_on_file, application_date: 8.years.ago)
 
       post identity_review_admin_paper_applications_path, headers: default_headers, params: {
         identity_context: 'dependent', guardian_id: guardian.id, relationship_type: 'Parent',
@@ -1929,8 +1933,37 @@ module Admin
       body = response.parsed_body
       assert_equal 'needs_confirmation', body['state']
       assert_equal [on_file.id], body['candidates'].select { |candidate| candidate['selectable'] }.pluck('id')
+      assert_includes body['candidates'].pluck('id'), blocked_on_file.id
       assert_includes body['candidates'].pluck('id'), unrelated.id
       assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, body['token'])
+    end
+
+    test 'dependent identity review applies the waiting period in both directions' do
+      guardian = create(:constituent)
+      waiting_period = Policy.get('waiting_period_years') || 3
+      eligible = create(:constituent, first_name: 'Preview', last_name: 'Subject',
+                                      date_of_birth: Date.new(1990, 4, 2))
+      waiting = create(:constituent, first_name: 'Preview', last_name: 'Subject',
+                                     date_of_birth: Date.new(1990, 4, 2))
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: eligible)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: waiting)
+      create(:application, :archived, user: eligible,
+                                      application_date: waiting_period.years.ago - 1.day)
+      create(:application, :archived, user: waiting,
+                                      application_date: waiting_period.years.ago + 1.day)
+
+      post identity_review_admin_paper_applications_path, headers: default_headers, params: {
+        identity_context: 'dependent', guardian_id: guardian.id, relationship_type: 'Parent',
+        email_strategy: 'dependent', phone_strategy: 'dependent', address_strategy: 'dependent',
+        constituent: identity_facts.merge(
+          dependent_email: identity_facts[:email], dependent_phone: identity_facts[:phone]
+        )
+      }
+
+      assert_response :success
+      body = response.parsed_body
+      assert_equal [eligible.id], body['candidates'].select { |candidate| candidate['selectable'] }.pluck('id')
+      assert_includes body['candidates'].pluck('id'), waiting.id
     end
 
     test 'dependent identity review refuses a blank own email before presenting candidates' do

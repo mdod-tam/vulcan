@@ -381,13 +381,15 @@ module Admin
       assert_text soft_candidate.full_name
       assert_text 'Not an eligible on-file dependent for this guardian'
       assert_no_button "Use this dependent: #{soft_candidate.full_name}"
+      assert_button 'These are different people — create a new dependent'
+      assert_no_button 'These are different people — create a new constituent'
       assert_equal 'identity-review-heading', page.evaluate_script('document.activeElement.id')
       assert_filenames_survived
       take_evidence_screenshot('paper-a2-dependent-soft-match', full: true, html: true)
 
       assert_difference ['User.count', 'GuardianRelationship.count', 'Application.count'], 1 do
         assert_difference "Event.where(action: 'paper_identity_no_match_confirmed').count", 1 do
-          click_button 'These are different people — create a new constituent'
+          click_button 'These are different people — create a new dependent'
           assert_selector 'h1', text: 'Application #', wait: 20
         end
       end

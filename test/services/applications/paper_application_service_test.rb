@@ -314,6 +314,58 @@ module Applications
       assert_equal guardian, service.application.managing_guardian
     end
 
+    test 'existing dependent with a blocking application is refused before writes' do
+      guardian = create(:constituent)
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      create(:application, :in_progress, user: dependent, application_date: 8.years.ago)
+      original_dependent = dependent.attributes.deep_dup
+      service = PaperApplicationService.new(
+        params: existing_dependent_service_params(guardian, dependent),
+        admin: @admin,
+        skip_proof_processing: true
+      )
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        assert_not service.create
+      end
+      assert_includes service.errors, 'This dependent already has an active or pending application.'
+      assert_equal original_dependent, dependent.reload.attributes
+    end
+
+    test 'existing dependent inside the waiting period is refused before writes' do
+      guardian = create(:constituent)
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      waiting_period = Policy.get('waiting_period_years') || 3
+      last_application = create(
+        :application,
+        :archived,
+        user: dependent,
+        application_date: waiting_period.years.ago + 1.day
+      )
+      original_dependent = dependent.attributes.deep_dup
+      service = PaperApplicationService.new(
+        params: existing_dependent_service_params(guardian, dependent),
+        admin: @admin,
+        skip_proof_processing: true
+      )
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        assert_not service.create
+      end
+      assert_includes(
+        service.errors,
+        'Not yet eligible for a new application. Eligible after ' \
+        "#{(last_application.application_date + waiting_period.years).to_date.strftime('%B %d, %Y')}."
+      )
+      assert_equal original_dependent, dependent.reload.attributes
+    end
+
     test 'creates application with rejected income proof' do
       # Test the rejection functionality
       test_timestamp = Time.now.to_i
@@ -1880,6 +1932,20 @@ module Applications
         date_of_birth: existing.date_of_birth
       )
       params
+    end
+
+    def existing_dependent_service_params(guardian, dependent)
+      {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        address_strategy: 'guardian',
+        constituent: { hearing_disability: true },
+        application: @application_params
+      }
     end
   end
 end

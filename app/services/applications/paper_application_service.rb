@@ -358,10 +358,7 @@ module Applications
       return add_error('Applicant not found') unless user
       return add_error('Selected user is not eligible as an applicant.') unless user.paper_applicant_candidate?
 
-      # Dual eligibility check
-      return add_error('This constituent already has an active or pending application.') if user.applications.blocking_new_submission.exists?
-
-      return false unless waiting_period_eligible?(user)
+      return false unless paper_application_eligible?(user, subject: :constituent)
 
       return add_error('Verify contact information against the paper application before submitting.') unless existing_adult_contact_info_verified?
 
@@ -420,8 +417,7 @@ module Applications
     end
 
     def update_dependent_and_validate_eligibility(dependent)
-      return add_error('This dependent already has an active or pending application.') if dependent.applications.blocking_new_submission.exists?
-      return false unless waiting_period_eligible?(dependent)
+      return false unless paper_application_eligible?(dependent, subject: :dependent)
 
       return false unless update_existing_applicant_disability_info(dependent)
 
@@ -429,18 +425,6 @@ module Applications
       return false if params[:constituent].present? && attributes_present?(params[:constituent]) && !update_dependent_contact_info(dependent)
 
       true
-    end
-
-    def waiting_period_eligible?(user)
-      last_app = user.applications.order(application_date: :desc).first
-      return true if last_app.blank?
-
-      waiting_period = Policy.get('waiting_period_years') || 3
-      eligible_date = last_app.application_date + waiting_period.years
-      return true if eligible_date <= Time.current
-
-      add_error("Not yet eligible for a new application. Eligible after #{eligible_date.to_date.strftime('%B %d, %Y')}.")
-      false
     end
 
     def self_applicant_scenario?(applicant_data)
@@ -463,7 +447,7 @@ module Applications
 
         track_email_backed_portal_created_user_ids(result.data[:email_backed_portal_created_user_ids])
 
-        validate_no_active_application('dependent')
+        paper_application_eligible?(@constituent, subject: :dependent)
       else
         @errors.concat(service.errors)
         false
@@ -529,8 +513,7 @@ module Applications
         # successful confirmation writes its own evidence instead.
         record_no_match_confirmation(@constituent)
 
-        return false unless validate_no_active_application('constituent')
-        return false unless waiting_period_eligible?(@constituent)
+        return false unless paper_application_eligible?(@constituent, subject: :constituent)
 
         true
       else
@@ -682,17 +665,11 @@ module Applications
       @created_portal_user_ids << user_id.to_s if user_id.present?
     end
 
-    def validate_no_active_application(user_type)
-      return true unless @constituent.applications.blocking_new_submission.exists?
+    def paper_application_eligible?(user, subject:)
+      result = PaperApplicationEligibility.call(user)
+      return true if result.eligible?
 
-      error_message = case user_type
-                      when 'dependent'
-                        'This dependent already has an active or pending application.'
-                      else
-                        'This constituent already has an active or pending application.'
-                      end
-      add_error(error_message)
-      false
+      add_error(result.refusal_message(subject: subject))
     end
 
     def update_dependent_contact_info(dependent)

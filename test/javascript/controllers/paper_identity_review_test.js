@@ -46,7 +46,13 @@ function buildForm({ existingConstituentId = "", applicantType = "self" } = {}) 
         <h3 tabindex="-1" data-paper-application-target="identityReviewHeading"></h3>
         <p data-paper-application-target="identityReviewBody"></p>
         <ul data-paper-application-target="identityReviewCandidates"></ul>
-        <div class="hidden" style="display: none;" data-paper-application-target="identityReviewOverride"></div>
+        <div class="hidden" style="display: none;" data-paper-application-target="identityReviewOverride">
+          <button type="button"
+                  data-action="click->paper-application#overrideIdentityReview"
+                  data-paper-application-target="identityReviewOverrideButton">
+            These are different people — create a new constituent
+          </button>
+        </div>
         <p class="hidden" style="display: none;" tabindex="-1" data-paper-application-target="identityReviewNotice"></p>
       </section>
       <input type="hidden" name="identity_decision" data-paper-application-target="identityDecision">
@@ -214,6 +220,41 @@ describe("paper identity review", () => {
       const list = form.querySelector('[data-paper-application-target="identityReviewCandidates"]')
       expect(list.querySelector("img")).toBeNull()
       expect(list.textContent).toContain("<img src=x onerror=alert(1)>")
+    })
+
+    test("self-applicant override copy names a new constituent", async () => {
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "needs_confirmation",
+        candidates: [{ id: 1, name: "Jane Doe", selectable: true }],
+        reasons: ["name_dob"],
+        token: "v1:1:abc"
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const button = form.querySelector('[data-paper-application-target="identityReviewOverrideButton"]')
+      expect(button.textContent.trim()).toBe("These are different people — create a new constituent")
+    })
+
+    test("dependent override copy names a new dependent, not a constituent", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "needs_confirmation",
+        candidates: [{ id: 1, name: "Jamie Doe", selectable: true }],
+        reasons: ["name_dob"],
+        token: "v1:1:abc"
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const button = form.querySelector('[data-paper-application-target="identityReviewOverrideButton"]')
+      expect(button.textContent.trim()).toBe("These are different people — create a new dependent")
+      expect(button.textContent).not.toContain("constituent")
     })
 
     test("a token is not written to the hidden field until staff override", async () => {
@@ -633,6 +674,26 @@ describe("paper identity review", () => {
       settle(jsonResponse({ state: "clear", candidates: [] }))
     })
 
+    test("dependent checking copy names dependents in visible and announced text", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      let settle
+      jest.spyOn(global, "fetch").mockImplementation(() => new Promise((resolve) => { settle = resolve }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const heading = form.querySelector('[data-paper-application-target="identityReviewHeading"]')
+      const status = form.querySelector('[data-paper-application-target="status"]')
+      expect(heading.textContent).toBe("Checking for existing dependents")
+      expect(status.textContent).toBe("Checking for existing dependents…")
+      expect(`${heading.textContent} ${status.textContent}`).not.toContain("constituents")
+
+      settle(jsonResponse({ state: "clear", candidates: [] }))
+    })
+
     // Focus belongs to whatever field staff are still typing in. A transient state that resolves on
     // its own must not yank it away.
     test("the checking state does not steal focus", async () => {
@@ -856,6 +917,79 @@ describe("paper identity review", () => {
         deferred.resolve({ selected: true })
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(controllerFor(application, form)._identityReviewState).toBe("idle")
+      })
+    })
+
+    describe("dependent candidate selection", () => {
+      let picker
+
+      beforeEach(async () => {
+        application.stop()
+        form = buildForm({ applicantType: "dependent" })
+        application = await startApplication()
+        form.requestSubmit = jest.fn()
+
+        picker = {
+          selectDependentFromIdentityReview: jest.fn((candidate) => {
+            form.querySelector('[name="dependent_id"]').value = String(candidate.id)
+            return Promise.resolve({ selected: true })
+          })
+        }
+
+        const host = document.createElement("div")
+        host.setAttribute("data-controller", "guardian-picker")
+        form.appendChild(host)
+        Object.defineProperty(controllerFor(application, form), "application", {
+          value: { getControllerForElementAndIdentifier: () => picker },
+          configurable: true
+        })
+      })
+
+      test("refreshes server selectability before the picker may set dependent_id", async () => {
+        const candidate = { id: 7, name: "Jamie Dependent", selectable: true }
+        const refreshed = { ...candidate, name: "Jamie Dependent, refreshed" }
+        const fetchMock = jest.spyOn(global, "fetch")
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation", candidates: [candidate], token: "v1:1:abc"
+          }))
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation", candidates: [refreshed], token: "v1:1:def"
+          }))
+
+        form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        form.querySelector('[data-paper-application-target="identityReviewCandidates"] button').click()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(picker.selectDependentFromIdentityReview).toHaveBeenCalledWith(
+          refreshed, expect.objectContaining({ signal: expect.any(AbortSignal) })
+        )
+        expect(form.querySelector('[name="dependent_id"]').value).toBe("7")
+      })
+
+      test("refuses a dependent that the refreshed server policy no longer marks selectable", async () => {
+        const candidate = { id: 7, name: "Jamie Dependent", selectable: true }
+        const fetchMock = jest.spyOn(global, "fetch")
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation", candidates: [candidate], token: "v1:1:abc"
+          }))
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation",
+            candidates: [{ ...candidate, selectable: false }],
+            token: "v1:1:def"
+          }))
+
+        form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        form.querySelector('[data-paper-application-target="identityReviewCandidates"] button').click()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(picker.selectDependentFromIdentityReview).not.toHaveBeenCalled()
+        expect(form.querySelector('[name="dependent_id"]').value).toBe("")
+        expect(form.querySelector('[data-paper-application-target="status"]').textContent)
+          .toMatch(/no longer an eligible on-file dependent/i)
       })
     })
 

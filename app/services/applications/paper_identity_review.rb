@@ -210,20 +210,10 @@ module Applications
         candidate.respond_to?(:paper_guardian_candidate?) && candidate.paper_guardian_candidate?
       when :dependent
         candidate.respond_to?(:paper_dependent_candidate?) && candidate.paper_dependent_candidate? &&
-          paper_application_eligible?(candidate) && guardian_relationship_exists?(candidate)
+          PaperApplicationEligibility.call(candidate).eligible? && guardian_relationship_exists?(candidate)
       else
         candidate.respond_to?(:paper_applicant_candidate?) && candidate.paper_applicant_candidate?
       end
-    end
-
-    def paper_application_eligible?(candidate)
-      return false if candidate.applications.blocking_new_submission.exists?
-
-      last_application = candidate.applications.order(application_date: :desc).first
-      return true if last_application.blank?
-
-      waiting_period = Policy.get('waiting_period_years') || 3
-      last_application.application_date + waiting_period.years <= Time.current
     end
 
     # Paper intake may choose an on-file dependent already owned by the selected guardian. Creating

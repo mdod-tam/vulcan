@@ -38,6 +38,7 @@ export default class extends Controller {
     "identityReviewBody",
     "identityReviewCandidates",
     "identityReviewOverride",
+    "identityReviewOverrideButton",
     "identityReviewNotice",
     "identityDecision"
   ];
@@ -226,6 +227,14 @@ export default class extends Controller {
         !String(dependent?.value || "").trim() && firstName) return "dependent";
 
     return null;
+  }
+
+  /** @private */
+  _identityReviewNoun({ plural = false } = {}) {
+    const dependent = this._identityReviewContext() === "dependent";
+    if (plural) return dependent ? "dependents" : "constituents";
+
+    return dependent ? "dependent" : "constituent";
   }
 
   /**
@@ -546,7 +555,7 @@ export default class extends Controller {
     if (this._dependentContactChoiceMessage) return this._dependentContactChoiceMessage;
 
     switch (this._identityReviewState) {
-      case "checking": return "Checking for existing constituents…";
+      case "checking": return `Checking for existing ${this._identityReviewNoun({ plural: true })}…`;
       case "possible_matches": return "Review the possible matches before submitting.";
       case "blocked": return "Resolve the contact conflict before submitting.";
       case "invalid_contact_choice": return this._dependentContactChoiceMessage;
@@ -581,7 +590,7 @@ export default class extends Controller {
   /** @private */
   _identityReviewNoticeHeading(state) {
     switch (state) {
-      case "checking": return "Checking for existing constituents";
+      case "checking": return `Checking for existing ${this._identityReviewNoun({ plural: true })}`;
       case "expired": return "Review expired";
       case "timed_out": return "Identity review timed out";
       case "session_expired": return "Session expired";
@@ -674,6 +683,10 @@ export default class extends Controller {
     }
     if (this.hasIdentityReviewOverrideTarget) {
       setVisible(this.identityReviewOverrideTarget, true);
+    }
+    if (this.hasIdentityReviewOverrideButtonTarget) {
+      this.identityReviewOverrideButtonTarget.textContent =
+        `These are different people — create a new ${this._identityReviewNoun()}`;
     }
     this._showIdentityReviewPanel(this._identityReviewContext() === "dependent"
       ? "Possible matching dependents" : "Possible matching constituents");
@@ -853,9 +866,10 @@ export default class extends Controller {
   }
 
   /**
-   * Selection goes through a dedicated adult-picker entry point rather than its HTML-taking
-   * selectAdult, and that entry point owns the eligibility check: an applicant with an active
-   * application or inside the waiting period must not be silently selected.
+   * Adult selection goes through a dedicated picker entry point that checks eligibility. Dependent
+   * selection first refreshes the server-owned identity review, which composes guardian
+   * relationship and application eligibility policy, before the picker may set dependent_id.
+   * The final writer still requalifies either choice under its transaction lock.
    * @private
    */
   async _selectIdentityReviewCandidate(candidate) {
@@ -883,7 +897,14 @@ export default class extends Controller {
     this._candidateSelectionAbort = abort;
     let outcome;
     try {
-      outcome = await picker[method](candidate, { signal: abort.signal });
+      if (dependentContext) {
+        const refreshed = await this._recheckDependentIdentityCandidate(candidate, abort);
+        outcome = refreshed.selected
+          ? await picker[method](refreshed.candidate, { signal: abort.signal })
+          : refreshed;
+      } else {
+        outcome = await picker[method](candidate, { signal: abort.signal });
+      }
     } finally {
       this._candidateSelectionInFlight = false;
       this._candidateSelectionAbort = null;
@@ -906,6 +927,42 @@ export default class extends Controller {
       // which gating already owns and which is the one live region on the page.
       this._candidateSelectionRefusal = outcome.reason;
       this._applySubmitGating();
+    }
+  }
+
+  /** @private */
+  async _recheckDependentIdentityCandidate(candidate, controller) {
+    const { body } = this._identityReviewPayload();
+
+    try {
+      const payload = await this._fetchIdentityReviewWithTimeout(body, controller);
+      if (controller.signal.aborted) return { selected: false };
+
+      const refreshed = (payload.candidates || []).find((row) =>
+        String(row.id) === String(candidate.id)
+      );
+      if (refreshed?.selectable === true) return { selected: true, candidate: refreshed };
+
+      return {
+        selected: false,
+        reason: "This record is no longer an eligible on-file dependent for the selected guardian. " +
+                "Review the current matches or correct the dependent details."
+      };
+    } catch (error) {
+      if (controller.signal.aborted && error?.kind !== "timed_out") return { selected: false };
+
+      if (error instanceof IdentityReviewFailure && error.kind === "session_expired") {
+        return {
+          selected: false,
+          reason: "Your session has expired. Sign in again in another browser tab, then try again " +
+                  "here. Your entries and selected documents stay on this page."
+        };
+      }
+      if (error instanceof IdentityReviewFailure && error.kind === "timed_out") {
+        return { selected: false, reason: "Checking that record took too long. Try again." };
+      }
+
+      return { selected: false, reason: "That record could not be checked right now. Try again." };
     }
   }
 
