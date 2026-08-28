@@ -25,6 +25,11 @@ module Admin
       visit new_admin_paper_application_path
 
       choose 'applicant_is_minor'
+      submit_status = find_by_id('paper-submit-gate-status', visible: :all)
+      assert_equal "Select or create a guardian before submitting this dependent's application.", submit_status.text(:all)
+      assert_predicate find_by_id('submit-button', visible: :all), :disabled?
+      take_evidence_screenshot('paper-a2-guardian-unselected-submit-gate', full: true, html: true)
+
       within '#guardian-info-section' do
         click_link 'Create New Guardian'
         fill_in 'guardian_attributes[first_name]', with: 'Review'
@@ -85,6 +90,7 @@ module Admin
 
       assert_equal 0, DuplicateReviewCase.where(source: :admin_create).count
       assert_equal 'new.review.guardian@example.com', User.order(:id).last.email
+      assert_no_match(/Select or create a guardian/, submit_status.text(:all))
       take_evidence_screenshot('paper-a2-guardian-soft-match-created', full: true, html: true)
 
       email_owner = create(:constituent, email: "split-email-#{SecureRandom.hex(3)}@example.com")

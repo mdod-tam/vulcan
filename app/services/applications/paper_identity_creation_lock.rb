@@ -4,9 +4,14 @@ module Applications
   # Serializes paper writers that are about to create the same identity. There is no row to lock
   # before creation, so the key is the same name/date-of-birth identity used by duplicate matching.
   class PaperIdentityCreationLock
+    TRANSACTION_REQUIRED_MESSAGE = 'PaperIdentityCreationLock.lock! must run inside an open transaction'
+
     class << self
       def lock!(identity_facts)
-        ActiveRecord::Base.connection.exec_query(
+        connection = ActiveRecord::Base.connection
+        raise ArgumentError, TRANSACTION_REQUIRED_MESSAGE unless connection.transaction_open?
+
+        connection.exec_query(
           'SELECT pg_advisory_xact_lock($1)::text',
           'Paper identity lock',
           [ActiveRecord::Relation::QueryAttribute.new(

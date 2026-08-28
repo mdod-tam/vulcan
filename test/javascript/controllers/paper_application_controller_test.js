@@ -346,4 +346,45 @@ describe("PaperApplicationController", () => {
 
     expect(submitButton.disabled).toBe(false)
   })
+
+  test("dependent submit gate names a missing guardian and preserves identity-review priority", () => {
+    document.body.innerHTML = `
+      <form data-controller="paper-application">
+        <input type="radio" name="applicant_type" value="dependent" checked>
+        <input type="hidden" name="guardian_id" value="">
+        <p data-paper-application-target="status"></p>
+        <button type="submit" data-paper-application-target="submitButton">Submit</button>
+      </form>
+    `
+
+    const form = document.querySelector("[data-controller='paper-application']")
+    const guardianId = form.querySelector('[name="guardian_id"]')
+    const submitButton = form.querySelector('[data-paper-application-target="submitButton"]')
+    const status = form.querySelector('[data-paper-application-target="status"]')
+    const directController = new PaperApplicationController()
+
+    Object.defineProperty(directController, "element", { value: form, configurable: true })
+    Object.defineProperty(directController, "hasSubmitButtonTarget", { value: true, configurable: true })
+    Object.defineProperty(directController, "submitButtonTarget", { value: submitButton, configurable: true })
+    Object.defineProperty(directController, "hasStatusTarget", { value: true, configurable: true })
+    Object.defineProperty(directController, "statusTarget", { value: status, configurable: true })
+    Object.defineProperty(directController, "hasRejectionButtonTarget", { value: false, configurable: true })
+    directController.elementIsVisible = () => true
+    directController._identityReviewState = "idle"
+
+    directController._applySubmitGating()
+    expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe("Select or create a guardian before submitting this dependent's application.")
+
+    guardianId.value = "42"
+    directController._applySubmitGating()
+    expect(submitButton.disabled).toBe(false)
+    expect(status.textContent).toBe("Paper application is ready to submit.")
+
+    guardianId.value = ""
+    directController._identityReviewState = "possible_matches"
+    directController._applySubmitGating()
+    expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe("Review the possible matches before submitting.")
+  })
 })

@@ -225,7 +225,7 @@ begin
   # - Requalifies the saved/selected guardian
   # - Creates a new dependent with contact strategies
   # - Creates GuardianRelationship
-  # - Creates Application with managing_guardian_id set
+  # PaperApplicationService then creates Application with managing_guardian_id set
 ensure
   Current.paper_context = nil
 end

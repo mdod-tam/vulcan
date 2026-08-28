@@ -969,9 +969,11 @@ export default class extends Controller {
       // Identity-review states describe themselves; a generic "complete the confirmations" message
       // would tell staff nothing about what the server just found.
       const reviewText = this._identityReviewStatusText();
-      this.statusTarget.textContent = reviewText || (disable
-        ? "Complete all required confirmations before submitting."
-        : "Paper application is ready to submit.");
+      this.statusTarget.textContent = reviewText || (guardianSelectionBlocks
+        ? "Select or create a guardian before submitting this dependent's application."
+        : (disable
+          ? "Complete all required confirmations before submitting."
+          : "Paper application is ready to submit."));
     }
 
     if (this.hasRejectionButtonTarget) {
