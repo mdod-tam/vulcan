@@ -71,6 +71,8 @@ module Applications
       end
 
       application_created
+    rescue GuardianDependentManagementService::DependentCreationConflict
+      recover_dependent_creation_conflict
     rescue TransactionFailure
       false
     rescue StandardError => e
@@ -466,6 +468,36 @@ module Applications
         @errors.concat(service.errors)
         false
       end
+    end
+
+    # PostgreSQL aborts a transaction after a unique-index violation, so classification cannot run
+    # inside GuardianDependentManagementService's transaction. Its narrow wrapper escapes the
+    # transaction; only then do we recompute the paper identity review against the now-committed
+    # winner. No write is retried here.
+    def recover_dependent_creation_conflict
+      Rails.logger.warn('Dependent creation hit a unique constraint; identity review recomputed after rollback')
+      guardian = User.find_by(id: params[:guardian_id])
+      review = if guardian&.paper_guardian_candidate?
+                 Applications::PaperIdentityReview.new(
+                   constituent_params: params[:constituent],
+                   contact_flag_params: params,
+                   admin: @admin,
+                   submitted_token: nil,
+                   context: :dependent,
+                   context_data: { guardian: guardian, relationship_type: params[:relationship_type] }
+                 ).call
+               end
+
+      if review&.blocked?
+        add_error(GuardianDependentManagementService::DEPENDENT_CONTACT_COLLISION_MESSAGE)
+      else
+        add_error('Dependent contact information changed while saving. ' \
+                  'Review the dependent before trying again.')
+      end
+    rescue StandardError => e
+      log_error(e, 'Could not classify a dependent creation conflict after rollback')
+      add_error('Dependent contact information changed while saving. ' \
+                'Review the dependent before trying again.')
     end
 
     def process_self_applicant(applicant_data)

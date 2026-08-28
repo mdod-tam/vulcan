@@ -258,6 +258,74 @@ module Admin
       take_evidence_screenshot('paper-identity-review-ineligible-match', full: true, html: true)
     end
 
+    test 'dependent contact correction leads to on-file identity selection and submission' do
+      guardian = create(:constituent, first_name: 'Selection', last_name: 'Guardian',
+                                      email: "selection-guardian-#{SecureRandom.hex(3)}@example.com",
+                                      phone: '202-555-0184')
+      on_file = create(:constituent, first_name: 'Selection', last_name: 'Dependent',
+                                     date_of_birth: Date.new(2012, 9, 14))
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: on_file,
+                                     relationship_type: 'Parent')
+
+      start_new_dependent_application(guardian)
+      fill_new_dependent_identity(first_name: on_file.first_name, last_name: on_file.last_name,
+                                  date_of_birth: on_file.date_of_birth.strftime('%m/%d/%Y'))
+      within '#dependent-info-section' do
+        uncheck 'use_guardian_email'
+        find('input[name="constituent[dependent_email]"]:not([disabled])').set('')
+      end
+      complete_dependent_application
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        submit_and_settle
+      end
+      assert_selector '#identity-review-heading', text: 'Dependent contact information needed'
+      assert_text "Enter the dependent's email or choose the guardian's email address."
+      contact_field = find('input[name="constituent[dependent_email]"]:not([disabled])')
+      assert_equal 'true', contact_field[:'aria-invalid']
+      assert_equal contact_field[:id], page.evaluate_script('document.activeElement.id')
+      assert_filenames_survived
+      take_evidence_screenshot('paper-a2-dependent-contact-choice-refused', full: true, html: true)
+
+      contact_field.set("selection-dependent-#{SecureRandom.hex(3)}@example.com")
+      assert_no_selector '#identity-review-heading', text: 'Dependent contact information needed', wait: 10
+      assert_nil contact_field[:'aria-invalid']
+      assert_filenames_survived
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count'] do
+        submit_and_settle
+      end
+      assert_selector '#identity-review-heading', text: 'Possible matching dependents'
+      assert_button "Use this dependent: #{on_file.full_name}"
+      assert_filenames_survived
+      take_evidence_screenshot('paper-a2-dependent-on-file-match', full: true, html: true)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        click_button "Use this dependent: #{on_file.full_name}"
+        assert_selector '#existing-dependent-summary', text: on_file.full_name, wait: 15
+      end
+      assert_equal on_file.id.to_s, first("input[name='dependent_id']", visible: :all).value
+      assert_text on_file.date_of_birth.to_fs(:long)
+      assert_selector '#existing-dependent-summary [role="status"]',
+                      text: /Existing dependent selected: #{Regexp.escape(on_file.full_name)}/
+      select 'Parent', from: 'relationship_type'
+      assert_filenames_survived
+      take_evidence_screenshot('paper-a2-dependent-on-file-match-selected', full: true, html: true)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'DuplicateReviewCase.count',
+                            "Event.where(action: 'paper_identity_no_match_confirmed').count"] do
+        assert_difference 'Application.count', 1 do
+          submit_and_settle
+          assert_created_without_refusal
+        end
+      end
+      application = Application.order(:id).last
+      assert_equal on_file.id, application.user_id
+      assert_equal guardian.id, application.managing_guardian_id
+    end
+
     test 'A2 dependent decisions remain visible through refusal correction and on-file selection' do
       guardian = create(:constituent, first_name: 'A2', last_name: 'Guardian',
                                       date_of_birth: Date.new(1980, 1, 15),

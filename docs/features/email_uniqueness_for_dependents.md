@@ -57,6 +57,18 @@ The paper application controller derives contact strategy parameters (`email_str
   - If the strategy is `'dependent'`, the service uses the provided dependent-owned contact information.
   - If a recognized strategy is not supplied, the service defaults to guardian strategy with fallback logic. Nil strategy values are handled before this defaulting so callers can preserve existing data when appropriate.
 - **Address Strategy**: Also handles address information copying from guardian to dependent.
+- **Own-Contact Consistency**: `Applications::PaperDependentContactChoice` is the paper-only owner
+  for the rule that selecting the dependent's own email or phone requires that value. The read-only
+  identity preflight and `GuardianDependentManagementService` both call it, while an explicitly
+  selected guardian-contact strategy continues to permit a blank dependent-owned value.
+- **Identity and Contact Collisions**: New-dependent preflight uses `PaperIdentityReview`, and the
+  canonical writer recomputes that review under `PaperIdentityCreationLock` before creating the
+  user. Exact email or phone collisions are hard refusals; name/date-of-birth candidates require an
+  eligible on-file selection or a valid signed different-person decision.
+- **Concurrent Unique Contact**: A unique-index collision around the dependent `User` insert aborts
+  the application transaction. After rollback, `PaperApplicationService` recomputes the identity
+  review and returns an actionable contact refusal; it never retries the write inside the aborted
+  transaction or exposes database constraint text to staff.
 - **Existing Dependent Reuse**: Existing dependent updates run through `GuardianDependentManagementService#apply_contact_strategies_for` before `PaperApplicationService` writes contact changes, so guardian/no-contact UI choices replace stale direct contact data instead of only aliasing submitted `dependent_email` / `dependent_phone`.
 - **Search**: Admin lookup can find dependents by direct dependent email tokens and, when needed, guardian fallback contact tokens.
 - **Maintainability**: This design results in cleaner, more maintainable code with clear fallback logic and proper error handling.

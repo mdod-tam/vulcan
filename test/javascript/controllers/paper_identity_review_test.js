@@ -251,6 +251,42 @@ describe("paper identity review", () => {
       expect(form.requestSubmit).not.toHaveBeenCalled()
     })
 
+    test("a dependent contact refusal focuses the field, blocks submit, and clears when corrected", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "invalid_contact_choice",
+        candidates: [],
+        reasons: ["missing_dependent_email"],
+        field: "dependent_email",
+        message: "Enter the dependent's email or choose the guardian's email address."
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const field = form.querySelector('[name="constituent[dependent_email]"]')
+      const panel = form.querySelector('[data-paper-application-target="identityReviewPanel"]')
+      const heading = form.querySelector('[data-paper-application-target="identityReviewHeading"]')
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(panel.classList.contains("hidden")).toBe(false)
+      expect(heading.textContent).toBe("Dependent contact information needed")
+      expect(body.textContent).toBe("Enter the dependent's email or choose the guardian's email address.")
+      expect(document.activeElement).toBe(field)
+      expect(field.getAttribute("aria-invalid")).toBe("true")
+      expect(controllerFor(application, form)._identityReviewBlocksSubmit()).toBe(true)
+      expect(form.requestSubmit).not.toHaveBeenCalled()
+
+      field.value = "corrected-dependent@example.com"
+      field.dispatchEvent(new Event("input", { bubbles: true }))
+
+      expect(field.hasAttribute("aria-invalid")).toBe(false)
+      expect(panel.classList.contains("hidden")).toBe(true)
+      expect(controllerFor(application, form)._identityReviewState).toBe("idle")
+    })
+
     test("a selectable self-applicant contact collision offers the existing constituent", async () => {
       jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
         state: "blocked",

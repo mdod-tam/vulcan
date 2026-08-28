@@ -75,6 +75,37 @@ module Applications
       cleanup!
     end
 
+    # Different guardians mean the two requests lock different guardian rows; different names and
+    # birth dates mean they also take different identity advisory locks. The shared own-email is
+    # therefore the only point that can serialize these writers. The loser must let PostgreSQL roll
+    # back the aborted transaction, then classify the committed winner as an exact-contact block.
+    test 'dependent contact collision after a unique-index race returns an actionable refusal' do
+      @guardians = [
+        create(:constituent, phone: "410555#{format('%04d', SecureRandom.random_number(10_000))}"),
+        create(:constituent, phone: "301555#{format('%04d', SecureRandom.random_number(10_000))}")
+      ]
+      @seeded_ids.concat(@guardians.map(&:id))
+      @shared_dependent_email = "dependent-race-#{@stamp}@example.com"
+
+      outcomes = run_racing_creates(params_for: ->(index) { new_dependent_params(index) })
+
+      assert_equal 1, outcomes.count { |outcome| outcome[:created] }, outcomes.inspect
+      dependent = User.find_by_email(@shared_dependent_email)
+      assert dependent, 'the winning dependent must own the submitted email'
+      assert_equal 1, Application.where(user_id: dependent.id).count
+      assert_equal 1, GuardianRelationship.where(dependent_id: dependent.id).count
+      assert_equal 0, DuplicateReviewCase.where(subject_user_id: dependent.id).count
+      assert_equal 0, Event.where(action: 'paper_identity_no_match_confirmed',
+                                  auditable_type: 'User', auditable_id: dependent.id).count
+
+      loser = outcomes.find { |outcome| !outcome[:created] }
+      assert_includes loser[:errors],
+                      GuardianDependentManagementService::DEPENDENT_CONTACT_COLLISION_MESSAGE
+      assert_no_match(/index_users|duplicate key/i, loser[:errors].join(' '))
+    ensure
+      cleanup!
+    end
+
     private
 
     # Only the applicants these submissions created -- never the seeded soft-match candidate, which
@@ -87,7 +118,41 @@ module Applications
 
     def cleanup!
       users = Users::Constituent.where(first_name: 'Race', last_name: 'Case').to_a
-      cleanup_duplicate_review_test_data!(*users, @admin)
+      users.concat(User.unscoped.where(id: @seeded_ids).to_a)
+      raced_dependent = User.find_by_email(@shared_dependent_email) if @shared_dependent_email.present?
+      cleanup_duplicate_review_test_data!(*users, raced_dependent, @admin)
+    end
+
+    def new_dependent_params(index)
+      {
+        applicant_type: 'dependent',
+        guardian_id: @guardians.fetch(index).id,
+        relationship_type: 'Parent',
+        email_strategy: 'dependent',
+        phone_strategy: 'guardian',
+        address_strategy: 'guardian',
+        constituent: {
+          first_name: "ContactRace#{index}",
+          last_name: 'Dependent',
+          date_of_birth: Date.new(2010 + index, 2, 3).iso8601,
+          dependent_email: @shared_dependent_email,
+          dependent_phone: '',
+          hearing_disability: '1',
+          vision_disability: '0',
+          speech_disability: '0',
+          mobility_disability: '0',
+          cognition_disability: '0'
+        },
+        application: {
+          household_size: '2',
+          annual_income: '15000',
+          maryland_resident: '1',
+          self_certify_disability: '1',
+          medical_provider_name: 'Dr. Smith',
+          medical_provider_phone: '2025559876',
+          medical_provider_email: 'drsmith@example.com'
+        }
+      }
     end
 
     def new_applicant_params(index = 0)

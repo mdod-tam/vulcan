@@ -67,7 +67,12 @@ system matrix in `test/system/admin/paper_application_rollback_test.rb` owns pic
 reveal, and the cases where the browser's own submission rules matter -- an unchecked box is omitted
 entirely, and a disabled control is not submitted, neither of which a request test can reproduce.
 
-The existing-dependent branch is covered end to end in that system test -- selecting an on-file dependent, failing, and retrying to success. The inline-guardian branch is still request level only. Applicant and application fields, disability selections and
+The existing-dependent branch is covered end to end in that system test -- selecting an on-file
+dependent, failing, and retrying to success. Guardian quick-create identity decisions are exercised
+through the browser in `test/system/admin/paper_application_dependent_guardian_test.rb`; dependent
+preflight, correction, override, and on-file selection are exercised in
+`test/system/admin/paper_identity_review_test.rb`. Request tests still own server-rendered retry
+bindings. Together those paths cover applicant and application fields, disability selections and
 self-certification, attestations, contact strategies, applicant-type branch, guardian/dependent
 selection, all four proof dispositions, and their rejection reasons. The four native file inputs
 cannot be repopulated by a server render, so staff reselect only the documents their restored

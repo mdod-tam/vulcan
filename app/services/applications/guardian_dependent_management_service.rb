@@ -5,6 +5,12 @@ module Applications
   class GuardianDependentManagementService < BaseService
     SYNTHETIC_PHONE_RANDOM_SPACE = 10_000_000
     SYNTHETIC_PHONE_MAX_ATTEMPTS = 25
+    DEPENDENT_CONTACT_COLLISION_MESSAGE = 'A dependent with this email or phone already exists. ' \
+                                          'Select the existing dependent or correct the contact information.'
+
+    # Raised only around the new-dependent User insert. The outer application writer catches it
+    # after its transaction has rolled back, when PostgreSQL permits a fresh identity query.
+    class DependentCreationConflict < StandardError; end
 
     attr_reader :params, :guardian_user, :dependent_user, :errors
 
@@ -114,6 +120,8 @@ module Applications
       record_no_match_confirmation(@dependent_user)
 
       true
+    rescue ActiveRecord::RecordNotUnique
+      raise DependentCreationConflict, 'Dependent creation collided with an existing unique record'
     end
 
     def dependent_identity_review_allows_creation?(applicant_data, relationship_type)
@@ -130,10 +138,7 @@ module Applications
 
       return add_error?('Duplicate detection failed. Try again.') if @identity_review.error?
       return add_error?(dependent_decision_error(@identity_review)) if @identity_review.invalid_decision?
-      if @identity_review.blocked?
-        return add_error?('A dependent with this email or phone already exists. ' \
-                          'Select the existing dependent or correct the contact information.')
-      end
+      return add_error?(DEPENDENT_CONTACT_COLLISION_MESSAGE) if @identity_review.blocked?
 
       if @identity_review.confirmed?
         @confirmed_no_match = {
@@ -263,20 +268,12 @@ module Applications
       attrs.present? && attrs.values.any?(&:present?)
     end
 
-    # This validation belongs to the paper writer, not the shared contact-strategy adapter: portal
-    # dependent creation has its own admission/replay contract and is outside A2. Paper staff made
-    # an explicit own-vs-guardian choice, so a blank own value is a contradiction, not permission to
-    # silently switch strategies.
     def paper_dependent_contact_choices_valid?(applicant_data)
-      data = applicant_data.with_indifferent_access
-      if params[:email_strategy].to_s == 'dependent' &&
-         data[:dependent_email].blank? && data[:email].blank?
-        return add_error?("Enter the dependent's email or choose the guardian's email address.")
-      end
-      if params[:phone_strategy].to_s == 'dependent' &&
-         data[:dependent_phone].blank? && data[:phone].blank?
-        return add_error?("Enter the dependent's phone or choose the guardian's phone number.")
-      end
+      choice = Applications::PaperDependentContactChoice.new(
+        applicant_data: applicant_data,
+        strategy_params: params
+      ).call
+      return add_error?(choice.message) unless choice.valid?
 
       true
     end

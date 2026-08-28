@@ -90,15 +90,25 @@ module Admin
         return render json: { state: :error, reasons: [], candidates: [] }, status: :unprocessable_content
       end
 
+      facts = identity_review_facts
+      flags = identity_review_flags
+      contact_refusal = if context == 'dependent'
+                          Applications::PaperDependentContactChoice.new(
+                            applicant_data: facts, strategy_params: flags
+                          ).call.identity_review_payload
+                        end
+
+      response.headers['Cache-Control'] = 'no-store'
+      return render json: contact_refusal if contact_refusal
+
       review = Applications::PaperIdentityReview.new(
-        constituent_params: identity_review_facts,
+        constituent_params: facts,
         admin: current_user,
-        contact_flag_params: identity_review_flags,
+        contact_flag_params: flags,
         context: context,
         context_data: { guardian: guardian, relationship_type: params[:relationship_type] }
       ).call
 
-      response.headers['Cache-Control'] = 'no-store'
       render json: identity_review_payload(review)
     end
 

@@ -1933,6 +1933,64 @@ module Admin
       assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, body['token'])
     end
 
+    test 'dependent identity review refuses a blank own email before presenting candidates' do
+      guardian = create(:constituent)
+
+      assert_no_difference ['User.count', 'Application.count', 'GuardianRelationship.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        post identity_review_admin_paper_applications_path, headers: default_headers, params: {
+          identity_context: 'dependent', guardian_id: guardian.id, relationship_type: 'Parent',
+          email_strategy: 'dependent', phone_strategy: 'guardian', address_strategy: 'guardian',
+          constituent: identity_facts.merge(email: '', dependent_email: '', dependent_phone: '')
+        }
+      end
+
+      assert_response :success
+      assert_equal(
+        {
+          'state' => 'invalid_contact_choice',
+          'reasons' => ['missing_dependent_email'],
+          'candidates' => [],
+          'field' => 'dependent_email',
+          'message' => "Enter the dependent's email or choose the guardian's email address."
+        },
+        response.parsed_body
+      )
+    end
+
+    test 'dependent identity review refuses a blank own phone independently' do
+      guardian = create(:constituent)
+
+      post identity_review_admin_paper_applications_path, headers: default_headers, params: {
+        identity_context: 'dependent', guardian_id: guardian.id, relationship_type: 'Parent',
+        email_strategy: 'dependent', phone_strategy: 'dependent', address_strategy: 'guardian',
+        constituent: identity_facts.merge(
+          email: '', phone: '', dependent_email: 'dependent@example.com', dependent_phone: ''
+        )
+      }
+
+      assert_response :success
+      body = response.parsed_body
+      assert_equal 'invalid_contact_choice', body['state']
+      assert_equal ['missing_dependent_phone'], body['reasons']
+      assert_equal 'dependent_phone', body['field']
+      assert_empty body['candidates']
+      assert_nil body['token']
+    end
+
+    test 'dependent identity review accepts blank own contact when guardian contact is selected' do
+      guardian = create(:constituent)
+
+      post identity_review_admin_paper_applications_path, headers: default_headers, params: {
+        identity_context: 'dependent', guardian_id: guardian.id, relationship_type: 'Parent',
+        email_strategy: 'guardian', phone_strategy: 'guardian', address_strategy: 'guardian',
+        constituent: identity_facts.merge(email: '', phone: '', dependent_email: '', dependent_phone: '')
+      }
+
+      assert_response :success
+      assert_equal 'clear', response.parsed_body['state']
+    end
+
     test 'dependent identity review fails closed for an invalid guardian and writes nothing' do
       assert_no_difference ['User.count', 'Application.count', 'GuardianRelationship.count',
                             'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do

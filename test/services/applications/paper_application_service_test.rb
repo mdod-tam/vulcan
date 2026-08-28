@@ -1408,6 +1408,42 @@ module Applications
                  'a hard block is not a reviewable decision'
     end
 
+    test 'a dependent unique-contact race is reclassified after rollback without leaking database details' do
+      guardian = create(:constituent, phone: unique_paper_phone)
+      params = base_paper_params.merge(
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        relationship_type: 'Parent',
+        email_strategy: 'dependent',
+        phone_strategy: 'guardian',
+        address_strategy: 'guardian'
+      )
+      params[:constituent] = params[:constituent].except(:email, :phone).merge(
+        dependent_email: "dependent-race-#{SecureRandom.hex(4)}@example.com",
+        dependent_phone: ''
+      )
+
+      clear_review = stub(error?: false, invalid_decision?: false, blocked?: false,
+                          confirmed?: false, clear?: true)
+      blocked_review = stub(blocked?: true)
+      Applications::PaperIdentityReview.any_instance.expects(:call).twice.returns(clear_review, blocked_review)
+      Applications::UserCreationService.any_instance.expects(:call).raises(
+        ActiveRecord::RecordNotUnique.new('duplicate key violates index_users_on_email')
+      )
+
+      counters = ['User.count', 'GuardianRelationship.count', 'Application.count',
+                  'DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count',
+                  'Event.count', 'Notification.count']
+      service = paper_service(params)
+      assert_no_difference counters do
+        assert_not service.create
+      end
+
+      assert_includes service.errors,
+                      GuardianDependentManagementService::DEPENDENT_CONTACT_COLLISION_MESSAGE
+      assert_no_match(/index_users|duplicate key/i, service.errors.join(' '))
+    end
+
     # Removing the automatic review case removed the only durable record of who decided what, so a
     # successful confirmation writes its own. Only successes: a missing, forged, expired or
     # abandoned review must leave no trace, so the trail records decisions taken rather than

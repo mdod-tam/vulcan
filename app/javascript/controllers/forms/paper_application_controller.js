@@ -75,6 +75,8 @@ export default class extends Controller {
     this._candidateSelectionInFlight = false;
     this._candidateSelectionAbort = null;
     this._candidateSelectionRefusal = null;
+    this._dependentContactChoiceField = null;
+    this._dependentContactChoiceMessage = null;
     this._identityReviewToken = null;
     this._identityReviewExpiresAt = null;
 
@@ -353,6 +355,10 @@ export default class extends Controller {
         this._renderContactBlock(payload);
         this._setIdentityReviewState("blocked");
         break;
+      case "invalid_contact_choice":
+        this._renderDependentContactChoice(payload);
+        this._setIdentityReviewState("invalid_contact_choice");
+        break;
       default:
         this._setIdentityReviewState("error");
     }
@@ -527,7 +533,8 @@ export default class extends Controller {
    * @private
    */
   _identityReviewBlocksSubmit() {
-    return ["checking", "possible_matches", "blocked"].includes(this._identityReviewState);
+    return ["checking", "possible_matches", "blocked", "invalid_contact_choice"]
+      .includes(this._identityReviewState);
   }
 
   /** @private */
@@ -536,11 +543,13 @@ export default class extends Controller {
     // staff are still looking at the same possible matches -- but something just happened, and it
     // is the only thing they need to hear. Cleared by the next attempt or by invalidation.
     if (this._candidateSelectionRefusal) return this._candidateSelectionRefusal;
+    if (this._dependentContactChoiceMessage) return this._dependentContactChoiceMessage;
 
     switch (this._identityReviewState) {
       case "checking": return "Checking for existing constituents…";
       case "possible_matches": return "Review the possible matches before submitting.";
       case "blocked": return "Resolve the contact conflict before submitting.";
+      case "invalid_contact_choice": return this._dependentContactChoiceMessage;
       case "error": return "Identity review could not be completed. Submit again to retry.";
       case "timed_out": return "Identity review took too long to respond. Submit again to retry.";
       // Truthful about the recovery: this page must not be reloaded or navigated away from, because
@@ -759,6 +768,28 @@ export default class extends Controller {
   }
 
   /** @private */
+  _renderDependentContactChoice(payload) {
+    if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren();
+    if (this.hasIdentityReviewOverrideTarget) setVisible(this.identityReviewOverrideTarget, false);
+
+    this._dependentContactChoiceField = String(payload.field || "");
+    this._dependentContactChoiceMessage = String(payload.message ||
+      "Review the dependent's contact choice before submitting.");
+    if (this.hasIdentityReviewBodyTarget) {
+      this.identityReviewBodyTarget.textContent = this._dependentContactChoiceMessage;
+    }
+
+    this._showIdentityReviewPanel("Dependent contact information needed");
+    const field = this.element.querySelector(
+      `[name="constituent[${this._dependentContactChoiceField}]"]:not([disabled])`
+    );
+    if (field) {
+      field.setAttribute("aria-invalid", "true");
+      field.focus();
+    }
+  }
+
+  /** @private */
   _showIdentityReviewPanel(heading) {
     if (this.hasIdentityReviewHeadingTarget) this.identityReviewHeadingTarget.textContent = heading;
     if (!this.hasIdentityReviewPanelTarget) return;
@@ -785,6 +816,14 @@ export default class extends Controller {
     // submitting again -- and the live region went on announcing "already has an active
     // application" while the panel said "Review expired".
     this._candidateSelectionRefusal = null;
+    if (this._dependentContactChoiceField) {
+      const field = this.element.querySelector(
+        `[name="constituent[${this._dependentContactChoiceField}]"]`
+      );
+      if (field) field.removeAttribute("aria-invalid");
+    }
+    this._dependentContactChoiceField = null;
+    this._dependentContactChoiceMessage = null;
     if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren();
     if (this.hasIdentityReviewBodyTarget) this.identityReviewBodyTarget.textContent = "";
     if (this.hasIdentityReviewOverrideTarget) setVisible(this.identityReviewOverrideTarget, false);
