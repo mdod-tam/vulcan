@@ -136,6 +136,55 @@ module Admin
       take_evidence_screenshot('paper-a2-unsaved-guardian-server-refusal', full: true, html: true)
     end
 
+    test 'existing dependent contact refusal uses the shared contact-choice message' do
+      guardian = create(:constituent, first_name: 'Shared', last_name: 'Guardian')
+      dependent = create(
+        :constituent,
+        first_name: 'Shared',
+        last_name: 'Dependent',
+        dependent_email: 'shared.dependent@example.com'
+      )
+      create(
+        :guardian_relationship,
+        guardian_user: guardian,
+        dependent_user: dependent,
+        relationship_type: 'Parent'
+      )
+      admin = create(:admin, verified: true)
+      system_test_sign_in(admin)
+      visit new_admin_paper_application_path
+
+      choose 'applicant_is_minor'
+      within '#guardian-info-section' do
+        fill_in 'guardian_search_q', with: guardian.full_name
+        within '#guardian_search_results' do
+          find('li', text: guardian.full_name, wait: 10).click
+        end
+      end
+
+      within '#guardian_dependents' do
+        within 'li', text: dependent.full_name, wait: 10 do
+          click_button 'Select'
+        end
+      end
+      assert_selector '#existing-dependent-summary', text: dependent.full_name, wait: 10
+      assert_field 'constituent[dependent_email]', with: dependent.dependent_email
+      fill_in 'constituent[dependent_email]', with: ''
+
+      assert_no_difference ['Application.count', 'GuardianRelationship.count', 'Event.count',
+                            'DuplicateReviewCase.count', 'Notification.count'] do
+        page.execute_script(<<~JS)
+          const form = document.querySelector('form[data-controller~="paper-application"]');
+          HTMLFormElement.prototype.submit.call(form);
+        JS
+        assert_text "Enter the dependent's email or choose the guardian's email address.", wait: 20
+      end
+
+      assert_selector '#existing-dependent-summary', text: dependent.full_name
+      assert_field 'constituent[dependent_email]', with: ''
+      take_evidence_screenshot('paper-a2-existing-dependent-contact-refusal', full: true, html: true)
+    end
+
     private
 
     def perform_complete_guardian_creation_workflow

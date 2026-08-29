@@ -59,8 +59,10 @@ The paper application controller derives contact strategy parameters (`email_str
 - **Address Strategy**: Also handles address information copying from guardian to dependent.
 - **Own-Contact Consistency**: `Applications::PaperDependentContactChoice` is the paper-only owner
   for the rule that selecting the dependent's own email or phone requires that value. The read-only
-  identity preflight and `GuardianDependentManagementService` both call it, while an explicitly
-  selected guardian-contact strategy continues to permit a blank dependent-owned value.
+  identity preflight, new-dependent writer, and existing-dependent writer all call it. For an
+  existing dependent, an omitted field keeps a real on-file dependent-owned value while a submitted
+  blank is refused. An explicitly selected guardian-contact strategy still permits a blank
+  dependent-owned value.
 - **Identity and Contact Collisions**: New-dependent preflight uses `PaperIdentityReview`, and the
   canonical writer recomputes that review under `PaperIdentityCreationLock` before creating the
   user. Exact email or phone collisions are hard refusals; name/date-of-birth candidates require an

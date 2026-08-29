@@ -1096,7 +1096,7 @@ module Applications
                                             admin: @admin, skip_proof_processing: true)
 
       assert_not service.create, 'a contradictory contact instruction must not be resolved silently'
-      assert_match(/use the guardian's email address/i, service.errors.join(' '))
+      assert_includes service.errors, "Enter the dependent's email or choose the guardian's email address."
       # The old address must not have been quietly reinstated behind the refusal.
       assert_equal original_email, dependent.reload.dependent_email
     end
@@ -1129,7 +1129,7 @@ module Applications
                                             admin: @admin, skip_proof_processing: true)
 
       assert_not service.create
-      assert_match(/use the guardian's phone number/i, service.errors.join(' '))
+      assert_includes service.errors, "Enter the dependent's phone or choose the guardian's phone number."
       assert_equal original_phone, dependent.reload.dependent_phone
     end
 

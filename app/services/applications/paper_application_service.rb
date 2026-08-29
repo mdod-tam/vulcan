@@ -737,81 +737,26 @@ module Applications
     def apply_dependent_contact_strategies!(attrs, dependent: nil)
       guardian = guardian_for_dependent_contact_update
       return attrs.deep_dup if guardian.blank?
-      return nil unless dependent_contact_instructions_consistent?(attrs)
+
+      choice = Applications::PaperDependentContactChoice.new(
+        applicant_data: attrs,
+        strategy_params: params,
+        existing_dependent: dependent,
+        guardian: guardian
+      ).call
+      unless choice.valid?
+        add_error(choice.message)
+        return nil
+      end
 
       strategy_service = GuardianDependentManagementService.new(params)
-      merged = merge_existing_dependent_contact(attrs, dependent)
-      applied = strategy_service.apply_contact_strategies_for(guardian, merged)
+      applied = strategy_service.apply_contact_strategies_for(guardian, choice.resolved_applicant_data)
       if applied
         applied
       else
         @errors.concat(strategy_service.errors)
         nil
       end
-    end
-
-    # "Use the guardian's email" unchecked, with the dependent's own email deliberately cleared, is
-    # a contradiction rather than an instruction -- and resolving it silently has gone wrong in both
-    # directions. Backfilling from the record undoes the clear while the re-rendered form still
-    # shows blank, so an unchanged retry persists something staff cannot see. Letting the blank
-    # through instead reaches `apply_email_strategy`'s guardian fallback, which mints a synthetic
-    # primary identifier and moves delivery to the guardian.
-    #
-    # Neither is what was asked for, so it is refused with a message staff can act on. Keyed on the
-    # field being *submitted* blank: absent means the checkbox disabled it, which is a real
-    # instruction and still backfills below.
-    def dependent_contact_instructions_consistent?(attrs)
-      data = attrs.to_h.with_indifferent_access
-      consistent = true
-
-      { email: 'email address', phone: 'phone number' }.each do |kind, label|
-        next unless params[:"#{kind}_strategy"].to_s == 'dependent'
-        next unless data.key?(:"dependent_#{kind}") || data.key?(kind)
-        next if data[:"dependent_#{kind}"].present? || data[kind].present?
-
-        add_error("Enter the dependent's own #{label}, or select the option to use the guardian's " \
-                  "#{label}. It cannot be blank while the dependent is set to use their own.")
-        consistent = false
-      end
-
-      consistent
-    end
-
-    # Backfills an existing dependent's own contact from their record when the form supplied none.
-    #
-    # Deliberately keyed on blankness, not key presence. Key presence would make a cleared field
-    # authoritative, and that is not a restoration change -- it is a contact policy change. A blank
-    # dependent contact reaches `GuardianDependentManagementService#apply_email_strategy`, which
-    # falls back to the guardian strategy and mints a synthetic
-    # `dependent-<uuid>@system.matvulcan.local` primary identifier. Clearing the field would then
-    # silently revoke the dependent's portal access and hand delivery to the guardian, while the
-    # re-rendered form still showed "use guardian" unchecked beside an empty box.
-    #
-    # Honouring a deliberate clear is a real gap, but it belongs with that fallback -- refusing
-    # blank-plus-dependent rather than converting it -- not here.
-    def merge_existing_dependent_contact(attrs, dependent)
-      data = attrs.deep_dup.with_indifferent_access
-      return data unless dependent
-
-      if data[:dependent_email].blank? && data[:email].blank?
-        if dependent.dependent_email.present?
-          data[:dependent_email] = dependent.dependent_email
-        elsif dependent.real_email?
-          data[:email] = dependent.email
-          data[:dependent_email] = dependent.email
-        end
-      end
-
-      if data[:dependent_phone].blank? && data[:phone].blank?
-        if dependent.dependent_phone.present?
-          data[:dependent_phone] = dependent.dependent_phone
-        elsif dependent.real_phone?
-          data[:phone] = dependent.phone
-          data[:dependent_phone] = dependent.phone
-        end
-      end
-
-      data
     end
 
     def guardian_for_dependent_contact_update
