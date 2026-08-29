@@ -52,6 +52,16 @@ describe("UserSearchController", () => {
           <input type="date" name="guardian_attributes[date_of_birth]" value="" />
           <input type="radio" name="guardian_attributes[phone_type]" value="mobile" checked />
           <input type="radio" name="guardian_attributes[communication_preference]" value="email" checked />
+
+          <section id="identityReviewPanel" class="hidden">
+            <h4 id="identityReviewHeading" tabindex="-1"></h4>
+            <p id="identityReviewBody"></p>
+            <ul id="identityReviewCandidates"></ul>
+            <div id="identityReviewOverride" class="hidden">
+              <button type="button" id="identityReviewOverrideButton">Create a new guardian</button>
+            </div>
+          </section>
+          <p id="identityReviewStatus" aria-live="polite"></p>
           
           <button type="button" id="createButton">Save Guardian</button>
         </div>
@@ -95,6 +105,17 @@ describe("UserSearchController", () => {
       value: fixture.querySelector('#createButton'),
       writable: false,
       configurable: true
+    })
+
+    ;['Panel', 'Heading', 'Body', 'Candidates', 'Override', 'Status'].forEach((suffix) => {
+      Object.defineProperty(controller, `identityReview${suffix}Target`, {
+        value: fixture.querySelector(`#identityReview${suffix}`),
+        configurable: true
+      })
+      Object.defineProperty(controller, `hasIdentityReview${suffix}Target`, {
+        value: true,
+        configurable: true
+      })
     })
     
     Object.defineProperty(controller, 'clearSearchButtonTarget', {
@@ -388,6 +409,109 @@ describe("UserSearchController", () => {
       // Button should be restored after error
       expect(createButton.disabled).toBe(false)
     })
+
+    it("renders a 422 identity decision without losing the reviewed guardian facts", async () => {
+      railsRequest.perform.mockRejectedValue({
+        data: {
+          state: 'needs_confirmation',
+          candidates: [{
+            id: 17,
+            name: '<img src=x onerror=alert(1)>',
+            date_of_birth: 'January 15, 1980',
+            selectable: true
+          }],
+          token: 'signed-review',
+          expires_at: new Date(Date.now() + 60000).toISOString()
+        }
+      })
+      controller.validateBeforeSubmit = jest.fn().mockResolvedValue({ valid: true })
+
+      await controller.createGuardian({ target: fixture.querySelector('#createButton'), preventDefault: jest.fn() })
+
+      expect(controller._guardianReviewData.first_name).toBe('John')
+      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
+      expect(controller.identityReviewCandidatesTarget.querySelector('img')).toBeNull()
+      expect(controller.identityReviewCandidatesTarget.textContent).toContain('<img src=x onerror=alert(1)>')
+      expect(document.activeElement).toBe(controller.identityReviewHeadingTarget)
+    })
+
+    it("renders a stale selected-guardian 422 and keeps the reviewed facts for a fresh review", async () => {
+      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
+      railsRequest.perform.mockRejectedValue({
+        data: { state: 'invalid_selection', candidates: [] }
+      })
+
+      await controller._submitGuardianIdentityChoice({ selected_candidate_id: 17 })
+
+      expect(controller._guardianReviewData).toEqual({ first_name: 'John', last_name: 'Doe' })
+      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
+      expect(controller.identityReviewHeadingTarget.textContent).toBe('Identity review unavailable')
+      expect(controller.identityReviewStatusTarget.textContent).toBe('Guardian identity review must be run again.')
+    })
+
+    it("keeps edit invalidation visible without moving focus from the changed field", () => {
+      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
+      controller._renderGuardianIdentityReview({
+        state: 'needs_confirmation',
+        candidates: [{ id: 17, name: 'John Doe', selectable: true }],
+        token: 'signed-review',
+        expires_at: new Date(Date.now() + 60000).toISOString()
+      })
+
+      const firstName = fixture.querySelector('[name="guardian_attributes[first_name]"]')
+      firstName.focus()
+      firstName.value = 'Jonathan'
+      firstName.dispatchEvent(new Event('input', { bubbles: true }))
+
+      expect(controller._guardianReviewData).toBeNull()
+      expect(controller._guardianReviewToken).toBeNull()
+      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
+      expect(controller.identityReviewHeadingTarget.textContent).toBe('Guardian details changed')
+      expect(controller.identityReviewBodyTarget.textContent).toBe('Save Guardian to review again.')
+      expect(controller.identityReviewCandidatesTarget.children).toHaveLength(0)
+      expect(controller.identityReviewOverrideTarget.classList.contains('hidden')).toBe(true)
+      expect(controller.identityReviewStatusTarget.textContent).toContain('Guardian details changed')
+      expect(document.activeElement).toBe(firstName)
+    })
+
+    it("shows an expired review visibly and moves focus from the removed override action", async () => {
+      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
+      controller._guardianReviewToken = 'signed-review'
+      controller._guardianReviewExpiresAt = Date.now() - 1000
+      const overrideButton = fixture.querySelector('#identityReviewOverrideButton')
+      overrideButton.focus()
+
+      await controller.overrideGuardianIdentityReview()
+
+      expect(railsRequest.perform).not.toHaveBeenCalled()
+      expect(controller._guardianReviewData).toBeNull()
+      expect(controller._guardianReviewToken).toBeNull()
+      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
+      expect(controller.identityReviewHeadingTarget.textContent).toBe('Review expired')
+      expect(controller.identityReviewBodyTarget.textContent).toBe(
+        'This review expired. Save Guardian to review again.'
+      )
+      expect(controller.identityReviewOverrideTarget.classList.contains('hidden')).toBe(true)
+      expect(document.activeElement).toBe(controller.identityReviewHeadingTarget)
+    })
+
+    it("explains a split contact conflict without calling either guardian ineligible", () => {
+      controller._renderGuardianIdentityReview({
+        state: 'blocked',
+        reasons: ['exact_email', 'exact_phone', 'email_phone_split'],
+        candidates: [
+          { id: 17, name: 'Email Owner', selectable: false },
+          { id: 18, name: 'Phone Owner', selectable: false }
+        ]
+      })
+
+      expect(controller.identityReviewBodyTarget.textContent).toContain(
+        'The email and phone belong to different existing records.'
+      )
+      expect(controller.identityReviewCandidatesTarget.textContent).toContain('Cannot resolve both contact conflicts')
+      expect(controller.identityReviewCandidatesTarget.textContent).not.toContain('Not eligible as a guardian')
+      expect(controller.identityReviewCandidatesTarget.querySelector('button')).toBeNull()
+    })
     
     it("builds correct user display HTML", () => {
       const userData = {
@@ -474,4 +598,4 @@ describe("UserSearchController", () => {
       expect(mockedOutlet.clearSelection).not.toHaveBeenCalled()
     })
   })
-}) 
+})

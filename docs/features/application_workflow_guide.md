@@ -25,7 +25,7 @@ All flows converge on **one Application record**, so every downstream service (e
 | Component | Purpose | Notes |
 |-----------|---------|-------|
 | **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; writes the application, its status history, and audit events. It sends **no** notifications and enqueues no delivery of its own — recipient messaging is triggered by later workflow steps, and its tests assert a zero notification delta. Refuses final submission while the applicant is the subject of an open `registration_soft_match` duplicate-review case; draft saves and autosave are unaffected |
-| **Applications::PaperApplicationService** | Admin data-entry path | Sets `Current.paper_context` to bypass online-only validations |
+| **Applications::PaperApplicationService** | Final multipart writer for admin paper applications | Owns the scoped `Current.paper_context`, locked identity requalification, application write, proofs, and audit events; guardian JSON quick-create is a separate pre-submit step |
 | **Applications::EventDeduplicationService** | 1-min window, priority pick | Used by audit views, dashboards, certification timelines |
 | **NotificationService** | Email notifications | Postmark integration; uses MAILER_MAP for routing |
 | **ProofAttachmentService** | Upload / approve / reject | Unified for portal, secure form, and paper proof handling; handles blob validation |
@@ -47,20 +47,11 @@ All flows converge on **one Application record**, so every downstream service (e
 
 ### 2.2 Paper (Admin)
 
-1. **Admin → Paper Apps → New**  
-2. Dynamic form (guardian search / create, proof accept with file; reject without file).  
-3. Wrap all logic with:
-
-```ruby
-Current.paper_context = true
-begin
-  process_paper_application # uses Applications::PaperApplicationService
-ensure
-  Current.paper_context = nil
-end
-```
-
-4. Same downstream services as portal flow → single behaviour set.
+1. **Admin → Paper Apps → New**
+2. For a dependent application, staff first select an on-file guardian or use **Save Guardian**. Quick-create is a JSON `POST /admin/users`: it performs guardian identity review, then returns the selected or newly created `guardian_id`; the final multipart submit does not create an inline guardian.
+3. Before a new self-applicant or dependent is submitted, the browser sends the context-scoped identity facts — never proofs or other application answers — to the read-only JSON `POST /admin/paper_applications/identity_review`. Staff either choose an eligible on-file record or explicitly confirm that the people are different; a clear response resumes submission automatically.
+4. The final multipart submit runs through `Applications::PaperApplicationService`. The service owns the scoped `Current.paper_context`, locks and requalifies any selected record or new-person decision, writes the application and proofs, and records the audit event.
+5. The resulting Application then uses the same downstream lifecycle, proof, event, and notification services as the portal flow.
 
 ---
 

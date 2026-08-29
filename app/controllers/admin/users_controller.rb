@@ -8,8 +8,6 @@ module Admin
     include UserServiceIntegration
     include PaperQuickCreatePortalMarkers
 
-    class DuplicateReviewCaseRollback < StandardError; end
-
     DependentSummary = Struct.new(
       :id,
       :name,
@@ -215,53 +213,23 @@ module Admin
     # Create action for creating a new guardian from the paper application form
     def create
       Current.paper_context = true
-      contact_flags = quick_create_contact_flags
-      attrs = contact_flags.apply_to(user_create_params.to_h)
-      duplicate_detection = detect_admin_create_duplicates(attrs)
+      response.headers['Cache-Control'] = 'no-store'
+      service = Applications::PaperGuardianQuickCreateService.new(
+        attrs: user_create_params.to_h,
+        request_params: params,
+        admin: current_user,
+        submitted_token: params[:identity_decision],
+        selected_candidate_id: params[:selected_candidate_id]
+      )
+      result = service.call
 
-      return render_admin_duplicate_block if duplicate_detection.hard_block
-
-      result = nil
-      review_result = nil
-      user = nil
-
-      ActiveRecord::Base.transaction do
-        result = create_user_with_service(
-          attrs,
-          is_managing_adult: true,
-          skip_user_lookup: true,
-          skip_email_validation: contact_flags.skip_email_validation?,
-          skip_phone_validation: contact_flags.skip_phone_validation?
-        )
-
-        raise ActiveRecord::Rollback unless result.success?
-
-        user = result.data[:user]
-        review_result = open_admin_duplicate_review_case(user, duplicate_detection)
-        raise DuplicateReviewCaseRollback if review_result&.failure?
+      if result.success?
+        user = result.data.fetch(:user)
+        store_quick_created_portal_user_marker!(user) if result.data[:created]
+        return render json: guardian_quick_create_success_payload(user, result.data[:state])
       end
 
-      if result&.success?
-        store_quick_created_portal_user_marker!(user)
-
-        render json: {
-          success: true,
-          user: user.as_json(only: %i[id first_name last_name email phone
-                                      physical_address_1 physical_address_2 city state zip_code])
-        }
-      else
-        log_user_service_error('to create user in admin interface', result.data[:errors] || [result.message])
-        render json: {
-          success: false,
-          errors: format_validation_errors(result.data[:errors] || [result.message])
-        }, status: :unprocessable_content
-      end
-    rescue DuplicateReviewCaseRollback
-      log_user_service_error('to create duplicate review case in admin interface', [review_result.message])
-      render json: {
-        success: false,
-        errors: format_validation_errors([review_result.message])
-      }, status: :unprocessable_content
+      render json: guardian_quick_create_failure_payload(result), status: :unprocessable_content
     ensure
       Current.reset
     end
@@ -697,77 +665,31 @@ module Admin
       phone
     end
 
-    def quick_create_contact_flags
-      Applications::PaperContactFlags.new(params, scope: quick_create_contact_scope)
-    end
-
-    def quick_create_contact_scope
-      if params.key?(:guardian_no_email_address) || params.key?(:guardian_no_phone_number)
-        :guardian
-      else
-        :constituent
-      end
-    end
-
-    def detect_admin_create_duplicates(attrs)
-      result = DuplicateDetectionService.new(
-        context: :admin_create,
-        attrs: duplicate_detection_attrs(attrs)
-      ).call
-      return result.data if result.success?
-
-      Rails.logger.warn("Admin user duplicate detection failed: #{result.message}")
-      DuplicateDetectionService::Result.new([], 0.0, [], false, :allow, :proceed)
-    end
-
-    def render_admin_duplicate_block
-      render json: {
-        success: false,
-        errors: {
-          duplicate: 'A user with this email or phone already exists. Select the existing user instead of creating a new one.'
-        }
-      }, status: :unprocessable_content
-    end
-
-    def open_admin_duplicate_review_case(user, duplicate_detection)
-      return unless duplicate_detection.recommended_action == :flag
-
-      DuplicateReviewCases::CreateService.new(
-        source: :admin_create,
-        subject_user: user,
-        actor: current_user,
-        reason_codes: duplicate_detection.reasons,
-        candidates: duplicate_review_candidates_for(duplicate_detection),
-        metadata: { intake_context: 'admin_create' }
-      ).call
-    end
-
-    def duplicate_review_candidates_for(duplicate_detection)
-      duplicate_detection.matched_users.map do |candidate|
-        DuplicateReviewCases::CreateService::CandidateInput.new(
-          candidate,
-          duplicate_detection.reasons.first
-        )
-      end
-    end
-
-    def duplicate_detection_attrs(attrs)
-      data = attrs.with_indifferent_access
-      dob_holder = Users::Constituent.new
-      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
-
+    def guardian_quick_create_success_payload(user, state)
       {
-        email: User.normalize_email(data[:email]),
-        phone: User.normalize_phone(data[:phone]),
-        first_name: data[:first_name],
-        last_name: data[:last_name],
-        date_of_birth: dob_holder.date_of_birth,
-        physical_address_1: data[:physical_address_1],
-        physical_address_2: data[:physical_address_2],
-        city: data[:city],
-        state: data[:state],
-        zip_code: data[:zip_code]
+        success: true,
+        state: state,
+        user: user.as_json(only: %i[id first_name last_name email phone
+                                    physical_address_1 physical_address_2 city state zip_code])
       }
+    end
+
+    def guardian_quick_create_failure_payload(result)
+      review = result.data[:review]
+      payload = {
+        success: false,
+        state: result.data[:state],
+        errors: format_validation_errors(result.data[:errors].presence || [result.message])
+      }
+      return payload if review.blank?
+
+      payload[:reasons] = review.reasons
+      payload[:candidates] = review.presented_candidates
+      if review.token.present?
+        payload[:token] = review.token
+        payload[:expires_at] = Applications::PaperIdentityDecision.expires_at(review.token)&.iso8601
+      end
+      payload
     end
 
     # Build DependentSummary objects for a guardian's dependents
@@ -807,6 +729,10 @@ module Admin
         return [] if pool.empty?
 
         pool.select(&:paper_applicant_candidate?).first(limit)
+      elsif role_filter == 'guardian'
+        result = Users::FilterService.new(User.all, q: query, role: nil).apply_filters
+        pool = result.success? ? result.data.limit(50).to_a : []
+        pool.select(&:paper_guardian_candidate?).first(limit)
       else
         result = Users::FilterService.new(User.all, q: query, role: role_filter).apply_filters
         result.success? ? result.data.limit(limit).to_a : []

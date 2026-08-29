@@ -36,10 +36,11 @@ module Applications
   # ## What it does not claim
   #
   # Recomputing at the write boundary closes stale *client* state, and nothing more. This token is
-  # stateless -- it is never marked spent -- so on its own it can be presented twice. Two concurrent
-  # submissions racing between the read and the write are excluded separately, by the identity
-  # advisory lock in PaperApplicationService. The honest contract for this object alone is: staff
-  # reviewed the candidate snapshot as recomputed at the write boundary.
+  # stateless -- it is never marked spent -- so on its own it can be presented twice. The canonical
+  # writer instead takes PaperIdentityCreationLock, then recomputes the candidate snapshot and
+  # verifies this decision while holding that lock. Serialization plus locked recomputation rejects
+  # a competing replay; the lock alone does not spend the token. The honest contract for this object
+  # alone is: staff reviewed the candidate snapshot as recomputed at the write boundary.
   class PaperIdentityDecision
     VERSION = 'v1'
     HMAC_PURPOSE = 'applications/paper_identity_decision'

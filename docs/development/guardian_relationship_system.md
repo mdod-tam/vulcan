@@ -222,16 +222,16 @@ Current.paper_context = true
 begin
   # PaperApplicationService.process_guardian_dependent calls:
   # GuardianDependentManagementService.process_guardian_scenario
-  # - Sets up guardian (existing or new)
-  # - Creates or reuses dependent with contact strategies
+  # - Requalifies the saved/selected guardian
+  # - Creates a new dependent with contact strategies
   # - Creates GuardianRelationship
-  # - Creates Application with managing_guardian_id set
+  # PaperApplicationService then creates Application with managing_guardian_id set
 ensure
   Current.paper_context = nil
 end
 ```
 
-Supports new guardians, existing guardians, new dependents, and existing dependents selected with `dependent_id`. `PaperApplicationService` owns application creation and eligibility checks; `GuardianDependentManagementService` owns dependent/guardian setup, duplicate detection for new paper guardians/dependents, duplicate-review case creation with source `:paper_intake`, and request-time contact strategy snapshots (`email_strategy`, `phone_strategy`, `address_strategy`).
+Supports saved/selected guardians, new dependents, and on-file existing dependents selected with `dependent_id`. New guardians are created only by the paper form's JSON quick-create writer; final submit requires `guardian_id`. `PaperApplicationService` owns the outer transaction, application eligibility, and locked requalification of direct ids. `GuardianDependentManagementService` owns dependent contact-strategy snapshots (`email_strategy`, `phone_strategy`, `address_strategy`), new-dependent identity verification under the shared creation lock, creation, and relationship persistence. Adjudicated paper writers open no automatic duplicate-review case. Existing enum values and historical cases remain readable.
 
 Existing dependent reuse should preserve the current relationship when possible, set `managing_guardian_id` explicitly on the new application, and still respect waiting-period or `blocking_new_submission` checks from the paper applicant lookup.
 
@@ -264,7 +264,7 @@ Handles complex guardian/dependent scenarios in paper applications:
 ```ruby
 # Contact strategies determine how dependent contact info is handled
 service = GuardianDependentManagementService.new(params)
-service.process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
+service.process_guardian_scenario(guardian_id, applicant_data, relationship_type)
 ```
 
 ---

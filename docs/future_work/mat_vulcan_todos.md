@@ -44,6 +44,17 @@ Income threshold (FPL) validation follow-ups
 - [ ] Confirm no dual ownership: remove any `data-paper-application-target="incomeThresholdWarning"` or warning toggling from non-owner controllers.  [PATCH-001]
 - [ ] Grep for `#income-threshold-warning` usages in admin paths and replace with `#admin-income-threshold-warning` or target-based selectors as appropriate.  [PATCH-001]
 
+Paper guardian/dependent identity-review follow-ups
+- [ ] Make guardian identity-choice actions single-flight. Disable every rendered "Use this guardian"
+      action and the different-person override while one choice request is pending, ignore repeated
+      activation, and restore the actions after a safe refusal. Pin the double-activation behavior in
+      `user_search_controller_test.js`, including the override case where the first request may
+      already have committed before its browser response is canceled. [TEST-001][DATA-002]
+- [ ] Associate an `invalid_contact_choice` refusal with the dependent contact field that must be
+      corrected. Keep the existing visible panel, live-region announcement, focus, and `aria-invalid`;
+      add an `aria-describedby` reference to stable refusal text and remove it when review state is
+      cleared. Cover both dependent email and phone, plus cleanup after correction. [TEST-001]
+
 ## Registration & Account Integrity  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 
 Duplicate-review outcome contract  [AUTHZ-002][AUDIT-002]

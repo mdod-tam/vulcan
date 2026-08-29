@@ -314,6 +314,58 @@ module Applications
       assert_equal guardian, service.application.managing_guardian
     end
 
+    test 'existing dependent with a blocking application is refused before writes' do
+      guardian = create(:constituent)
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      create(:application, :in_progress, user: dependent, application_date: 8.years.ago)
+      original_dependent = dependent.attributes.deep_dup
+      service = PaperApplicationService.new(
+        params: existing_dependent_service_params(guardian, dependent),
+        admin: @admin,
+        skip_proof_processing: true
+      )
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        assert_not service.create
+      end
+      assert_includes service.errors, 'This dependent already has an active or pending application.'
+      assert_equal original_dependent, dependent.reload.attributes
+    end
+
+    test 'existing dependent inside the waiting period is refused before writes' do
+      guardian = create(:constituent)
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      waiting_period = Policy.get('waiting_period_years') || 3
+      last_application = create(
+        :application,
+        :archived,
+        user: dependent,
+        application_date: waiting_period.years.ago + 1.day
+      )
+      original_dependent = dependent.attributes.deep_dup
+      service = PaperApplicationService.new(
+        params: existing_dependent_service_params(guardian, dependent),
+        admin: @admin,
+        skip_proof_processing: true
+      )
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        assert_not service.create
+      end
+      assert_includes(
+        service.errors,
+        'Not yet eligible for a new application. Eligible after ' \
+        "#{(last_application.application_date + waiting_period.years).to_date.strftime('%B %d, %Y')}."
+      )
+      assert_equal original_dependent, dependent.reload.attributes
+    end
+
     test 'creates application with rejected income proof' do
       # Test the rejection functionality
       test_timestamp = Time.now.to_i
@@ -953,6 +1005,32 @@ module Applications
       assert dependent.phone.start_with?('000-')
     end
 
+    test 'a submitted existing dependent without an on-file guardian relationship is refused before writes' do
+      guardian = create(:constituent, email: "guardian-unrelated-#{SecureRandom.hex(4)}@example.com")
+      dependent = create(:constituent, email: "dependent-unrelated-#{SecureRandom.hex(4)}@example.com")
+      original_dependent = dependent.attributes.deep_dup
+      service_params = {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        constituent: { locale: 'es', communication_preference: 'letter', hearing_disability: true },
+        application: @application_params
+      }
+      service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count',
+                            'Event.count', 'Notification.count'] do
+        assert_not service.create
+      end
+      assert_match(/not on file|not eligible/i, service.errors.join(' '))
+      assert_equal original_dependent, dependent.reload.attributes,
+                   'contact and disability facts must not change before relationship requalification'
+    end
+
     test 'process_existing_dependent clears stale dependent_phone when guardian has no phone' do
       guardian = create(:constituent,
                         email: "guardian-nophone-#{SecureRandom.hex(4)}@example.com",
@@ -1018,7 +1096,7 @@ module Applications
                                             admin: @admin, skip_proof_processing: true)
 
       assert_not service.create, 'a contradictory contact instruction must not be resolved silently'
-      assert_match(/use the guardian's email address/i, service.errors.join(' '))
+      assert_includes service.errors, "Enter the dependent's email or choose the guardian's email address."
       # The old address must not have been quietly reinstated behind the refusal.
       assert_equal original_email, dependent.reload.dependent_email
     end
@@ -1051,7 +1129,7 @@ module Applications
                                             admin: @admin, skip_proof_processing: true)
 
       assert_not service.create
-      assert_match(/use the guardian's phone number/i, service.errors.join(' '))
+      assert_includes service.errors, "Enter the dependent's phone or choose the guardian's phone number."
       assert_equal original_phone, dependent.reload.dependent_phone
     end
 
@@ -1380,6 +1458,42 @@ module Applications
       assert_match(/already exists/i, service.errors.join(' '))
       assert_nil service.pending_identity_decision,
                  'a hard block is not a reviewable decision'
+    end
+
+    test 'a dependent unique-contact race is reclassified after rollback without leaking database details' do
+      guardian = create(:constituent, phone: unique_paper_phone)
+      params = base_paper_params.merge(
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        relationship_type: 'Parent',
+        email_strategy: 'dependent',
+        phone_strategy: 'guardian',
+        address_strategy: 'guardian'
+      )
+      params[:constituent] = params[:constituent].except(:email, :phone).merge(
+        dependent_email: "dependent-race-#{SecureRandom.hex(4)}@example.com",
+        dependent_phone: ''
+      )
+
+      clear_review = stub(error?: false, invalid_decision?: false, blocked?: false,
+                          confirmed?: false, clear?: true)
+      blocked_review = stub(blocked?: true)
+      Applications::PaperIdentityReview.any_instance.expects(:call).twice.returns(clear_review, blocked_review)
+      Applications::UserCreationService.any_instance.expects(:call).raises(
+        ActiveRecord::RecordNotUnique.new('duplicate key violates index_users_on_email')
+      )
+
+      counters = ['User.count', 'GuardianRelationship.count', 'Application.count',
+                  'DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count',
+                  'Event.count', 'Notification.count']
+      service = paper_service(params)
+      assert_no_difference counters do
+        assert_not service.create
+      end
+
+      assert_includes service.errors,
+                      GuardianDependentManagementService::DEPENDENT_CONTACT_COLLISION_MESSAGE
+      assert_no_match(/index_users|duplicate key/i, service.errors.join(' '))
     end
 
     # Removing the automatic review case removed the only durable record of who decided what, so a
@@ -1818,6 +1932,20 @@ module Applications
         date_of_birth: existing.date_of_birth
       )
       params
+    end
+
+    def existing_dependent_service_params(guardian, dependent)
+      {
+        applicant_type: 'dependent',
+        guardian_id: guardian.id,
+        dependent_id: dependent.id,
+        relationship_type: 'Parent',
+        email_strategy: 'guardian',
+        phone_strategy: 'guardian',
+        address_strategy: 'guardian',
+        constituent: { hearing_disability: true },
+        application: @application_params
+      }
     end
   end
 end

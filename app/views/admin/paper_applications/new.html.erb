@@ -1312,7 +1312,10 @@
           <div class="hidden mt-3" style="display: none;" data-paper-application-target="identityReviewOverride">
             <%= button_tag type: "button",
                 class: "inline-flex items-center px-3 py-2 border border-amber-400 rounded-md text-sm font-medium text-amber-900 bg-white hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500",
-                data: { action: "click->paper-application#overrideIdentityReview" } do %>
+                data: {
+                  action: "click->paper-application#overrideIdentityReview",
+                  "paper-application-target": "identityReviewOverrideButton"
+                } do %>
               These are different people — create a new constituent
             <% end %>
           </div>

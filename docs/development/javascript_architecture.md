@@ -34,6 +34,7 @@ Relevant routes:
 | `PATCH /constituent_portal/applications/:id/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
 | `GET /admin/paper_applications/recipient_preference` | `Admin::PaperApplicationsController#recipient_preference` | `forms/paper_application_controller.js` |
 | `POST /admin/paper_applications/identity_review` | `Admin::PaperApplicationsController#identity_review` | `forms/paper_application_controller.js` (submit-time preflight) |
+| `POST /admin/users` | `Admin::UsersController#create` | `admin/user_search_controller.js` (paper guardian quick-create review, selection, or override) |
 | `GET /admin/users/:id/adult_application_context` | `Admin::UsersController#adult_application_context` | `users/adult_picker_controller.js` |
 | `GET /admin/applications/charts` | `Admin::ApplicationsController#charts` | Lazy Turbo frame that mounts `reports-chart` |
 
@@ -140,21 +141,29 @@ Current producer: `ConstituentPortal::ApplicationsController` sets `@submission_
 
 ### Paper identity review preflight on `paper-application`
 
-New **self-applicant** paper submissions are checked for an existing constituent *before* the form is submitted. This is a preflight rather than a server-rendered failure because the form holds four native file inputs with no direct upload: any re-render discards documents staff already selected, and nothing can restore them.
+New **self-applicant and dependent** paper submissions are checked for an existing constituent *before* the form is submitted. Guardian JSON quick-create performs the same server-owned review inside its own request. The multipart preflight exists because the form holds four native file inputs with no direct upload: any re-render discards documents staff already selected, and nothing can restore them.
 
 - **Route.** `POST /admin/paper_applications/identity_review`, read-only, `Cache-Control: no-store`. The URL arrives as `data-paper-application-identity-review-url-value`; it is never hardcoded.
-- **Payload.** Exactly ten identity facts plus the two no-contact flags — never a `File`, and never the application answers. The flags are read from the live checkbox, not a hidden field, because they change the facts before detection runs.
-- **Every submission calls it**, including one that will turn out to have no matches: the browser cannot know the outcome without asking.
-- **States.** `idle` → `checking` → one of `clear` (resumes the native submission once), `possible_matches`, `blocked`, `error`, `timed_out`, `session_expired`, `expired`.
-- **Gating.** `_identityReviewBlocksSubmit()` is a sixth predicate in `_applySubmitGating`, which recomputes `disabled` from scratch on every input/change event — so setting `disabled` directly anywhere else would simply be undone. Only `checking`, `possible_matches`, and `blocked` gate. The failure states deliberately leave Submit live: Submit *is* the retry, and `beforeSubmit` intercepts it again, so a retry can never fall through to an unreviewed native submission.
+- **Payload.** A context-scoped allowlist of identity facts — never a `File`, and never application/proof answers. Self-applicant no-contact flags come from the live checkboxes. Dependent requests add only the selected guardian, relationship, and contact-strategy context needed to reproduce writer facts.
+- **Every new-self or new-dependent submission calls it**, including one that will turn out to have no matches: the browser cannot know the outcome without asking. Existing-record branches are requalified directly by the writer.
+- **States.** `idle` → `checking` → one of `clear` (resumes the native submission once), `possible_matches`, `blocked`, `invalid_contact_choice`, `error`, `timed_out`, `session_expired`, `expired`.
+- **Gating.** `_identityReviewBlocksSubmit()` is a sixth predicate in `_applySubmitGating`, which recomputes `disabled` from scratch on every input/change event — so setting `disabled` directly anywhere else would simply be undone. Only `checking`, `possible_matches`, `blocked`, and `invalid_contact_choice` gate. The failure states deliberately leave Submit live: Submit *is* the retry, and `beforeSubmit` intercepts it again, so a retry can never fall through to an unreviewed native submission.
 - **Bounded.** The request times out after 15s. Without that, a request that never settles left the form in `checking` with Submit disabled permanently.
 - **Session expiry is distinct.** A JSON request whose session has ended is answered with **401 and `Cache-Control: no-store`** by `Authentication#authenticate_user!`, not redirected — the sign-in page has no JSON representation, so redirecting a `fetch` there raised `ActionController::UnknownFormat` and made an ordinary expired session log a server exception. The client also still treats a followed redirect (`response.redirected`) as session expiry, so a non-JSON caller or an intermediary that redirects anyway is classified correctly rather than becoming a generic error. Treated as a generic error it produced an unbreakable "submit again to retry" loop, since retrying is exactly what does not work. The recovery offered is to sign in in **another tab** and resubmit, because this page cannot be reloaded without losing the selected files.
 - **Visible, not only announced.** Every notice state — including `checking` — renders into `identityReviewNotice`. `checking` alone does not take focus, since it resolves on its own and staff may still be typing.
 - **Invalidation.** Any edit to a bound identity fact clears the panel, the in-flight request, the expiry timer, the hidden `identity_decision` field, and any pending candidate selection. Generation counter plus a snapshot comparison, so a response already in flight cannot paint a panel for an applicant staff have since edited past.
 - **Decision carrier.** The override token is written to a hidden `identity_decision` field only when staff actually override. It is filtered from logs.
 - **Adult-picker handoff.** "Use this constituent" calls `adult-picker#selectAdultFromIdentityReview`, which re-checks eligibility server-side, applies the context *before* announcing the selection (announcing first would let gating conclude verification was unnecessary), and moves focus to the selected-applicant heading — the button that had focus is torn down with the panel.
+- **Dependent-picker handoff.** Before "Use this dependent" may set `dependent_id`, `paper-application` repeats the read-only identity-review POST and requires that the same candidate is still server-marked selectable. That refresh reuses the writer's dependent-role, guardian-relationship, blocking-application, and waiting-period policy. Only then does `guardian-picker#selectDependentFromIdentityReview` load the dependent through the existing Turbo frame, dispatch the ordinary guardian selection-change event, and move focus to the on-file identity summary. The final writer requalifies again under lock.
 
 Client-side state is convenience, never authority: `PaperIdentityReview` recomputes the same answer at the write boundary from the submitted facts.
+
+Guardian quick-create posts to `POST /admin/users` through `admin-user-search`. A 422 review
+response is an expected identity state, not a generic transport failure: the controller renders the
+server candidate snapshot, allows only an eligible server-marked selection or explicit override,
+invalidates that decision on any bound edit, and submits the selection/token back to the canonical
+quick-create service. The service locks and recomputes the review; browser state never authorizes a
+write.
 
 `BaseFormController#collectFormData` returns a flat object. It supports array fields named `field[]`, but it does not parse Rails nested parameter names into nested objects. A field named `guardian_attributes[name]` remains the key `"guardian_attributes[name]"`.
 

@@ -67,7 +67,12 @@ system matrix in `test/system/admin/paper_application_rollback_test.rb` owns pic
 reveal, and the cases where the browser's own submission rules matter -- an unchecked box is omitted
 entirely, and a disabled control is not submitted, neither of which a request test can reproduce.
 
-The existing-dependent branch is covered end to end in that system test -- selecting an on-file dependent, failing, and retrying to success. The inline-guardian branch is still request level only. Applicant and application fields, disability selections and
+The existing-dependent branch is covered end to end in that system test -- selecting an on-file
+dependent, failing, and retrying to success. Guardian quick-create identity decisions are exercised
+through the browser in `test/system/admin/paper_application_dependent_guardian_test.rb`; dependent
+preflight, correction, override, and on-file selection are exercised in
+`test/system/admin/paper_identity_review_test.rb`. Request tests still own server-rendered retry
+bindings. Together those paths cover applicant and application fields, disability selections and
 self-certification, attestations, contact strategies, applicant-type branch, guardian/dependent
 selection, all four proof dispositions, and their rejection reasons. The four native file inputs
 cannot be repopulated by a server render, so staff reselect only the documents their restored
@@ -92,7 +97,8 @@ The controller does not own the main paper-application side effects after create
 
 `Applications::PaperApplicationService` currently:
 
-- handles existing self-applicant, existing dependent, new guardian/dependent, and new self-applicant scenarios
+- handles existing self-applicant, existing dependent, new dependent with a saved/selected guardian,
+  and new self-applicant scenarios
 - creates or updates the relevant users
 - creates or updates the `Application`
 - sets `submission_method` to `paper`
@@ -110,15 +116,18 @@ Paper intake deliberately branches before it writes the application:
 |--------|-----------------|------------------|
 | Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
 | Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
-| New guardian/dependent | Admin enters guardian and dependent details. | Uses `GuardianDependentManagementService` to create or reuse the guardian, create the dependent, apply contact strategies, create the relationship, and return the dependent/guardian pair to `PaperApplicationService`. |
+| Guardian/dependent | Admin first saves or selects a guardian, then selects an on-file dependent or enters a new dependent. | `PaperGuardianQuickCreateService` owns new-guardian JSON creation. Final submission requires the saved/selected `guardian_id`; `PaperApplicationService` reuses only an eligible dependent already related to that guardian, while `GuardianDependentManagementService` creates one new dependent plus its relationship. Neither path manufactures a relationship to an unrelated existing record from a submitted id. |
 | New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Supports phone-only and address-only adults with NULL stored contacts when appropriate. Email-backed portal users get internal forced-change account setup; phone-only and address-only users do not. No-phone intake sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
 
-New paper self, guardian, and dependent records run through `DuplicateDetectionService` before the application write. Exact email or phone collisions hard-block new-record creation so paper intake cannot silently attach an unrelated user.
+New paper self and dependent records run through `DuplicateDetectionService` before the application
+write. A new guardian runs the same review before its separate JSON quick-create write. Exact email
+or phone collisions hard-block new-record creation so paper intake cannot silently attach an
+unrelated user.
 
 Soft name+DOB/address matches are handled differently by branch:
 
-- **New self applicant** — adjudicated inline, not queued. `Applications::PaperIdentityReview` is the single owner of the review: the admin form calls it through `POST /admin/paper_applications/identity_review` before submitting, and `PaperApplicationService` recomputes the same review at the write boundary, which is what decides. Staff either select the surfaced constituent or record that this is a different person; that override carries a signed `Applications::PaperIdentityDecision` bound to the acting admin, the submitted identity facts, the exact candidate set and the match reasons, and it logs one `paper_identity_no_match_confirmed` event. **No `paper_intake` review case is opened on this branch** — queuing one would ask staff to re-review a decision they had just made, and paper cases are resolvable but never mergeable. A search that surfaces nothing creates normally, with no token and no event.
-- **Guardian and dependent** — unchanged for now: soft matches still open `DuplicateReviewCase` rows through `DuplicateReviewCases::CreateService` after the subject user is persisted, using source `:paper_intake`, setting `users.needs_duplicate_review`, and logging `duplicate_review_case_opened`. Bringing these onto the same inline decision is PR A2.
+- **New self applicant or dependent** — adjudicated inline, not queued. `Applications::PaperIdentityReview` is the single owner of normalized facts, candidate presentation, role-specific selectability, and signed decisions. The form calls the read-only review before native multipart submission; the canonical writer recomputes it under `PaperIdentityCreationLock` inside the application transaction. A dependent decision is additionally bound to the selected guardian, relationship, and contact strategies. A valid different-person override logs exactly one bounded `paper_identity_no_match_confirmed` event; a clear result logs none. Neither branch opens `paper_intake` cases.
+- **Guardian** — the visible `Save Guardian` JSON step is the only new-guardian writer. `PaperGuardianQuickCreateService` applies guardian contact flags, recomputes review under the shared identity lock, and returns clear, candidate, exact-contact, selected-existing, or confirmed-override outcomes. Final paper submission requires its returned `guardian_id` (or an existing selection); it never creates from inline `guardian_attributes`. No `admin_create` or `paper_intake` case is opened.
 
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
@@ -126,7 +135,7 @@ Contact verification matters for existing adults because paper intake can change
 
 ## Account-Created Notices And Quick-Create Markers
 
-Paper intake routes are `new`, `create`, and the read-only `identity_review` collection POST (`config/routes.rb`). The admin form calls `identity_review` before every submission; it detects, describes and signs, and never writes. Quick-created **email-backed** portal user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
+Paper intake routes are `new`, `create`, and the read-only `identity_review` collection POST (`config/routes.rb`). The admin form calls `identity_review` before new-self and new-dependent submission; existing-record branches are requalified by the writer instead. The endpoint detects, describes and signs, and never writes. Quick-created **email-backed** portal user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
 
 When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for email-backed portal users created in the same submission or quick-created in the same browser session. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
 

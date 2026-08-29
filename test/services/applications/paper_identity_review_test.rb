@@ -121,6 +121,9 @@ module Applications
       assert result.blocked?
       assert_equal [email_owner.id, phone_owner.id].sort, result.candidates.map(&:id).sort
       assert_includes result.reasons, 'email_phone_split'
+      assert_empty result.selectable_candidates,
+                   'selecting either record cannot resolve contact owned by the other record'
+      assert(result.presented_candidates.none? { |candidate| candidate[:selectable] })
     end
 
     # PaperContactFlags rewrites the facts before detection: choosing "no email" removes the email
@@ -167,6 +170,20 @@ module Applications
       assert_match(/changed since you reviewed them/i, service.errors.join(' '))
     end
 
+    test 'a submitted decision is not ignored when edited facts now have no candidates' do
+      create(:constituent, first_name: 'Review', last_name: 'Subject', date_of_birth: Date.new(1990, 4, 2))
+      preview = review(@facts)
+      assert preview.needs_confirmation?
+
+      changed = review_object(@facts.merge(last_name: 'Different'), contact_flag_params: @facts,
+                                                                    submitted_token: preview.token).call
+
+      assert changed.invalid_decision?
+      assert_not changed.permits_creation?
+      assert_equal :mismatched, changed.decision_reason
+      assert_empty changed.candidates
+    end
+
     private
 
     # A complete paper submission, so the writer can actually run rather than fail earlier for
@@ -188,9 +205,9 @@ module Applications
       }.merge(extra)
     end
 
-    def review_object(facts, contact_flag_params: nil)
+    def review_object(facts, contact_flag_params: nil, submitted_token: nil)
       PaperIdentityReview.new(constituent_params: facts, admin: @admin,
-                              contact_flag_params: contact_flag_params)
+                              contact_flag_params: contact_flag_params, submitted_token: submitted_token)
     end
 
     def review(facts, contact_flag_params: nil)

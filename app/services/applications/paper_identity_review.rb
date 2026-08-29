@@ -18,6 +18,12 @@ module Applications
   #
   # Read-only by construction. It detects, describes, verifies and signs; nothing here writes.
   class PaperIdentityReview
+    CONTEXTS = {
+      self_applicant: { detection: :paper_new_self, contact_scope: :constituent },
+      guardian: { detection: :paper_new_guardian, contact_scope: :guardian },
+      dependent: { detection: :paper_new_dependent, contact_scope: nil }
+    }.freeze
+
     # `candidates` is what the search surfaced. `selectable_candidates` is the subset staff can
     # actually act on: an exact email or phone collision may belong to a record that cannot be a
     # paper applicant at all, and telling staff to "select the existing applicant" is useless when
@@ -35,6 +41,7 @@ module Applications
       def confirmed? = state == :confirmed
       def needs_confirmation? = state == :needs_confirmation
       def error? = state == :error
+      def invalid_decision? = state == :invalid_decision
       def candidate_ids = Array(candidates).map(&:id)
 
       # Creation may proceed either because the search turned nothing up or because staff looked at
@@ -45,11 +52,16 @@ module Applications
 
     # @param submitted_token [String, nil] the decision the request carried, if any. The preview
     #   passes nothing; the writer passes what staff returned.
-    def initialize(constituent_params:, admin:, contact_flag_params: nil, submitted_token: nil)
+    def initialize(constituent_params:, admin:, contact_flag_params: nil, submitted_token: nil,
+                   context: :self_applicant, context_data: {})
       @constituent_params = constituent_params
       @admin = admin
       @contact_flag_params = contact_flag_params || constituent_params
       @submitted_token = submitted_token
+      @context = context.to_sym
+      @context_config = CONTEXTS.fetch(@context)
+      @guardian = context_data[:guardian]
+      @relationship_type = context_data[:relationship_type]
     end
 
     def call
@@ -74,8 +86,8 @@ module Applications
     # Enough for staff to tell two people apart, and no more. Contact details are deliberately
     # excluded: a soft match is decided on identity, and an exact-contact conflict is described by
     # its reason codes rather than by echoing the other record's email or phone back to the browser.
-    def presented_candidates(candidates)
-      selectable_ids = selectable(candidates).to_set(&:id)
+    def presented_candidates(candidates, selectable_candidates: selectable(candidates))
+      selectable_ids = selectable_candidates.to_set(&:id)
       Array(candidates).map do |candidate|
         {
           id: candidate.id,
@@ -124,7 +136,7 @@ module Applications
     private
 
     def detect
-      result = DuplicateDetectionService.new(context: :paper_new_self, attrs: identity_facts).call
+      result = DuplicateDetectionService.new(context: @context_config.fetch(:detection), attrs: identity_facts).call
       return result.data if result.success?
 
       nil
@@ -132,7 +144,12 @@ module Applications
 
     # Flags applied first, exactly as the writer applies them, so preview and verification agree.
     def applicant_data
-      PaperContactFlags.new(@contact_flag_params, scope: :constituent).apply_to(@constituent_params)
+      return dependent_applicant_data if @context == :dependent
+
+      PaperContactFlags.new(
+        @contact_flag_params,
+        scope: @context_config.fetch(:contact_scope)
+      ).apply_to(@constituent_params)
     end
 
     # A hard block is not a decision staff may take, so no token is issued: there is nothing to
@@ -140,9 +157,10 @@ module Applications
     # split-contact conflict -- because they are the only thing that lets the endpoint explain what
     # happened, particularly when the matched record is not selectable.
     def blocked_result(candidates, reasons)
+      blocked_selectable = reasons.include?('email_phone_split') ? [] : selectable(candidates)
       Result.new(state: :blocked, candidates: candidates,
-                 selectable_candidates: selectable(candidates),
-                 presented_candidates: presented_candidates(candidates), reasons: reasons,
+                 selectable_candidates: blocked_selectable,
+                 presented_candidates: presented_candidates(candidates, selectable_candidates: blocked_selectable), reasons: reasons,
                  token: nil, decision_reason: nil, identity_facts: identity_facts)
     end
 
@@ -152,13 +170,21 @@ module Applications
     # A decision is only meaningful when staff are overriding something the computer surfaced.
     def confirmed_or_pending(candidates, reasons)
       if candidates.empty?
+        if @submitted_token.present?
+          facts = PaperIdentityDecision::Facts.new(decision_context, @admin, identity_facts, [], reasons)
+          decision = PaperIdentityDecision.verify(@submitted_token, facts)
+          return Result.new(state: :invalid_decision, candidates: [], selectable_candidates: [],
+                            presented_candidates: [], reasons: reasons,
+                            token: nil, decision_reason: decision.reason, identity_facts: identity_facts)
+        end
+
         return Result.new(state: :clear, candidates: [], selectable_candidates: [],
                           presented_candidates: [], reasons: reasons,
                           token: nil, decision_reason: nil, identity_facts: identity_facts)
       end
 
       presented = presented_candidates(candidates)
-      facts = PaperIdentityDecision::Facts.new(:self_applicant, @admin, identity_facts,
+      facts = PaperIdentityDecision::Facts.new(decision_context, @admin, identity_facts,
                                                presented, reasons)
       decision = PaperIdentityDecision.verify(@submitted_token, facts)
 
@@ -175,7 +201,66 @@ module Applications
     end
 
     def selectable(candidates)
-      candidates.select { |user| user.respond_to?(:paper_applicant_candidate?) && user.paper_applicant_candidate? }
+      candidates.select { |candidate| candidate_selectable?(candidate) }
+    end
+
+    def candidate_selectable?(candidate)
+      case @context
+      when :guardian
+        candidate.respond_to?(:paper_guardian_candidate?) && candidate.paper_guardian_candidate?
+      when :dependent
+        candidate.respond_to?(:paper_dependent_candidate?) && candidate.paper_dependent_candidate? &&
+          PaperApplicationEligibility.call(candidate).eligible? && guardian_relationship_exists?(candidate)
+      else
+        candidate.respond_to?(:paper_applicant_candidate?) && candidate.paper_applicant_candidate?
+      end
+    end
+
+    # Paper intake may choose an on-file dependent already owned by the selected guardian. Creating
+    # a new guardian relationship is a separate identity-authority decision and is not inferred from
+    # a raw candidate id or a demographic match.
+    def guardian_relationship_exists?(candidate)
+      return false if @guardian.blank?
+
+      GuardianRelationship.exists?(guardian_id: @guardian.id, dependent_id: candidate.id)
+    end
+
+    # Random synthetic credentials are created later and cannot be signed review facts. Guardian
+    # contact is absent from dependent identity matching; guardian address is a deterministic copy.
+    def dependent_applicant_data
+      data = hash_for(@constituent_params).deep_dup.with_indifferent_access
+      choices = hash_for(@contact_flag_params).with_indifferent_access
+
+      if choices[:email_strategy].to_s == 'guardian'
+        data.delete(:email)
+      elsif data[:dependent_email].present?
+        data[:email] = data[:dependent_email]
+      end
+
+      if choices[:phone_strategy].to_s == 'guardian'
+        data.delete(:phone)
+      elsif data[:dependent_phone].present?
+        data[:phone] = data[:dependent_phone]
+      end
+
+      if choices[:address_strategy].to_s == 'guardian' && @guardian.present?
+        %i[physical_address_1 physical_address_2 city state zip_code].each do |field|
+          data[field] = @guardian.public_send(field)
+        end
+      end
+      data
+    end
+
+    def decision_context
+      return @context unless @context == :dependent
+
+      "dependent:guardian=#{@guardian&.id}:relationship=#{@relationship_type}"
+    end
+
+    def hash_for(value)
+      return value.to_unsafe_h if value.respond_to?(:to_unsafe_h)
+
+      value.to_h
     end
   end
 end

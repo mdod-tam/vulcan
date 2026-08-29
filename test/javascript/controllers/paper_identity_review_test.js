@@ -31,12 +31,28 @@ function buildForm({ existingConstituentId = "", applicantType = "self" } = {}) 
       <input type="checkbox" name="no_email_address" value="1">
       <input type="hidden" name="no_phone_number" value="0">
       <input type="checkbox" name="no_phone_number" value="1">
+      ${applicantType === "dependent" ? `
+        <input type="hidden" name="guardian_id" value="42">
+        <input type="hidden" name="dependent_id" value="">
+        <input name="relationship_type" value="Parent">
+        <input name="constituent[dependent_email]" value="dependent@example.com">
+        <input name="constituent[dependent_phone]" value="555-0102">
+        <input name="email_strategy" value="dependent">
+        <input name="phone_strategy" value="guardian">
+        <input name="address_strategy" value="guardian">
+      ` : ""}
       <input type="file" name="income_proof">
       <section class="hidden" style="display: none;" data-paper-application-target="identityReviewPanel">
         <h3 tabindex="-1" data-paper-application-target="identityReviewHeading"></h3>
         <p data-paper-application-target="identityReviewBody"></p>
         <ul data-paper-application-target="identityReviewCandidates"></ul>
-        <div class="hidden" style="display: none;" data-paper-application-target="identityReviewOverride"></div>
+        <div class="hidden" style="display: none;" data-paper-application-target="identityReviewOverride">
+          <button type="button"
+                  data-action="click->paper-application#overrideIdentityReview"
+                  data-paper-application-target="identityReviewOverrideButton">
+            These are different people — create a new constituent
+          </button>
+        </div>
         <p class="hidden" style="display: none;" tabindex="-1" data-paper-application-target="identityReviewNotice"></p>
       </section>
       <input type="hidden" name="identity_decision" data-paper-application-target="identityDecision">
@@ -104,6 +120,62 @@ describe("paper identity review", () => {
       expect([...body.values()].some((value) => value instanceof File)).toBe(false)
     })
 
+    test("a new dependent sends only scoped identity context and resumes after a clear answer", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      const fetchMock = jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({ state: "clear", candidates: [] }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = fetchMock.mock.calls[0][1].body
+      expect([...body.keys()].sort()).toEqual([
+        ...IDENTITY_FIELDS.map((f) => `constituent[${f}]`),
+        "constituent[dependent_email]", "constituent[dependent_phone]",
+        "no_email_address", "no_phone_number", "identity_context", "guardian_id",
+        "relationship_type", "email_strategy", "phone_strategy", "address_strategy"
+      ].sort())
+      expect(body.get("identity_context")).toBe("dependent")
+      expect(body.get("guardian_id")).toBe("42")
+      expect(body.get("email_strategy")).toBe("dependent")
+      expect(body.get("phone_strategy")).toBe("guardian")
+      expect([...body.values()].some((value) => value instanceof File)).toBe(false)
+      expect(form.requestSubmit).toHaveBeenCalledTimes(1)
+    })
+
+    test("a dependent preview reads the enabled dependent identity instead of disabled adult copies", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      const dependentFields = document.createElement("fieldset")
+      dependentFields.id = "dependent-info-section"
+      IDENTITY_FIELDS.forEach((field) => {
+        const adultCopy = form.querySelector(`[name="constituent[${field}]"]`)
+        adultCopy.disabled = true
+        adultCopy.value = `stale-adult-${field}`
+        const dependentCopy = document.createElement("input")
+        dependentCopy.name = `constituent[${field}]`
+        dependentCopy.value = `active-dependent-${field}`
+        dependentFields.appendChild(dependentCopy)
+      })
+      form.appendChild(dependentFields)
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      const fetchMock = jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "needs_confirmation", candidates: [], reasons: ["name_dob"], token: "v1:1:abc"
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = fetchMock.mock.calls[0][1].body
+      IDENTITY_FIELDS.forEach((field) => {
+        expect(body.get(`constituent[${field}]`)).toBe(`active-dependent-${field}`)
+      })
+      expect(form.requestSubmit).not.toHaveBeenCalled()
+    })
+
     test("reads the no-contact flags from the checkbox, not the hidden field before it", async () => {
       document.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = true })
       const fetchMock = jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({ state: "clear", candidates: [] }))
@@ -150,6 +222,41 @@ describe("paper identity review", () => {
       expect(list.textContent).toContain("<img src=x onerror=alert(1)>")
     })
 
+    test("self-applicant override copy names a new constituent", async () => {
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "needs_confirmation",
+        candidates: [{ id: 1, name: "Jane Doe", selectable: true }],
+        reasons: ["name_dob"],
+        token: "v1:1:abc"
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const button = form.querySelector('[data-paper-application-target="identityReviewOverrideButton"]')
+      expect(button.textContent.trim()).toBe("These are different people — create a new constituent")
+    })
+
+    test("dependent override copy names a new dependent, not a constituent", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "needs_confirmation",
+        candidates: [{ id: 1, name: "Jamie Doe", selectable: true }],
+        reasons: ["name_dob"],
+        token: "v1:1:abc"
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const button = form.querySelector('[data-paper-application-target="identityReviewOverrideButton"]')
+      expect(button.textContent.trim()).toBe("These are different people — create a new dependent")
+      expect(button.textContent).not.toContain("constituent")
+    })
+
     test("a token is not written to the hidden field until staff override", async () => {
       jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
         state: "needs_confirmation",
@@ -183,6 +290,95 @@ describe("paper identity review", () => {
       const override = form.querySelector('[data-paper-application-target="identityReviewOverride"]')
       expect(override.classList.contains("hidden")).toBe(true)
       expect(form.requestSubmit).not.toHaveBeenCalled()
+    })
+
+    test("a dependent contact refusal focuses the field, blocks submit, and clears when corrected", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "invalid_contact_choice",
+        candidates: [],
+        reasons: ["missing_dependent_email"],
+        field: "dependent_email",
+        message: "Enter the dependent's email or choose the guardian's email address."
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const field = form.querySelector('[name="constituent[dependent_email]"]')
+      const panel = form.querySelector('[data-paper-application-target="identityReviewPanel"]')
+      const heading = form.querySelector('[data-paper-application-target="identityReviewHeading"]')
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(panel.classList.contains("hidden")).toBe(false)
+      expect(heading.textContent).toBe("Dependent contact information needed")
+      expect(body.textContent).toBe("Enter the dependent's email or choose the guardian's email address.")
+      expect(document.activeElement).toBe(field)
+      expect(field.getAttribute("aria-invalid")).toBe("true")
+      expect(controllerFor(application, form)._identityReviewBlocksSubmit()).toBe(true)
+      expect(form.requestSubmit).not.toHaveBeenCalled()
+
+      field.value = "corrected-dependent@example.com"
+      field.dispatchEvent(new Event("input", { bubbles: true }))
+
+      expect(field.hasAttribute("aria-invalid")).toBe(false)
+      expect(panel.classList.contains("hidden")).toBe(true)
+      expect(controllerFor(application, form)._identityReviewState).toBe("idle")
+    })
+
+    test("a selectable self-applicant contact collision offers the existing constituent", async () => {
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "blocked",
+        candidates: [{ id: 2, name: "Existing Person", selectable: true }],
+        reasons: ["exact_email"]
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(body.textContent).toMatch(/Select the existing constituent/i)
+    })
+
+    test("a selectable dependent contact collision names the on-file dependent", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "blocked",
+        candidates: [{ id: 2, name: "Existing Dependent", selectable: true }],
+        reasons: ["exact_phone"]
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(body.textContent).toMatch(/Select the eligible on-file dependent shown below/i)
+      expect(body.textContent).not.toMatch(/Select the existing constituent/i)
+    })
+
+    test("a dependent contact collision without a selectable row offers only truthful exits", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({
+        state: "blocked",
+        candidates: [{ id: 2, name: "Unrelated Record", selectable: false }],
+        reasons: ["exact_email"]
+      }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const body = form.querySelector('[data-paper-application-target="identityReviewBody"]')
+      expect(body.textContent).toMatch(/no eligible on-file dependent for this guardian/i)
+      expect(body.textContent).toMatch(/Correct the dependent's entered contact information/i)
+      expect(body.textContent).not.toMatch(/Select the existing/i)
     })
 
     test("a stale response cannot repaint the panel", async () => {
@@ -478,6 +674,26 @@ describe("paper identity review", () => {
       settle(jsonResponse({ state: "clear", candidates: [] }))
     })
 
+    test("dependent checking copy names dependents in visible and announced text", async () => {
+      application.stop()
+      form = buildForm({ applicantType: "dependent" })
+      application = await startApplication()
+      form.requestSubmit = jest.fn()
+      let settle
+      jest.spyOn(global, "fetch").mockImplementation(() => new Promise((resolve) => { settle = resolve }))
+
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      const heading = form.querySelector('[data-paper-application-target="identityReviewHeading"]')
+      const status = form.querySelector('[data-paper-application-target="status"]')
+      expect(heading.textContent).toBe("Checking for existing dependents")
+      expect(status.textContent).toBe("Checking for existing dependents…")
+      expect(`${heading.textContent} ${status.textContent}`).not.toContain("constituents")
+
+      settle(jsonResponse({ state: "clear", candidates: [] }))
+    })
+
     // Focus belongs to whatever field staff are still typing in. A transient state that resolves on
     // its own must not yank it away.
     test("the checking state does not steal focus", async () => {
@@ -704,6 +920,79 @@ describe("paper identity review", () => {
       })
     })
 
+    describe("dependent candidate selection", () => {
+      let picker
+
+      beforeEach(async () => {
+        application.stop()
+        form = buildForm({ applicantType: "dependent" })
+        application = await startApplication()
+        form.requestSubmit = jest.fn()
+
+        picker = {
+          selectDependentFromIdentityReview: jest.fn((candidate) => {
+            form.querySelector('[name="dependent_id"]').value = String(candidate.id)
+            return Promise.resolve({ selected: true })
+          })
+        }
+
+        const host = document.createElement("div")
+        host.setAttribute("data-controller", "guardian-picker")
+        form.appendChild(host)
+        Object.defineProperty(controllerFor(application, form), "application", {
+          value: { getControllerForElementAndIdentifier: () => picker },
+          configurable: true
+        })
+      })
+
+      test("refreshes server selectability before the picker may set dependent_id", async () => {
+        const candidate = { id: 7, name: "Jamie Dependent", selectable: true }
+        const refreshed = { ...candidate, name: "Jamie Dependent, refreshed" }
+        const fetchMock = jest.spyOn(global, "fetch")
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation", candidates: [candidate], token: "v1:1:abc"
+          }))
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation", candidates: [refreshed], token: "v1:1:def"
+          }))
+
+        form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        form.querySelector('[data-paper-application-target="identityReviewCandidates"] button').click()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(picker.selectDependentFromIdentityReview).toHaveBeenCalledWith(
+          refreshed, expect.objectContaining({ signal: expect.any(AbortSignal) })
+        )
+        expect(form.querySelector('[name="dependent_id"]').value).toBe("7")
+      })
+
+      test("refuses a dependent that the refreshed server policy no longer marks selectable", async () => {
+        const candidate = { id: 7, name: "Jamie Dependent", selectable: true }
+        const fetchMock = jest.spyOn(global, "fetch")
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation", candidates: [candidate], token: "v1:1:abc"
+          }))
+          .mockImplementationOnce(() => jsonResponse({
+            state: "needs_confirmation",
+            candidates: [{ ...candidate, selectable: false }],
+            token: "v1:1:def"
+          }))
+
+        form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        form.querySelector('[data-paper-application-target="identityReviewCandidates"] button').click()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(picker.selectDependentFromIdentityReview).not.toHaveBeenCalled()
+        expect(form.querySelector('[name="dependent_id"]').value).toBe("")
+        expect(form.querySelector('[data-paper-application-target="status"]').textContent)
+          .toMatch(/no longer an eligible on-file dependent/i)
+      })
+    })
+
     test("disconnect clears the in-flight request and the expiry timer", async () => {
       jest.spyOn(global, "fetch").mockImplementation(() => jsonResponse({ state: "clear", candidates: [] }))
       const controller = controllerFor(application, form)
@@ -716,7 +1005,7 @@ describe("paper identity review", () => {
     })
   })
 
-  describe("when the branch does not create a new self applicant", () => {
+  describe("when the branch selects an on-file constituent", () => {
     test("selecting an existing constituent submits without a review", async () => {
       form = buildForm({ existingConstituentId: "42" })
       application = await startApplication()
@@ -729,8 +1018,9 @@ describe("paper identity review", () => {
       expect(event.defaultPrevented).toBe(false)
     })
 
-    test("a dependent application submits without a review", async () => {
+    test("an on-file dependent submits without a new-person review", async () => {
       form = buildForm({ applicantType: "dependent" })
+      form.querySelector('[name="dependent_id"]').value = "99"
       application = await startApplication()
       const fetchMock = jest.spyOn(global, "fetch")
 

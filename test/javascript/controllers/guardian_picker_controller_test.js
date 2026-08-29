@@ -42,6 +42,9 @@ describe("GuardianPickerController", () => {
         </div>
         
         <input type="hidden" id="guardianIdField" name="guardian_id" value="" />
+        <input type="hidden" id="dependentIdField" name="dependent_id" value="" />
+        <input type="radio" id="dependentRadio" name="applicant_type" value="dependent" />
+        <turbo-frame id="dependent_info_form"></turbo-frame>
         <input type="text" name="application[household_size]" value="" />
         <input type="text" name="application[annual_income]" value="" />
         <input type="text" name="application[medical_provider_name]" value="" />
@@ -100,6 +103,17 @@ describe("GuardianPickerController", () => {
       writable: true, // This might be modified in tests
       configurable: true
     })
+
+    Object.defineProperty(controller, 'dependentIdFieldTarget', {
+      value: fixture.querySelector('#dependentIdField'),
+      configurable: true
+    })
+    Object.defineProperty(controller, 'hasDependentIdFieldTarget', { value: true, configurable: true })
+    Object.defineProperty(controller, 'applicantTypeRadioDependentTarget', {
+      value: fixture.querySelector('#dependentRadio'),
+      configurable: true
+    })
+    Object.defineProperty(controller, 'hasApplicantTypeRadioDependentTarget', { value: true, configurable: true })
     
     // Mock the dispatch method
     controller.dispatch = jest.fn()
@@ -219,6 +233,20 @@ describe("GuardianPickerController", () => {
       controller.selectGuardian("456", "<div>Guardian Info</div>")
 
       expect(setFieldValue).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("selectDependentFromIdentityReview", () => {
+    it("loads the on-file dependent and moves focus to the rendered summary", async () => {
+      const outcome = await controller.selectDependentFromIdentityReview({ id: 99, selectable: true })
+      const frame = document.getElementById('dependent_info_form')
+      frame.innerHTML = '<div id="existing-dependent-summary" tabindex="-1">Existing dependent selected</div>'
+      frame.dispatchEvent(new Event('turbo:frame-load'))
+
+      expect(outcome).toEqual({ selected: true })
+      expect(controller.dependentIdFieldTarget.value).toBe('99')
+      expect(controller.applicantTypeRadioDependentTarget.checked).toBe(true)
+      expect(document.activeElement).toBe(frame.querySelector('#existing-dependent-summary'))
     })
   })
   

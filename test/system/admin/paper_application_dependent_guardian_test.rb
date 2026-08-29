@@ -1,15 +1,188 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
+require Rails.root.join('test/support/system_test_evidence')
 
 module Admin
   class PaperApplicationDependentGuardianTest < ApplicationSystemTestCase
+    include SystemTestEvidence
+
     test 'complete guardian creation and application workflow' do
       perform_complete_guardian_creation_workflow
     end
 
     test 'existing guardian selection and workflow' do
       perform_existing_guardian_selection_workflow
+    end
+
+    test 'guardian soft match requires a decision before quick create' do
+      existing = create(:constituent, first_name: 'Review', last_name: 'Guardian',
+                                      date_of_birth: Date.new(1980, 1, 15),
+                                      email: 'existing.review.guardian@example.com',
+                                      phone: '2025550101')
+      admin = create(:admin, verified: true)
+      system_test_sign_in(admin)
+      visit new_admin_paper_application_path
+
+      choose 'applicant_is_minor'
+      submit_status = find_by_id('paper-submit-gate-status', visible: :all)
+      assert_equal "Select or create a guardian before submitting this dependent's application.", submit_status.text(:all)
+      assert_predicate find_by_id('submit-button', visible: :all), :disabled?
+      take_evidence_screenshot('paper-a2-guardian-unselected-submit-gate', full: true, html: true)
+
+      within '#guardian-info-section' do
+        click_link 'Create New Guardian'
+        fill_in 'guardian_attributes[first_name]', with: 'Review'
+        fill_in 'guardian_attributes[last_name]', with: 'Guardian'
+        fill_in 'guardian_attributes[date_of_birth]', with: '01/15/1980'
+        fill_in 'guardian_attributes[email]', with: 'new.review.guardian@example.com'
+        fill_in 'guardian_attributes[phone]', with: '2025550199'
+        fill_in 'guardian_attributes[physical_address_1]', with: '456 Review Avenue'
+        fill_in 'guardian_attributes[city]', with: 'Baltimore'
+        fill_in 'guardian_attributes[state]', with: 'MD'
+        fill_in 'guardian_attributes[zip_code]', with: '21202'
+        choose 'guardian_phone_type_voice'
+        choose 'guardian_communication_preference_email'
+
+        assert_no_difference ['User.count', "Event.where(action: 'paper_identity_no_match_confirmed').count",
+                              "DuplicateReviewCase.where(source: 'admin_create').count"] do
+          click_button 'Save Guardian'
+          assert_selector '#guardian-identity-review-heading', text: 'Possible matching guardians', wait: 10
+        end
+
+        assert_text existing.full_name
+        assert_equal 'guardian-identity-review-heading', page.evaluate_script('document.activeElement.id')
+        assert_field 'guardian_attributes[first_name]', with: 'Review'
+        assert_field 'guardian_attributes[email]', with: 'new.review.guardian@example.com'
+        take_evidence_screenshot('paper-a2-guardian-soft-match', full: true, html: true)
+
+        address = find_field('guardian_attributes[physical_address_1]')
+        address.click
+        address.set('457 Review Avenue')
+        assert_selector '#guardian-identity-review-heading', text: 'Guardian details changed'
+        assert_text 'Save Guardian to review again.'
+        assert_no_button 'These are different people — create a new guardian'
+        assert_equal address[:id], page.evaluate_script('document.activeElement.id')
+        take_evidence_screenshot('paper-a2-guardian-review-invalidated-by-edit', full: true, html: true)
+
+        click_button 'Save Guardian'
+        assert_selector '#guardian-identity-review-heading', text: 'Possible matching guardians', wait: 10
+
+        existing.update!(last_name: 'Former Guardian')
+        assert_no_difference ['User.count', "Event.where(action: 'paper_identity_no_match_confirmed').count"] do
+          click_button 'These are different people — create a new guardian'
+          assert_selector '#guardian-identity-review-heading', text: 'Identity review unavailable', wait: 10
+        end
+        assert_text 'No guardian was created. Try the review again.'
+        take_evidence_screenshot('paper-a2-guardian-invalid-decision', full: true, html: true)
+
+        existing.update!(last_name: 'Guardian')
+        click_button 'Save Guardian'
+        assert_selector '#guardian-identity-review-heading', text: 'Possible matching guardians', wait: 10
+
+        assert_difference 'User.count', 1 do
+          assert_difference "Event.where(action: 'paper_identity_no_match_confirmed').count", 1 do
+            click_button 'These are different people — create a new guardian'
+            assert_selector '[data-guardian-picker-target="selectedPane"]', text: 'Review Guardian', wait: 10
+          end
+        end
+      end
+
+      assert_equal 0, DuplicateReviewCase.where(source: :admin_create).count
+      assert_equal 'new.review.guardian@example.com', User.order(:id).last.email
+      assert_no_match(/Select or create a guardian/, submit_status.text(:all))
+      take_evidence_screenshot('paper-a2-guardian-soft-match-created', full: true, html: true)
+
+      email_owner = create(:constituent, email: "split-email-#{SecureRandom.hex(3)}@example.com")
+      phone_owner = create(:constituent, phone: '202-555-0166')
+      visit new_admin_paper_application_path
+      choose 'applicant_is_minor'
+      within '#guardian-info-section' do
+        click_link 'Create New Guardian'
+        fill_in 'guardian_attributes[first_name]', with: 'Split'
+        fill_in 'guardian_attributes[last_name]', with: 'Contact'
+        fill_in 'guardian_attributes[date_of_birth]', with: '02/16/1980'
+        fill_in 'guardian_attributes[email]', with: email_owner.email
+        fill_in 'guardian_attributes[phone]', with: phone_owner.phone
+        fill_in 'guardian_attributes[physical_address_1]', with: '22 Split Avenue'
+        fill_in 'guardian_attributes[city]', with: 'Baltimore'
+        fill_in 'guardian_attributes[state]', with: 'MD'
+        fill_in 'guardian_attributes[zip_code]', with: '21202'
+        choose 'guardian_phone_type_voice'
+        choose 'guardian_communication_preference_email'
+
+        assert_no_difference ['User.count', 'Event.count', 'DuplicateReviewCase.count'] do
+          click_button 'Save Guardian'
+          assert_selector '#guardian-identity-review-heading', text: 'Existing contact information', wait: 10
+        end
+        assert_text 'The email and phone belong to different existing records.'
+        assert_text 'Cannot resolve both contact conflicts', count: 2
+        assert_no_selector '[data-admin--user-search-target="identityReviewOverride"]', visible: true
+      end
+      submit_button = find('[data-paper-application-target="submitButton"]', visible: :all)
+      assert_predicate submit_button, :disabled?
+      take_evidence_screenshot('paper-a2-guardian-split-contact-block', full: true, html: true)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+        page.execute_script(<<~JS)
+          const form = document.querySelector('form[data-controller~="paper-application"]');
+          HTMLFormElement.prototype.submit.call(form);
+        JS
+        assert_text 'Save or select the guardian before submitting the paper application', wait: 20
+      end
+      assert_field 'guardian_attributes[first_name]', with: 'Split'
+      assert_field 'guardian_attributes[email]', with: email_owner.email
+      take_evidence_screenshot('paper-a2-unsaved-guardian-server-refusal', full: true, html: true)
+    end
+
+    test 'existing dependent contact refusal uses the shared contact-choice message' do
+      guardian = create(:constituent, first_name: 'Shared', last_name: 'Guardian')
+      dependent = create(
+        :constituent,
+        first_name: 'Shared',
+        last_name: 'Dependent',
+        dependent_email: 'shared.dependent@example.com'
+      )
+      create(
+        :guardian_relationship,
+        guardian_user: guardian,
+        dependent_user: dependent,
+        relationship_type: 'Parent'
+      )
+      admin = create(:admin, verified: true)
+      system_test_sign_in(admin)
+      visit new_admin_paper_application_path
+
+      choose 'applicant_is_minor'
+      within '#guardian-info-section' do
+        fill_in 'guardian_search_q', with: guardian.full_name
+        within '#guardian_search_results' do
+          find('li', text: guardian.full_name, wait: 10).click
+        end
+      end
+
+      within '#guardian_dependents' do
+        within 'li', text: dependent.full_name, wait: 10 do
+          click_button 'Select'
+        end
+      end
+      assert_selector '#existing-dependent-summary', text: dependent.full_name, wait: 10
+      assert_field 'constituent[dependent_email]', with: dependent.dependent_email
+      fill_in 'constituent[dependent_email]', with: ''
+
+      assert_no_difference ['Application.count', 'GuardianRelationship.count', 'Event.count',
+                            'DuplicateReviewCase.count', 'Notification.count'] do
+        page.execute_script(<<~JS)
+          const form = document.querySelector('form[data-controller~="paper-application"]');
+          HTMLFormElement.prototype.submit.call(form);
+        JS
+        assert_text "Enter the dependent's email or choose the guardian's email address.", wait: 20
+      end
+
+      assert_selector '#existing-dependent-summary', text: dependent.full_name
+      assert_field 'constituent[dependent_email]', with: ''
+      take_evidence_screenshot('paper-a2-existing-dependent-contact-refusal', full: true, html: true)
     end
 
     private
@@ -165,7 +338,7 @@ module Admin
 
     def fill_existing_guardian_form
       assert_text 'Create New Guardian', wait: 3
-      fill_in 'guardian_attributes[first_name]', with: 'Existing'
+      fill_in 'guardian_attributes[first_name]', with: 'Fallback'
       fill_in 'guardian_attributes[last_name]', with: 'Guardian'
       fill_in 'guardian_attributes[date_of_birth]', with: 40.years.ago.strftime('%Y-%m-%d')
       fill_in 'guardian_attributes[email]', with: "existing-fallback-#{Time.now.to_i}@example.com"
@@ -177,8 +350,13 @@ module Admin
       choose 'guardian_phone_type_voice'
       choose 'guardian_communication_preference_email'
 
-      click_button 'Save Guardian'
-      assert_text 'Existing Guardian', wait: 5
+      assert_difference 'User.count', 1 do
+        click_button 'Save Guardian'
+        assert_selector '[data-guardian-picker-target="selectedPane"]',
+                        text: 'Fallback Guardian', visible: true, wait: 5
+      end
+      guardian = User.find_by!(first_name: 'Fallback', last_name: 'Guardian')
+      assert_field 'guardian_id', type: :hidden, with: guardian.id, visible: :all
     end
 
     def complete_application_form

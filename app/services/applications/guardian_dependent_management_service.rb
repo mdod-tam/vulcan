@@ -5,6 +5,12 @@ module Applications
   class GuardianDependentManagementService < BaseService
     SYNTHETIC_PHONE_RANDOM_SPACE = 10_000_000
     SYNTHETIC_PHONE_MAX_ATTEMPTS = 25
+    DEPENDENT_CONTACT_COLLISION_MESSAGE = 'A dependent with this email or phone already exists. ' \
+                                          'Select the existing dependent or correct the contact information.'
+
+    # Raised only around the new-dependent User insert. The outer application writer catches it
+    # after its transaction has rolled back, when PostgreSQL permits a fresh identity query.
+    class DependentCreationConflict < StandardError; end
 
     attr_reader :params, :guardian_user, :dependent_user, :errors
 
@@ -21,23 +27,28 @@ module Applications
       @errors = []
     end
 
-    def process_guardian_scenario(guardian_id, new_guardian_attrs, applicant_data, relationship_type)
+    def process_guardian_scenario(guardian_id, applicant_data, relationship_type)
       result = nil
 
       ActiveRecord::Base.transaction do
-        unless setup_guardian(guardian_id, new_guardian_attrs)
+        unless setup_guardian(guardian_id)
           result = failure('Failed to setup guardian')
           raise ActiveRecord::Rollback
         end
 
         applicant_data = applicant_data.deep_dup
-        unless apply_contact_strategies(applicant_data)
-          result = failure('Failed to apply contact strategies')
+        unless paper_dependent_contact_choices_valid?(applicant_data)
+          result = failure('Dependent contact strategy refused the write')
           raise ActiveRecord::Rollback
         end
 
-        unless dependent_duplicate_detection_allows_creation?(applicant_data)
-          result = failure('Failed to create dependent')
+        unless dependent_identity_review_allows_creation?(applicant_data, relationship_type)
+          result = failure('Dependent identity review refused the write')
+          raise ActiveRecord::Rollback
+        end
+
+        unless apply_contact_strategies(applicant_data)
+          result = failure('Failed to apply contact strategies')
           raise ActiveRecord::Rollback
         end
 
@@ -90,32 +101,13 @@ module Applications
 
     private
 
-    def setup_guardian(guardian_id, new_guardian_attrs)
-      if guardian_id.present?
-        @guardian_user = User.find_by(id: guardian_id)
-        return add_error?('Guardian not found') unless @guardian_user
-      elsif attributes_present?(new_guardian_attrs)
-        contact_flags = Applications::PaperContactFlags.new(params, scope: :guardian)
-        guardian_attrs = contact_flags.apply_to(new_guardian_attrs)
-        duplicate_detection = detect_duplicates(:paper_new_guardian, guardian_attrs)
-        return false if duplicate_detection.blank?
-        return block_duplicate(:paper_new_guardian) if duplicate_detection.hard_block
+    def setup_guardian(guardian_id)
+      return add_error?('Guardian information missing') if guardian_id.blank?
 
-        result = UserCreationService.new(
-          guardian_attrs,
-          is_managing_adult: true,
-          skip_user_lookup: true,
-          skip_email_validation: contact_flags.skip_email_validation?,
-          skip_phone_validation: contact_flags.skip_phone_validation?
-        ).call
-        return false unless result.success?
+      @guardian_user = User.lock.find_by(id: guardian_id)
+      return add_error?('Guardian not found') unless @guardian_user
+      return add_error?('Selected guardian is not an eligible active constituent') unless @guardian_user.paper_guardian_candidate?
 
-        @guardian_user = result.data[:user]
-        track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
-        return false unless open_duplicate_review_case(@guardian_user, duplicate_detection)
-      else
-        return add_error?('Guardian information missing')
-      end
       true
     end
 
@@ -125,17 +117,39 @@ module Applications
 
       @dependent_user = result.data[:user]
       track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
-      return false unless open_duplicate_review_case(@dependent_user, @dependent_duplicate_detection)
+      record_no_match_confirmation(@dependent_user)
 
       true
+    rescue ActiveRecord::RecordNotUnique
+      raise DependentCreationConflict, 'Dependent creation collided with an existing unique record'
     end
 
-    def dependent_duplicate_detection_allows_creation?(applicant_data)
-      @dependent_duplicate_detection = detect_duplicates(:paper_new_dependent, applicant_data)
-      return false if @dependent_duplicate_detection.blank?
-      return block_duplicate(:paper_new_dependent) if @dependent_duplicate_detection.hard_block
+    def dependent_identity_review_allows_creation?(applicant_data, relationship_type)
+      review_owner = Applications::PaperIdentityReview.new(
+        constituent_params: applicant_data,
+        contact_flag_params: params,
+        admin: @actor,
+        submitted_token: params[:identity_decision],
+        context: :dependent,
+        context_data: { guardian: @guardian_user, relationship_type: relationship_type }
+      )
+      Applications::PaperIdentityCreationLock.lock!(review_owner.identity_facts)
+      @identity_review = review_owner.call
 
-      true
+      return add_error?('Duplicate detection failed. Try again.') if @identity_review.error?
+      return add_error?(dependent_decision_error(@identity_review)) if @identity_review.invalid_decision?
+      return add_error?(DEPENDENT_CONTACT_COLLISION_MESSAGE) if @identity_review.blocked?
+
+      if @identity_review.confirmed?
+        @confirmed_no_match = {
+          candidate_ids: @identity_review.candidate_ids,
+          reason_codes: @identity_review.reasons
+        }
+        return true
+      end
+      return true if @identity_review.clear?
+
+      add_error?(dependent_decision_error(@identity_review))
     end
 
     # The replay pair is written here rather than by a follow-up update from the caller, so the key,
@@ -254,73 +268,41 @@ module Applications
       attrs.present? && attrs.values.any?(&:present?)
     end
 
-    def detect_duplicates(context, attrs)
-      result = DuplicateDetectionService.new(
-        context: context,
-        attrs: duplicate_detection_attrs(attrs)
+    def paper_dependent_contact_choices_valid?(applicant_data)
+      choice = Applications::PaperDependentContactChoice.new(
+        applicant_data: applicant_data,
+        strategy_params: params
       ).call
-      return result.data if result.success?
+      return add_error?(choice.message) unless choice.valid?
 
-      add_error?("Duplicate detection failed: #{result.message}")
-      nil
+      true
     end
 
-    def block_duplicate(context)
-      add_error?(duplicate_block_message(context))
+    def dependent_decision_error(review)
+      return 'This identity review expired. Review the possible matches again.' if review.decision_reason == :expired
+      return 'The dependent, guardian, relationship, or possible matches changed. Review them again.' if review.decision_reason == :mismatched
+
+      "#{review.candidates.size} possible #{'match'.pluralize(review.candidates.size)} found. " \
+        'Select an eligible existing dependent or confirm these are different people.'
     end
 
-    def duplicate_block_message(context)
-      case context
-      when :paper_new_guardian
-        'A guardian with this email or phone already exists. Select the existing guardian instead of creating a new one.'
-      else
-        'A dependent with this email or phone already exists. Select the existing dependent instead of creating a new one.'
-      end
-    end
+    def record_no_match_confirmation(user)
+      return if @confirmed_no_match.blank?
 
-    def open_duplicate_review_case(user, duplicate_detection)
-      return true unless duplicate_detection&.recommended_action == :flag
-
-      result = DuplicateReviewCases::CreateService.new(
-        source: :paper_intake,
-        subject_user: user,
+      AuditEventService.log(
+        action: 'paper_identity_no_match_confirmed',
         actor: @actor,
-        reason_codes: duplicate_detection.reasons,
-        candidates: duplicate_review_candidates_for(duplicate_detection),
-        metadata: { intake_context: 'paper_intake' }
-      ).call
-      return true if result.success?
-
-      add_error?(result.message)
-      false
-    end
-
-    def duplicate_review_candidates_for(duplicate_detection)
-      duplicate_detection.matched_users.map do |candidate|
-        DuplicateReviewCases::CreateService::CandidateInput.new(
-          candidate,
-          duplicate_detection.reasons.first
-        )
-      end
-    end
-
-    def duplicate_detection_attrs(attrs)
-      data = attrs.to_h.with_indifferent_access
-      dob_holder = Users::Constituent.new
-      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
-
-      {
-        email: User.normalize_email(data[:email]),
-        phone: User.normalize_phone(data[:phone]),
-        first_name: data[:first_name],
-        last_name: data[:last_name],
-        date_of_birth: dob_holder.date_of_birth,
-        physical_address_1: data[:physical_address_1],
-        physical_address_2: data[:physical_address_2],
-        city: data[:city],
-        state: data[:state],
-        zip_code: data[:zip_code]
-      }
+        auditable: user,
+        metadata: {
+          decision_context: 'paper_new_dependent',
+          role: 'dependent',
+          guardian_id: @guardian_user.id,
+          relationship_type: params[:relationship_type],
+          candidate_ids: @confirmed_no_match[:candidate_ids],
+          candidate_count: @confirmed_no_match[:candidate_ids].size,
+          reason_codes: @confirmed_no_match[:reason_codes]
+        }
+      )
     end
 
     def track_email_backed_portal_created_user_id(user_id)
@@ -336,9 +318,9 @@ module Applications
       Result.new(success: true, data: data)
     end
 
-    def failure(message)
+    def failure(message, data = nil)
       add_error?(message)
-      Result.new(success: false, message: message, data: { errors: @errors })
+      Result.new(success: false, message: message, data: data || { errors: @errors })
     end
   end
 end
