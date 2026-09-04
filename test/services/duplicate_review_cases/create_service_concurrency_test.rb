@@ -67,7 +67,7 @@ module DuplicateReviewCases
       cleanup_duplicate_review_test_data!(admin, canonical, duplicate, third_party)
     end
 
-    test 'case creation commits first: the merge then fails closed on the new competing case' do
+    test 'case creation commits first: merge reloads before blocking the unsupported competing case' do
       admin, canonical, duplicate, third_party, review_case = build_fixtures
 
       holder_ready = Queue.new
@@ -99,15 +99,25 @@ module DuplicateReviewCases
 
       assert create_result.success?, "expected case creation (holder) to succeed: #{create_result&.message}"
       assert merge_result.failure?, "expected the merge to fail closed against the new competing case: #{merge_result.message}"
-      assert_match(/another open duplicate review case/i, merge_result.message)
+      assert_match(/related records changed while the merge was being prepared/i, merge_result.message)
+      assert_not duplicate.reload.merged?
+
+      retry_result = run_merge(admin:, canonical:, duplicate:, review_case:)
+      assert retry_result.failure?, 'expected the stable unsupported case to block the merge on retry'
+      assert_match(/another open duplicate review case/i, retry_result.message)
       assert_not duplicate.reload.merged?
     ensure
       cleanup_duplicate_review_test_data!(admin, canonical, duplicate, third_party)
     end
 
     test 'case creation commits first: clear_flag on the same subject then observes the open case and refuses' do
-      subject = create(:constituent, needs_duplicate_review: false)
-      candidate = create(:constituent, email: "cand-#{SecureRandom.hex(3)}@example.com")
+      subject = create(:constituent, first_name: 'ClearRace', last_name: 'SubjectOne', needs_duplicate_review: false)
+      candidate = create(
+        :constituent,
+        first_name: 'ClearRace',
+        last_name: 'CandidateOne',
+        email: "cand-#{SecureRandom.hex(3)}@example.com"
+      )
       admin = create(:admin)
 
       holder_ready = Queue.new
@@ -148,8 +158,13 @@ module DuplicateReviewCases
     end
 
     test 'clear_flag commits first: a subsequent case creation on the same subject proceeds normally' do
-      subject = create(:constituent, needs_duplicate_review: true)
-      candidate = create(:constituent, email: "cand-#{SecureRandom.hex(3)}@example.com")
+      subject = create(:constituent, first_name: 'ClearRace', last_name: 'SubjectTwo', needs_duplicate_review: true)
+      candidate = create(
+        :constituent,
+        first_name: 'ClearRace',
+        last_name: 'CandidateTwo',
+        email: "cand-#{SecureRandom.hex(3)}@example.com"
+      )
       admin = create(:admin)
 
       holder_ready = Queue.new

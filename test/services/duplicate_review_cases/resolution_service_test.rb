@@ -178,6 +178,71 @@ module DuplicateReviewCases
                    'each resolution must be attributable to the case it closed'
     end
 
+    test 'post-import different-person resolution clears both pair flags and remains suppressed on synchronization' do
+      first, second = matching_constituents(2, needs_duplicate_review: true)
+      review_case = open_reconciliation_case(first, second)
+
+      result = resolve(review_case: review_case, reason_codes: %w[name_dob admin_reviewed])
+
+      assert result.success?, result.message
+      assert_equal 'keep_separate', review_case.reload.resolution_determination
+      assert_not first.reload.needs_duplicate_review
+      assert_not second.reload.needs_duplicate_review
+      assert_not Application.identity_review_pending_for?(first)
+      assert_not Application.identity_review_pending_for?(second)
+
+      assert_no_changes -> { [first.reload.needs_duplicate_review?, second.reload.needs_duplicate_review?] } do
+        DuplicateReconciliation::ReviewFlagSyncService.new(user_ids: [first.id, second.id]).call
+      end
+      assert_equal :confirmed_different,
+                   DuplicateReconciliation::Population.new.pair_for_ids(first.id, second.id).state
+    end
+
+    test 'post-import resolution preserves flags when either participant still has an unresolved pair' do
+      first, second, third = matching_constituents(3, needs_duplicate_review: true)
+      review_case = open_reconciliation_case(first, second)
+
+      result = resolve(review_case: review_case)
+
+      assert result.success?, result.message
+      assert first.reload.needs_duplicate_review, 'first still participates in the first-third pair'
+      assert second.reload.needs_duplicate_review, 'second still participates in the second-third pair'
+      assert DuplicateReconciliation::Population.new.pair_for_ids(first.id, third.id).unresolved?
+      assert DuplicateReconciliation::Population.new.pair_for_ids(second.id, third.id).unresolved?
+    end
+
+    test 'post-import resolution fails closed when the locked records no longer match' do
+      first, second = matching_constituents(2, needs_duplicate_review: true)
+      review_case = open_reconciliation_case(first, second)
+      second.update!(last_name: 'Changed after review entry')
+
+      assert_no_difference 'Event.where(action: \'duplicate_review_case_resolved\').count' do
+        result = resolve(review_case: review_case)
+
+        assert result.failure?
+        assert_match(/no longer form a supported/i, result.message)
+      end
+      assert review_case.reload.open?
+      assert first.reload.needs_duplicate_review
+      assert second.reload.needs_duplicate_review
+    end
+
+    test 'post-import resolution rejects a case that is not exactly pair scoped' do
+      first, second, third = matching_constituents(3, needs_duplicate_review: true)
+      review_case = open_reconciliation_case(first, second)
+      review_case.duplicate_review_case_candidates.create!(
+        candidate_user: third,
+        match_reason: 'name_dob',
+        snapshot: {}
+      )
+
+      result = resolve(review_case: review_case)
+
+      assert result.failure?
+      assert_match(/exactly one canonical pair/i, result.message)
+      assert review_case.reload.open?
+    end
+
     private
 
     def resolve(rationale: 'reviewed and resolved', reason_codes: %w[name_dob], review_case: @review_case)
@@ -198,6 +263,35 @@ module DuplicateReviewCases
         opened_at: Time.current,
         status: :open
       )
+    end
+
+    def matching_constituents(count, needs_duplicate_review:)
+      users = Array.new(count) do
+        create(
+          :constituent,
+          first_name: 'Resolution',
+          last_name: "Pair#{SecureRandom.hex(4)}",
+          date_of_birth: Date.new(1988, 2, 14),
+          email: "resolution-#{SecureRandom.hex(5)}@example.com",
+          needs_duplicate_review: needs_duplicate_review
+        )
+      end
+      shared_last_name = users.first.last_name
+      users.drop(1).each { |user| user.update!(last_name: shared_last_name) }
+      users
+    end
+
+    def open_reconciliation_case(first, second)
+      subject, candidate = [first, second].sort_by(&:id)
+      result = DuplicateReviewCases::CreateService.new(
+        source: :post_import_reconciliation,
+        subject_user: subject,
+        actor: @admin,
+        reason_codes: ['name_dob'],
+        candidates: [DuplicateReviewCases::CreateService::CandidateInput.new(candidate, 'name_dob', {})]
+      ).call
+      assert result.success?, result.message
+      result.data.fetch(:duplicate_review_case)
     end
   end
 end

@@ -1,0 +1,11 @@
+<%= form_with url: review_pair_admin_duplicate_reviews_path, method: :post do |f| %>
+  <%= f.hidden_field :first_user_id,
+                     value: pair.first.id,
+                     id: "duplicate-pair-#{pair.first.id}-#{pair.second.id}-first-#{form_id_suffix}" %>
+  <%= f.hidden_field :second_user_id,
+                     value: pair.second.id,
+                     id: "duplicate-pair-#{pair.first.id}-#{pair.second.id}-second-#{form_id_suffix}" %>
+  <%= f.submit button_label,
+               aria: { label: "#{button_label}: constituent records #{pair.first.id} and #{pair.second.id}" },
+               class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded text-sm cursor-pointer' %>
+<% end %>

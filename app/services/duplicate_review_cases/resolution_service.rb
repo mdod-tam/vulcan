@@ -3,8 +3,9 @@
 module DuplicateReviewCases
   # Resolves an open duplicate review case without moving any data. There is exactly one such
   # outcome: staff decided the records are different people. It records the admin actor, that fixed
-  # determination, and a required rationale, then clears the subject review flag when no other open
-  # case remains. Same-person merges are handled by Users::DuplicateMergeService.
+  # determination, and a required rationale, then reprojects every constituent participant's review
+  # flag from remaining open cases and unresolved post-import pairs. Same-person merges are handled
+  # by Users::DuplicateMergeService.
   class ResolutionService < BaseService
     class StaleCaseError < StandardError; end
 
@@ -25,14 +26,14 @@ module DuplicateReviewCases
     #
     # - the PR5a submission gate is released when no open `registration_soft_match` case remains
     #   for the subject (the gate filters on that source);
-    # - `needs_duplicate_review` is cleared when no open case of *any* source remains, which also
-    #   removes the subject from the admin flagged list, the review-count badge, and the row/badge
-    #   highlights.
+    # - `needs_duplicate_review` is reprojected for every constituent participant from open cases of
+    #   *any* source plus unresolved post-import pairs; resolving one pair cannot clear unrelated
+    #   work.
     #
-    # Neither is automatic on resolution, and they can diverge: a subject with another open case of
-    # a different source keeps the flag while the gate releases. So only a *completed identity
-    # decision* may close a case, and "these are different people" is the only such decision that
-    # does not move data.
+    # They can diverge: a participant with another open case or unresolved pair keeps the flag while
+    # the subject-only registration gate releases. So only a *completed identity decision* may
+    # close a case, and "these are different people" is the only such decision that does not move
+    # data.
     #
     # The rest of the matrix is deliberately unreachable from here:
     #
@@ -77,8 +78,10 @@ module DuplicateReviewCases
         @duplicate_review_case.lock!
         raise StaleCaseError, 'Case is no longer open' unless @duplicate_review_case.open?
 
+        lock_and_requalify_case_participants!
+
         resolve_case!
-        sync_subject_review_flag!
+        sync_participant_review_flags!
         log_resolution!
       end
 
@@ -94,6 +97,10 @@ module DuplicateReviewCases
       return 'Case is not open' unless @duplicate_review_case.open?
       return 'An admin actor is required' unless admin_actor?
       return 'A rationale is required' if @rationale.blank?
+      return 'Post-import reconciliation requires at least one reason/evidence code' if
+        @duplicate_review_case.post_import_reconciliation? && @reason_codes.empty?
+      return 'Post-import reconciliation case must identify exactly one canonical pair' if
+        @duplicate_review_case.post_import_reconciliation? && post_import_pair_ids.blank?
 
       reason_code_error
     end
@@ -118,11 +125,41 @@ module DuplicateReviewCases
 
     def lock_user_participants!
       subject_id = @duplicate_review_case.subject_user_id
-      locked_users = User.lock_for_merge_integrity!(@actor.id, subject_id)
+      participant_ids = [@actor.id, *case_participant_ids]
+      locked_users = User.lock_for_merge_integrity!(*participant_ids)
+      @locked_users = locked_users
       @actor = locked_users.fetch(@actor.id)
       raise StaleCaseError, 'Admin actor is no longer eligible' unless @actor.admin? && @actor.public_login_active?
 
       @locked_subject = locked_users[subject_id]
+      @locked_case_participants = case_participant_ids.filter_map { |id| locked_users[id] }
+    end
+
+    def lock_and_requalify_case_participants!
+      locked_candidates = @duplicate_review_case.duplicate_review_case_candidates.lock('FOR UPDATE').to_a
+      locked_participant_ids = [
+        @duplicate_review_case.subject_user_id,
+        *locked_candidates.map(&:candidate_user_id)
+      ].compact.uniq
+      raise StaleCaseError, 'Case participants changed while the resolution was being prepared' unless
+        locked_participant_ids.sort == case_participant_ids.sort
+
+      return unless @duplicate_review_case.post_import_reconciliation?
+
+      @locked_pair_users = post_import_pair_ids.map { |id| @locked_users.fetch(id) }
+      unless @locked_pair_users.all? { |user| user.is_a?(Users::Constituent) && user.public_login_active? }
+        raise StaleCaseError, 'Pair participants are no longer eligible active constituents'
+      end
+
+      unless DuplicateReconciliation::Population.strict_case_pair_ids(
+        @duplicate_review_case,
+        candidates: locked_candidates
+      ) == post_import_pair_ids
+        raise StaleCaseError, 'Post-import reconciliation pair is no longer valid'
+      end
+      return if DuplicateReconciliation::Population.new.current_match?(*@locked_pair_users)
+
+      raise StaleCaseError, 'The records no longer form a supported name-and-date-of-birth pair'
     end
 
     def resolve_case!
@@ -142,11 +179,22 @@ module DuplicateReviewCases
       metadata
     end
 
-    def sync_subject_review_flag!
-      return if @locked_subject.blank?
+    def sync_participant_review_flags!
+      projection = DuplicateReconciliation::ReviewFlagProjection.new
+      @locked_case_participants.grep(Users::Constituent).each do |user|
+        user.update!(needs_duplicate_review: projection.required_for?(user))
+      end
+    end
 
-      remaining = DuplicateReviewCase.open_cases.for_subject(@locked_subject).where.not(id: @duplicate_review_case.id).exists?
-      @locked_subject.update!(needs_duplicate_review: remaining)
+    def case_participant_ids
+      @case_participant_ids ||= [
+        @duplicate_review_case.subject_user_id,
+        *@duplicate_review_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
+      ].compact.uniq
+    end
+
+    def post_import_pair_ids
+      @post_import_pair_ids ||= DuplicateReconciliation::Population.strict_case_pair_ids(@duplicate_review_case)
     end
 
     def log_resolution!

@@ -2,10 +2,11 @@
 
 module DuplicateReviewCases
   # Clears a legacy needs_duplicate_review flag directly (not through a case resolution).
-  # An open case owns the flag, so this refuses when one exists for the subject -- the case
-  # must be resolved instead (approve/ignore/keep-separate/merge).
+  # An open case owns the flag, so this refuses when one exists for the user as subject or
+  # candidate -- the case must be resolved instead.
   class ClearFlagService < BaseService
     class OpenCaseExistsError < StandardError; end
+    class UnresolvedPairExistsError < StandardError; end
     class IneligibleUserError < StandardError; end
 
     def initialize(user:, actor:, rationale:)
@@ -36,7 +37,8 @@ module DuplicateReviewCases
         # failure result every other blocker here returns.
         raise IneligibleUserError unless locked_user.public_login_active?
         raise IneligibleActorError unless @actor.admin? && @actor.public_login_active?
-        raise OpenCaseExistsError if DuplicateReviewCase.open_cases.for_subject(locked_user).exists?
+        raise OpenCaseExistsError if DuplicateReviewCase.open_cases.for_participant(locked_user).exists?
+        raise UnresolvedPairExistsError if DuplicateReconciliation::Population.new.unresolved_for_user?(locked_user)
 
         locked_user.update!(needs_duplicate_review: false)
         AuditEventService.log(
@@ -50,6 +52,8 @@ module DuplicateReviewCases
       success('Review flag cleared.')
     rescue OpenCaseExistsError
       failure('This record has an open review case; resolve the case instead of clearing the flag.')
+    rescue UnresolvedPairExistsError
+      failure('This record still has an unresolved matching pair; review the pair instead of clearing the flag.')
     rescue IneligibleUserError
       failure('This record is no longer an eligible active record.')
     rescue IneligibleActorError

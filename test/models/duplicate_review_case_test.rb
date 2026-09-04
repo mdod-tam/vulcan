@@ -30,6 +30,65 @@ class DuplicateReviewCaseTest < ActiveSupport::TestCase
     )
   end
 
+  test 'for_participant finds both the subject and every candidate without changing for_subject' do
+    assert_includes DuplicateReviewCase.for_participant(@subject), @review_case
+    assert_includes DuplicateReviewCase.for_participant(@candidate), @review_case
+    assert_includes DuplicateReviewCase.for_subject(@subject), @review_case
+    assert_not_includes DuplicateReviewCase.for_subject(@candidate), @review_case
+  end
+
+  test 'source enum preserves historical values and adds reconciliation without renumbering' do
+    assert_equal(
+      {
+        'registration_soft_match' => 0,
+        'paper_intake' => 1,
+        'admin_create' => 2,
+        'support_claim' => 3,
+        'portal_dependent' => 4,
+        'post_import_reconciliation' => 5
+      },
+      DuplicateReviewCase.sources
+    )
+  end
+
+  test 'status enum preserves historical values and adds merge supersession without renumbering' do
+    assert_equal(
+      {
+        'open' => 0,
+        'resolved_approved' => 1,
+        'resolved_ignored' => 2,
+        'resolved_merged' => 3,
+        'resolved_superseded' => 4
+      },
+      DuplicateReviewCase.statuses
+    )
+  end
+
+  test 'superseded status records that an open pair was replaced by a merge without deciding identity' do
+    replacement = DuplicateReviewCase.create!(
+      source: :post_import_reconciliation,
+      subject_user: create(:constituent),
+      deduplication_key: SecureRandom.hex(16),
+      metadata: { 'reason_codes' => ['name_dob'] },
+      opened_at: Time.current,
+      status: :open
+    )
+
+    assert @review_case.update(
+      status: :resolved_superseded,
+      resolution_determination: :superseded_by_merge,
+      resolution_rationale: 'review continues on the surviving pair',
+      resolution_metadata: {
+        'replacement_case_id' => replacement.id,
+        'superseding_merge_case_id' => 42
+      },
+      resolved_by: @admin,
+      resolved_at: Time.current
+    )
+    assert @review_case.resolved?
+    assert_not @review_case.merge_eligible_determination?
+  end
+
   # metadata['reason_codes'] was already held to DuplicateReviewCaseCandidate::MATCH_REASONS;
   # resolution_metadata validated only its keys, and that is where admin-supplied codes land.
   test 'resolution metadata rejects reason codes outside the resolution vocabulary' do

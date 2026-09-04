@@ -14,6 +14,8 @@ gem 'bootsnap', '~> 1.23', require: false
 gem 'chunky_png', '~> 1.4'
 # bundle and process CSS [https://github.com/rails/cssbundling-rails]
 gem 'cssbundling-rails', '~> 1.4', '>= 1.4.3'
+# CSV output for operational reports (no longer bundled with Ruby 4).
+gem 'csv', '~> 3.3'
 # DocuSeal API integration for digital document signing
 gem 'docuseal', '~> 1.0', '>= 1.0.5'
 # HTTP client for downloading files from webhooks
