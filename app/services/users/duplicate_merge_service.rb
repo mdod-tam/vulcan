@@ -27,11 +27,13 @@ module Users
   #   transferred; the canonical user's auth state is preserved and duplicate sessions expire.
   class DuplicateMergeService < BaseService
     class MergeError < StandardError; end
+    class IntegrityInventoryChanged < MergeError; end
 
     SELECTED_SOURCES = %w[canonical duplicate].freeze
     AGREED_SOURCE = 'agreed'
     CONTACT_SOURCES = [*SELECTED_SOURCES, AGREED_SOURCE].freeze
     MERGE_ELIGIBLE_SOURCES = %w[registration_soft_match post_import_reconciliation].freeze
+    INTEGRITY_INVENTORY_RETRY_LIMIT = 1
 
     # rubocop:disable Metrics/ParameterLists -- explicit, auditable merge contract
     def initialize(actor:, duplicate_review_case:, canonical_user:, duplicate_user:,
@@ -55,7 +57,37 @@ module Users
       error = static_preflight
       return failure(error) if error
 
-      ActiveRecord::Base.transaction do
+      merge_with_integrity_inventory_retry!
+
+      success('Duplicate record merged', { canonical_user: @canonical_user, duplicate_user: @duplicate_user, summary: @summary })
+    rescue MergeError => e
+      failure(e.message)
+    rescue ActiveRecord::RecordInvalid => e
+      failure(e.record.errors.full_messages.to_sentence.presence || e.message)
+    end
+
+    private
+
+    # A relationship or related case can commit after the advisory participant scan but
+    # before the participant User locks are acquired. The locked inventory detects that
+    # race without taking a late, out-of-order User lock. Restart the whole transaction
+    # once so the newly committed participant is included in the canonical lock order.
+    # Persistent inventory churn still fails closed with the existing retryable message.
+    def merge_with_integrity_inventory_retry!
+      retries = 0
+
+      begin
+        merge_transaction!
+      rescue IntegrityInventoryChanged
+        raise if retries >= INTEGRITY_INVENTORY_RETRY_LIMIT
+
+        retries += 1
+        retry
+      end
+    end
+
+    def merge_transaction!
+      ActiveRecord::Base.transaction(requires_new: true) do
         lock_records!
         recheck_error = post_lock_identity_recheck
         raise MergeError, recheck_error if recheck_error
@@ -79,15 +111,7 @@ module Users
         resolve_selected_case!(audit_event)
         sync_affected_review_flags!
       end
-
-      success('Duplicate record merged', { canonical_user: @canonical_user, duplicate_user: @duplicate_user, summary: @summary })
-    rescue MergeError => e
-      failure(e.message)
-    rescue ActiveRecord::RecordInvalid => e
-      failure(e.record.errors.full_messages.to_sentence.presence || e.message)
     end
-
-    private
 
     # --- Preflight -----------------------------------------------------------
 
@@ -520,7 +544,7 @@ module Users
       missing_ids = (relationship_user_ids + case_user_ids).compact.uniq - @locked_users.keys
       return if missing_ids.empty?
 
-      raise MergeError, 'Related records changed while the merge was being prepared; reload and try again'
+      raise IntegrityInventoryChanged, 'Related records changed while the merge was being prepared; reload and try again'
     end
 
     # A lock does not validate a stale decision (plan section 2): every authorization,

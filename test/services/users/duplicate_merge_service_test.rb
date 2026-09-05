@@ -939,6 +939,21 @@ module Users
       assert_equal 2, GuardianRelationship.where(guardian_id: guardian.id).count
     end
 
+    test 'fails closed after one integrity inventory retry' do
+      message = 'Related records changed while the merge was being prepared; reload and try again'
+      service = build_merge_service
+      service.expects(:merge_transaction!)
+             .twice
+             .raises(DuplicateMergeService::IntegrityInventoryChanged, message)
+
+      result = service.call
+
+      assert result.failure?
+      assert_equal message, result.message
+      assert_not @duplicate.reload.merged?
+      assert_predicate @review_case.reload, :open?
+    end
+
     private
 
     # The replay pair is meaningless split, and a check constraint enforces that, so fixtures that
@@ -1015,6 +1030,10 @@ module Users
     end
 
     def merge(**overrides)
+      build_merge_service(**overrides).call
+    end
+
+    def build_merge_service(**overrides)
       defaults = {
         actor: @admin,
         duplicate_review_case: @review_case,
@@ -1026,7 +1045,7 @@ module Users
         contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' },
         delivery_choice: 'canonical'
       }
-      DuplicateMergeService.new(**defaults, **overrides).call
+      DuplicateMergeService.new(**defaults, **overrides)
     end
 
     def phone_only_constituent(phone:)

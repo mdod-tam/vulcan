@@ -166,7 +166,9 @@ module Letters
           paragraph.split("\n").each do |list_item|
             if list_item.match(/^\s*[*\-•]\s+/)
               pdf.indent(10) do
-                pdf.text list_item.gsub(/^\s*[*\-•]\s+/, '• ')
+                # Do not introduce a Unicode glyph into otherwise ASCII letter copy.
+                # Prawn treats non-ASCII text in its built-in fonts as an i18n warning.
+                pdf.text list_item.gsub(/^\s*[*\-•]\s+/, '- ')
               end
             else
               pdf.text list_item
