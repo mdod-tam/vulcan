@@ -18,9 +18,11 @@ class DuplicateReviewCase < ApplicationRecord
     delivery_choice
     transfer_summary
     merge_audit_event_id
+    replacement_case_id
+    superseding_merge_case_id
   ].freeze
 
-  RESOLVED_STATUSES = %w[resolved_approved resolved_ignored resolved_merged].freeze
+  RESOLVED_STATUSES = %w[resolved_approved resolved_ignored resolved_merged resolved_superseded].freeze
 
   # Reason codes an admin may record on a resolution, as opposed to the detection-derived
   # evidence codes in DuplicateReviewCaseCandidate::MATCH_REASONS. A case opened without any
@@ -42,7 +44,8 @@ class DuplicateReviewCase < ApplicationRecord
     open: 0,
     resolved_approved: 1,
     resolved_ignored: 2,
-    resolved_merged: 3
+    resolved_merged: 3,
+    resolved_superseded: 4
   }
 
   enum :source, {
@@ -50,7 +53,8 @@ class DuplicateReviewCase < ApplicationRecord
     paper_intake: 1,
     admin_create: 2,
     support_claim: 3,
-    portal_dependent: 4
+    portal_dependent: 4,
+    post_import_reconciliation: 5
   }
 
   # Identity/linking determination the admin recorded. Distinct from the coarse
@@ -59,6 +63,7 @@ class DuplicateReviewCase < ApplicationRecord
     same_person_confirmed: 'same_person_confirmed',
     authorized_relationship_confirmed: 'authorized_relationship_confirmed',
     keep_separate: 'keep_separate',
+    superseded_by_merge: 'superseded_by_merge',
     needs_more_information: 'needs_more_information',
     fraud_or_security_review: 'fraud_or_security_review'
   }, validate: { allow_nil: true }
@@ -80,6 +85,15 @@ class DuplicateReviewCase < ApplicationRecord
   scope :open_cases, -> { where(status: statuses[:open]) }
   scope :resolved_cases, -> { where(status: RESOLVED_STATUSES.map { |s| statuses[s] }) }
   scope :for_subject, ->(user) { where(subject_user: user) }
+  scope :for_participant, lambda { |user|
+    where(
+      '(duplicate_review_cases.subject_user_id = :user_id OR EXISTS (' \
+      'SELECT 1 FROM duplicate_review_case_candidates participant_candidates ' \
+      'WHERE participant_candidates.duplicate_review_case_id = duplicate_review_cases.id ' \
+      'AND participant_candidates.candidate_user_id = :user_id))',
+      user_id: user.id
+    )
+  }
 
   def open?
     status == 'open'

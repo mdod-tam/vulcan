@@ -4,15 +4,17 @@ module Users
   # Same-person merge of a duplicate constituent record into a canonical survivor.
   #
   # Contract:
-  # - Requires an admin actor, an open *registration_soft_match* duplicate review case,
+  # - Requires an admin actor, an open merge-eligible duplicate review case,
   #   explicit same-person confirmation, a rationale, evidence/reason codes, and explicit
-  #   contact, delivery, and transfer choices.
+  #   contact and delivery decisions. Exact shared values may arrive as agreement markers,
+  #   which are rechecked under the same locks before any mutation.
   # - Locks the actor, both users, the case, its candidate row, and the complete
-  #   application inventory (in that order); preflights every blocker against the
+  #   application and guardian/dependent relationship inventories (in that order);
+  #   preflights every blocker against the
   #   requalified locked state; then performs all mutations with bang persistence inside a
   #   single transaction and rolls back on failure.
-  # - Fails closed if any other open case references either participant, rather than
-  #   repointing or auto-resolving it. Resolves only the selected case.
+  # - Carries other open exact-pair post-import cases from the retiring record to the
+  #   survivor without deciding them. Cases outside that narrow contract still fail closed.
   # - Retires (deactivates) the duplicate and points it at the canonical survivor; it is
   #   never destroyed.
   # - Emits exactly one +duplicate_user_merged+ audit event.
@@ -25,8 +27,13 @@ module Users
   #   transferred; the canonical user's auth state is preserved and duplicate sessions expire.
   class DuplicateMergeService < BaseService
     class MergeError < StandardError; end
+    class IntegrityInventoryChanged < MergeError; end
 
-    CONTACT_SOURCES = %w[canonical duplicate].freeze
+    SELECTED_SOURCES = %w[canonical duplicate].freeze
+    AGREED_SOURCE = 'agreed'
+    CONTACT_SOURCES = [*SELECTED_SOURCES, AGREED_SOURCE].freeze
+    MERGE_ELIGIBLE_SOURCES = %w[registration_soft_match post_import_reconciliation].freeze
+    INTEGRITY_INVENTORY_RETRY_LIMIT = 1
 
     # rubocop:disable Metrics/ParameterLists -- explicit, auditable merge contract
     def initialize(actor:, duplicate_review_case:, canonical_user:, duplicate_user:,
@@ -50,10 +57,43 @@ module Users
       error = static_preflight
       return failure(error) if error
 
-      ActiveRecord::Base.transaction do
+      merge_with_integrity_inventory_retry!
+
+      success('Duplicate record merged', { canonical_user: @canonical_user, duplicate_user: @duplicate_user, summary: @summary })
+    rescue MergeError => e
+      failure(e.message)
+    rescue ActiveRecord::RecordInvalid => e
+      failure(e.record.errors.full_messages.to_sentence.presence || e.message)
+    end
+
+    private
+
+    # A relationship or related case can commit after the advisory participant scan but
+    # before the participant User locks are acquired. The locked inventory detects that
+    # race without taking a late, out-of-order User lock. Restart the whole transaction
+    # once so the newly committed participant is included in the canonical lock order.
+    # Persistent inventory churn still fails closed with the existing retryable message.
+    def merge_with_integrity_inventory_retry!
+      retries = 0
+
+      begin
+        merge_transaction!
+      rescue IntegrityInventoryChanged
+        raise if retries >= INTEGRITY_INVENTORY_RETRY_LIMIT
+
+        retries += 1
+        retry
+      end
+    end
+
+    def merge_transaction!
+      ActiveRecord::Base.transaction(requires_new: true) do
         lock_records!
         recheck_error = post_lock_identity_recheck
         raise MergeError, recheck_error if recheck_error
+
+        agreement_error = agreement_recheck_error
+        raise MergeError, agreement_error if agreement_error
 
         capture_final_contact!
         live_error = live_preflight
@@ -66,19 +106,12 @@ module Users
         reconcile_person_references!
         expire_duplicate_sessions!
         retire_duplicate!
+        reconcile_related_cases!
         audit_event = log_merge!
         resolve_selected_case!(audit_event)
-        sync_canonical_review_flag!
+        sync_affected_review_flags!
       end
-
-      success('Duplicate record merged', { canonical_user: @canonical_user, duplicate_user: @duplicate_user, summary: @summary })
-    rescue MergeError => e
-      failure(e.message)
-    rescue ActiveRecord::RecordInvalid => e
-      failure(e.record.errors.full_messages.to_sentence.presence || e.message)
     end
-
-    private
 
     # --- Preflight -----------------------------------------------------------
 
@@ -100,7 +133,10 @@ module Users
     def pair_membership_error
       return 'The review case subject must be one of the two records' unless subject_in_pair?
       return 'The other record must be a recorded candidate of this case' unless other_is_recorded_candidate?
-      return 'Only a registration_soft_match case can be merged through this path' unless registration_soft_match_case?
+      return 'This case source is not eligible for the duplicate merge workflow' unless merge_eligible_source?
+
+      reconciliation_error = post_import_pair_error
+      return reconciliation_error if reconciliation_error
 
       nil
     end
@@ -117,11 +153,25 @@ module Users
       @duplicate_review_case.duplicate_review_case_candidates.pluck(:candidate_user_id).compact.include?(other_id)
     end
 
-    # PR4b's merge path exists to resolve an online-registration probable duplicate (plan
-    # Goal/acceptance criteria); a staff-initiated support_claim/paper_intake/admin_create
-    # case is out of this contract's scope.
-    def registration_soft_match_case?
-      @duplicate_review_case.registration_soft_match?
+    # PR4b's merge path accepts online-registration probable duplicates and the narrowly
+    # pair-scoped post-import reconciliation source. Staff-initiated
+    # support_claim/paper_intake/admin_create cases remain outside this contract.
+    def merge_eligible_source?
+      MERGE_ELIGIBLE_SOURCES.include?(@duplicate_review_case.source)
+    end
+
+    def post_import_pair_error
+      return unless @duplicate_review_case.post_import_reconciliation?
+
+      expected_ids = [@canonical_user.id, @duplicate_user.id].sort
+      actual_ids = DuplicateReconciliation::Population.strict_case_pair_ids(
+        @duplicate_review_case,
+        candidates: @locked_candidate_rows
+      )
+      return 'The post-import reconciliation case no longer identifies this exact pair' unless actual_ids == expected_ids
+      return if DuplicateReconciliation::Population.new.current_match?(@canonical_user, @duplicate_user)
+
+      'The post-import reconciliation pair no longer has the supported name-and-date-of-birth match'
     end
 
     # The survivor must be a live, active record. Merging into a retired, inactive, or
@@ -187,26 +237,57 @@ module Users
       "Unsupported reason/evidence code: #{unsupported.join(', ')}"
     end
 
-    # Each contact fact must be an explicit admin decision, not an inferred default:
-    # a missing or garbage value must block the merge rather than silently resolve to
-    # "canonical" and let the audit metadata misrepresent what the admin chose.
+    # Each contact fact must be an explicit admin decision or a current exact agreement,
+    # never an inferred default. A missing or garbage value must block the merge rather
+    # than silently resolve to "canonical" and let the audit metadata misrepresent what
+    # the admin reviewed.
     def contact_choice_error
       %i[email phone address].each do |field|
         source = @contact_choices[field].to_s.presence
-        return "An explicit #{field} choice (canonical or duplicate) is required" if source.blank?
-        return "Invalid #{field} choice" unless CONTACT_SOURCES.include?(source)
+        return "An explicit #{field} choice or current agreement is required" if source.blank?
+
+        allowed_sources = field == :email ? SELECTED_SOURCES : CONTACT_SOURCES
+        return "Invalid #{field} choice" unless allowed_sources.include?(source)
       end
       nil
     end
 
-    # The delivery route is chosen explicitly and independently from login identity
-    # (see the merge inventory). A missing or invalid value must not silently fall
-    # back to the canonical record's preference.
+    # Delivery remains independent from login identity (see the merge inventory). The
+    # form either records a choice between differing values or claims exact agreement;
+    # a missing or invalid value must not silently fall back to canonical.
     def delivery_choice_error
-      return 'An explicit delivery route choice (canonical or duplicate) is required' if @delivery_choice.blank?
+      return 'An explicit delivery route choice or current agreement is required' if @delivery_choice.blank?
       return 'Invalid delivery route choice' unless CONTACT_SOURCES.include?(@delivery_choice)
 
       nil
+    end
+
+    # A collapsed form row is a claim about both locked records, not permission to silently pick
+    # one. Recheck every such claim after the standard merge-integrity locks and fail before any
+    # contact capture, mutation, or audit if the page is stale or the marker was forged.
+    def agreement_recheck_error
+      checks = {
+        phone: final_phone_source,
+        phone_type: @contact_choices[:phone_type].to_s,
+        address: final_address_source,
+        delivery: @delivery_choice
+      }
+      checks.each do |fact, source|
+        next unless source == AGREED_SOURCE
+        next if duplicate_merge_facts.agreed?(fact)
+
+        return "The #{agreement_label(fact)} no longer agree; reload the case and review the current records"
+      end
+      nil
+    end
+
+    def agreement_label(fact)
+      {
+        phone: 'phone values',
+        phone_type: 'phone types',
+        address: 'addresses',
+        delivery: 'official-notice delivery routes'
+      }.fetch(fact)
     end
 
     # Blockers that depend on live, locked state.
@@ -215,28 +296,11 @@ module Users
       return duplicate_eligibility_error if duplicate_eligibility_error
       return 'The duplicate record has a pending recovery request; resolve it before merging' if duplicate_pending_recovery?
       return 'The duplicate record is the recipient of an active secure request form; revoke it before merging' if duplicate_active_secure_forms?
-      return competing_case_message if competing_open_case?
+      return @related_case_reconciler.error unless @related_case_reconciler.valid?
       return application_conflict_message if application_conflict?
-      return guardian_conflict_message if guardian_pair_conflict?
+      return @guardian_relationship_plan.error unless @guardian_relationship_plan.valid?
 
       contact_result_error
-    end
-
-    # Fail closed instead of reconciling every graph (plan section 3): any other open case
-    # whose subject or candidate references either participant blocks the merge rather than
-    # being silently repointed, coalesced, or auto-resolved alongside it.
-    def competing_open_case?
-      participant_ids = [@canonical_user.id, @duplicate_user.id]
-      DuplicateReviewCase.open_cases
-                         .where.not(id: @duplicate_review_case.id)
-                         .exists?(['duplicate_review_cases.subject_user_id IN (?) OR EXISTS (' \
-                                   'SELECT 1 FROM duplicate_review_case_candidates c ' \
-                                   'WHERE c.duplicate_review_case_id = duplicate_review_cases.id ' \
-                                   'AND c.candidate_user_id IN (?))', participant_ids, participant_ids])
-    end
-
-    def competing_case_message
-      'Another open duplicate review case references one of these records; resolve it before merging'
     end
 
     def contact_result_error
@@ -301,7 +365,13 @@ module Users
     end
 
     def final_phone_type
+      return @canonical_user.phone_type.to_s.presence if @contact_choices[:phone_type].to_s == AGREED_SOURCE
+
       @contact_choices[:phone_type].to_s.presence
+    end
+
+    def duplicate_merge_facts
+      DuplicateMergeFacts.new(@canonical_user, @duplicate_user)
     end
 
     def final_phone_real?
@@ -358,21 +428,74 @@ module Users
     # +User.lock_for_merge_integrity!+ entry point, so this order can never deadlock against
     # a hardened writer.
     def lock_records!
-      locked_users = User.lock_for_merge_integrity!(@actor, @canonical_user, @duplicate_user)
+      integrity_user_ids = [
+        @actor.id,
+        @canonical_user.id,
+        @duplicate_user.id,
+        *relationship_neighbor_user_ids,
+        *related_open_case_participant_ids
+      ].uniq
+      locked_users = User.lock_for_merge_integrity!(*integrity_user_ids)
+      @locked_users = locked_users
       @actor = locked_users.fetch(@actor.id)
       @canonical_user = locked_users.fetch(@canonical_user.id)
       @duplicate_user = locked_users.fetch(@duplicate_user.id)
 
-      @duplicate_review_case.lock!
-      lock_candidate_row!
+      lock_case_inventory!
       lock_application_inventory!
+      lock_guardian_relationship_inventory!
+      ensure_integrity_inventory_is_fully_locked!
+      @related_case_reconciler = DuplicateReconciliation::RelatedCaseReconciler.new(
+        selected_case: @duplicate_review_case,
+        canonical_user: @canonical_user,
+        duplicate_user: @duplicate_user,
+        actor: @actor,
+        cases: @locked_case_rows,
+        candidate_rows: @locked_case_candidate_rows,
+        locked_users: @locked_users
+      )
     end
 
-    def lock_candidate_row!
-      @duplicate_review_case.duplicate_review_case_candidates
-                            .where(candidate_user_id: [@canonical_user.id, @duplicate_user.id])
-                            .lock('FOR UPDATE')
-                            .load
+    def lock_case_inventory!
+      case_ids = (related_open_case_ids + [@duplicate_review_case.id]).uniq
+      @locked_case_rows = DuplicateReviewCase.where(id: case_ids).order(:id).lock('FOR UPDATE').to_a
+      @duplicate_review_case = @locked_case_rows.find { |review_case| review_case.id == @duplicate_review_case.id }
+      raise MergeError, 'The selected duplicate review case is no longer available' unless @duplicate_review_case
+
+      @locked_case_candidate_rows = DuplicateReviewCaseCandidate
+                                    .where(duplicate_review_case_id: case_ids)
+                                    .order(:duplicate_review_case_id, :id)
+                                    .lock('FOR UPDATE')
+                                    .to_a
+      @locked_candidate_rows = @locked_case_candidate_rows.select do |candidate|
+        candidate.duplicate_review_case_id == @duplicate_review_case.id
+      end
+    end
+
+    def related_open_case_ids
+      participant_ids = [@canonical_user.id, @duplicate_user.id]
+      candidate_case_ids = DuplicateReviewCaseCandidate.where(candidate_user_id: participant_ids)
+                                                       .select(:duplicate_review_case_id)
+      DuplicateReviewCase.open_cases
+                         .where(subject_user_id: participant_ids)
+                         .or(DuplicateReviewCase.open_cases.where(id: candidate_case_ids))
+                         .pluck(:id)
+    end
+
+    def related_open_case_participant_ids
+      case_ids = related_open_case_ids
+      subject_ids = DuplicateReviewCase.where(id: case_ids).pluck(:subject_user_id)
+      candidate_ids = DuplicateReviewCaseCandidate.where(duplicate_review_case_id: case_ids).pluck(:candidate_user_id)
+      (subject_ids + candidate_ids).compact
+    end
+
+    def relationship_neighbor_user_ids
+      participant_ids = [@canonical_user.id, @duplicate_user.id]
+      GuardianRelationship.where(guardian_id: participant_ids)
+                          .or(GuardianRelationship.where(dependent_id: participant_ids))
+                          .pluck(:guardian_id, :dependent_id)
+                          .flatten
+                          .uniq
     end
 
     # Locks (without mutating) every application either participant owns or manages, so a
@@ -384,6 +507,44 @@ module Users
                                         .order(:id)
                                         .lock('FOR UPDATE')
                                         .load
+    end
+
+    # Every relationship whose endpoint can change is locked before the projection is
+    # derived. Relationship creation also locks both User endpoints first, so no new edge
+    # can be attached to either participant between this inventory read and retirement.
+    def lock_guardian_relationship_inventory!
+      participant_ids = [@canonical_user.id, @duplicate_user.id]
+      @locked_guardian_relationships = GuardianRelationship
+                                       .where(guardian_id: participant_ids)
+                                       .or(GuardianRelationship.where(dependent_id: participant_ids))
+                                       .order(:id)
+                                       .lock('FOR UPDATE')
+                                       .load
+      @guardian_relationship_plan = DuplicateMergeRelationshipPlan.new(
+        canonical_user: @canonical_user,
+        duplicate_user: @duplicate_user,
+        relationships: @locked_guardian_relationships
+      )
+    end
+
+    # Related case/relationship writers lock their User participants first. If one committed
+    # between the advisory pre-scan and our User lock, the locked inventory can name a newly
+    # discovered participant. Acquiring that missing User lock now could violate ascending lock
+    # order, so fail closed and let a clean retry include the complete set from the start.
+    def ensure_integrity_inventory_is_fully_locked!
+      relationship_user_ids = @locked_guardian_relationships.flat_map do |relationship|
+        [relationship.guardian_id, relationship.dependent_id]
+      end
+      case_user_ids = @locked_case_rows.flat_map do |review_case|
+        [review_case.subject_user_id,
+         *@locked_case_candidate_rows.select do |candidate|
+           candidate.duplicate_review_case_id == review_case.id
+         end.map(&:candidate_user_id)]
+      end
+      missing_ids = (relationship_user_ids + case_user_ids).compact.uniq - @locked_users.keys
+      return if missing_ids.empty?
+
+      raise IntegrityInventoryChanged, 'Related records changed while the merge was being prepared; reload and try again'
     end
 
     # A lock does not validate a stale decision (plan section 2): every authorization,
@@ -487,40 +648,7 @@ module Users
     end
 
     def transfer_guardian_relationships!
-      dissolve_direct_pair_relationships!
-
-      as_guardian = GuardianRelationship.where(guardian_id: @duplicate_user.id)
-      as_dependent = GuardianRelationship.where(dependent_id: @duplicate_user.id)
-      @summary[:guardian_relationships_transferred] = as_guardian.count + as_dependent.count
-
-      # Pair conflicts are blocked in preflight and direct pair relationships are dissolved
-      # above, so these repoints cannot violate the (guardian_id, dependent_id) uniqueness
-      # or self-relationship constraints.
-      #
-      # The two repoints are not symmetric for the replay pair (`portal_creation_key` and its
-      # `portal_creation_fingerprint`). The key identifies one portal request within one guardian's
-      # namespace, and the partial unique index is scoped (guardian_id, portal_creation_key) to
-      # match. The pair moves or clears together; a check constraint forbids splitting it.
-      #
-      # - Retiring a *guardian* ends its request namespace, so the keys are cleared as the rows move.
-      #   Carrying them over would silently re-file the retired guardian's requests under the
-      #   canonical guardian, where they could collide with that guardian's own keys and would in any
-      #   case claim a replay history that never happened on this account.
-      # - Retiring a *dependent* leaves the guardian and their namespace intact, so the key still
-      #   truthfully identifies that guardian's request and is preserved.
-      as_guardian.update_all(guardian_id: @canonical_user.id, portal_creation_key: nil, # rubocop:disable Rails/SkipsModelValidations
-                             portal_creation_fingerprint: nil, updated_at: Time.current)
-      as_dependent.update_all(dependent_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
-    end
-
-    # A same-person merge dissolves any direct guardian relationship between the two
-    # records; repointing it would produce a self-relationship (update_all skips the
-    # guardian_and_dependent_must_be_different guard).
-    def dissolve_direct_pair_relationships!
-      pair = [@canonical_user.id, @duplicate_user.id]
-      direct = GuardianRelationship.where(guardian_id: pair, dependent_id: pair)
-      @summary[:guardian_relationships_dissolved] = direct.count
-      direct.delete_all
+      @summary.merge!(@guardian_relationship_plan.apply!)
     end
 
     # Same-person records that reference the duplicate directly (not through an
@@ -559,10 +687,13 @@ module Users
       )
     end
 
-    # The selected registration_soft_match case is the only case resolved by the merge
-    # (plan section 3): this keeps the identity-transfer transaction's contract small and
-    # leaves richer case routing -- and any other case touching either participant, which
-    # competing_open_case? already blocked above -- out of it entirely.
+    def reconcile_related_cases!
+      @summary.merge!(@related_case_reconciler.apply!)
+    end
+
+    # The selected merge-eligible case records the identity decision. Other open exact-pair
+    # post-import cases may be carried forward or superseded, but never receive a same/different
+    # determination from this merge.
     def resolve_selected_case!(audit_event)
       @duplicate_review_case.update!(
         status: :resolved_merged,
@@ -595,9 +726,12 @@ module Users
       }
     end
 
-    def sync_canonical_review_flag!
-      remaining = DuplicateReviewCase.open_cases.for_subject(@canonical_user).exists?
-      @canonical_user.update!(needs_duplicate_review: remaining)
+    def sync_affected_review_flags!
+      projection = DuplicateReconciliation::ReviewFlagProjection.new
+      user_ids = [@canonical_user.id, *@related_case_reconciler.affected_user_ids].uniq - [@duplicate_user.id]
+      user_ids.filter_map { |id| @locked_users[id] }.grep(Users::Constituent).each do |user|
+        user.update!(needs_duplicate_review: projection.required_for?(user))
+      end
     end
 
     def log_merge!
@@ -639,26 +773,6 @@ module Users
 
     def application_conflict_message
       'Merging would leave the canonical record with more than one active application; archive or reject one first'
-    end
-
-    def guardian_pair_conflict?
-      shared_dependent_conflict? || shared_guardian_conflict?
-    end
-
-    def shared_dependent_conflict?
-      canonical_dependents = GuardianRelationship.where(guardian_id: @canonical_user.id).pluck(:dependent_id)
-      duplicate_dependents = GuardianRelationship.where(guardian_id: @duplicate_user.id).pluck(:dependent_id)
-      canonical_dependents.intersect?(duplicate_dependents)
-    end
-
-    def shared_guardian_conflict?
-      canonical_guardians = GuardianRelationship.where(dependent_id: @canonical_user.id).pluck(:guardian_id)
-      duplicate_guardians = GuardianRelationship.where(dependent_id: @duplicate_user.id).pluck(:guardian_id)
-      canonical_guardians.intersect?(duplicate_guardians)
-    end
-
-    def guardian_conflict_message
-      'Canonical and duplicate share a guardian/dependent relationship; resolve the relationship conflict before merging'
     end
 
     # --- Guards --------------------------------------------------------------

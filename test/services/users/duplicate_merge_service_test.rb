@@ -44,6 +44,85 @@ module Users
       assert_equal 'same_person_confirmed', @review_case.resolution_determination
     end
 
+    test 'accepts shared contact and delivery facts only while both locked records agree' do
+      shared_address = {
+        physical_address_1: '100 Shared Street',
+        physical_address_2: nil,
+        city: 'Baltimore',
+        state: 'MD',
+        zip_code: '21201'
+      }
+      @canonical.update!(phone: nil, phone_type: nil, communication_preference: :letter, **shared_address)
+      @duplicate.update!(
+        email: "shared-duplicate-#{SecureRandom.hex(4)}@example.com",
+        phone: nil,
+        phone_type: nil,
+        communication_preference: :letter,
+        **shared_address
+      )
+
+      result = merge(
+        contact_choices: { phone: 'agreed', phone_type: nil, email: 'canonical', address: 'agreed' },
+        delivery_choice: 'agreed'
+      )
+
+      assert result.success?, result.message
+      metadata = @review_case.reload.resolution_metadata
+      assert_equal 'agreed', metadata.dig('contact_choices', 'phone')
+      assert_equal 'agreed', metadata.dig('contact_choices', 'address')
+      assert_equal 'agreed', metadata['delivery_choice']
+    end
+
+    test 'refuses a forged shared-phone claim before merge or audit' do
+      assert_no_difference 'Event.where(action: \'duplicate_user_merged\').count' do
+        result = merge(
+          contact_choices: { phone: 'agreed', phone_type: 'voice', email: 'canonical', address: 'canonical' }
+        )
+
+        assert result.failure?
+        assert_match(/phone values no longer agree/i, result.message)
+      end
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'refuses a forged shared-address claim before merge or audit' do
+      @duplicate.update!(physical_address_1: 'Different address')
+
+      assert_no_difference 'Event.where(action: \'duplicate_user_merged\').count' do
+        result = merge(
+          contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'agreed' }
+        )
+
+        assert result.failure?
+        assert_match(/addresses no longer agree/i, result.message)
+      end
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'refuses a forged shared-delivery claim before merge or audit' do
+      assert_no_difference 'Event.where(action: \'duplicate_user_merged\').count' do
+        result = merge(delivery_choice: 'agreed')
+
+        assert result.failure?
+        assert_match(/delivery routes no longer agree/i, result.message)
+      end
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'refuses a forged shared-phone-type claim before merge or audit' do
+      @canonical.update!(phone: '410-555-0191', phone_type: 'text')
+
+      assert_no_difference 'Event.where(action: \'duplicate_user_merged\').count' do
+        result = merge(
+          contact_choices: { phone: 'duplicate', phone_type: 'agreed', email: 'canonical', address: 'canonical' }
+        )
+
+        assert result.failure?
+        assert_match(/phone types no longer agree/i, result.message)
+      end
+      assert_not @duplicate.reload.merged?
+    end
+
     test 'blocks merge without same-person confirmation' do
       result = merge(same_person_confirmed: false)
       assert result.failure?
@@ -91,13 +170,20 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
-    test 'blocks merge on shared guardian relationship conflict' do
+    test 'coalesces the same dependent relationship and keeps the dependent application on the dependent' do
       dependent = create(:constituent)
       create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
       create(:guardian_relationship, guardian_user: @duplicate, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: @duplicate)
+
       result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' })
-      assert result.failure?
-      assert_not @duplicate.reload.merged?
+
+      assert result.success?, result.message
+      assert_equal 1, GuardianRelationship.where(guardian_id: @canonical.id, dependent_id: dependent.id).count
+      assert_not GuardianRelationship.exists?(guardian_id: @duplicate.id)
+      assert_equal dependent.id, application.reload.user_id, 'a guardian merge never moves the dependent-owned application'
+      assert_equal @canonical.id, application.managing_guardian_id
+      assert_equal 1, result.data[:summary][:guardian_relationships_coalesced]
     end
 
     test 'blocks choosing a phone-only record as canonical when the other record is email-backed' do
@@ -282,14 +368,16 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
-    test 'blocks merge when another open case has the canonical as its subject' do
+    test 'keeps another open case involving only the canonical while allowing the merge' do
       third_party = create(:constituent, email: "third-#{SecureRandom.hex(3)}@example.com")
-      open_case(subject: @canonical, candidate: third_party, reason: 'name_dob')
+      other_case = open_case(subject: @canonical, candidate: third_party, reason: 'name_dob')
 
       result = merge
-      assert result.failure?
-      assert_match(/another open duplicate review case/i, result.message)
-      assert_not @duplicate.reload.merged?
+
+      assert result.success?, result.message
+      assert @duplicate.reload.merged?
+      assert other_case.reload.open?
+      assert @canonical.reload.needs_duplicate_review?
     end
 
     test 'blocks merge when another open case names either participant as a candidate' do
@@ -303,8 +391,18 @@ module Users
     end
 
     test 'resolves only the selected case, leaving a case naming neither participant untouched' do
-      third_party = create(:constituent, email: "third-#{SecureRandom.hex(3)}@example.com")
-      other_party = create(:constituent, email: "other-#{SecureRandom.hex(3)}@example.com")
+      third_party = create(
+        :constituent,
+        first_name: 'Unrelated',
+        last_name: "Third#{SecureRandom.hex(3)}",
+        email: "third-#{SecureRandom.hex(3)}@example.com"
+      )
+      other_party = create(
+        :constituent,
+        first_name: 'Unrelated',
+        last_name: "Other#{SecureRandom.hex(3)}",
+        email: "other-#{SecureRandom.hex(3)}@example.com"
+      )
       unrelated_case = open_case(subject: third_party, candidate: other_party, reason: 'name_dob')
 
       result = merge
@@ -315,15 +413,156 @@ module Users
       assert_not @canonical.reload.needs_duplicate_review
     end
 
-    test 'blocks merge when the case is not a registration_soft_match' do
+    test 'blocks merge when the case source is not merge eligible' do
       subject = phone_only_constituent(phone: '555-333-4444')
       candidate = create(:constituent, email: "portal3-#{SecureRandom.hex(3)}@example.com")
       non_registration_case = open_case(subject: subject, candidate: candidate, reason: 'exact_phone', source: :support_claim)
 
       result = merge(duplicate_review_case: non_registration_case, canonical_user: candidate, duplicate_user: subject)
       assert result.failure?
-      assert_match(/registration_soft_match/i, result.message)
+      assert_match(/not eligible/i, result.message)
       assert_not subject.reload.merged?
+    end
+
+    test 'merges an exact post-import pair and keeps the retired record out of later reconciliation' do
+      canonical, duplicate = post_import_matching_pair
+      review_result = DuplicateReconciliation::ReviewPairService.new(
+        actor: @admin,
+        first_user_id: duplicate.id,
+        second_user_id: canonical.id
+      ).call
+      assert review_result.success?, review_result.message
+      review_case = review_result.data.fetch(:duplicate_review_case)
+
+      result = merge_post_import(review_case:, canonical:, duplicate:)
+
+      assert result.success?, result.message
+      assert duplicate.reload.merged?
+      assert_equal canonical.id, duplicate.merged_into_user_id
+      assert_equal 'resolved_merged', review_case.reload.status
+      assert_equal 'same_person_confirmed', review_case.resolution_determination
+      assert_not_includes DuplicateReconciliation::Population.new.pairs.map(&:ids), [canonical.id, duplicate.id].sort
+      historical_pairs = DuplicateReconciliation::Population.new.pairs(include_historical: true)
+      historical_pair = historical_pairs.find { |pair| pair.ids == [canonical.id, duplicate.id].sort }
+      assert_equal :merged_retired, historical_pair.state
+
+      DuplicateReconciliation::ReviewFlagSyncService.new(user_ids: [canonical.id, duplicate.id]).call
+      assert_not canonical.reload.needs_duplicate_review
+      assert_not duplicate.reload.needs_duplicate_review
+    end
+
+    test 'carries a related open post-import pair forward to the survivor instead of blocking the merge' do
+      first, second = post_import_matching_pair
+      third = create(
+        :constituent,
+        first_name: first.first_name,
+        last_name: first.last_name,
+        date_of_birth: first.date_of_birth,
+        email: "third-#{SecureRandom.hex(5)}@example.com",
+        phone: nil,
+        phone_type: nil,
+        needs_duplicate_review: false
+      )
+      related_case = review_pair(first, second)
+      selected_case = review_pair(first, third)
+
+      result = merge_post_import(review_case: selected_case, canonical: third, duplicate: first)
+
+      assert result.success?, result.message
+      assert first.reload.merged?
+      assert selected_case.reload.resolved_merged?
+      assert related_case.reload.open?
+      assert_equal [second.id, third.id].sort,
+                   DuplicateReconciliation::Population.strict_case_pair_ids(related_case)
+      assert_equal 1, result.data[:summary][:related_post_import_cases_repointed]
+      assert_equal 1, Event.where(action: 'duplicate_review_case_pair_repointed').count
+      assert second.reload.needs_duplicate_review?
+      assert third.reload.needs_duplicate_review?
+    end
+
+    test 'supersedes a related post-import case when its survivor pair already has an open case' do
+      first, second = post_import_matching_pair
+      third = create(
+        :constituent,
+        first_name: first.first_name,
+        last_name: first.last_name,
+        date_of_birth: first.date_of_birth,
+        email: "third-#{SecureRandom.hex(5)}@example.com",
+        phone: nil,
+        phone_type: nil,
+        needs_duplicate_review: false
+      )
+      related_case = review_pair(first, second)
+      selected_case = review_pair(first, third)
+      replacement_case = review_pair(second, third)
+
+      result = merge_post_import(review_case: selected_case, canonical: third, duplicate: first)
+
+      assert result.success?, result.message
+      assert related_case.reload.resolved_superseded?
+      assert_equal 'superseded_by_merge', related_case.resolution_determination
+      assert_equal replacement_case.id, related_case.resolution_metadata['replacement_case_id']
+      assert replacement_case.reload.open?
+      assert_equal 1, result.data[:summary][:related_post_import_cases_superseded]
+      assert_equal 1, Event.where(action: 'duplicate_review_case_superseded').count
+    end
+
+    test 'records one bounded repoint audit event for each related post-import case' do
+      first, second = post_import_matching_pair
+      third = matching_post_import_peer(first)
+      fourth = matching_post_import_peer(first)
+      first_related_case = review_pair(first, second)
+      second_related_case = review_pair(first, third)
+      selected_case = review_pair(first, fourth)
+
+      result = merge_post_import(review_case: selected_case, canonical: fourth, duplicate: first)
+
+      assert result.success?, result.message
+      events = Event.where(action: 'duplicate_review_case_pair_repointed').order(:id)
+      assert_equal 2, events.count
+      assert_equal [first_related_case.id, second_related_case.id].sort,
+                   events.map { |event| event.metadata['duplicate_review_case_id'] }.sort
+      events.each do |event|
+        assert_equal selected_case.id, event.metadata['superseding_merge_case_id']
+        assert_equal [first.id, event.metadata['previous_pair_ids'].max], event.metadata['previous_pair_ids']
+        assert_includes event.metadata['current_pair_ids'], fourth.id
+        assert_not event.metadata.to_json.match?(/@example\.com|\d{3}-\d{3}-\d{4}/)
+      end
+    end
+
+    test 'blocks a post-import case whose subject and candidate orientation is reversed' do
+      canonical, duplicate = post_import_matching_pair
+      review_case = open_case(
+        subject: duplicate,
+        candidate: canonical,
+        reason: 'name_dob',
+        source: :post_import_reconciliation
+      )
+
+      result = merge_post_import(review_case:, canonical:, duplicate:)
+
+      assert result.failure?
+      assert_match(/exact pair/i, result.message)
+      assert_not duplicate.reload.merged?
+      assert review_case.reload.open?
+    end
+
+    test 'blocks a stale post-import pair that no longer matches under lock' do
+      canonical, duplicate = post_import_matching_pair
+      review_result = DuplicateReconciliation::ReviewPairService.new(
+        actor: @admin,
+        first_user_id: canonical.id,
+        second_user_id: duplicate.id
+      ).call
+      review_case = review_result.data.fetch(:duplicate_review_case)
+      duplicate.update!(last_name: 'No longer matching')
+
+      result = merge_post_import(review_case:, canonical:, duplicate:)
+
+      assert result.failure?
+      assert_match(/no longer has the supported/i, result.message)
+      assert_not duplicate.reload.merged?
+      assert review_case.reload.open?
     end
 
     test 'does not emit profile audit events during a successful merge' do
@@ -418,6 +657,111 @@ module Users
       assert result.success?, result.message
       assert GuardianRelationship.exists?(guardian_id: guardian.id, dependent_id: @canonical.id)
       assert_not GuardianRelationship.exists?(dependent_id: @duplicate.id)
+    end
+
+    test 'preserves different dependents and moves their managing-guardian application links to the survivor' do
+      canonical_dependent = create(:constituent)
+      duplicate_dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: canonical_dependent)
+      create(:guardian_relationship, guardian_user: @duplicate, dependent_user: duplicate_dependent)
+      canonical_application = create(:application, user: canonical_dependent, managing_guardian: @canonical)
+      duplicate_application = create(:application, user: duplicate_dependent, managing_guardian: @duplicate)
+
+      result = merge
+
+      assert result.success?, result.message
+      assert_equal [canonical_dependent.id, duplicate_dependent.id].sort,
+                   GuardianRelationship.where(guardian_id: @canonical.id).order(:dependent_id).pluck(:dependent_id)
+      assert_equal canonical_dependent.id, canonical_application.reload.user_id
+      assert_equal duplicate_dependent.id, duplicate_application.reload.user_id
+      assert_equal @canonical.id, canonical_application.managing_guardian_id
+      assert_equal @canonical.id, duplicate_application.managing_guardian_id
+      assert_equal 1, result.data[:summary][:guardian_relationships_transferred]
+      assert_equal 0, result.data[:summary][:guardian_relationships_coalesced]
+    end
+
+    test 'blocks coalescing the same dependent when relationship types conflict' do
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent, relationship_type: 'Parent')
+      create(:guardian_relationship, guardian_user: @duplicate, dependent_user: dependent, relationship_type: 'Legal Guardian')
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/conflicting relationship types/i, result.message)
+      assert_not @duplicate.reload.merged?
+      assert_equal 2, GuardianRelationship.where(dependent_id: dependent.id).count
+    end
+
+    test 'coalesces a shared guardian when duplicate dependent records are explicitly merged' do
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @canonical, relationship_type: 'Parent')
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @duplicate, relationship_type: 'Parent')
+
+      result = merge
+
+      assert result.success?, result.message
+      assert_equal 1, GuardianRelationship.where(guardian_id: guardian.id, dependent_id: @canonical.id).count
+      assert_not GuardianRelationship.exists?(dependent_id: @duplicate.id)
+      assert_equal 1, result.data[:summary][:guardian_relationships_coalesced]
+    end
+
+    test 'merging duplicate dependents with two active applications remains blocked' do
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @canonical)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @duplicate)
+      create(:application, user: @canonical, status: :in_progress, managing_guardian: guardian)
+      create(:application, user: @duplicate, status: :awaiting_proof, managing_guardian: guardian)
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/more than one active application/i, result.message)
+      assert_not @duplicate.reload.merged?
+      assert_equal 2, GuardianRelationship.where(guardian_id: guardian.id).count
+    end
+
+    test 'merging duplicate dependents preserves their different guardians on the survivor' do
+      canonical_guardian = create(:constituent)
+      duplicate_guardian = create(:constituent)
+      canonical_relationship = create(
+        :guardian_relationship,
+        guardian_user: canonical_guardian,
+        dependent_user: @canonical,
+        relationship_type: 'Parent'
+      )
+      duplicate_relationship = create(
+        :guardian_relationship,
+        guardian_user: duplicate_guardian,
+        dependent_user: @duplicate,
+        relationship_type: 'Legal Guardian'
+      )
+
+      result = merge
+
+      assert result.success?, result.message
+      assert_equal @canonical.id, canonical_relationship.reload.dependent_id
+      assert_equal @canonical.id, duplicate_relationship.reload.dependent_id
+      assert_equal [canonical_guardian.id, duplicate_guardian.id].sort,
+                   GuardianRelationship.where(dependent_id: @canonical.id).order(:guardian_id).pluck(:guardian_id)
+      assert_equal 'Parent', canonical_relationship.relationship_type
+      assert_equal 'Legal Guardian', duplicate_relationship.relationship_type
+      assert_not GuardianRelationship.exists?(dependent_id: @duplicate.id)
+    end
+
+    test 'guardian-first and dependent-first merges converge on the same family and application ownership' do
+      guardian_first = merge_family_in_order(:guardian_first)
+      dependent_first = merge_family_in_order(:dependent_first)
+
+      expected = {
+        relationships: 1,
+        guardian_duplicate_retired: true,
+        dependent_duplicate_retired: true,
+        application_owned_by_dependent_survivor: true,
+        application_managed_by_guardian_survivor: true
+      }
+      assert_equal expected, guardian_first
+      assert_equal expected, dependent_first
     end
 
     test 'retirement clears all primary contact truth and invalidates an outstanding reset token' do
@@ -547,6 +891,69 @@ module Users
                    'the pair moves together: a preserved key with a cleared fingerprint would break the pair constraint'
     end
 
+    test 'coalescing duplicate dependents preserves the sole portal replay pair' do
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @canonical, relationship_type: 'Parent')
+      key = SecureRandom.uuid
+      fingerprint = fake_fingerprint
+      keyed_relationship = GuardianRelationship.create!(
+        guardian_user: guardian,
+        dependent_user: @duplicate,
+        relationship_type: 'Parent',
+        portal_creation_key: key,
+        portal_creation_fingerprint: fingerprint
+      )
+
+      result = merge
+
+      assert result.success?, result.message
+      keyed_relationship.reload
+      assert_equal @canonical.id, keyed_relationship.dependent_id
+      assert_equal key, keyed_relationship.portal_creation_key
+      assert_equal fingerprint, keyed_relationship.portal_creation_fingerprint
+      assert_equal 1, GuardianRelationship.where(guardian_id: guardian.id, dependent_id: @canonical.id).count
+    end
+
+    test 'blocks coalescing two separately replay-protected dependent relationships' do
+      guardian = create(:constituent)
+      GuardianRelationship.create!(
+        guardian_user: guardian,
+        dependent_user: @canonical,
+        relationship_type: 'Parent',
+        portal_creation_key: SecureRandom.uuid,
+        portal_creation_fingerprint: fake_fingerprint
+      )
+      GuardianRelationship.create!(
+        guardian_user: guardian,
+        dependent_user: @duplicate,
+        relationship_type: 'Parent',
+        portal_creation_key: SecureRandom.uuid,
+        portal_creation_fingerprint: fake_fingerprint
+      )
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/separately recorded portal links/i, result.message)
+      assert_not @duplicate.reload.merged?
+      assert_equal 2, GuardianRelationship.where(guardian_id: guardian.id).count
+    end
+
+    test 'fails closed after one integrity inventory retry' do
+      message = 'Related records changed while the merge was being prepared; reload and try again'
+      service = build_merge_service
+      service.expects(:merge_transaction!)
+             .twice
+             .raises(DuplicateMergeService::IntegrityInventoryChanged, message)
+
+      result = service.call
+
+      assert result.failure?
+      assert_equal message, result.message
+      assert_not @duplicate.reload.merged?
+      assert_predicate @review_case.reload, :open?
+    end
+
     private
 
     # The replay pair is meaningless split, and a check constraint enforces that, so fixtures that
@@ -556,7 +963,77 @@ module Users
       "v1:#{SecureRandom.hex(32)}"
     end
 
+    def merge_family_in_order(order)
+      guardian_survivor = create(:constituent)
+      guardian_duplicate = create(:constituent)
+      dependent_survivor = create(:constituent)
+      dependent_duplicate = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian_survivor, dependent_user: dependent_survivor)
+      create(:guardian_relationship, guardian_user: guardian_duplicate, dependent_user: dependent_duplicate)
+      application = create(:application, :approved, user: dependent_duplicate, managing_guardian: guardian_duplicate)
+
+      guardian_case = open_case(
+        subject: guardian_duplicate,
+        candidate: guardian_survivor,
+        reason: 'name_dob'
+      )
+      dependent_case = open_case(
+        subject: dependent_duplicate,
+        candidate: dependent_survivor,
+        reason: 'name_dob'
+      )
+      merges = {
+        guardian_first: [
+          [guardian_case, guardian_survivor, guardian_duplicate],
+          [dependent_case, dependent_survivor, dependent_duplicate]
+        ],
+        dependent_first: [
+          [dependent_case, dependent_survivor, dependent_duplicate],
+          [guardian_case, guardian_survivor, guardian_duplicate]
+        ]
+      }.fetch(order)
+
+      merges.each do |review_case, canonical, duplicate|
+        result = merge_independent_pair(review_case:, canonical:, duplicate:)
+        assert result.success?, "#{order} merge failed: #{result.message}"
+      end
+
+      {
+        relationships: GuardianRelationship.where(
+          guardian_id: guardian_survivor.id,
+          dependent_id: dependent_survivor.id
+        ).count,
+        guardian_duplicate_retired: guardian_duplicate.reload.merged?,
+        dependent_duplicate_retired: dependent_duplicate.reload.merged?,
+        application_owned_by_dependent_survivor: application.reload.user_id == dependent_survivor.id,
+        application_managed_by_guardian_survivor: application.managing_guardian_id == guardian_survivor.id
+      }
+    end
+
+    def merge_independent_pair(review_case:, canonical:, duplicate:)
+      DuplicateMergeService.new(
+        actor: @admin,
+        duplicate_review_case: review_case,
+        canonical_user: canonical,
+        duplicate_user: duplicate,
+        same_person_confirmed: true,
+        rationale: 'confirmed same person while testing family merge order',
+        reason_codes: %w[name_dob],
+        contact_choices: {
+          phone: 'canonical',
+          phone_type: canonical.phone_type,
+          email: 'canonical',
+          address: 'canonical'
+        },
+        delivery_choice: 'canonical'
+      ).call
+    end
+
     def merge(**overrides)
+      build_merge_service(**overrides).call
+    end
+
+    def build_merge_service(**overrides)
       defaults = {
         actor: @admin,
         duplicate_review_case: @review_case,
@@ -568,7 +1045,7 @@ module Users
         contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'canonical' },
         delivery_choice: 'canonical'
       }
-      DuplicateMergeService.new(**defaults, **overrides).call
+      DuplicateMergeService.new(**defaults, **overrides)
     end
 
     def phone_only_constituent(phone:)
@@ -578,9 +1055,59 @@ module Users
       Current.reset
     end
 
-    # Defaults to registration_soft_match because that is the only source the merge path
-    # accepts (plan acceptance criteria); pass an explicit `source:` for cases that exist
-    # only to exercise the competing-open-case blocker rather than being merged themselves.
+    def post_import_matching_pair
+      shared_attributes = {
+        first_name: 'PostImport',
+        last_name: "Merge#{SecureRandom.hex(4)}",
+        date_of_birth: Date.new(1977, 11, 3),
+        phone: nil,
+        phone_type: nil,
+        needs_duplicate_review: false
+      }
+      canonical = create(:constituent, **shared_attributes, email: "canonical-#{SecureRandom.hex(5)}@example.com")
+      duplicate = create(:constituent, **shared_attributes, email: "duplicate-#{SecureRandom.hex(5)}@example.com")
+      [canonical, duplicate]
+    end
+
+    def matching_post_import_peer(user)
+      create(
+        :constituent,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        date_of_birth: user.date_of_birth,
+        email: "peer-#{SecureRandom.hex(5)}@example.com",
+        phone: nil,
+        phone_type: nil,
+        needs_duplicate_review: false
+      )
+    end
+
+    def merge_post_import(review_case:, canonical:, duplicate:)
+      DuplicateMergeService.new(
+        actor: @admin,
+        duplicate_review_case: review_case,
+        canonical_user: canonical,
+        duplicate_user: duplicate,
+        same_person_confirmed: true,
+        rationale: 'confirmed same imported person',
+        reason_codes: %w[name_dob admin_reviewed],
+        contact_choices: { phone: 'canonical', email: 'canonical', address: 'canonical' },
+        delivery_choice: 'canonical'
+      ).call
+    end
+
+    def review_pair(first, second)
+      result = DuplicateReconciliation::ReviewPairService.new(
+        actor: @admin,
+        first_user_id: first.id,
+        second_user_id: second.id
+      ).call
+      assert result.success?, result.message
+      result.data.fetch(:duplicate_review_case)
+    end
+
+    # Defaults to registration_soft_match; pass an explicit source for cases that exist only
+    # to exercise the competing-open-case blocker rather than being merged themselves.
     def open_case(subject:, candidate:, reason:, source: :registration_soft_match)
       review_case = DuplicateReviewCase.create!(
         source: source,

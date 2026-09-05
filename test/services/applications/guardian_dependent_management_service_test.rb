@@ -129,6 +129,40 @@ module Applications
       assert_equal dependent.id, relationship.dependent_id
     end
 
+    test 'public relationship creation refuses a guardian retired by a merge' do
+      dependent = create(:constituent)
+      survivor = create(:constituent)
+      stale_guardian = @guardian
+      @guardian.update!(status: :inactive, merged_into_user: survivor, merged_at: Time.current)
+      service = GuardianDependentManagementService.new(
+        {},
+        guardian_user: stale_guardian,
+        dependent_user: dependent
+      )
+
+      assert_no_difference 'GuardianRelationship.count' do
+        assert_not service.create_guardian_relationship('Parent')
+      end
+      assert_includes service.errors.join(' '), 'guardian must be an active constituent'
+    end
+
+    test 'public relationship creation refuses a dependent retired by a merge' do
+      survivor = create(:constituent)
+      dependent = create(:constituent)
+      stale_dependent = dependent
+      dependent.update!(status: :inactive, merged_into_user: survivor, merged_at: Time.current)
+      service = GuardianDependentManagementService.new(
+        {},
+        guardian_user: @guardian,
+        dependent_user: stale_dependent
+      )
+
+      assert_no_difference 'GuardianRelationship.count' do
+        assert_not service.create_guardian_relationship('Parent')
+      end
+      assert_includes service.errors.join(' '), 'dependent must be an active constituent'
+    end
+
     test 'guardian phone strategy skips occupied synthetic primary phone' do
       create(:constituent, phone: '000-000-0000')
       SecureRandom

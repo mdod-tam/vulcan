@@ -7,7 +7,8 @@ module Admin
       'paper_intake' => 'Paper intake',
       'admin_create' => 'Admin-created',
       'support_claim' => 'Support / claim case',
-      'portal_dependent' => 'Portal dependent'
+      'portal_dependent' => 'Portal dependent',
+      'post_import_reconciliation' => 'Post-import reconciliation'
     }.freeze
 
     REASON_LABELS = {
@@ -33,7 +34,8 @@ module Admin
       'open' => 'Open',
       'resolved_approved' => 'Approved',
       'resolved_ignored' => 'Resolved without merge',
-      'resolved_merged' => 'Merged'
+      'resolved_merged' => 'Merged',
+      'resolved_superseded' => 'Superseded by merge'
     }.freeze
 
     PHONE_TYPE_LABELS = {
@@ -65,6 +67,23 @@ module Admin
       REASON_LABELS.fetch(reason.to_s, reason.to_s.humanize)
     end
 
+    def duplicate_review_presence_label(value)
+      value ? 'Yes' : 'No'
+    end
+
+    # A queue row represents one durable case, not one subject record. Keep the subject and every
+    # recorded candidate together so two exact-pair cases sharing a subject cannot look like a
+    # duplicated person row. Retain missing IDs as bounded historical context when a linked user
+    # no longer exists.
+    def duplicate_review_case_participants(review_case)
+      subject = { user: review_case.subject_user, constituent_id: review_case.subject_user_id }
+      candidates = review_case.duplicate_review_case_candidates.map do |candidate|
+        { user: candidate.candidate_user, constituent_id: candidate.candidate_user_id }
+      end
+
+      [subject, *candidates]
+    end
+
     # Stored record truth (not the delivery/effective fallback). Synthetic placeholders
     # are hidden so the queue never presents synthetic contact as a real fact.
     def stored_email_display(user)
@@ -86,6 +105,55 @@ module Admin
       parts.compact_blank.join(' · ').presence || NO_ADDRESS
     end
 
+    def duplicate_review_date_of_birth_display(user)
+      user&.date_of_birth&.strftime('%m/%d/%Y') || 'Not on file'
+    end
+
+    def duplicate_review_delivery_display(user)
+      user&.communication_preference.to_s.humanize.presence || 'Not set'
+    end
+
+    def duplicate_review_phone_type_display(phone_type)
+      PHONE_TYPE_LABELS.fetch(phone_type.to_s, phone_type.to_s.humanize)
+    end
+
+    def duplicate_review_shared_merge_facts(facts)
+      rows = []
+      if facts.agreed?(:date_of_birth)
+        rows << { key: :date_of_birth, label: 'Date of birth',
+                  value: duplicate_review_date_of_birth_display(facts.first_user) }
+      end
+      rows << { key: :phone, label: 'Phone', value: stored_phone_display(facts.first_user) } if facts.agreed?(:phone)
+      if facts.agreed?(:phone_type) &&
+         [facts.first_user, facts.second_user].any?(&:real_phone?) &&
+         User::REAL_PHONE_TYPES.include?(facts.agreed_value(:phone_type))
+        rows << { key: :phone_type, label: 'Phone type',
+                  value: duplicate_review_phone_type_display(facts.agreed_value(:phone_type)) }
+      end
+      rows << { key: :address, label: 'Address', value: stored_address_display(facts.first_user) } if facts.agreed?(:address)
+      if facts.agreed?(:delivery)
+        rows << { key: :delivery, label: 'Official-notice delivery route',
+                  value: duplicate_review_delivery_display(facts.first_user) }
+      end
+      rows
+    end
+
+    def duplicate_review_constituent_label(user)
+      "#{user.full_name} (Constituent ID #{user.id})"
+    end
+
+    # The controller preloads applications for every rendered comparison user, so repeated subject
+    # cards reuse the same bounded association data without another query.
+    def duplicate_review_record_history(user)
+      applications = user.applications.to_a
+      {
+        application_count: applications.size,
+        recent_applications: applications.sort_by { |application| application.application_date || Date.new(1, 1, 1) }
+                                         .reverse
+                                         .first(5)
+      }
+    end
+
     # Whether a recorded candidate link still points at an accessible, non-merged user.
     def candidate_link_state(candidate)
       return 'unavailable' if candidate.candidate_user_id.present? && candidate.candidate_user.nil?
@@ -97,7 +165,7 @@ module Admin
 
     # Entry point from a user page: open case detail when one exists, otherwise the queue.
     def admin_duplicate_review_entry_path(user)
-      open_case = DuplicateReviewCase.open_cases.for_subject(user).order(opened_at: :desc).first
+      open_case = DuplicateReviewCase.open_cases.for_participant(user).order(opened_at: :desc).first
       open_case ? admin_duplicate_review_path(open_case) : admin_duplicate_reviews_path
     end
 

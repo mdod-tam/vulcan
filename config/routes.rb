@@ -131,6 +131,7 @@ Rails.application.routes.draw do
       end
       collection do
         post :clear_flag
+        post :review_pair
       end
     end
 
