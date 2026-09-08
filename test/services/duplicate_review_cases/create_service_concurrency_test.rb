@@ -67,7 +67,7 @@ module DuplicateReviewCases
       cleanup_duplicate_review_test_data!(admin, canonical, duplicate, third_party)
     end
 
-    test 'case creation commits first: merge reloads before blocking the unsupported competing case' do
+    test 'case creation commits first: merge retries before blocking the unsupported competing case' do
       admin, canonical, duplicate, third_party, review_case = build_fixtures
 
       holder_ready = Queue.new
@@ -99,7 +99,7 @@ module DuplicateReviewCases
 
       assert create_result.success?, "expected case creation (holder) to succeed: #{create_result&.message}"
       assert merge_result.failure?, "expected the merge to fail closed against the new competing case: #{merge_result.message}"
-      assert_match(/related records changed while the merge was being prepared/i, merge_result.message)
+      assert_match(/another open duplicate review case/i, merge_result.message)
       assert_not duplicate.reload.merged?
 
       retry_result = run_merge(admin:, canonical:, duplicate:, review_case:)
