@@ -124,7 +124,12 @@ class AuditEventService < BaseService
     # different candidate sets coexist by design. Without the id the fingerprint collapses to just
     # the action name, and a second case event for the same subject within the dedup window would
     # silently suppress its audit event even though the open or resolution itself succeeded.
-    if %w[duplicate_review_case_opened duplicate_review_case_resolved].include?(action.to_s)
+    if %w[
+      duplicate_review_case_opened
+      duplicate_review_case_resolved
+      duplicate_review_case_pair_repointed
+      duplicate_review_case_superseded
+    ].include?(action.to_s)
       review_case_id = metadata['duplicate_review_case_id'] || metadata[:duplicate_review_case_id]
       return "#{base}_#{review_case_id}" if review_case_id.present?
     end

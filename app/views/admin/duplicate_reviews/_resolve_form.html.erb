@@ -9,24 +9,19 @@
   <div id="identity-outcome" class="rounded-md bg-gray-50 border border-gray-200 p-3">
     <p class="text-sm font-medium text-gray-900">Identity outcome: Keep records separate</p>
     <p class="mt-1 text-xs text-gray-600">
-      This resolution records that the records represent different people. If you are still
-      gathering information, leave this case open instead of resolving it.
+      This records that the records represent different people. If they are the same person, merge
+      them instead; if you are still gathering information, leave this case open.
     </p>
   </div>
 
-  <fieldset>
-    <legend class="text-sm font-medium text-gray-700">Evidence / reason codes</legend>
-    <% Array(review_case.metadata['reason_codes']).each do |code| %>
-      <label class="inline-flex items-center mr-3 text-sm">
-        <%= check_box_tag 'reason_codes[]', code, true %>
-        <span class="ml-1"><%= duplicate_review_reason_label(code) %></span>
-      </label>
-    <% end %>
-  </fieldset>
-
   <div>
-    <%= label_tag :rationale, 'Rationale (required)', class: 'block text-sm font-medium text-gray-700' %>
-    <%= text_area_tag :rationale, nil, rows: 2, required: true, class: 'w-full border-gray-300 rounded-md text-sm', placeholder: 'Explain the decision.' %>
+    <%= label_tag :rationale, 'Why these records are different people (required)', class: 'block text-sm font-medium text-gray-700' %>
+    <%= text_area_tag :rationale,
+                      nil,
+                      rows: 2,
+                      required: true,
+                      class: 'w-full border-gray-300 rounded-md text-sm',
+                      placeholder: 'Describe what you verified beyond the matching name and date of birth.' %>
   </div>
 
   <%= f.submit 'Resolve case', class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded text-sm cursor-pointer' %>

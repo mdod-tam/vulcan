@@ -1,14 +1,45 @@
-<%# locals: user, role_label %>
+<%# locals: user, role_label, comparison_user: nil %>
+<% comparison_user = local_assigns[:comparison_user] %>
+<% history = duplicate_review_record_history(user) %>
+<% date_of_birth = user.date_of_birth %>
+<% newer_record = comparison_user.present? && user.created_at > comparison_user.created_at %>
+<% most_recent_login = comparison_user.present? && user.last_sign_in_at.present? &&
+                       (comparison_user&.last_sign_in_at.blank? || user.last_sign_in_at > comparison_user.last_sign_in_at) %>
 <div class="border border-gray-200 rounded-lg p-4" data-testid="record-facts">
   <div class="flex items-center justify-between mb-3">
     <div>
       <span class="text-xs uppercase tracking-wide text-gray-500"><%= role_label %></span>
-      <h4 class="text-base font-semibold text-gray-900"><%= user.full_name %> <span class="text-xs text-gray-400">#<%= user.id %></span></h4>
+      <h4 class="text-base font-semibold text-gray-900"><%= user.full_name %> <span class="text-xs font-normal text-gray-500">Constituent ID <%= user.id %></span></h4>
+      <div class="mt-1 flex flex-wrap gap-1 text-xs" data-testid="record-comparison-badges">
+        <% if newer_record %>
+          <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">Newer record</span>
+        <% end %>
+        <% if most_recent_login %>
+          <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">Most recent login</span>
+        <% end %>
+        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
+          <%= history[:application_count].zero? ? 'No applications' : pluralize(history[:application_count], 'application') %>
+        </span>
+      </div>
     </div>
     <%= link_to 'Open profile', admin_user_path(user), class: 'text-xs text-indigo-600 hover:text-indigo-900', target: '_blank', rel: 'noopener' %>
   </div>
 
   <dl class="space-y-3 text-sm">
+    <div>
+      <dt class="font-medium text-gray-700">Record history</dt>
+      <dd class="text-gray-600">
+        Created:
+        <time datetime="<%= user.created_at.iso8601 %>" data-testid="record-created-at"><%= user.created_at.strftime('%b %d, %Y at %I:%M %p') %></time><br>
+        Last signed in:
+        <% if user.last_sign_in_at.present? %>
+          <time datetime="<%= user.last_sign_in_at.iso8601 %>" data-testid="record-last-sign-in-at"><%= user.last_sign_in_at.strftime('%b %d, %Y at %I:%M %p') %></time>
+        <% else %>
+          <span data-testid="record-last-sign-in-at">Never</span>
+        <% end %>
+      </dd>
+    </div>
+
     <div>
       <dt class="font-medium text-gray-700">Login identity</dt>
       <dd class="text-gray-600">
@@ -28,6 +59,7 @@
     <div>
       <dt class="font-medium text-gray-700">Record truth</dt>
       <dd class="text-gray-600">
+        Date of birth: <span data-testid="record-date-of-birth"><%= date_of_birth&.strftime('%m/%d/%Y') || 'Not on file' %></span><br>
         Email: <%= stored_email_display(user) %><br>
         Phone: <%= stored_phone_display(user) %><%= " (#{user.phone_type})" if user.real_phone? %><br>
         Address: <%= stored_address_display(user) %>
@@ -37,10 +69,9 @@
     <div>
       <dt class="font-medium text-gray-700">Applications</dt>
       <dd class="text-gray-600">
-        <% apps = user.applications.order(application_date: :desc).limit(5) %>
-        <% if apps.any? %>
+        <% if history[:recent_applications].any? %>
           <ul class="list-disc list-inside">
-            <% apps.each do |app| %>
+            <% history[:recent_applications].each do |app| %>
               <li>#<%= app.id %> · <%= app.status.to_s.humanize %> · <%= app.application_date&.strftime('%b %Y') %></li>
             <% end %>
           </ul>
@@ -53,8 +84,8 @@
     <div>
       <dt class="font-medium text-gray-700">Relationships</dt>
       <dd class="text-gray-600">
-        As guardian: <%= GuardianRelationship.where(guardian_id: user.id).count %> dependent(s)<br>
-        As dependent: <%= GuardianRelationship.where(dependent_id: user.id).count %> guardian(s)
+        As guardian: <%= user.guardian_relationships_as_guardian.size %> dependent(s)<br>
+        As dependent: <%= user.guardian_relationships_as_dependent.size %> guardian(s)
       </dd>
     </div>
 

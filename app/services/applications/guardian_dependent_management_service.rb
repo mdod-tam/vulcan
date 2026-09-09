@@ -96,7 +96,23 @@ module Applications
     def create_guardian_relationship(relationship_type)
       return false unless @guardian_user && @dependent_user
 
-      create_relationship(relationship_type)
+      ActiveRecord::Base.transaction do
+        locked_users = User.lock_for_merge_integrity!(@guardian_user, @dependent_user)
+        @guardian_user = locked_users.fetch(@guardian_user.id)
+        @dependent_user = locked_users.fetch(@dependent_user.id)
+
+        eligibility_error = relationship_participant_error
+        return add_error?("Failed to create relationship: #{eligibility_error}") if eligibility_error
+
+        create_relationship_record!(relationship_type)
+      end
+      true
+    rescue ActiveRecord::RecordNotFound
+      add_error?('Failed to create relationship: a selected record is no longer available')
+    rescue ActiveRecord::RecordInvalid => e
+      add_error?("Failed to create relationship: #{e.record.errors.full_messages.to_sentence.presence || e.message}")
+    rescue ActiveRecord::RecordNotUnique
+      add_error?('Failed to create relationship: relationship already exists')
     end
 
     private
@@ -160,6 +176,14 @@ module Applications
     def create_relationship(relationship_type)
       return add_error?('Relationship type required') if relationship_type.blank?
 
+      create_relationship_record!(relationship_type)
+      true
+    rescue ActiveRecord::RecordInvalid => e
+      add_error?("Failed to create relationship: #{e.message}")
+      false
+    end
+
+    def create_relationship_record!(relationship_type)
       GuardianRelationship.create!(
         guardian_user: @guardian_user,
         dependent_user: @dependent_user,
@@ -167,10 +191,17 @@ module Applications
         portal_creation_key: params[:portal_creation_key].presence,
         portal_creation_fingerprint: params[:portal_creation_fingerprint].presence
       )
-      true
-    rescue ActiveRecord::RecordInvalid => e
-      add_error?("Failed to create relationship: #{e.message}")
-      false
+    end
+
+    def relationship_participant_error
+      return 'guardian must be an active constituent' unless relationship_participant_eligible?(@guardian_user)
+      return 'dependent must be an active constituent' unless relationship_participant_eligible?(@dependent_user)
+
+      nil
+    end
+
+    def relationship_participant_eligible?(user)
+      user.is_a?(Users::Constituent) && user.public_login_active?
     end
 
     def apply_email_strategy(data)

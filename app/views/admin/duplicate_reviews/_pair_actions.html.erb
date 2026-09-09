@@ -1,0 +1,9 @@
+<ul class="divide-y divide-gray-200" aria-label="Unreviewed record pairings">
+  <% group.pairs.each do |pair| %>
+    <li class="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+        data-testid="unreviewed-pair-action">
+      <p class="text-sm text-gray-700">Constituent IDs <%= pair.first.id %> and <%= pair.second.id %></p>
+      <%= render 'pair_form', pair:, button_label:, form_id_suffix: 'picker' %>
+    </li>
+  <% end %>
+</ul>

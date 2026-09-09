@@ -311,6 +311,11 @@ class NotificationServiceTest < ActiveSupport::TestCase
     create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :income)
 
     ApplicationNotificationsMailer.expects(:proof_rejected).never
+    Rails.logger.expects(:error).with(
+      "NotificationService: Refused to create 'income_proof_rejected' notification. " \
+      'Use Applications::RequestProofResubmission for reviewable proof rejection delivery, ' \
+      "or metadata: { delivery_path: 'legacy' } for intentional mailer-only paths."
+    )
 
     assert_no_difference 'Notification.count' do
       notification = NotificationService.create_and_deliver!(

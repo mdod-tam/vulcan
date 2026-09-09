@@ -19,16 +19,16 @@
   </section>
 
   <% if @subject %>
-    <section class="mb-8" aria-labelledby="subject-heading">
-      <h2 id="subject-heading" class="text-lg font-medium text-gray-900 mb-3">Subject record</h2>
-      <%= render 'record_facts', user: @subject, role_label: 'Subject' %>
-    </section>
-
     <section aria-labelledby="candidates-heading">
-      <h2 id="candidates-heading" class="text-lg font-medium text-gray-900 mb-3">Candidate comparisons</h2>
+      <h2 id="candidates-heading" class="text-lg font-medium text-gray-900 mb-3">
+        <%= @candidates.one? ? 'Record comparison' : 'Record comparisons' %>
+      </h2>
 
       <% if @candidates.empty? %>
-        <div class="bg-white shadow sm:rounded-md p-6 text-center text-gray-500">No candidate records were recorded for this case.</div>
+        <div class="bg-white shadow sm:rounded-md p-4 mb-6">
+          <%= render 'record_facts', user: @subject, role_label: 'Subject', comparison_user: nil %>
+          <p class="mt-3 text-sm text-gray-500">No candidate records were recorded for this case.</p>
+        </div>
       <% end %>
 
       <% @candidates.each do |candidate| %>
@@ -40,24 +40,29 @@
 
           <% if candidate.candidate_user.present? && !candidate.candidate_user.merged? %>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <%= render 'record_facts', user: @subject, role_label: 'Subject' %>
-              <%= render 'record_facts', user: candidate.candidate_user, role_label: 'Candidate' %>
+              <%= render 'record_facts', user: @subject, role_label: 'Subject', comparison_user: candidate.candidate_user %>
+              <%= render 'record_facts', user: candidate.candidate_user, role_label: 'Candidate', comparison_user: @subject %>
             </div>
-            <% if @review_case.open? && @review_case.registration_soft_match? %>
+            <% if @review_case.open? && Users::DuplicateMergeService::MERGE_ELIGIBLE_SOURCES.include?(@review_case.source) %>
               <details class="border-t border-gray-100 pt-3">
                 <summary class="cursor-pointer text-sm font-medium text-red-700">Merge these two records</summary>
                 <div class="mt-3">
-                  <%= render 'merge_form', review_case: @review_case, subject: @subject, candidate: candidate.candidate_user %>
+                  <%= render 'merge_form',
+                             review_case: @review_case,
+                             subject: @subject,
+                             candidate: candidate.candidate_user,
+                             relationship_users_by_id: @relationship_users_by_id %>
                 </div>
               </details>
             <% elsif @review_case.open? %>
               <p class="border-t border-gray-100 pt-3 text-sm text-gray-500">
-                Same-person merge is available only for registration-match cases. Resolve this case without merging.
+                Same-person merge is unavailable for this case source. Resolve this case without merging.
               </p>
             <% else %>
               <p class="border-t border-gray-100 pt-3 text-sm text-gray-500">This case is resolved. Merging is disabled.</p>
             <% end %>
           <% else %>
+            <%= render 'record_facts', user: @subject, role_label: 'Subject', comparison_user: nil %>
             <p class="text-sm text-gray-500">This candidate cannot be merged (record missing or already merged). Evidence snapshot is retained on the case.</p>
           <% end %>
         </article>
@@ -68,7 +73,6 @@
   <% if @review_case.open? %>
     <section class="bg-white shadow sm:rounded-md p-4 mt-8" aria-labelledby="resolve-heading">
       <h2 id="resolve-heading" class="text-lg font-medium text-gray-900 mb-3">Resolve without merging</h2>
-      <p class="text-sm text-gray-500 mb-4">Record that these records represent different people. Every resolution records the determination and rationale, and does not move any contact facts. If the records are the same person, merge them instead; if you are still gathering information, leave the case open.</p>
       <%= render 'resolve_form', review_case: @review_case %>
     </section>
   <% else %>

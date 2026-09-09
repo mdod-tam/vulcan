@@ -45,6 +45,51 @@ module DuplicateReviewCases
       assert @user.reload.needs_duplicate_review
     end
 
+    test 'refuses while the user is a candidate in an open case' do
+      subject = create(:constituent)
+      review_case = DuplicateReviewCase.create!(
+        source: :support_claim,
+        subject_user: subject,
+        deduplication_key: SecureRandom.hex(16),
+        metadata: { 'reason_codes' => ['name_dob'] },
+        opened_at: Time.current,
+        status: :open
+      )
+      review_case.duplicate_review_case_candidates.create!(
+        candidate_user: @user,
+        match_reason: 'name_dob',
+        snapshot: {}
+      )
+
+      result = ClearFlagService.new(user: @user, actor: @admin, rationale: 'trying anyway').call
+
+      assert result.failure?
+      assert_match(/open review case/i, result.message)
+      assert @user.reload.needs_duplicate_review
+    end
+
+    test 'refuses while a current unresolved pair exists' do
+      @user.update!(
+        first_name: 'Legacy',
+        last_name: 'MatchingPair',
+        date_of_birth: Date.new(1983, 5, 6)
+      )
+      create(
+        :constituent,
+        first_name: 'legacy',
+        last_name: 'matchingpair',
+        date_of_birth: Date.new(1983, 5, 6)
+      )
+
+      assert_no_difference 'Event.where(action: \'duplicate_review_flag_cleared\').count' do
+        result = ClearFlagService.new(user: @user, actor: @admin, rationale: 'trying to bypass the pair').call
+
+        assert result.failure?
+        assert_match(/unresolved matching pair/i, result.message)
+      end
+      assert @user.reload.needs_duplicate_review
+    end
+
     # The review-round finding this regresses: a lock does not validate a stale decision. If
     # the user became merged (or otherwise ineligible) while this request waited for the
     # lock, `locked_user.update!` would trip the merged-record immutability guard and raise

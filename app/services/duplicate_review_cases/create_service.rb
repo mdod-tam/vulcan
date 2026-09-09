@@ -6,6 +6,13 @@ module DuplicateReviewCases
 
     CandidateInput = Struct.new(:user, :match_reason, :snapshot)
 
+    def self.deduplication_key_for(source:, subject_user_id:, reason_codes:, candidate_user_ids:)
+      Digest::SHA256.hexdigest(
+        [source, subject_user_id, Array(reason_codes).map(&:to_s).sort.join(','),
+         Array(candidate_user_ids).compact.map(&:to_i).sort.join(',')].join(':')
+      )
+    end
+
     # rubocop:disable Metrics/ParameterLists -- explicit service contract for atomic case creation
     def initialize(source:, subject_user:, actor:, reason_codes:, candidates: [], metadata: {}, audit_action: 'duplicate_review_case_opened')
       super()
@@ -132,9 +139,11 @@ module DuplicateReviewCases
     end
 
     def deduplication_key
-      candidate_ids = @candidates.filter_map { |candidate| candidate.user&.id }.sort.join(',')
-      Digest::SHA256.hexdigest(
-        [@source, @subject_user.id, @reason_codes.join(','), candidate_ids].join(':')
+      self.class.deduplication_key_for(
+        source: @source,
+        subject_user_id: @subject_user.id,
+        reason_codes: @reason_codes,
+        candidate_user_ids: @candidates.filter_map { |candidate| candidate.user&.id }
       )
     end
 
