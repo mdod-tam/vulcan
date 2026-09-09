@@ -7,16 +7,19 @@ module Users
     MAX_APPLICATIONS_PER_DEPENDENT = 5
 
     RelatedRecord = Data.define(:user, :relationship_type, :applications, :application_count)
-    Participant = Data.define(:user, :dependents, :guardians)
+    Participant = Data.define(:user, :dependents, :guardians, :application_count, :applications_managed_by_other_count)
+    DirectRelationship = Data.define(:guardian, :dependent, :relationship_type)
     DependentOutcome = Data.define(:user, :applications, :application_count, :linked_from_both)
     GuardianOutcome = Data.define(:user, :linked_from_both)
 
-    attr_reader :participants, :dependent_outcomes, :guardian_outcomes
+    attr_reader :participants, :direct_relationships, :dependent_outcomes, :guardian_outcomes
 
     def initialize(first_user, second_user, related_users_by_id:)
       @users = [first_user, second_user]
+      @user_ids = @users.map(&:id)
       @related_users_by_id = related_users_by_id
       @participants = @users.map { |user| participant(user) }
+      @direct_relationships = build_direct_relationships
       @dependent_outcomes = build_dependent_outcomes
       @guardian_outcomes = build_guardian_outcomes
     end
@@ -35,8 +38,25 @@ module Users
         end,
         guardians: user.guardian_relationships_as_dependent.sort_by(&:id).map do |relationship|
           related_record(related_user(relationship.guardian_id), relationship.relationship_type, include_applications: false)
+        end,
+        application_count: user.applications.size,
+        applications_managed_by_other_count: user.applications.count do |application|
+          (@user_ids - [user.id]).include?(application.managing_guardian_id)
         end
       )
+    end
+
+    def build_direct_relationships
+      @users.flat_map(&:guardian_relationships_as_guardian)
+            .select { |relationship| @user_ids.include?(relationship.dependent_id) }
+            .sort_by(&:id)
+            .map do |relationship|
+        DirectRelationship.new(
+          guardian: @users.find { |user| user.id == relationship.guardian_id },
+          dependent: @users.find { |user| user.id == relationship.dependent_id },
+          relationship_type: relationship.relationship_type
+        )
+      end
     end
 
     def related_user(user_id)
@@ -55,7 +75,11 @@ module Users
 
     def build_dependent_outcomes
       grouped = participants.flat_map do |participant|
-        participant.dependents.map { |dependent| [dependent.user.id, participant.user.id, dependent] }
+        participant.dependents.filter_map do |dependent|
+          next if @user_ids.include?(dependent.user.id)
+
+          [dependent.user.id, participant.user.id, dependent]
+        end
       end.group_by(&:first)
 
       outcomes = grouped.values.map do |rows|
@@ -72,7 +96,11 @@ module Users
 
     def build_guardian_outcomes
       grouped = participants.flat_map do |participant|
-        participant.guardians.map { |guardian| [guardian.user.id, participant.user.id, guardian] }
+        participant.guardians.filter_map do |guardian|
+          next if @user_ids.include?(guardian.user.id)
+
+          [guardian.user.id, participant.user.id, guardian]
+        end
       end.group_by(&:first)
 
       outcomes = grouped.values.map do |rows|

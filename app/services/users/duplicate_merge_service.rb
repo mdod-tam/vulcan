@@ -490,12 +490,18 @@ module Users
     end
 
     def relationship_neighbor_user_ids
+      relationship_inventory_scope.pluck(:guardian_id, :dependent_id).flatten.uniq
+    end
+
+    # A guardian merge can coalesce one of several relationships attached to the same dependent.
+    # Include every co-guardian for those dependents so contact-priority checks operate on the
+    # complete relationship set under the same User/relationship lock inventory.
+    def relationship_inventory_scope
       participant_ids = [@canonical_user.id, @duplicate_user.id]
-      GuardianRelationship.where(guardian_id: participant_ids)
-                          .or(GuardianRelationship.where(dependent_id: participant_ids))
-                          .pluck(:guardian_id, :dependent_id)
-                          .flatten
-                          .uniq
+      affected_dependent_ids = GuardianRelationship.where(guardian_id: participant_ids).select(:dependent_id)
+
+      GuardianRelationship.where(dependent_id: participant_ids)
+                          .or(GuardianRelationship.where(dependent_id: affected_dependent_ids))
     end
 
     # Locks (without mutating) every application either participant owns or manages, so a
@@ -513,13 +519,7 @@ module Users
     # derived. Relationship creation also locks both User endpoints first, so no new edge
     # can be attached to either participant between this inventory read and retirement.
     def lock_guardian_relationship_inventory!
-      participant_ids = [@canonical_user.id, @duplicate_user.id]
-      @locked_guardian_relationships = GuardianRelationship
-                                       .where(guardian_id: participant_ids)
-                                       .or(GuardianRelationship.where(dependent_id: participant_ids))
-                                       .order(:id)
-                                       .lock('FOR UPDATE')
-                                       .load
+      @locked_guardian_relationships = relationship_inventory_scope.order(:id).lock('FOR UPDATE').load
       @guardian_relationship_plan = DuplicateMergeRelationshipPlan.new(
         canonical_user: @canonical_user,
         duplicate_user: @duplicate_user,

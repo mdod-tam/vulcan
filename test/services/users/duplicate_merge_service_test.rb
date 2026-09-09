@@ -893,7 +893,12 @@ module Users
 
     test 'coalescing duplicate dependents preserves the sole portal replay pair' do
       guardian = create(:constituent)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: @canonical, relationship_type: 'Parent')
+      canonical_relationship = create(
+        :guardian_relationship,
+        guardian_user: guardian,
+        dependent_user: @canonical,
+        relationship_type: 'Parent'
+      )
       key = SecureRandom.uuid
       fingerprint = fake_fingerprint
       keyed_relationship = GuardianRelationship.create!(
@@ -907,11 +912,124 @@ module Users
       result = merge
 
       assert result.success?, result.message
-      keyed_relationship.reload
-      assert_equal @canonical.id, keyed_relationship.dependent_id
-      assert_equal key, keyed_relationship.portal_creation_key
-      assert_equal fingerprint, keyed_relationship.portal_creation_fingerprint
+      assert_not GuardianRelationship.exists?(keyed_relationship.id)
+      canonical_relationship.reload
+      assert_equal @canonical.id, canonical_relationship.dependent_id
+      assert_equal key, canonical_relationship.portal_creation_key
+      assert_equal fingerprint, canonical_relationship.portal_creation_fingerprint
       assert_equal 1, GuardianRelationship.where(guardian_id: guardian.id, dependent_id: @canonical.id).count
+    end
+
+    test 'coalescing duplicate dependents preserves canonical guardian contact priority and the replay pair' do
+      primary_guardian = create(:constituent, email: "primary-guardian-#{SecureRandom.hex(4)}@example.com")
+      other_guardian = create(:constituent, email: "other-guardian-#{SecureRandom.hex(4)}@example.com")
+      canonical_relationship = create(
+        :guardian_relationship,
+        guardian_user: primary_guardian,
+        dependent_user: @canonical,
+        relationship_type: 'Parent'
+      )
+      create(
+        :guardian_relationship,
+        guardian_user: other_guardian,
+        dependent_user: @canonical,
+        relationship_type: 'Parent'
+      )
+      key = SecureRandom.uuid
+      fingerprint = fake_fingerprint
+      duplicate_relationship = GuardianRelationship.create!(
+        guardian_user: primary_guardian,
+        dependent_user: @duplicate,
+        relationship_type: 'Parent',
+        portal_creation_key: key,
+        portal_creation_fingerprint: fingerprint
+      )
+
+      assert_equal primary_guardian.email, @canonical.reload.effective_email
+
+      result = merge
+
+      assert result.success?, result.message
+      assert_not GuardianRelationship.exists?(duplicate_relationship.id)
+      canonical_relationship.reload
+      assert_equal @canonical.id, canonical_relationship.dependent_id
+      assert_equal key, canonical_relationship.portal_creation_key
+      assert_equal fingerprint, canonical_relationship.portal_creation_fingerprint
+      assert_equal primary_guardian.email, @canonical.reload.effective_email,
+                   'coalescing must not silently change the guardian selected for dependent communications'
+    end
+
+    test 'blocks when an older distinct transferred relationship would change canonical guardian contact priority' do
+      transferred_guardian = create(:constituent, email: "transferred-guardian-#{SecureRandom.hex(4)}@example.com")
+      canonical_guardian = create(:constituent, email: "canonical-guardian-#{SecureRandom.hex(4)}@example.com")
+      transferred_relationship = create(
+        :guardian_relationship,
+        guardian_user: transferred_guardian,
+        dependent_user: @duplicate,
+        relationship_type: 'Parent'
+      )
+      canonical_relationship = create(
+        :guardian_relationship,
+        guardian_user: canonical_guardian,
+        dependent_user: @canonical,
+        relationship_type: 'Parent'
+      )
+      coalescing_relationship = create(
+        :guardian_relationship,
+        guardian_user: canonical_guardian,
+        dependent_user: @duplicate,
+        relationship_type: 'Parent'
+      )
+
+      assert_operator transferred_relationship.id, :<, canonical_relationship.id
+      assert_equal canonical_guardian.email, Users::Constituent.find(@canonical.id).effective_email
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/change which guardian receives dependent communications/i, result.message)
+      assert_not @duplicate.reload.merged?
+      assert_equal canonical_guardian.email, Users::Constituent.find(@canonical.id).effective_email
+      assert_equal @duplicate.id, transferred_relationship.reload.dependent_id
+      assert_equal @canonical.id, canonical_relationship.reload.dependent_id
+      assert_equal @duplicate.id, coalescing_relationship.reload.dependent_id
+    end
+
+    test 'blocks a guardian merge when coalescing would promote a different co-guardian for contact' do
+      dependent = create(:constituent)
+      other_guardian = create(:constituent, email: "other-guardian-#{SecureRandom.hex(4)}@example.com")
+      duplicate_relationship = create(
+        :guardian_relationship,
+        guardian_user: @duplicate,
+        dependent_user: dependent,
+        relationship_type: 'Parent'
+      )
+      other_relationship = create(
+        :guardian_relationship,
+        guardian_user: other_guardian,
+        dependent_user: dependent,
+        relationship_type: 'Parent'
+      )
+      canonical_relationship = create(
+        :guardian_relationship,
+        guardian_user: @canonical,
+        dependent_user: dependent,
+        relationship_type: 'Parent'
+      )
+
+      assert_operator duplicate_relationship.id, :<, other_relationship.id
+      assert_operator other_relationship.id, :<, canonical_relationship.id
+      assert_equal @duplicate.email, Users::Constituent.find(dependent.id).effective_email
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/change which guardian receives dependent communications/i, result.message)
+      assert_not @duplicate.reload.merged?
+      assert_equal @duplicate.email, Users::Constituent.find(dependent.id).effective_email
+      assert GuardianRelationship.exists?(duplicate_relationship.id)
+      assert GuardianRelationship.exists?(other_relationship.id)
+      assert GuardianRelationship.exists?(canonical_relationship.id)
     end
 
     test 'blocks coalescing two separately replay-protected dependent relationships' do

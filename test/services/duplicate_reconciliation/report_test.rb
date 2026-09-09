@@ -55,6 +55,36 @@ module DuplicateReconciliation
       end
     end
 
+    test 'neutralizes formula-like constituent names in CSV output' do
+      date_of_birth = Date.new(1988, 2, 14)
+      first = create(
+        :constituent,
+        first_name: '=1+',
+        last_name: '1',
+        date_of_birth: date_of_birth,
+        email: 'formula-first@example.com',
+        phone: nil
+      )
+      second = create(
+        :constituent,
+        first_name: '=1+',
+        last_name: '1',
+        date_of_birth: date_of_birth,
+        email: 'formula-second@example.com',
+        phone: nil
+      )
+
+      Tempfile.create(['duplicate-report', '.csv']) do |file|
+        Report.new.call(output: StringIO.new, csv_path: file.path)
+        row = CSV.read(file.path, headers: true).find do |candidate|
+          candidate['pair_key'] == [first.id, second.id].sort.join('-')
+        end
+
+        assert_equal "'=1+ 1", row['first_user_name']
+        assert_equal "'=1+ 1", row['second_user_name']
+      end
+    end
+
     private
 
     def create_match(date_of_birth:, email:, phone:)

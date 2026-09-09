@@ -505,6 +505,27 @@ module Admin
       take_evidence_screenshot('duplicate-merge-related-case-carried-forward', full: true, html: true)
     end
 
+    test 'a direct guardian and dependent merge previews the dissolved relationship and application transfer' do
+      create(:guardian_relationship, guardian_user: @subject, dependent_user: @candidate, relationship_type: 'Parent')
+      application = create(:application, :approved, user: @candidate, managing_guardian: @subject)
+
+      visit admin_duplicate_review_path(@review_case)
+      find('summary', text: 'Merge these two records').click
+
+      within '[data-testid="merge-relationship-impact"]' do
+        assert_text "#{@subject.full_name} (Constituent ID #{@subject.id})"
+        assert_text "#{@candidate.full_name} (Constituent ID #{@candidate.id})"
+        assert_text 'This relationship will be removed because the surviving record cannot be related to itself.'
+        assert_text 'If this record is retired, the application will move to the surviving record.'
+        assert_text 'The managing guardian will be cleared for 1 application'
+        assert_link "##{application.id} Approved"
+        assert_no_text 'will be linked to the surviving record'
+        assert_no_text 'will remain attached to this dependent'
+      end
+
+      take_evidence_screenshot('duplicate-merge-direct-relationship-consequences', full: true, html: true)
+    end
+
     test 'queue groups a three-record match and progressively discloses exact pair actions' do
       members = create_unreviewed_group(count: 3)
       selected_ids = members.first(2).map(&:id).sort

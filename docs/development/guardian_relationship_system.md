@@ -8,7 +8,7 @@ Explicit `GuardianRelationship` records replace the old boolean flags, allowing 
 
 | Table | Key Columns | Notes |
 |-------|-------------|-------|
-| **guardian_relationships** | `guardian_id`, `dependent_id`, `relationship_type`, `portal_creation_key`, `portal_creation_fingerprint` | Unique index on `[guardian_id, dependent_id]`. The replay pair is nullable, set only by portal dependent creation, with a **partial composite** unique index on `[guardian_id, portal_creation_key]` (`WHERE portal_creation_key IS NOT NULL`) and a check constraint keeping both halves present or absent together. |
+| **guardian_relationships** | `guardian_id`, `dependent_id`, `relationship_type`, `portal_creation_key`, `portal_creation_fingerprint` | Unique index on `[guardian_id, dependent_id]`. The replay pair is nullable and originates only from portal dependent creation; a duplicate merge may preserve it on the retained relationship row. A **partial composite** unique index on `[guardian_id, portal_creation_key]` (`WHERE portal_creation_key IS NOT NULL`) and a check constraint keep the pair scoped and both halves present or absent together. |
 | **applications** | `user_id`, `managing_guardian_id` | `user_id` = applicant; `managing_guardian_id` set only for dependents. |
 | **users** (associations) | see below | |
 

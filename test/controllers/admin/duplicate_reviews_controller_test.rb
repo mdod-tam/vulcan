@@ -237,6 +237,31 @@ module Admin
       end
     end
 
+    test 'show explains a direct guardian relationship and its application consequences' do
+      relationship = create(
+        :guardian_relationship,
+        guardian_user: @subject,
+        dependent_user: @candidate,
+        relationship_type: 'Parent'
+      )
+      application = create(:application, :approved, user: @candidate, managing_guardian: @subject)
+
+      get admin_duplicate_review_path(@review_case)
+
+      assert_response :success
+      assert_select '[data-testid="merge-relationship-impact"]' do
+        assert_select '[data-testid="direct-merge-relationship"]', text: /#{Regexp.escape(@subject.full_name)}.*#{Regexp.escape(@candidate.full_name)}/m
+        assert_select '[data-testid="direct-merge-relationship"]', text: /will be removed.*cannot be related to itself/m
+        assert_select '[data-testid="direct-merge-application-impact"]', text: /1 application.*move to the surviving record/m
+        assert_select '[data-testid="direct-merge-application-impact"]', text: /managing guardian will be cleared/m
+        assert_select "a[href='#{admin_application_path(application)}']", text: "##{application.id} Approved"
+        assert_select 'p', text: /Different dependent records and their applications are not merged by this action/, count: 0
+        assert_select 'li', text: /will be linked to the surviving record/, count: 0
+        assert_select 'li', text: /will remain attached to this dependent/, count: 0
+      end
+      assert GuardianRelationship.exists?(relationship.id)
+    end
+
     test 'show collapses every equal merge fact and submits locked agreement markers' do
       date_of_birth = Date.new(1985, 4, 12)
       @subject.update!(date_of_birth:, phone: nil, phone_type: nil)

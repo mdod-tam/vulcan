@@ -70,12 +70,22 @@ module DuplicateReconciliation
     def member_csv_fields(member)
       [
         member.id,
-        member.name,
+        spreadsheet_safe(member.name),
         member.real_email,
         member.real_phone,
         member.application_summary,
         member.needs_duplicate_review
       ]
+    end
+
+    # CSV quoting does not stop spreadsheet software from interpreting a leading formula
+    # operator. Names are user-controlled, so prefix formula-like cells with an apostrophe at
+    # the final spreadsheet boundary while leaving the human-readable report unchanged.
+    def spreadsheet_safe(value)
+      text = value.to_s
+      return text unless text.match?(/\A\s*[=+\-@]/)
+
+      "'#{text}"
     end
 
     def yes_no(value)

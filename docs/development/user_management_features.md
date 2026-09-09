@@ -193,7 +193,7 @@ Consequences for the request contract:
 - every enum value is preserved so cases already resolved with them still render.
 
 
-Flag/case sync is enforced in both directions: resolving reprojects every constituent case participant, merging reprojects the canonical survivor and clears the retired duplicate, and the explicit synchronization command repairs callback-bypassed or stale cache values across the population. A merge resolves only its selected case and refuses any other open case involving either participant. `ClearFlagService` locks and requalifies the user and actor, refuses open-case participation or an unresolved current pair, and logs `duplicate_review_flag_cleared` only for a genuine manual/legacy clear.
+Flag/case sync is enforced in both directions: resolving reprojects every constituent case participant, merging reprojects the canonical survivor and clears the retired duplicate, and the explicit synchronization command repairs callback-bypassed or stale cache values across the population. A merge resolves its selected case; another strict post-import pair involving the retired record is repointed to the survivor when it remains actionable or superseded when it becomes obsolete. A related open case that cannot be represented safely as one strict post-import pair still blocks the merge. `ClearFlagService` locks and requalifies the user and actor, refuses open-case participation or an unresolved current pair, and logs `duplicate_review_flag_cleared` only for a genuine manual/legacy clear.
 
 ### 3.2.3 Same-person merge service
 
