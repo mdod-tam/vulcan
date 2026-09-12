@@ -6,28 +6,24 @@ module Admin
 
     private
 
+    def load_secure_request_recipient_data(application)
+      relationships = provider_info_guardian_relationships(application)
+      @secure_request_missing_managing_guardian = provider_info_missing_managing_guardian?(application, relationships)
+      @secure_request_recipient_options = provider_info_recipient_options(application, relationships)
+      @secure_request_default_recipient_ids = provider_info_default_recipient_ids(application, relationships)
+    end
+
     def load_provider_info_request_data(application)
       unless application.missing_required_provider_info?
-        @provider_info_guardian_relationships = []
-        @provider_info_recipient_options = []
-        @provider_info_default_recipient_ids = []
         @secure_request_forms = []
         @active_secure_request_form_batch_counts = {}
-        @provider_info_missing_managing_guardian = false
         return
       end
 
-      @provider_info_guardian_relationships = provider_info_guardian_relationships(application)
-      @provider_info_missing_managing_guardian = provider_info_missing_managing_guardian?(
-        application,
-        @provider_info_guardian_relationships
-      )
-      @provider_info_recipient_options = provider_info_recipient_options(application, @provider_info_guardian_relationships)
-      @provider_info_default_recipient_ids = provider_info_default_recipient_ids(application, @provider_info_guardian_relationships)
       @secure_request_forms = application
                               .secure_request_forms
                               .provider_info
-                              .includes(:recipient)
+                              .includes(:recipient, :delivery_owner)
                               .order(sent_at: :desc)
       @active_secure_request_form_batch_counts = application
                                                  .secure_request_forms
@@ -78,11 +74,10 @@ module Admin
                            .index_by { |candidate| candidate.recipient.id }
 
       known_recipients.map do |recipient|
-        default_candidate = default_candidates[recipient.id]
         {
           recipient: recipient,
-          candidate: default_candidate,
-          email_override_available: default_candidate&.email_override_available? || false
+          candidate: default_candidates[recipient.id],
+          eligible: recipient.secure_request_delivery_eligible?
         }
       end
     end

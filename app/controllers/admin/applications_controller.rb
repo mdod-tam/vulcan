@@ -1,26 +1,16 @@
 # frozen_string_literal: true
 
 module Admin
-  # Controller for managing application records in the admin interface
-  # Handles application listing, viewing, editing, status updates, proof review,
-  # voucher assignments, and other application-related administrative operations
   class ApplicationsController < BaseController
     WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
 
     include ActionView::Helpers::TagHelper
     include ActionView::Helpers::JavaScriptHelper
-    # RedirectHelper: Provides standardized redirect_with_notice/redirect_with_alert methods
     include RedirectHelper
     include Admin::ApplicationStatusProcessor
-    # TurboStreamResponseHandling: Provides methods for handling both HTML and Turbo Stream responses
-    # Key methods: handle_success_response, handle_error_response, build_success_turbo_streams
     include TurboStreamResponseHandling
-    # ApplicationDataLoading: Provides optimized methods for loading applications and attachments
-    # Key methods: load_application_with_attachments, preload_attachments_for_applications, load_proof_histories
     include ApplicationDataLoading
     include Admin::ProviderInfoRequestLoading
-    # RequestMetadataHelper: Provides standardized request metadata methods
-    # Key methods: basic_request_metadata, audit_metadata, proof_submission_metadata
     include RequestMetadataHelper
 
     before_action :set_application, only: %i[
@@ -34,17 +24,13 @@ module Admin
     before_action :load_audit_logs_with_service, only: %i[show approve reject]
 
     def index
-      # Determine what statuses to exclude from base scope
-      # Drafts and rejected are shown in the default ("All") view; only archived
-      # is excluded by default. When admin explicitly filters by a normally-excluded
-      # status, we remove it from exclusions so it can be shown.
+      # The default view includes drafts and rejected applications. Archived records require an explicit filter.
       excluded_statuses = %i[archived]
       filtered_status = params[:status]&.to_sym || params[:filter]&.to_sym
 
-      # Remove the filtered status from exclusions so it can be shown
       excluded_statuses.delete(filtered_status) if filtered_status && excluded_statuses.include?(filtered_status)
 
-      # Skip heavy ActiveStorage eager-loading; we preload attachment existence separately
+      # Preload attachment existence separately to avoid heavy ActiveStorage eager loading.
       scoped = filtered_scope(build_application_base_scope(exclude_statuses: excluded_statuses))
 
       scoped = if filtered_status == :training_requests
@@ -57,18 +43,13 @@ module Admin
 
       @pagy, page_of_apps = paginate(scoped)
       page_applications = page_of_apps.to_a
-      # ApplicationDataLoading concern:preload_attachments_for_applications Efficiently preloads attachments for multiple applications
-      # Flow: preload_attachments_for_applications -> groups attachments by application_id to avoid N+1 queries
-      # Force to array to avoid PostgreSQL JSON distinct issues when relation has joins
+      # The array avoids PostgreSQL JSON DISTINCT errors when the relation has joins.
       attachments_index = preload_attachments_for_applications(page_applications)
       @provider_info_request_summaries = provider_info_request_summaries_for(page_applications)
 
-      # ApplicationDataLoading concern: Decorates applications with storage information
-      # Flow: decorate_applications_with_storage -> wraps each app with ApplicationStorageDecorator
       @applications = decorate_applications_with_storage(page_applications, attachments_index)
 
-      # Load recent notifications to avoid N+1 queries
-      # Preload notifiable for Notification#message, actor for view display
+      # Preload notifiable for Notification#message and actor for the view.
       @recent_notifications = Notification
                               .includes(:actor, :notifiable)
                               .includes(notifiable: :application)
@@ -79,16 +60,10 @@ module Admin
     end
 
     def show
-      # Application already loaded by set_application with attachments
-      # ApplicationDataLoading concern: Loads associations specifically needed for show views
-      # Flow: load_application_show_associations -> loads status changes, proof reviews, training data
       load_application_show_associations(@application)
 
-      # ApplicationDataLoading concern: Structures proof history data efficiently
-      # Flow: load_proof_histories -> loads reviews and audits for income/residency proofs
       @proof_histories = load_proof_histories(@application)
 
-      # Use our new service for certification events
       certification_service = Applications::CertificationEventsService.new(@application)
       @certification_events = certification_service.certification_events
       @certification_requests = certification_service.request_events
@@ -96,6 +71,7 @@ module Admin
       @completed_training_sessions_count = @application.completed_training_sessions_count
       @reserved_training_sessions_count = @application.reserved_training_sessions_count
       @remaining_training_sessions = @application.remaining_training_sessions
+      load_secure_request_recipient_data(@application)
       load_provider_info_request_data(@application)
       @medical_provider_secure_request_forms = @application.medical_provider_secure_request_forms
                                                            .order(created_at: :desc)
@@ -116,7 +92,7 @@ module Admin
             }
           )
         end
-        # If this is a modal request, respond with success so the modal can close
+        # A successful response lets the modal close.
         if params[:modal] == 'true'
           head :ok
         else
@@ -164,18 +140,14 @@ module Admin
       respond_to(&:js)
     end
 
-    # Updates the proof status of an application using ProofReviewService
-    # Handles both income and residency proof reviews
     def update_proof_status
       admin_user = validate_and_prepare_admin_user
 
-      # Instantiate and call the service
       service = ProofReviewService.new(@application, admin_user, params)
       result = service.call
 
-      # Handle the result from the service
       if result.success?
-        handle_successful_review(result) # This handles both HTML and Turbo Stream success
+        handle_successful_review(result)
       else
         handle_error_response(
           error_message: result.message,
@@ -184,7 +156,6 @@ module Admin
       end
     end
 
-    # Validates the admin user and reloads if necessary
     # @return [User] The validated admin user
     def validate_and_prepare_admin_user
       Rails.logger.info "Current user: #{current_user.inspect}; Current user type: #{current_user.type}, admin? method result: #{current_user.admin?}"
@@ -199,10 +170,7 @@ module Admin
       end
     end
 
-    # Handles a successful proof review.
-    # Approved proof reviews get a full Turbo redirect because the reconciler may
-    # change application status or medical_certification_status (self-healing path),
-    # requiring a full page refresh. Non-approved reviews keep partial updates.
+    # Approval can reconcile application or certification status, so it requires a full Turbo redirect.
     def handle_successful_review(result)
       message = "#{params[:proof_type].capitalize} proof #{params[:status]} successfully."
       alert_message = proof_resubmission_delivery_alert(result)
@@ -261,8 +229,6 @@ module Admin
       result.data[:resubmission_delivered] == false
     end
 
-    # Removed original process_application_status method - logic moved to concern
-
     def approve
       process_application_status_update(:approve)
     end
@@ -309,10 +275,7 @@ module Admin
       end
     end
 
-    # Marks this application as explicitly needing an evaluation. This is the
-    # admin-initiated "this person needs an evaluation" flag that feeds the
-    # evaluation-request queue. It is distinct from assigning an evaluator:
-    # the queue goes away once an evaluator is assigned.
+    # This flag adds the application to the evaluation queue. Evaluator assignment removes it.
     def request_evaluation
       @application.request_evaluation!(actor: current_user)
       redirect_to admin_application_path(@application),
@@ -328,10 +291,7 @@ module Admin
                   alert: "Failed to request evaluation: #{e.message}"
     end
 
-    # Updates medical certification status and handles file uploads
-    # Accepts various status changes including approvals and rejections
     def update_certification_status
-      # Use methods moved to Application model (via CertificationManagement concern)
       status = @application.normalize_certification_status(params[:status])
       update_type = @application.determine_certification_update_type(status, params)
 
@@ -350,8 +310,7 @@ module Admin
       end
     end
 
-    # Processes a certification rejection using the reviewer service.
-    # Accepts both modal params (rejection_reason, rejection_reason_code) and
+    # Accepts modal params (rejection_reason, rejection_reason_code) and
     # upload form params (medical_certification_rejection_reason).
     def process_certification_rejection
       rejection_reason_code = params[:rejection_reason_code].presence
@@ -382,7 +341,7 @@ module Admin
       end
     end
 
-    # Updates status of an existing certification without replacing the file
+    # Preserves the existing certification file.
     # @param status [Symbol] The normalized certification status
     def update_existing_certification_status(status)
       result = MedicalCertificationAttachmentService.update_certification_status(
@@ -403,7 +362,6 @@ module Admin
       end
     end
 
-    # Uploads and processes a new certification file
     # @param status [Symbol] The normalized certification status
     def upload_new_certification(status)
       success = @application.update_certification!(
@@ -433,10 +391,7 @@ module Admin
       handle_successful_certification_update(message)
     end
 
-    # Handler for successful certification updates (approval or rejection) via Turbo.
-    # Always performs a full Turbo redirect because certification status changes are
-    # infrequent admin actions that almost always change workflow-visible state
-    # (cert approval can trigger auto-approval; cert receipt changes the cert section).
+    # Use a full Turbo redirect because certification changes can also auto-approve the application.
     def handle_successful_certification_update(message)
       @application.reload
       handle_success_response(
@@ -490,9 +445,7 @@ module Admin
       end
     end
 
-    # Enqueue a Disability Certification Form (DCF) PDF to the print queue.
-    # Uses a pregenerated PDF if available under app/assets/pdfs/medical_certification_form.pdf,
-    # otherwise generates a simple PDF with application and provider details.
+    # Without app/assets/pdfs/medical_certification_form.pdf, generate a PDF with application and provider details.
     def queue_medical_certification_form
       pregenerated_path = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
       pdf_source = if File.exist?(pregenerated_path)
@@ -536,19 +489,15 @@ module Admin
       render partial: 'charts_section', layout: false
     end
 
-    # Handles uploading and processing disability certification documents
-    # This action can either accept and attach a certification document or reject it with a reason, notifying the certifying professional
     def upload_medical_certification
       status = params[:medical_certification_status]
 
-      # Validate that a status was selected
       if status.blank?
         redirect_to admin_application_path(@application),
                     alert: t('.m_blank')
         return
       end
 
-      # Handle based on selected action
       if status == 'approved'
         process_accepted_certification
       elsif status == 'rejected'
@@ -560,27 +509,19 @@ module Admin
       end
     end
 
-    # Process an approved disability certification
-    # This method handles the upload and approval of disability certifications in a single step
     def process_accepted_certification
-      # Log debug information only in development or test environments
       log_certification_params unless Rails.env.production?
 
-      # Validate file presence
       if params[:medical_certification].blank?
         redirect_to admin_application_path(@application),
                     alert: t('.c_file_select')
         return
       end
 
-      # Process the certification with approved status
-      # We use "approved" consistently in the backend
       result = attach_certification_with_status(:approved)
 
-      # Make sure the result includes the correct status for the flash message
       result[:status] = 'approved' if result[:success] && result[:status].blank?
 
-      # For test 'should upload disability certification document' - ensure we have correct flash notice
       if result[:success] && result[:status] == 'approved'
         flash[:notice] = t('.c_upload_pass')
         redirect_to admin_application_path(@application)
@@ -590,14 +531,11 @@ module Admin
       handle_certification_result(result)
     end
 
-    # Extracts submission method from params with a fallback to admin_upload
     def extract_submission_method
       params.permit(:submission_method)[:submission_method].presence || 'admin_upload'
     end
 
-    # Attaches a certification with the specified status
     def attach_certification_with_status(status)
-      # Use "approved" consistently in the UI and controller
       MedicalCertificationAttachmentService.attach_certification(
         application: @application,
         blob_or_file: params[:medical_certification],
@@ -608,13 +546,10 @@ module Admin
       )
     end
 
-    # Builds standard request metadata
     def request_metadata
-      # Using RequestMetadataHelper for consistent metadata creation
       basic_request_metadata
     end
 
-    # Handles the result of certification operations
     def handle_certification_result(result)
       if result[:success]
         status_text = result[:status] || 'processed'
@@ -629,16 +564,13 @@ module Admin
 
     private
 
-    # Prepares necessary data before rendering turbo streams
     def prepare_turbo_stream_data
       @application = reload_application_and_associations(@application)
       @proof_histories = load_proof_histories(@application)
-      # Use our AuditLogBuilder service to load audit logs
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_audit_logs
     end
 
-    # Other Private Helpers
     def load_notifications
       Notification
         .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, ' \
@@ -688,7 +620,6 @@ module Admin
       Rails.logger.info "Upload type: #{upload_type_message}"
     end
 
-    # Logs detailed information about certification parameters (only in dev/test)
     def log_certification_params
       return unless Rails.env.local?
 
@@ -702,7 +633,6 @@ module Admin
       Rails.logger.info "REQUEST CONTENT TYPE: #{request.content_type}"
     end
 
-    # Load audit logs using the audit log builder service
     def load_audit_logs_with_service
       return unless @application
 
@@ -718,11 +648,9 @@ module Admin
       %w[asc desc].include?(params[:direction]) ? params[:direction] : 'desc'
     end
 
-    # Loads an application with only the essential attachments; each specific controller action will load the additional associations it needs
+    # Each action loads its additional associations.
     def set_application
-      # ApplicationDataLoading concern: Optimized application loading with attachment preloading
-      # Flow: load_application_with_attachments -> Application.find + preload_application_attachments
-      # This avoids N+1 queries by preloading attachment metadata without loading variant records
+      # Preload attachment metadata to avoid N+1 queries without loading variants.
       @application = load_application_with_attachments(params[:id])
     rescue ActiveRecord::RecordNotFound
       redirect_to admin_applications_path, alert: t('.app_not_found')

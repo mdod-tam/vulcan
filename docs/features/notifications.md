@@ -38,6 +38,8 @@ Some workflows create both. For example, proof approval logs `proof_approved` as
 | Email delivery/open tracking | `UpdateEmailStatusJob` and `PostmarkEmailTracker` |
 | Bounce/spam webhooks | `Webhooks::EmailEventsController` and `EmailEventHandler` |
 
+Two secure-request issuance services are deliberate exceptions to the `NotificationService` routing row: `Applications::RequestProviderInfo` and `Applications::RequestProofResubmission` route constituent delivery through `Applications::SecureRequestRecipientResolver` plus `ApplicationNotificationsMailer` for email and postal letters (via `PrintQueueItem`); their SMS goes through `SmsService` directly, since SMS is not a `NotificationService` channel (see the SMS notes below). Routing depends on resolver-selected channels, contact owners, and delivery-owner eligibility rather than a stored notification preference alone.
+
 The normal entry point is `NotificationService.create_and_deliver!`. It creates a `Notification` row, records delivery intent in metadata, and attempts delivery when `deliver: true`.
 
 `NotificationService.build` also exists for fluent call sites, but most new code should prefer the direct service call unless a builder makes the caller clearer.
@@ -148,6 +150,13 @@ When adding or changing templates:
 - treat reset URLs, verification URLs, and secure upload links as delivery artifacts; sanitize them from mailer/SMS failure logs and never persist raw bearer links in notification metadata
 
 ---
+
+Secure provider-info and proof requests use the persisted secure form's delivery owner
+for message language, with a supported-locale check and default-locale fallback.
+Staff can explicitly select proof SMS from the application detail page after automatic
+delivery fails; automatic rejection callbacks do not select SMS. Issued-link rows show
+stable constituent IDs and original delivery ownership, with “Postal mail” for letters
+because no historical address snapshot is stored.
 
 ## 8. Delivery Tracking
 
@@ -269,6 +278,8 @@ When changing notifications:
 | Delivery polling | `app/jobs/update_email_status_job.rb`, `app/services/postmark_email_tracker.rb` |
 | Bounce/spam handling | `app/controllers/webhooks/email_events_controller.rb`, `app/services/email_event_handler.rb` |
 | Proof resubmission delivery | `app/services/applications/request_proof_resubmission.rb` |
+| Provider-info request delivery | `app/services/applications/request_provider_info.rb` |
+| Secure-request recipient/channel routing | `app/services/applications/secure_request_recipient_resolver.rb` |
 | Certification delivery | `app/services/applications/medical_certification_service.rb`, `app/services/applications/medical_certification_reviewer.rb` |
 
 Related docs:

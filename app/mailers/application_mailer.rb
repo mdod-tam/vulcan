@@ -25,8 +25,6 @@ class ApplicationMailer < ActionMailer::Base
   layout 'mailer'
   before_action :set_common_variables
 
-  # Common email sender used by all mailers
-  # Checks if template is enabled before sending and logs warnings if disabled
   def send_email(recipient_email, template, variables, mail_options = {})
     unless template.enabled?
       Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping email to #{recipient_email}")
@@ -36,7 +34,6 @@ class ApplicationMailer < ActionMailer::Base
     variables = common_template_variables.merge(variables)
     rendered_subject, rendered_text_body = template.render(**variables)
 
-    # Apply subject override if provided
     subject_override = mail_options.delete(:subject_override)
     rendered_subject = subject_override.call(rendered_subject) if subject_override.present?
 
@@ -85,8 +82,9 @@ class ApplicationMailer < ActionMailer::Base
     nil
   end
 
-  def queue_letter_delivery(recipient:, template_name:, variables:, letter_type: nil, application: nil)
-    print_recipient = letter_recipient_for(recipient)
+  # Secure requests pass the resolver-selected print_recipient. Other callers retain the dependent-to-guardian fallback.
+  def queue_letter_delivery(recipient:, template_name:, variables:, letter_type: nil, application: nil, print_recipient: nil)
+    print_recipient ||= letter_recipient_for(recipient)
     letter_variables = common_template_variables.merge(variables.respond_to?(:to_h) ? variables.to_h.deep_symbolize_keys : variables.dup)
     letter_variables[:application] = application if application.present?
 
@@ -103,6 +101,19 @@ class ApplicationMailer < ActionMailer::Base
     return recipient unless recipient.respond_to?(:guardian_for_contact) && recipient.guardian_for_contact.present?
 
     recipient.guardian_for_contact
+  end
+
+  # Persisted channel ownership controls new secure-request delivery language.
+  # Legacy forms retain the explicit print target or historical recipient fallback.
+  def secure_request_locale(secure_request_form, print_recipient, recipient)
+    return secure_request_form.delivery_locale if secure_request_form&.delivery_owner.present?
+
+    target = if secure_request_form&.recipient_channel_letter?
+               print_recipient.presence || letter_recipient_for(recipient)
+             else
+               recipient
+             end
+    resolve_template_locale(recipient: target)
   end
 
   def resolve_template_locale(recipient: nil)

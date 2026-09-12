@@ -6,13 +6,20 @@ class SecureRequestForm < ApplicationRecord
   encrypts :recipient_email, deterministic: true
   encrypts :recipient_phone, deterministic: true
 
+  def delivery_locale
+    locale = delivery_owner ? delivery_owner.locale : recipient&.effective_message_locale
+    candidate = locale.to_s.to_sym
+    I18n.available_locales.include?(candidate) ? candidate : I18n.default_locale
+  end
+
   belongs_to :application
   belongs_to :recipient, class_name: 'User'
   belongs_to :requested_by, class_name: 'User', optional: true
+  # Owns the selected contact or postal address. A guardian can own a dependent's delivery.
+  belongs_to :delivery_owner, class_name: 'User', optional: true
 
-  # Rails generates kind_provider_info_request? from this enum. Public
-  # provider-info endpoints and services use that predicate as a token boundary
-  # so proof-resubmission bearer links cannot be used on provider-info forms.
+  # Public endpoints and services use kind_provider_info_request? to prevent
+  # proof-resubmission tokens from accessing provider-info forms.
   enum :kind, {
     provider_info_request: 0,
     id_proof_resubmission: 1,
@@ -24,6 +31,9 @@ class SecureRequestForm < ApplicationRecord
   enum :recipient_role, { constituent: 0, guardian: 1 }, prefix: true
 
   validates :request_batch_id, presence: true
+  validates :delivery_source,
+            inclusion: { in: Applications::SecureRequestRecipientResolver::CONTACT_SOURCES.map(&:to_s) },
+            allow_nil: true
   validates :recipient_channel, presence: true
   validates :recipient_role, presence: true
   validates :public_token_digest, presence: true, uniqueness: true

@@ -105,7 +105,9 @@ module Applications
           application,
           :residency,
           secure_upload_url: regexp_matches(/secure_proof_form/),
-          recipient: application.user
+          recipient: application.user,
+          secure_request_form: kind_of(SecureRequestForm),
+          letter_recipient: application.user
         )
         .returns(@mailer_delivery)
       @mailer_delivery.expects(:deliver_now).returns(true)
@@ -199,7 +201,9 @@ module Applications
           application,
           proof_review,
           secure_upload_url: regexp_matches(/secure_proof_form/),
-          recipient: guardian
+          recipient: guardian,
+          secure_request_form: kind_of(SecureRequestForm),
+          letter_recipient: guardian
         )
         .returns(@mailer_delivery)
 
@@ -385,7 +389,9 @@ module Applications
           application,
           :id,
           secure_upload_url: regexp_matches(/secure_proof_form/),
-          recipient: application.user
+          recipient: application.user,
+          secure_request_form: kind_of(SecureRequestForm),
+          letter_recipient: application.user
         )
         .returns(@mailer_delivery)
 
@@ -422,7 +428,9 @@ module Applications
           application,
           :id,
           secure_upload_url: regexp_matches(/secure_proof_form/),
-          recipient: application.user
+          recipient: application.user,
+          secure_request_form: kind_of(SecureRequestForm),
+          letter_recipient: application.user
         )
         .returns(@mailer_delivery)
       @mailer_delivery.expects(:deliver_now).returns(true)
@@ -450,7 +458,9 @@ module Applications
           application,
           :id,
           secure_upload_url: regexp_matches(/secure_proof_form/),
-          recipient: application.user
+          recipient: application.user,
+          secure_request_form: kind_of(SecureRequestForm),
+          letter_recipient: application.user
         )
         .returns(@mailer_delivery)
 
@@ -475,7 +485,9 @@ module Applications
           application,
           :id,
           secure_upload_url: nil,
-          recipient: application.user
+          recipient: application.user,
+          secure_request_form: kind_of(SecureRequestForm),
+          letter_recipient: application.user
         )
         .returns(@mailer_delivery)
 
@@ -547,6 +559,234 @@ module Applications
       replacement = result.data.fetch(:secure_request_forms).first
       assert_predicate replacement, :kind_id_proof_resubmission?
       assert_predicate replacement, :status_sent?
+    end
+
+    test 'explicit email override stays email even when the recipient prefers letters' do
+      @application.user.update!(communication_preference: 'letter')
+      delivery = mock('proof-mailer-delivery')
+      delivery.expects(:deliver_now).returns(true)
+      ApplicationNotificationsMailer
+        .expects(:proof_rejected)
+        .with(
+          @application,
+          @proof_review,
+          secure_upload_url: regexp_matches(/secure_proof_form/),
+          recipient: @application.user,
+          secure_request_form: kind_of(SecureRequestForm),
+          letter_recipient: @application.user
+        )
+        .returns(delivery)
+
+      result = RequestProofResubmission.new(
+        application: @application,
+        actor: @actor,
+        proof_type: :income,
+        channel_overrides: { @application.user_id => 'email' }
+      ).call
+
+      assert_predicate result, :success?
+      assert_predicate result.data.fetch(:secure_request_forms).first, :recipient_channel_email?
+    end
+
+    test 'forged sms override for a voice phone fails without creating anything' do
+      @application.user.update!(phone_type: 'voice')
+      SmsService.expects(:send_message).never
+
+      result = assert_no_difference(['SecureRequestForm.count', 'Notification.count']) do
+        RequestProofResubmission.new(
+          application: @application,
+          actor: @actor,
+          proof_type: :income,
+          channel_overrides: { @application.user_id => 'sms' }
+        ).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.invalid_channel_override',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'no-route recipient fails before any form notification or delivery' do
+      Current.paper_context = true
+      user = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
+      Current.paper_context = false
+      user.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
+      application = create(:application, :in_progress, id_proof_status: :not_reviewed, user: user)
+      ApplicationNotificationsMailer.expects(:proof_requested).never
+      SmsService.expects(:send_message).never
+
+      result = assert_no_difference(['SecureRequestForm.count', 'Notification.count']) do
+        RequestProofResubmission.new(application: application, actor: @actor, proof_type: :id).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.no_contact_path',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'a merged recipient fails closed and never redirects the request to the survivor' do
+      @application.user.update_columns(merged_into_user_id: create(:constituent).id)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.recipient_no_longer_eligible',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'address-only constituent receives a letter proof request printed to the address owner' do
+      Current.paper_context = true
+      user = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
+      Current.paper_context = false
+      application = create(:application, :in_progress, id_proof_status: :not_reviewed, user: user)
+      ApplicationNotificationsMailer.unstub(:proof_requested)
+      SmsService.expects(:send_message).never
+
+      result = assert_difference('PrintQueueItem.count', 1) do
+        RequestProofResubmission.new(application: application, actor: @actor, proof_type: :id).call
+      end
+
+      assert_predicate result, :success?
+      assert_predicate result.data.fetch(:secure_request_forms).first, :recipient_channel_letter?
+      assert_equal user.id, PrintQueueItem.last.constituent_id
+    end
+
+    test 'resend fails closed when the historical email channel is no longer deliverable' do
+      original = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+                                         .data.fetch(:secure_request_forms).first
+      @application.user.update_column(:email, nil)
+
+      result = assert_no_difference(['SecureRequestForm.count', 'Notification.count']) do
+        travel_to original.sent_at + 2.hours do
+          RequestProofResubmission.new(
+            application: @application,
+            actor: @actor,
+            proof_type: :income,
+            resend_of: original
+          ).call
+        end
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.invalid_channel_override',
+                          locale: @actor.effective_locale),
+                   result.message
+      assert_predicate original.reload, :status_sent?
+      assert_not original.revoked?
+    end
+
+    test 'resend keeps the historical channel but snapshots the current email' do
+      original = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+                                         .data.fetch(:secure_request_forms).first
+      new_email = "moved.#{SecureRandom.hex(3)}@example.com"
+      @application.user.update!(email: new_email)
+
+      result = nil
+      travel_to original.sent_at + 2.hours do
+        result = RequestProofResubmission.new(
+          application: @application,
+          actor: @actor,
+          proof_type: :income,
+          resend_of: original
+        ).call
+      end
+
+      assert_predicate result, :success?
+      replacement = result.data.fetch(:secure_request_forms).first
+      assert_predicate replacement, :recipient_channel_email?
+      assert_equal new_email, replacement.recipient_email
+      assert_predicate original.reload, :revoked?
+    end
+
+    test 'dependent proof request fails closed when the guardian contact owner is suspended' do
+      _guardian, dependent, application = build_dependent_proof_application
+      application.managing_guardian.update!(status: :suspended)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProofResubmission.new(application: application, actor: @actor, proof_type: :income,
+                                     recipient_ids: [dependent.id]).call
+      end
+
+      assert_not result.success?
+      # Defaults reject owner-ineligible routes as :no_contact_path before form creation.
+      # Explicit overrides and resends reach the locked eligibility test and return :recipient_no_longer_eligible.
+      assert_equal I18n.t('applications.proof_resubmission.messages.no_contact_path',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'dependent proof resend fails closed when the guardian contact owner was suspended after issuance' do
+      _guardian, dependent, application = build_dependent_proof_application
+      original = RequestProofResubmission.new(application: application, actor: @actor, proof_type: :income,
+                                              recipient_ids: [dependent.id]).call
+                                         .data.fetch(:secure_request_forms).first
+      assert_predicate original, :recipient_channel_email?
+
+      application.managing_guardian.update!(status: :suspended)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        travel_to original.sent_at + 2.hours do
+          RequestProofResubmission.new(application: application, actor: @actor, proof_type: :income,
+                                       resend_of: original).call
+        end
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.recipient_no_longer_eligible',
+                          locale: @actor.effective_locale),
+                   result.message
+      assert_predicate original.reload, :status_sent?
+      assert_not original.revoked?
+    end
+
+    test 'persists resolver delivery ownership on the form and notification metadata' do
+      guardian, dependent, application = build_dependent_proof_application
+
+      result = RequestProofResubmission.new(application: application, actor: @actor, proof_type: :income,
+                                            recipient_ids: [dependent.id]).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_equal guardian, form.delivery_owner
+      assert_equal 'managing_guardian', form.delivery_source
+
+      # AuditLogBuilder includes this notification action without consulting the audited flag.
+      # The notification owns the durable audit of delivery.
+      notification = Notification.find_by!(notifiable: application, action: 'proof_resubmission_requested',
+                                           recipient: dependent)
+      assert_equal guardian.id, notification.metadata['delivery_owner_id']
+      assert_equal 'managing_guardian', notification.metadata['delivery_source']
+    end
+
+    private
+
+    # Active dependent with a rejected income proof and guardian-owned contact and address.
+    # Returns [guardian, dependent, application].
+    def build_dependent_proof_application
+      guardian = create(:constituent, email: "guardian.proof.#{SecureRandom.hex(4)}@example.com")
+      dependent = create(
+        :constituent,
+        email: "dependent.proof.#{SecureRandom.hex(4)}@system.matvulcan.local",
+        dependent_email: guardian.email
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      application = create(:application, :in_progress, user: dependent, managing_guardian: guardian)
+      Current.paper_context = true
+      create_rejected_proof_review_without_auto_resubmission(
+        application: application,
+        admin: @actor,
+        proof_type: :income,
+        rejection_reason: 'Missing income details'
+      )
+      Current.paper_context = false
+      application.income_proof.purge if application.income_proof.attached?
+      [guardian, dependent, application]
     end
   end
 end

@@ -15,6 +15,45 @@ module Applications
       ApplicationNotificationsMailer.stubs(:provider_info_requested).returns(@mailer_delivery)
     end
 
+    test 'unsupported SMS delivery locale falls back without revoking the request' do
+      @application.user.update!(locale: 'unsupported', phone_type: 'text')
+      SmsService.expects(:send_message).with do |phone, body, **options|
+        phone == @application.user.phone && body.include?('provider') && options[:sensitive]
+      end.returns(true)
+
+      result = RequestProviderInfo.new(application: @application, actor: @actor,
+                                       channel_overrides: { @application.user_id => 'sms' }).call
+
+      assert_predicate result, :success?
+      assert_predicate result.data.fetch(:secure_request_forms).first.reload, :active?
+    end
+
+    private
+
+    # Paper context permits a constituent with no digital contact.
+    def build_address_only_constituent
+      Current.paper_context = true
+      create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
+    ensure
+      Current.reset
+    end
+
+    # Active dependent with guardian-owned contact and address. Returns [guardian, dependent, application].
+    def build_dependent_routed_through_guardian(guardian_attrs = {})
+      guardian = create(:constituent, {
+        email: "guardian.owner.#{SecureRandom.hex(4)}@example.com"
+      }.merge(guardian_attrs))
+      dependent = create(
+        :constituent,
+        email: "dependent.owner.#{SecureRandom.hex(4)}@system.matvulcan.local",
+        dependent_email: guardian.email
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian)
+      [guardian, dependent, application]
+    end
+
     test 'creates one active request and refuses a duplicate during cooldown' do
       first_result = RequestProviderInfo.new(application: @application, actor: @actor).call
       second_result = RequestProviderInfo.new(application: @application, actor: @actor).call
@@ -261,7 +300,6 @@ module Applications
       create(:guardian_relationship, dependent_user: @application.user, guardian_user: guardian)
       @application.update!(managing_guardian_id: guardian.id)
 
-      # Issue to guardian only, putting guardian on cooldown
       first_result = RequestProviderInfo.new(
         application: @application,
         actor: @actor,
@@ -269,8 +307,6 @@ module Applications
       ).call
       assert_predicate first_result, :success?
 
-      # Now attempt multi-recipient issuance (applicant + guardian).
-      # Guardian is still in cooldown, so the whole batch should roll back.
       multi_result = assert_no_difference(['SecureRequestForm.count', 'Notification.count']) do
         RequestProviderInfo.new(
           application: @application,
@@ -282,7 +318,6 @@ module Applications
       assert_not multi_result.success?
       assert_match(/minute/, multi_result.message)
 
-      # The applicant's individual request still works since their cooldown is clear
       solo_result = RequestProviderInfo.new(
         application: @application,
         actor: @actor,
@@ -366,10 +401,6 @@ module Applications
       ).count
     end
 
-    # -----------------------------------------------------------------------
-    # Guardian repair: single guardian auto-sets managing_guardian_id
-    # -----------------------------------------------------------------------
-
     test 'auto-repairs managing_guardian_id when exactly one guardian relationship exists' do
       dependent = create(:constituent)
       guardian = create(:constituent)
@@ -418,10 +449,6 @@ module Applications
                    result.message
     end
 
-    # -----------------------------------------------------------------------
-    # Multi-recipient: shared request_batch_id
-    # -----------------------------------------------------------------------
-
     test 'multi-recipient issuance assigns the same request_batch_id to all created forms' do
       guardian = create(:constituent)
       create(:guardian_relationship, dependent_user: @application.user, guardian_user: guardian)
@@ -439,15 +466,10 @@ module Applications
       assert_equal 1, batch_ids.size, 'All forms from the same issuance must share one request_batch_id'
     end
 
-    # -----------------------------------------------------------------------
-    # Recipient-scoped cooldown independence
-    # -----------------------------------------------------------------------
-
     test 'resend cooldown for recipient A does not block recipient B from receiving their own resend' do
       guardian = create(:constituent)
       create(:guardian_relationship, dependent_user: @application.user, guardian_user: guardian)
 
-      # Issue to the applicant only, putting the applicant on cooldown
       applicant_result = RequestProviderInfo.new(
         application: @application,
         actor: @actor,
@@ -455,7 +477,6 @@ module Applications
       ).call
       assert_predicate applicant_result, :success?
 
-      # Guardian has never been issued a link; their issuance must not be blocked
       guardian_result = RequestProviderInfo.new(
         application: @application,
         actor: @actor,
@@ -469,14 +490,7 @@ module Applications
       ).count
     end
 
-    # -----------------------------------------------------------------------
-    # Token not in Notification metadata
-    # -----------------------------------------------------------------------
-
     test 'raw bearer token does not appear in Notification metadata after issuance' do
-      # Use a recognisable sentinel token so we can assert its absence clearly.
-      # Stub generate_public_token (class method) to return the sentinel value;
-      # this is called exactly once for a single-recipient issuance.
       sentinel_token = 'SENTINEL_TOKEN_MUST_NOT_LEAK_IN_METADATA'
       SecureRequestForm.stubs(:generate_public_token).returns(sentinel_token)
 
@@ -496,23 +510,14 @@ module Applications
                           'Full secure URL must not appear in Notification metadata'
     end
 
-    # -----------------------------------------------------------------------
-    # No duplicate custom audit event for issuance
-    # -----------------------------------------------------------------------
-
-    test 'issuance does not create a custom secure_link_sent audit event beyond the NotificationService record' do
-      # The issuer must rely solely on the NotificationService audit event for
-      # provider_info_requested. A separate custom secure_link_sent Event would
-      # mean two audit records for the same logical issuance event.
+    test 'issuance does not create a custom secure_link_sent audit event beyond the notification record' do
+      # AuditLogBuilder already includes the provider_info_requested notification.
+      # A secure_link_sent Event would duplicate the issuance audit.
       assert_no_difference -> { Event.where(action: 'secure_link_sent').count } do
         result = RequestProviderInfo.new(application: @application, actor: @actor).call
         assert_predicate result, :success?
       end
     end
-
-    # -----------------------------------------------------------------------
-    # secure_url_for rejects unsafe production config
-    # -----------------------------------------------------------------------
 
     test 'secure_url_for raises when the configured host is blank in production' do
       Rails.env.stubs(:production?).returns(true)
@@ -539,6 +544,394 @@ module Applications
       service = RequestProviderInfo.new(application: @application, actor: @actor)
 
       assert_raises(ArgumentError) { service.send(:secure_url_for, 'some-token') }
+    end
+
+    test 'address-only constituent receives a letter request with no digital contact snapshot' do
+      user = build_address_only_constituent
+      application = create(:application, user: user)
+      ApplicationNotificationsMailer.unstub(:provider_info_requested)
+      SmsService.expects(:send_message).never
+
+      result = assert_difference('PrintQueueItem.count', 1) do
+        RequestProviderInfo.new(application: application, actor: @actor).call
+      end
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_predicate form, :recipient_channel_letter?
+      assert_nil form.recipient_email
+      assert_nil form.recipient_phone
+      print_item = PrintQueueItem.last
+      assert_equal user.id, print_item.constituent_id
+    end
+
+    test 'no-route resolution creates no form notification audit event or transport call' do
+      user = build_address_only_constituent
+      user.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
+      application = create(:application, user: user)
+      ApplicationNotificationsMailer.expects(:provider_info_requested).never
+      SmsService.expects(:send_message).never
+
+      result = assert_no_difference(['SecureRequestForm.count', 'Notification.count', 'Event.count',
+                                     'DuplicateReviewCase.count']) do
+        RequestProviderInfo.new(application: application, actor: @actor).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.no_contact_path', locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'forged sms override for a voice phone fails without creating anything' do
+      @application.user.update!(phone_type: 'voice')
+      SmsService.expects(:send_message).never
+
+      result = assert_no_difference(['SecureRequestForm.count', 'Notification.count']) do
+        RequestProviderInfo.new(
+          application: @application,
+          actor: @actor,
+          channel_overrides: { @application.user_id => 'sms' }
+        ).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.invalid_channel_override', locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'unknown forged channel value fails without creating anything' do
+      result = assert_no_difference(['SecureRequestForm.count', 'Notification.count']) do
+        RequestProviderInfo.new(
+          application: @application,
+          actor: @actor,
+          channel_overrides: { @application.user_id => 'carrier_pigeon' }
+        ).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.invalid_channel_override', locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'a suspended recipient fails closed without issuing a request' do
+      @application.user.update!(status: :suspended)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProviderInfo.new(application: @application, actor: @actor).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.recipient_no_longer_eligible',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'resend to a merged recipient fails closed and never redirects to the survivor' do
+      original = RequestProviderInfo.new(application: @application, actor: @actor).call
+                                    .data.fetch(:secure_request_forms).first
+      survivor = create(:constituent)
+      @application.user.update_columns(merged_into_user_id: survivor.id)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        travel_to original.sent_at + 2.hours do
+          RequestProviderInfo.new(application: @application, actor: @actor, resend_of: original).call
+        end
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.recipient_no_longer_eligible',
+                          locale: @actor.effective_locale),
+                   result.message
+      assert_empty SecureRequestForm.where(recipient: survivor)
+      assert_predicate original.reload, :status_sent?
+      assert_not original.revoked?
+    end
+
+    test 'resend fails closed when the historical email channel is no longer deliverable' do
+      original = RequestProviderInfo.new(application: @application, actor: @actor).call
+                                    .data.fetch(:secure_request_forms).first
+      @application.user.update_column(:email, nil)
+
+      result = assert_no_difference(['SecureRequestForm.count', 'Notification.count']) do
+        travel_to original.sent_at + 2.hours do
+          RequestProviderInfo.new(application: @application, actor: @actor, resend_of: original).call
+        end
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.invalid_channel_override',
+                          locale: @actor.effective_locale),
+                   result.message
+      assert_predicate original.reload, :status_sent?
+      assert_not original.revoked?
+    end
+
+    test 'resend keeps the historical channel but snapshots current contact' do
+      original = RequestProviderInfo.new(application: @application, actor: @actor).call
+                                    .data.fetch(:secure_request_forms).first
+      new_email = "moved.#{SecureRandom.hex(3)}@example.com"
+      @application.user.update!(email: new_email)
+
+      result = nil
+      travel_to original.sent_at + 2.hours do
+        result = RequestProviderInfo.new(application: @application, actor: @actor, resend_of: original).call
+      end
+
+      assert_predicate result, :success?
+      replacement = result.data.fetch(:secure_request_forms).first
+      assert_predicate replacement, :recipient_channel_email?
+      assert_equal new_email, replacement.recipient_email
+      assert_predicate original.reload, :revoked?
+    end
+
+    test 'sms resend fails closed when the phone is no longer text capable' do
+      @application.user.update!(phone_type: 'text')
+      SmsService.stubs(:send_message).returns(true)
+      original = RequestProviderInfo.new(
+        application: @application,
+        actor: @actor,
+        channel_overrides: { @application.user_id => 'sms' }
+      ).call.data.fetch(:secure_request_forms).first
+      assert_predicate original, :recipient_channel_sms?
+
+      @application.user.update!(phone_type: 'voice')
+      SmsService.expects(:send_message).never
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        travel_to original.sent_at + 2.hours do
+          RequestProviderInfo.new(application: @application, actor: @actor, resend_of: original).call
+        end
+      end
+
+      assert_not result.success?
+      assert_predicate original.reload, :status_sent?
+      assert_not original.revoked?
+    end
+
+    test 'letter resend fails closed when the address is no longer complete' do
+      @application.user.update!(communication_preference: 'letter')
+      ApplicationNotificationsMailer.unstub(:provider_info_requested)
+      original = RequestProviderInfo.new(application: @application, actor: @actor).call
+                                    .data.fetch(:secure_request_forms).first
+      assert_predicate original, :recipient_channel_letter?
+
+      @application.user.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
+
+      result = assert_no_difference(['SecureRequestForm.count', 'PrintQueueItem.count']) do
+        travel_to original.sent_at + 2.hours do
+          RequestProviderInfo.new(application: @application, actor: @actor, resend_of: original).call
+        end
+      end
+
+      assert_not result.success?
+      assert_predicate original.reload, :status_sent?
+      assert_not original.revoked?
+    end
+
+    # Defaults reject owner-ineligible routes as :no_contact_path before form creation.
+    # Explicit overrides and resends reach delivery_participants_eligible? under lock.
+    # They return :recipient_no_longer_eligible.
+    test 'dependent email request fails closed when the guardian contact owner is suspended' do
+      guardian, dependent, application = build_dependent_routed_through_guardian
+      guardian.update!(status: :suspended)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProviderInfo.new(application: application, actor: @actor,
+                                recipient_ids: [dependent.id]).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.no_contact_path',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'dependent email request fails closed when the guardian contact owner is inactive' do
+      guardian, dependent, application = build_dependent_routed_through_guardian
+      guardian.update!(status: :inactive)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProviderInfo.new(application: application, actor: @actor,
+                                recipient_ids: [dependent.id]).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.no_contact_path',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'dependent email request fails closed when the guardian contact owner has been merged' do
+      guardian, dependent, application = build_dependent_routed_through_guardian
+      survivor = create(:constituent)
+      guardian.update_columns(merged_into_user_id: survivor.id)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProviderInfo.new(application: application, actor: @actor,
+                                recipient_ids: [dependent.id]).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.no_contact_path',
+                          locale: @actor.effective_locale),
+                   result.message
+      assert_empty SecureRequestForm.where(recipient: survivor)
+    end
+
+    test 'dependent sms request fails closed when the guardian contact owner is suspended' do
+      guardian, dependent, application = build_dependent_routed_through_guardian(
+        phone: '410-555-0180', phone_type: 'text'
+      )
+      guardian.update!(status: :suspended)
+      SmsService.expects(:send_message).never
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        RequestProviderInfo.new(application: application, actor: @actor,
+                                recipient_ids: [dependent.id],
+                                channel_overrides: { dependent.id => 'sms' }).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.recipient_no_longer_eligible',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'dependent letter request fails closed when the guardian address owner is suspended' do
+      guardian, dependent, application = build_dependent_routed_through_guardian(
+        communication_preference: 'letter'
+      )
+      guardian.update!(status: :suspended)
+      ApplicationNotificationsMailer.unstub(:provider_info_requested)
+
+      result = assert_no_difference(['SecureRequestForm.count', 'PrintQueueItem.count']) do
+        RequestProviderInfo.new(application: application, actor: @actor,
+                                recipient_ids: [dependent.id]).call
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.no_contact_path',
+                          locale: @actor.effective_locale),
+                   result.message
+    end
+
+    test 'resend fails closed when the guardian contact owner was suspended after issuance' do
+      _guardian, dependent, application = build_dependent_routed_through_guardian
+      original = RequestProviderInfo.new(application: application, actor: @actor,
+                                         recipient_ids: [dependent.id]).call
+                                    .data.fetch(:secure_request_forms).first
+      assert_predicate original, :recipient_channel_email?
+
+      application.managing_guardian.update!(status: :suspended)
+
+      result = assert_no_difference('SecureRequestForm.count') do
+        travel_to original.sent_at + 2.hours do
+          RequestProviderInfo.new(application: application, actor: @actor, resend_of: original).call
+        end
+      end
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.provider_info.messages.recipient_no_longer_eligible',
+                          locale: @actor.effective_locale),
+                   result.message
+      assert_predicate original.reload, :status_sent?
+      assert_not original.revoked?
+    end
+
+    test 'persists resolver delivery ownership on the form and notification' do
+      guardian, dependent, application = build_dependent_routed_through_guardian
+
+      result = RequestProviderInfo.new(application: application, actor: @actor,
+                                       recipient_ids: [dependent.id]).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_equal guardian, form.delivery_owner
+      assert_equal 'managing_guardian', form.delivery_source
+
+      # AuditLogBuilder includes this notification action without consulting the audited flag.
+      # The notification owns the durable audit of delivery.
+      notification = Notification.find_by!(notifiable: application, action: 'provider_info_requested',
+                                           recipient: dependent)
+      assert_equal guardian.id, notification.metadata['delivery_owner_id']
+      assert_equal 'managing_guardian', notification.metadata['delivery_source']
+    end
+
+    test 'explicit SMS with a dependent-owned email records the phone field provenance' do
+      # The email comes from dependent_email, but SMS uses the constituent phone field.
+      guardian = create(:constituent, email: "guardian.smx.#{SecureRandom.hex(4)}@example.com")
+      dependent = create(
+        :constituent,
+        email: "dependent.smx.#{SecureRandom.hex(4)}@system.matvulcan.local",
+        dependent_email: "dependent-owned.#{SecureRandom.hex(4)}@example.com",
+        phone: "555-#{rand(200..899)}-#{rand(1000..9999)}",
+        phone_type: 'text'
+      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      SmsService.stubs(:send_message).returns(true)
+      result = RequestProviderInfo.new(application: application, actor: @actor,
+                                       recipient_ids: [dependent.id],
+                                       channel_overrides: { dependent.id => 'sms' }).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_predicate form, :recipient_channel_sms?
+      assert_equal dependent, form.delivery_owner
+      assert_equal 'constituent', form.delivery_source
+
+      notification = Notification.find_by!(notifiable: application, action: 'provider_info_requested',
+                                           recipient: dependent)
+      assert_equal dependent.id, notification.metadata['delivery_owner_id']
+      assert_equal 'constituent', notification.metadata['delivery_source']
+    end
+
+    test 'self-delivered constituent request records the constituent as delivery owner' do
+      result = RequestProviderInfo.new(application: @application, actor: @actor).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_equal @application.user, form.delivery_owner
+      assert_equal 'constituent', form.delivery_source
+    end
+
+    test 'letter request records the guardian household as delivery owner and source' do
+      guardian, dependent, application = build_dependent_routed_through_guardian(
+        communication_preference: 'letter'
+      )
+
+      result = RequestProviderInfo.new(application: application, actor: @actor,
+                                       recipient_ids: [dependent.id]).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_predicate form, :recipient_channel_letter?
+      assert_equal guardian, form.delivery_owner
+      assert_equal 'managing_guardian', form.delivery_source
+    end
+
+    test 'dependent with own email falls back from an owner-ineligible letter route' do
+      # Only the letter route belongs to the suspended guardian.
+      guardian = create(:constituent, physical_address_1: '9 Guardian Way')
+      dependent_email = "dependent.mixed.#{SecureRandom.hex(4)}@example.com"
+      dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email,
+                                       communication_preference: 'letter')
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                     relationship_type: 'Parent')
+      application = create(:application, user: dependent, managing_guardian: guardian)
+      guardian.update!(status: :suspended)
+      @mailer_delivery.expects(:deliver_now).returns(true)
+
+      result = RequestProviderInfo.new(application: application, actor: @actor,
+                                       recipient_ids: [dependent.id]).call
+
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).first
+      assert_predicate form, :recipient_channel_email?
+      assert_equal dependent, form.delivery_owner
+      assert_equal 'dependent_contact', form.delivery_source
     end
   end
 end

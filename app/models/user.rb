@@ -2,7 +2,7 @@
 
 require 'bcrypt'
 
-# User model that serves as the base class for all user types in the system
+# STI base class for all user types.
 class User < ApplicationRecord
   include UserAuthentication
   include UserRolesAndCapabilities
@@ -12,11 +12,9 @@ class User < ApplicationRecord
   include UserEmailSearch
   include UserMergeIntegrity
 
-  # Ensure duplicate review flag is accessible
   attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')
   attr_accessor :portal_self_registration
 
-  # Class methods
   def self.normalize_email(email_value)
     email_value.to_s.strip.downcase.presence
   end
@@ -59,12 +57,11 @@ class User < ApplicationRecord
   end
   private_class_method :system_user_valid?
 
-  # Rails 8 encryption helper methods for encrypted queries
   def self.find_by_email(email_value)
     normalized_email = normalize_email(email_value)
     return nil if normalized_email.blank?
 
-    # With transparent encryption, we can use regular find_by
+    # Rails encryption supports this ordinary find_by query.
     User.find_by(email: normalized_email)
   rescue StandardError => e
     Rails.logger.warn "find_by_email failed: #{e.message}"
@@ -90,8 +87,8 @@ class User < ApplicationRecord
     normalized.match?(URI::MailTo::EMAIL_REGEXP)
   end
 
-  # Public portal login/recovery lookup only (email-backed accounts; phone alternate when real_phone?).
-  # Do not use for paper/admin contact matching or delivery routing — use find_for_account_access for delivery.
+  # Public portal login/recovery lookup for email-backed accounts, with real_phone? as an alternate identifier.
+  # Do not use for paper/admin contact matching. Delivery uses find_for_account_access.
   def self.find_by_login_identifier(contact)
     normalized = contact.to_s.strip.presence
     return nil if normalized.blank?
@@ -171,10 +168,8 @@ class User < ApplicationRecord
     false
   end
 
-  # Callbacks
   after_save :reset_all_caches
 
-  # Associations
   has_many :events, dependent: :destroy
   has_many :received_notifications,
            class_name: 'Notification',
@@ -189,7 +184,7 @@ class User < ApplicationRecord
            dependent: :nullify,
            inverse_of: :subject_user
 
-  # Same-person merge retirement: a duplicate points at its surviving canonical user.
+  # A same-person merge points the retired duplicate at its canonical survivor.
   belongs_to :merged_into_user, class_name: 'User', optional: true, inverse_of: :merged_duplicate_users
   belongs_to :merged_by, class_name: 'User', optional: true
   has_many :merged_duplicate_users,
@@ -206,26 +201,19 @@ class User < ApplicationRecord
   has_and_belongs_to_many :products,
                           join_table: 'products_users'
 
-  # Scopes
   scope :ordered_by_name, -> { order(:first_name) }
 
-  # Subject of a paper application (existing-adult flow). Used at trust boundaries;
-  # do not rely on UI-only filtering or raw +existing_constituent_id+.
-  #
-  # A merge retires the duplicate by pointing it at a survivor, but leaves it a Constituent, so
-  # +constituent?+ alone keeps offering the retired record as a valid applicant. Attaching a new
-  # application to it would hang that application off a record the merge just declared is not the
-  # person -- and every later lookup resolves to the survivor instead.
+  # Paper intake must enforce this boundary, not trust UI filtering or +existing_constituent_id+.
+  # A retired duplicate still passes +constituent?+, but new applications belong to its survivor.
   def paper_applicant_candidate?
     return false if merged?
 
     constituent?
   end
 
-  # A selected guardian owns paper-application context and may receive notifications, so paper
-  # intake requires an active, non-retired constituent. This paper-domain authority is explicit:
-  # duplicate-review visibility does not gate paper intake, and authentication policy is owned by
-  # +public_login_active?+ below. Legacy NULL status remains eligible, matching the standing rule.
+  # Guardians own paper-intake context and may receive notifications, so they must remain active constituents.
+  # Duplicate-review visibility does not gate intake. +public_login_active?+ owns authentication policy.
+  # Legacy NULL status remains eligible.
   def paper_guardian_candidate?
     return false unless constituent?
     return false if merged?
@@ -234,21 +222,30 @@ class User < ApplicationRecord
     true
   end
 
-  # Dependents may intentionally use guardian contact and synthetic credentials, so public-login
-  # status is not part of this role boundary. Application eligibility is checked separately.
+  # Guardian contact and synthetic credentials do not disqualify dependents.
+  # Public-login status does not gate this role. Application eligibility is separate.
   def paper_dependent_candidate?
     paper_applicant_candidate?
   end
 
-  # True once this record has been retired into a canonical survivor by a same-person merge.
   def merged?
     merged_into_user_id.present?
   end
 
-  # Public portal auth gate for sign-in, account access, and password-reset token flows.
-  # A merged, inactive, or suspended record must never authenticate. Legacy NULL status
-  # (before the status enum existed) is treated as active.
+  # Shared gate for sign-in, account access, and password-reset tokens.
+  # Legacy NULL status predates the enum and remains active.
   def public_login_active?
+    return false if merged?
+    return false if respond_to?(:suspended?) && suspended?
+    return false if respond_to?(:inactive?) && inactive?
+
+    true
+  end
+
+  # Callers requalify persisted recipients under the issuance lock for new forms and resends.
+  # This delivery policy does not grant login access or change an issued form's submitted/revoked/expired lifecycle.
+  def secure_request_delivery_eligible?
+    return false unless constituent?
     return false if merged?
     return false if respond_to?(:suspended?) && suspended?
     return false if respond_to?(:inactive?) && inactive?

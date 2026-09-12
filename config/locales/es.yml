@@ -161,8 +161,7 @@ es:
   constituent_portal:
     dependents:
       form:
-        # Shown on the submit control while the request is in flight. Turbo already disables the
-        # submitter; this only tells the guardian why it went quiet.
+        # Turbo disables the submitter. These labels explain the wait.
         adding: "Agregando…"
         saving: "Guardando…"
       create:
@@ -190,6 +189,7 @@ es:
         needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
         cooldown_active: "Se envió recientemente un enlace seguro para información del proveedor. Espere %{minutes} minutos antes de enviar otro."
         no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
+        invalid_channel_override: "El canal de entrega seleccionado no está disponible con la información de contacto actual de este destinatario. No se envió ninguna solicitud."
         no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
         unknown_recipient: "Uno o más destinatarios seleccionados no están asociados con esta solicitud."
         recipient_no_longer_eligible: "Uno o más destinatarios ya no son un registro activo elegible."
@@ -215,6 +215,7 @@ es:
         needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
         cooldown_active: "Se envió recientemente un enlace seguro para subir documentos. Espere %{minutes} minutos antes de enviar otro."
         no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
+        invalid_channel_override: "El canal de entrega seleccionado no está disponible con la información de contacto actual de este destinatario. No se envió ninguna solicitud."
         no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
         unknown_recipient: "Uno o más destinatarios seleccionados no están asociados con esta solicitud."
         recipient_no_longer_eligible: "Uno o más destinatarios ya no son un registro activo elegible."
@@ -280,6 +281,7 @@ es:
           failure: "No se pudo enviar la solicitud segura de información del proveedor."
         contact:
           letter: "Correo postal"
+          letter_with_address: "Correo postal: %{address}"
           unknown: "Desconocido"
         channels:
           email: "Correo electrónico"
@@ -290,12 +292,22 @@ es:
           submitted: "Enviado"
           revoked: "Revocado"
           expired: "Vencido"
+        roles:
+          applicant: "Solicitante"
+          guardian: "Tutor"
         panel:
           title: "Solicitudes seguras de información del proveedor"
           description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
-          default_channel: "Canal predeterminado: %{channel}"
-          email_override: "Enviar enlace seguro en línea por correo electrónico"
+          legend: "Destinatarios"
+          channel_label: "Canal de entrega para %{recipient}"
+          channel_prompt: "Seleccione un canal"
+          no_route: "No hay un canal de entrega disponible actualmente. Este destinatario necesita un correo electrónico real, un número de teléfono con capacidad de texto o una dirección postal completa."
+          ineligible: "Este registro ya no puede recibir solicitudes seguras."
+          owner_ineligible: "Existe un canal de entrega, pero el contacto o la dirección registrados pertenecen a un registro que ya no puede recibir solicitudes seguras. Resuelva el estado de ese registro o agregue información de contacto de un registro elegible."
+          destination: "Se entrega a %{destination}"
+          destination_via: "Se entrega a %{owner} — %{destination}"
           submit: "Enviar solicitud segura"
+          submit_blocked: "Ningún destinatario puede recibir una solicitud segura actualmente, por lo que este formulario no se puede enviar. Resuelva primero los problemas indicados arriba."
           no_recipients: "No hay destinatarios elegibles disponibles para esta solicitud."
         managing_guardian:
           title: "Falta tutor principal"
@@ -316,6 +328,7 @@ es:
           send_new_link: "Enviar nuevo enlace"
           no_actions: "Sin acciones"
           empty: "No se han enviado solicitudes seguras de información del proveedor."
+          originally_delivered_to: "Entregado originalmente a %{owner}. Al reenviar se vuelve a verificar la información de contacto actual."
         summary:
           label: "Información del proveedor solicitada"
           last_sent: "Enviado %{time}"

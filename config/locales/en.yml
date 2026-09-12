@@ -1,27 +1,21 @@
-# Files in the config/locales directory are used for internationalization and
-# are automatically loaded by Rails. If you want to use locales other than
-# English, add the necessary files in this directory.
+# Rails loads locale files from this directory.
 #
-# To use the locales, use `I18n.t`:
+# Translation lookup:
 #
 #     I18n.t "hello"
 #
-# In views, this is aliased to just `t`:
+# In views:
 #
 #     <%= t("hello") %>
 #
-# To use a different locale, set it with `I18n.locale`:
+# Select config/locales/es.yml:
 #
 #     I18n.locale = :es
 #
-# This would use the information in config/locales/es.yml.
+# Rails Internationalization guide: https://guides.rubyonrails.org/i18n.html.
 #
-# To learn more about the API, please read the Rails Internationalization guide
-# at https://guides.rubyonrails.org/i18n.html.
-#
-# Be aware that YAML interprets the following case-insensitive strings as
-# booleans: `true`, `false`, `on`, `off`, `yes`, `no`. Therefore, these strings
-# must be quoted to be interpreted as strings. For example:
+# Quote `true`, `false`, `on`, `off`, `yes`, and `no` to prevent YAML boolean
+# conversion, regardless of case. For example:
 #
 #     en:
 #       "yes": yup
@@ -179,31 +173,23 @@ en:
   constituent_portal:
     dependents:
       form:
-        # Shown on the submit control while the request is in flight. Turbo already disables the
-        # submitter; this only tells the guardian why it went quiet.
+        # Turbo disables the submitter. These labels explain the wait.
         adding: "Adding…"
         saving: "Saving…"
       create:
-        # Shown when the same submission reaches the server twice. The guardian asked for one
-        # dependent and got one, so this reports the success they were waiting on rather than an
-        # error about a request they did not knowingly send twice.
+        # Duplicate submissions report the original success, not an error.
         already_added: "%{name} was already added to your account."
-        # The same request key arriving with different identity details means the page that sent it
-        # no longer reflects what the server has. Refused rather than guessed at.
+        # The server refuses a stale page that reuses a request key with different identity details.
         stale_request: "This form was out of date, so nothing was changed. Please reload the page and try again."
-        # Guardian-scoped admission rule: one dependent per name and birthdate. The escape hatch
-        # matters -- a guardian who genuinely has two different people with the same name and
-        # birthdate cannot resolve this themselves, and a refusal with no route forward is a dead
-        # end.
+        # Each guardian can add one dependent per name and birthdate.
+        # Support must resolve distinct people who share both values.
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
     submission_gate:
-      # Announced by the submit-gate live region when the control is held disabled. Short on
-      # purpose: the full explanation is already on screen in the pending-review notice, and this
-      # only has to say why the button cannot be pressed.
+      # The live region explains the disabled control. The visible notice has the full explanation.
       pending_identity_review_status: "Submitting is unavailable while we review information associated with this application. You can still save your draft."
-      # Shown only after a refused submission, never on arrival. The typed answers survive the
-      # re-render; file selections cannot, and a draft save is what actually attaches them.
+      # Only refusals show this notice. Text survives the re-render, but file selections do not.
+      # A draft save attaches the files.
       refused_documents_notice: "Any documents you had selected were not attached. Choose them again and use \"Save Application\" to keep them with your draft."
     proof_resubmission_requests:
       create:
@@ -221,6 +207,7 @@ en:
         needs_managing_guardian: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
         cooldown_active: "A secure provider information link was sent recently. Please wait %{minutes} minutes before sending another one."
         no_contact_path: "No usable contact path is available for this recipient."
+        invalid_channel_override: "The selected delivery channel is not available for this recipient's current contact information. No request was sent."
         no_recipient: "Choose at least one recipient for this secure link."
         unknown_recipient: "One or more selected recipients are not associated with this application."
         recipient_no_longer_eligible: "One or more recipients are no longer an eligible active record."
@@ -246,6 +233,7 @@ en:
         needs_managing_guardian: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
         cooldown_active: "A secure proof upload link was sent recently. Please wait %{minutes} minutes before sending another one."
         no_contact_path: "No usable contact path is available for this recipient."
+        invalid_channel_override: "The selected delivery channel is not available for this recipient's current contact information. No request was sent."
         no_recipient: "Choose at least one recipient for this secure link."
         unknown_recipient: "One or more selected recipients are not associated with this application."
         recipient_no_longer_eligible: "One or more recipients are no longer an eligible active record."
@@ -576,6 +564,7 @@ en:
           failure: "Unable to send secure provider information request."
         contact:
           letter: "Postal mail"
+          letter_with_address: "Postal mail: %{address}"
           unknown: "Unknown"
         channels:
           email: "Email"
@@ -586,12 +575,22 @@ en:
           submitted: "Submitted"
           revoked: "Revoked"
           expired: "Expired"
+        roles:
+          applicant: "Applicant"
+          guardian: "Guardian"
         panel:
           title: "Secure provider information requests"
           description: "Send a secure link for entering certifying professional contact information."
-          default_channel: "Default channel: %{channel}"
-          email_override: "Send secure online link by email instead"
+          legend: "Recipients"
+          channel_label: "Delivery channel for %{recipient}"
+          channel_prompt: "Choose a channel"
+          no_route: "No delivery route is currently available. This recipient needs a real email address, a text-capable phone number, or a complete mailing address."
+          ineligible: "This record can no longer receive secure requests."
+          owner_ineligible: "A delivery route exists, but the contact or address on file belongs to a record that can no longer receive secure requests. Resolve that record's status or add contact information owned by an eligible record."
+          destination: "Delivers to %{destination}"
+          destination_via: "Delivers to %{owner} — %{destination}"
           submit: "Send secure request"
+          submit_blocked: "No recipient can currently receive a secure request, so this form cannot be submitted. Resolve the issues listed above first."
           no_recipients: "No eligible recipients are available for this request."
         managing_guardian:
           title: "Missing managing guardian"
@@ -612,6 +611,7 @@ en:
           send_new_link: "Send New Link"
           no_actions: "No actions"
           empty: "No secure provider information requests have been sent."
+          originally_delivered_to: "Originally delivered to %{owner}. Resending re-checks the current contact information."
         summary:
           label: "Provider info requested"
           last_sent: "Sent %{time}"

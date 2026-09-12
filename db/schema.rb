@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_03_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_11_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -505,6 +505,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_03_180000) do
   create_table "secure_request_forms", force: :cascade do |t|
     t.bigint "application_id", null: false
     t.datetime "created_at", null: false
+    t.bigint "delivery_owner_id"
+    t.string "delivery_source"
     t.datetime "expires_at", null: false
     t.integer "kind", default: 0, null: false
     t.string "public_token_digest", null: false
@@ -528,6 +530,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_03_180000) do
     t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_residency_proof_recipient", unique: true, where: "((status = 0) AND (kind = 2))"
     t.index ["application_id", "kind", "request_batch_id"], name: "idx_secure_request_forms_on_app_kind_batch"
     t.index ["application_id"], name: "index_secure_request_forms_on_application_id"
+    t.index ["delivery_owner_id"], name: "index_secure_request_forms_on_delivery_owner_id"
     t.index ["expires_at"], name: "index_secure_request_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL))"
     t.index ["public_token_digest"], name: "idx_secure_request_forms_on_public_token_digest", unique: true
     t.index ["recipient_id"], name: "index_secure_request_forms_on_recipient_id"
@@ -979,6 +982,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_03_180000) do
   add_foreign_key "recovery_requests", "users"
   add_foreign_key "role_capabilities", "users"
   add_foreign_key "secure_request_forms", "applications"
+  add_foreign_key "secure_request_forms", "users", column: "delivery_owner_id"
   add_foreign_key "secure_request_forms", "users", column: "recipient_id"
   add_foreign_key "secure_request_forms", "users", column: "requested_by_id"
   add_foreign_key "sessions", "users"

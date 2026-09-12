@@ -79,6 +79,8 @@ Use `success?`, `failure?`, `message`, and `data` when a service returns `BaseSe
 | `Applications::PaperIdentityDecision` | `app/services/applications/paper_identity_decision.rb` | Issues and verifies the signed attestation that staff looked at specific candidates and decided none is this applicant. Token is `v1:<issued_at>:<hmac>`; nothing about the applicant travels in it. Bound to the context, admin, an HMAC of the full detection fact set, an HMAC of the **presented candidate snapshot including each row's `selectable` state**, the reason codes, and the issue time. 30-minute expiry. The token is stateless and is never marked spent. Every canonical new-person writer takes `PaperIdentityCreationLock`, then recomputes the candidate snapshot and verifies the decision while holding that lock; serialization plus locked recomputation rejects a competing replay. | `PaperIdentityDecision::Result` |
 | `Applications::GuardianDependentManagementService` | `app/services/applications/guardian_dependent_management_service.rb` | Creates a new paper dependent for a locked, eligible selected guardian; applies contact strategies, verifies identity under the shared lock, records a successful override when needed, and creates the relationship in the outer paper transaction. It does not create guardians or reuse unrelated existing dependents. | `BaseService::Result` on the success path |
 | `Applications::MedicalCertificationService` | `app/services/applications/medical_certification_service.rb` | Requests disability certification from a provider. | `BaseService::Result` |
+| `Applications::RequestProviderInfo` | `app/services/applications/request_provider_info.rb` | Canonical writer of provider-info `SecureRequestForm` rows. Issues and resends secure provider-contact links under the issuance-integrity lock, routing each recipient through `Applications::SecureRequestRecipientResolver` (logical recipient, contact/address owner, deliverable channel, delivery-owner eligibility) and delivering via `ApplicationNotificationsMailer`, `SmsService`, or `PrintQueueItem`. | `BaseService::Result` |
+| `Applications::RequestProofResubmission` | `app/services/applications/request_proof_resubmission.rb` | Canonical writer of proof-resubmission `SecureRequestForm` rows. Same resolver-routed issuance under the issuance-integrity lock for rejected/requested proofs. | `BaseService::Result` |
 | `Applications::EventService` | `app/services/applications/event_service.rb` | Logs guardian/dependent application submission and update events. | `Event` or `nil` |
 | `Applications::EventDeduplicationService` | `app/services/applications/event_deduplication_service.rb` | Deduplicates timeline inputs for display. | Array |
 | `DuplicateDetectionService` | `app/services/duplicate_detection_service.rb` | Evaluates exact contact duplicates and soft name+DOB/address signals. Public registration and portal dependent creation call it for their contexts; paper self, guardian quick-create, and dependent writers reach it through `Applications::PaperIdentityReview`, which owns their normalized facts and inline decisions. | `BaseService::Result` with `DuplicateDetectionService::Result` data |
@@ -100,6 +102,11 @@ Related docs:
 - Audit/event tracking: [`docs/features/audit_event_tracking.md`](../features/audit_event_tracking.md)
 - Notifications: [`docs/features/notifications.md`](../features/notifications.md)
 - Document signing: [`docs/development/docuseal_integration_guide.md`](docuseal_integration_guide.md)
+
+Secure-request admin recipient controls share resolver-backed options for provider
+information and all three proof types. `SecureRequestForm#delivery_locale` owns
+message language for persisted delivery ownership; callers keep actor-facing messages
+separate. Issued letter rows do not infer historical addresses from mutable user data.
 
 ### Merge-integrity lock boundary
 

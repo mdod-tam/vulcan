@@ -4,7 +4,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   layout false
   include Rails.application.routes.url_helpers
   include Mailers::ApplicationNotificationsHelper
-  include Mailers::SharedPartialHelpers # Include the shared helpers
+  include Mailers::SharedPartialHelpers
 
   def self.default_url_options
     Rails.application.config.action_mailer.default_url_options
@@ -39,7 +39,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     with_mailer_error_handling("training_requested application=#{application&.id} notification=#{notification&.id}") do
       admin = notification.recipient
       template_name = 'application_notifications_training_requested'
-      # Staff-only template; only English seed content is maintained.
+      # Staff-only seed content is maintained only in English.
       locale        = 'en'
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_training_requested_variables(
@@ -89,13 +89,17 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
-  def proof_rejected(application, proof_review, secure_upload_url: nil, recipient: nil)
+  # The form's channel and encrypted contact snapshot override current recipient preferences.
+  # Email uses the snapshot address. Letters use the resolver-selected letter_recipient.
+  # Without a form, legacy preference routing applies.
+  def proof_rejected(application, proof_review, secure_upload_url: nil, recipient: nil, secure_request_form: nil,
+                     letter_recipient: nil)
     with_mailer_error_handling("proof_rejected application=#{application&.id} proof_review=#{proof_review&.id}") do
       recipient ||= application.user
       remaining_attempts   = 8 - application.total_rejections
       reapply_date         = 3.years.from_now.to_date
       template_name        = 'application_notifications_proof_rejected'
-      locale               = resolve_template_locale(recipient: recipient)
+      locale               = secure_request_locale(secure_request_form, letter_recipient, recipient)
       text_template        = find_text_template(template_name, locale: locale)
       variables            = build_proof_rejected_variables(
         application,
@@ -107,6 +111,22 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         template: text_template,
         locale: locale
       )
+
+      if secure_request_form.present?
+        if secure_request_form.recipient_channel_letter?
+          queue_letter_delivery(
+            recipient: recipient,
+            template_name: template_name,
+            variables: variables.merge(proof_type: proof_review.proof_type),
+            letter_type: proof_rejection_letter_type(proof_review.proof_type),
+            application: application,
+            print_recipient: letter_recipient
+          )
+          return noop_letter_delivery
+        end
+
+        return send_email(secure_request_form.recipient_email, text_template, variables)
+      end
 
       if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
@@ -123,11 +143,13 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
-  def proof_requested(application, proof_type, secure_upload_url: nil, recipient: nil)
+  # Channel/snapshot/address-owner contract is identical to proof_rejected.
+  def proof_requested(application, proof_type, secure_upload_url: nil, recipient: nil, secure_request_form: nil,
+                      letter_recipient: nil)
     with_mailer_error_handling("proof_requested application=#{application&.id} proof_type=#{proof_type}") do
       recipient ||= application.user
       template_name = 'application_notifications_proof_requested'
-      locale = resolve_template_locale(recipient: recipient)
+      locale = secure_request_locale(secure_request_form, letter_recipient, recipient)
       text_template = find_text_template(template_name, locale: locale)
       variables = build_proof_requested_variables(
         application,
@@ -137,6 +159,21 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         template: text_template,
         locale: locale
       )
+
+      if secure_request_form.present?
+        if secure_request_form.recipient_channel_letter?
+          queue_letter_delivery(
+            recipient: recipient,
+            template_name: template_name,
+            variables: variables.merge(proof_type: proof_type),
+            application: application,
+            print_recipient: letter_recipient
+          )
+          return noop_letter_delivery
+        end
+
+        return send_email(secure_request_form.recipient_email, text_template, variables)
+      end
 
       if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
@@ -186,7 +223,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       return handle_no_stale_reviews if stale_reviews.empty? && !Rails.env.test?
 
-      # Staff-only template; only English seed content is maintained.
+      # Staff-only seed content is maintained only in English.
       locale        = 'en'
       text_template = find_text_template('application_notifications_proof_needs_review_reminder', locale: locale)
       variables     = build_review_reminder_variables(admin, stale_reviews, template: text_template, locale: locale)
@@ -319,11 +356,12 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
-  def provider_info_requested(application, secure_request_form, secure_url: nil)
+  # The resolver-selected letter_recipient overrides the legacy dependent-to-guardian address owner.
+  def provider_info_requested(application, secure_request_form, secure_url: nil, letter_recipient: nil)
     with_mailer_error_handling("provider_info_requested application=#{application&.id} secure_request_form=#{secure_request_form&.id}") do
       template_name = 'application_notifications_provider_info_requested'
       recipient = secure_request_form.recipient
-      locale = resolve_template_locale(recipient: recipient)
+      locale = secure_request_locale(secure_request_form, letter_recipient, recipient)
       text_template = find_text_template(template_name, locale: locale)
       variables = build_provider_info_requested_variables(
         application,
@@ -339,7 +377,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
           template_name: template_name,
           variables: variables,
           letter_type: :provider_info_requested,
-          application: application
+          application: application,
+          print_recipient: letter_recipient
         )
         return noop_letter_delivery
       end
@@ -421,7 +460,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   def build_proof_rejected_variables(application, proof_review, remaining_attempts, reapply_date, secure_upload_url, recipient, template:, locale: nil) # rubocop:disable Metrics/ParameterLists
     user                 = application.user
-    proof_type_formatted = format_proof_type(proof_review.proof_type)
+    proof_type_formatted = format_proof_type(proof_review.proof_type, locale: locale)
     recipient ||= user
 
     base_variables = build_base_email_variables(
@@ -456,7 +495,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   def build_proof_requested_variables(application, proof_type, secure_upload_url, recipient, template:, locale: nil)
     user = application.user
-    proof_type_formatted = format_proof_type(proof_type)
+    proof_type_formatted = format_proof_type(proof_type, locale: locale)
     recipient ||= user
 
     base_variables = build_base_email_variables(
@@ -821,7 +860,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                          }).compact
   end
 
-  # Medical certification not provided specific methods
+  # Medical certification not provided
   def build_medical_certification_not_provided_variables(application, template:, locale: nil)
     user = application.user
 
