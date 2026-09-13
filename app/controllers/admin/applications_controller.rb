@@ -61,8 +61,7 @@ module Admin
 
     def show
       load_application_show_associations(@application)
-
-      @proof_histories = load_proof_histories(@application)
+      load_attachment_data
 
       certification_service = Applications::CertificationEventsService.new(@application)
       @certification_events = certification_service.certification_events
@@ -71,7 +70,6 @@ module Admin
       @completed_training_sessions_count = @application.completed_training_sessions_count
       @reserved_training_sessions_count = @application.reserved_training_sessions_count
       @remaining_training_sessions = @application.remaining_training_sessions
-      load_secure_request_recipient_data(@application)
       load_provider_info_request_data(@application)
       @medical_provider_secure_request_forms = @application.medical_provider_secure_request_forms
                                                            .order(created_at: :desc)
@@ -564,9 +562,14 @@ module Admin
 
     private
 
+    def load_attachment_data
+      @proof_histories = load_proof_histories(@application)
+      load_secure_request_recipient_data(@application)
+    end
+
     def prepare_turbo_stream_data
       @application = reload_application_and_associations(@application)
-      @proof_histories = load_proof_histories(@application)
+      load_attachment_data
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_audit_logs
     end

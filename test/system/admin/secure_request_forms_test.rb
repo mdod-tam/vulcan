@@ -347,7 +347,70 @@ module AdminTests
       Current.reset
     end
 
+    test 'Turbo proof rejection allows SMS recovery without reloading' do
+      recipient = build_sms_only_constituent
+      application = create(:application, :in_progress, user: recipient)
+      Rails.root.join('test/fixtures/files/sample.png').open do |proof|
+        application.income_proof.attach(io: proof, filename: 'income.png', content_type: 'image/png')
+      end
+      SmsService.expects(:send_message).with(recipient.phone, anything, sensitive: true, context: anything).once.returns(true)
+
+      system_test_sign_in(@admin)
+      visit_admin_application_with_retry(application, user: @admin)
+      take_full_page_screenshot('proof-turbo-recovery-entry')
+      click_review_proof_and_wait('income')
+      within '#incomeProofReviewModal' do
+        click_button 'Reject'
+      end
+      wait_for_modal_open('proofRejectionModal')
+      within '#proofRejectionModal' do
+        find("button[data-action='click->rejection-form#selectOther']").click
+        fill_in 'Reason for Rejection', with: 'Unreadable document'
+        take_full_page_screenshot('proof-turbo-recovery-rejection-modal')
+        click_button 'Submit'
+      end
+
+      assert_no_selector '#proofRejectionModal[open]'
+      assert_text I18n.t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en)
+      take_full_page_screenshot('proof-turbo-recovery-after-rejection')
+      %w[income residency id].each do |proof_type|
+        assert_selector "#proof_#{proof_type}_recipient_#{recipient.id}:not([disabled])"
+        assert_selector "#proof_#{proof_type}_channel_#{recipient.id} option[value='sms']", visible: :all
+      end
+      assert_predicate application.reload, :income_proof_status_rejected?
+      assert_empty application.secure_request_forms
+
+      within '#proof_income_request_chooser' do
+        check "proof_income_recipient_#{recipient.id}"
+        find("#proof_income_channel_#{recipient.id} option[value='sms']").select_option
+        take_full_page_screenshot('proof-turbo-recovery-sms-ready')
+        click_button 'Send Secure Income Upload Link'
+      end
+      assert_selector "[data-testid='income-proof-secure-request-forms-panel']", text: 'SMS'
+      request = application.secure_request_forms.reload.sole
+      assert_equal recipient.id, request.recipient_id
+      assert_equal recipient.id, request.delivery_owner_id
+      assert_predicate request, :recipient_channel_sms?
+      assert_predicate request, :active?
+      take_full_page_screenshot('proof-turbo-recovery-issued')
+    ensure
+      Current.reset
+    end
+
     private
+
+    def take_full_page_screenshot(name)
+      @screenshot_artifact_label = name
+      increment_unique
+      # rubocop:disable Lint/Debugger
+      page.save_page(html_path)
+      page.save_screenshot(image_path, full: true)
+      # rubocop:enable Lint/Debugger
+      write_screenshot_sidecar(image_path, label: name, html_saved: true)
+      puts screenshot_log_message(image_path)
+    ensure
+      @screenshot_artifact_label = nil
+    end
 
     # Paper context permits no email. Direct updates model an incomplete legacy address.
     def build_sms_only_constituent

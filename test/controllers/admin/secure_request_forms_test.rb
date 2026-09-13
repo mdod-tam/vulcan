@@ -28,6 +28,28 @@ module Admin
       end
     end
 
+    test 'Turbo proof rejection preserves recipient controls in every proof section' do
+      recipient = build_sms_only_constituent
+      application = create(:application, :in_progress, :with_income_proof, user: recipient)
+
+      patch update_proof_status_admin_application_path(application),
+            params: { proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable document' },
+            as: :turbo_stream
+
+      assert_response :success
+      assert_equal 'text/vnd.turbo-stream.html', response.media_type
+      assert_predicate application.reload, :income_proof_status_rejected?
+      assert_empty application.secure_request_forms
+      assert_select "turbo-stream[target='attachments-section'] template" do
+        %w[income residency id].each do |proof_type|
+          assert_select "#proof_#{proof_type}_request_chooser" do
+            assert_select "#proof_#{proof_type}_recipient_#{recipient.id}:not([disabled])"
+            assert_select "#proof_#{proof_type}_channel_#{recipient.id} option[value='sms']"
+          end
+        end
+      end
+    end
+
     test 'provider channel options describe their own destination and stable owner identity' do
       application = create(:application, status: :awaiting_proof, medical_provider_name: nil, medical_provider_phone: nil,
                                          medical_provider_email: nil)
