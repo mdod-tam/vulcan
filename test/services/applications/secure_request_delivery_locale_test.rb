@@ -10,7 +10,8 @@ module Applications
       @actor = create(:admin)
       @generic_guardian = create(:constituent, locale: 'en')
       @owner = create(:constituent, locale: 'es', phone_type: 'text')
-      @dependent = create(:constituent, locale: 'en', dependent_email: @owner.email)
+      @dependent = create(:constituent, locale: 'en', dependent_email: @owner.email,
+                                        dependent_phone: @owner.phone)
       create(:guardian_relationship, guardian_user: @generic_guardian, dependent_user: @dependent, relationship_type: 'Parent')
       create(:guardian_relationship, guardian_user: @owner, dependent_user: @dependent, relationship_type: 'Parent')
       @application = create(:application, :in_progress, user: @dependent, managing_guardian: @owner)
@@ -29,7 +30,7 @@ module Applications
         assert_equal :es, original.delivery_locale
         new_owner = create(:constituent, locale: 'en', phone_type: 'text')
         create(:guardian_relationship, guardian_user: new_owner, dependent_user: @dependent, relationship_type: 'Parent')
-        @dependent.update!(dependent_email: new_owner.email)
+        @dependent.update!(dependent_email: new_owner.email, dependent_phone: new_owner.phone)
         @application.update!(managing_guardian: new_owner)
         SmsService.expects(:send_message).with do |phone, body, **options|
           phone == new_owner.phone && body.start_with?('MAT needs') && options[:sensitive]
