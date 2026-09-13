@@ -46,7 +46,8 @@ module Applications
       dependent = create(
         :constituent,
         email: "dependent.owner.#{SecureRandom.hex(4)}@system.matvulcan.local",
-        dependent_email: guardian.email
+        dependent_email: guardian.email,
+        dependent_phone: guardian.phone
       )
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')

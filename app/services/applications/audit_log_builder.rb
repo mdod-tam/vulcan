@@ -2,11 +2,12 @@
 
 module Applications
   class AuditLogBuilder < BaseService
-    attr_reader :application
+    attr_reader :application, :delivery_owners_by_id
 
     def initialize(application)
       super()
       @application = application
+      @delivery_owners_by_id = {}
     end
 
     # Build combined audit logs from multiple sources, including creation event
@@ -15,6 +16,7 @@ module Applications
 
       # Combine creation event with other events
       events = [build_creation_event] + combined_events
+      preload_delivery_owners(events)
       events.sort_by(&:created_at).reverse
     rescue StandardError => e
       Rails.logger.error "Failed to build audit logs: #{e.message}"
@@ -62,6 +64,13 @@ module Applications
     end
 
     private
+
+    def preload_delivery_owners(events)
+      owner_ids = events.grep(Notification).filter_map do |notification|
+        notification.metadata&.[]('delivery_owner_id')
+      end
+      @delivery_owners_by_id = User.where(id: owner_ids.map(&:to_i).uniq).index_by(&:id)
+    end
 
     # Construct the application creation event
     def build_creation_event

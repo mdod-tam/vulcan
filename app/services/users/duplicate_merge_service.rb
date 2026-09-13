@@ -295,7 +295,7 @@ module Users
       return 'Case is no longer open' unless @duplicate_review_case.open?
       return duplicate_eligibility_error if duplicate_eligibility_error
       return 'The duplicate record has a pending recovery request; resolve it before merging' if duplicate_pending_recovery?
-      return 'The duplicate record is the recipient of an active secure request form; revoke it before merging' if duplicate_active_secure_forms?
+      return 'The duplicate record is a recipient or delivery owner of an active secure request form; revoke it before merging' if duplicate_active_secure_forms?
       return @related_case_reconciler.error unless @related_case_reconciler.valid?
       return application_conflict_message if application_conflict?
       return @guardian_relationship_plan.error unless @guardian_relationship_plan.valid?
@@ -760,7 +760,9 @@ module Users
     end
 
     def duplicate_active_secure_forms?
-      SecureRequestForm.active.exists?(recipient_id: @duplicate_user.id)
+      SecureRequestForm.active.where(recipient_id: @duplicate_user.id)
+                       .or(SecureRequestForm.active.where(delivery_owner_id: @duplicate_user.id))
+                       .exists?
     end
 
     # Derived from the locked inventory (lock_application_inventory!) rather than a fresh

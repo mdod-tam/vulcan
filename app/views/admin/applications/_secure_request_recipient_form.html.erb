@@ -15,12 +15,18 @@
   </div>
 <% elsif recipient_options.present? %>
   <% any_selectable = recipient_options.any? { |option| secure_request_option_selectable?(option) } %>
+  <% initially_ready = recipient_options.any? do |option|
+       secure_request_option_selectable?(option) && option[:candidate].channel.present? &&
+         default_recipient_ids.include?(option[:recipient].id)
+     end %>
   <% request_path = proof_type ? admin_application_proof_resubmission_request_path(application) : admin_application_secure_request_forms_path(application) %>
-  <%= form_with url: request_path, method: :post, local: true, data: { turbo: false }, class: 'mb-6 space-y-4' do |form| %>
+  <%= form_with url: request_path, method: :post, local: true,
+                data: { turbo: false, controller: ('final-submit-gate' if any_selectable) },
+                class: 'mb-6 space-y-4' do |form| %>
     <%# The empty value prevents service defaults when no recipient is selected. %>
     <%= hidden_field_tag 'recipient_ids[]', '', id: nil %>
     <%= hidden_field_tag :proof_type, proof_type, id: "#{purpose}_proof_type" if proof_type %>
-    <fieldset aria-describedby="<%= description_id %>">
+    <fieldset aria-describedby="<%= description_id %>" data-requires-one-checkbox="true">
       <legend class="sr-only"><%= t('admin.applications.secure_request_forms.panel.legend') %></legend>
       <div class="space-y-3">
         <% recipient_options.each do |option| %>
@@ -29,6 +35,7 @@
           <% selectable = secure_request_option_selectable?(option) %>
           <% checkbox_id = "#{purpose}_recipient_#{recipient.id}" %>
           <% channel_id = "#{purpose}_channel_#{recipient.id}" %>
+          <% selected_by_default = selectable && candidate.channel.present? && default_recipient_ids.include?(recipient.id) %>
           <% recipient_label = secure_request_recipient_label(
                recipient,
                application: application,
@@ -38,9 +45,13 @@
           <div class="rounded border border-gray-200 p-3">
             <div class="flex items-start gap-3">
               <%= check_box_tag 'recipient_ids[]', recipient.id,
-                                selectable && candidate.channel.present? && default_recipient_ids.include?(recipient.id),
+                                selected_by_default,
                                 id: checkbox_id, disabled: !selectable,
                                 aria: { describedby: selectable ? nil : "#{checkbox_id}_unavailable" },
+                                data: {
+                                  final_submit_gate_conditional_required_source: channel_id,
+                                  final_submit_gate_required_when_selected: true
+                                },
                                 class: 'mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 disabled:cursor-not-allowed disabled:opacity-50' %>
               <div class="min-w-0 flex-1">
                 <%= label_tag checkbox_id, recipient_label, class: 'block text-sm font-medium text-gray-900' %>
@@ -54,6 +65,9 @@
                                    options_for_select(secure_request_channel_options(candidate), candidate.channel&.to_s),
                                    prompt: candidate.channel.nil? ? t('admin.applications.secure_request_forms.panel.channel_prompt') : nil,
                                    id: channel_id,
+                                   required: selected_by_default,
+                                   aria: { required: selected_by_default },
+                                   data: { final_submit_gate_conditional_required: channel_id },
                                    class: 'mt-1 block w-full rounded-md border-gray-300 text-sm focus:border-indigo-600 focus:ring-indigo-600' %>
                   </div>
                 <% else %>
@@ -68,9 +82,16 @@
     <% unless any_selectable %>
       <p class="text-sm text-gray-600" id="<%= purpose %>_submit_blocker"><%= t('admin.applications.secure_request_forms.panel.submit_blocked') %></p>
     <% end %>
+    <% if any_selectable %>
+      <p class="text-sm text-gray-600" id="<%= purpose %>_selection_help"><%= t('admin.applications.secure_request_forms.panel.selection_help') %></p>
+    <% end %>
     <%= form.submit proof_type ? secure_proof_resubmission_button_text(proof_type) : t('admin.applications.secure_request_forms.panel.submit'),
-                    disabled: !any_selectable,
-                    aria: { disabled: !any_selectable, describedby: any_selectable ? nil : "#{purpose}_submit_blocker" },
+                    disabled: !initially_ready,
+                    aria: {
+                      disabled: !initially_ready,
+                      describedby: any_selectable ? "#{purpose}_selection_help" : "#{purpose}_submit_blocker"
+                    },
+                    data: { final_submit_gate_target: 'submitButton' },
                     class: 'inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white ' \
                            'hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ' \
                            'disabled:cursor-not-allowed disabled:opacity-50' %>

@@ -170,8 +170,8 @@ module Applications
       assert_not_equal other_guardian.email, dependent_candidate.email
     end
 
-    test 'explicit sms override fails strictly when the selected phone is synthetic' do
-      guardian = create(:constituent, phone: '410-555-0100')
+    test 'explicit sms override uses the independently selected guardian phone type' do
+      guardian = create(:constituent, phone: '410-555-0100', phone_type: 'voice')
       dependent_email = "dependent.sms.#{SecureRandom.hex(3)}@example.com"
       dependent = create(
         :constituent,
@@ -191,7 +191,8 @@ module Applications
                   .first
 
       assert_equal dependent, candidate.recipient
-      assert_nil candidate.phone
+      assert_equal guardian.phone, candidate.phone
+      assert_equal guardian, candidate.phone_owner
       assert_nil candidate.channel
       assert_equal :invalid_channel_override, candidate.failure_reason
       assert_not candidate.success?
@@ -300,6 +301,21 @@ module Applications
       assert_equal 'parent', candidate.recipient_relationship_type
     end
 
+    test 'labels the application manager as a guardian without a relationship row' do
+      dependent = create(:constituent)
+      guardian = create(:constituent)
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      candidate = SecureRequestRecipientResolver
+                  .new(application: application, recipient_ids: [guardian.id])
+                  .resolve
+                  .first
+
+      assert_equal :guardian, candidate.recipient_role
+      assert_nil candidate.recipient_relationship_type
+      assert_equal :managing_guardian, candidate.delivery_source
+    end
+
     test 'records contact owner and source for a guardian-routed dependent' do
       guardian = create(:constituent, email: "guardian.owner.#{SecureRandom.hex(3)}@example.com",
                                       phone: '410-555-0160', phone_type: 'text')
@@ -355,6 +371,46 @@ module Applications
       assert_equal '410-555-0161', candidate.phone
       assert_equal 'text', candidate.phone_type
       assert_includes candidate.available_channels, :sms
+    end
+
+    test 'selects dependent phone independently from guardian-owned email' do
+      guardian = create(:constituent, email: "guardian.mixed.#{SecureRandom.hex(3)}@example.com")
+      dependent_phone = "555-#{rand(200..899)}-#{rand(1000..9999)}"
+      dependent = create(:constituent,
+                         email: "dependent.mixed.#{SecureRandom.hex(3)}@system.matvulcan.local",
+                         dependent_email: guardian.email,
+                         phone: dependent_phone, dependent_phone: dependent_phone, phone_type: 'text')
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      candidate = SecureRequestRecipientResolver
+                  .new(application:, recipient_ids: [dependent.id],
+                       channel_overrides: { dependent.id => 'sms' })
+                  .resolve.first
+
+      assert_equal guardian, candidate.email_owner
+      assert_equal dependent, candidate.phone_owner
+      assert_equal dependent_phone, candidate.phone
+      assert_equal :sms, candidate.channel
+    end
+
+    test 'selects guardian phone independently from dependent-owned email' do
+      guardian = create(:constituent, phone: '410-555-0181', phone_type: 'text')
+      dependent_email = "dependent.mixed.#{SecureRandom.hex(3)}@example.com"
+      dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email,
+                                       phone: '000-123-4567', dependent_phone: guardian.phone)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      candidate = SecureRequestRecipientResolver
+                  .new(application:, recipient_ids: [dependent.id],
+                       channel_overrides: { dependent.id => 'sms' })
+                  .resolve.first
+
+      assert_equal dependent, candidate.email_owner
+      assert_equal guardian, candidate.phone_owner
+      assert_equal guardian.phone, candidate.phone
+      assert_equal :sms, candidate.channel
     end
 
     test 'records guardian relationship provenance for an explicitly selected guardian' do
@@ -578,6 +634,22 @@ module Applications
       assert_equal guardian, candidate.recipient
       assert_equal :letter, candidate.channel
       assert_equal guardian, candidate.address_owner
+    end
+
+    test 'dependent letter delivery uses a complete dependent-owned address' do
+      guardian = create(:constituent, physical_address_1: nil, city: nil, state: nil, zip_code: nil)
+      dependent = create(:constituent, physical_address_1: '12 Dependent St', city: 'Baltimore',
+                                       state: 'MD', zip_code: '21201')
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: guardian)
+
+      candidate = SecureRequestRecipientResolver
+                  .new(application:, recipient_ids: [dependent.id],
+                       channel_overrides: { dependent.id => 'letter' })
+                  .resolve.first
+
+      assert_equal dependent, candidate.address_owner
+      assert_equal :letter, candidate.channel
     end
 
     test 'letter route requires the address owner to have a complete address' do
@@ -817,10 +889,10 @@ module Applications
                   .first
 
       assert_equal guardian, candidate.delivery_owner_for(:email)
-      assert_equal guardian, candidate.delivery_owner_for(:sms)
+      assert_equal dependent, candidate.delivery_owner_for(:sms)
       assert_equal guardian, candidate.delivery_owner_for(:letter)
       assert_equal guardian, candidate.email_owner
-      assert_equal guardian, candidate.phone_owner
+      assert_equal dependent, candidate.phone_owner
       assert_equal guardian, candidate.address_owner
     end
   end

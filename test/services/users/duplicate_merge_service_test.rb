@@ -162,6 +162,18 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
+    test 'blocks merge when the duplicate owns delivery for an active secure request form' do
+      dependent = create(:constituent)
+      application = create(:application, user: dependent, managing_guardian: @duplicate)
+      create(:secure_request_form, application:, recipient: dependent, delivery_owner: @duplicate,
+                                   delivery_source: 'managing_guardian')
+
+      result = merge
+
+      assert result.failure?
+      assert_not @duplicate.reload.merged?
+    end
+
     test 'blocks merge that would create conflicting active applications' do
       create(:application, user: @canonical, status: :in_progress)
       create(:application, user: @duplicate, status: :in_progress)

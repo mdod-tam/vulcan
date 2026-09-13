@@ -169,14 +169,14 @@ module SecureRequestFormsHelper
     "•••-•••-#{digits.last(4)}"
   end
 
-  def secure_request_notification_detail(notification, application:)
+  def secure_request_notification_detail(notification, application:, delivery_owners_by_id:)
     metadata = notification.metadata.is_a?(Hash) ? notification.metadata.stringify_keys : {}
 
     case notification.action
     when 'provider_info_requested'
-      secure_provider_info_notification_detail(notification, metadata)
+      secure_provider_info_notification_detail(notification, metadata, delivery_owners_by_id:)
     when 'proof_resubmission_requested'
-      secure_proof_resubmission_notification_detail(notification, metadata)
+      secure_proof_resubmission_notification_detail(notification, metadata, delivery_owners_by_id:)
     when 'cert_upload_requested'
       secure_cert_upload_notification_detail(metadata, application)
     end
@@ -230,32 +230,32 @@ module SecureRequestFormsHelper
     ''
   end
 
-  def secure_provider_info_notification_detail(notification, metadata)
+  def secure_provider_info_notification_detail(notification, metadata, delivery_owners_by_id:)
     recipient_name = notification.recipient&.full_name || 'Unknown recipient'
     channel = secure_request_recipient_channel_label(metadata)
     expires_text = secure_request_notification_expires_text(metadata)
-    owner_text = secure_request_delivery_owner_text(notification, metadata)
+    owner_text = secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
 
     "Secure provider information request sent to #{recipient_name} via #{channel}#{owner_text}#{expires_text}"
   end
 
-  def secure_proof_resubmission_notification_detail(notification, metadata)
+  def secure_proof_resubmission_notification_detail(notification, metadata, delivery_owners_by_id:)
     recipient_name = notification.recipient&.full_name || 'Unknown recipient'
     channel = secure_request_recipient_channel_label(metadata)
     proof_type = metadata['proof_type']
     expires_text = secure_request_notification_expires_text(metadata)
-    owner_text = secure_request_delivery_owner_text(notification, metadata)
+    owner_text = secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
     request_context = secure_proof_resubmission_request_context(notification, metadata, proof_type)
 
     "#{request_context}; secure upload link sent to #{recipient_name} via #{channel}#{owner_text}#{expires_text}"
   end
 
   # Name the actual owner so the audit does not imply use of the logical recipient's contact.
-  def secure_request_delivery_owner_text(notification, metadata)
+  def secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
     owner_id = metadata['delivery_owner_id']
     return '' if owner_id.blank? || owner_id.to_i == notification.recipient_id
 
-    owner = User.find_by(id: owner_id)
+    owner = delivery_owners_by_id.to_h[owner_id.to_i]
     return '' if owner.nil?
 
     " (delivered to #{secure_request_delivery_owner_label(owner, delivery_source: metadata['delivery_source'])})"

@@ -113,7 +113,8 @@ consult the resolver only for the internal tracking-notification recipient.
   not be displayed as historical destinations. Chooser options describe current routes.
 * **SMS capability.** SMS is only ever an explicit selection, never a default. It
   requires the selected contact owner's real phone with `phone_type` of `text`; voice,
-  videophone, synthetic, or malformed phones fail server-side.
+  videophone, synthetic, or malformed phones fail server-side. Phone ownership is
+  resolved independently from email ownership.
 * **Delivery-owner eligibility.** The selected channel's delivery owner — contact owner
   for email/SMS, address owner for letters — must satisfy the same delivery-eligibility
   rule as the logical recipient. An active dependent's request never routes through a
@@ -121,9 +122,9 @@ consult the resolver only for the internal tracking-notification recipient.
 * **Address-only letters.** A constituent with a complete mailing address and no real
   digital contact still resolves to postal letter when the action permits it; blank
   email/phone does not block the request. Letter content is printed to the
-  resolver-selected address owner (for dependents, the contact/managing guardian
-  household), and template selection plus translated instructions share that address
-  owner's locale.
+  resolver-selected address owner. A dependent's complete address is used when the
+  managing guardian has no complete mailing address; otherwise the guardian remains the
+  address owner. Template selection and translated instructions use that owner's locale.
 * **Resend revalidation.** Resending an issued link revalidates the stored channel
   against the recipient's *current* contact information. A channel that is no longer
   deliverable fails closed (the original form stays untouched); a successful resend

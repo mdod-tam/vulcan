@@ -572,6 +572,7 @@ module Admin
       load_attachment_data
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_audit_logs
+      @secure_request_delivery_owners_by_id = audit_log_builder.delivery_owners_by_id
     end
 
     def load_notifications
@@ -641,6 +642,7 @@ module Admin
 
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_deduplicated_audit_logs
+      @secure_request_delivery_owners_by_id = audit_log_builder.delivery_owners_by_id
     end
 
     def sort_column

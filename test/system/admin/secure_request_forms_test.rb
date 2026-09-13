@@ -73,11 +73,17 @@ module AdminTests
       select_selector = "#provider_info_channel_#{user.id}"
       assert_selector "#{select_selector} option[value='sms']"
       assert_no_selector "#{select_selector} option[value='sms'][selected]"
+      assert_button I18n.t('admin.applications.secure_request_forms.panel.submit'), disabled: true
+      assert_text I18n.t('admin.applications.secure_request_forms.panel.selection_help')
 
       take_screenshot('secure-request-panel-sms-only-prompt', html: true)
 
       check "provider_info_recipient_#{user.id}"
+      assert_selector "#{select_selector}:not([disabled])[required]"
+      assert_button I18n.t('admin.applications.secure_request_forms.panel.submit'), disabled: true
+
       find("#provider_info_channel_#{user.id} option[value='sms']").select_option
+      assert_button I18n.t('admin.applications.secure_request_forms.panel.submit'), disabled: false
       click_button I18n.t('admin.applications.secure_request_forms.panel.submit')
 
       assert_text I18n.t('admin.applications.secure_request_forms.create.success'), wait: 15

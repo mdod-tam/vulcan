@@ -85,7 +85,8 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       }
     )
 
-    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata)
+    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
+                  delivery_owners_by_id: {})
 
     assert_includes detail, 'ID proof rejected - Too blurry; secure upload link sent to'
     assert_includes detail, 'via Email'
@@ -114,7 +115,8 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       }
     )
 
-    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata)
+    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
+                  delivery_owners_by_id: {})
 
     assert_includes detail, 'ID proof requested; secure upload link sent to'
     assert_not_includes detail, 'Old blurry document'

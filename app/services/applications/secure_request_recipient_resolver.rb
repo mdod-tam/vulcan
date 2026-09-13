@@ -173,7 +173,11 @@ module Applications
 
     def candidate_for(recipient)
       relationship = relationship_for(recipient)
-      role = relationship.present? ? :guardian : :constituent
+      role = if relationship.present? || recipient.id == application.managing_guardian_id
+               :guardian
+             else
+               :constituent
+             end
       email, email_owner, email_source = email_selection_for(recipient, role)
       phone, phone_owner, phone_source = phone_selection_for(recipient, role)
       phone_type = phone_owner&.phone_type
@@ -212,7 +216,7 @@ module Applications
     # Selections return [value, owning-record, symbolic-source]. Sources come from CONTACT_SOURCES.
     # Shared predicates exclude synthetic contact values.
     def email_selection_for(recipient, role)
-      return own_contact_selection(recipient, recipient.email, :email, :guardian_relationship) if role == :guardian
+      return own_contact_selection(recipient, recipient.email, :email, guardian_source_for(recipient)) if role == :guardian
 
       if dependent_recipient?(recipient)
         if application_contact_guardian.present?
@@ -228,16 +232,20 @@ module Applications
     end
 
     def phone_selection_for(recipient, role)
-      return own_contact_selection(recipient, recipient.phone, :phone, :guardian_relationship) if role == :guardian
+      return own_contact_selection(recipient, recipient.phone, :phone, guardian_source_for(recipient)) if role == :guardian
 
       if dependent_recipient?(recipient)
-        if application_contact_guardian.present?
-          return own_contact_selection(application_contact_guardian, application_contact_guardian.phone, :phone,
+        guardian = application.managing_guardian
+        dependent_phone = recipient.paper_intake_own_phone(guardian:)
+        if dependent_phone.blank? && guardian.present?
+          return own_contact_selection(guardian, guardian.phone, :phone,
                                        :managing_guardian)
         end
 
-        dependent_phone = recipient.dependent_phone.to_s.strip.presence
-        return own_contact_selection(recipient, dependent_phone, :phone, :dependent_contact) if dependent_phone.present? && !guardian_phone?(dependent_phone)
+        if dependent_phone.present? && !guardian_phone?(dependent_phone)
+          source = normalized_phone(dependent_phone) == normalized_phone(recipient.dependent_phone) ? :dependent_contact : :constituent
+          return own_contact_selection(recipient, dependent_phone, :phone, source)
+        end
       end
 
       own_contact_selection(recipient, recipient.phone, :phone, :constituent)
@@ -261,12 +269,16 @@ module Applications
       value if User.new(phone: value).real_phone?
     end
 
-    # The resolver owns household selection. The mailer must not select another address owner.
+    # Legacy rows do not persist address strategy; use the dependent only when the
+    # managing guardian has no usable mailing address.
     def address_owner_for(recipient, role)
       return recipient if role == :guardian
       return recipient unless dependent_recipient?(recipient)
 
-      application_contact_guardian || application.managing_guardian || guardian_users.first || recipient
+      guardian = application.managing_guardian
+      return recipient if complete_mailing_address?(recipient) && !complete_mailing_address?(guardian)
+
+      guardian || recipient
     end
 
     def available_channels_for(email:, phone:, phone_type:, address_owner:)
@@ -334,7 +346,7 @@ module Applications
     def delivery_source_for(recipient, role, address_owner, channel, email_source, phone_source)
       case channel&.to_sym
       when :letter
-        return :guardian_relationship if role == :guardian
+        return guardian_source_for(recipient) if role == :guardian
         return :constituent if address_owner.nil? || address_owner.id == recipient.id
         return :managing_guardian if address_owner.id == application.managing_guardian_id
 
@@ -356,6 +368,10 @@ module Applications
 
     def relationship_by_guardian_id
       @relationship_by_guardian_id ||= guardian_relationships.index_by(&:guardian_id)
+    end
+
+    def guardian_source_for(recipient)
+      relationship_for(recipient).present? ? :guardian_relationship : :managing_guardian
     end
 
     def locale_for(recipient, contact_owner)

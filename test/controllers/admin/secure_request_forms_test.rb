@@ -879,6 +879,8 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
+      assert_select "form[data-controller='final-submit-gate']"
+      assert_select "fieldset[data-requires-one-checkbox='true']"
       assert_select "input[name='recipient_ids[]'][value='#{user.id}']:not([disabled])"
       assert_select "input[name='recipient_ids[]'][value='#{user.id}'][checked]", count: 0
       # Native required validation would block other selected recipients.
@@ -892,6 +894,8 @@ module Admin
         assert_select "option[value='letter']", count: 0
       end
       assert_select "select[name='channel_overrides[#{user.id}]'][required]", count: 0
+      assert_select "input[type='submit'][disabled][data-final-submit-gate-target='submitButton']"
+      assert_includes response.body, I18n.t('admin.applications.secure_request_forms.panel.selection_help')
       assert_not_includes response.body, I18n.t('admin.applications.secure_request_forms.panel.no_route')
     end
 
@@ -1017,6 +1021,8 @@ module Admin
         assert_equal 'Destinatarios', I18n.t('admin.applications.secure_request_forms.panel.legend')
         assert_match(/^Ningún destinatario/,
                      I18n.t('admin.applications.secure_request_forms.panel.submit_blocked'))
+        assert_match(/^Seleccione al menos un destinatario/,
+                     I18n.t('admin.applications.secure_request_forms.panel.selection_help'))
         assert_equal 'Solicitante', I18n.t('admin.applications.secure_request_forms.roles.applicant')
         assert_equal 'Tutor', I18n.t('admin.applications.secure_request_forms.roles.guardian')
         assert_equal 'Se entrega a a***@example.com',

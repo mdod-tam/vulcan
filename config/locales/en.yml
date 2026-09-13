@@ -590,6 +590,7 @@ en:
           destination: "Delivers to %{destination}"
           destination_via: "Delivers to %{owner} — %{destination}"
           submit: "Send secure request"
+          selection_help: "Choose at least one recipient, then choose a delivery channel for each selected recipient."
           submit_blocked: "No recipient can currently receive a secure request, so this form cannot be submitted. Resolve the issues listed above first."
           no_recipients: "No eligible recipients are available for this request."
         managing_guardian:

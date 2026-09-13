@@ -307,6 +307,7 @@ es:
           destination: "Se entrega a %{destination}"
           destination_via: "Se entrega a %{owner} — %{destination}"
           submit: "Enviar solicitud segura"
+          selection_help: "Seleccione al menos un destinatario y luego un canal de entrega para cada destinatario seleccionado."
           submit_blocked: "Ningún destinatario puede recibir una solicitud segura actualmente, por lo que este formulario no se puede enviar. Resuelva primero los problemas indicados arriba."
           no_recipients: "No hay destinatarios elegibles disponibles para esta solicitud."
         managing_guardian:
