@@ -2,8 +2,6 @@
 
 module Applications
   class SubmitProofResubmission < BaseService
-    include SecureFormLocaleResolver
-
     MESSAGE_SCOPE = 'applications.proof_resubmission.messages'
     KIND_TO_PROOF_TYPE = {
       'id_proof_resubmission' => :id,
@@ -126,14 +124,16 @@ module Applications
     end
 
     def log_submission
-      AuditEventService.log(
+      PublicAuditActor.log_audit(
         action: 'proof_submitted_via_secure_form',
-        actor: secure_request_form.recipient,
         auditable: application,
         metadata: {
           secure_request_form_id: secure_request_form.id,
           recipient_user_id: secure_request_form.recipient_id,
           recipient_role: secure_request_form.recipient_role,
+          delivery_owner_id: secure_request_form.delivery_owner_id,
+          delivery_source: secure_request_form.delivery_source,
+          recipient_channel: secure_request_form.recipient_channel,
           request_batch_id: secure_request_form.request_batch_id,
           proof_type: proof_type.to_s
         }
@@ -141,7 +141,7 @@ module Applications
     end
 
     def message(key, **)
-      I18n.t("#{MESSAGE_SCOPE}.#{key}", **, locale: secure_form_locale_for(secure_request_form.recipient))
+      I18n.t("#{MESSAGE_SCOPE}.#{key}", **, locale: secure_request_form.delivery_locale)
     end
 
     def validation_message(error)

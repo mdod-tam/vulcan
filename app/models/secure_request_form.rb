@@ -3,6 +3,8 @@
 class SecureRequestForm < ApplicationRecord
   include SecureTokenizable
 
+  DELIVERY_SOURCES = %w[constituent dependent_contact managing_guardian guardian_relationship].freeze
+
   encrypts :recipient_email, deterministic: true
   encrypts :recipient_phone, deterministic: true
 
@@ -31,9 +33,11 @@ class SecureRequestForm < ApplicationRecord
   enum :recipient_role, { constituent: 0, guardian: 1 }, prefix: true
 
   validates :request_batch_id, presence: true
+  validates :delivery_owner, :delivery_source, presence: true, on: :create
   validates :delivery_source,
-            inclusion: { in: Applications::SecureRequestRecipientResolver::CONTACT_SOURCES.map(&:to_s) },
+            inclusion: { in: DELIVERY_SOURCES },
             allow_nil: true
+  validate :delivery_provenance_is_complete
   validates :recipient_channel, presence: true
   validates :recipient_role, presence: true
   validates :public_token_digest, presence: true, uniqueness: true
@@ -52,6 +56,9 @@ class SecureRequestForm < ApplicationRecord
   scope :residency_proof, -> { where(kind: kinds[:residency_proof_resubmission]) }
   scope :income_proof, -> { where(kind: kinds[:income_proof_resubmission]) }
   scope :active, -> { status_sent.where(submitted_at: nil, revoked_at: nil).where(arel_table[:expires_at].gt(Time.current)) }
+  scope :with_incomplete_delivery_provenance, lambda {
+    where(delivery_owner_id: nil).or(where(delivery_source: nil))
+  }
   # Timestamp checks are defensive against status/timestamp drift (see revoked?/submitted?).
   scope :open_provider_info_for_recipient, lambda { |application_id:, recipient_id:|
     provider_info.status_sent.where(application_id: application_id, recipient_id: recipient_id)
@@ -69,4 +76,16 @@ class SecureRequestForm < ApplicationRecord
     income_proof.status_sent.where(application_id: application_id, recipient_id: recipient_id)
                 .where(submitted_at: nil, revoked_at: nil)
   }
+
+  def delivery_provenance?
+    delivery_owner_id.present? && delivery_source.present?
+  end
+
+  private
+
+  def delivery_provenance_is_complete
+    return if delivery_owner_id.present? == delivery_source.present?
+
+    errors.add(:base, 'Delivery owner and delivery source must both be present or both be absent')
+  end
 end

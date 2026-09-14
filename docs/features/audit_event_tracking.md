@@ -100,7 +100,7 @@ This is display behavior only. It does not delete records and should not be used
 | Application lifecycle | `application_created`, `application_updated`, `application_status_changed` | Status changes should go through `Application#transition_status!`. |
 | Proof attachment | `<proof_type>_proof_attached`, `<proof_type>_proof_submitted`, `<proof_type>_proof_attachment_failed`, `proof_submitted` | Attachment services and intake flows own these. |
 | Proof review | `proof_approved`, `proof_rejected` | `ProofReview` owns approval/rejection audit events. |
-| Proof secure requests | `proof_resubmission_requested`, `proof_submitted_via_secure_form`, request revoked/expired events | Secure request services own these. |
+| Proof secure requests | `proof_resubmission_requested`, `proof_submitted_via_secure_form`, request revoked/expired events | Secure request services own these. Bearer submissions use the configured public/system actor, not the logical recipient. |
 | Disability certification | `medical_certification_requested`, `medical_certification_received`, approved/rejected/status events, secure upload and DocuSeal events | Code names still use `medical_certification_*`; user-facing prose should say disability certification. |
 | Duplicate review | `duplicate_review_case_opened`, `duplicate_review_case_resolved`, `duplicate_review_case_pair_repointed`, `duplicate_review_case_superseded`, `duplicate_user_merged`, `duplicate_review_flag_cleared` | `DuplicateReviewCases::CreateService` owns case-opened rows, including admin-initiated exact `post_import_reconciliation` pairs; `DuplicateReviewCases::ResolutionService` owns non-merge resolutions and records the server-owned determination without a `resolution_action` key; merge-time related-case reconciliation records bounded old/new pair IDs when an untouched open post-import pair follows the survivor, or case IDs when obsolete work is superseded; `Users::DuplicateMergeService` emits exactly one `duplicate_user_merged` per merge; `DuplicateReviewCases::ClearFlagService` logs only genuine case-less/pair-less legacy clears. Population reporting and flag synchronization emit no audit events. |
 | Paper follow-up failure | `application_post_creation_step_failed` | `Applications::PaperApplicationService` writes one per follow-up step that failed *after* the application committed. The `step` values are `the creation audit event`, `notifications`, `proof delivery checks`, `the certifying provider request`, and `a post-commit callback` -- the last covering a callback that raised once the data was already durable, which is deliberately not retried because it may have completed some of its side effects. Metadata carries `step`, `error_class`, and `submission_method`. Fingerprinted by step, so two different failures on one application are two events rather than one deduplicated record. Shown on the application timeline. Best effort: a failure to write this event is logged and must never turn a committed application into an error. |
@@ -169,6 +169,12 @@ Good metadata usually answers:
 - which secure request or batch was involved
 - what status changed from and to
 - whether a background delivery failed and why
+
+Bearer provider-information and proof submissions are not authenticated user actions:
+possession of the link does not prove who submitted it. Their audit actor is therefore
+`PublicAuditActor`'s configured system user. Metadata identifies the represented logical
+recipient and role, delivery owner and source, channel, request batch, and secure form.
+It must not include the raw bearer token or unredacted contact values.
 
 Avoid storing sensitive data unless there is a specific operational reason and retention is acceptable.
 

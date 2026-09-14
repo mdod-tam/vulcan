@@ -932,12 +932,19 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
   end
 
-  test 'proof_requested with an email secure request form sends to the snapshot address despite letter preference' do
+  test 'proof_requested email uses the delivery owner locale and snapshot address' do
     @user.update!(communication_preference: 'letter')
+    owner = create(:constituent, locale: 'es')
+    proof_template = mock_template('Solicitud de documento', 'Texto de solicitud')
+    EmailTemplate.expects(:find_by!).with(
+      name: 'application_notifications_proof_requested', format: :text, locale: 'es'
+    ).returns(proof_template)
     snapshot_email = "snapshot.#{SecureRandom.hex(3)}@example.com"
     form = create(:secure_request_form,
                   application: @application,
                   recipient: @user,
+                  delivery_owner: owner,
+                  delivery_source: 'managing_guardian',
                   kind: :id_proof_resubmission,
                   recipient_channel: :email,
                   recipient_email: snapshot_email)
@@ -990,6 +997,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :id_proof_resubmission,
                   recipient_channel: :letter,
                   recipient_email: nil,
@@ -1018,6 +1027,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :income_proof_resubmission,
                   recipient_channel: :letter,
                   recipient_email: nil,
@@ -1050,6 +1061,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :provider_info_request,
                   recipient_channel: :letter,
                   recipient_email: nil,
@@ -1070,16 +1083,19 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_no_emails { delivery.deliver_now }
   end
 
-  test 'provider_info_requested email goes to the encrypted snapshot address' do
+  test 'provider_info_requested email uses the delivery owner locale and encrypted snapshot address' do
     provider_info_template = mock_template('Mock Provider Info Requested',
                                            'Text Body: provider info requested for %<user_first_name>s.')
+    owner = create(:constituent, locale: 'es')
     EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_provider_info_requested', format: :text, locale: 'en'
+      name: 'application_notifications_provider_info_requested', format: :text, locale: 'es'
     ).returns(provider_info_template)
     snapshot_email = "snapshot.#{SecureRandom.hex(3)}@example.com"
     form = create(:secure_request_form,
                   application: @application,
                   recipient: @user,
+                  delivery_owner: owner,
+                  delivery_source: 'managing_guardian',
                   kind: :provider_info_request,
                   recipient_channel: :email,
                   recipient_email: snapshot_email)
@@ -1108,6 +1124,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :provider_info_request,
                   recipient_channel: :letter,
                   recipient_email: nil,
@@ -1140,6 +1158,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :provider_info_request,
                   recipient_channel: :letter,
                   recipient_email: nil,
@@ -1167,6 +1187,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :id_proof_resubmission,
                   recipient_channel: :letter,
                   recipient_email: nil,
@@ -1208,6 +1230,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :provider_info_request,
                   recipient_channel: :letter,
                   recipient_email: nil,
@@ -1250,6 +1274,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
                   kind: :provider_info_request,
                   recipient_channel: :letter,
                   recipient_email: nil,

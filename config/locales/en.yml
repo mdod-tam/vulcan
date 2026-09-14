@@ -219,7 +219,7 @@ en:
         already_submitted: "This secure form has already been submitted."
         revoked: "This secure link is no longer active."
         expired: "This secure link has expired."
-        resent: "If this request can be resent, a new secure link will be sent to the original recipient."
+        resent: "If this request can be resent, a new secure link will be sent using the current eligible contact information on file."
         invalid_request: "This secure link is no longer available."
         medical_provider_name_blank: "Enter the certifying professional's name."
         medical_provider_phone_blank: "Enter the certifying professional's phone number."
@@ -248,7 +248,7 @@ en:
         already_submitted: "This secure form has already been submitted."
         revoked: "This secure link is no longer active."
         expired: "This secure link has expired."
-        resent: "If this request can be resent, a new secure link will be sent to the original recipient."
+        resent: "If this request can be resent, a new secure link will be sent using the current eligible contact information on file."
         invalid_request: "This secure link is no longer available."
         file_blank: "Choose a proof document to upload."
         file_type_invalid: "Upload a PDF, JPEG, PNG, or HEIC/HEIF file."
@@ -613,6 +613,9 @@ en:
           no_actions: "No actions"
           empty: "No secure provider information requests have been sent."
           originally_delivered_to: "Originally delivered to %{owner}. Resending re-checks the current contact information."
+          delivery_ownership_unknown: "Historical delivery ownership is unknown."
+        delivery_owner:
+          source_unknown: "%{owner} (delivery source unknown)"
         summary:
           label: "Provider info requested"
           last_sent: "Sent %{time}"
@@ -898,13 +901,13 @@ en:
     new:
       title: "Request New Secure Link"
       heading: "This secure link has expired"
-      body: "You can request a new secure link. For privacy, it will only be sent to the original recipient."
+      body: "You can request a new secure link. For privacy, it will only be sent using the current eligible contact information on file."
       submit: "Request New Secure Link"
       submitting: "Requesting…"
     create:
       title: "Request Received"
       heading: "Request received"
-      body: "If this request can be resent, a new secure link will be sent to the original recipient."
+      body: "If this request can be resent, a new secure link will be sent using the current eligible contact information on file."
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
@@ -947,13 +950,13 @@ en:
     new:
       title: "Request New Secure Link"
       heading: "This secure link has expired"
-      body: "You can request a new secure link. For privacy, it will only be sent to the original recipient."
+      body: "You can request a new secure link. For privacy, it will only be sent using the current eligible contact information on file."
       submit: "Request New Secure Link"
       submitting: "Requesting..."
     create:
       title: "Request Received"
       heading: "Request received"
-      body: "If this request can be resent, a new secure link will be sent to the original recipient."
+      body: "If this request can be resent, a new secure link will be sent using the current eligible contact information on file."
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"

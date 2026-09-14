@@ -138,6 +138,7 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
                                      state: 'MD', zip_code: '20715')
     form = create(:secure_request_form, recipient: recipient, recipient_channel: :letter,
                                         recipient_email: nil, recipient_phone: nil)
+    form.update_columns(delivery_owner_id: nil, delivery_source: nil)
 
     assert_equal 'Postal mail', secure_request_masked_contact(form)
 
@@ -148,10 +149,17 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
   test 'delivery owner label qualifies guardians and leaves other sources unqualified' do
     owner = create(:constituent, first_name: 'Jane', last_name: 'Smith')
 
-    assert_equal "Jane Smith (Guardian) (ID: #{owner.id})", secure_request_delivery_owner_label(owner)
+    assert_equal "Jane Smith (ID: #{owner.id}) (delivery source unknown)", secure_request_delivery_owner_label(owner)
     assert_equal "Jane Smith (Guardian) (ID: #{owner.id})",
                  secure_request_delivery_owner_label(owner, delivery_source: 'managing_guardian')
     assert_equal "Jane Smith (ID: #{owner.id})", secure_request_delivery_owner_label(owner, delivery_source: 'constituent')
+  end
+
+  test 'historical rows render delivery ownership as unknown' do
+    form = create(:secure_request_form)
+    form.update_columns(delivery_owner_id: nil, delivery_source: nil)
+
+    assert_equal 'Historical delivery ownership is unknown.', secure_request_original_delivery_owner_text(form.reload)
   end
 
   test 'candidate destination text masks the resolved digital destination' do
@@ -161,8 +169,7 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       available_channels: %i[email],
       channel: :email,
       email: recipient.email,
-      email_owner: recipient,
-      contact_owner: recipient
+      email_owner: recipient
     )
     candidate.define_singleton_method(:deliverable_channels) { %i[email] }
 
@@ -178,8 +185,7 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       available_channels: %i[email],
       channel: :email,
       email: guardian.email,
-      email_owner: guardian,
-      contact_owner: guardian
+      email_owner: guardian
     )
     candidate.define_singleton_method(:deliverable_channels) { %i[email] }
 

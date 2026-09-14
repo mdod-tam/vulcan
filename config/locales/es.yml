@@ -201,7 +201,7 @@ es:
         already_submitted: "Este formulario seguro ya fue enviado."
         revoked: "Este enlace seguro ya no está activo."
         expired: "Este enlace seguro ha vencido."
-        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
         invalid_request: "Este enlace seguro ya no está disponible."
         medical_provider_name_blank: "Ingrese el nombre del profesional certificador."
         medical_provider_phone_blank: "Ingrese el número de teléfono del profesional certificador."
@@ -230,7 +230,7 @@ es:
         already_submitted: "Este formulario seguro ya fue enviado."
         revoked: "Este enlace seguro ya no está activo."
         expired: "Este enlace seguro ha vencido."
-        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
         invalid_request: "Este enlace seguro ya no está disponible."
         file_blank: "Seleccione un documento para subir."
         file_type_invalid: "Suba un archivo PDF, JPEG, PNG o HEIC/HEIF."
@@ -330,6 +330,9 @@ es:
           no_actions: "Sin acciones"
           empty: "No se han enviado solicitudes seguras de información del proveedor."
           originally_delivered_to: "Entregado originalmente a %{owner}. Al reenviar se vuelve a verificar la información de contacto actual."
+          delivery_ownership_unknown: "Se desconoce el propietario histórico de la entrega."
+        delivery_owner:
+          source_unknown: "%{owner} (se desconoce el origen de la entrega)"
         summary:
           label: "Información del proveedor solicitada"
           last_sent: "Enviado %{time}"
@@ -743,13 +746,13 @@ es:
     new:
       title: "Solicitar Nuevo Enlace Seguro"
       heading: "Este enlace seguro ha vencido"
-      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará al destinatario original."
+      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará usando la información de contacto elegible que esté registrada en ese momento."
       submit: "Solicitar Nuevo Enlace Seguro"
       submitting: "Solicitando…"
     create:
       title: "Solicitud Recibida"
       heading: "Solicitud recibida"
-      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
@@ -792,13 +795,13 @@ es:
     new:
       title: "Solicitar Nuevo Enlace Seguro"
       heading: "Este enlace seguro ha vencido"
-      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará al destinatario original."
+      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará usando la información de contacto elegible que esté registrada en ese momento."
       submit: "Solicitar Nuevo Enlace Seguro"
       submitting: "Solicitando..."
     create:
       title: "Solicitud Recibida"
       heading: "Solicitud recibida"
-      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"

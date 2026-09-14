@@ -7,6 +7,7 @@ module Applications
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
+      @system_audit_actor = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
       @application = create(:application, :in_progress)
       @secure_request_form = create(:secure_request_form, kind: :income_proof_resubmission, application: @application)
       @file = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
@@ -25,7 +26,12 @@ module Applications
       assert_predicate @application, :income_proof_status_not_reviewed?
 
       event = Event.find_by!(auditable: @application, action: 'proof_submitted_via_secure_form')
+      assert_equal @system_audit_actor.id, event.user_id
       assert_equal @secure_request_form.id, event.metadata.fetch('secure_request_form_id')
+      assert_equal @secure_request_form.recipient_id, event.metadata.fetch('recipient_user_id')
+      assert_equal @secure_request_form.delivery_owner_id, event.metadata.fetch('delivery_owner_id')
+      assert_equal @secure_request_form.delivery_source, event.metadata.fetch('delivery_source')
+      assert_equal @secure_request_form.recipient_channel, event.metadata.fetch('recipient_channel')
       assert_equal 'income', event.metadata.fetch('proof_type')
 
       attachment_event = Event.where(auditable: @application, action: 'income_proof_attached').order(:created_at).last

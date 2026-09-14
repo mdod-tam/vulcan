@@ -2,6 +2,7 @@
 
 module Applications
   # Canonical secure-request router: logical recipient, contact owner, source, and channel.
+  # UserGuardianship owns persisted dependent contact ownership, and
   # UserContactPredicates owns contact validity. Fallback contact affects delivery only.
   # The resolver never copies contact onto a constituent or grants portal access.
   #
@@ -18,22 +19,14 @@ module Applications
   class SecureRequestRecipientResolver
     PERMITTED_CHANNELS = %i[email letter sms].freeze
 
-    # Bounded provenance for the selected contact. Values: :constituent (the application
-    # constituent's own record), :dependent_contact (a dependent-owned contact field),
-    # :managing_guardian (the application's managing guardian), :guardian_relationship
-    # (an explicitly selected persisted guardian's own record).
-    CONTACT_SOURCES = %i[constituent dependent_contact managing_guardian guardian_relationship].freeze
-
     FAILURE_REASONS = %i[no_contact_path invalid_channel_override].freeze
 
     Candidate = Struct.new(
       :recipient,
       :recipient_role,
       :recipient_relationship_type,
-      :contact_owner,
       :email_owner,
       :phone_owner,
-      :contact_source,
       :delivery_source,
       :available_channels,
       :channel,
@@ -41,7 +34,6 @@ module Applications
       :phone,
       :phone_type,
       :address_owner,
-      :locale,
       :failure_reason
     ) do
       def success?
@@ -58,7 +50,6 @@ module Applications
         when :letter then address_owner
         when :email then email_owner
         when :sms then phone_owner
-        else contact_owner
         end
       end
 
@@ -156,19 +147,8 @@ module Applications
     def application_contact_guardian
       return @application_contact_guardian if defined?(@application_contact_guardian)
 
-      @application_contact_guardian =
-        if dependent_application? && application.managing_guardian.present? &&
-           dependent_effective_email_matches?(application.managing_guardian)
-          application.managing_guardian
-        end
-    end
-
-    def dependent_effective_email_matches?(guardian)
-      dependent_email = application.user.effective_email if application.user.respond_to?(:effective_email)
-      dependent_email = application.user.email if dependent_email.blank?
-
-      normalized_email(dependent_email).present? &&
-        normalized_email(dependent_email) == normalized_email(guardian&.email)
+      contact = application_user_email_contact
+      @application_contact_guardian = contact.owner if contact&.source == :guardian
     end
 
     def candidate_for(recipient)
@@ -182,7 +162,6 @@ module Applications
       phone, phone_owner, phone_source = phone_selection_for(recipient, role)
       phone_type = phone_owner&.phone_type
       address_owner = address_owner_for(recipient, role)
-      contact_owner = email_owner || phone_owner
       available = available_channels_for(
         email: email,
         phone: phone,
@@ -197,10 +176,8 @@ module Applications
         recipient: recipient,
         recipient_role: role,
         recipient_relationship_type: relationship&.relationship_type,
-        contact_owner: contact_owner,
         email_owner: email_owner,
         phone_owner: phone_owner,
-        contact_source: email_source || phone_source,
         delivery_source: delivery_source_for(recipient, role, address_owner, channel, email_source, phone_source),
         available_channels: available,
         channel: channel,
@@ -208,65 +185,52 @@ module Applications
         phone: phone,
         phone_type: phone_type,
         address_owner: address_owner,
-        locale: locale_for(recipient, contact_owner),
         failure_reason: failure_reason
       )
     end
 
-    # Selections return [value, owning-record, symbolic-source]. Sources come from CONTACT_SOURCES.
-    # Shared predicates exclude synthetic contact values.
+    # Selections adapt model-owned contact truth to secure-form provenance.
     def email_selection_for(recipient, role)
-      return own_contact_selection(recipient, recipient.email, :email, guardian_source_for(recipient)) if role == :guardian
+      return own_contact_selection(recipient, :email, guardian_source_for(recipient)) if role == :guardian
 
-      if dependent_recipient?(recipient)
-        if application_contact_guardian.present?
-          return own_contact_selection(application_contact_guardian, application_contact_guardian.email, :email,
-                                       :managing_guardian)
-        end
+      return resolver_selection(application_user_email_contact) if dependent_recipient?(recipient)
 
-        dependent_email = recipient.dependent_email.to_s.strip.presence
-        return own_contact_selection(recipient, dependent_email, :email, :dependent_contact) if dependent_email.present? && !guardian_email?(dependent_email)
-      end
-
-      own_contact_selection(recipient, recipient.email, :email, :constituent)
+      own_contact_selection(recipient, :email, :constituent)
     end
 
     def phone_selection_for(recipient, role)
-      return own_contact_selection(recipient, recipient.phone, :phone, guardian_source_for(recipient)) if role == :guardian
+      return own_contact_selection(recipient, :phone, guardian_source_for(recipient)) if role == :guardian
 
-      if dependent_recipient?(recipient)
-        guardian = application.managing_guardian
-        dependent_phone = recipient.paper_intake_own_phone(guardian:)
-        if dependent_phone.blank? && guardian.present?
-          return own_contact_selection(guardian, guardian.phone, :phone,
-                                       :managing_guardian)
-        end
+      return resolver_selection(application_user_phone_contact) if dependent_recipient?(recipient)
 
-        if dependent_phone.present? && !guardian_phone?(dependent_phone)
-          source = normalized_phone(dependent_phone) == normalized_phone(recipient.dependent_phone) ? :dependent_contact : :constituent
-          return own_contact_selection(recipient, dependent_phone, :phone, source)
-        end
-      end
-
-      own_contact_selection(recipient, recipient.phone, :phone, :constituent)
+      own_contact_selection(recipient, :phone, :constituent)
     end
 
-    def own_contact_selection(owner, value, kind, source)
-      value = value.to_s.strip.presence
-      return [nil, nil, nil] if value.blank?
-
-      accepted = kind == :email ? real_email_value(value) : real_phone_value(value)
-      accepted.present? ? [accepted, owner, source] : [nil, nil, nil]
+    def application_user_email_contact
+      @application_user_email_contact ||= application.user.dependent_email_contact(
+        contact_guardian: application.managing_guardian,
+        related_guardians: guardian_users
+      )
     end
 
-    # Detached User probes reuse contact predicates, as in UserProfile:
-    # User.new(phone: ...).real_phone?
-    def real_email_value(value)
-      value if User.new(email: value).real_email?
+    def application_user_phone_contact
+      @application_user_phone_contact ||= application.user.dependent_phone_contact(
+        contact_guardian: application.managing_guardian,
+        related_guardians: guardian_users
+      )
     end
 
-    def real_phone_value(value)
-      value if User.new(phone: value).real_phone?
+    def resolver_selection(contact)
+      return [nil, nil, nil] unless contact
+
+      source = contact.source == :guardian ? :managing_guardian : contact.source
+      [contact.value, contact.owner, source]
+    end
+
+    def own_contact_selection(owner, kind, source)
+      return [nil, nil, nil] unless owner.public_send("real_#{kind}?")
+
+      [owner.public_send(kind), owner, source]
     end
 
     # Legacy rows do not persist address strategy; use the dependent only when the
@@ -275,16 +239,13 @@ module Applications
       return recipient if role == :guardian
       return recipient unless dependent_recipient?(recipient)
 
-      guardian = application.managing_guardian
-      return recipient if complete_mailing_address?(recipient) && !complete_mailing_address?(guardian)
-
-      guardian || recipient
+      recipient.dependent_mailing_address_owner(contact_guardian: application.managing_guardian)
     end
 
     def available_channels_for(email:, phone:, phone_type:, address_owner:)
       channels = []
       channels << :email if permits?(:email) && email.present?
-      channels << :letter if permits?(:letter) && complete_mailing_address?(address_owner)
+      channels << :letter if permits?(:letter) && address_owner&.complete_mailing_address?
       channels << :sms if permits?(:sms) && sms_capable_contact?(phone, phone_type)
       channels
     end
@@ -299,12 +260,6 @@ module Applications
       return false unless phone_type.to_s == 'text'
 
       User.new(phone: phone).real_phone?
-    end
-
-    def complete_mailing_address?(owner)
-      return false if owner.blank?
-
-      %i[physical_address_1 city state zip_code].all? { |attr| owner.public_send(attr).present? }
     end
 
     # Overrides use available_channels. The caller's locked delivery_participants_eligible?
@@ -355,8 +310,6 @@ module Applications
         phone_source
       when :email
         email_source
-      else
-        email_source || phone_source
       end
     end
 
@@ -374,12 +327,6 @@ module Applications
       relationship_for(recipient).present? ? :guardian_relationship : :managing_guardian
     end
 
-    def locale_for(recipient, contact_owner)
-      contact_owner&.locale.presence ||
-        (recipient.respond_to?(:effective_locale) ? recipient.effective_locale.presence : nil) ||
-        recipient.locale
-    end
-
     def recipient_letter_preferred?(recipient)
       preference =
         if dependent_recipient?(recipient)
@@ -391,31 +338,6 @@ module Applications
         end
 
       preference.to_s == 'letter'
-    end
-
-    def guardian_email?(email)
-      normalized = normalized_email(email)
-      return false if normalized.blank?
-
-      guardian_users.any? { |guardian| normalized_email(guardian.email) == normalized }
-    end
-
-    def guardian_phone?(phone)
-      normalized = normalized_phone(phone)
-      return false if normalized.blank?
-
-      guardian_users.any? { |guardian| normalized_phone(guardian.phone) == normalized }
-    end
-
-    # User normalizers prevent guardian contact from appearing dependent-owned.
-    # dependent_email / dependent_phone are raw (e.g. "+1 410-555-1212").
-    # Guardian phone columns are normalized ("410-555-1212").
-    def normalized_email(email)
-      User.normalize_email(email).to_s
-    end
-
-    def normalized_phone(phone)
-      User.normalize_phone(phone).to_s
     end
   end
 end

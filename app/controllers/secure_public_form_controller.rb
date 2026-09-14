@@ -35,16 +35,8 @@ class SecurePublicFormController < ApplicationController
   end
 
   def locale_from_request
-    recipient = locale_recipient_for_request
-
-    recipient&.effective_locale.presence ||
-      recipient&.locale.presence ||
-      I18n.default_locale
-  end
-
-  def locale_recipient_for_request
     # Subclasses must set @secure_request_form before with_request_locale runs.
-    @secure_request_form&.recipient
+    @secure_request_form&.delivery_locale || I18n.default_locale
   end
 
   def public_constituent_name(user, fallback: '')

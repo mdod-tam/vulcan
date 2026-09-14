@@ -194,15 +194,15 @@ module Applications
       assert_equal guardian.phone, candidate.phone
       assert_equal guardian, candidate.phone_owner
       assert_nil candidate.channel
+      assert_nil candidate.delivery_owner
+      assert_nil candidate.delivery_source
       assert_equal :invalid_channel_override, candidate.failure_reason
       assert_not candidate.success?
       assert_includes candidate.available_channels, :email
       assert_not_includes candidate.available_channels, :sms
     end
 
-    test 'guardian phone stored in +1 format is still recognized as guardian-owned' do
-      # Validation accepts the raw dependent_phone with a leading 1. The guardian phone is canonical.
-      # User.normalize_phone must match their owners before the resolver applies phone_type.
+    test 'guardian phone stored in +1 format keeps guardian ownership and rejects voice sms' do
       guardian = create(:constituent, phone: '410-555-0170', phone_type: 'voice')
       dependent_email = "dependent.plusone.#{SecureRandom.hex(3)}@example.com"
       dependent = create(
@@ -223,7 +223,8 @@ module Applications
                   .resolve
                   .first
 
-      assert_nil candidate.phone
+      assert_equal guardian.phone, candidate.phone
+      assert_equal guardian, candidate.phone_owner
       assert_nil candidate.channel
       assert_equal :invalid_channel_override, candidate.failure_reason
       assert_includes candidate.available_channels, :email
@@ -248,8 +249,8 @@ module Applications
                   .resolve
                   .first
 
-      assert_equal guardian, candidate.contact_owner
-      assert_equal :managing_guardian, candidate.contact_source
+      assert_equal guardian, candidate.email_owner
+      assert_equal :managing_guardian, candidate.delivery_source
       assert_equal guardian.email, candidate.email
     end
 
@@ -333,8 +334,8 @@ module Applications
                             .resolve
                             .first
 
-      assert_equal guardian, default_candidate.contact_owner
-      assert_equal :guardian_relationship, default_candidate.contact_source
+      assert_equal guardian, default_candidate.email_owner
+      assert_equal :guardian_relationship, default_candidate.delivery_source
       assert_equal guardian.email, default_candidate.email
       assert_equal guardian.phone, default_candidate.phone
       assert_equal 'text', default_candidate.phone_type
@@ -342,8 +343,8 @@ module Applications
       assert_includes default_candidate.available_channels, :sms
 
       assert_equal dependent, dependent_candidate.recipient
-      assert_equal guardian, dependent_candidate.contact_owner
-      assert_equal :managing_guardian, dependent_candidate.contact_source
+      assert_equal guardian, dependent_candidate.email_owner
+      assert_equal :managing_guardian, dependent_candidate.delivery_source
       assert_equal guardian.email, dependent_candidate.email
     end
 
@@ -365,8 +366,8 @@ module Applications
                   .resolve
                   .first
 
-      assert_equal dependent, candidate.contact_owner
-      assert_equal :dependent_contact, candidate.contact_source
+      assert_equal dependent, candidate.email_owner
+      assert_equal :dependent_contact, candidate.delivery_source
       assert_equal dependent_email, candidate.email
       assert_equal '410-555-0161', candidate.phone
       assert_equal 'text', candidate.phone_type
@@ -428,8 +429,8 @@ module Applications
                   .resolve
                   .first
 
-      assert_equal other_guardian, candidate.contact_owner
-      assert_equal :guardian_relationship, candidate.contact_source
+      assert_equal other_guardian, candidate.email_owner
+      assert_equal :guardian_relationship, candidate.delivery_source
       assert_equal other_guardian, candidate.address_owner
     end
 

@@ -395,6 +395,13 @@ class UserTest < ActiveSupport::TestCase
     assert dependent.paper_intake_uses_guardian_phone?
     assert_nil dependent.paper_intake_own_email
     assert_nil dependent.paper_intake_own_phone
+
+    email_contact = dependent.dependent_email_contact(contact_guardian: guardian)
+    phone_contact = dependent.dependent_phone_contact(contact_guardian: guardian)
+    assert_equal [guardian, :guardian, guardian.email],
+                 [email_contact.owner, email_contact.source, email_contact.value]
+    assert_equal [guardian, :guardian, guardian.phone],
+                 [phone_contact.owner, phone_contact.source, phone_contact.value]
   end
 
   test 'paper_intake contact helpers expose dependent-owned contact when present' do
@@ -412,6 +419,50 @@ class UserTest < ActiveSupport::TestCase
     assert_not dependent.paper_intake_uses_guardian_phone?
     assert_equal own_email, dependent.paper_intake_own_email
     assert_equal own_phone, dependent.paper_intake_own_phone
+
+    email_contact = dependent.dependent_email_contact(contact_guardian: guardian)
+    phone_contact = dependent.dependent_phone_contact(contact_guardian: guardian)
+    assert_equal [dependent, :dependent_contact, own_email],
+                 [email_contact.owner, email_contact.source, email_contact.value]
+    assert_equal [dependent, :dependent_contact, own_phone],
+                 [phone_contact.owner, phone_contact.source, phone_contact.value]
+  end
+
+  test 'dependent contact policy preserves field-specific fallbacks for legacy rows without snapshots' do
+    dependent = create(:constituent, dependent_email: nil, dependent_phone: nil)
+    create(:guardian_relationship, guardian_user: @guardian_user, dependent_user: dependent)
+
+    email_contact = dependent.dependent_email_contact(contact_guardian: @guardian_user)
+    phone_contact = dependent.dependent_phone_contact(contact_guardian: @guardian_user)
+
+    assert_equal [@guardian_user, :guardian, @guardian_user.email],
+                 [email_contact.owner, email_contact.source, email_contact.value]
+    assert_equal [dependent, :constituent, dependent.phone],
+                 [phone_contact.owner, phone_contact.source, phone_contact.value]
+    assert_nil dependent.paper_intake_own_email(guardian: @guardian_user)
+    assert_equal dependent.phone, dependent.paper_intake_own_phone(guardian: @guardian_user)
+    assert_equal dependent.phone, dependent.effective_phone
+  end
+
+  test 'dependent contact policy does not attribute another guardians contact to the dependent or manager' do
+    dependent = create(:constituent,
+                       dependent_email: @another_guardian.email,
+                       dependent_phone: @another_guardian.phone)
+    create(:guardian_relationship, guardian_user: @guardian_user, dependent_user: dependent)
+    create(:guardian_relationship, guardian_user: @another_guardian, dependent_user: dependent)
+    guardians = [@guardian_user, @another_guardian]
+
+    email_contact = dependent.dependent_email_contact(
+      contact_guardian: @guardian_user, related_guardians: guardians
+    )
+    phone_contact = dependent.dependent_phone_contact(
+      contact_guardian: @guardian_user, related_guardians: guardians
+    )
+
+    assert_equal [dependent, :constituent, dependent.email],
+                 [email_contact.owner, email_contact.source, email_contact.value]
+    assert_equal [dependent, :constituent, dependent.phone],
+                 [phone_contact.owner, phone_contact.source, phone_contact.value]
   end
 
   teardown do

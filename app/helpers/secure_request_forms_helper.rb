@@ -46,10 +46,14 @@ module SecureRequestFormsHelper
     [recipient.full_name, ("(#{qualifier})" if qualifier), "(ID: #{recipient.id})"].compact.join(' ')
   end
 
-  # Guardian provenance supplies the role label. Legacy records without a source assume guardian ownership.
+  # Guardian provenance supplies the role label. Missing provenance stays explicitly unknown.
   def secure_request_delivery_owner_label(owner, delivery_source: nil)
-    guardian_source = delivery_source.nil? ||
-                      %w[managing_guardian guardian_relationship].include?(delivery_source.to_s)
+    if delivery_source.blank?
+      return t('admin.applications.secure_request_forms.delivery_owner.source_unknown',
+               owner: secure_request_recipient_label(owner))
+    end
+
+    guardian_source = %w[managing_guardian guardian_relationship].include?(delivery_source.to_s)
     secure_request_recipient_label(owner, role: guardian_source ? 'guardian' : nil)
   end
 
@@ -62,6 +66,9 @@ module SecureRequestFormsHelper
 
   # "Originally" identifies the historical owner. Resends resolve the current owner and contact.
   def secure_request_original_delivery_owner_text(secure_request_form)
+    ownership_unknown = t('admin.applications.secure_request_forms.table.delivery_ownership_unknown')
+    return ownership_unknown unless secure_request_form.delivery_provenance?
+
     owner = secure_request_form.delivery_owner
     return if owner.nil? || secure_request_form.delivery_owner_id == secure_request_form.recipient_id
 
@@ -108,7 +115,8 @@ module SecureRequestFormsHelper
     owner = candidate.delivery_owner_for(channel)
     if owner.present? && owner.id != candidate.recipient.id
       t('admin.applications.secure_request_forms.panel.destination_via',
-        owner: secure_request_delivery_owner_label(owner), destination: destination)
+        owner: secure_request_delivery_owner_label(owner, delivery_source: 'managing_guardian'),
+        destination: destination)
     else
       t('admin.applications.secure_request_forms.panel.destination', destination: destination)
     end

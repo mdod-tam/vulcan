@@ -104,6 +104,96 @@ module Applications
       cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
     end
 
+    test 'merge commits first: dependent issuance re-resolves the retired guardian delivery owner' do
+      admin, canonical, duplicate, review_case = build_fixtures
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: duplicate, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: duplicate)
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      merge_result = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          merge_result = run_merge(admin:, canonical:, duplicate:, review_case:)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      issuance_result = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        issuance_result = run_provider_info_request(admin:, application:, recipient: dependent)
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert merge_result.success?, "expected the merge (holder) to succeed: #{merge_result&.message}"
+      assert issuance_result.success?, "expected issuance to re-resolve: #{issuance_result&.message}"
+      form = issuance_result.data[:secure_request_forms].first
+      assert_equal dependent.id, form.recipient_id
+      assert_equal canonical.id, form.delivery_owner_id
+      assert_equal 'managing_guardian', form.delivery_source
+      assert_predicate form, :recipient_channel_letter?
+      assert_single_issuance_side_effects(application)
+    ensure
+      cleanup_duplicate_review_test_data!(admin, canonical, duplicate, dependent)
+    end
+
+    test 'dependent issuance commits first: merge blocks on the retiring guardian delivery owner' do
+      admin, canonical, duplicate, review_case = build_fixtures
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: duplicate, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: duplicate)
+
+      holder_ready = Queue.new
+      release_holder = Queue.new
+      holder_pid_queue = Queue.new
+      issuance_result = nil
+      holder_thread = on_own_connection do
+        holder_pid_queue << backend_pid
+        ActiveRecord::Base.transaction do
+          issuance_result = run_provider_info_request(admin:, application:, recipient: dependent)
+          holder_ready << true
+          release_holder.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+      wait_for_signal(holder_ready, thread: holder_thread)
+
+      contender_pid_queue = Queue.new
+      merge_result = nil
+      contender_thread = on_own_connection do
+        contender_pid_queue << backend_pid
+        merge_result = run_merge(admin:, canonical:, duplicate:, review_case:)
+      end
+
+      confirm_blocked_then_release(
+        wait_for_signal(contender_pid_queue, thread: contender_thread),
+        holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+      )
+
+      assert issuance_result.success?, "expected the issuance (holder) to succeed: #{issuance_result&.message}"
+      form = issuance_result.data[:secure_request_forms].first
+      assert_equal dependent.id, form.recipient_id
+      assert_equal duplicate.id, form.delivery_owner_id
+      assert merge_result.failure?, 'expected merge to fail against the freshly-active delivery-owner form'
+      assert_match(/active secure request form/i, merge_result.message)
+      assert_not duplicate.reload.merged?
+      assert_single_issuance_side_effects(application)
+    ensure
+      cleanup_duplicate_review_test_data!(admin, canonical, duplicate, dependent)
+    end
+
     private
 
     def assert_single_issuance_side_effects(application)
@@ -152,8 +242,13 @@ module Applications
       ).call
     end
 
-    def run_provider_info_request(admin:, application:)
-      RequestProviderInfo.new(application: Application.find(application.id), actor: User.find(admin.id)).call
+    def run_provider_info_request(admin:, application:, recipient: nil)
+      args = { application: Application.find(application.id), actor: User.find(admin.id) }
+      if recipient
+        args[:recipient_ids] = [recipient.id]
+        args[:channel_overrides] = { recipient.id => 'letter' }
+      end
+      RequestProviderInfo.new(**args).call
     end
   end
 end

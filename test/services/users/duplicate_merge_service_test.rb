@@ -174,6 +174,142 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
+    test 'blocks all merges while an active historical form has unresolved delivery provenance' do
+      form = create(:secure_request_form)
+      form.update_columns(delivery_owner_id: nil, delivery_source: nil)
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/legacy secure request forms.*unresolved delivery ownership/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'expired submitted and revoked delivery-owner forms do not block retirement' do
+      create(:secure_request_form, :expired, delivery_owner: @duplicate, delivery_source: 'constituent')
+      create(:secure_request_form, :submitted, delivery_owner: @duplicate, delivery_source: 'constituent')
+      create(:secure_request_form, :revoked, delivery_owner: @duplicate, delivery_source: 'constituent')
+
+      result = merge
+
+      assert result.success?, result.message
+      assert @duplicate.reload.merged?
+    end
+
+    test 'blocks when the canonical email snapshot differs from the selected surviving email' do
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: @canonical)
+      create(:secure_request_form, application:, recipient: dependent, recipient_channel: :email,
+                                   recipient_email: 'previous-canonical@example.com', delivery_owner: @canonical,
+                                   delivery_source: 'managing_guardian')
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/discard contact used by an active secure request form/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'allows an active canonical email delivery when its snapshot remains unchanged' do
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: @canonical)
+      form = create(:secure_request_form, application:, recipient: dependent, recipient_channel: :email,
+                                          recipient_email: @canonical.email, delivery_owner: @canonical,
+                                          delivery_source: 'managing_guardian')
+
+      result = merge
+
+      assert result.success?, result.message
+      assert_predicate form.reload, :active?
+    end
+
+    test 'blocks when the merge replaces the canonical phone used for an active SMS delivery' do
+      @canonical.update!(phone: '555-867-5309', phone_type: 'text')
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: @canonical)
+      create(:secure_request_form, application:, recipient: dependent, recipient_channel: :sms,
+                                   recipient_phone: @canonical.phone, delivery_owner: @canonical,
+                                   delivery_source: 'managing_guardian')
+
+      result = merge
+
+      assert result.failure?
+      assert_match(/discard contact used by an active secure request form/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'allows an active canonical SMS delivery when its phone remains unchanged' do
+      @canonical.update!(phone: '555-867-5309', phone_type: 'text')
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: @canonical)
+      form = create(:secure_request_form, application:, recipient: dependent, recipient_channel: :sms,
+                                          recipient_phone: @canonical.phone, delivery_owner: @canonical,
+                                          delivery_source: 'managing_guardian')
+
+      result = merge(contact_choices: { phone: 'canonical', phone_type: 'text', email: 'canonical', address: 'canonical' })
+
+      assert result.success?, result.message
+      assert_predicate form.reload, :active?
+    end
+
+    test 'blocks when the merge selects the duplicate address over an active canonical letter owner' do
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: @canonical)
+      create(:secure_request_form, application:, recipient: dependent, recipient_channel: :letter,
+                                   recipient_email: nil, recipient_phone: nil, delivery_owner: @canonical,
+                                   delivery_source: 'managing_guardian')
+
+      result = merge(contact_choices: { phone: 'duplicate', phone_type: 'voice', email: 'canonical', address: 'duplicate' })
+
+      assert result.failure?
+      assert_match(/discard contact used by an active secure request form/i, result.message)
+      assert_not @duplicate.reload.merged?
+    end
+
+    test 'allows an active canonical letter delivery when the canonical address remains selected' do
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
+      application = create(:application, user: dependent, managing_guardian: @canonical)
+      form = create(:secure_request_form, application:, recipient: dependent, recipient_channel: :letter,
+                                          recipient_email: nil, recipient_phone: nil, delivery_owner: @canonical,
+                                          delivery_source: 'managing_guardian')
+
+      result = merge
+
+      assert result.success?, result.message
+      assert_predicate form.reload, :active?
+    end
+
+    test 'secure-form contact blocker leaves every merge-owned record unchanged' do
+      @canonical.update!(phone: '555-867-5309', phone_type: 'text')
+      duplicate_application = create(:application, user: @duplicate)
+      dependent = create(:constituent)
+      relationship = create(:guardian_relationship, guardian_user: @duplicate, dependent_user: dependent)
+      session = @duplicate.sessions.create!(session_token: SecureRandom.hex(16), user_agent: 'test', ip_address: '127.0.0.1')
+      protected_application = create(:application, user: dependent, managing_guardian: @canonical)
+      form = create(:secure_request_form, application: protected_application, recipient: dependent,
+                                          recipient_channel: :sms, recipient_phone: @canonical.phone,
+                                          delivery_owner: @canonical, delivery_source: 'managing_guardian')
+
+      assert_no_difference -> { Event.where(action: 'duplicate_user_merged').count } do
+        result = merge
+        assert result.failure?
+        assert_match(/discard contact used by an active secure request form/i, result.message)
+      end
+
+      assert_not @duplicate.reload.merged?
+      assert_equal @duplicate.id, duplicate_application.reload.user_id
+      assert_equal @duplicate.id, relationship.reload.guardian_id
+      assert Session.exists?(session.id)
+      assert_predicate @review_case.reload, :open?
+      assert_predicate form.reload, :active?
+    end
+
     test 'blocks merge that would create conflicting active applications' do
       create(:application, user: @canonical, status: :in_progress)
       create(:application, user: @duplicate, status: :in_progress)

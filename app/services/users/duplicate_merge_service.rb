@@ -295,7 +295,9 @@ module Users
       return 'Case is no longer open' unless @duplicate_review_case.open?
       return duplicate_eligibility_error if duplicate_eligibility_error
       return 'The duplicate record has a pending recovery request; resolve it before merging' if duplicate_pending_recovery?
-      return 'The duplicate record is a recipient or delivery owner of an active secure request form; revoke it before merging' if duplicate_active_secure_forms?
+
+      secure_request_error = secure_request_merge_error
+      return secure_request_error if secure_request_error
       return @related_case_reconciler.error unless @related_case_reconciler.valid?
       return application_conflict_message if application_conflict?
       return @guardian_relationship_plan.error unless @guardian_relationship_plan.valid?
@@ -763,6 +765,34 @@ module Users
       SecureRequestForm.active.where(recipient_id: @duplicate_user.id)
                        .or(SecureRequestForm.active.where(delivery_owner_id: @duplicate_user.id))
                        .exists?
+    end
+
+    def secure_request_merge_error
+      if SecureRequestForm.active.with_incomplete_delivery_provenance.exists?
+        return 'Active legacy secure request forms have unresolved delivery ownership; revoke them or wait for expiry before merging'
+      end
+
+      active_form_error =
+        'The duplicate record is a recipient or delivery owner of an active secure request form; revoke it before merging'
+      return active_form_error if duplicate_active_secure_forms?
+      return unless canonical_delivery_contact_would_change?
+
+      'The merge would discard contact used by an active secure request form; revoke it or keep that contact before merging'
+    end
+
+    def canonical_delivery_contact_would_change?
+      SecureRequestForm.active.where(delivery_owner_id: @canonical_user.id).any? do |form|
+        case form.recipient_channel
+        when 'email'
+          User.normalize_email(form.recipient_email) != User.normalize_email(final_email)
+        when 'sms'
+          User.normalize_phone(form.recipient_phone) != User.normalize_phone(final_phone)
+        when 'letter'
+          final_address_source == 'duplicate'
+        else
+          true
+        end
+      end
     end
 
     # Derived from the locked inventory (lock_application_inventory!) rather than a fresh

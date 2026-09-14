@@ -103,10 +103,10 @@ class ApplicationMailer < ActionMailer::Base
     recipient.guardian_for_contact
   end
 
-  # Persisted channel ownership controls new secure-request delivery language.
-  # Legacy forms retain the explicit print target or historical recipient fallback.
+  # The form owns secure-request language. Historical ownerless forms use the
+  # form's explicit recipient fallback rather than inferring an address owner.
   def secure_request_locale(secure_request_form, print_recipient, recipient)
-    return secure_request_form.delivery_locale if secure_request_form&.delivery_owner.present?
+    return secure_request_form.delivery_locale if secure_request_form.present?
 
     target = if secure_request_form&.recipient_channel_letter?
                print_recipient.presence || letter_recipient_for(recipient)

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Preserve whose contact/address each delivery uses, independently of the logical recipient.
-# delivery_source records provenance from Applications::SecureRequestRecipientResolver::CONTACT_SOURCES.
+# delivery_source records bounded constituent, dependent-contact, or guardian provenance.
 class AddDeliveryOwnershipToSecureRequestForms < ActiveRecord::Migration[8.0]
   def change
     add_column :secure_request_forms, :delivery_owner_id, :bigint

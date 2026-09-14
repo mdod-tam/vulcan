@@ -40,6 +40,12 @@ Some workflows create both. For example, proof approval logs `proof_approved` as
 
 Two secure-request issuance services are deliberate exceptions to the `NotificationService` routing row: `Applications::RequestProviderInfo` and `Applications::RequestProofResubmission` route constituent delivery through `Applications::SecureRequestRecipientResolver` plus `ApplicationNotificationsMailer` for email and postal letters (via `PrintQueueItem`); their SMS goes through `SmsService` directly, since SMS is not a `NotificationService` channel (see the SMS notes below). Routing depends on resolver-selected channels, contact owners, and delivery-owner eligibility rather than a stored notification preference alone.
 
+Every newly issued application secure request persists the resolver-selected delivery
+owner and source. Those facts belong to that bearer link and are not recomputed while
+the form is used. A resend resolves current eligible contact into its replacement form
+without rewriting the old form's provenance. Historical rows may lack both; they retain
+an explicit logical-recipient fallback rather than an inferred guardian.
+
 The normal entry point is `NotificationService.create_and_deliver!`. It creates a `Notification` row, records delivery intent in metadata, and attempts delivery when `deliver: true`.
 
 `NotificationService.build` also exists for fluent call sites, but most new code should prefer the direct service call unless a builder makes the caller clearer.
@@ -152,7 +158,9 @@ When adding or changing templates:
 ---
 
 Secure provider-info and proof requests use the persisted secure form's delivery owner
-for message language, with a supported-locale check and default-locale fallback.
+for message language across email, SMS, letters, public form/resend pages, validation
+errors, and success responses, with a supported-locale check and default-locale fallback.
+Historical ownerless forms use the logical recipient's effective message locale.
 Staff can explicitly select proof SMS from the application detail page after automatic
 delivery fails; automatic rejection callbacks do not select SMS. Issued-link rows show
 stable constituent IDs and original delivery ownership, with “Postal mail” for letters

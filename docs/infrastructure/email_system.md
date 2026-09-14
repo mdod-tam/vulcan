@@ -81,10 +81,11 @@ Secure temporary forms centralize:
 
 **Delivery routing (`Applications::SecureRequestRecipientResolver`):** for
 constituent-facing secure-request issuance (`Applications::RequestProviderInfo` and
-`Applications::RequestProofResubmission`), the resolver is the sole authority for who
-receives the request, whose contact information is used, and which channel (email,
-postal letter, or SMS) is currently deliverable. Callers own form creation, tokens,
-notifications, and retry; the resolver never creates portal/login eligibility and never
+`Applications::RequestProofResubmission`), the resolver selects the logical recipient,
+channel, and secure-form provenance. It consumes the field-specific persisted ownership
+policy in [`UserGuardianship`](../development/guardian_relationship_system.md#canonical-stored-contact-ownership)
+instead of interpreting dependent and guardian fields itself. Callers own form creation,
+tokens, notifications, and retry; the resolver never creates portal/login eligibility or
 stores fallback contact on the constituent. Certification-upload flows
 (`Applications::RequestCertificationUpload`, `MedicalCertificationService`) are outside
 this routing: they deliver to the medical provider's recorded email address directly and
@@ -132,6 +133,32 @@ consult the resolver only for the internal tracking-notification recipient.
   or inactive recipients are rejected, never redirected to a merge survivor.
 * **No route is not a delivery failure.** When no permissible route exists, the caller
   fails before creating any form, token, notification, or audit event.
+
+### Delivery-provenance rollout and merge gate
+
+PR4c (#209) makes `Applications::RequestProviderInfo` and
+`Applications::RequestProofResubmission` the only production writers of application
+secure forms and requires every new row to persist both `delivery_owner_id` and
+`delivery_source`. The columns remain nullable so historical ownership is not invented.
+The PR4b stack (#192–#194) owns the merge blocker that consumes this provenance.
+
+Before enabling owner-complete protection in production, operators must record:
+
+- active ownerless rows, grouped by channel and kind, with maximum `expires_at`;
+- rows where owner/source presence does not match;
+- confirmation that no other production writer creates application secure forms.
+
+Existing active ownerless links should expire or be revoked through the normal secure
+request lifecycle. Until their count reaches zero, the bounded single-deploy guard blocks
+all merges whenever any active incomplete-provenance row exists. That zero count is the
+guard's exit condition; it is not evidence that historical rows acquired an owner.
+
+The `delivery_owner_id` index is retained because PostgreSQL does not automatically
+index foreign keys and merge performs a reverse lookup across active recipient/owner
+forms. The index decision must be confirmed with a representative `EXPLAIN` using
+realistic active/expired proportions. Do not add a composite or partial index without
+evidence that the observed bitmap/index plan needs it. Production table size, form
+distribution, and merge-query frequency remain operator-owned rollout evidence.
 
 ---
 

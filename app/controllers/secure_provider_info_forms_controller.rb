@@ -5,6 +5,7 @@ class SecureProviderInfoFormsController < SecurePublicFormController
 
   before_action :set_secure_request_form, only: %i[show update]
   around_action :with_request_locale, only: %i[show update]
+  around_action :with_public_request_locale, only: :success
 
   def show
     return render_unavailable unless provider_info_form?
@@ -28,7 +29,7 @@ class SecureProviderInfoFormsController < SecurePublicFormController
     ).call
 
     if result.success?
-      redirect_to secure_provider_info_form_success_path
+      redirect_to secure_provider_info_form_success_path(locale: @secure_request_form.delivery_locale)
     else
       return render_submitted if @secure_request_form.reload.submitted?
 

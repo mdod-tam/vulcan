@@ -135,6 +135,60 @@ module AdminTests
       Current.reset
     end
 
+    test 'alternate email and letter recipients restore defaults after rechecking while sms stays explicit' do
+      applicant = create(:constituent)
+      default_guardian = create(:constituent, email: "default.#{SecureRandom.hex(4)}@example.com")
+      email_guardian = create(:constituent, email: "alternate.#{SecureRandom.hex(4)}@example.com")
+      letter_guardian = create(
+        :constituent,
+        email: "letter.#{SecureRandom.hex(4)}@system.matvulcan.local",
+        phone: nil,
+        phone_type: nil,
+        communication_preference: :letter
+      )
+      sms_guardian = build_sms_only_constituent
+      [default_guardian, email_guardian, letter_guardian, sms_guardian].each do |guardian|
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant)
+      end
+      application = create(:application, user: applicant, status: :awaiting_proof,
+                                         medical_provider_name: nil, medical_provider_phone: nil,
+                                         medical_provider_email: nil,
+                                         managing_guardian: default_guardian)
+
+      system_test_sign_in(@admin)
+      visit_admin_application_with_retry(application, user: @admin)
+
+      email_select = "#provider_info_channel_#{email_guardian.id}"
+      letter_select = "#provider_info_channel_#{letter_guardian.id}"
+      sms_select = "#provider_info_channel_#{sms_guardian.id}"
+      assert_selector "#{email_select}[disabled]", wait: 10
+      assert_selector "#{letter_select}[disabled]"
+      assert_selector "#{sms_select}[disabled]"
+
+      check "provider_info_recipient_#{email_guardian.id}"
+      assert_equal 'email', find(email_select).value
+      uncheck "provider_info_recipient_#{email_guardian.id}"
+      assert_selector "#{email_select}[disabled]"
+      assert_equal '', find(email_select, visible: :all).value
+      check "provider_info_recipient_#{email_guardian.id}"
+      assert_equal 'email', find(email_select).value
+
+      check "provider_info_recipient_#{letter_guardian.id}"
+      assert_equal 'letter', find(letter_select).value
+      uncheck "provider_info_recipient_#{letter_guardian.id}"
+      assert_equal '', find(letter_select, visible: :all).value
+      check "provider_info_recipient_#{letter_guardian.id}"
+      assert_equal 'letter', find(letter_select).value
+
+      check "provider_info_recipient_#{sms_guardian.id}"
+      assert_equal '', find(sms_select).value
+      assert_button I18n.t('admin.applications.secure_request_forms.panel.submit'), disabled: true
+
+      take_full_page_screenshot('secure-request-panel-alternate-default-restoration')
+    ensure
+      Current.reset
+    end
+
     test 'address-only recipient resolves to a preselected letter channel' do
       Current.paper_context = true
       user = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
@@ -184,7 +238,7 @@ module AdminTests
       assert_selector "input[type='submit'][disabled][aria-disabled='true']"
       assert_text I18n.t('admin.applications.secure_request_forms.panel.submit_blocked')
 
-      take_screenshot('secure-request-panel-ineligible-states', html: true)
+      take_full_page_screenshot('secure-request-panel-ineligible-states')
     ensure
       Current.reset
     end
@@ -225,7 +279,69 @@ module AdminTests
                          owner: "#{guardian.full_name} (#{I18n.t('admin.applications.secure_request_forms.roles.guardian')}) (ID: #{guardian.id})")
       assert_text "(delivered to #{guardian.full_name} (#{I18n.t('admin.applications.secure_request_forms.roles.guardian')}) (ID: #{guardian.id}))"
 
-      take_screenshot('secure-request-panel-issued-original-owner', html: true)
+      take_full_page_screenshot('secure-request-panel-issued-original-owner')
+    ensure
+      Current.reset
+    end
+
+    test 'active bearer link leaves the duplicate merge form open with a visible blocker' do
+      subject = create(
+        :constituent,
+        email: "secure-request-subject-#{SecureRandom.hex(3)}@example.com",
+        phone: nil,
+        phone_type: nil,
+        physical_address_1: '101 Harbor Street',
+        city: 'Baltimore',
+        state: 'MD',
+        zip_code: '21201',
+        needs_duplicate_review: true
+      )
+      candidate = create(
+        :constituent,
+        email: "secure-request-candidate-#{SecureRandom.hex(3)}@example.com",
+        phone: '410-555-0198',
+        phone_type: 'text',
+        physical_address_1: '303 Harbor Street',
+        city: 'Towson',
+        state: 'MD',
+        zip_code: '21204'
+      )
+      review_case = DuplicateReviewCase.create!(
+        source: :registration_soft_match,
+        subject_user: subject,
+        deduplication_key: SecureRandom.hex(16),
+        metadata: { 'reason_codes' => ['name_dob'] },
+        opened_at: Time.current,
+        status: :open
+      )
+      review_case.duplicate_review_case_candidates.create!(
+        candidate_user: candidate,
+        match_reason: 'name_dob',
+        snapshot: {}
+      )
+      application = create(:application, user: subject)
+      create(:secure_request_form, application: application, recipient: subject)
+
+      system_test_sign_in(@admin)
+      visit admin_duplicate_review_path(review_case)
+      find('summary', text: 'Merge these two records').click
+
+      prefix = "duplicate-review-#{review_case.id}-candidate-#{candidate.id}"
+      within 'form[data-testid="duplicate-merge-form"]' do
+        choose "#{prefix}-canonical-#{candidate.id}"
+        choose "#{prefix}-phone-source-#{candidate.id}"
+        select 'Text', from: "#{prefix}-phone-type"
+        choose "#{prefix}-address-source-#{candidate.id}"
+        fill_in "#{prefix}-rationale", with: 'Verified one identity; active bearer link must be resolved first.'
+        check "#{prefix}-same-person-confirmed"
+        accept_confirm { click_button 'Merge records' }
+      end
+
+      assert_current_path admin_duplicate_review_path(review_case)
+      assert_text 'The duplicate record is a recipient or delivery owner of an active secure request form; revoke it before merging'
+      assert_predicate review_case.reload, :open?
+      assert_not subject.reload.merged?
+      take_screenshot('duplicate-merge-secure-request-blocker', html: true)
     ensure
       Current.reset
     end
@@ -238,13 +354,13 @@ module AdminTests
       application.user.update!(phone_type: 'text')
       system_test_sign_in(@admin)
       visit_admin_application_with_retry(application, user: @admin)
-      take_screenshot('secure-request-final-entry', html: true)
+      take_full_page_screenshot('secure-request-final-entry')
       channel_id = "provider_info_channel_#{application.user_id}"
       %w[letter sms email].each do |channel|
         find("##{channel_id} option[value='#{channel}']").select_option
         assert_equal channel, find("##{channel_id}").value
         assert_no_selector "#provider_info_recipient_#{application.user_id}_destination"
-        take_screenshot("secure-request-final-channel-#{channel}", html: true)
+        take_full_page_screenshot("secure-request-final-channel-#{channel}")
       end
       click_button I18n.t('admin.applications.secure_request_forms.panel.submit')
       assert_text I18n.t('admin.applications.secure_request_forms.create.success')
@@ -263,11 +379,10 @@ module AdminTests
       assert_equal '', find("#proof_income_channel_#{sms_recipient.id}").value
       take_screenshot('secure-request-final-proof-recovery-prompt', html: true)
       within '#proof_income_request_chooser' do
-        click_button 'Send Secure Income Upload Link'
+        assert_button 'Send Secure Income Upload Link', disabled: true
       end
-      assert_text I18n.t('applications.proof_resubmission.messages.no_recipient')
       assert_equal 0, proof_application.secure_request_forms.reload.count
-      take_screenshot('secure-request-final-proof-empty-error', html: true)
+      take_screenshot('secure-request-final-proof-empty-disabled', html: true)
       %w[income residency id].each do |proof_type|
         within "#proof_#{proof_type}_request_chooser" do
           check "proof_#{proof_type}_recipient_#{sms_recipient.id}"
