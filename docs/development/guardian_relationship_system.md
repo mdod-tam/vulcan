@@ -130,14 +130,36 @@ dependent = User.create!(
 )
 ```
 
-Helper methods (implemented in `UserGuardianship` concern):
+### Canonical stored-contact ownership
+
+`Applications::GuardianDependentManagementService` writes the strategy shapes above.
+`UserGuardianship` is the sole interpreter of those persisted shapes:
+
+* `dependent_email_contact` and `dependent_phone_contact` return the usable value,
+  owning record, and stored-field source independently. The dependent's relationships
+  provide the default guardian scope, while callers with a preloaded scope can supply it
+  explicitly. Another guardian's value is never labeled as dependent-owned.
+* Rows that predate strategy snapshots can have no `dependent_email` or
+  `dependent_phone`. Their compatibility stays explicit: delivery and effective email
+  retain the contact-guardian fallback, while a usable primary phone remains
+  dependent-owned. Paper intake preserves a usable primary email or phone when staff
+  edit an existing dependent without resubmitting contact fields. All paths use the
+  same ownership interpreter; only the declared legacy fallback differs. Canonical
+  dependent-owned rows are unambiguous because the writer mirrors the dependent's
+  value into the corresponding `dependent_*` field.
+* `dependent_mailing_address_owner` makes only the inference supported without a stored
+  address strategy: it selects the dependent when the dependent address is complete and
+  the contact guardian's is incomplete. Otherwise it conservatively selects the guardian.
+* Delivery services consume these answers; they do not compare contact values again.
+
+Other guardian/dependent helpers:
 
 ```ruby
-dependent.effective_email  # prefers dependent_email, falls back to guardian's email
-dependent.effective_phone  # prefers dependent_phone, falls back to guardian's phone
-dependent.effective_phone_type  # handles phone type logic for dependents
+dependent.effective_email  # resolves through the canonical email ownership policy
+dependent.effective_phone  # resolves through the canonical phone ownership policy
+dependent.effective_phone_type  # uses the selected phone owner's type
 dependent.effective_communication_preference  # uses guardian's preference if dependent
-dependent.effective_locale  # see below
+dependent.effective_locale  # uses the selected email owner's locale; see below
 dependent.effective_message_locale  # see below
 dependent.guardian_for_contact  # returns primary guardian for contact purposes
 ```

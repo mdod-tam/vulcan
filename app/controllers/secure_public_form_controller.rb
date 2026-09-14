@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class SecurePublicFormController < ApplicationController
+  include SecureFormLocaleResolver
+
   skip_before_action :authenticate_user!, raise: false
   skip_before_action :check_password_change_required, raise: false
   skip_before_action :verify_authenticity_token, raise: false
@@ -35,11 +37,9 @@ class SecurePublicFormController < ApplicationController
   end
 
   def locale_from_request
-    recipient = locale_recipient_for_request
+    return @secure_request_form.delivery_locale if @secure_request_form.respond_to?(:delivery_locale)
 
-    recipient&.effective_locale.presence ||
-      recipient&.locale.presence ||
-      I18n.default_locale
+    secure_form_locale_for(locale_recipient_for_request)
   end
 
   def locale_recipient_for_request

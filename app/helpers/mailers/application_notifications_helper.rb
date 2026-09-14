@@ -2,7 +2,7 @@
 
 module Mailers
   module ApplicationNotificationsHelper
-    def format_proof_type(proof_type)
+    def format_proof_type(proof_type, locale: nil)
       return '' if proof_type.nil?
 
       type_value = proof_type.respond_to?(:proof_type_before_type_cast) ? proof_type.proof_type_before_type_cast : proof_type
@@ -20,6 +20,7 @@ module Mailers
 
       I18n.t(
         "secure_proof_forms.proof_types.#{normalized_type}",
+        locale: locale,
         default: normalized_type.humanize.downcase
       )
     end

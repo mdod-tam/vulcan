@@ -5,6 +5,42 @@ require 'test_helper'
 class SecureRequestFormTest < ActiveSupport::TestCase
   include ActiveSupport::Testing::TimeHelpers
 
+  test 'new forms require complete delivery provenance' do
+    form = build(:secure_request_form, delivery_owner: nil, delivery_source: nil)
+
+    assert_not form.valid?
+    assert_includes form.errors[:delivery_owner], "can't be blank"
+    assert_includes form.errors[:delivery_source], "can't be blank"
+  end
+
+  test 'delivery owner and source must remain paired' do
+    form = create(:secure_request_form)
+
+    form.delivery_source = nil
+
+    assert_not form.valid?
+    assert_includes form.errors[:base], 'Delivery owner and delivery source must both be present or both be absent'
+  end
+
+  test 'historical ownerless forms can complete their existing lifecycle' do
+    form = create(:secure_request_form)
+    form.update_columns(delivery_owner_id: nil, delivery_source: nil)
+
+    assert_not_predicate form.reload, :delivery_provenance?
+
+    form.mark_submitted!
+
+    assert_predicate form.reload, :submitted?
+  end
+
+  test 'historical ownerless forms use the logical recipient locale' do
+    recipient = create(:constituent, locale: 'es')
+    form = create(:secure_request_form, recipient: recipient)
+    form.update_columns(delivery_owner_id: nil, delivery_source: nil)
+
+    assert_equal :es, form.reload.delivery_locale
+  end
+
   test 'active scope does not add a provider info kind predicate' do
     sql = SecureRequestForm.provider_info.active.to_sql
 

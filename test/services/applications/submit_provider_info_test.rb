@@ -5,6 +5,7 @@ require 'test_helper'
 module Applications
   class SubmitProviderInfoTest < ActiveSupport::TestCase
     setup do
+      @system_audit_actor = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
       @application = create(
         :application,
         status: :awaiting_proof
@@ -242,7 +243,11 @@ module Applications
 
       assert_equal @secure_request_form.id.to_s, metadata['secure_request_form_id'].to_s
       assert_equal @secure_request_form.recipient_id.to_s, metadata['recipient_user_id'].to_s
+      assert_equal @system_audit_actor.id, event.user_id
       assert_includes %w[constituent guardian], metadata['recipient_role']
+      assert_equal @secure_request_form.delivery_owner_id.to_s, metadata['delivery_owner_id'].to_s
+      assert_equal @secure_request_form.delivery_source, metadata['delivery_source']
+      assert_equal @secure_request_form.recipient_channel, metadata['recipient_channel']
       assert_includes metadata.keys, 'request_batch_id'
       assert_includes metadata.keys, 'changed_fields'
       assert_includes metadata.keys, 'previous_presence'

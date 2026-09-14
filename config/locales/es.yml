@@ -161,8 +161,7 @@ es:
   constituent_portal:
     dependents:
       form:
-        # Shown on the submit control while the request is in flight. Turbo already disables the
-        # submitter; this only tells the guardian why it went quiet.
+        # Turbo disables the submitter. These labels explain the wait.
         adding: "Agregando…"
         saving: "Guardando…"
       create:
@@ -190,6 +189,7 @@ es:
         needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
         cooldown_active: "Se envió recientemente un enlace seguro para información del proveedor. Espere %{minutes} minutos antes de enviar otro."
         no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
+        invalid_channel_override: "El canal de entrega seleccionado no está disponible con la información de contacto actual de este destinatario. No se envió ninguna solicitud."
         no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
         unknown_recipient: "Uno o más destinatarios seleccionados no están asociados con esta solicitud."
         recipient_no_longer_eligible: "Uno o más destinatarios ya no son un registro activo elegible."
@@ -201,7 +201,7 @@ es:
         already_submitted: "Este formulario seguro ya fue enviado."
         revoked: "Este enlace seguro ya no está activo."
         expired: "Este enlace seguro ha vencido."
-        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
         invalid_request: "Este enlace seguro ya no está disponible."
         medical_provider_name_blank: "Ingrese el nombre del profesional certificador."
         medical_provider_phone_blank: "Ingrese el número de teléfono del profesional certificador."
@@ -215,6 +215,7 @@ es:
         needs_managing_guardian: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."
         cooldown_active: "Se envió recientemente un enlace seguro para subir documentos. Espere %{minutes} minutos antes de enviar otro."
         no_contact_path: "No hay una forma de contacto utilizable para este destinatario."
+        invalid_channel_override: "El canal de entrega seleccionado no está disponible con la información de contacto actual de este destinatario. No se envió ninguna solicitud."
         no_recipient: "Seleccione al menos un destinatario para este enlace seguro."
         unknown_recipient: "Uno o más destinatarios seleccionados no están asociados con esta solicitud."
         recipient_no_longer_eligible: "Uno o más destinatarios ya no son un registro activo elegible."
@@ -229,7 +230,7 @@ es:
         already_submitted: "Este formulario seguro ya fue enviado."
         revoked: "Este enlace seguro ya no está activo."
         expired: "Este enlace seguro ha vencido."
-        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+        resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
         invalid_request: "Este enlace seguro ya no está disponible."
         file_blank: "Seleccione un documento para subir."
         file_type_invalid: "Suba un archivo PDF, JPEG, PNG o HEIC/HEIF."
@@ -280,6 +281,7 @@ es:
           failure: "No se pudo enviar la solicitud segura de información del proveedor."
         contact:
           letter: "Correo postal"
+          letter_with_address: "Correo postal: %{address}"
           unknown: "Desconocido"
         channels:
           email: "Correo electrónico"
@@ -290,12 +292,23 @@ es:
           submitted: "Enviado"
           revoked: "Revocado"
           expired: "Vencido"
+        roles:
+          applicant: "Solicitante"
+          guardian: "Tutor"
         panel:
           title: "Solicitudes seguras de información del proveedor"
           description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
-          default_channel: "Canal predeterminado: %{channel}"
-          email_override: "Enviar enlace seguro en línea por correo electrónico"
+          legend: "Destinatarios"
+          channel_label: "Canal de entrega para %{recipient}"
+          channel_prompt: "Seleccione un canal"
+          no_route: "No hay un canal de entrega disponible actualmente. Este destinatario necesita un correo electrónico real, un número de teléfono con capacidad de texto o una dirección postal completa."
+          ineligible: "Este registro ya no puede recibir solicitudes seguras."
+          owner_ineligible: "Existe un canal de entrega, pero el contacto o la dirección registrados pertenecen a un registro que ya no puede recibir solicitudes seguras. Resuelva el estado de ese registro o agregue información de contacto de un registro elegible."
+          destination: "Se entrega a %{destination}"
+          destination_via: "Se entrega a %{owner} — %{destination}"
           submit: "Enviar solicitud segura"
+          selection_help: "Seleccione al menos un destinatario y luego un canal de entrega para cada destinatario seleccionado."
+          submit_blocked: "Ningún destinatario puede recibir una solicitud segura actualmente, por lo que este formulario no se puede enviar. Resuelva primero los problemas indicados arriba."
           no_recipients: "No hay destinatarios elegibles disponibles para esta solicitud."
         managing_guardian:
           title: "Falta tutor principal"
@@ -316,6 +329,10 @@ es:
           send_new_link: "Enviar nuevo enlace"
           no_actions: "Sin acciones"
           empty: "No se han enviado solicitudes seguras de información del proveedor."
+          originally_delivered_to: "Entregado originalmente a %{owner}. Al reenviar se vuelve a verificar la información de contacto actual."
+          delivery_ownership_unknown: "Se desconoce el propietario histórico de la entrega."
+        delivery_owner:
+          source_unknown: "%{owner} (se desconoce el origen de la entrega)"
         summary:
           label: "Información del proveedor solicitada"
           last_sent: "Enviado %{time}"
@@ -729,13 +746,13 @@ es:
     new:
       title: "Solicitar Nuevo Enlace Seguro"
       heading: "Este enlace seguro ha vencido"
-      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará al destinatario original."
+      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará usando la información de contacto elegible que esté registrada en ese momento."
       submit: "Solicitar Nuevo Enlace Seguro"
       submitting: "Solicitando…"
     create:
       title: "Solicitud Recibida"
       heading: "Solicitud recibida"
-      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
@@ -778,13 +795,13 @@ es:
     new:
       title: "Solicitar Nuevo Enlace Seguro"
       heading: "Este enlace seguro ha vencido"
-      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará al destinatario original."
+      body: "Puede solicitar un nuevo enlace seguro. Por privacidad, solo se enviará usando la información de contacto elegible que esté registrada en ese momento."
       submit: "Solicitar Nuevo Enlace Seguro"
       submitting: "Solicitando..."
     create:
       title: "Solicitud Recibida"
       heading: "Solicitud recibida"
-      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al destinatario original."
+      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"

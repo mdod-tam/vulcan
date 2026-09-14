@@ -35,8 +35,7 @@ module Applications
       proof_type = proof_review.proof_type.to_sym
       return false unless PROOF_KIND_BY_TYPE.key?(proof_type)
 
-      # Only count still-usable forms. Failed deliveries revoke the request record even
-      # though the row remains for audit; those must not suppress admin warnings.
+      # Failed deliveries retain revoked rows for audit. They must not suppress admin warnings.
       SecureRequestForm.public_send("#{proof_type}_proof")
                        .active
                        .where(application_id: proof_review.application_id)
@@ -82,8 +81,7 @@ module Applications
           raise ActiveRecord::Rollback
         end
 
-        # #call's unlocked state check is only a fast-fail. Recheck against the
-        # exact locked application before creating any request rows.
+        # Repeat #call's preliminary state check under the issuance lock.
         unless requestable_proof_state?
           result = failure(message(:request_not_needed))
           raise ActiveRecord::Rollback
@@ -127,8 +125,10 @@ module Applications
       actor.admin? && actor.public_login_active?
     end
 
+    # Locked recipients and delivery owners must meet delivery policy,
+    # including guardians who supply a dependent's contact or address.
     def secure_request_recipients_eligible?(candidates)
-      candidates.all? { |candidate| candidate.recipient.constituent? && candidate.recipient.public_login_active? }
+      candidates.all?(&:delivery_participants_eligible?)
     end
 
     def validate_request_preconditions
@@ -290,6 +290,8 @@ module Applications
         recipient_channel: candidate.channel,
         recipient_role: candidate.recipient_role,
         recipient_relationship_type: candidate.recipient_relationship_type,
+        delivery_owner: candidate.delivery_owner,
+        delivery_source: candidate.delivery_source&.to_s,
         public_token_digest: SecureRequestForm.digest_public_token(raw_token),
         expires_at: link_expiration_hours.hours.from_now,
         sent_at: Time.current,
@@ -318,6 +320,8 @@ module Applications
         recipient_role: secure_request_form.recipient_role,
         recipient_channel: secure_request_form.recipient_channel,
         requested_recipient_channel: secure_request_form.recipient_channel,
+        delivery_owner_id: secure_request_form.delivery_owner_id,
+        delivery_source: secure_request_form.delivery_source,
         request_batch_id: secure_request_form.request_batch_id,
         proof_type: proof_type.to_s,
         proof_request_display_mode: proof_request_display_mode,
@@ -373,8 +377,7 @@ module Applications
     end
 
     def deliver_email(delivery)
-      # deliver_now is intentional: the email body contains the raw bearer URL,
-      # which must not be serialized into Active Job arguments via deliver_later.
+      # deliver_now keeps the raw bearer URL out of Active Job arguments.
       proof_request_mail(
         delivery,
         secure_upload_url: secure_url_for(delivery.raw_token)
@@ -488,7 +491,7 @@ module Applications
     end
 
     def sms_message(secure_url, secure_request_form)
-      locale = secure_form_locale_for(secure_request_form.recipient)
+      locale = secure_request_form.delivery_locale
 
       I18n.t(
         'secure_proof_forms.sms.message',
@@ -507,20 +510,26 @@ module Applications
       Policy.get('secure_form_resend_cooldown_hours') || 1
     end
 
+    # The mailer must use the form's channel and encrypted contact snapshot, not the recipient's preferences.
+    # letter_recipient supplies the resolver's address owner for print delivery.
     def proof_request_mail(delivery, secure_upload_url:)
       if delivery.proof_review.present?
         ApplicationNotificationsMailer.proof_rejected(
           application,
           delivery.proof_review,
           secure_upload_url: secure_upload_url,
-          recipient: delivery.secure_request_form.recipient
+          recipient: delivery.secure_request_form.recipient,
+          secure_request_form: delivery.secure_request_form,
+          letter_recipient: delivery.candidate.address_owner
         )
       else
         ApplicationNotificationsMailer.proof_requested(
           application,
           proof_type,
           secure_upload_url: secure_upload_url,
-          recipient: delivery.secure_request_form.recipient
+          recipient: delivery.secure_request_form.recipient,
+          secure_request_form: delivery.secure_request_form,
+          letter_recipient: delivery.candidate.address_owner
         )
       end
     end

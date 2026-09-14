@@ -5,6 +5,16 @@ require 'test_helper'
 class SecureRequestFormsHelperTest < ActionView::TestCase
   include SecureRequestFormsHelper
 
+  test 'issued postal destination does not change when the address changes' do
+    owner = create(:constituent)
+    form = create(:secure_request_form, recipient: owner, delivery_owner: owner,
+                                        recipient_channel: :letter)
+
+    assert_equal 'Postal mail', secure_request_masked_contact(form)
+    owner.update!(physical_address_1: '98 Updated Road')
+    assert_equal 'Postal mail', secure_request_masked_contact(form.reload)
+  end
+
   test 'summary copy uses date-only sent and expiration details' do
     summary = {
       summary_status: :active,
@@ -75,7 +85,8 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       }
     )
 
-    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata)
+    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
+                  delivery_owners_by_id: {})
 
     assert_includes detail, 'ID proof rejected - Too blurry; secure upload link sent to'
     assert_includes detail, 'via Email'
@@ -104,9 +115,108 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       }
     )
 
-    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata)
+    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
+                  delivery_owners_by_id: {})
 
     assert_includes detail, 'ID proof requested; secure upload link sent to'
     assert_not_includes detail, 'Old blurry document'
+  end
+
+  test 'issued letter contact omits mutable delivery owner address' do
+    guardian = create(:constituent, physical_address_1: '9 Guardian Way', city: 'Baltimore',
+                                    state: 'MD', zip_code: '21201')
+    dependent = create(:constituent)
+    form = create(:secure_request_form, recipient: dependent, recipient_channel: :letter,
+                                        recipient_email: nil, recipient_phone: nil,
+                                        delivery_owner: guardian, delivery_source: 'managing_guardian')
+
+    assert_equal 'Postal mail', secure_request_masked_contact(form)
+  end
+
+  test 'legacy issued letter contact does not guess its address owner' do
+    recipient = create(:constituent, physical_address_1: '1 Home St', city: 'Bowie',
+                                     state: 'MD', zip_code: '20715')
+    form = create(:secure_request_form, recipient: recipient, recipient_channel: :letter,
+                                        recipient_email: nil, recipient_phone: nil)
+    form.update_columns(delivery_owner_id: nil, delivery_source: nil)
+
+    assert_equal 'Postal mail', secure_request_masked_contact(form)
+
+    recipient.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
+    assert_equal 'Postal mail', secure_request_masked_contact(form.reload)
+  end
+
+  test 'delivery owner label qualifies guardians and leaves other sources unqualified' do
+    owner = create(:constituent, first_name: 'Jane', last_name: 'Smith')
+
+    assert_equal "Jane Smith (ID: #{owner.id}) (delivery source unknown)", secure_request_delivery_owner_label(owner)
+    assert_equal "Jane Smith (Guardian) (ID: #{owner.id})",
+                 secure_request_delivery_owner_label(owner, delivery_source: 'managing_guardian')
+    assert_equal "Jane Smith (ID: #{owner.id})", secure_request_delivery_owner_label(owner, delivery_source: 'constituent')
+  end
+
+  test 'historical rows render delivery ownership as unknown' do
+    form = create(:secure_request_form)
+    form.update_columns(delivery_owner_id: nil, delivery_source: nil)
+
+    assert_equal 'Historical delivery ownership is unknown.', secure_request_original_delivery_owner_text(form.reload)
+  end
+
+  test 'candidate destination text masks the resolved digital destination' do
+    recipient = create(:constituent, email: "jane.doe.#{SecureRandom.hex(4)}@example.com")
+    candidate = Applications::SecureRequestRecipientResolver::Candidate.new(
+      recipient: recipient,
+      available_channels: %i[email],
+      channel: :email,
+      email: recipient.email,
+      email_owner: recipient
+    )
+    candidate.define_singleton_method(:deliverable_channels) { %i[email] }
+
+    assert_equal 'Delivers to j***@example.com', secure_request_candidate_destination_text(candidate)
+  end
+
+  test 'candidate destination text names a differing delivery owner' do
+    guardian = create(:constituent, first_name: 'Jane', last_name: 'Smith',
+                                    email: "jane.smith.#{SecureRandom.hex(4)}@example.com")
+    dependent = create(:constituent)
+    candidate = Applications::SecureRequestRecipientResolver::Candidate.new(
+      recipient: dependent,
+      available_channels: %i[email],
+      channel: :email,
+      email: guardian.email,
+      email_owner: guardian
+    )
+    candidate.define_singleton_method(:deliverable_channels) { %i[email] }
+
+    assert_equal "Delivers to Jane Smith (Guardian) (ID: #{guardian.id}) — j***@example.com",
+                 secure_request_candidate_destination_text(candidate)
+  end
+
+  test 'candidate destination text renders the letter mailing destination' do
+    owner = create(:constituent, physical_address_1: '9 Guardian Way', city: 'Baltimore',
+                                 state: 'MD', zip_code: '21201')
+    candidate = Applications::SecureRequestRecipientResolver::Candidate.new(
+      recipient: owner,
+      available_channels: %i[letter],
+      channel: :letter,
+      address_owner: owner
+    )
+    candidate.define_singleton_method(:deliverable_channels) { %i[letter] }
+
+    assert_equal 'Delivers to 9 Guardian Way, Baltimore, MD 21201',
+                 secure_request_candidate_destination_text(candidate)
+  end
+
+  test 'candidate destination text is blank without a resolvable channel' do
+    recipient = create(:constituent)
+    candidate = Applications::SecureRequestRecipientResolver::Candidate.new(
+      recipient: recipient,
+      available_channels: [],
+      channel: nil
+    )
+    candidate.define_singleton_method(:deliverable_channels) { [] }
+
+    assert_nil secure_request_candidate_destination_text(candidate)
   end
 end

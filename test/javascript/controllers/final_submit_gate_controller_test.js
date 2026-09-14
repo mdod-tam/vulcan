@@ -279,6 +279,96 @@ describe("FinalSubmitGateController", () => {
   })
 })
 
+describe("FinalSubmitGateController secure-request channel restoration", () => {
+  let controller
+  let form
+  let submitButton
+
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <form data-final-submit-gate-restore-conditional-values="true">
+        <input type="checkbox"
+               name="recipient_ids[]"
+               value="11"
+               checked
+               data-final-submit-gate-conditional-required-source="email-channel"
+               data-final-submit-gate-required-when-selected="true">
+        <select name="channel_overrides[11]"
+                data-final-submit-gate-conditional-required="email-channel"
+                data-final-submit-gate-restore-value="email">
+          <option value="email" selected>Email</option>
+          <option value="letter">Postal mail</option>
+        </select>
+        <input type="checkbox"
+               name="recipient_ids[]"
+               value="12"
+               data-final-submit-gate-conditional-required-source="sms-channel"
+               data-final-submit-gate-required-when-selected="true">
+        <select name="channel_overrides[12]"
+                data-final-submit-gate-conditional-required="sms-channel"
+                data-final-submit-gate-restore-value="">
+          <option value="" selected>Choose a delivery channel</option>
+          <option value="sms">Text message</option>
+        </select>
+        <button type="submit" data-final-submit-gate-target="submitButton">Submit</button>
+      </form>
+    `
+
+    form = document.querySelector("form")
+    ;({ controller, submitButton } = mount(form))
+  })
+
+  afterEach(() => {
+    document.body.innerHTML = ""
+  })
+
+  test("preserves the initial server default and restores it after rechecking", () => {
+    const recipient = form.querySelector('input[value="11"]')
+    const channel = form.querySelector('select[name="channel_overrides[11]"]')
+
+    controller.update()
+    expect(channel.value).toBe("email")
+    expect(channel.disabled).toBe(false)
+    expect(submitButton.disabled).toBe(false)
+
+    recipient.checked = false
+    controller.update()
+    expect(channel.value).toBe("")
+    expect(channel.disabled).toBe(true)
+
+    recipient.checked = true
+    controller.update()
+    expect(channel.value).toBe("email")
+    expect(channel.disabled).toBe(false)
+  })
+
+  test("requires an explicit SMS choice again after rechecking", () => {
+    const emailRecipient = form.querySelector('input[value="11"]')
+    const smsRecipient = form.querySelector('input[value="12"]')
+    const channel = form.querySelector('select[name="channel_overrides[12]"]')
+
+    controller.update()
+    emailRecipient.checked = false
+    smsRecipient.checked = true
+    controller.update()
+
+    expect(channel.value).toBe("")
+    expect(submitButton.disabled).toBe(true)
+
+    channel.value = "sms"
+    controller.update()
+    expect(submitButton.disabled).toBe(false)
+
+    smsRecipient.checked = false
+    controller.update()
+    smsRecipient.checked = true
+    controller.update()
+
+    expect(channel.value).toBe("")
+    expect(submitButton.disabled).toBe(true)
+  })
+})
+
 // The admin merge form is the only opt-in consumer of the detail template, and the only form
 // whose radio groups are wrapped in nested fieldsets. Its own fixture keeps that structure
 // explicit rather than inferring group naming from the constituent-portal shape above.

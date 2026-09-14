@@ -84,9 +84,15 @@ export default class extends Controller {
         const hadPreviousValue = this._conditionalRequiredSourceValues.has(key)
         const previousValue = this._conditionalRequiredSourceValues.get(key)
         const required = selectedSource?.dataset.finalSubmitGateRequiredWhenSelected === "true"
+        const restoreConditionalValues =
+          this.element.dataset.finalSubmitGateRestoreConditionalValues === "true"
 
-        if (!required || (hadPreviousValue && previousValue !== selectedValue)) {
+        if (!required) {
           field.value = ""
+        } else if (hadPreviousValue && previousValue !== selectedValue) {
+          field.value = restoreConditionalValues
+            ? (field.dataset.finalSubmitGateRestoreValue || "")
+            : ""
         }
 
         field.required = required

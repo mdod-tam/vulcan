@@ -296,6 +296,17 @@ module Applications
       end
     end
 
+    test 'bulk loads secure request delivery owners for the audit view' do
+      owner = create(:constituent)
+      create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
+                            action: 'provider_info_requested', metadata: { 'delivery_owner_id' => owner.id })
+
+      builder = AuditLogBuilder.new(@application)
+      builder.build_audit_logs
+
+      assert_equal owner, builder.delivery_owners_by_id[owner.id]
+    end
+
     test 'includes secure request revocation events in audit logs' do
       provider_info_event = Event.create!(
         user: @admin,

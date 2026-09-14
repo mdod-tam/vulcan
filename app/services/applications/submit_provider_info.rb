@@ -2,8 +2,6 @@
 
 module Applications
   class SubmitProviderInfo < BaseService
-    include SecureFormLocaleResolver
-
     MESSAGE_SCOPE = 'applications.provider_info.messages'
     PROVIDER_FIELDS = %i[
       medical_provider_name
@@ -149,9 +147,8 @@ module Applications
     end
 
     def log_submission(previous_presence)
-      AuditEventService.log(
+      PublicAuditActor.log_audit(
         action: 'medical_provider_info_submitted',
-        actor: secure_request_form.recipient,
         auditable: application,
         metadata: {
           submitted_via: 'secure_request_form',
@@ -159,6 +156,9 @@ module Applications
           recipient_user_id: secure_request_form.recipient_id,
           recipient_role: secure_request_form.recipient_role,
           recipient_relationship_type: secure_request_form.recipient_relationship_type,
+          delivery_owner_id: secure_request_form.delivery_owner_id,
+          delivery_source: secure_request_form.delivery_source,
+          recipient_channel: secure_request_form.recipient_channel,
           request_batch_id: secure_request_form.request_batch_id,
           changed_fields: changed_provider_fields,
           previous_presence: previous_presence,
@@ -176,7 +176,7 @@ module Applications
     end
 
     def message(key)
-      I18n.t("#{MESSAGE_SCOPE}.#{key}", locale: secure_form_locale_for(secure_request_form.recipient))
+      I18n.t("#{MESSAGE_SCOPE}.#{key}", locale: secure_request_form.delivery_locale)
     end
   end
 end

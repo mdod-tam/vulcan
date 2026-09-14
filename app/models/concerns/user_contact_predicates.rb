@@ -10,6 +10,8 @@
 module UserContactPredicates
   extend ActiveSupport::Concern
 
+  MAILING_ADDRESS_FIELDS = %i[physical_address_1 city state zip_code].freeze
+
   def real_email?
     return false if email.blank?
     return false unless email.to_s.match?(URI::MailTo::EMAIL_REGEXP)
@@ -59,5 +61,9 @@ module UserContactPredicates
 
   def address_only_contact?
     !real_email? && !real_phone?
+  end
+
+  def complete_mailing_address?
+    MAILING_ADDRESS_FIELDS.all? { |field| public_send(field).present? }
   end
 end

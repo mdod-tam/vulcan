@@ -59,6 +59,21 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
     )
   end
 
+  test 'show and validation errors use the delivery owner locale' do
+    owner = create(:constituent, locale: 'es')
+    @secure_request_form.update!(delivery_owner: owner, delivery_source: 'managing_guardian')
+
+    patch secure_proof_form_path, params: { token: @raw_token }
+
+    assert_response :unprocessable_content
+    assert_select 'h1', I18n.t(
+      'secure_proof_forms.show.heading',
+      proof_type: I18n.t('secure_proof_forms.proof_types.income', locale: :es),
+      locale: :es
+    )
+    assert_select '#file_error', I18n.t('applications.proof_resubmission.messages.file_blank', locale: :es)
+  end
+
   test 'success response has secure no-store headers' do
     get secure_proof_form_success_path
 
@@ -107,7 +122,22 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_proof_form_path, params: { token: @raw_token, file: file }
 
-    assert_redirected_to secure_proof_form_success_path
+    assert_redirected_to secure_proof_form_success_path(locale: :en)
+  end
+
+  test 'patch success carries the delivery owner locale to the success page' do
+    owner = create(:constituent, locale: 'es')
+    @secure_request_form.update!(delivery_owner: owner, delivery_source: 'managing_guardian')
+    Applications::SubmitProofResubmission.any_instance.stubs(:call).returns(
+      BaseService::Result.new(success: true, message: 'ok', data: {})
+    )
+    file = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+
+    patch secure_proof_form_path, params: { token: @raw_token, file: file }
+
+    assert_redirected_to secure_proof_form_success_path(locale: :es)
+    get secure_proof_form_success_path(locale: :es)
+    assert_select 'h1', I18n.t('secure_proof_forms.success.heading', locale: :es)
   end
 
   test 'patch with missing file re-renders upload form with validation error' do

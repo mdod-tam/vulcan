@@ -79,6 +79,87 @@ Secure temporary forms centralize:
 * audit events for request, submission, revocation, and expiration
 * delivery failure reporting back to the calling workflow
 
+**Delivery routing (`Applications::SecureRequestRecipientResolver`):** for
+constituent-facing secure-request issuance (`Applications::RequestProviderInfo` and
+`Applications::RequestProofResubmission`), the resolver selects the logical recipient,
+channel, and secure-form provenance. It consumes the field-specific persisted ownership
+policy in [`UserGuardianship`](../development/guardian_relationship_system.md#canonical-stored-contact-ownership)
+instead of interpreting dependent and guardian fields itself. Callers own form creation,
+tokens, notifications, and retry; the resolver never creates portal/login eligibility or
+stores fallback contact on the constituent. Certification-upload flows
+(`Applications::RequestCertificationUpload`, `MedicalCertificationService`) are outside
+this routing: they deliver to the medical provider's recorded email address directly and
+consult the resolver only for the internal tracking-notification recipient.
+
+* **Strict channel overrides.** An admin-selected channel is honored only when the
+  contact for it currently exists on the recipient's resolved records. A forged, stale,
+  or contact-less override fails with `invalid_channel_override` and creates nothing —
+  there is no silent fallback to another channel. An override naming a route whose
+  contact exists but whose delivery owner is no longer eligible passes this
+  contact-availability check and then fails the locked delivery-participant recheck with
+  `recipient_no_longer_eligible` instead.
+* **Staff proof delivery.** Income, residency, and ID proof controls use the same
+  recipient/channel chooser as provider-info requests, including when provider data
+  is complete. Automatic rejection delivery does not select SMS; after a delivery
+  warning staff can explicitly choose SMS. Partial-batch recovery offers revoked
+  recipients without resending successful active links.
+* **Message language.** A form with a persisted delivery owner uses that owner's
+  supported locale for email, SMS, and letters. Unsupported or missing owner locales
+  use `I18n.default_locale`. Legacy forms retain the recipient/explicit print-owner
+  fallback. The logical recipient still identifies whose request is being completed.
+* **Issued-link history.** Both admin tables identify recipients by role, relationship,
+  constituent ID, and profile link, and name a differing original delivery owner.
+  Email/phone destinations use encrypted issuance snapshots. Letter rows say
+  “Postal mail”: no immutable address snapshot is stored, so current addresses must
+  not be displayed as historical destinations. Chooser options describe current routes.
+* **SMS capability.** SMS is only ever an explicit selection, never a default. It
+  requires the selected contact owner's real phone with `phone_type` of `text`; voice,
+  videophone, synthetic, or malformed phones fail server-side. Phone ownership is
+  resolved independently from email ownership.
+* **Delivery-owner eligibility.** The selected channel's delivery owner — contact owner
+  for email/SMS, address owner for letters — must satisfy the same delivery-eligibility
+  rule as the logical recipient. An active dependent's request never routes through a
+  suspended, inactive, or merged guardian's email, phone, or household address.
+* **Address-only letters.** A constituent with a complete mailing address and no real
+  digital contact still resolves to postal letter when the action permits it; blank
+  email/phone does not block the request. Letter content is printed to the
+  resolver-selected address owner. A dependent's complete address is used when the
+  managing guardian has no complete mailing address; otherwise the guardian remains the
+  address owner. Template selection and translated instructions use that owner's locale.
+* **Resend revalidation.** Resending an issued link revalidates the stored channel
+  against the recipient's *current* contact information. A channel that is no longer
+  deliverable fails closed (the original form stays untouched); a successful resend
+  snapshots the current contact while keeping the original channel. Merged, suspended,
+  or inactive recipients are rejected, never redirected to a merge survivor.
+* **No route is not a delivery failure.** When no permissible route exists, the caller
+  fails before creating any form, token, notification, or audit event.
+
+### Delivery-provenance rollout and merge gate
+
+PR4c (#209) makes `Applications::RequestProviderInfo` and
+`Applications::RequestProofResubmission` the only production writers of application
+secure forms and requires every new row to persist both `delivery_owner_id` and
+`delivery_source`. The columns remain nullable so historical ownership is not invented.
+The PR4b stack (#192–#194) owns the merge blocker that consumes this provenance.
+
+Before enabling owner-complete protection in production, operators must record:
+
+- active ownerless rows, grouped by channel and kind, with maximum `expires_at`;
+- rows where owner/source presence does not match;
+- confirmation that no other production writer creates application secure forms.
+
+Existing active ownerless links should expire or be revoked through the normal secure
+request lifecycle. Until their count reaches zero, the bounded single-deploy guard blocks
+all merges whenever any active incomplete-provenance row exists. That zero count is the
+guard's exit condition; it is not evidence that historical rows acquired an owner.
+
+The `delivery_owner_id` index is retained because PostgreSQL does not automatically
+index foreign keys and merge performs a reverse lookup across active recipient/owner
+forms. The index decision must be confirmed with a representative `EXPLAIN` using
+realistic active/expired proportions. Do not add a composite or partial index without
+evidence that the observed bitmap/index plan needs it. Production table size, form
+distribution, and merge-query frequency remain operator-owned rollout evidence.
+
 ---
 
 ## 3 · Letter Generation
@@ -159,7 +240,6 @@ def mock_template(subject_format, body_format)
   template
 end
 
-# Usage:
 tpl = mock_template('Hello %{first_name}', 'Welcome %{first_name}!')
 subj, body = tpl.render(first_name: 'Ada')
 ```

@@ -102,11 +102,12 @@ module Applications
       actor.admin? && actor.public_login_active?
     end
 
+    # Locked recipients and delivery owners must meet delivery policy,
+    # including guardians who supply a dependent's contact or address.
     def secure_request_recipients_eligible?(candidates)
-      candidates.all? { |candidate| candidate.recipient.constituent? && candidate.recipient.public_login_active? }
+      candidates.all?(&:delivery_participants_eligible?)
     end
 
-    # resend_of takes precedence over recipient_ids; they are mutually exclusive
     def resolve_recipients
       candidates = if resend_of.present?
                      resolver_for_resend.resolve
@@ -221,6 +222,8 @@ module Applications
         recipient_channel: candidate.channel,
         recipient_role: candidate.recipient_role,
         recipient_relationship_type: candidate.recipient_relationship_type,
+        delivery_owner: candidate.delivery_owner,
+        delivery_source: candidate.delivery_source&.to_s,
         public_token_digest: SecureRequestForm.digest_public_token(raw_token),
         expires_at: link_expiration_hours.hours.from_now,
         sent_at: Time.current,
@@ -241,6 +244,8 @@ module Applications
           recipient_role: secure_request_form.recipient_role,
           recipient_channel: secure_request_form.recipient_channel,
           requested_recipient_channel: secure_request_form.recipient_channel,
+          delivery_owner_id: secure_request_form.delivery_owner_id,
+          delivery_source: secure_request_form.delivery_source,
           request_batch_id: secure_request_form.request_batch_id,
           expires_at: secure_request_form.expires_at.iso8601
         },
@@ -255,7 +260,7 @@ module Applications
       when 'letter'
         :letter
       when 'sms'
-        # NotificationService has no SMS transport in v1; SmsService owns token-safe SMS delivery.
+        # NotificationService has no SMS transport. SmsService owns token-safe SMS delivery.
         :email
       end || :email
     end
@@ -263,9 +268,8 @@ module Applications
     def deliver_requests(deliveries)
       delivery_failures = []
 
-      # Request rows are committed before transport begins. Attempting each
-      # delivery preserves per-recipient delivery opportunities and returns
-      # non-secret failure metadata for staff follow-up.
+      # Transport starts after commit. One failure must not block other recipients.
+      # Failure metadata must exclude secrets.
       Array(deliveries).each do |delivery|
         case delivery.secure_request_form.recipient_channel.to_sym
         when :email
@@ -287,18 +291,18 @@ module Applications
     end
 
     def deliver_email(delivery)
-      # deliver_now is intentional: the email body contains the raw bearer URL,
-      # which must not be serialized into Active Job arguments via deliver_later.
+      # deliver_now keeps the raw bearer URL out of Active Job arguments.
       ApplicationNotificationsMailer
         .provider_info_requested(application, delivery.secure_request_form, secure_url: secure_url_for(delivery.raw_token))
         .deliver_now
     end
 
     def deliver_letter(delivery)
-      # deliver_now triggers the action body, which calls queue_letter_delivery
-      # and returns noop_letter_delivery (a safe no-op for .deliver_now).
+      # deliver_now runs queue_letter_delivery, then receives noop_letter_delivery.
+      # The resolver selects the printed address owner.
       ApplicationNotificationsMailer
-        .provider_info_requested(application, delivery.secure_request_form, secure_url: nil)
+        .provider_info_requested(application, delivery.secure_request_form, secure_url: nil,
+                                                                            letter_recipient: delivery.candidate.address_owner)
         .deliver_now
     end
 
@@ -392,7 +396,7 @@ module Applications
     def sms_message(secure_url, secure_request_form)
       I18n.t(
         'secure_provider_info_forms.sms.message',
-        locale: secure_form_locale_for(secure_request_form.recipient),
+        locale: secure_request_form.delivery_locale,
         secure_url: secure_url,
         hours: link_expiration_hours
       )

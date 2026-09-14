@@ -12,6 +12,8 @@ FactoryBot.define do
     recipient_phone { recipient.phone }
     recipient_channel { :email }
     recipient_role { :constituent }
+    delivery_owner { recipient }
+    delivery_source { :constituent }
     expires_at { 48.hours.from_now }
     sent_at { Time.current }
 

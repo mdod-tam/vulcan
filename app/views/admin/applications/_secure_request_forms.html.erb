@@ -2,67 +2,12 @@
   <%= t('admin.applications.secure_request_forms.panel.title') %>
 </h2>
 
-<p class="text-sm text-gray-600 mb-4">
-  <%= t('admin.applications.secure_request_forms.panel.description') %>
-</p>
-
-<% if @provider_info_missing_managing_guardian %>
-  <div class="mb-6 rounded-md border border-amber-300 bg-amber-50 p-4" role="alert">
-    <h3 class="text-sm font-semibold text-amber-900">
-      <%= t('admin.applications.secure_request_forms.managing_guardian.title') %>
-    </h3>
-    <p class="mt-1 text-sm text-amber-800">
-      <%= t('admin.applications.secure_request_forms.managing_guardian.description') %>
-    </p>
-  </div>
-<% elsif @provider_info_recipient_options.present? %>
-  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "mb-6 space-y-4" do |form| %>
-    <fieldset>
-
-      <div class="space-y-3">
-        <% @provider_info_recipient_options.each do |option| %>
-          <% recipient = option[:recipient] %>
-          <% candidate = option[:candidate] %>
-          <% checkbox_id = "provider_info_recipient_#{recipient.id}" %>
-          <div class="rounded border border-gray-200 p-3">
-            <div class="flex items-start gap-3">
-              <%= check_box_tag "recipient_ids[]",
-                                recipient.id,
-                                @provider_info_default_recipient_ids.include?(recipient.id),
-                                id: checkbox_id,
-                                class: "mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" %>
-              <div>
-                <%= label_tag checkbox_id, recipient.full_name, class: "block text-sm font-medium text-gray-900" %>
-                <p class="text-xs text-gray-600">
-                  <%= t('admin.applications.secure_request_forms.panel.default_channel',
-                        channel: candidate&.channel || t('admin.applications.secure_request_forms.contact.unknown')) %>
-                </p>
-              </div>
-            </div>
-
-            <% if option[:email_override_available] %>
-              <div class="mt-3 ml-7">
-                <%= check_box_tag "channel_overrides[#{recipient.id}]",
-                                  "email",
-                                  false,
-                                  id: "provider_info_email_override_#{recipient.id}",
-                                  class: "h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" %>
-                <%= label_tag "provider_info_email_override_#{recipient.id}",
-                              t('admin.applications.secure_request_forms.panel.email_override'),
-                              class: "ml-2 text-sm text-gray-700" %>
-              </div>
-            <% end %>
-          </div>
-        <% end %>
-      </div>
-    </fieldset>
-
-    <%= form.submit t('admin.applications.secure_request_forms.panel.submit'),
-                    class: "inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2" %>
-  <% end %>
-<% else %>
-  <p class="text-sm text-gray-600 mb-6"><%= t('admin.applications.secure_request_forms.panel.no_recipients') %></p>
-<% end %>
+<%= render "secure_request_recipient_form",
+           application: @application,
+           recipient_options: @secure_request_recipient_options,
+           default_recipient_ids: @secure_request_default_recipient_ids,
+           missing_managing_guardian: @secure_request_missing_managing_guardian,
+           purpose: "provider_info" %>
 
 <% if @secure_request_forms.present? %>
   <div class="overflow-x-auto">
@@ -82,7 +27,17 @@
         <% @secure_request_forms.each do |secure_request_form| %>
           <% active_batch_count = @active_secure_request_form_batch_counts.fetch(secure_request_form.request_batch_id, 0) %>
           <tr>
-            <td class="px-3 py-3 text-gray-900"><%= secure_request_form.recipient.full_name %></td>
+            <td class="px-3 py-3 text-gray-900">
+              <%= link_to secure_request_issued_recipient_label(secure_request_form),
+                          admin_user_path(secure_request_form.recipient),
+                          class: 'text-indigo-700 underline', data: { turbo_frame: '_top' } %>
+              <%# The row preserves the owner at issuance. Resends resolve the current contact. %>
+              <% if secure_request_form.delivery_owner.present? && secure_request_form.delivery_owner_id != secure_request_form.recipient_id %>
+                <span class="block text-xs font-normal text-gray-600">
+                  <%= secure_request_original_delivery_owner_text(secure_request_form) %>
+                </span>
+              <% end %>
+            </td>
             <td class="px-3 py-3 text-gray-700"><%= secure_request_masked_contact(secure_request_form) %></td>
             <td class="px-3 py-3 text-gray-700"><%= secure_request_channel_label(secure_request_form) %></td>
             <td class="px-3 py-3 text-gray-700"><%= secure_request_status_label(secure_request_form) %></td>
@@ -115,9 +70,6 @@
                   <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
                     <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
                     <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
-                    <% if secure_request_form.recipient_channel_email? %>
-                      <%= hidden_field_tag "channel_overrides[#{secure_request_form.recipient_id}]", "email" %>
-                    <% end %>
                     <%= submit_tag t('admin.applications.secure_request_forms.table.resend'),
                                    class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
                   <% end %>
@@ -125,9 +77,6 @@
                   <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
                     <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
                     <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
-                    <% if secure_request_form.recipient_channel_email? %>
-                      <%= hidden_field_tag "channel_overrides[#{secure_request_form.recipient_id}]", "email" %>
-                    <% end %>
                     <%= submit_tag t('admin.applications.secure_request_forms.table.send_new_link'),
                                    class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
                   <% end %>

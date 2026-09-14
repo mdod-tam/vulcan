@@ -198,7 +198,8 @@
                       proof_type = log.metadata.try(:[], 'proof_type') || 'Unknown'
                       "Constituent notified: #{ProofNotificationCopy.rejected_text(proof_type, log.metadata.try(:[], 'rejection_reason'))}"
                     when "provider_info_requested", "proof_resubmission_requested", "cert_upload_requested"
-                      secure_request_notification_detail(log, application: @application)
+                      secure_request_notification_detail(log, application: @application,
+                                                               delivery_owners_by_id: @secure_request_delivery_owners_by_id)
                     else
                       log.action.titleize.gsub('_', ' ')
                     end

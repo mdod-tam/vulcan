@@ -19,6 +19,109 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     clear_emails
   end
 
+  test 'secure request email uses persisted delivery owner locale' do
+    owner = create(:constituent, locale: 'es')
+    recipient = create(:constituent, locale: 'en')
+    application = create(:application, user: recipient)
+    form = create(:secure_request_form, application: application, recipient: recipient,
+                                        recipient_email: owner.email, delivery_owner: owner,
+                                        delivery_source: 'managing_guardian')
+    spanish_template = mock_template('Spanish delivery owner', 'Spanish message for %<user_first_name>s')
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_provider_info_requested',
+                                        format: :text, locale: 'es').returns(spanish_template)
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_provider_info_requested',
+                                        format: :text, locale: 'en').returns(@mock_requested_text)
+
+    mail = ApplicationNotificationsMailer.provider_info_requested(application, form, secure_url: 'https://example.test/secure').deliver_now
+
+    assert_equal [owner.email], mail.to
+    assert_equal 'Spanish delivery owner', mail.subject
+    assert_includes mail.body.decoded, 'Spanish message'
+  end
+
+  %i[proof_requested proof_rejected].each do |action|
+    test "#{action} email uses persisted owner language and safe default locale" do
+      owner = create(:constituent, locale: 'es')
+      recipient = create(:constituent, locale: 'en')
+      form = create(:secure_request_form, application: @application, recipient: recipient,
+                                          kind: :income_proof_resubmission, delivery_owner: owner,
+                                          recipient_email: owner.email, delivery_source: 'managing_guardian')
+      %w[es en].each do |locale|
+        template = mock_template("#{locale} delivery", "#{locale} message %<proof_type_formatted>s")
+        EmailTemplate.stubs(:find_by!).with(name: "application_notifications_#{action}",
+                                            format: :text, locale: locale).returns(template)
+      end
+      %w[es unsupported].each do |locale|
+        owner.update!(locale: locale)
+        form.reload
+        argument = action == :proof_requested ? :income : @proof_review
+        mail = ApplicationNotificationsMailer.public_send(action, @application, argument,
+                                                          recipient: recipient, secure_request_form: form,
+                                                          secure_upload_url: 'https://example.test/secure').deliver_now
+        expected_locale = locale == 'es' ? 'es' : I18n.default_locale.to_s
+        assert_equal [owner.email], mail.to
+        assert_equal "#{expected_locale} delivery", mail.subject
+        assert_includes mail.body.decoded, "#{expected_locale} message"
+        assert_includes mail.body.decoded, I18n.t('secure_proof_forms.proof_types.income', locale: expected_locale)
+      end
+    end
+  end
+
+  test 'secure request letters render provider and both proof states in the delivery owner language' do
+    EmailTemplate.unstub(:find_by!)
+    %i[header_text footer_text].each { |helper| ApplicationNotificationsMailer.any_instance.unstub(helper) }
+    %w[email_header_text email_footer_text].each do |template_name|
+      EmailTemplate.where(name: template_name, format: :text).destroy_all
+      %w[en es].each do |locale|
+        suffix = locale == 'es' ? '_es' : ''
+        load Rails.root.join("db/seeds/email_templates/#{template_name}#{suffix}.rb")
+      end
+    end
+    %w[provider_info_requested proof_requested proof_rejected].each do |action|
+      EmailTemplate.where(name: "application_notifications_#{action}", format: :text).destroy_all
+      %w[en es].each do |locale|
+        suffix = locale == 'es' ? '_es' : ''
+        load Rails.root.join("db/seeds/email_templates/application_notifications_#{action}#{suffix}.rb")
+      end
+    end
+    recipient = create(:constituent, locale: 'en')
+    owner = create(:constituent, locale: 'es', physical_address_1: '9 Guardian Way')
+    %w[en es].each do |locale|
+      owner.update!(locale: locale)
+      %i[provider_info_requested proof_requested proof_rejected].each do |action|
+        form = create(:secure_request_form, application: @application, recipient: recipient,
+                                            kind: action == :provider_info_requested ? :provider_info_request : :income_proof_resubmission,
+                                            recipient_channel: :letter, recipient_email: nil, recipient_phone: nil,
+                                            delivery_owner: owner, delivery_source: 'managing_guardian')
+        delivery = if action == :provider_info_requested
+                     ApplicationNotificationsMailer.provider_info_requested(@application, form, letter_recipient: owner)
+                   else
+                     argument = action == :proof_requested ? :income : @proof_review
+                     ApplicationNotificationsMailer.public_send(action, @application, argument,
+                                                                recipient: recipient, secure_request_form: form,
+                                                                letter_recipient: owner)
+                   end
+        assert_difference('PrintQueueItem.count', 1) { assert_no_emails { delivery.deliver_now } }
+        item = PrintQueueItem.order(:created_at).last
+        assert_equal owner.id, item.constituent_id
+        pdf_path = Rails.root.join("tmp/capybara/secure-request-#{action}-#{locale}.pdf")
+        pdf_path.dirname.mkpath
+        File.binwrite(pdf_path, item.pdf_letter.download)
+        File.write(pdf_path.sub_ext('.json'), JSON.pretty_generate(
+                                                generated_at: Time.current.iso8601, target_root: Rails.root.to_s,
+                                                test_class: self.class.name, test_name: name, delivery_owner_id: owner.id,
+                                                locale: locale, action: action, pdf_path: pdf_path.to_s
+                                              ))
+        assert_operator pdf_path.size, :>, 1_000
+        unless action == :provider_info_requested
+          pdf_text = inflated_pdf_text(item.pdf_letter.download)
+          assert_includes pdf_text, I18n.t('secure_proof_forms.proof_types.income', locale: locale)
+        end
+        form.revoke!(actor: @admin, reason: :replacement_request)
+      end
+    end
+  end
+
   private
 
   def setup_email_template_mocks
@@ -107,8 +210,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     ApplicationNotificationsMailer.any_instance.stubs(:new_user_session_url).returns('http://example.com/users/sign_in')
     ApplicationNotificationsMailer.any_instance.stubs(:constituent_portal_dashboard_url).returns('http://example.com/dashboard')
     ApplicationNotificationsMailer.any_instance.stubs(:new_constituent_portal_application_url).returns('http://example.com/applications/new')
-    # Scope the stub to the mailer instance so Mocha auto-teardowns it and
-    # no other test's admin_applications_path(filter: ...) calls are affected.
+    # The mailer-scoped stub preserves other tests' admin_applications_path(filter: ...) calls and allows Mocha cleanup.
     ApplicationNotificationsMailer.any_instance.stubs(:admin_applications_path).returns('/admin/applications')
     ApplicationNotificationsMailer.any_instance.stubs(:admin_application_url).with(anything, anything).returns('http://example.com/admin/applications/1')
   end
@@ -144,30 +246,24 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   teardown do
-    # Clean up after each test
     ActionMailer::Base.deliveries.clear
   end
 
   test 'proof_approved' do
-    # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
-    # Call the mailer method and deliver the email
     email = nil
     assert_emails 1 do
       email = ApplicationNotificationsMailer.proof_approved(@application, @proof_review)
       email.deliver_now
     end
 
-    # Now check the email's basic properties
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@user.email], email.to
 
-    # Check the actual delivered email content in ActionMailer::Base.deliveries
     delivered_email = ActionMailer::Base.deliveries.first
     assert_equal 'Mock Proof Approved: Income', delivered_email.subject
 
-    # Check the content of the email
     assert_match(/approved for #{@user.first_name}/, delivered_email.body.to_s)
     assert_match(/Income/, delivered_email.body.to_s)
   end
@@ -317,30 +413,23 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'proof_rejected' do
-    # Set up the remaining_attempts for the test
     @application.update_column(:total_rejections, 3)
 
-    # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
-    # Deliver the email directly with deliver_now instead of deliver_later
     email = nil
     assert_emails 1 do
       email = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review)
       email.deliver_now
     end
 
-    # Assert email properties
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@user.email], email.to
 
-    # We're working with the mock data from setup
     assert_equal @mock_rejected_text.subject, email.subject
 
-    # We're using a text-only template, don't expect multipart emails anymore
     assert_not email.multipart?
 
-    # Check the content of the email
     assert_includes email.body.to_s, "needs revision for #{@user.first_name}"
     assert_includes email.body.to_s, "Reason: #{@proof_review.rejection_reason}"
   end
@@ -468,28 +557,22 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'max_rejections_reached' do
-    # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
-    # Deliver the email directly with deliver_now instead of deliver_later
     email = nil
     assert_emails 1 do
       email = ApplicationNotificationsMailer.max_rejections_reached(@application)
       email.deliver_now
     end
 
-    # Assert email properties
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@user.email], email.to
 
-    # We're working with the mock data from setup
     expected_subject = 'Mock Application Archived - ID 7'
     assert_equal expected_subject, email.subject
 
-    # We're using a text-only template, don't expect multipart emails anymore
     assert_not email.multipart?
 
-    # Check the content of the email
     assert_includes email.body.to_s, "archived for #{@user.first_name}"
     assert_includes email.body.to_s, "Reapply after #{@reapply_date.strftime('%B %d, %Y')}"
   end
@@ -508,39 +591,30 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'proof_needs_review_reminder' do
-    # Create a list of applications that need review
     applications = [@application]
 
-    # Stub the needs_review_since method to return a date more than 3 days ago
-    # This is needed for the @stale_reviews to be populated
+    # Only reviews older than three days enter the reminder.
     @application.stubs(:needs_review_since).returns(4.days.ago)
 
-    # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
-    # Use the capture_emails helper instead of assert_emails
     emails = capture_emails do
       ApplicationNotificationsMailer.proof_needs_review_reminder(@admin, applications).deliver_now
     end
 
-    # Verify we captured exactly one email
     assert_equal 1, emails.size
     email = emails.first
 
-    # Test email content
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@admin.email], email.to
-    # Assert against specific mock subject
     expected_subject = "Mock Reminder: #{applications.count} Apps Need Review"
     assert_equal expected_subject, email.subject
 
-    # We're using a text-only template, don't expect multipart emails anymore
     assert_not email.multipart?
 
-    # Check the content of the email
     assert_includes email.body.to_s, "Reminder for #{@admin.full_name}"
     assert_includes email.body.to_s, "#{applications.count} apps need review"
-    assert_includes email.body.to_s, "ID: #{@application.id}" # Check list content
+    assert_includes email.body.to_s, "ID: #{@application.id}"
   end
 
   test 'proof_needs_review_reminder uses English template for Spanish locale admin' do
@@ -566,25 +640,20 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     )
     temp_password = 'temporary123'
 
-    # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
-    # Deliver the email directly with deliver_now instead of deliver_later
     email = nil
     assert_emails 1 do
       email = ApplicationNotificationsMailer.account_created(constituent)
       email.deliver_now
     end
 
-    # Assert email properties
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [constituent.email], email.to
 
-    # We're working with the mock data from setup
     expected_subject = "Mock Account Created for #{constituent.first_name}"
     assert_equal expected_subject, email.subject
 
-    # Check the content of the email
     assert_includes decoded_text_part(email), "Welcome #{constituent.first_name}"
     assert_includes decoded_text_part(email), 'mat.program1@maryland.gov'
     assert_includes decoded_text_part(email), ProgramContact.website_url
@@ -660,7 +729,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       password: 'password',
       password_confirmation: 'password',
       hearing_disability: true,
-      communication_preference: 'letter', # Set preference to letter
+      communication_preference: 'letter',
       physical_address_1: '123 Main St',
       city: 'Baltimore',
       state: 'MD',
@@ -676,24 +745,22 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
   end
 
-  # Helper method to set up common data for income threshold tests
   def setup_income_threshold_test_data
     @constituent_params = {
       first_name: 'John',
       last_name: 'Doe',
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
-      communication_preference: 'letter' # Set preference to letter
+      communication_preference: 'letter'
     }
 
     @notification_params = {
       household_size: 2,
       annual_income: 100_000,
-      communication_preference: 'email', # This preference is for the email, not the letter recipient
+      communication_preference: 'email', # Overrides the constituent's delivery preference.
       additional_notes: 'Income exceeds threshold'
     }
 
-    # Set up FPL policies for testing (needed by the mailer method)
     Policy.find_or_create_by(key: 'fpl_2_person').update(value: 20_000)
     Policy.find_or_create_by(key: 'fpl_modifier_percentage').update(value: 400)
   end
@@ -718,45 +785,36 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     setup_income_threshold_test_data
     @constituent_params[:communication_preference] = 'email'
 
-    # Create new mocks for the test to ensure they're fresh
     mock_income_exceeded_text = mock_template("Mock Income Threshold Exceeded for #{@constituent_params[:first_name]}",
                                               "Text Body: #{@constituent_params[:first_name]}, your income exceeds the " \
                                               "threshold for household size #{@notification_params[:household_size]}. " \
                                               "#{@notification_params[:additional_notes]}")
 
-    # Re-stub the EmailTemplate.find_by! to return our new mock
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded',
                                         format: :text, locale: 'en').returns(mock_income_exceeded_text)
 
-    # Set default mail parameters to ensure consistency
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
-    # Deliver the email directly with deliver_now instead of deliver_later
     email = nil
     assert_emails 1 do
       email = ApplicationNotificationsMailer.income_threshold_exceeded(@constituent_params, @notification_params)
       email.deliver_now
     end
 
-    # Assert email properties
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@constituent_params[:email]], email.to
 
-    # We're working with the mock data from setup
     expected_subject = "Mock Income Threshold Exceeded for #{@constituent_params[:first_name]}"
     assert_equal expected_subject, email.subject
 
-    # We're using a text-only template, don't expect multipart emails anymore
     assert_not email.multipart?
 
-    # Check the content of the email
     assert_includes email.body.to_s, "#{@constituent_params[:first_name]}, your income"
     assert_includes email.body.to_s, "household size #{@notification_params[:household_size]}"
-    assert_includes email.body.to_s, @notification_params[:additional_notes] # Check optional note
+    assert_includes email.body.to_s, @notification_params[:additional_notes]
   end
 
   test 'registration_confirmation' do
-    # Create a test constituent
     user = Constituent.create!(
       first_name: 'Jane',
       last_name: 'Smith',
@@ -767,12 +825,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       hearing_disability: true
     )
 
-    # Stub Vendor.active.order to return an empty array
     active_vendors = []
     Vendor.stubs(:active).returns(Vendor.none)
     Vendor.none.stubs(:order).returns(active_vendors)
 
-    # Override the email template mock specifically for this test
     mock_template(
       'Mock Welcome Jane!',
       "Text Body: Welcome, Jane!\n\n" \
@@ -781,20 +837,16 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       'No authorized vendors found at this time.'
     )
 
-    # Generate the email
     email = ApplicationNotificationsMailer.registration_confirmation(user)
 
-    # Deliver the email directly (don't use deliver_later)
     assert_emails 1 do
       email.deliver_now
     end
 
-    # Test email attributes
     assert_equal ['no_reply@mdmat.org'], email.from, 'Email should be from no_reply@mdmat.org'
     assert_equal [user.email], email.to, 'Email should be sent to the registered user'
     assert_equal 'Mock Welcome Jane!', email.subject, 'Email subject should match mock'
 
-    # Check the content of the email
     text_content = decoded_text_part(email)
     assert_match 'Welcome, Jane!', text_content
     assert_match "Dashboard link:\nhttp://example.com/dashboard", text_content
@@ -803,7 +855,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'registration_confirmation generates letter when preference is letter' do
-    # Create a test constituent with letter preference
     user = Constituent.create!(
       first_name: 'Jane',
       last_name: 'Smith',
@@ -812,14 +863,13 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       password: 'password',
       password_confirmation: 'password',
       hearing_disability: true,
-      communication_preference: 'letter', # Set preference to letter
+      communication_preference: 'letter',
       physical_address_1: '123 Main St',
       city: 'Baltimore',
       state: 'MD',
       zip_code: '21201'
     )
 
-    # Stub Vendor.active.order to return an empty array (needed by the mailer method)
     active_vendors = []
     Vendor.stubs(:active).returns(Vendor.none)
     Vendor.none.stubs(:order).returns(active_vendors)
@@ -880,5 +930,392 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
         raise StandardError, 'simulated failure'
       end
     end
+  end
+
+  test 'proof_requested email uses the delivery owner locale and snapshot address' do
+    @user.update!(communication_preference: 'letter')
+    owner = create(:constituent, locale: 'es')
+    proof_template = mock_template('Solicitud de documento', 'Texto de solicitud')
+    EmailTemplate.expects(:find_by!).with(
+      name: 'application_notifications_proof_requested', format: :text, locale: 'es'
+    ).returns(proof_template)
+    snapshot_email = "snapshot.#{SecureRandom.hex(3)}@example.com"
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: @user,
+                  delivery_owner: owner,
+                  delivery_source: 'managing_guardian',
+                  kind: :id_proof_resubmission,
+                  recipient_channel: :email,
+                  recipient_email: snapshot_email)
+
+    email = nil
+    assert_emails 1 do
+      email = ApplicationNotificationsMailer.proof_requested(
+        @application,
+        :id,
+        secure_upload_url: 'https://example.test/secure_proof_form?token=abc',
+        recipient: @user,
+        secure_request_form: form,
+        letter_recipient: @user
+      )
+      email.deliver_now
+    end
+
+    assert_equal [snapshot_email], email.to
+  end
+
+  test 'proof_rejected with an email secure request form sends to the snapshot address despite letter preference' do
+    @user.update!(communication_preference: 'letter')
+    snapshot_email = "snapshot.#{SecureRandom.hex(3)}@example.com"
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: @user,
+                  kind: :income_proof_resubmission,
+                  recipient_channel: :email,
+                  recipient_email: snapshot_email)
+
+    email = nil
+    assert_emails 1 do
+      email = ApplicationNotificationsMailer.proof_rejected(
+        @application,
+        @proof_review,
+        secure_upload_url: 'https://example.test/secure_proof_form?token=abc',
+        recipient: @user,
+        secure_request_form: form,
+        letter_recipient: @user
+      )
+      email.deliver_now
+    end
+
+    assert_equal [snapshot_email], email.to
+  end
+
+  test 'proof_requested with a letter secure request form prints to the resolver-selected address owner' do
+    guardian = create(:constituent)
+    dependent = create(:constituent, communication_preference: 'email')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :id_proof_resubmission,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    pdf_service_mock = mock('pdf_service')
+    pdf_service_mock.expects(:queue_for_printing).once
+    Letters::TextTemplateToPdfService.expects(:new).with(
+      has_entries(recipient: guardian)
+    ).returns(pdf_service_mock)
+
+    delivery = ApplicationNotificationsMailer.proof_requested(
+      @application,
+      :id,
+      secure_upload_url: 'https://example.test/secure_proof_form?token=abc',
+      recipient: dependent,
+      secure_request_form: form,
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+  end
+
+  test 'proof_rejected with a letter secure request form prints to the resolver-selected address owner' do
+    guardian = create(:constituent)
+    dependent = create(:constituent, communication_preference: 'email')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :income_proof_resubmission,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    pdf_service_mock = mock('pdf_service')
+    pdf_service_mock.expects(:queue_for_printing).once
+    Letters::TextTemplateToPdfService.expects(:new).with(
+      has_entries(recipient: guardian)
+    ).returns(pdf_service_mock)
+
+    delivery = ApplicationNotificationsMailer.proof_rejected(
+      @application,
+      @proof_review,
+      recipient: dependent,
+      secure_request_form: form,
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+  end
+
+  test 'provider_info_requested letter prints to the resolver-selected address owner' do
+    provider_info_template = mock_template('Mock Provider Info Requested',
+                                           'Text Body: provider info requested for %<user_first_name>s.')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_provider_info_requested', format: :text, locale: 'en'
+    ).returns(provider_info_template)
+    guardian = create(:constituent)
+    dependent = create(:constituent, communication_preference: 'email')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :provider_info_request,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    pdf_service_mock = mock('pdf_service')
+    pdf_service_mock.expects(:queue_for_printing).once
+    Letters::TextTemplateToPdfService.expects(:new).with(
+      has_entries(recipient: guardian)
+    ).returns(pdf_service_mock)
+
+    delivery = ApplicationNotificationsMailer.provider_info_requested(
+      @application,
+      form,
+      secure_url: 'https://example.test/secure_provider_info_form?token=abc',
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+  end
+
+  test 'provider_info_requested email uses the delivery owner locale and encrypted snapshot address' do
+    provider_info_template = mock_template('Mock Provider Info Requested',
+                                           'Text Body: provider info requested for %<user_first_name>s.')
+    owner = create(:constituent, locale: 'es')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_provider_info_requested', format: :text, locale: 'es'
+    ).returns(provider_info_template)
+    snapshot_email = "snapshot.#{SecureRandom.hex(3)}@example.com"
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: @user,
+                  delivery_owner: owner,
+                  delivery_source: 'managing_guardian',
+                  kind: :provider_info_request,
+                  recipient_channel: :email,
+                  recipient_email: snapshot_email)
+
+    email = nil
+    assert_emails 1 do
+      email = ApplicationNotificationsMailer.provider_info_requested(
+        @application,
+        form,
+        secure_url: 'https://example.test/secure_provider_info_form?token=abc'
+      )
+      email.deliver_now
+    end
+
+    assert_equal [snapshot_email], email.to
+  end
+
+  test 'provider_info_requested letter builds variables in the address owner locale not the recipient locale' do
+    provider_info_template = mock_template('Mock Provider Info Requested',
+                                           'Text Body: %<provider_info_instructions>s')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_provider_info_requested', format: :text, locale: 'en'
+    ).returns(provider_info_template)
+    guardian = create(:constituent, locale: 'en')
+    dependent = create(:constituent, locale: 'es', communication_preference: 'letter')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :provider_info_request,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    pdf_service_mock = mock('pdf_service')
+    pdf_service_mock.expects(:queue_for_printing).once
+    Letters::TextTemplateToPdfService.expects(:new).with do |*args|
+      opts = args.last
+      opts[:recipient] == guardian &&
+        opts[:variables][:provider_info_instructions].include?('Please contact our team by phone')
+    end.returns(pdf_service_mock)
+
+    delivery = ApplicationNotificationsMailer.provider_info_requested(
+      @application,
+      form,
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+  end
+
+  test 'provider_info_requested letter uses the spanish address owner locale for a spanish guardian' do
+    provider_info_template_es = mock_template('Mock Solicitud de Información',
+                                              'Texto: %<provider_info_instructions>s')
+    EmailTemplate.stubs(:find_by!).with(
+      name: 'application_notifications_provider_info_requested', format: :text, locale: 'es'
+    ).returns(provider_info_template_es)
+    guardian = create(:constituent, locale: 'es')
+    dependent = create(:constituent, locale: 'en', communication_preference: 'letter')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :provider_info_request,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    pdf_service_mock = mock('pdf_service')
+    pdf_service_mock.expects(:queue_for_printing).once
+    Letters::TextTemplateToPdfService.expects(:new).with do |*args|
+      opts = args.last
+      opts[:recipient] == guardian &&
+        opts[:variables][:provider_info_instructions].include?('Comuníquese con nuestro equipo')
+    end.returns(pdf_service_mock)
+
+    delivery = ApplicationNotificationsMailer.provider_info_requested(
+      @application,
+      form,
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+  end
+
+  test 'proof_requested letter builds variables in the address owner locale' do
+    guardian = create(:constituent, locale: 'en')
+    dependent = create(:constituent, locale: 'es', communication_preference: 'letter')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :id_proof_resubmission,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    pdf_service_mock = mock('pdf_service')
+    pdf_service_mock.expects(:queue_for_printing).once
+    Letters::TextTemplateToPdfService.expects(:new).with do |*args|
+      opts = args.last
+      opts[:recipient] == guardian &&
+        opts[:variables][:default_options_text].include?('HOW TO SUBMIT THIS DOCUMENT')
+    end.returns(pdf_service_mock)
+
+    delivery = ApplicationNotificationsMailer.proof_requested(
+      @application,
+      :id,
+      recipient: dependent,
+      secure_request_form: form,
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+  end
+
+  test 'provider_info_requested letter PDF output is entirely in the spanish address owner locale' do
+    # Template markers and translated instructions independently verify the locale through the real PDF service.
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'application_notifications_provider_info_requested', format: :text).destroy_all
+    %w[en es].each do |locale|
+      create(:email_template,
+             name: 'application_notifications_provider_info_requested',
+             format: :text,
+             locale: locale,
+             subject: "LETTER SUBJECT #{locale.upcase} MARKER",
+             body: "LETTER BODY #{locale.upcase} MARKER\n\n%<provider_info_instructions>s",
+             variables: { 'required' => %w[provider_info_instructions], 'optional' => [] })
+    end
+    guardian = create(:constituent, locale: 'es')
+    dependent = create(:constituent, locale: 'en', communication_preference: 'letter')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :provider_info_request,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    delivery = ApplicationNotificationsMailer.provider_info_requested(
+      @application,
+      form,
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+
+    item = PrintQueueItem.order(:created_at).last
+    assert_equal guardian.id, item.constituent_id
+    assert_equal 'provider_info_requested', item.letter_type
+
+    pdf_text = inflated_pdf_text(item.pdf_letter.download)
+    assert_includes pdf_text, 'LETTER BODY ES MARKER'
+    # ASCII-safe fragment of the Spanish letter instructions (accents are WinAnsi-encoded).
+    assert_includes pdf_text, 'con nuestro equipo por'
+    assert_not_includes pdf_text, 'LETTER BODY EN MARKER'
+    assert_not_includes pdf_text, 'Please contact our team'
+  end
+
+  test 'spanish provider info letter renders a reviewable PDF artifact' do
+    # Text assertions cannot verify layout or glyphs. This PDF supports visual review.
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'application_notifications_provider_info_requested', format: :text).destroy_all
+    %w[en es].each do |locale|
+      create(:email_template,
+             name: 'application_notifications_provider_info_requested',
+             format: :text,
+             locale: locale,
+             subject: "LETTER SUBJECT #{locale.upcase} MARKER",
+             body: "LETTER BODY #{locale.upcase} MARKER\n\n%<provider_info_instructions>s",
+             variables: { 'required' => %w[provider_info_instructions], 'optional' => [] })
+    end
+    guardian = create(:constituent, locale: 'es', physical_address_1: '9 Guardian Way')
+    dependent = create(:constituent, locale: 'en', communication_preference: 'letter')
+    form = create(:secure_request_form,
+                  application: @application,
+                  recipient: dependent,
+                  delivery_owner: guardian,
+                  delivery_source: 'managing_guardian',
+                  kind: :provider_info_request,
+                  recipient_channel: :letter,
+                  recipient_email: nil,
+                  recipient_phone: nil)
+
+    delivery = ApplicationNotificationsMailer.provider_info_requested(
+      @application,
+      form,
+      letter_recipient: guardian
+    )
+    assert_no_emails { delivery.deliver_now }
+
+    item = PrintQueueItem.order(:created_at).last
+    pdf_path = Rails.root.join('tmp/capybara/1_secure-request-letter-spanish.pdf')
+    pdf_path.dirname.mkpath
+    File.binwrite(pdf_path, item.pdf_letter.download)
+    pdf_path.sub_ext('.json').write(
+      JSON.pretty_generate(
+        generated_at: Time.current.iso8601,
+        test_class: self.class.name,
+        test_name: name,
+        label: 'secure-request-letter-spanish',
+        artifact_usable_for_llm_qa: true,
+        unusable_reasons: [],
+        pdf_path: pdf_path.to_s
+      )
+    )
+
+    assert_path_exists pdf_path
+    assert_operator pdf_path.size, :>, 1_000
+  end
+
+  # Prawn uses FlateDecode and hex glyph runs with kerning splits ("[<4c4554...> 90 <59...>] TJ").
+  # This extracts text without a PDF parser.
+  def inflated_pdf_text(pdf_binary)
+    content = pdf_binary.scan(/stream\r?\n(.*?)endstream/m).flatten.map do |stream|
+      Zlib::Inflate.inflate(stream)
+    rescue Zlib::Error
+      stream.dup
+    end.join
+    content.scan(/<([0-9a-fA-F]+)>/).flatten.map { |hex| [hex].pack('H*') }.join.force_encoding('BINARY')
   end
 end

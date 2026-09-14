@@ -350,6 +350,13 @@ end
 
 Rejected or missing proofs are resubmitted through tokenized secure forms. `Applications::RequestProofResubmission` creates `SecureRequestForm` records and notifications; public upload controllers call `Applications::SubmitProofResubmission`.
 
+On the application detail page, all three proof types use the shared resolver-backed
+recipient/channel chooser. Initial email or letter defaults survive controller connection
+and return when a recipient is rechecked; unchecking excludes the disabled channel from
+submission. SMS is never defaulted and must be selected explicitly. If no recipient has a
+currently eligible route, the submit control stays disabled. Each issued form persists
+the logical recipient separately from its delivery owner and source.
+
 ```ruby
 request_result = Applications::RequestProofResubmission.new(
   application: application,

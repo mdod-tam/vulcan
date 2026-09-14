@@ -4,6 +4,11 @@
 module UserGuardianship
   extend ActiveSupport::Concern
 
+  # Identifies the stored value and record that own one dependent contact field.
+  # +source+ describes the field shape; delivery workflows map guardian ownership
+  # to their application-specific provenance.
+  OwnedContact = Data.define(:value, :owner, :source)
+
   included do
     # Guardian/Dependent Associations
     has_many :guardian_relationships_as_guardian,
@@ -75,41 +80,21 @@ module UserGuardianship
 
   # Helper methods for dependent contact information
   def effective_email
-    if dependent? && dependent_email.present?
-      dependent_email
-    elsif dependent? && guardian_for_contact
-      guardian_for_contact.email
-    else
-      email
-    end
+    return email unless dependent?
+
+    dependent_email_contact(contact_guardian: guardian_for_contact)&.value
   end
 
   def effective_phone
-    if dependent? && dependent_phone.present?
-      dependent_phone
-    elsif dependent? && guardian_for_contact
-      guardian_for_contact.phone
-    else
-      phone
-    end
+    return phone unless dependent?
+
+    dependent_phone_contact(contact_guardian: guardian_for_contact)&.value
   end
 
   def effective_phone_type
-    if dependent? && dependent_phone.present?
-      if guardian_for_contact && normalized_phone_for_guardianship(dependent_phone) == normalized_phone_for_guardianship(guardian_for_contact.phone)
-        guardian_for_contact.phone_type
-      else
-        phone_type # Use dependent's preferred phone type
-      end
-    elsif dependent? && guardian_for_contact
-      guardian_for_contact.phone_type
-    else
-      phone_type
-    end
-  end
+    return phone_type unless dependent?
 
-  def normalized_phone_for_guardianship(phone)
-    phone.to_s.gsub(/\D/, '')
+    dependent_phone_contact(contact_guardian: guardian_for_contact)&.owner&.phone_type || phone_type
   end
 
   def effective_communication_preference
@@ -121,11 +106,9 @@ module UserGuardianship
   end
 
   def effective_locale
-    if dependent? && guardian_for_contact && effective_email == guardian_for_contact.email
-      guardian_for_contact.locale
-    else
-      locale
-    end
+    return locale unless dependent?
+
+    dependent_email_contact(contact_guardian: guardian_for_contact)&.owner&.locale || locale
   end
 
   # +effective_locale+ narrowed to something I18n will actually accept, or nil when this user has
@@ -175,25 +158,13 @@ module UserGuardianship
 
   # Paper intake displays dependent-owned contact separately from synthetic primary fields.
   def paper_intake_own_email(guardian: nil)
-    return unless dependent?
-
     guardian ||= guardian_for_contact
-    candidate = paper_intake_email_candidate
-    return if candidate.blank?
-    return if guardian && User.normalize_email(candidate) == User.normalize_email(guardian.email)
-
-    candidate
+    paper_intake_own_contact(:email, guardian: guardian)
   end
 
   def paper_intake_own_phone(guardian: nil)
-    return unless dependent?
-
     guardian ||= guardian_for_contact
-    candidate = paper_intake_phone_candidate
-    return if candidate.blank?
-    return if guardian && normalized_phone_for_guardianship(candidate) == normalized_phone_for_guardianship(guardian.phone)
-
-    candidate
+    paper_intake_own_contact(:phone, guardian: guardian)
   end
 
   def paper_intake_uses_guardian_email?(guardian: nil)
@@ -204,19 +175,106 @@ module UserGuardianship
     dependent? && paper_intake_own_phone(guardian: guardian).blank?
   end
 
-  def paper_intake_email_candidate
-    if dependent_email.present? && !User.system_generated_email?(dependent_email)
-      dependent_email
-    elsif real_email?
-      email
-    end
+  # Canonical interpretation of the contact shapes written by
+  # Applications::GuardianDependentManagementService. Callers may supply a
+  # preloaded guardian scope; otherwise the dependent's relationships define it.
+  def dependent_email_contact(contact_guardian:, related_guardians: nil)
+    dependent_contact(
+      :email,
+      contact_guardian: contact_guardian,
+      related_guardians: related_guardians,
+      missing_snapshot_fallback: :guardian
+    )
   end
 
-  def paper_intake_phone_candidate
-    if dependent_phone.present? && User.new(phone: dependent_phone).real_phone?
-      dependent_phone
-    elsif real_phone?
-      phone
+  def dependent_phone_contact(contact_guardian:, related_guardians: nil)
+    dependent_contact(
+      :phone,
+      contact_guardian: contact_guardian,
+      related_guardians: related_guardians,
+      missing_snapshot_fallback: :primary
+    )
+  end
+
+  # Address strategy is not persisted. Retain one deliberately bounded inference:
+  # only a complete dependent address paired with an incomplete guardian address
+  # can be identified as dependent-owned from stored state alone.
+  def dependent_mailing_address_owner(contact_guardian:)
+    return self unless dependent? && contact_guardian
+    return self if complete_mailing_address? && !contact_guardian.complete_mailing_address?
+
+    contact_guardian
+  end
+
+  private
+
+  # A legacy paper edit with no strategy snapshot preserves a usable primary
+  # contact. Matching and ownership still come from the canonical interpreter.
+  def paper_intake_own_contact(field, guardian:)
+    contact = dependent_contact(
+      field,
+      contact_guardian: guardian,
+      related_guardians: nil,
+      missing_snapshot_fallback: :primary
+    )
+    contact.value if contact&.owner == self
+  end
+
+  def dependent_contact(field, contact_guardian:, related_guardians:, missing_snapshot_fallback:)
+    return unless dependent?
+
+    dependent_value = usable_contact_value(field, public_send("dependent_#{field}"))
+    primary_value = public_send(field) if public_send("real_#{field}?")
+    if dependent_value
+      related_guardians ||= guardians.to_a
+      guardian_scope = [contact_guardian, *Array(related_guardians)].compact.uniq(&:id)
+      return contact_from_snapshot(field, dependent_value, primary_value, contact_guardian, guardian_scope)
     end
+
+    # Rows predating strategy snapshots are ambiguous. Preserve each field's
+    # established fallback explicitly instead of deriving one field from another.
+    contact_without_snapshot(field, primary_value, contact_guardian, missing_snapshot_fallback)
+  end
+
+  def contact_from_snapshot(field, dependent_value, primary_value, contact_guardian, guardians)
+    matching_guardian = guardian_matching(field, dependent_value, guardians)
+    contact_guardian_owns_snapshot = matching_guardian&.id == contact_guardian&.id
+    if contact_guardian_owns_snapshot
+      guardian_value = guardian_contact_value(field, contact_guardian)
+      return owned_contact(guardian_value, contact_guardian, :guardian)
+    end
+    return owned_contact(primary_value, self, :constituent) if matching_guardian
+
+    owned_contact(dependent_value, self, :dependent_contact)
+  end
+
+  def contact_without_snapshot(field, primary_value, contact_guardian, fallback)
+    return owned_contact(primary_value, self, :constituent) if fallback == :primary && primary_value
+    return owned_contact(guardian_contact_value(field, contact_guardian), contact_guardian, :guardian) if contact_guardian
+
+    owned_contact(primary_value, self, :constituent)
+  end
+
+  def guardian_matching(field, value, guardians)
+    normalized = normalize_contact(field, value)
+    return if normalized.blank?
+
+    guardians.find { |guardian| normalize_contact(field, guardian_contact_value(field, guardian)) == normalized }
+  end
+
+  def usable_contact_value(field, value)
+    value if User.new(field => value).public_send("real_#{field}?")
+  end
+
+  def guardian_contact_value(field, guardian)
+    guardian.public_send(field) if guardian.public_send("real_#{field}?")
+  end
+
+  def normalize_contact(field, value)
+    User.public_send("normalize_#{field}", value).to_s
+  end
+
+  def owned_contact(value, owner, source)
+    OwnedContact.new(value: value, owner: owner, source: source) if value.present?
   end
 end

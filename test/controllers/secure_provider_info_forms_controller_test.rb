@@ -3,12 +3,14 @@
 require 'test_helper'
 
 class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
-  test 'request locale is scoped to the secure form recipient and reset after rendering' do
+  test 'request locale is scoped to the secure form delivery owner and reset after rendering' do
     I18n.with_locale(:en) do
-      constituent = create(:constituent, locale: 'es')
+      constituent = create(:constituent, locale: 'en')
+      delivery_owner = create(:constituent, locale: 'es')
       application = create(:application, user: constituent)
       token = SecureRequestForm.generate_public_token
-      create(:secure_request_form, application: application, recipient: constituent, raw_token: token)
+      create(:secure_request_form, application: application, recipient: constituent, raw_token: token,
+                                   delivery_owner: delivery_owner, delivery_source: 'managing_guardian')
 
       get secure_provider_info_form_path(token: token)
 
@@ -66,6 +68,34 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'h1', text: I18n.t('secure_provider_info_forms.success.heading')
   end
 
+  test 'success page honors the form-derived locale parameter' do
+    get secure_provider_info_form_success_path(locale: :es)
+
+    assert_response :success
+    assert_select 'h1', text: I18n.t('secure_provider_info_forms.success.heading', locale: :es)
+  end
+
+  test 'successful submission redirects with the delivery owner locale' do
+    constituent = create(:constituent, locale: 'en')
+    delivery_owner = create(:constituent, locale: 'es')
+    application = create(:application, user: constituent)
+    token = SecureRequestForm.generate_public_token
+    create(:secure_request_form, application: application, recipient: constituent, raw_token: token,
+                                 delivery_owner: delivery_owner, delivery_source: 'managing_guardian')
+    Applications::SubmitProviderInfo.any_instance.stubs(:call).returns(
+      BaseService::Result.new(success: true, message: 'ok', data: {})
+    )
+
+    patch secure_provider_info_form_path(token: token), params: {
+      token: token,
+      medical_provider_name: 'Dr. Taylor',
+      medical_provider_phone: '410-555-0199',
+      medical_provider_email: 'doctor@example.test'
+    }
+
+    assert_redirected_to secure_provider_info_form_success_path(locale: :es)
+  end
+
   test 'show with submitted token renders already submitted state' do
     application = create(:application)
     token = SecureRequestForm.generate_public_token
@@ -111,6 +141,34 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert_select "form[action='#{secure_provider_info_form_path(token: token)}']"
     assert_select "input[type=hidden][name=token][value='#{token}']"
+  end
+
+  test 'validation failure uses the delivery owner locale' do
+    constituent = create(:constituent, locale: 'en')
+    delivery_owner = create(:constituent, locale: 'es')
+    application = create(:application, status: :awaiting_proof, user: constituent)
+    application.update!(
+      medical_provider_name: nil,
+      medical_provider_phone: nil,
+      medical_provider_email: nil,
+      medical_provider_fax: nil
+    )
+    token = SecureRequestForm.generate_public_token
+    create(:secure_request_form, application: application, recipient: constituent, raw_token: token,
+                                 delivery_owner: delivery_owner, delivery_source: 'managing_guardian')
+
+    patch secure_provider_info_form_path(token: token), params: {
+      token: token,
+      medical_provider_name: '',
+      medical_provider_phone: '',
+      medical_provider_email: 'not-an-email'
+    }
+
+    assert_response :unprocessable_content
+    assert_select '#medical_provider_name_error',
+                  I18n.t('applications.provider_info.messages.medical_provider_name_blank', locale: :es)
+    assert_select '#medical_provider_email_error',
+                  I18n.t('applications.provider_info.messages.medical_provider_email_invalid', locale: :es)
   end
 
   test 'validation failure marks errored fields as aria-invalid' do
@@ -226,12 +284,15 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'form[data-turbo=?]', 'false'
   end
 
-  test 'resend confirmation uses recipient locale without leaking it to later requests' do
+  test 'resend confirmation uses delivery owner locale without leaking it to later requests' do
     I18n.with_locale(:en) do
-      constituent = create(:constituent, locale: 'es')
+      constituent = create(:constituent, locale: 'en')
+      delivery_owner = create(:constituent, locale: 'es')
       application = create(:application, user: constituent)
       token = SecureRequestForm.generate_public_token
-      create(:secure_request_form, :expired, application: application, recipient: constituent, raw_token: token)
+      create(:secure_request_form, :expired, application: application, recipient: constituent, raw_token: token,
+                                             delivery_owner: delivery_owner,
+                                             delivery_source: 'managing_guardian')
 
       post secure_provider_info_form_resend_path, params: { token: token, unexpected_destination: 'attacker@example.test' }
 

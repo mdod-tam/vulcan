@@ -29,6 +29,108 @@ module SecureRequestFormsHelper
     t("admin.applications.secure_request_forms.statuses.#{secure_request_form.display_status}")
   end
 
+  # Stable IDs distinguish people even when names, relationships and contacts collide.
+  def secure_request_recipient_label(recipient, application: nil, role: nil, relationship_type: nil)
+    role = role.to_s.presence
+    role ||= 'constituent' if application.present? && recipient.id == application.user_id
+
+    qualifier =
+      case role
+      when 'guardian'
+        guardian = t('admin.applications.secure_request_forms.roles.guardian')
+        relationship_type.present? ? "#{guardian} — #{relationship_type}" : guardian
+      when 'constituent'
+        t('admin.applications.secure_request_forms.roles.applicant')
+      end
+
+    [recipient.full_name, ("(#{qualifier})" if qualifier), "(ID: #{recipient.id})"].compact.join(' ')
+  end
+
+  # Guardian provenance supplies the role label. Missing provenance stays explicitly unknown.
+  def secure_request_delivery_owner_label(owner, delivery_source: nil)
+    if delivery_source.blank?
+      return t('admin.applications.secure_request_forms.delivery_owner.source_unknown',
+               owner: secure_request_recipient_label(owner))
+    end
+
+    guardian_source = %w[managing_guardian guardian_relationship].include?(delivery_source.to_s)
+    secure_request_recipient_label(owner, role: guardian_source ? 'guardian' : nil)
+  end
+
+  # Persisted qualifiers match the chooser, e.g. "Jane Smith (Guardian — Parent)".
+  def secure_request_issued_recipient_label(secure_request_form)
+    secure_request_recipient_label(secure_request_form.recipient,
+                                   role: secure_request_form.recipient_role,
+                                   relationship_type: secure_request_form.recipient_relationship_type)
+  end
+
+  # "Originally" identifies the historical owner. Resends resolve the current owner and contact.
+  def secure_request_original_delivery_owner_text(secure_request_form)
+    ownership_unknown = t('admin.applications.secure_request_forms.table.delivery_ownership_unknown')
+    return ownership_unknown unless secure_request_form.delivery_provenance?
+
+    owner = secure_request_form.delivery_owner
+    return if owner.nil? || secure_request_form.delivery_owner_id == secure_request_form.recipient_id
+
+    t('admin.applications.secure_request_forms.table.originally_delivered_to',
+      owner: secure_request_delivery_owner_label(owner, delivery_source: secure_request_form.delivery_source))
+  end
+
+  def secure_request_option_selectable?(option)
+    option[:eligible] && option[:candidate]&.deliverable_channels&.any?
+  end
+
+  def secure_request_option_unavailable_text(option)
+    reason = if !option[:eligible]
+               'ineligible'
+             elsif option[:candidate]&.owner_ineligible_channels&.any?
+               'owner_ineligible'
+             else
+               'no_route'
+             end
+    t("admin.applications.secure_request_forms.panel.#{reason}")
+  end
+
+  def secure_request_channel_options(candidate)
+    candidate.deliverable_channels.map do |channel|
+      destination = secure_request_candidate_destination_text(candidate, channel: channel)
+      ["#{secure_request_channel_label_for(channel)} — #{destination}", channel.to_s]
+    end
+  end
+
+  def secure_request_candidate_destination_text(candidate, channel: candidate&.channel)
+    return if candidate.nil?
+
+    channel = channel&.to_sym || candidate.deliverable_channels.first
+    return if channel.nil?
+
+    destination =
+      case channel
+      when :email then secure_request_masked_email(candidate.email)
+      when :sms then secure_request_masked_phone(candidate.phone)
+      when :letter then secure_request_letter_destination(candidate.address_owner)
+      end
+    return if destination.blank?
+
+    owner = candidate.delivery_owner_for(channel)
+    if owner.present? && owner.id != candidate.recipient.id
+      t('admin.applications.secure_request_forms.panel.destination_via',
+        owner: secure_request_delivery_owner_label(owner, delivery_source: 'managing_guardian'),
+        destination: destination)
+    else
+      t('admin.applications.secure_request_forms.panel.destination', destination: destination)
+    end
+  end
+
+  # The admin page already shows full addresses, so this stays unmasked ("123 Main St, Baltimore, MD 21201").
+  def secure_request_letter_destination(address_owner)
+    return if address_owner.nil?
+
+    city_state = [address_owner.city, address_owner.state].compact_blank.join(', ')
+    city_state_zip = [city_state.presence, address_owner.zip_code].compact.join(' ')
+    [address_owner.physical_address_1, city_state_zip].compact_blank.join(', ').presence
+  end
+
   def secure_request_summary_accessible_label(summary)
     label = t('admin.applications.secure_request_forms.summary.label')
 
@@ -75,14 +177,14 @@ module SecureRequestFormsHelper
     "•••-•••-#{digits.last(4)}"
   end
 
-  def secure_request_notification_detail(notification, application:)
+  def secure_request_notification_detail(notification, application:, delivery_owners_by_id:)
     metadata = notification.metadata.is_a?(Hash) ? notification.metadata.stringify_keys : {}
 
     case notification.action
     when 'provider_info_requested'
-      secure_provider_info_notification_detail(notification, metadata)
+      secure_provider_info_notification_detail(notification, metadata, delivery_owners_by_id:)
     when 'proof_resubmission_requested'
-      secure_proof_resubmission_notification_detail(notification, metadata)
+      secure_proof_resubmission_notification_detail(notification, metadata, delivery_owners_by_id:)
     when 'cert_upload_requested'
       secure_cert_upload_notification_detail(metadata, application)
     end
@@ -136,22 +238,35 @@ module SecureRequestFormsHelper
     ''
   end
 
-  def secure_provider_info_notification_detail(notification, metadata)
+  def secure_provider_info_notification_detail(notification, metadata, delivery_owners_by_id:)
     recipient_name = notification.recipient&.full_name || 'Unknown recipient'
     channel = secure_request_recipient_channel_label(metadata)
     expires_text = secure_request_notification_expires_text(metadata)
+    owner_text = secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
 
-    "Secure provider information request sent to #{recipient_name} via #{channel}#{expires_text}"
+    "Secure provider information request sent to #{recipient_name} via #{channel}#{owner_text}#{expires_text}"
   end
 
-  def secure_proof_resubmission_notification_detail(notification, metadata)
+  def secure_proof_resubmission_notification_detail(notification, metadata, delivery_owners_by_id:)
     recipient_name = notification.recipient&.full_name || 'Unknown recipient'
     channel = secure_request_recipient_channel_label(metadata)
     proof_type = metadata['proof_type']
     expires_text = secure_request_notification_expires_text(metadata)
+    owner_text = secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
     request_context = secure_proof_resubmission_request_context(notification, metadata, proof_type)
 
-    "#{request_context}; secure upload link sent to #{recipient_name} via #{channel}#{expires_text}"
+    "#{request_context}; secure upload link sent to #{recipient_name} via #{channel}#{owner_text}#{expires_text}"
+  end
+
+  # Name the actual owner so the audit does not imply use of the logical recipient's contact.
+  def secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
+    owner_id = metadata['delivery_owner_id']
+    return '' if owner_id.blank? || owner_id.to_i == notification.recipient_id
+
+    owner = delivery_owners_by_id.to_h[owner_id.to_i]
+    return '' if owner.nil?
+
+    " (delivered to #{secure_request_delivery_owner_label(owner, delivery_source: metadata['delivery_source'])})"
   end
 
   def secure_proof_resubmission_request_context(notification, metadata, proof_type)

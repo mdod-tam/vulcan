@@ -45,8 +45,9 @@ class SecureProofFormResendsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to secure_proof_form_path(token: @raw_token)
   end
 
-  test 'new uses recipient Spanish locale' do
-    @secure_request_form.recipient.update!(locale: 'es')
+  test 'new uses delivery owner Spanish locale' do
+    owner = create(:constituent, locale: 'es')
+    @secure_request_form.update!(delivery_owner: owner, delivery_source: 'managing_guardian')
 
     get new_secure_proof_form_resend_path(token: @raw_token)
 

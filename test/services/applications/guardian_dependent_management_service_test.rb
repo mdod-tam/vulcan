@@ -401,6 +401,30 @@ module Applications
 
       assert_equal @guardian.email, service.dependent_user.dependent_email
       assert_equal @guardian.phone, service.dependent_user.dependent_phone
+
+      email_contact = service.dependent_user.dependent_email_contact(contact_guardian: @guardian)
+      phone_contact = service.dependent_user.dependent_phone_contact(contact_guardian: @guardian)
+      assert_equal [@guardian, :guardian], [email_contact.owner, email_contact.source]
+      assert_equal [@guardian, :guardian], [phone_contact.owner, phone_contact.source]
+    end
+
+    test 'new dependent own-contact strategy is read as independent email and phone ownership' do
+      service = GuardianDependentManagementService.new(
+        {
+          email_strategy: 'dependent', phone_strategy: 'dependent', address_strategy: 'dependent',
+          relationship_type: 'Parent'
+        },
+        actor: @admin
+      )
+
+      result = service.process_guardian_scenario(@guardian.id, dependent_creation_attrs, 'Parent')
+
+      assert result.success?, service.errors.inspect
+      dependent = service.dependent_user
+      email_contact = dependent.dependent_email_contact(contact_guardian: @guardian)
+      phone_contact = dependent.dependent_phone_contact(contact_guardian: @guardian)
+      assert_equal [dependent, :dependent_contact], [email_contact.owner, email_contact.source]
+      assert_equal [dependent, :dependent_contact], [phone_contact.owner, phone_contact.source]
     end
 
     private
