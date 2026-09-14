@@ -140,10 +140,13 @@ dependent = User.create!(
   provide the default guardian scope, while callers with a preloaded scope can supply it
   explicitly. Another guardian's value is never labeled as dependent-owned.
 * Rows that predate strategy snapshots can have no `dependent_email` or
-  `dependent_phone`. Their field-specific compatibility stays explicit: email retains
-  the contact-guardian fallback, while a usable primary phone remains dependent-owned.
-  Canonical dependent-owned rows are unambiguous because the writer mirrors the
-  dependent's value into the corresponding `dependent_*` field.
+  `dependent_phone`. Their compatibility stays explicit: delivery and effective email
+  retain the contact-guardian fallback, while a usable primary phone remains
+  dependent-owned. Paper intake preserves a usable primary email or phone when staff
+  edit an existing dependent without resubmitting contact fields. All paths use the
+  same ownership interpreter; only the declared legacy fallback differs. Canonical
+  dependent-owned rows are unambiguous because the writer mirrors the dependent's
+  value into the corresponding `dependent_*` field.
 * `dependent_mailing_address_owner` makes only the inference supported without a stored
   address strategy: it selects the dependent when the dependent address is complete and
   the contact guardian's is incomplete. Otherwise it conservatively selects the guardian.

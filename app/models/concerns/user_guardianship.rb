@@ -159,14 +159,12 @@ module UserGuardianship
   # Paper intake displays dependent-owned contact separately from synthetic primary fields.
   def paper_intake_own_email(guardian: nil)
     guardian ||= guardian_for_contact
-    contact = dependent_email_contact(contact_guardian: guardian)
-    contact.value if contact&.owner == self
+    paper_intake_own_contact(:email, guardian: guardian)
   end
 
   def paper_intake_own_phone(guardian: nil)
     guardian ||= guardian_for_contact
-    contact = dependent_phone_contact(contact_guardian: guardian)
-    contact.value if contact&.owner == self
+    paper_intake_own_contact(:phone, guardian: guardian)
   end
 
   def paper_intake_uses_guardian_email?(guardian: nil)
@@ -209,6 +207,18 @@ module UserGuardianship
   end
 
   private
+
+  # A legacy paper edit with no strategy snapshot preserves a usable primary
+  # contact. Matching and ownership still come from the canonical interpreter.
+  def paper_intake_own_contact(field, guardian:)
+    contact = dependent_contact(
+      field,
+      contact_guardian: guardian,
+      related_guardians: nil,
+      missing_snapshot_fallback: :primary
+    )
+    contact.value if contact&.owner == self
+  end
 
   def dependent_contact(field, contact_guardian:, related_guardians:, missing_snapshot_fallback:)
     return unless dependent?

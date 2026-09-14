@@ -428,7 +428,7 @@ class UserTest < ActiveSupport::TestCase
                  [phone_contact.owner, phone_contact.source, phone_contact.value]
   end
 
-  test 'dependent contact policy preserves field-specific fallbacks for legacy rows without snapshots' do
+  test 'dependent contact policy preserves explicit context fallbacks for legacy rows without snapshots' do
     dependent = create(:constituent, dependent_email: nil, dependent_phone: nil)
     create(:guardian_relationship, guardian_user: @guardian_user, dependent_user: dependent)
 
@@ -439,7 +439,8 @@ class UserTest < ActiveSupport::TestCase
                  [email_contact.owner, email_contact.source, email_contact.value]
     assert_equal [dependent, :constituent, dependent.phone],
                  [phone_contact.owner, phone_contact.source, phone_contact.value]
-    assert_nil dependent.paper_intake_own_email(guardian: @guardian_user)
+    assert_equal @guardian_user.email, dependent.effective_email
+    assert_equal dependent.email, dependent.paper_intake_own_email(guardian: @guardian_user)
     assert_equal dependent.phone, dependent.paper_intake_own_phone(guardian: @guardian_user)
     assert_equal dependent.phone, dependent.effective_phone
   end
