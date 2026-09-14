@@ -136,9 +136,9 @@ dependent = User.create!(
 `UserGuardianship` is the sole interpreter of those persisted shapes:
 
 * `dependent_email_contact` and `dependent_phone_contact` return the usable value,
-  owning record, and stored-field source independently. The caller supplies its contact
-  guardian and related-guardian scope, so another guardian's value is never labeled as
-  dependent-owned.
+  owning record, and stored-field source independently. The dependent's relationships
+  provide the default guardian scope, while callers with a preloaded scope can supply it
+  explicitly. Another guardian's value is never labeled as dependent-owned.
 * Rows that predate strategy snapshots can have no `dependent_email` or
   `dependent_phone`. Their field-specific compatibility stays explicit: email retains
   the contact-guardian fallback, while a usable primary phone remains dependent-owned.

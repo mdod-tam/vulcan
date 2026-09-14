@@ -178,9 +178,8 @@ module UserGuardianship
   end
 
   # Canonical interpretation of the contact shapes written by
-  # Applications::GuardianDependentManagementService. The selected application
-  # supplies its contact guardian and all related guardians so another guardian's
-  # contact is never mislabeled as dependent-owned.
+  # Applications::GuardianDependentManagementService. Callers may supply a
+  # preloaded guardian scope; otherwise the dependent's relationships define it.
   def dependent_email_contact(contact_guardian:, related_guardians: nil)
     dependent_contact(
       :email,
@@ -216,8 +215,11 @@ module UserGuardianship
 
     dependent_value = usable_contact_value(field, public_send("dependent_#{field}"))
     primary_value = public_send(field) if public_send("real_#{field}?")
-    guardians = [contact_guardian, *Array(related_guardians)].compact.uniq(&:id)
-    return contact_from_snapshot(field, dependent_value, primary_value, contact_guardian, guardians) if dependent_value
+    if dependent_value
+      related_guardians ||= guardians.to_a
+      guardian_scope = [contact_guardian, *Array(related_guardians)].compact.uniq(&:id)
+      return contact_from_snapshot(field, dependent_value, primary_value, contact_guardian, guardian_scope)
+    end
 
     # Rows predating strategy snapshots are ambiguous. Preserve each field's
     # established fallback explicitly instead of deriving one field from another.

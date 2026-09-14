@@ -99,7 +99,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       remaining_attempts   = 8 - application.total_rejections
       reapply_date         = 3.years.from_now.to_date
       template_name        = 'application_notifications_proof_rejected'
-      locale               = secure_request_locale(secure_request_form, letter_recipient, recipient)
+      locale               = secure_request_locale(secure_request_form, recipient)
       text_template        = find_text_template(template_name, locale: locale)
       variables            = build_proof_rejected_variables(
         application,
@@ -149,7 +149,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     with_mailer_error_handling("proof_requested application=#{application&.id} proof_type=#{proof_type}") do
       recipient ||= application.user
       template_name = 'application_notifications_proof_requested'
-      locale = secure_request_locale(secure_request_form, letter_recipient, recipient)
+      locale = secure_request_locale(secure_request_form, recipient)
       text_template = find_text_template(template_name, locale: locale)
       variables = build_proof_requested_variables(
         application,
@@ -361,7 +361,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     with_mailer_error_handling("provider_info_requested application=#{application&.id} secure_request_form=#{secure_request_form&.id}") do
       template_name = 'application_notifications_provider_info_requested'
       recipient = secure_request_form.recipient
-      locale = secure_request_locale(secure_request_form, letter_recipient, recipient)
+      locale = secure_request_locale(secure_request_form, recipient)
       text_template = find_text_template(template_name, locale: locale)
       variables = build_provider_info_requested_variables(
         application,

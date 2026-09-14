@@ -444,25 +444,30 @@ class UserTest < ActiveSupport::TestCase
     assert_equal dependent.phone, dependent.effective_phone
   end
 
-  test 'dependent contact policy does not attribute another guardians contact to the dependent or manager' do
+  test 'dependent contact policy checks every guardian when scope is omitted' do
+    @another_guardian.update!(phone_type: 'text', locale: 'es')
     dependent = create(:constituent,
                        dependent_email: @another_guardian.email,
-                       dependent_phone: @another_guardian.phone)
+                       dependent_phone: @another_guardian.phone,
+                       phone_type: 'voice',
+                       locale: 'en')
     create(:guardian_relationship, guardian_user: @guardian_user, dependent_user: dependent)
     create(:guardian_relationship, guardian_user: @another_guardian, dependent_user: dependent)
-    guardians = [@guardian_user, @another_guardian]
 
-    email_contact = dependent.dependent_email_contact(
-      contact_guardian: @guardian_user, related_guardians: guardians
-    )
-    phone_contact = dependent.dependent_phone_contact(
-      contact_guardian: @guardian_user, related_guardians: guardians
-    )
+    email_contact = dependent.dependent_email_contact(contact_guardian: @guardian_user)
+    phone_contact = dependent.dependent_phone_contact(contact_guardian: @guardian_user)
 
     assert_equal [dependent, :constituent, dependent.email],
                  [email_contact.owner, email_contact.source, email_contact.value]
     assert_equal [dependent, :constituent, dependent.phone],
                  [phone_contact.owner, phone_contact.source, phone_contact.value]
+    assert_equal @guardian_user, dependent.guardian_for_contact
+    assert_equal dependent.email, dependent.effective_email
+    assert_equal dependent.phone, dependent.effective_phone
+    assert_equal 'voice', dependent.effective_phone_type
+    assert_equal 'en', dependent.effective_locale
+    assert_equal dependent.email, dependent.paper_intake_own_email(guardian: @guardian_user)
+    assert_equal dependent.phone, dependent.paper_intake_own_phone(guardian: @guardian_user)
   end
 
   teardown do

@@ -105,15 +105,10 @@ class ApplicationMailer < ActionMailer::Base
 
   # The form owns secure-request language. Historical ownerless forms use the
   # form's explicit recipient fallback rather than inferring an address owner.
-  def secure_request_locale(secure_request_form, print_recipient, recipient)
+  def secure_request_locale(secure_request_form, recipient)
     return secure_request_form.delivery_locale if secure_request_form.present?
 
-    target = if secure_request_form&.recipient_channel_letter?
-               print_recipient.presence || letter_recipient_for(recipient)
-             else
-               recipient
-             end
-    resolve_template_locale(recipient: target)
+    resolve_template_locale(recipient: recipient)
   end
 
   def resolve_template_locale(recipient: nil)
