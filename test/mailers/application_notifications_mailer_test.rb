@@ -1290,8 +1290,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     item = PrintQueueItem.order(:created_at).last
     pdf_path = Rails.root.join('tmp/capybara/1_secure-request-letter-spanish.pdf')
+    pdf_path.dirname.mkpath
     File.binwrite(pdf_path, item.pdf_letter.download)
-    Rails.root.join('tmp/capybara/1_secure-request-letter-spanish.json').write(
+    pdf_path.sub_ext('.json').write(
       JSON.pretty_generate(
         generated_at: Time.current.iso8601,
         test_class: self.class.name,
