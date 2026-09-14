@@ -1,0 +1,670 @@
+# frozen_string_literal: true
+
+require 'digest'
+require 'openssl'
+require 'securerandom'
+require 'timeout'
+
+module DuplicateReconciliation
+  # Production-safe discovery probe that evaluates the state of duplicate review cases,
+  # review flags (needs_duplicate_review), dynamic matching volume, and guardian relationships.
+  #
+  # Design guarantees:
+  # 1. Zero in-memory quadratic expansion or unbounded array loading.
+  # 2. Database aggregates (COUNT, GROUP BY, HAVING, CTEs) execute in SQL.
+  # 3. Database-enforced read-only transaction (SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY).
+  # 4. Total task deadline actively enforced via dynamic per-query statement timeouts.
+  # 5. Default output is strictly aggregate, with zero PII, topology masking, and HMAC-keyed pseudonyms.
+  # 6. Correct flag-drift definition: counts constituents with needs_duplicate_review = true
+  #    who have NEITHER an open case NOR a current active Name+DOB match.
+  # 7. Fails closed if invoked within an open transaction to preserve top-level repeatable-read guarantees.
+  class DiscoveryProbe
+    DEFAULT_STATEMENT_TIMEOUT_MS = 15_000
+    DEFAULT_SAMPLE_LIMIT = 5
+
+    STRICT_CONDITION_SQL = <<~SQL.squish
+      drc.metadata->'reason_codes' = '["name_dob"]'::jsonb
+      AND drc.subject_user_id IS NOT NULL
+      AND (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id) = 1
+      AND (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id AND c.match_reason = 'name_dob' AND c.candidate_user_id IS NOT NULL AND drc.subject_user_id < c.candidate_user_id) = 1
+    SQL
+
+    STRICT_COUNT_SQL = "SELECT COUNT(*) FROM duplicate_review_cases drc WHERE drc.source = 5 AND (#{STRICT_CONDITION_SQL})".freeze
+
+    MALFORMED_SAMPLES_SQL = <<~SQL.squish
+      SELECT drc.id, drc.status, drc.subject_user_id,
+             (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id) AS candidate_count,
+             drc.metadata->'reason_codes' AS reason_codes
+      FROM duplicate_review_cases drc
+      WHERE drc.source = 5
+        AND (#{STRICT_CONDITION_SQL}) IS NOT TRUE
+      ORDER BY drc.id
+      LIMIT $1
+    SQL
+
+    MULTI_CASE_PAIRS_SQL = <<~SQL.squish
+      WITH strict_cases AS (
+        SELECT drc.id, drc.subject_user_id AS u1
+        FROM duplicate_review_cases drc
+        WHERE drc.source = 5 AND (#{STRICT_CONDITION_SQL})
+      ),
+      strict_pairs AS (
+        SELECT sc.u1, c.candidate_user_id AS u2
+        FROM strict_cases sc
+        JOIN duplicate_review_case_candidates c ON c.duplicate_review_case_id = sc.id
+      ),
+      multi_pairs AS (
+        SELECT u1, u2, COUNT(*) AS case_count
+        FROM strict_pairs
+        GROUP BY u1, u2
+        HAVING COUNT(*) > 1
+      )
+      SELECT u1, u2, case_count, COUNT(*) OVER () AS full_count
+      FROM multi_pairs
+      ORDER BY u1, u2
+      LIMIT $1
+    SQL
+
+    TRUE_DRIFT_WHERE_SQL = <<~SQL.squish
+      users.type = 'Users::Constituent'
+      AND users.needs_duplicate_review = true
+      AND NOT EXISTS (
+        SELECT 1 FROM duplicate_review_cases drc
+        WHERE drc.status = 0 AND drc.subject_user_id = users.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM duplicate_review_case_candidates drcc
+        JOIN duplicate_review_cases drc ON drc.id = drcc.duplicate_review_case_id
+        WHERE drc.status = 0 AND drcc.candidate_user_id = users.id
+      )
+      AND NOT (
+        users.merged_into_user_id IS NULL
+        AND (users.status IS NULL OR users.status = 1)
+        AND users.first_name IS NOT NULL AND users.first_name != ''
+        AND users.last_name IS NOT NULL AND users.last_name != ''
+        AND users.date_of_birth IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM users u2
+          WHERE u2.id != users.id
+            AND u2.type = 'Users::Constituent'
+            AND u2.merged_into_user_id IS NULL
+            AND (u2.status IS NULL OR u2.status = 1)
+            AND u2.first_name IS NOT NULL AND u2.first_name != ''
+            AND u2.last_name IS NOT NULL AND u2.last_name != ''
+            AND u2.date_of_birth IS NOT NULL
+            AND LOWER(u2.first_name) = LOWER(users.first_name)
+            AND LOWER(u2.last_name) = LOWER(users.last_name)
+            AND u2.date_of_birth = users.date_of_birth
+        )
+      )
+    SQL
+
+    TRUE_DRIFT_COUNT_SQL = "SELECT COUNT(*) FROM users WHERE #{TRUE_DRIFT_WHERE_SQL}".freeze
+
+    WITHOUT_OPEN_CASE_COUNT_SQL = <<~SQL.squish
+      SELECT COUNT(*)
+      FROM users
+      WHERE users.type = 'Users::Constituent'
+        AND users.needs_duplicate_review = true
+        AND NOT EXISTS (
+          SELECT 1 FROM duplicate_review_cases drc
+          WHERE drc.status = 0 AND drc.subject_user_id = users.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM duplicate_review_case_candidates drcc
+          JOIN duplicate_review_cases drc ON drc.id = drcc.duplicate_review_case_id
+          WHERE drc.status = 0 AND drcc.candidate_user_id = users.id
+        )
+    SQL
+
+    OPEN_CASE_UNFLAGGED_COUNT_SQL = <<~SQL.squish
+      SELECT COUNT(DISTINCT u.id)
+      FROM users u
+      WHERE u.type = 'Users::Constituent'
+        AND (u.needs_duplicate_review = false OR u.needs_duplicate_review IS NULL)
+        AND (
+          EXISTS (SELECT 1 FROM duplicate_review_cases drc WHERE drc.status = 0 AND drc.subject_user_id = u.id)
+          OR EXISTS (
+            SELECT 1 FROM duplicate_review_case_candidates drcc
+            JOIN duplicate_review_cases drc ON drc.id = drcc.duplicate_review_case_id
+            WHERE drc.status = 0 AND drcc.candidate_user_id = u.id
+          )
+        )
+    SQL
+
+    MALFORMED_OPEN_PARTICIPANTS_SQL = <<~SQL.squish
+      WITH malformed_open_cases AS (
+        SELECT drc.id, drc.subject_user_id
+        FROM duplicate_review_cases drc
+        WHERE drc.source = 5 AND drc.status = 0
+          AND (#{STRICT_CONDITION_SQL}) IS NOT TRUE
+      )
+      SELECT COUNT(DISTINCT participant_id)
+      FROM (
+        SELECT subject_user_id AS participant_id FROM malformed_open_cases WHERE subject_user_id IS NOT NULL
+        UNION
+        SELECT candidate_user_id AS participant_id FROM duplicate_review_case_candidates
+        WHERE duplicate_review_case_id IN (SELECT id FROM malformed_open_cases) AND candidate_user_id IS NOT NULL
+      ) p
+    SQL
+
+    DRIFT_SAMPLES_SQL = "SELECT users.id FROM users WHERE #{TRUE_DRIFT_WHERE_SQL} ORDER BY users.id LIMIT $1".freeze
+
+    CLUSTERS_SUMMARY_SQL = <<~SQL.squish
+      WITH clusters AS (
+        SELECT COUNT(*) AS cluster_size
+        FROM users
+        WHERE type = 'Users::Constituent'
+          AND merged_into_user_id IS NULL
+          AND (status IS NULL OR status = 1)
+          AND first_name IS NOT NULL AND first_name != ''
+          AND last_name IS NOT NULL AND last_name != ''
+          AND date_of_birth IS NOT NULL
+        GROUP BY LOWER(first_name), LOWER(last_name), date_of_birth
+        HAVING COUNT(*) > 1
+      )
+      SELECT
+        COUNT(*) AS cluster_count,
+        COALESCE(SUM(cluster_size * (cluster_size - 1) / 2), 0) AS total_pairs,
+        COALESCE(MAX(cluster_size), 0) AS max_cluster_size
+      FROM clusters
+    SQL
+
+    LARGEST_CLUSTER_SQL = <<~SQL.squish
+      SELECT LOWER(first_name) AS fn, LOWER(last_name) AS ln, date_of_birth AS dob, COUNT(*) AS cluster_size
+      FROM users
+      WHERE type = 'Users::Constituent'
+        AND merged_into_user_id IS NULL
+        AND (status IS NULL OR status = 1)
+        AND first_name IS NOT NULL AND first_name != ''
+        AND last_name IS NOT NULL AND last_name != ''
+        AND date_of_birth IS NOT NULL
+      GROUP BY LOWER(first_name), LOWER(last_name), date_of_birth
+      HAVING COUNT(*) > 1
+      ORDER BY COUNT(*) DESC, LOWER(last_name), LOWER(first_name), date_of_birth
+      LIMIT 1
+    SQL
+
+    CLUSTERS_DISTRIBUTION_SQL = <<~SQL.squish
+      WITH clusters AS (
+        SELECT COUNT(*) AS cluster_size
+        FROM users
+        WHERE type = 'Users::Constituent'
+          AND merged_into_user_id IS NULL
+          AND (status IS NULL OR status = 1)
+          AND first_name IS NOT NULL AND first_name != ''
+          AND last_name IS NOT NULL AND last_name != ''
+          AND date_of_birth IS NOT NULL
+        GROUP BY LOWER(first_name), LOWER(last_name), date_of_birth
+        HAVING COUNT(*) > 1
+      )
+      SELECT cluster_size, COUNT(*) AS group_count
+      FROM clusters
+      GROUP BY cluster_size
+      ORDER BY cluster_size
+    SQL
+
+    GUARDIAN_DISTRIBUTION_SQL = <<~SQL.squish
+      WITH dep_counts AS (
+        SELECT dependent_id, COUNT(*) AS g_count
+        FROM guardian_relationships
+        GROUP BY dependent_id
+      )
+      SELECT g_count, COUNT(*) AS dep_count
+      FROM dep_counts
+      GROUP BY g_count
+      ORDER BY g_count
+    SQL
+
+    MULTI_GUARDIAN_DEPS_COUNT_SQL = <<~SQL.squish
+      WITH dep_counts AS (
+        SELECT dependent_id, COUNT(*) AS g_count
+        FROM guardian_relationships
+        GROUP BY dependent_id
+        HAVING COUNT(*) > 1
+      )
+      SELECT COUNT(*) FROM dep_counts
+    SQL
+
+    MULTI_GUARDIAN_SAMPLES_SQL = <<~SQL.squish
+      SELECT dependent_id, COUNT(*) AS guardian_count
+      FROM guardian_relationships
+      GROUP BY dependent_id
+      HAVING COUNT(*) > 1
+      ORDER BY dependent_id
+      LIMIT $1
+    SQL
+
+    Result = Data.define(
+      :provenance,
+      :case_metrics,
+      :flag_metrics,
+      :matching_metrics,
+      :guardian_metrics,
+      :samples
+    )
+
+    def initialize(statement_timeout_ms: DEFAULT_STATEMENT_TIMEOUT_MS, sample_limit: DEFAULT_SAMPLE_LIMIT)
+      @statement_timeout_ms = Integer(statement_timeout_ms)
+      @sample_limit = Integer(sample_limit)
+      @salt = SecureRandom.hex(16)
+    end
+
+    def call(detailed_pii: false)
+      with_read_only_transaction do
+        provenance = collect_provenance
+        case_metrics, malformed_samples, multi_case_samples = collect_case_metrics(detailed_pii: detailed_pii)
+        flag_metrics, flag_discrepancy_samples = collect_flag_metrics
+        matching_metrics, largest_group_sample = collect_matching_metrics
+        guardian_metrics, multi_guardian_samples = collect_guardian_metrics(detailed_pii: detailed_pii)
+        assert_within_deadline!
+
+        samples = {
+          malformed_cases: malformed_samples,
+          multi_case_pairs: multi_case_samples,
+          flag_discrepancies: flag_discrepancy_samples,
+          largest_matching_group: largest_group_sample,
+          multi_guardian_dependents: multi_guardian_samples
+        }
+
+        Result.new(
+          provenance: provenance,
+          case_metrics: case_metrics,
+          flag_metrics: flag_metrics,
+          matching_metrics: matching_metrics,
+          guardian_metrics: guardian_metrics,
+          samples: samples
+        )
+      end
+    end
+
+    def render_summary(result, detailed_pii: false)
+      [
+        render_provenance_lines(result, detailed_pii),
+        render_case_lines(result, detailed_pii),
+        render_flag_lines(result, detailed_pii),
+        render_matching_lines(result),
+        render_guardian_lines(result, detailed_pii),
+        '==========================================='
+      ].flatten.join("\n")
+    end
+
+    def with_read_only_transaction
+      raise 'DiscoveryProbe must not be executed inside an existing open transaction' unless ActiveRecord::Base.connection.open_transactions.zero?
+
+      @deadline ||= Process.clock_gettime(Process::CLOCK_MONOTONIC) + (@statement_timeout_ms / 1000.0)
+
+      ActiveRecord::Base.transaction(isolation: :repeatable_read) do
+        ActiveRecord::Base.connection.execute('SET TRANSACTION READ ONLY') if postgresql?
+        yield
+      end
+    ensure
+      @deadline = nil
+    end
+
+    def query_with_timeout
+      apply_remaining_timeout!
+      yield
+    end
+
+    private
+
+    def render_provenance_lines(result, detailed_pii)
+      lines = []
+      lines << '=== PR 208 ARCHITECTURE DISCOVERY PROBE ==='
+      lines << "Environment:  #{result.provenance[:rails_env]}"
+      lines << "Timestamp:    #{result.provenance[:timestamp]}"
+      lines << "Code SHA:     #{result.provenance[:code_sha]}"
+      lines << "Database:     #{result.provenance[:database_adapter]} (fingerprint: #{result.provenance[:database_fingerprint]})"
+      if result.provenance[:transaction_isolation]
+        lines << "Transaction:  isolation=#{result.provenance[:transaction_isolation]}, read_only=#{result.provenance[:transaction_read_only]}"
+      end
+      lines << "PII Redacted: #{!detailed_pii}"
+      lines << 'NOTE: SENSITIVE PII INCLUDED - HANDLE WITH CARE' if detailed_pii
+      lines << ''
+      lines
+    end
+
+    def render_case_lines(result, detailed_pii)
+      lines = []
+      lines << '--- 1. DUPLICATE REVIEW CASES INVENTORY ---'
+      lines << "Total cases: #{result.case_metrics[:total_cases]}"
+      result.case_metrics[:by_source_status_determination].each do |(source, status, determination), count|
+        lines << "  source: #{source.to_s.ljust(28)} | status: #{status.to_s.ljust(22)} | determination: #{determination.to_s.ljust(28)} | count: #{count}"
+      end
+      lines << "Post-import cases total:     #{result.case_metrics[:post_import_total]}"
+      lines << "  Conforming to strict shape: #{result.case_metrics[:post_import_strict_shape]}"
+      lines << "  Malformed cases:            #{result.case_metrics[:post_import_malformed]}"
+      lines << "Pairs with multiple cases:    #{result.case_metrics[:pairs_with_multiple_cases]}"
+      if result.case_metrics[:post_import_malformed].positive? && result.samples[:malformed_cases].any?
+        lines << "  Sample malformed cases (#{result.samples[:malformed_cases].size}):"
+        result.samples[:malformed_cases].each do |c|
+          lines << if detailed_pii
+                     "    Case ##{c[:id]}: status=#{c[:status]}, subject_id=#{c[:subject_user_id]}, candidates=#{c[:candidate_count]}"
+                   else
+                     "    Case ref #{c[:ref]}: status=#{c[:status]}, candidate_count=#{c[:candidate_count]}"
+                   end
+        end
+      end
+      lines << ''
+      lines
+    end
+
+    def render_flag_lines(result, detailed_pii)
+      lines = []
+      lines << '--- 2. REVIEW FLAG INVENTORY (needs_duplicate_review) ---'
+      lines << "Constituents with needs_duplicate_review = true: #{result.flag_metrics[:total_flagged_constituents]}"
+      lines << "  Flagged but NO open case and NO dynamic match:  #{result.flag_metrics[:flagged_without_open_case_or_match]} (true flag drift)"
+      lines << "  Flagged but NO open case (may have match):      #{result.flag_metrics[:flagged_without_open_case]}"
+      lines << "Constituents in open cases with flag = false:     #{result.flag_metrics[:open_case_constituents_unflagged]}"
+      lines << "Malformed post-import open case participants:     #{result.flag_metrics[:malformed_open_case_participants]}"
+      if result.flag_metrics[:flagged_without_open_case_or_match].positive? && result.samples[:flag_discrepancies].any?
+        lines << "  Sample true drift records (#{result.samples[:flag_discrepancies].size}):"
+        result.samples[:flag_discrepancies].each do |s|
+          lines << (detailed_pii ? "    Constituent ##{s[:id]}" : "    Constituent ref #{s[:ref]}")
+        end
+      end
+      lines << ''
+      lines
+    end
+
+    def render_matching_lines(result)
+      lines = []
+      lines << '--- 3. CURRENT DYNAMIC MATCHING METRICS (Database Aggregates) ---'
+      lines << "Matching Name + DOB clusters: #{result.matching_metrics[:cluster_count]}"
+      lines << "Total dynamic pair edges:     #{result.matching_metrics[:total_dynamic_pairs]}"
+      lines << 'Cluster size distribution (cluster size => group count):'
+      result.matching_metrics[:cluster_size_distribution].each do |size, count|
+        pairs_each = size * (size - 1) / 2
+        lines << "  Size #{size} (#{pairs_each} pairs each): #{count} group(s) -> #{count * pairs_each} total pairs"
+      end
+      if result.samples[:largest_matching_group]
+        lg = result.samples[:largest_matching_group]
+        lines << "Largest cluster: #{lg[:size]} constituents (#{lg[:pairs]} pairs) [cluster_ref: #{lg[:cluster_ref]}]"
+      end
+      lines << ''
+      lines
+    end
+
+    def render_guardian_lines(result, detailed_pii)
+      lines = []
+      lines << '--- 4. GUARDIAN RELATIONSHIP INVENTORY ---'
+      lines << "Total GuardianRelationships: #{result.guardian_metrics[:total_relationships]}"
+      lines << "Distinct dependents:         #{result.guardian_metrics[:distinct_dependents]}"
+      lines << "Distinct guardians:          #{result.guardian_metrics[:distinct_guardians]}"
+      lines << 'Guardians per dependent distribution (guardians => dependents):'
+      result.guardian_metrics[:guardians_per_dependent_distribution].each do |g_count, dep_count|
+        lines << "  #{g_count} guardian(s): #{dep_count} dependent(s)"
+      end
+      lines << "Dependents with multiple guardians: #{result.guardian_metrics[:multi_guardian_dependents_count]}"
+      if result.samples[:multi_guardian_dependents].any?
+        lines << 'Sample multi-guardian dependents:'
+        result.samples[:multi_guardian_dependents].each do |m|
+          if detailed_pii
+            lines << "  Dependent ##{m[:dependent_id]} (#{m[:dependent_name]}): #{m[:guardian_count]} guardians (#{m[:relationship_count]} relationships)"
+            m[:relationships].each do |r|
+              lines << "    Rel ##{r[:id]}: guardian ##{r[:guardian_id]} (#{r[:guardian_name]}), type: #{r[:type]}, created: #{r[:created_at]}"
+            end
+            lines << "    ... and #{m[:omitted_relationships_count]} more relationship(s) omitted" if m[:omitted_relationships_count]&.positive?
+          else
+            lines << "  Dependent sample #{m[:ref]}: #{m[:guardian_count]} guardians (#{m[:relationship_count]} relationships)"
+          end
+        end
+      end
+      lines
+    end
+
+    def postgresql?
+      ActiveRecord::Base.connection.adapter_name =~ /postgresql/i
+    end
+
+    def apply_remaining_timeout!
+      return unless postgresql?
+
+      deadline = @deadline || (Process.clock_gettime(Process::CLOCK_MONOTONIC) + (@statement_timeout_ms / 1000.0))
+      remaining_ms = Integer((deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)) * 1000)
+      raise Timeout::Error, "DiscoveryProbe exceeded total task deadline of #{@statement_timeout_ms}ms" if remaining_ms <= 0
+
+      ActiveRecord::Base.connection.exec_query(
+        "SELECT set_config('statement_timeout', $1, true)",
+        'SQL',
+        [ActiveRecord::Relation::QueryAttribute.new('value', "#{remaining_ms}ms", ActiveRecord::Type::String.new)]
+      )
+    end
+
+    def assert_within_deadline!
+      return unless @deadline && Process.clock_gettime(Process::CLOCK_MONOTONIC) > @deadline
+
+      raise Timeout::Error, "DiscoveryProbe exceeded total task deadline of #{@statement_timeout_ms}ms"
+    end
+
+    def opaque_ref(prefix, identifier)
+      OpenSSL::HMAC.hexdigest('SHA256', @salt, "#{prefix}:#{identifier}")[0..7]
+    end
+
+    def collect_provenance
+      conn = ActiveRecord::Base.connection
+      db_config = ActiveRecord::Base.connection_db_config
+      host_info = db_config.respond_to?(:host) ? db_config.host.to_s : ''
+      db_info = db_config.respond_to?(:database) ? db_config.database.to_s : ''
+      fingerprint = stable_database_fingerprint(conn.adapter_name, host_info, db_info)
+
+      isolation = postgresql? ? query_with_timeout { conn.select_value('SHOW transaction_isolation') } : nil
+      read_only = postgresql? ? query_with_timeout { conn.select_value('SHOW transaction_read_only') } : nil
+
+      {
+        rails_env: Rails.env,
+        timestamp: Time.current.iso8601,
+        code_sha: `git rev-parse HEAD 2>/dev/null`.strip.presence || 'unknown',
+        database_adapter: conn.adapter_name,
+        database_fingerprint: fingerprint,
+        transaction_isolation: isolation,
+        transaction_read_only: read_only
+      }
+    end
+
+    def stable_database_fingerprint(adapter, host_info, db_info)
+      secret = Rails.application.key_generator.generate_key('DuplicateReconciliation::DiscoveryProbe:database_fingerprint', 32)
+      OpenSSL::HMAC.hexdigest('SHA256', secret, "#{adapter}:#{host_info}:#{db_info}")[0..7]
+    end
+
+    def integer_bind(name, val)
+      ActiveRecord::Relation::QueryAttribute.new(name.to_s, Integer(val), ActiveRecord::Type::Integer.new)
+    end
+
+    def collect_case_metrics(detailed_pii: false)
+      counts = query_with_timeout { DuplicateReviewCase.group(:source, :status, :resolution_determination).count }
+      total_cases = counts.values.sum
+      post_import_total = query_with_timeout { DuplicateReviewCase.where(source: :post_import_reconciliation).count }
+
+      strict_count = query_with_timeout { ActiveRecord::Base.connection.select_value(STRICT_COUNT_SQL).to_i }
+      malformed_count = post_import_total - strict_count
+
+      malformed_samples = query_malformed_case_samples(malformed_count)
+      multi_case_samples, multi_case_count = query_multi_case_pairs(detailed_pii: detailed_pii)
+
+      case_metrics = {
+        total_cases: total_cases,
+        by_source_status_determination: counts,
+        post_import_total: post_import_total,
+        post_import_strict_shape: strict_count,
+        post_import_malformed: malformed_count,
+        pairs_with_multiple_cases: multi_case_count
+      }
+
+      [case_metrics, malformed_samples, multi_case_samples]
+    end
+
+    def query_malformed_case_samples(malformed_count)
+      return [] unless malformed_count.positive?
+
+      rows = query_with_timeout do
+        ActiveRecord::Base.connection.exec_query(MALFORMED_SAMPLES_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+      end
+      rows.map do |row|
+        {
+          id: row['id'],
+          ref: opaque_ref('case', row['id']),
+          status: row['status'],
+          subject_user_id: row['subject_user_id'],
+          candidate_count: row['candidate_count'].to_i,
+          reason_codes: row['reason_codes']
+        }
+      end
+    end
+
+    def query_multi_case_pairs(detailed_pii:)
+      rows = query_with_timeout do
+        ActiveRecord::Base.connection.exec_query(MULTI_CASE_PAIRS_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+      end
+      total_count = rows.empty? ? 0 : rows.first['full_count'].to_i
+      samples = rows.map do |row|
+        {
+          pair_ids: detailed_pii ? [row['u1'], row['u2']] : nil,
+          pair_ref: opaque_ref('pair', "#{row['u1']}_#{row['u2']}"),
+          case_count: row['case_count'].to_i
+        }
+      end
+      [samples, total_count]
+    end
+
+    def collect_flag_metrics
+      total_flagged = query_with_timeout { Users::Constituent.where(needs_duplicate_review: true).count }
+
+      true_drift_count = query_with_timeout { ActiveRecord::Base.connection.select_value(TRUE_DRIFT_COUNT_SQL).to_i }
+      without_open_case_count = query_with_timeout { ActiveRecord::Base.connection.select_value(WITHOUT_OPEN_CASE_COUNT_SQL).to_i }
+      open_case_unflagged_count = query_with_timeout { ActiveRecord::Base.connection.select_value(OPEN_CASE_UNFLAGGED_COUNT_SQL).to_i }
+      malformed_open_participants_count = query_with_timeout { ActiveRecord::Base.connection.select_value(MALFORMED_OPEN_PARTICIPANTS_SQL).to_i }
+
+      discrepancy_samples = query_drift_samples(true_drift_count)
+
+      flag_metrics = {
+        total_flagged_constituents: total_flagged,
+        flagged_without_open_case_or_match: true_drift_count,
+        flagged_without_open_case: without_open_case_count,
+        open_case_constituents_unflagged: open_case_unflagged_count,
+        malformed_open_case_participants: malformed_open_participants_count
+      }
+
+      [flag_metrics, discrepancy_samples]
+    end
+
+    def query_drift_samples(true_drift_count)
+      return [] unless true_drift_count.positive?
+
+      rows = query_with_timeout do
+        ActiveRecord::Base.connection.exec_query(DRIFT_SAMPLES_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+      end
+      rows.rows.flatten.map do |uid|
+        {
+          id: uid,
+          ref: opaque_ref('user', uid)
+        }
+      end
+    end
+
+    def collect_matching_metrics
+      summary_row = query_with_timeout { ActiveRecord::Base.connection.select_one(CLUSTERS_SUMMARY_SQL) }
+      cluster_count = summary_row['cluster_count'].to_i
+      total_pairs = summary_row['total_pairs'].to_i
+      max_size = summary_row['max_cluster_size'].to_i
+
+      rows = query_with_timeout { ActiveRecord::Base.connection.select_rows(CLUSTERS_DISTRIBUTION_SQL) }
+      distribution = rows.map do |size, count|
+        [size.to_i, count.to_i]
+      end
+
+      largest_group_sample = nil
+      if max_size.positive?
+        largest_row = query_with_timeout { ActiveRecord::Base.connection.select_one(LARGEST_CLUSTER_SQL) }
+        if largest_row
+          largest_group_sample = {
+            size: max_size,
+            pairs: max_size * (max_size - 1) / 2,
+            cluster_ref: opaque_ref('cluster', "#{largest_row['fn']}:#{largest_row['ln']}:#{largest_row['dob']}")
+          }
+        end
+      end
+
+      matching_metrics = {
+        cluster_count: cluster_count,
+        total_dynamic_pairs: total_pairs,
+        cluster_size_distribution: distribution
+      }
+
+      [matching_metrics, largest_group_sample]
+    end
+
+    def collect_guardian_metrics(detailed_pii: false)
+      total_relationships = query_with_timeout { GuardianRelationship.count }
+      distinct_dependents = query_with_timeout { GuardianRelationship.distinct.count(:dependent_id) }
+      distinct_guardians = query_with_timeout { GuardianRelationship.distinct.count(:guardian_id) }
+
+      rows = query_with_timeout { ActiveRecord::Base.connection.select_rows(GUARDIAN_DISTRIBUTION_SQL) }
+      distribution = rows.map do |g_count, dep_count|
+        [g_count.to_i, dep_count.to_i]
+      end
+
+      multi_count = query_with_timeout { ActiveRecord::Base.connection.select_value(MULTI_GUARDIAN_DEPS_COUNT_SQL).to_i }
+      multi_guardian_samples = query_multi_guardian_samples(multi_count, detailed_pii: detailed_pii)
+
+      guardian_metrics = {
+        total_relationships: total_relationships,
+        distinct_dependents: distinct_dependents,
+        distinct_guardians: distinct_guardians,
+        guardians_per_dependent_distribution: distribution,
+        multi_guardian_dependents_count: multi_count
+      }
+
+      [guardian_metrics, multi_guardian_samples]
+    end
+
+    def query_multi_guardian_samples(multi_count, detailed_pii:)
+      return [] unless multi_count.positive?
+
+      rows = query_with_timeout do
+        ActiveRecord::Base.connection.exec_query(MULTI_GUARDIAN_SAMPLES_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+      end
+
+      rows.each_with_index.map do |row, idx|
+        dep_id = row['dependent_id'].to_i
+        g_count = row['guardian_count'].to_i
+
+        if detailed_pii
+          build_detailed_guardian_sample(dep_id, g_count)
+        else
+          {
+            ref: opaque_ref('dep', idx + 1),
+            guardian_count: g_count,
+            relationship_count: g_count
+          }
+        end
+      end
+    end
+
+    def build_detailed_guardian_sample(dep_id, g_count)
+      dep = query_with_timeout { User.find_by(id: dep_id) }
+      rels_scope = GuardianRelationship.where(dependent_id: dep_id).order(:id)
+      total_rels = query_with_timeout { rels_scope.count }
+      sampled_rels = query_with_timeout { rels_scope.limit(@sample_limit).eager_load(:guardian_user).to_a }
+      omitted_count = [total_rels - @sample_limit, 0].max
+
+      {
+        dependent_id: dep_id,
+        dependent_name: dep&.full_name,
+        guardian_count: g_count,
+        relationship_count: total_rels,
+        omitted_relationships_count: omitted_count,
+        relationships: sampled_rels.map do |r|
+          {
+            id: r.id,
+            guardian_id: r.guardian_id,
+            guardian_name: r.guardian_user&.full_name,
+            type: r.relationship_type,
+            created_at: r.created_at
+          }
+        end
+      }
+    end
+  end
+end

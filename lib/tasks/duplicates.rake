@@ -16,4 +16,12 @@ namespace :duplicates do
     puts "Set: #{counts[:set_count]}"
     puts "Cleared: #{counts[:cleared_count]}"
   end
+
+  desc 'Read-only discovery probe for PR 208 architecture correction (optional DETAILED_PII=true)'
+  task discovery: :environment do
+    detailed = ActiveModel::Type::Boolean.new.cast(ENV.fetch('DETAILED_PII', 'false'))
+    probe = DuplicateReconciliation::DiscoveryProbe.new
+    result = probe.call(detailed_pii: detailed)
+    puts probe.render_summary(result, detailed_pii: detailed)
+  end
 end
