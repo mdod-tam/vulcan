@@ -18,10 +18,8 @@ module DuplicateReconciliation
   # 6. Correct flag-drift definition: counts constituents with needs_duplicate_review = true
   #    who have NEITHER an open case NOR a current active Name+DOB match.
   # 7. Fails closed if invoked within an open transaction to preserve top-level repeatable-read guarantees.
-  class DiscoveryProbe
-    DEFAULT_STATEMENT_TIMEOUT_MS = 15_000
-    DEFAULT_SAMPLE_LIMIT = 5
-
+  # SQL queries and CTE definitions for DiscoveryProbe
+  module DiscoveryQueries
     STRICT_CONDITION_SQL = <<~SQL.squish
       drc.metadata->'reason_codes' = '["name_dob"]'::jsonb
       AND drc.subject_user_id IS NOT NULL
@@ -65,7 +63,40 @@ module DuplicateReconciliation
       LIMIT $1
     SQL
 
-    TRUE_DRIFT_WHERE_SQL = <<~SQL.squish
+    ACTIVE_DYNAMIC_MATCH_SQL = <<~SQL.squish
+      users.merged_into_user_id IS NULL
+      AND (users.status IS NULL OR users.status = 1)
+      AND users.first_name IS NOT NULL AND users.first_name != ''
+      AND users.last_name IS NOT NULL AND users.last_name != ''
+      AND users.date_of_birth IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM users u2
+        WHERE u2.id != users.id
+          AND u2.type = 'Users::Constituent'
+          AND u2.merged_into_user_id IS NULL
+          AND (u2.status IS NULL OR u2.status = 1)
+          AND u2.first_name IS NOT NULL AND u2.first_name != ''
+          AND u2.last_name IS NOT NULL AND u2.last_name != ''
+          AND u2.date_of_birth IS NOT NULL
+          AND LOWER(u2.first_name) = LOWER(users.first_name)
+          AND LOWER(u2.last_name) = LOWER(users.last_name)
+          AND u2.date_of_birth = users.date_of_birth
+          AND NOT EXISTS (
+            SELECT 1 FROM duplicate_review_cases drc
+            JOIN duplicate_review_case_candidates drcc ON drcc.duplicate_review_case_id = drc.id
+            WHERE drc.source = 5
+              AND drc.status != 0
+              AND drc.resolution_determination = 'keep_separate'
+              AND drc.metadata->'reason_codes' = '["name_dob"]'::jsonb
+              AND drc.subject_user_id = LEAST(users.id, u2.id)
+              AND drcc.candidate_user_id = GREATEST(users.id, u2.id)
+              AND drcc.match_reason = 'name_dob'
+              AND (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id) = 1
+          )
+      )
+    SQL
+
+    NO_OPEN_CASE_SQL = <<~SQL.squish
       users.type = 'Users::Constituent'
       AND users.needs_duplicate_review = true
       AND NOT EXISTS (
@@ -77,45 +108,17 @@ module DuplicateReconciliation
         JOIN duplicate_review_cases drc ON drc.id = drcc.duplicate_review_case_id
         WHERE drc.status = 0 AND drcc.candidate_user_id = users.id
       )
-      AND NOT (
-        users.merged_into_user_id IS NULL
-        AND (users.status IS NULL OR users.status = 1)
-        AND users.first_name IS NOT NULL AND users.first_name != ''
-        AND users.last_name IS NOT NULL AND users.last_name != ''
-        AND users.date_of_birth IS NOT NULL
-        AND EXISTS (
-          SELECT 1 FROM users u2
-          WHERE u2.id != users.id
-            AND u2.type = 'Users::Constituent'
-            AND u2.merged_into_user_id IS NULL
-            AND (u2.status IS NULL OR u2.status = 1)
-            AND u2.first_name IS NOT NULL AND u2.first_name != ''
-            AND u2.last_name IS NOT NULL AND u2.last_name != ''
-            AND u2.date_of_birth IS NOT NULL
-            AND LOWER(u2.first_name) = LOWER(users.first_name)
-            AND LOWER(u2.last_name) = LOWER(users.last_name)
-            AND u2.date_of_birth = users.date_of_birth
-        )
-      )
     SQL
 
+    TRUE_DRIFT_WHERE_SQL = "#{NO_OPEN_CASE_SQL} AND NOT (#{ACTIVE_DYNAMIC_MATCH_SQL})".freeze
     TRUE_DRIFT_COUNT_SQL = "SELECT COUNT(*) FROM users WHERE #{TRUE_DRIFT_WHERE_SQL}".freeze
-
-    WITHOUT_OPEN_CASE_COUNT_SQL = <<~SQL.squish
-      SELECT COUNT(*)
-      FROM users
-      WHERE users.type = 'Users::Constituent'
-        AND users.needs_duplicate_review = true
-        AND NOT EXISTS (
-          SELECT 1 FROM duplicate_review_cases drc
-          WHERE drc.status = 0 AND drc.subject_user_id = users.id
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM duplicate_review_case_candidates drcc
-          JOIN duplicate_review_cases drc ON drc.id = drcc.duplicate_review_case_id
-          WHERE drc.status = 0 AND drcc.candidate_user_id = users.id
-        )
+    DRIFT_CANDIDATES_WITH_SQL_MATCH_SQL = <<~SQL.squish
+      SELECT users.id, users.date_of_birth FROM users
+      WHERE #{NO_OPEN_CASE_SQL} AND #{ACTIVE_DYNAMIC_MATCH_SQL}
+      ORDER BY users.id LIMIT $1
     SQL
+
+    WITHOUT_OPEN_CASE_COUNT_SQL = "SELECT COUNT(*) FROM users WHERE #{NO_OPEN_CASE_SQL}".freeze
 
     OPEN_CASE_UNFLAGGED_COUNT_SQL = <<~SQL.squish
       SELECT COUNT(DISTINCT u.id)
@@ -150,28 +153,7 @@ module DuplicateReconciliation
 
     DRIFT_SAMPLES_SQL = "SELECT users.id FROM users WHERE #{TRUE_DRIFT_WHERE_SQL} ORDER BY users.id LIMIT $1".freeze
 
-    CLUSTERS_SUMMARY_SQL = <<~SQL.squish
-      WITH clusters AS (
-        SELECT COUNT(*) AS cluster_size
-        FROM users
-        WHERE type = 'Users::Constituent'
-          AND merged_into_user_id IS NULL
-          AND (status IS NULL OR status = 1)
-          AND first_name IS NOT NULL AND first_name != ''
-          AND last_name IS NOT NULL AND last_name != ''
-          AND date_of_birth IS NOT NULL
-        GROUP BY LOWER(first_name), LOWER(last_name), date_of_birth
-        HAVING COUNT(*) > 1
-      )
-      SELECT
-        COUNT(*) AS cluster_count,
-        COALESCE(SUM(cluster_size * (cluster_size - 1) / 2), 0) AS total_pairs,
-        COALESCE(MAX(cluster_size), 0) AS max_cluster_size
-      FROM clusters
-    SQL
-
-    LARGEST_CLUSTER_SQL = <<~SQL.squish
-      SELECT LOWER(first_name) AS fn, LOWER(last_name) AS ln, date_of_birth AS dob, COUNT(*) AS cluster_size
+    CLUSTERS_BASE_SQL = <<~SQL.squish
       FROM users
       WHERE type = 'Users::Constituent'
         AND merged_into_user_id IS NULL
@@ -181,50 +163,33 @@ module DuplicateReconciliation
         AND date_of_birth IS NOT NULL
       GROUP BY LOWER(first_name), LOWER(last_name), date_of_birth
       HAVING COUNT(*) > 1
-      ORDER BY COUNT(*) DESC, LOWER(last_name), LOWER(first_name), date_of_birth
-      LIMIT 1
+    SQL
+
+    CLUSTERS_SUMMARY_SQL = <<~SQL.squish
+      WITH clusters AS (SELECT COUNT(*) AS cluster_size #{CLUSTERS_BASE_SQL})
+      SELECT COUNT(*) AS cluster_count,
+             COALESCE(SUM(cluster_size * (cluster_size - 1) / 2), 0) AS total_pairs,
+             COALESCE(MAX(cluster_size), 0) AS max_cluster_size
+      FROM clusters
     SQL
 
     CLUSTERS_DISTRIBUTION_SQL = <<~SQL.squish
-      WITH clusters AS (
-        SELECT COUNT(*) AS cluster_size
-        FROM users
-        WHERE type = 'Users::Constituent'
-          AND merged_into_user_id IS NULL
-          AND (status IS NULL OR status = 1)
-          AND first_name IS NOT NULL AND first_name != ''
-          AND last_name IS NOT NULL AND last_name != ''
-          AND date_of_birth IS NOT NULL
-        GROUP BY LOWER(first_name), LOWER(last_name), date_of_birth
-        HAVING COUNT(*) > 1
-      )
-      SELECT cluster_size, COUNT(*) AS group_count
-      FROM clusters
-      GROUP BY cluster_size
-      ORDER BY cluster_size
+      WITH clusters AS (SELECT COUNT(*) AS cluster_size #{CLUSTERS_BASE_SQL})
+      SELECT cluster_size, COUNT(*) AS group_count FROM clusters GROUP BY cluster_size ORDER BY cluster_size
     SQL
 
+    CLUSTERS_AUDIT_SQL = <<~SQL.squish
+      SELECT LOWER(first_name) AS fn, LOWER(last_name) AS ln, date_of_birth AS dob, COUNT(*) AS cluster_size
+      #{CLUSTERS_BASE_SQL}
+      ORDER BY COUNT(*) DESC, LOWER(last_name), LOWER(first_name), date_of_birth LIMIT $1
+    SQL
+
+    DEP_COUNTS_CTE_SQL = 'SELECT dependent_id, COUNT(*) AS g_count FROM guardian_relationships GROUP BY dependent_id'
     GUARDIAN_DISTRIBUTION_SQL = <<~SQL.squish
-      WITH dep_counts AS (
-        SELECT dependent_id, COUNT(*) AS g_count
-        FROM guardian_relationships
-        GROUP BY dependent_id
-      )
-      SELECT g_count, COUNT(*) AS dep_count
-      FROM dep_counts
-      GROUP BY g_count
-      ORDER BY g_count
+      WITH dep_counts AS (#{DEP_COUNTS_CTE_SQL})
+      SELECT g_count, COUNT(*) AS dep_count FROM dep_counts GROUP BY g_count ORDER BY g_count
     SQL
-
-    MULTI_GUARDIAN_DEPS_COUNT_SQL = <<~SQL.squish
-      WITH dep_counts AS (
-        SELECT dependent_id, COUNT(*) AS g_count
-        FROM guardian_relationships
-        GROUP BY dependent_id
-        HAVING COUNT(*) > 1
-      )
-      SELECT COUNT(*) FROM dep_counts
-    SQL
+    MULTI_GUARDIAN_DEPS_COUNT_SQL = "WITH dep_counts AS (#{DEP_COUNTS_CTE_SQL} HAVING COUNT(*) > 1) SELECT COUNT(*) FROM dep_counts".freeze
 
     MULTI_GUARDIAN_SAMPLES_SQL = <<~SQL.squish
       SELECT dependent_id, COUNT(*) AS guardian_count
@@ -234,6 +199,14 @@ module DuplicateReconciliation
       ORDER BY dependent_id
       LIMIT $1
     SQL
+  end
+
+  class DiscoveryProbe
+    include DiscoveryQueries
+
+    DEFAULT_STATEMENT_TIMEOUT_MS = 15_000
+    DEFAULT_SAMPLE_LIMIT = 5
+    DEFAULT_CLUSTER_LIMIT = 500
 
     Result = Data.define(
       :provenance,
@@ -244,18 +217,24 @@ module DuplicateReconciliation
       :samples
     )
 
-    def initialize(statement_timeout_ms: DEFAULT_STATEMENT_TIMEOUT_MS, sample_limit: DEFAULT_SAMPLE_LIMIT)
+    def initialize(statement_timeout_ms: DEFAULT_STATEMENT_TIMEOUT_MS, sample_limit: DEFAULT_SAMPLE_LIMIT,
+                   cluster_limit: DEFAULT_CLUSTER_LIMIT)
       @statement_timeout_ms = Integer(statement_timeout_ms)
       @sample_limit = Integer(sample_limit)
+      @cluster_limit = Integer(cluster_limit)
       @salt = SecureRandom.hex(16)
     end
 
     def call(detailed_pii: false)
       with_read_only_transaction do
         provenance = collect_provenance
+        assert_within_deadline!
         case_metrics, malformed_samples, multi_case_samples = collect_case_metrics(detailed_pii: detailed_pii)
-        flag_metrics, flag_discrepancy_samples = collect_flag_metrics
+        assert_within_deadline!
+        flag_metrics, flag_discrepancy_samples = collect_flag_metrics(detailed_pii: detailed_pii)
+        assert_within_deadline!
         matching_metrics, largest_group_sample = collect_matching_metrics
+        assert_within_deadline!
         guardian_metrics, multi_guardian_samples = collect_guardian_metrics(detailed_pii: detailed_pii)
         assert_within_deadline!
 
@@ -336,17 +315,37 @@ module DuplicateReconciliation
       lines << "  Conforming to strict shape: #{result.case_metrics[:post_import_strict_shape]}"
       lines << "  Malformed cases:            #{result.case_metrics[:post_import_malformed]}"
       lines << "Pairs with multiple cases:    #{result.case_metrics[:pairs_with_multiple_cases]}"
-      if result.case_metrics[:post_import_malformed].positive? && result.samples[:malformed_cases].any?
-        lines << "  Sample malformed cases (#{result.samples[:malformed_cases].size}):"
-        result.samples[:malformed_cases].each do |c|
-          lines << if detailed_pii
-                     "    Case ##{c[:id]}: status=#{c[:status]}, subject_id=#{c[:subject_user_id]}, candidates=#{c[:candidate_count]}"
-                   else
-                     "    Case ref #{c[:ref]}: status=#{c[:status]}, candidate_count=#{c[:candidate_count]}"
-                   end
-        end
-      end
+      lines.concat(render_malformed_case_sample_lines(result, detailed_pii))
+      lines.concat(render_multi_case_pair_sample_lines(result, detailed_pii))
       lines << ''
+      lines
+    end
+
+    def render_malformed_case_sample_lines(result, detailed_pii)
+      return [] unless result.case_metrics[:post_import_malformed].positive? && result.samples[:malformed_cases].any?
+
+      lines = ["  Sample malformed cases (#{result.samples[:malformed_cases].size}):"]
+      result.samples[:malformed_cases].each do |c|
+        lines << if detailed_pii && c[:id]
+                   "    Case ##{c[:id]}: status=#{c[:status]}, subject_id=#{c[:subject_user_id]}, candidates=#{c[:candidate_count]}"
+                 else
+                   "    Case ref #{c[:ref]}: status=#{c[:status]}, candidate_count=#{c[:candidate_count]}"
+                 end
+      end
+      lines
+    end
+
+    def render_multi_case_pair_sample_lines(result, detailed_pii)
+      return [] unless result.case_metrics[:pairs_with_multiple_cases].positive? && result.samples[:multi_case_pairs].any?
+
+      lines = ["  Sample duplicate-pair cases (#{result.samples[:multi_case_pairs].size}):"]
+      result.samples[:multi_case_pairs].each do |p|
+        lines << if detailed_pii && p[:pair_ids]
+                   "    Pair #{p[:pair_ids].join('-')}: #{p[:case_count]} cases"
+                 else
+                   "    Pair ref #{p[:pair_ref]}: #{p[:case_count]} cases"
+                 end
+      end
       lines
     end
 
@@ -354,14 +353,21 @@ module DuplicateReconciliation
       lines = []
       lines << '--- 2. REVIEW FLAG INVENTORY (needs_duplicate_review) ---'
       lines << "Constituents with needs_duplicate_review = true: #{result.flag_metrics[:total_flagged_constituents]}"
-      lines << "  Flagged but NO open case and NO dynamic match:  #{result.flag_metrics[:flagged_without_open_case_or_match]} (true flag drift)"
+      if result.flag_metrics[:drift_dob_audit_truncated]
+        fm = result.flag_metrics
+        lines << "  Flagged but NO open case and NO dynamic match:  >= #{fm[:flagged_without_open_case_or_match]} (true flag drift, lower bound; audit truncated)"
+        lines << "  NOTE: Drift candidate DOB audit was bounded to #{fm[:audited_drift_candidates]} of #{fm[:total_drift_candidates]} candidates; " \
+                 'additional corrupt matches may exist'
+      else
+        lines << "  Flagged but NO open case and NO dynamic match:  #{result.flag_metrics[:flagged_without_open_case_or_match]} (true flag drift)"
+      end
       lines << "  Flagged but NO open case (may have match):      #{result.flag_metrics[:flagged_without_open_case]}"
       lines << "Constituents in open cases with flag = false:     #{result.flag_metrics[:open_case_constituents_unflagged]}"
       lines << "Malformed post-import open case participants:     #{result.flag_metrics[:malformed_open_case_participants]}"
       if result.flag_metrics[:flagged_without_open_case_or_match].positive? && result.samples[:flag_discrepancies].any?
         lines << "  Sample true drift records (#{result.samples[:flag_discrepancies].size}):"
         result.samples[:flag_discrepancies].each do |s|
-          lines << (detailed_pii ? "    Constituent ##{s[:id]}" : "    Constituent ref #{s[:ref]}")
+          lines << (detailed_pii && s[:id] ? "    Constituent ##{s[:id]}" : "    Constituent ref #{s[:ref]}")
         end
       end
       lines << ''
@@ -371,18 +377,50 @@ module DuplicateReconciliation
     def render_matching_lines(result)
       lines = []
       lines << '--- 3. CURRENT DYNAMIC MATCHING METRICS (Database Aggregates) ---'
-      lines << "Matching Name + DOB clusters: #{result.matching_metrics[:cluster_count]}"
-      lines << "Total dynamic pair edges:     #{result.matching_metrics[:total_dynamic_pairs]}"
-      lines << 'Cluster size distribution (cluster size => group count):'
-      result.matching_metrics[:cluster_size_distribution].each do |size, count|
+      m = result.matching_metrics
+      if m[:dob_audit_truncated]
+        lines.concat(render_truncated_matching_lines(m, result.samples[:largest_matching_group]))
+      else
+        lines.concat(render_verified_matching_lines(m, result.samples[:largest_matching_group]))
+      end
+      lines << ''
+      lines
+    end
+
+    def render_truncated_matching_lines(metrics, largest_group)
+      lines = []
+      lines << "Raw SQL Name + DOB clusters:  #{metrics[:raw_cluster_count]} (unverified; cluster audit truncated)"
+      lines << "Raw SQL dynamic pair edges:   #{metrics[:raw_total_dynamic_pairs]}"
+      lines << "  NOTE: Cluster DOB audit was bounded to #{metrics[:audited_clusters]} of #{metrics[:raw_cluster_count]} clusters; canonical totals not verified"
+      if metrics[:invalid_dob_clusters].positive?
+        lines << "  Invalid/undecryptable DOB clusters in sample: #{metrics[:invalid_dob_clusters]} of #{metrics[:audited_clusters]} audited " \
+                 '(canonical exclusion incomplete)'
+      end
+      lines << 'Raw SQL cluster size distribution (cluster size => group count):'
+      metrics[:raw_cluster_size_distribution].each do |size, count|
         pairs_each = size * (size - 1) / 2
         lines << "  Size #{size} (#{pairs_each} pairs each): #{count} group(s) -> #{count * pairs_each} total pairs"
       end
-      if result.samples[:largest_matching_group]
-        lg = result.samples[:largest_matching_group]
-        lines << "Largest cluster: #{lg[:size]} constituents (#{lg[:pairs]} pairs) [cluster_ref: #{lg[:cluster_ref]}]"
+      if largest_group
+        lines << "Largest verified cluster in sample: #{largest_group[:size]} constituents (#{largest_group[:pairs]} pairs) [cluster_ref: #{largest_group[:cluster_ref]}]"
       end
-      lines << ''
+      lines
+    end
+
+    def render_verified_matching_lines(metrics, largest_group)
+      lines = []
+      lines << "Matching Name + DOB clusters: #{metrics[:cluster_count]}"
+      lines << "Total dynamic pair edges:     #{metrics[:total_dynamic_pairs]}"
+      if metrics[:invalid_dob_clusters].positive?
+        lines << "  Invalid/undecryptable DOB clusters: #{metrics[:invalid_dob_clusters]} " \
+                 "(excluded from verified dynamic matching; raw SQL clusters: #{metrics[:raw_cluster_count]})"
+      end
+      lines << 'Cluster size distribution (cluster size => group count):'
+      metrics[:cluster_size_distribution].each do |size, count|
+        pairs_each = size * (size - 1) / 2
+        lines << "  Size #{size} (#{pairs_each} pairs each): #{count} group(s) -> #{count * pairs_each} total pairs"
+      end
+      lines << "Largest cluster: #{largest_group[:size]} constituents (#{largest_group[:pairs]} pairs) [cluster_ref: #{largest_group[:cluster_ref]}]" if largest_group
       lines
     end
 
@@ -480,7 +518,7 @@ module DuplicateReconciliation
       strict_count = query_with_timeout { ActiveRecord::Base.connection.select_value(STRICT_COUNT_SQL).to_i }
       malformed_count = post_import_total - strict_count
 
-      malformed_samples = query_malformed_case_samples(malformed_count)
+      malformed_samples = query_malformed_case_samples(malformed_count, detailed_pii: detailed_pii)
       multi_case_samples, multi_case_count = query_multi_case_pairs(detailed_pii: detailed_pii)
 
       case_metrics = {
@@ -495,7 +533,7 @@ module DuplicateReconciliation
       [case_metrics, malformed_samples, multi_case_samples]
     end
 
-    def query_malformed_case_samples(malformed_count)
+    def query_malformed_case_samples(malformed_count, detailed_pii:)
       return [] unless malformed_count.positive?
 
       rows = query_with_timeout do
@@ -503,12 +541,12 @@ module DuplicateReconciliation
       end
       rows.map do |row|
         {
-          id: row['id'],
+          id: detailed_pii ? row['id'] : nil,
           ref: opaque_ref('case', row['id']),
           status: row['status'],
-          subject_user_id: row['subject_user_id'],
+          subject_user_id: detailed_pii ? row['subject_user_id'] : nil,
           candidate_count: row['candidate_count'].to_i,
-          reason_codes: row['reason_codes']
+          reason_codes: detailed_pii ? row['reason_codes'] : nil
         }
       end
     end
@@ -528,19 +566,30 @@ module DuplicateReconciliation
       [samples, total_count]
     end
 
-    def collect_flag_metrics
+    def collect_flag_metrics(detailed_pii: false)
       total_flagged = query_with_timeout { Users::Constituent.where(needs_duplicate_review: true).count }
 
-      true_drift_count = query_with_timeout { ActiveRecord::Base.connection.select_value(TRUE_DRIFT_COUNT_SQL).to_i }
+      sql_true_drift_count = query_with_timeout { ActiveRecord::Base.connection.select_value(TRUE_DRIFT_COUNT_SQL).to_i }
       without_open_case_count = query_with_timeout { ActiveRecord::Base.connection.select_value(WITHOUT_OPEN_CASE_COUNT_SQL).to_i }
       open_case_unflagged_count = query_with_timeout { ActiveRecord::Base.connection.select_value(OPEN_CASE_UNFLAGGED_COUNT_SQL).to_i }
       malformed_open_participants_count = query_with_timeout { ActiveRecord::Base.connection.select_value(MALFORMED_OPEN_PARTICIPANTS_SQL).to_i }
 
-      discrepancy_samples = query_drift_samples(true_drift_count)
+      candidates_with_sql_match_count = without_open_case_count - sql_true_drift_count
+      corrupt_dob_drift_ids, drift_truncated, audited_candidates_count = audit_sql_match_dob_drift(candidates_with_sql_match_count)
+      true_drift_lower_bound = sql_true_drift_count + corrupt_dob_drift_ids.size
+
+      discrepancy_samples = query_drift_samples(
+        sql_true_drift_count,
+        corrupt_dob_drift_ids,
+        detailed_pii: detailed_pii
+      )
 
       flag_metrics = {
         total_flagged_constituents: total_flagged,
-        flagged_without_open_case_or_match: true_drift_count,
+        flagged_without_open_case_or_match: true_drift_lower_bound,
+        drift_dob_audit_truncated: drift_truncated,
+        audited_drift_candidates: audited_candidates_count,
+        total_drift_candidates: candidates_with_sql_match_count,
         flagged_without_open_case: without_open_case_count,
         open_case_constituents_unflagged: open_case_unflagged_count,
         malformed_open_case_participants: malformed_open_participants_count
@@ -549,50 +598,163 @@ module DuplicateReconciliation
       [flag_metrics, discrepancy_samples]
     end
 
-    def query_drift_samples(true_drift_count)
-      return [] unless true_drift_count.positive?
+    def audit_sql_match_dob_drift(candidates_with_sql_match_count)
+      return [[], false, 0] unless candidates_with_sql_match_count.positive?
 
-      rows = query_with_timeout do
-        ActiveRecord::Base.connection.exec_query(DRIFT_SAMPLES_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+      candidate_rows = query_with_timeout do
+        ActiveRecord::Base.connection.exec_query(
+          DRIFT_CANDIDATES_WITH_SQL_MATCH_SQL,
+          'SQL',
+          [integer_bind('limit', @cluster_limit)]
+        )
       end
-      rows.rows.flatten.map do |uid|
-        {
-          id: uid,
-          ref: opaque_ref('user', uid)
-        }
+
+      is_truncated = candidates_with_sql_match_count > @cluster_limit
+      corrupt_ids = []
+      candidate_rows.each do |r|
+        corrupt_ids << r['id'] unless valid_dob?(r['date_of_birth'])
       end
+      [corrupt_ids, is_truncated, candidate_rows.length]
     end
 
-    def collect_matching_metrics
-      summary_row = query_with_timeout { ActiveRecord::Base.connection.select_one(CLUSTERS_SUMMARY_SQL) }
-      cluster_count = summary_row['cluster_count'].to_i
-      total_pairs = summary_row['total_pairs'].to_i
-      max_size = summary_row['max_cluster_size'].to_i
-
-      rows = query_with_timeout { ActiveRecord::Base.connection.select_rows(CLUSTERS_DISTRIBUTION_SQL) }
-      distribution = rows.map do |size, count|
-        [size.to_i, count.to_i]
-      end
-
-      largest_group_sample = nil
-      if max_size.positive?
-        largest_row = query_with_timeout { ActiveRecord::Base.connection.select_one(LARGEST_CLUSTER_SQL) }
-        if largest_row
-          largest_group_sample = {
-            size: max_size,
-            pairs: max_size * (max_size - 1) / 2,
-            cluster_ref: opaque_ref('cluster', "#{largest_row['fn']}:#{largest_row['ln']}:#{largest_row['dob']}")
+    def query_drift_samples(sql_true_drift_count, corrupt_dob_drift_ids, detailed_pii:)
+      samples = []
+      if sql_true_drift_count.positive?
+        rows = query_with_timeout do
+          ActiveRecord::Base.connection.exec_query(DRIFT_SAMPLES_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+        end
+        samples = rows.rows.flatten.map do |uid|
+          {
+            id: detailed_pii ? uid : nil,
+            ref: opaque_ref('user', uid)
           }
         end
       end
 
+      if samples.size < @sample_limit && corrupt_dob_drift_ids.any?
+        remaining = @sample_limit - samples.size
+        corrupt_dob_drift_ids.first(remaining).each do |uid|
+          samples << {
+            id: detailed_pii ? uid : nil,
+            ref: opaque_ref('user', uid)
+          }
+        end
+      end
+
+      samples
+    end
+
+    def collect_matching_metrics
+      summary_row = query_with_timeout { ActiveRecord::Base.connection.select_one(CLUSTERS_SUMMARY_SQL) }
+      raw_cluster_count = summary_row['cluster_count'].to_i
+      raw_total_pairs = summary_row['total_pairs'].to_i
+
+      if raw_cluster_count.zero?
+        matching_metrics = {
+          raw_cluster_count: 0,
+          raw_total_dynamic_pairs: 0,
+          raw_cluster_size_distribution: [],
+          cluster_count: 0,
+          total_dynamic_pairs: 0,
+          cluster_size_distribution: [],
+          dob_audit_truncated: false,
+          audited_clusters: 0,
+          invalid_dob_clusters: 0
+        }
+        return [matching_metrics, nil]
+      end
+
+      audit_rows = query_with_timeout do
+        ActiveRecord::Base.connection.exec_query(
+          CLUSTERS_AUDIT_SQL,
+          'SQL',
+          [integer_bind('limit', @cluster_limit)]
+        )
+      end
+
+      is_truncated = raw_cluster_count > @cluster_limit
+      valid_clusters, invalid_clusters = partition_audited_clusters(audit_rows)
+
+      canonical_cluster_count, canonical_total_pairs, canonical_distribution, raw_distribution = calculate_cluster_metrics(
+        raw_cluster_count,
+        raw_total_pairs,
+        valid_clusters,
+        invalid_clusters,
+        is_truncated
+      )
+
+      largest_group_sample = build_largest_group_sample(valid_clusters)
+
       matching_metrics = {
-        cluster_count: cluster_count,
-        total_dynamic_pairs: total_pairs,
-        cluster_size_distribution: distribution
+        raw_cluster_count: raw_cluster_count,
+        raw_total_dynamic_pairs: raw_total_pairs,
+        raw_cluster_size_distribution: raw_distribution,
+        cluster_count: canonical_cluster_count,
+        total_dynamic_pairs: canonical_total_pairs,
+        cluster_size_distribution: canonical_distribution,
+        dob_audit_truncated: is_truncated,
+        audited_clusters: audit_rows.length,
+        invalid_dob_clusters: invalid_clusters.size
       }
 
       [matching_metrics, largest_group_sample]
+    end
+
+    def partition_audited_clusters(audit_rows)
+      valid = []
+      invalid = []
+      audit_rows.each do |row|
+        if valid_dob?(row['dob'])
+          valid << row
+        else
+          invalid << row
+        end
+      end
+      [valid, invalid]
+    end
+
+    def calculate_cluster_metrics(raw_cluster_count, raw_total_pairs, valid_clusters, invalid_clusters, is_truncated)
+      dist_rows = query_with_timeout { ActiveRecord::Base.connection.select_rows(CLUSTERS_DISTRIBUTION_SQL) }
+      raw_dist = dist_rows.map { |sz, cnt| [sz.to_i, cnt.to_i] }
+
+      if is_truncated
+        [nil, nil, nil, raw_dist]
+      elsif invalid_clusters.any?
+        canonical_pairs = valid_clusters.sum do |c|
+          sz = c['cluster_size'].to_i
+          sz * (sz - 1) / 2
+        end
+        canonical_dist = valid_clusters.group_by { |c| c['cluster_size'].to_i }
+                                       .map { |sz, g| [sz, g.size] }
+                                       .sort_by(&:first)
+        [valid_clusters.size, canonical_pairs, canonical_dist, raw_dist]
+      else
+        [raw_cluster_count, raw_total_pairs, raw_dist, raw_dist]
+      end
+    end
+
+    def build_largest_group_sample(valid_clusters)
+      largest_row = valid_clusters.first
+      return unless largest_row
+
+      max_size = largest_row['cluster_size'].to_i
+      {
+        size: max_size,
+        pairs: max_size * (max_size - 1) / 2,
+        cluster_ref: opaque_ref('cluster', "#{largest_row['fn']}:#{largest_row['ln']}:#{largest_row['dob']}")
+      }
+    end
+
+    def valid_dob?(raw_dob)
+      return false if raw_dob.blank?
+
+      raw_value = Users::Constituent.type_for_attribute('date_of_birth').deserialize(raw_dob)
+      return false if raw_value.blank?
+      return true if raw_value.is_a?(Date)
+
+      Date.parse(raw_value.to_s).is_a?(Date)
+    rescue ActiveRecord::Encryption::Errors::Base, ArgumentError
+      false
     end
 
     def collect_guardian_metrics(detailed_pii: false)

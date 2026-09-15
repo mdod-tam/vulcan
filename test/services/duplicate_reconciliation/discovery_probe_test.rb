@@ -78,6 +78,37 @@ module DuplicateReconciliation
       assert_includes out, 'PII Redacted: true'
     end
 
+    test 'rake duplicates:discovery rejects invalid DETAILED_PII values' do
+      Rails.application.load_tasks unless Rake::Task.task_defined?('duplicates:discovery')
+
+      %w[typo tru yes on 1 TRUE].push(' true ').each do |bad_val|
+        Rake::Task['duplicates:discovery'].reenable
+        err = assert_raises SystemExit do
+          ENV['DETAILED_PII'] = bad_val
+          capture_io { Rake::Task['duplicates:discovery'].invoke }
+        end
+        assert_equal 1, err.status
+      ensure
+        ENV.delete('DETAILED_PII')
+      end
+    end
+
+    test 'rake duplicates:discovery enables detailed PII only with exact allowlisted value true' do
+      Rails.application.load_tasks unless Rake::Task.task_defined?('duplicates:discovery')
+      Rake::Task['duplicates:discovery'].reenable
+
+      begin
+        ENV['DETAILED_PII'] = 'true'
+        out, _err = capture_io do
+          Rake::Task['duplicates:discovery'].invoke
+        end
+        assert_includes out, 'PII Redacted: false'
+        assert_includes out, 'NOTE: SENSITIVE PII INCLUDED'
+      ensure
+        ENV.delete('DETAILED_PII')
+      end
+    end
+
     test 'derives opaque cluster reference from cluster key rather than cluster size' do
       ref_a = @probe.send(:opaque_ref, 'cluster', 'alpha:person:dob1')
       ref_b = @probe.send(:opaque_ref, 'cluster', 'beta:other:dob2')
@@ -261,20 +292,327 @@ module DuplicateReconciliation
 
       drift_user = create(:user, type: 'Users::Constituent', first_name: 'Solo', last_name: 'Unique', date_of_birth: Date.new(1975, 3, 15), needs_duplicate_review: true, status: :active)
 
-      result = @probe.call
+      result = @probe.call(detailed_pii: true)
       assert_equal 1, result.flag_metrics[:flagged_without_open_case_or_match]
       assert_equal drift_user.id, result.samples[:flag_discrepancies].first[:id]
       assert_equal 3, result.flag_metrics[:flagged_without_open_case]
     end
 
+    test 'default structured results redact raw identifiers at the result-producing boundary' do
+      c1 = create(:user, type: 'Users::Constituent', first_name: 'Boundary', last_name: 'Case', date_of_birth: Date.new(1990, 1, 1))
+      c2 = create(:user, type: 'Users::Constituent', first_name: 'Boundary', last_name: 'Case', date_of_birth: Date.new(1990, 1, 1))
+      c3 = create(:user, type: 'Users::Constituent', first_name: 'Boundary', last_name: 'Case', date_of_birth: Date.new(1990, 1, 1))
+
+      malformed_case = DuplicateReviewCase.create!(
+        source: :post_import_reconciliation,
+        subject_user: c1,
+        status: :open,
+        opened_at: Time.current,
+        deduplication_key: "boundary_malformed_#{SecureRandom.hex(8)}",
+        metadata: { 'reason_codes' => ['name_dob'] }
+      )
+      DuplicateReviewCaseCandidate.create!(duplicate_review_case: malformed_case, candidate_user: c2, match_reason: 'name_dob')
+      DuplicateReviewCaseCandidate.create!(duplicate_review_case: malformed_case, candidate_user: c3, match_reason: 'name_dob')
+
+      drift_user = create(:user, type: 'Users::Constituent', first_name: 'Drift', last_name: 'Redact', needs_duplicate_review: true)
+
+      default_res = @probe.call(detailed_pii: false)
+
+      malformed_sample = default_res.samples[:malformed_cases].first
+      assert_not_nil malformed_sample
+      assert_nil malformed_sample[:id]
+      assert_nil malformed_sample[:subject_user_id]
+      assert_nil malformed_sample[:reason_codes]
+      assert malformed_sample[:ref].present?
+
+      drift_sample = default_res.samples[:flag_discrepancies].first
+      assert_not_nil drift_sample
+      assert_nil drift_sample[:id]
+      assert drift_sample[:ref].present?
+
+      detailed_res = @probe.call(detailed_pii: true)
+      detailed_malformed = detailed_res.samples[:malformed_cases].first
+      assert_equal malformed_case.id, detailed_malformed[:id]
+      assert_equal c1.id, detailed_malformed[:subject_user_id]
+      assert_not_nil detailed_malformed[:reason_codes]
+
+      detailed_drift = detailed_res.samples[:flag_discrepancies].find { |s| s[:id] == drift_user.id }
+      assert_not_nil detailed_drift
+      assert_equal drift_user.id, detailed_drift[:id]
+    end
+
+    test 'measures flag drift correctly distinguishing canonical strict post-import keep_separate from non-post-import or malformed cases' do
+      admin = create(:admin)
+      dob = Date.new(1983, 6, 15)
+
+      # 1. Non-post-import case (registration_soft_match) with keep_separate:
+      # Canonical Population does NOT recognize this as a post-import pair resolution.
+      # The dynamic match remains active, flags are required under ReviewFlagProjection, so drift = 0.
+      r1 = create(:constituent, first_name: 'Reg', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
+      r2 = create(:constituent, first_name: 'Reg', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
+      r_first, r_second = [r1, r2].sort_by(&:id)
+
+      reg_case = DuplicateReviewCase.create!(
+        source: :registration_soft_match,
+        subject_user: r_first,
+        status: :open,
+        opened_at: 1.day.ago,
+        deduplication_key: "reg_sep_#{SecureRandom.hex(8)}",
+        metadata: { 'reason_codes' => ['name_dob'] }
+      )
+      DuplicateReviewCaseCandidate.create!(duplicate_review_case: reg_case, candidate_user: r_second, match_reason: 'name_dob')
+      reg_case.update!(
+        status: :resolved_ignored,
+        resolution_determination: 'keep_separate',
+        resolution_rationale: 'Confirmed different in registration review',
+        resolved_at: Time.current,
+        resolved_by: admin
+      )
+
+      assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(r1)
+      assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(r2)
+
+      # 2. Malformed post-import case (inverted orientation: subject > candidate) with keep_separate:
+      # Canonical Population rejects malformed post-import cases; dynamic match remains active, drift = 0.
+      m1 = create(:constituent, first_name: 'Mal', last_name: 'Shape', date_of_birth: dob, needs_duplicate_review: true, status: :active)
+      m2 = create(:constituent, first_name: 'Mal', last_name: 'Shape', date_of_birth: dob, needs_duplicate_review: true, status: :active)
+      m_first, m_second = [m1, m2].sort_by(&:id)
+
+      mal_case = DuplicateReviewCase.create!(
+        source: :post_import_reconciliation,
+        subject_user: m_second,
+        status: :open,
+        opened_at: 1.day.ago,
+        deduplication_key: "mal_sep_#{SecureRandom.hex(8)}",
+        metadata: { 'reason_codes' => ['name_dob'] }
+      )
+      DuplicateReviewCaseCandidate.create!(duplicate_review_case: mal_case, candidate_user: m_first, match_reason: 'name_dob')
+      mal_case.update!(
+        status: :resolved_ignored,
+        resolution_determination: 'keep_separate',
+        resolution_rationale: 'Confirmed different',
+        resolved_at: Time.current,
+        resolved_by: admin
+      )
+
+      assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(m1)
+      assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(m2)
+
+      res_before = @probe.call
+      assert_equal 0, res_before.flag_metrics[:flagged_without_open_case_or_match]
+
+      # 3. Canonical strict post-import case:
+      # Canonical Population classifies as confirmed_different; dynamic match is resolved; flags ARE true drift = 2!
+      s1 = create(:constituent, first_name: 'Strict', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
+      s2 = create(:constituent, first_name: 'Strict', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
+      s_first, s_second = [s1, s2].sort_by(&:id)
+
+      strict_case = DuplicateReviewCase.create!(
+        source: :post_import_reconciliation,
+        subject_user: s_first,
+        status: :open,
+        opened_at: 1.day.ago,
+        deduplication_key: "strict_sep_#{SecureRandom.hex(8)}",
+        metadata: { 'reason_codes' => ['name_dob'] }
+      )
+      DuplicateReviewCaseCandidate.create!(duplicate_review_case: strict_case, candidate_user: s_second, match_reason: 'name_dob')
+      strict_case.update!(
+        status: :resolved_ignored,
+        resolution_determination: 'keep_separate',
+        resolution_rationale: 'Confirmed different via photo ID',
+        resolved_at: Time.current,
+        resolved_by: admin
+      )
+
+      assert_not DuplicateReconciliation::ReviewFlagProjection.new.required_for?(s1)
+      assert_not DuplicateReconciliation::ReviewFlagProjection.new.required_for?(s2)
+
+      res_after = @probe.call
+      assert_equal 2, res_after.flag_metrics[:flagged_without_open_case_or_match]
+    end
+
+    test 'dynamic matching and drift metrics handle JSON-shaped undecryptable ciphertext' do
+      initial_cluster_count = @probe.call.matching_metrics[:cluster_count]
+      initial_dynamic_pairs = @probe.call.matching_metrics[:total_dynamic_pairs]
+
+      u1 = create(:constituent, first_name: 'Undecrypt', last_name: 'JsonDob', needs_duplicate_review: true, status: :active)
+      u2 = create(:constituent, first_name: 'Undecrypt', last_name: 'JsonDob', needs_duplicate_review: true, status: :active)
+
+      bad_json_dob = '{"p":"corrupt_payload_abc123","h":{"iv":"123","at":"456"}}'
+      Users::Constituent.where(id: [u1.id, u2.id]).update_all(date_of_birth: bad_json_dob)
+
+      u1.reload
+      u2.reload
+      assert_nil u1.date_of_birth
+      assert_nil u2.date_of_birth
+      assert_not DuplicateReconciliation::ReviewFlagProjection.new.required_for?(u1)
+      assert_not DuplicateReconciliation::ReviewFlagProjection.new.required_for?(u2)
+
+      res = @probe.call
+
+      assert_equal initial_cluster_count, res.matching_metrics[:cluster_count]
+      assert_equal initial_dynamic_pairs, res.matching_metrics[:total_dynamic_pairs]
+      assert_equal 1, res.matching_metrics[:invalid_dob_clusters]
+
+      assert_equal 2, res.flag_metrics[:flagged_without_open_case_or_match]
+    end
+
+    test 'dynamic matching and drift metrics support legacy plaintext DOBs' do
+      initial_cluster_count = @probe.call.matching_metrics[:cluster_count]
+      initial_dynamic_pairs = @probe.call.matching_metrics[:total_dynamic_pairs]
+
+      u1 = create(:constituent, first_name: 'Plaintext', last_name: 'LegacyDob', needs_duplicate_review: true, status: :active)
+      u2 = create(:constituent, first_name: 'Plaintext', last_name: 'LegacyDob', needs_duplicate_review: true, status: :active)
+
+      Users::Constituent.where(id: [u1.id, u2.id]).update_all(date_of_birth: '1985-04-12')
+
+      u1.reload
+      u2.reload
+      assert_equal Date.new(1985, 4, 12), u1.date_of_birth
+      assert_equal Date.new(1985, 4, 12), u2.date_of_birth
+      assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(u1)
+      assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(u2)
+
+      res = @probe.call
+
+      assert_equal initial_cluster_count + 1, res.matching_metrics[:cluster_count]
+      assert_equal initial_dynamic_pairs + 1, res.matching_metrics[:total_dynamic_pairs]
+
+      assert_equal 0, res.flag_metrics[:flagged_without_open_case_or_match]
+    end
+
+    test 'matching metrics maintain bounded behavior with many clusters' do
+      4.times do |i|
+        create(:constituent, first_name: "MultiCluster#{i}", last_name: 'Person', date_of_birth: Date.new(1980 + i, 1, 1), status: :active)
+        create(:constituent, first_name: "MultiCluster#{i}", last_name: 'Person', date_of_birth: Date.new(1980 + i, 1, 1), status: :active)
+      end
+
+      bounded_probe = DuplicateReconciliation::DiscoveryProbe.new(cluster_limit: 2)
+      res = bounded_probe.call
+
+      assert res.matching_metrics[:dob_audit_truncated]
+      assert_equal 2, res.matching_metrics[:audited_clusters]
+      assert_nil res.matching_metrics[:cluster_count]
+      assert_nil res.matching_metrics[:total_dynamic_pairs]
+      assert res.matching_metrics[:raw_cluster_count] >= 4
+    end
+
+    test 'measures flag drift as lower bound and reports truncation when corrupt candidates exceed audit limit' do
+      v1 = create(:constituent, first_name: 'AlphaValid', last_name: 'Drift', date_of_birth: Date.new(1982, 3, 4), needs_duplicate_review: true, status: :active)
+      v2 = create(:constituent, first_name: 'AlphaValid', last_name: 'Drift', date_of_birth: Date.new(1982, 3, 4), needs_duplicate_review: true, status: :active)
+      c1 = create(:constituent, first_name: 'BetaCorrupt', last_name: 'Drift', needs_duplicate_review: true, status: :active)
+      c2 = create(:constituent, first_name: 'BetaCorrupt', last_name: 'Drift', needs_duplicate_review: true, status: :active)
+
+      bad_json_dob = '{"p":"corrupt_drift_123","h":{"iv":"1","at":"2"}}'
+      Users::Constituent.where(id: [c1.id, c2.id]).update_all(date_of_birth: bad_json_dob)
+
+      assert v1.id < c1.id && v2.id < c2.id
+      assert_not DuplicateReconciliation::ReviewFlagProjection.new.required_for?(c1.reload)
+      assert_not DuplicateReconciliation::ReviewFlagProjection.new.required_for?(c2.reload)
+
+      bounded_probe = DuplicateReconciliation::DiscoveryProbe.new(cluster_limit: 1)
+      res = bounded_probe.call
+
+      assert res.flag_metrics[:drift_dob_audit_truncated]
+      assert_equal 1, res.flag_metrics[:audited_drift_candidates]
+      assert res.flag_metrics[:total_drift_candidates] >= 4
+      assert_equal 0, res.flag_metrics[:flagged_without_open_case_or_match]
+
+      rendered = bounded_probe.render_summary(res)
+      assert_includes rendered, 'Flagged but NO open case and NO dynamic match:  >= 0 (true flag drift, lower bound; audit truncated)'
+      assert_includes rendered, "NOTE: Drift candidate DOB audit was bounded to 1 of #{res.flag_metrics[:total_drift_candidates]} candidates; " \
+                                'additional corrupt matches may exist'
+    end
+
+    test 'truncated cluster audit containing invalid cluster reports raw totals and uncertain wording without claiming exclusions' do
+      create(:constituent, first_name: 'AaaBad', last_name: 'AuditCluster', needs_duplicate_review: false, status: :active)
+      create(:constituent, first_name: 'AaaBad', last_name: 'AuditCluster', needs_duplicate_review: false, status: :active)
+      Users::Constituent.where(first_name: 'AaaBad').update_all(date_of_birth: '{"p":"bad_cluster_payload","h":{"iv":"1","at":"2"}}')
+
+      create(:constituent, first_name: 'BbbGood', last_name: 'AuditCluster', date_of_birth: Date.new(1980, 2, 2), status: :active)
+      create(:constituent, first_name: 'BbbGood', last_name: 'AuditCluster', date_of_birth: Date.new(1980, 2, 2), status: :active)
+
+      create(:constituent, first_name: 'CccGood', last_name: 'AuditCluster', date_of_birth: Date.new(1981, 3, 3), status: :active)
+      create(:constituent, first_name: 'CccGood', last_name: 'AuditCluster', date_of_birth: Date.new(1981, 3, 3), status: :active)
+
+      bounded_probe = DuplicateReconciliation::DiscoveryProbe.new(cluster_limit: 2)
+      res = bounded_probe.call
+
+      assert res.matching_metrics[:dob_audit_truncated]
+      assert_equal 2, res.matching_metrics[:audited_clusters]
+      assert res.matching_metrics[:raw_cluster_count] >= 3
+      assert res.matching_metrics[:invalid_dob_clusters] >= 1
+      assert_nil res.matching_metrics[:cluster_count]
+      assert_nil res.matching_metrics[:total_dynamic_pairs]
+      assert_nil res.matching_metrics[:cluster_size_distribution]
+
+      rendered = bounded_probe.render_summary(res)
+      assert_includes rendered, "Raw SQL Name + DOB clusters:  #{res.matching_metrics[:raw_cluster_count]} (unverified; cluster audit truncated)"
+      assert_includes rendered, "NOTE: Cluster DOB audit was bounded to 2 of #{res.matching_metrics[:raw_cluster_count]} clusters; canonical totals not verified"
+      assert_includes rendered, 'Invalid/undecryptable DOB clusters in sample: 1 of 2 audited (canonical exclusion incomplete)'
+      assert_no_match(/excluded from verified dynamic matching/, rendered)
+      assert_no_match(/excluded from dynamic matching/, rendered)
+    end
+
+    test 'dob validation and user date_of_birth never write raw DOB values to application logs' do
+      log_output = StringIO.new
+      test_logger = Logger.new(log_output)
+      original_logger = Rails.logger
+      Rails.logger = test_logger
+      begin
+        @probe.send(:valid_dob?, '1985-99-99')
+        @probe.send(:valid_dob?, '{"p":"super_secret_corrupt_payload","h":{"iv":"1","at":"2"}}')
+        @probe.send(:valid_dob?, 'not-a-date')
+
+        u = Users::Constituent.instantiate('id' => 999_888, 'date_of_birth' => '1985-99-99')
+        u.date_of_birth
+
+        u2 = Users::Constituent.instantiate('id' => 999_889, 'date_of_birth' => '{"p":"another_secret_payload","h":{"iv":"1","at":"2"}}')
+        u2.date_of_birth
+
+        log_str = log_output.string
+        assert_no_match(/1985-99-99/, log_str)
+        assert_no_match(/super_secret_corrupt_payload/, log_str)
+        assert_no_match(/another_secret_payload/, log_str)
+        assert_includes log_str, 'Invalid date format for user 999888'
+      ensure
+        Rails.logger = original_logger
+      end
+    end
+
+    test 'renders duplicate-pair case samples in summary output' do
+      u1 = create(:user, type: 'Users::Constituent', first_name: 'Sample', last_name: 'MultiPair', date_of_birth: Date.new(1988, 8, 8))
+      u2 = create(:user, type: 'Users::Constituent', first_name: 'Sample', last_name: 'MultiPair', date_of_birth: Date.new(1988, 8, 8))
+      first, second = [u1, u2].sort_by(&:id)
+
+      2.times do |j|
+        c = DuplicateReviewCase.create!(
+          source: :post_import_reconciliation,
+          subject_user: first,
+          status: :open,
+          opened_at: Time.current,
+          deduplication_key: "render_multi_pair_#{j}_#{SecureRandom.hex(6)}",
+          metadata: { 'reason_codes' => ['name_dob'] }
+        )
+        DuplicateReviewCaseCandidate.create!(duplicate_review_case: c, candidate_user: second, match_reason: 'name_dob')
+      end
+
+      res_default = @probe.call(detailed_pii: false)
+      rendered_default = @probe.render_summary(res_default, detailed_pii: false)
+      assert_includes rendered_default, 'Sample duplicate-pair cases (1):'
+      assert_includes rendered_default, 'Pair ref '
+      assert_includes rendered_default, '2 cases'
+
+      res_detailed = @probe.call(detailed_pii: true)
+      rendered_detailed = @probe.render_summary(res_detailed, detailed_pii: true)
+      assert_includes rendered_detailed, 'Sample duplicate-pair cases (1):'
+      assert_includes rendered_detailed, "Pair #{first.id}-#{second.id}: 2 cases"
+    end
+
     test 'measures flag drift correctly including inactive and merged flagged users without dynamic matches' do
       dob = Date.new(1980, 5, 10)
-      # Active constituent with matching active partner
       create(:user, type: 'Users::Constituent', first_name: 'Shared', last_name: 'Person', date_of_birth: dob, status: :active)
 
-      # Inactive constituent with same name+DOB as active constituent:
-      # Flagged, no open case. Even though an active constituent shares name+DOB, Population requires both
-      # to be eligible, so this inactive user cannot have a dynamic match. Therefore, they MUST be counted in true drift.
       inactive_user = create(
         :user,
         type: 'Users::Constituent',
@@ -285,8 +623,6 @@ module DuplicateReconciliation
         needs_duplicate_review: true
       )
 
-      # Merged constituent with same name+DOB:
-      # Flagged, no open case. Merged user cannot be dynamically paired under Population, so MUST be counted in true drift.
       canonical_user = create(:user, type: 'Users::Constituent', first_name: 'Merged', last_name: 'Person', date_of_birth: dob, status: :active)
       merged_user = create(
         :user,
@@ -299,7 +635,7 @@ module DuplicateReconciliation
         needs_duplicate_review: true
       )
 
-      result = @probe.call
+      result = @probe.call(detailed_pii: true)
       drift_sample_ids = result.samples[:flag_discrepancies].pluck(:id)
       assert_includes drift_sample_ids, inactive_user.id
       assert_includes drift_sample_ids, merged_user.id
