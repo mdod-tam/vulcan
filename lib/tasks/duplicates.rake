@@ -16,4 +16,18 @@ namespace :duplicates do
     puts "Set: #{counts[:set_count]}"
     puts "Cleared: #{counts[:cleared_count]}"
   end
+
+  desc 'Read-only discovery probe for PR 208 architecture correction (optional DETAILED_PII=true)'
+  task discovery: :environment do
+    raw_detailed = ENV.fetch('DETAILED_PII', nil)
+    detailed = case raw_detailed
+               when nil, '', 'false' then false
+               when 'true' then true
+               else
+                 abort "Invalid DETAILED_PII value #{raw_detailed.inspect}. Expected 'true' or 'false'."
+               end
+    probe = DuplicateReconciliation::DiscoveryProbe.new
+    result = probe.call(detailed_pii: detailed)
+    puts probe.render_summary(result, detailed_pii: detailed)
+  end
 end
