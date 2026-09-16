@@ -327,7 +327,8 @@ module DuplicateReconciliation
       lines = ["  Sample malformed cases (#{result.samples[:malformed_cases].size}):"]
       result.samples[:malformed_cases].each do |c|
         lines << if detailed_pii && c[:id]
-                   "    Case ##{c[:id]}: status=#{c[:status]}, subject_id=#{c[:subject_user_id]}, candidates=#{c[:candidate_count]}"
+                   "    Case ##{c[:id]}: status=#{c[:status]}, subject_id=#{c[:subject_user_id]}, " \
+                     "candidates=#{c[:candidate_count]}, reasons=#{sanitize_output_text(c[:reason_codes])}"
                  else
                    "    Case ref #{c[:ref]}: status=#{c[:status]}, candidate_count=#{c[:candidate_count]}"
                  end
@@ -439,9 +440,14 @@ module DuplicateReconciliation
         lines << 'Sample multi-guardian dependents:'
         result.samples[:multi_guardian_dependents].each do |m|
           if detailed_pii
-            lines << "  Dependent ##{m[:dependent_id]} (#{m[:dependent_name]}): #{m[:guardian_count]} guardians (#{m[:relationship_count]} relationships)"
+            dep_name = sanitize_output_text(m[:dependent_name])
+            lines << "  Dependent ##{m[:dependent_id]} (#{dep_name}): " \
+                     "#{m[:guardian_count]} guardians (#{m[:relationship_count]} relationships)"
             m[:relationships].each do |r|
-              lines << "    Rel ##{r[:id]}: guardian ##{r[:guardian_id]} (#{r[:guardian_name]}), type: #{r[:type]}, created: #{r[:created_at]}"
+              g_name = sanitize_output_text(r[:guardian_name])
+              r_type = sanitize_output_text(r[:type])
+              lines << "    Rel ##{r[:id]}: guardian ##{r[:guardian_id]} (#{g_name}), " \
+                       "type: #{r_type}, created: #{r[:created_at]}"
             end
             lines << "    ... and #{m[:omitted_relationships_count]} more relationship(s) omitted" if m[:omitted_relationships_count]&.positive?
           else
@@ -480,6 +486,35 @@ module DuplicateReconciliation
       OpenSSL::HMAC.hexdigest('SHA256', @salt, "#{prefix}:#{identifier}")[0..7]
     end
 
+    def sanitize_output_text(value)
+      return '' if value.nil?
+
+      str = value.to_s
+      str = if str.encoding == Encoding::UTF_8
+              str.valid_encoding? ? str : str.scrub
+            else
+              str.encode(Encoding::UTF_8, invalid: :replace, undef: :replace, replace: "\uFFFD")
+            end
+
+      str.gsub(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/) do |ch|
+        case ch
+        when "\n" then '\n'
+        when "\r" then '\r'
+        when "\t" then '\t'
+        when "\e" then '\e'
+        else
+          cp = ch.ord
+          if cp <= 0xFF
+            format('\x%02X', cp)
+          elsif cp <= 0xFFFF
+            format('\u%04X', cp)
+          else
+            format('\u{%X}', cp)
+          end
+        end
+      end
+    end
+
     def collect_provenance
       conn = ActiveRecord::Base.connection
       db_config = ActiveRecord::Base.connection_db_config
@@ -493,12 +528,36 @@ module DuplicateReconciliation
       {
         rails_env: Rails.env,
         timestamp: Time.current.iso8601,
-        code_sha: `git rev-parse HEAD 2>/dev/null`.strip.presence || 'unknown',
+        code_sha: resolve_code_sha,
         database_adapter: conn.adapter_name,
         database_fingerprint: fingerprint,
         transaction_isolation: isolation,
         transaction_read_only: read_only
       }
+    end
+
+    def resolve_code_sha
+      ENV['COMMIT_SHA'].presence ||
+        ENV['HEROKU_BUILD_COMMIT'].presence ||
+        ENV['SOURCE_VERSION'].presence ||
+        ENV['HEROKU_SLUG_COMMIT'].presence ||
+        ENV['KAMAL_VERSION'].presence ||
+        ENV['GIT_SHA'].presence ||
+        ENV['REVISION'].presence ||
+        read_revision_file ||
+        git_head_sha ||
+        'unknown'
+    end
+
+    def read_revision_file
+      rev_file = Rails.root.join('REVISION')
+      File.read(rev_file).strip.presence if File.file?(rev_file)
+    rescue SystemCallError
+      nil
+    end
+
+    def git_head_sha
+      `git rev-parse HEAD 2>/dev/null`.strip.presence
     end
 
     def stable_database_fingerprint(adapter, host_info, db_info)

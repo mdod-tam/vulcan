@@ -26,6 +26,10 @@ namespace :duplicates do
                else
                  abort "Invalid DETAILED_PII value #{raw_detailed.inspect}. Expected 'true' or 'false'."
                end
+    if detailed && !$stdout.tty?
+      abort 'DETAILED_PII=true requires an attached interactive terminal (TTY) to prevent writing sensitive PII to background application logs.'
+    end
+
     probe = DuplicateReconciliation::DiscoveryProbe.new
     result = probe.call(detailed_pii: detailed)
     puts probe.render_summary(result, detailed_pii: detailed)

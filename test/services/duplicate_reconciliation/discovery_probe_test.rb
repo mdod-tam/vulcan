@@ -2,6 +2,7 @@
 
 require 'test_helper'
 require 'rake'
+require 'minitest/mock'
 
 module DuplicateReconciliation
   class DiscoveryProbeTest < ActiveSupport::TestCase
@@ -93,14 +94,31 @@ module DuplicateReconciliation
       end
     end
 
-    test 'rake duplicates:discovery enables detailed PII only with exact allowlisted value true' do
+    test 'rake duplicates:discovery rejects DETAILED_PII=true when stdout is not an attached TTY' do
+      Rails.application.load_tasks unless Rake::Task.task_defined?('duplicates:discovery')
+      Rake::Task['duplicates:discovery'].reenable
+
+      begin
+        ENV['DETAILED_PII'] = 'true'
+        err = assert_raises SystemExit do
+          capture_io { Rake::Task['duplicates:discovery'].invoke }
+        end
+        assert_equal 1, err.status
+      ensure
+        ENV.delete('DETAILED_PII')
+      end
+    end
+
+    test 'rake duplicates:discovery enables detailed PII only with exact allowlisted value true and attached TTY' do
       Rails.application.load_tasks unless Rake::Task.task_defined?('duplicates:discovery')
       Rake::Task['duplicates:discovery'].reenable
 
       begin
         ENV['DETAILED_PII'] = 'true'
         out, _err = capture_io do
-          Rake::Task['duplicates:discovery'].invoke
+          $stdout.stub(:tty?, true) do
+            Rake::Task['duplicates:discovery'].invoke
+          end
         end
         assert_includes out, 'PII Redacted: false'
         assert_includes out, 'NOTE: SENSITIVE PII INCLUDED'
@@ -339,6 +357,12 @@ module DuplicateReconciliation
       detailed_drift = detailed_res.samples[:flag_discrepancies].find { |s| s[:id] == drift_user.id }
       assert_not_nil detailed_drift
       assert_equal drift_user.id, detailed_drift[:id]
+
+      rendered_default = @probe.render_summary(default_res, detailed_pii: false)
+      assert_no_match(/reasons=/, rendered_default)
+
+      rendered_detailed = @probe.render_summary(detailed_res, detailed_pii: true)
+      assert_includes rendered_detailed, 'reasons=["name_dob"]'
     end
 
     test 'measures flag drift correctly distinguishing canonical strict post-import keep_separate from non-post-import or malformed cases' do
@@ -708,6 +732,111 @@ module DuplicateReconciliation
       assert_raises Timeout::Error do
         probe.send(:apply_remaining_timeout!)
       end
+    end
+
+    test 'provenance resolves release SHA from environment variables and revision file before git fallback' do
+      original_env = ENV.to_h
+
+      begin
+        ENV['COMMIT_SHA'] = 'commit_sha_12345678'
+        assert_equal 'commit_sha_12345678', @probe.send(:resolve_code_sha)
+
+        ENV.delete('COMMIT_SHA')
+        ENV['HEROKU_BUILD_COMMIT'] = 'heroku_build_commit_aabbccdd'
+        assert_equal 'heroku_build_commit_aabbccdd', @probe.send(:resolve_code_sha)
+
+        ENV.delete('HEROKU_BUILD_COMMIT')
+        ENV['KAMAL_VERSION'] = 'kamal_version_87654321'
+        assert_equal 'kamal_version_87654321', @probe.send(:resolve_code_sha)
+
+        ENV.delete('KAMAL_VERSION')
+        ENV['HEROKU_SLUG_COMMIT'] = 'heroku_slug_11223344'
+        assert_equal 'heroku_slug_11223344', @probe.send(:resolve_code_sha)
+
+        ENV.delete('HEROKU_SLUG_COMMIT')
+        ENV['SOURCE_VERSION'] = 'source_ver_55667788'
+        assert_equal 'source_ver_55667788', @probe.send(:resolve_code_sha)
+
+        ENV.delete('SOURCE_VERSION')
+        ENV['GIT_SHA'] = 'git_sha_99001122'
+        assert_equal 'git_sha_99001122', @probe.send(:resolve_code_sha)
+
+        ENV.delete('GIT_SHA')
+        ENV['REVISION'] = 'revision_env_33445566'
+        assert_equal 'revision_env_33445566', @probe.send(:resolve_code_sha)
+
+        ENV.delete('REVISION')
+        rev_path = Rails.root.join('REVISION')
+        File.write(rev_path, "file_rev_77889900\n")
+        assert_equal 'file_rev_77889900', @probe.send(:resolve_code_sha)
+      ensure
+        FileUtils.rm_f(Rails.root.join('REVISION'))
+        ENV.replace(original_env)
+      end
+    end
+
+    test 'sanitize_output_text safely handles Cc, Cf, Zl, Zp, and invalid encodings' do
+      # 1. Cc controls (C0 and C1)
+      assert_equal 'line1\nline2\r\ttab\e[31m', @probe.send(:sanitize_output_text, "line1\nline2\r\ttab\e[31m")
+      assert_equal 'null\x00bell\x07', @probe.send(:sanitize_output_text, "null\x00bell\a")
+      assert_equal 'nel\x85c1', @probe.send(:sanitize_output_text, "nel\u0085c1")
+
+      # 2. Cf format and bidi controls (e.g. U+202E RLO, U+2066 LTI, U+200B zero-width space)
+      assert_equal 'bidi\u202Ereversed\u2066isolate', @probe.send(:sanitize_output_text, "bidi\u202Ereversed\u2066isolate")
+      assert_equal 'zero\u200Bwidth', @probe.send(:sanitize_output_text, "zero\u200Bwidth")
+
+      # 3. Zl and Zp separators (U+2028 line separator, U+2029 paragraph separator)
+      assert_equal 'line\u2028separator', @probe.send(:sanitize_output_text, "line\u2028separator")
+      assert_equal 'para\u2029separator', @probe.send(:sanitize_output_text, "para\u2029separator")
+
+      # 4. Supplementary plane Cf characters (> 0xFFFF)
+      assert_equal 'tag\u{E0001}char', @probe.send(:sanitize_output_text, "tag\u{E0001}char")
+
+      # 5. Invalid encoding handling (non-UTF8 or malformed byte sequences)
+      bad_binary = "bad\xFF\xFE\x00\nend".b
+      sanitized_binary = @probe.send(:sanitize_output_text, bad_binary)
+      assert_equal "bad\uFFFD\uFFFD\\x00\\nend", sanitized_binary
+
+      bad_utf8 = "bad\xFF\xFE\x00\nend".dup.force_encoding('UTF-8')
+      sanitized_utf8 = @probe.send(:sanitize_output_text, bad_utf8)
+      assert_equal "bad\uFFFD\uFFFD\\x00\\nend", sanitized_utf8
+
+      # 6. Preserves valid Unicode (accented letters, emojis, normal punctuation)
+      assert_equal 'José Niño 😀', @probe.send(:sanitize_output_text, 'José Niño 😀')
+      # Compound emojis with ZWJ (U+200D, category Cf) safely escape the format character
+      assert_equal '👨\u200D👩\u200D👧', @probe.send(:sanitize_output_text, '👨‍👩‍👧')
+    end
+
+    test 'detailed rendering encodes control, format, and separator characters in constituent names and relationship types' do
+      evil_dep = create(:constituent, first_name: "Evil\nInjected\u2028Line", last_name: "Person\u202EReversed\u2066\e[31m")
+      evil_guardian = create(:constituent, first_name: "Hostile\r\tGuardian\u2029Para", last_name: "Test\a\e[2J")
+      other_guardian = create(:constituent, first_name: 'Normal', last_name: 'Guardian')
+
+      GuardianRelationship.create!(
+        dependent_user: evil_dep,
+        guardian_user: evil_guardian,
+        relationship_type: "fake_type\n--- FORGED REPORT SECTION ---\r\u2028Spoofed"
+      )
+      GuardianRelationship.create!(
+        dependent_user: evil_dep,
+        guardian_user: other_guardian,
+        relationship_type: 'other'
+      )
+
+      res = @probe.call(detailed_pii: true)
+      rendered = @probe.render_summary(res, detailed_pii: true)
+
+      assert_not_includes rendered, "\e"
+      assert_not_includes rendered, "\r"
+      assert_not_includes rendered, "\u2028"
+      assert_not_includes rendered, "\u2029"
+      assert_not_includes rendered, "\u202E"
+      assert_not_includes rendered, "\u2066"
+      assert_no_match(/\n--- FORGED REPORT SECTION ---/, rendered)
+      assert_includes rendered, '\n--- FORGED REPORT SECTION ---\r\u2028Spoofed'
+      assert_includes rendered, 'Evil\nInjected\u2028Line'
+      assert_includes rendered, 'Person\u202EReversed\u2066\e[31m'
+      assert_includes rendered, 'Hostile\r\tGuardian\u2029Para'
     end
 
     private

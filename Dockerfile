@@ -2,7 +2,7 @@
 # check=error=true
 
 # This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t mat_vulcan .
+# docker build --build-arg COMMIT_SHA=$(git rev-parse HEAD) -t mat_vulcan .
 # docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name mat_vulcan mat_vulcan
 
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
@@ -24,6 +24,9 @@ ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
     BUNDLE_WITHOUT="development"
+
+ARG COMMIT_SHA
+ENV COMMIT_SHA=$COMMIT_SHA
 
 # Throw-away build stage to reduce size of final image
 FROM base AS build
@@ -67,6 +70,9 @@ RUN rm -rf node_modules
 
 # Final stage for app image
 FROM base
+
+ARG COMMIT_SHA
+ENV COMMIT_SHA=$COMMIT_SHA
 
 # Copy built artifacts: gems, application
 COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
