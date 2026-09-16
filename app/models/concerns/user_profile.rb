@@ -88,7 +88,7 @@ module UserProfile
     begin
       Date.parse(raw_value.to_s)
     rescue ArgumentError
-      Rails.logger.warn "Invalid date format for user #{id}: #{raw_value}"
+      Rails.logger.warn "Invalid date format for user #{id}"
       nil
     end
   end
