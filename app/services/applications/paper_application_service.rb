@@ -21,7 +21,7 @@ module Applications
     POST_COMMIT_CALLBACK_STEP = 'a post-commit callback'
 
     attr_reader :params, :admin, :application, :constituent, :errors, :guardian_user_for_app, :reconciliation_note,
-                :pending_identity_decision, :warnings
+                :identity_review, :warnings
 
     def initialize(params:, admin:, skip_income_validation: false, skip_proof_processing: false,
                    quick_created_portal_user_ids: [])
@@ -37,8 +37,7 @@ module Applications
       @reconciliation_note = nil
       @warnings = []
       @commit_confirmed = true
-      @pending_identity_decision = nil
-      @confirmed_no_match = nil
+      @identity_review = nil
       @skip_income_validation = skip_income_validation
       @skip_proof_processing = skip_proof_processing
     end
@@ -156,6 +155,7 @@ module Applications
         rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
         rollback_failure('Application creation failed') unless create_application
         rollback_failure_unless_explained('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
+        record_identity_decision!
 
         @application.persisted?
       end
@@ -333,7 +333,9 @@ module Applications
       dependent_id = params[:dependent_id]
       existing_constituent_id = params[:existing_constituent_id]
 
-      if existing_self_applicant_scenario?(existing_constituent_id)
+      if params[:identity_candidate_id].present?
+        process_reviewed_selection
+      elsif existing_self_applicant_scenario?(existing_constituent_id)
         process_existing_self_applicant(existing_constituent_id)
       elsif existing_dependent_scenario?(guardian_id, dependent_id)
         process_existing_dependent(guardian_id, dependent_id, relationship_type)
@@ -354,7 +356,7 @@ module Applications
     end
 
     def process_existing_self_applicant(existing_constituent_id)
-      user = User.find_by(id: existing_constituent_id)
+      user = User.lock.find_by(id: existing_constituent_id)
       return add_error('Applicant not found') unless user
       return add_error('Selected user is not eligible as an applicant.') unless user.paper_applicant_candidate?
 
@@ -440,6 +442,7 @@ module Applications
     def process_guardian_dependent(guardian_id, applicant_data, relationship_type)
       service = GuardianDependentManagementService.new(params, actor: @admin)
       result = service.process_guardian_scenario(guardian_id, applicant_data, relationship_type)
+      @identity_review = service.identity_review
 
       if result.success?
         @guardian_user_for_app = result.data[:guardian]
@@ -486,8 +489,8 @@ module Applications
 
     def process_self_applicant(applicant_data)
       contact_flags = paper_contact_flags(:constituent)
-      review = review_paper_identity(applicant_data)
-      return false unless identity_review_permits_creation?(review)
+      @identity_review = review_paper_identity(applicant_data)
+      return false unless identity_review_permits_creation?(@identity_review)
 
       applicant_data = contact_flags.apply_to(applicant_data)
 
@@ -503,16 +506,6 @@ module Applications
         @constituent = result.data[:user]
         track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
 
-        # Deliberately no duplicate-review case here. Staff have just reviewed this exact candidate
-        # set and attested that none of them is this applicant; opening a case would queue that same
-        # decision for someone to make again. Paper cases are also resolvable but never mergeable,
-        # so the queue entry could be closed and never remediated.
-        #
-        # The case was, however, the only durable record of who decided what. Removing it without
-        # replacement would leave the enforcement provable only for the length of one request, so a
-        # successful confirmation writes its own evidence instead.
-        record_no_match_confirmation(@constituent)
-
         return false unless paper_application_eligible?(@constituent, subject: :constituent)
 
         true
@@ -522,66 +515,23 @@ module Applications
       end
     end
 
-    # The whole identity question is answered by PaperIdentityReview, which the preview endpoint
-    # calls too. Nothing about detection, hard blocks, candidates, reasons or decision verification
-    # is re-derived here: a second implementation is exactly how a preview and a write boundary come
-    # to disagree.
+    # Recompute the submitted identity under the same-identity creation lock.
     def review_paper_identity(applicant_data)
       review = Applications::PaperIdentityReview.new(
         constituent_params: applicant_data,
         admin: @admin,
         contact_flag_params: params,
-        submitted_token: params[:identity_decision]
+        submitted_token: params[:identity_review_receipt],
+        determination: params[:identity_determination]
       )
 
       # Taken from the review's own facts, before it runs, so the thing being locked and the thing
       # being searched for are the same by construction.
       Applications::PaperIdentityCreationLock.lock!(review.identity_facts)
-      review.call
+      review.call(lock: true)
     end
 
-    # The review answers a question about the rows that exist *now*, and the creation immediately
-    # afterwards adds one. Between those two steps another request can do exactly the same thing, so
-    # two concurrent submissions of the same person each see a clean search and each create: one
-    # signed decision spent twice on the override path, and on the zero-match path a duplicate with
-    # no decision involved at all. Recomputing at the write boundary closes stale *client* state; it
-    # does nothing about two writers racing.
-    #
-    # There is no row to lock for an identity that does not exist yet, so the lock is taken on the
-    # identity itself -- a transaction-scoped Postgres advisory lock keyed by the same canonical
-    # facts detection runs on. Transaction-scoped means Postgres releases it on commit *or*
-    # rollback, so a failed or rolled-back write can never strand the key.
-    #
-    # The key is the *matching* identity -- canonical name and date of birth -- not the whole fact
-    # set. Keying on everything looked safer and was strictly worse: two submissions for the same
-    # person carrying different emails would hash to different keys, take different locks, and race
-    # exactly as before. Name and date of birth is the equivalence Users::Constituent.find_duplicates
-    # itself uses, so the lock covers precisely the pairs detection would call the same person.
-    # Identical contact values are already excluded by the unique index; this covers the case that
-    # index cannot see.
-    #
-    # This serializes same-identity submissions only. Two different applicants hash to different
-    # keys and never wait on each other, so ordinary concurrent paper intake is unaffected.
-    # Paper intake asks staff to decide only where the computer is unsure. Selecting a surfaced
-    # constituent is enforced by existing_self_applicant_scenario?; this is the other half of that
-    # choice -- recording that the surfaced candidates are different people.
-    #
-    #   error              -> detection itself failed; refuse rather than guess
-    #   blocked            -> exact contact collision; never acknowledgeable
-    #   clear              -> nothing surfaced; create
-    #   needs_confirmation -> staff must decide about what surfaced; write nothing
-    #   confirmed          -> staff decided these are different people; create
-    #
-    # Staff are asked only where the computer is genuinely unsure. Two people can legitimately share
-    # a name and date of birth, so a soft match is a real decision: creating automatically risks a
-    # duplicate, refusing automatically turns away a legitimate applicant. Nothing surfacing is not
-    # a decision, and asking for a click there would prove nothing the server's own search -- run
-    # against the completed applicant immediately before this write -- has not already established.
-    #
-    # The review recomputes from the *submitted* facts rather than trusting the request, so a form
-    # searched under one name and submitted under another presents a candidate set the decision was
-    # never issued for. That closes stale client state; concurrent writers racing between the read
-    # and the write are closed separately, by PaperIdentityCreationLock.
+    # Only an explicit, freshly verified decision can override soft matches.
     def identity_review_permits_creation?(review)
       return add_error('Duplicate detection failed. Try again.') if review.error?
       return add_error('The applicant details or possible matches changed since you reviewed them. Review again.') if review.invalid_decision?
@@ -594,19 +544,13 @@ module Applications
       # Evidence is recorded only for an actual override: who looked at which records and said they
       # are different people. An ordinary application with nothing to decide has no decision to log.
       if review.confirmed?
-        @confirmed_no_match = { candidate_ids: review.candidate_ids, reason_codes: review.reasons }
+        return add_error('Explain the identity decision before continuing.') if params[:identity_rationale].blank?
+
         return true
       end
 
       return true if review.clear?
 
-      @pending_identity_decision = {
-        candidates: review.candidates,
-        selectable_candidates: review.selectable_candidates,
-        reasons: review.reasons,
-        token: review.token,
-        reason: review.decision_reason
-      }
       add_error(no_match_decision_error(review.decision_reason, review.candidates.size))
       false
     end
@@ -623,26 +567,35 @@ module Applications
         'Review them and either select the existing constituent or confirm this is a different person.'
     end
 
-    # One event per *successful* confirmation. Missing, forged, expired and abandoned reviews write
-    # nothing, so the trail records decisions taken rather than attempts made.
-    #
-    # Carries who confirmed, what they were shown, and why those records surfaced -- but no raw
-    # identity facts and no token. The facts are already on the constituent record this event is
-    # attached to, and the token is a credential-shaped value with no business meaning after the
-    # request that spent it.
-    def record_no_match_confirmation(constituent)
-      return if @confirmed_no_match.blank?
+    # Commit the decision with its application and proofs.
+    def record_identity_decision!
+      return unless @identity_review
 
-      AuditEventService.log(
-        action: 'paper_identity_no_match_confirmed',
-        actor: @admin,
-        auditable: constituent,
-        metadata: {
-          candidate_ids: @confirmed_no_match[:candidate_ids],
-          candidate_count: @confirmed_no_match[:candidate_ids].size,
-          reason_codes: @confirmed_no_match[:reason_codes]
-        }
+      DuplicateReviewCases::CreateService.record_paper_decision!(
+        review: @identity_review, user: @constituent, actor: @admin,
+        rationale: params[:identity_rationale], receipt: params[:identity_review_receipt], application: @application
       )
+    end
+
+    def process_reviewed_selection
+      dependent = params[:applicant_type] == 'dependent'
+      guardian = User.find_by(id: params[:guardian_id]) if dependent
+      owner = PaperIdentityReview.new(
+        constituent_params: params[:constituent], admin: @admin, contact_flag_params: params,
+        submitted_token: params[:identity_review_receipt], selected_candidate_id: params[:identity_candidate_id],
+        context: dependent ? :dependent : :self_applicant,
+        context_data: { guardian: guardian, relationship_type: params[:relationship_type] }
+      )
+      PaperIdentityCreationLock.lock!(owner.identity_facts)
+      @identity_review = owner.call(lock: true)
+      return add_error('Review the current matches and select an eligible person.') unless @identity_review.selected?
+      return add_error('Explain the identity decision before continuing.') if params[:identity_rationale].blank?
+
+      if dependent
+        process_existing_dependent(guardian&.id, @identity_review.selected_user.id, params[:relationship_type])
+      else
+        process_existing_self_applicant(@identity_review.selected_user.id)
+      end
     end
 
     def no_email_address?(scope = :constituent)
@@ -942,9 +895,8 @@ module Applications
     end
 
     def process_upload_only_proof(type)
-      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
-      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-      blob_or_file = params[file_key].presence || params[signed_id_key].presence
+      blob_or_file = proof_upload(type)
+      return false if blob_or_file == false
 
       return add_error("Please upload a file for #{proof_upload_label(type)} before sending it for review") if blob_or_file.blank?
 
@@ -1011,11 +963,8 @@ module Applications
     end
 
     def attach_and_approve_proof(type)
-      # Handle medical_certification naming convention
-      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
-      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
-
-      blob_or_file = params[file_key].presence || params[signed_id_key].presence
+      blob_or_file = proof_upload(type)
+      return false if blob_or_file == false
 
       # Route medical certifications to the correct service
       result = if type == :medical_certification
@@ -1045,6 +994,27 @@ module Applications
       end
 
       true
+    end
+
+    def proof_upload(type)
+      key = type == :medical_certification ? type.to_s : "#{type}_proof"
+      upload = params[key].presence || params["#{key}_signed_id"].presence
+      return upload unless upload.is_a?(String)
+
+      blob = ActiveStorage::Blob.find_signed!(upload)
+      blob.lock!
+      if !blob.attachments.exists? && blob.created_at <= CleanupUnattachedUploadsJob::RETENTION.ago
+        return add_error("The uploaded #{proof_upload_label(type)} has expired. Upload it again.")
+      end
+
+      permitted_attachments = blob.attachments.where(record: @application, name: key)
+      if blob.attachments.where.not(id: permitted_attachments.select(:id)).exists?
+        return add_error("The uploaded #{proof_upload_label(type)} is already attached elsewhere. Upload it again.")
+      end
+
+      blob
+    rescue ActiveSupport::MessageVerifier::InvalidSignature, ActiveRecord::RecordNotFound
+      add_error("The uploaded #{proof_upload_label(type)} is no longer available. Upload it again.")
     end
 
     def process_reject_proof(type)

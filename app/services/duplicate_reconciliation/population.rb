@@ -97,6 +97,7 @@ module DuplicateReconciliation
     end
 
     def self.strict_case_pair_ids(review_case, candidates: nil)
+      return paper_case_pair_ids(review_case, candidates) if review_case.inline_intake? && review_case.resolution_determination == 'keep_separate'
       return unless review_case.post_import_reconciliation?
       return unless Array(review_case.metadata['reason_codes']).map(&:to_s) == ['name_dob']
 
@@ -112,6 +113,13 @@ module DuplicateReconciliation
 
       [subject_id, candidate_id]
     end
+
+    def self.paper_case_pair_ids(review_case, candidates)
+      rows = candidates || review_case.duplicate_review_case_candidates.to_a
+      ids = [review_case.subject_user_id, rows.first&.candidate_user_id].compact.uniq.sort
+      ids if rows.one? && ids.size == 2 && Array(review_case.metadata['reason_codes']).include?('name_dob')
+    end
+    private_class_method :paper_case_pair_ids
 
     private
 
@@ -157,17 +165,11 @@ module DuplicateReconciliation
     end
 
     def cases_for_pair(ids)
-      subject_id, candidate_id = ids
-      matching_cases = DuplicateReviewCase.where(
-        source: :post_import_reconciliation,
-        subject_user_id: subject_id
-      )
-      matching_case_ids = matching_cases.joins(:duplicate_review_case_candidates)
-      matching_case_ids = matching_case_ids.where(
-        duplicate_review_case_candidates: { candidate_user_id: candidate_id }
-      ).select(:id)
-
-      DuplicateReviewCase.where(id: matching_case_ids)
+      matching_ids = DuplicateReviewCase.where(source: %i[post_import_reconciliation paper_intake], subject_user_id: ids)
+                                        .joins(:duplicate_review_case_candidates)
+                                        .where(duplicate_review_case_candidates: { candidate_user_id: ids })
+                                        .select(:id)
+      DuplicateReviewCase.where(id: matching_ids)
                          .includes(:duplicate_review_case_candidates)
                          .order(:id)
                          .select { |review_case| self.class.strict_case_pair_ids(review_case) == ids }
@@ -175,7 +177,7 @@ module DuplicateReconciliation
 
     def reconciliation_cases
       @reconciliation_cases ||=
-        DuplicateReviewCase.where(source: :post_import_reconciliation)
+        DuplicateReviewCase.where(source: %i[post_import_reconciliation paper_intake])
                            .includes(:duplicate_review_case_candidates)
                            .order(:id)
                            .to_a

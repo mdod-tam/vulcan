@@ -144,8 +144,8 @@ module Admin
 
       assert_dependent_branch_restored(guardian)
       assert_file_inputs_empty
-      # Submit is gated here, and correctly so: the files are the one thing a server render cannot
-      # put back. Readiness is proved below, after reselecting them and changing nothing else.
+      # Native inputs are empty; valid signed uploads remain available. This scenario replaces
+      # the uploads after restoration and checks that the other choices remain intact.
       take_evidence_screenshot('paper-application-rollback-dependent', full: true, html: true)
 
       ProofAttachmentService.unstub(:attach_proof)
@@ -207,7 +207,7 @@ module Admin
 
       # Files are the one thing a retry cannot put back, and the submit button goes disabled with no
       # visible reason on a form this long. The sr-only live region is not enough for sighted staff.
-      assert_text(/documents need reattaching/i)
+      assert_text(/entries were restored/i)
       assert_text(/Income proof/i)
 
       take_evidence_screenshot('paper-application-rollback-existing-adult', full: true, html: true)
@@ -727,12 +727,11 @@ module Admin
       page.evaluate_script("document.querySelector('input[name=\"#{group}\"]:checked')?.value || ''")
     end
 
-    # Stated rather than papered over: a server render cannot repopulate a native file input, so the
-    # documents genuinely must be reselected. The test pins that this is the *only* thing lost.
+    # A retry shows saved uploads by filename while native controls remain empty.
     def assert_file_inputs_empty
       PROOFS.each_key do |field|
         selected = page.evaluate_script(
-          "(document.querySelector('[name=\"#{field}\"]')?.files?.[0] || {}).name || ''"
+          "(document.querySelector('input[type=file][name=\"#{field}_signed_id\"]')?.files?.[0] || {}).name || ''"
         )
         assert_equal '', selected, "#{field} unexpectedly still holds a file"
       end

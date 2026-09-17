@@ -153,7 +153,7 @@ module Applications
       assert_equal 0, DuplicateReviewCaseCandidate.where(candidate_user_id: ids).count
       assert_equal 1, Event.where(action: 'profile_created_by_admin_via_paper',
                                   auditable_type: 'User', auditable_id: ids).count
-      assert_equal 0, Event.where(action: 'paper_identity_no_match_confirmed',
+      assert_equal 0, Event.where(action: 'duplicate_review_case_resolved',
                                   auditable_type: 'User', auditable_id: ids).count
       assert_equal 0, Notification.where(recipient_id: ids).count
     end

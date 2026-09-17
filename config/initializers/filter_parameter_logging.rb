@@ -21,7 +21,7 @@ Rails.application.config.filter_parameters += [
   # account, but it authorizes a specific creation, so it should not sit in logs after the request
   # that spent it. Listed explicitly because none of the legacy patterns below match this name --
   # /\btoken\z/ is anchored and this parameter is not called "token".
-  :identity_decision,
+  :identity_decision, :identity_review_receipt, :identity_rationale, /_signed_id\z/,
 
   # SMS credential specific field
   :phone_number,

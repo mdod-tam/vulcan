@@ -13,7 +13,17 @@
       <% end %>
     </div>
     <p class="text-sm text-gray-600">Opened <%= @review_case.opened_at.strftime('%B %d, %Y at %I:%M %p') %></p>
-    <% if @subject.nil? %>
+    <% if @review_case.inline_intake? && @review_case.metadata['application_id'] %>
+      <%= link_to 'View paper application', admin_application_path(@review_case.metadata['application_id']), class: 'text-indigo-700 underline' %>
+    <% end %>
+    <% if @review_case.resolved_selected? %>
+      <p class="mt-2">Staff selected an existing person for this <%= @review_case.metadata['intake_role'].humanize.downcase %> intake. No duplicate person was created.</p>
+      <% @candidates.each do |candidate| %>
+        <% if candidate.candidate_user %>
+          <%= render 'record_facts', user: candidate.candidate_user, role_label: 'Selected person', comparison_user: nil %>
+        <% end %>
+      <% end %>
+    <% elsif @subject.nil? %>
       <p class="text-sm text-red-600 mt-2">The subject record is no longer attached to this case.</p>
     <% end %>
   </section>

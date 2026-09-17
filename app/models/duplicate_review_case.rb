@@ -6,6 +6,9 @@ class DuplicateReviewCase < ApplicationRecord
     submitted_contact_digest
     intake_context
     subject_snapshot
+    intake_role
+    receipt_digest
+    application_id
   ].freeze
 
   # Structured record of an admin resolution. Stores decision context and codes only;
@@ -20,9 +23,10 @@ class DuplicateReviewCase < ApplicationRecord
     merge_audit_event_id
     replacement_case_id
     superseding_merge_case_id
+    selected_user_id
   ].freeze
 
-  RESOLVED_STATUSES = %w[resolved_approved resolved_ignored resolved_merged resolved_superseded].freeze
+  RESOLVED_STATUSES = %w[resolved_approved resolved_ignored resolved_merged resolved_superseded resolved_selected].freeze
 
   # Reason codes an admin may record on a resolution, as opposed to the detection-derived
   # evidence codes in DuplicateReviewCaseCandidate::MATCH_REASONS. A case opened without any
@@ -45,7 +49,8 @@ class DuplicateReviewCase < ApplicationRecord
     resolved_approved: 1,
     resolved_ignored: 2,
     resolved_merged: 3,
-    resolved_superseded: 4
+    resolved_superseded: 4,
+    resolved_selected: 5
   }
 
   enum :source, {
@@ -63,6 +68,7 @@ class DuplicateReviewCase < ApplicationRecord
     same_person_confirmed: 'same_person_confirmed',
     authorized_relationship_confirmed: 'authorized_relationship_confirmed',
     keep_separate: 'keep_separate',
+    existing_person_selected: 'existing_person_selected',
     superseded_by_merge: 'superseded_by_merge',
     needs_more_information: 'needs_more_information',
     fraud_or_security_review: 'fraud_or_security_review'
@@ -73,6 +79,7 @@ class DuplicateReviewCase < ApplicationRecord
   validates :deduplication_key, presence: true
   validates :opened_at, presence: true
   validates :metadata, presence: true
+  validate :inline_intake_shape
   validate :metadata_shape
   validate :resolution_fields_present_when_resolved
   validate :resolution_metadata_shape
@@ -107,7 +114,33 @@ class DuplicateReviewCase < ApplicationRecord
     MERGE_ELIGIBLE_DETERMINATIONS.include?(resolution_determination)
   end
 
+  def inline_intake?
+    paper_intake? && metadata['intake_context'].in?(%w[paper_inline_keep_separate paper_inline_selection])
+  end
+
   private
+
+  def inline_intake_shape
+    return unless inline_intake? || resolved_selected?
+
+    errors.add(:source, 'must be an inline paper review') unless inline_intake?
+    errors.add(:subject_fingerprint, 'is required') unless subject_fingerprint.to_s.match?(DuplicateReviewCases::MetadataSanitizer::DIGEST_PATTERN)
+    errors.add(:metadata, 'requires a review receipt digest') unless metadata['receipt_digest'].to_s.match?(DuplicateReviewCases::MetadataSanitizer::DIGEST_PATTERN)
+    errors.add(:metadata, 'requires an intake role') unless metadata['intake_role'].in?(%w[self_applicant guardian dependent])
+    selection = metadata['intake_context'] == 'paper_inline_selection'
+    errors.add(:subject_user, 'must be absent for a proposed identity selection') if selection && subject_user_id.present?
+    errors.add(:subject_user, 'is required for keep-separate') if !selection && subject_user_id.blank?
+    inline_resolution_shape(selection) if resolved?
+  end
+
+  def inline_resolution_shape(selection)
+    expected = selection ? 'existing_person_selected' : 'keep_separate'
+    errors.add(:resolution_determination, 'does not match the intake decision') unless resolution_determination == expected
+    errors.add(:status, 'does not match the intake selection') if selection != resolved_selected?
+    return unless selection && !duplicate_review_case_candidates.exists?(candidate_user_id: resolution_metadata['selected_user_id'])
+
+    errors.add(:resolution_metadata, 'must identify the selected candidate')
+  end
 
   def terminal_case_immutable
     errors.add(:base, 'A resolved duplicate review case cannot be modified') if currently_resolved_in_database?

@@ -29,10 +29,9 @@ DEBUG_AUTH=true rails test         # Auth debug info
 - **Auto-loading**: Support files from `test/support/`
 
 ### Browser Configuration
-- **Driver**: Cuprite with Chrome
+- **Driver**: Cuprite with Chrome, configured through Rails' `driven_by` options; a separate `:cuprite` registration would be replaced by Rails
+- **JavaScript failures**: `js_errors: true` enforces uncaught errors and rejected promises. A small hook rethrows Stimulus-reported errors. Runtime errors and missing declared controllers invalidate screenshot sidecars.
 - **Headless Mode**: Controlled by `HEADLESS` env var
-- **Performance**: Animations disabled, optimized options
-- **Debug**: `SLOWMO=0.5` for step debugging
 
 ### Log Noise Reduction
 - Default log level: `:warn`

@@ -61,14 +61,14 @@ module Applications
                                        date_of_birth: Date.new(1980, 1, 15))
       @seeded_ids << candidate.id
       params = confirmed_paper_params(address_only_params, admin: @admin)
-      assert params[:identity_decision].present?, 'this test is only meaningful with a real decision'
+      assert params[:identity_review_receipt].present?, 'this test is only meaningful with a real decision'
 
       outcomes = run_racing_creates(params_for: ->(_index) { deep_dup_params(params) })
 
       assert_equal 1, outcomes.count { |outcome| outcome[:created] },
                    "one signed decision may be spent once: #{outcomes.inspect}"
       assert_equal 1, created_users.count
-      assert_equal 1, Event.where(action: 'paper_identity_no_match_confirmed',
+      assert_equal 1, Event.where(action: 'duplicate_review_case_resolved',
                                   auditable_type: 'User', auditable_id: created_users.map(&:id)).count,
                    'the override must be recorded once, not once per racing request'
     ensure
@@ -95,7 +95,7 @@ module Applications
       assert_equal 1, Application.where(user_id: dependent.id).count
       assert_equal 1, GuardianRelationship.where(dependent_id: dependent.id).count
       assert_equal 0, DuplicateReviewCase.where(subject_user_id: dependent.id).count
-      assert_equal 0, Event.where(action: 'paper_identity_no_match_confirmed',
+      assert_equal 0, Event.where(action: 'duplicate_review_case_resolved',
                                   auditable_type: 'User', auditable_id: dependent.id).count
 
       loser = outcomes.find { |outcome| !outcome[:created] }

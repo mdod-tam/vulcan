@@ -1,0 +1,3 @@
+<%# locals: (review:, message:, submitted:) %>
+<p role="alert" tabindex="-1" class="my-3 text-red-700"><%= message %></p>
+<%= render 'admin/paper_applications/identity_review', review: review, submitted: submitted, guardian: true %>

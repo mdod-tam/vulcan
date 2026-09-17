@@ -236,20 +236,6 @@ describe("GuardianPickerController", () => {
     })
   })
 
-  describe("selectDependentFromIdentityReview", () => {
-    it("loads the on-file dependent and moves focus to the rendered summary", async () => {
-      const outcome = await controller.selectDependentFromIdentityReview({ id: 99, selectable: true })
-      const frame = document.getElementById('dependent_info_form')
-      frame.innerHTML = '<div id="existing-dependent-summary" tabindex="-1">Existing dependent selected</div>'
-      frame.dispatchEvent(new Event('turbo:frame-load'))
-
-      expect(outcome).toEqual({ selected: true })
-      expect(controller.dependentIdFieldTarget.value).toBe('99')
-      expect(controller.applicantTypeRadioDependentTarget.checked).toBe(true)
-      expect(document.activeElement).toBe(frame.querySelector('#existing-dependent-summary'))
-    })
-  })
-  
   describe("clearSelection", () => {
     beforeEach(() => {
       // Start with a selection

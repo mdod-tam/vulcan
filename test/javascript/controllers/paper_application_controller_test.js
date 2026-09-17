@@ -347,7 +347,7 @@ describe("PaperApplicationController", () => {
     expect(submitButton.disabled).toBe(false)
   })
 
-  test("dependent submit gate names a missing guardian and preserves identity-review priority", () => {
+  test("dependent submit gate names a missing guardian and preserves upload priority", () => {
     document.body.innerHTML = `
       <form data-controller="paper-application">
         <input type="radio" name="applicant_type" value="dependent" checked>
@@ -370,7 +370,7 @@ describe("PaperApplicationController", () => {
     Object.defineProperty(directController, "statusTarget", { value: status, configurable: true })
     Object.defineProperty(directController, "hasRejectionButtonTarget", { value: false, configurable: true })
     directController.elementIsVisible = () => true
-    directController._identityReviewState = "idle"
+    directController._uploading = false
 
     directController._applySubmitGating()
     expect(submitButton.disabled).toBe(true)
@@ -382,9 +382,9 @@ describe("PaperApplicationController", () => {
     expect(status.textContent).toBe("Paper application is ready to submit.")
 
     guardianId.value = ""
-    directController._identityReviewState = "possible_matches"
+    directController._uploading = true
     directController._applySubmitGating()
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe("Review the possible matches before submitting.")
+    expect(status.textContent).toBe("Uploading documents…")
   })
 })

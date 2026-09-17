@@ -20,7 +20,10 @@ class DocumentProofHandlerController extends Controller {
     "reasonPreview",
     "languageNotice",
     "customReasonSection",
-    "customReasonField"
+    "customReasonField",
+    "savedUpload",
+    "removeUpload",
+    "cancelUpload"
   ]
 
   static values = {
@@ -28,6 +31,9 @@ class DocumentProofHandlerController extends Controller {
   }
 
   connect() {
+    this.uploadForm = this.element.closest('form');
+    this._releaseUploads = this.releaseUploadControls.bind(this);
+    this.uploadForm?.addEventListener('direct-uploads:end', this._releaseUploads);
     // Restore state from form data if rejection fields have values
     this.restoreStateFromFormData();
     
@@ -39,6 +45,10 @@ class DocumentProofHandlerController extends Controller {
       this.previewRejectionReason();
       this.updateReasonInputMode();
     }
+  }
+
+  disconnect() {
+    this.uploadForm?.removeEventListener('direct-uploads:end', this._releaseUploads);
   }
 
   /**
@@ -68,6 +78,81 @@ class DocumentProofHandlerController extends Controller {
   toggleProofAction(event) {
     // Update UI based on selection
     this.updateVisibility();
+  }
+
+  signedInputs() {
+    if (!this.hasFileInputTarget) return [];
+    return Array.from(this.element.querySelectorAll('input[type="hidden"]'))
+      .filter(input => input.name === this.fileInputTarget.name);
+  }
+
+  removeUpload() {
+    if (this.uploading) return;
+    this.signedInputs().forEach(input => input.remove());
+    this.fileInputTarget.value = '';
+    if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = '';
+    this.fileInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  uploadStarted() {
+    this.previousUploadText = this.hasSavedUploadTarget ? this.savedUploadTarget.textContent : '';
+    this.uploading = true;
+    this.uploadError = false;
+    this.uploadCanceled = false;
+    this.uploadLockedControls = Array.from(this.element.querySelectorAll('input[type="radio"], button'))
+      .filter(control => !control.disabled);
+    this.uploadLockedControls.forEach(control => { control.disabled = true; });
+    if (this.hasRemoveUploadTarget) this.removeUploadTarget.disabled = true;
+    if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = 'Uploading document…';
+    if (this.hasCancelUploadTarget) {
+      this.cancelUploadTarget.disabled = false;
+      this.cancelUploadTarget.hidden = false;
+    }
+  }
+
+  rememberUploadRequest(event) {
+    this.uploadXHR = event.detail.xhr;
+    // Active Storage handles network errors, but does not subscribe to XHR aborts.
+    this.uploadXHR.addEventListener('abort', () => event.detail.xhr.dispatchEvent(new Event('error')), { once: true });
+    if (this.uploadCanceled) queueMicrotask(() => event.detail.xhr.abort());
+  }
+
+  cancelUpload() {
+    this.uploadCanceled = true;
+    this.uploadXHR?.abort();
+  }
+
+  uploadFailed(event) {
+    event.preventDefault();
+    this.uploadError = true;
+    if (this.hasSavedUploadTarget) {
+      this.savedUploadTarget.textContent = this.uploadCanceled
+        ? 'Upload canceled. Any previous upload is retained.'
+        : 'Upload failed. Retry or choose another file. Any previous upload is retained.';
+    }
+  }
+
+  uploadFinished() {
+    this.releaseUploadControls();
+    if (this.uploadError) return;
+
+    // Active Storage inserts the completed reference immediately before its file input.
+    const completed = this.fileInputTarget.previousElementSibling;
+    if (completed?.type !== 'hidden' || !completed.value) return;
+    this.signedInputs().filter(input => input !== completed).forEach(input => input.remove());
+    if (this.hasSavedUploadTarget) {
+      this.savedUploadTarget.textContent = `Uploaded: ${this.fileInputTarget.files[0]?.name || 'document'}`;
+    }
+  }
+
+  releaseUploadControls() {
+    if (!this.uploading) return;
+    if (!this.uploadError && this.hasSavedUploadTarget) this.savedUploadTarget.textContent = this.previousUploadText;
+    this.uploading = false;
+    this.uploadXHR = null;
+    if (this.hasCancelUploadTarget) this.cancelUploadTarget.hidden = true;
+    this.uploadLockedControls?.forEach(control => { control.disabled = false; });
+    if (this.hasRemoveUploadTarget) this.removeUploadTarget.disabled = false;
   }
 
   /**
@@ -122,6 +207,8 @@ class DocumentProofHandlerController extends Controller {
         if (target.value) {
           target.value = '';
         }
+        this.signedInputs().forEach(input => input.remove());
+        if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = '';
       }
     }
 
@@ -143,7 +230,6 @@ class DocumentProofHandlerController extends Controller {
     }
   }
 
-  disconnect() {}
 
   handleReasonSelectionChanged() {
     this.previewRejectionReason();

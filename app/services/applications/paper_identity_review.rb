@@ -1,22 +1,7 @@
 # frozen_string_literal: true
 
 module Applications
-  # The single owner of "what does a search for this paper applicant turn up, and what may staff do
-  # about it".
-  #
-  # Two callers need that answer and they must never disagree: the read-only review the admin form
-  # requests before submitting, and `PaperApplicationService` deciding whether it may write. If each
-  # built its own detection call, hard-block interpretation, candidate list, or decision token, a
-  # preview could show one thing and the writer conclude another -- which is the class of drift this
-  # slice exists to remove. So this object owns all of it, and the writer consumes the result rather
-  # than re-deriving any part of it.
-  #
-  # The contact flags are the easiest part to get wrong. `PaperContactFlags#apply_to` *changes the
-  # facts before detection*: choosing "no email" deletes the email and switches the communication
-  # preference. A preview that skipped the flags would sign a different fact set than the writer
-  # verifies, and every confirmation would fail for no reason staff could see.
-  #
-  # Read-only by construction. It detects, describes, verifies and signs; nothing here writes.
+  # Normalizes and rechecks the paper identity shown in a server-rendered review.
   class PaperIdentityReview
     CONTEXTS = {
       self_applicant: { detection: :paper_new_self, contact_scope: :constituent },
@@ -24,36 +9,22 @@ module Applications
       dependent: { detection: :paper_new_dependent, contact_scope: nil }
     }.freeze
 
-    # `candidates` is what the search surfaced. `selectable_candidates` is the subset staff can
-    # actually act on: an exact email or phone collision may belong to a record that cannot be a
-    # paper applicant at all, and telling staff to "select the existing applicant" is useless when
-    # the matched record is not selectable. The endpoint needs both, plus `reasons`, to say anything
-    # actionable.
-    # Keyword-only deliberately: `candidates`, `selectable_candidates` and `reasons` are three
-    # adjacent collections, and a positional transposition between them would produce a result that
-    # looks right and tells the endpoint something false.
-    # rubocop:disable Style/RedundantStructKeywordInit -- not redundant: a plain Struct still accepts
-    # positional construction, which is the transposition this is here to make impossible.
     Result = Struct.new(:state, :candidates, :selectable_candidates, :presented_candidates,
-                        :reasons, :token, :decision_reason, :identity_facts, keyword_init: true) do
+                        :reasons, :token, :decision_reason, :identity_facts, :context, :selected_user) do
       def blocked? = state == :blocked
       def clear? = state == :clear
       def confirmed? = state == :confirmed
+      def selected? = state == :selected
       def needs_confirmation? = state == :needs_confirmation
       def error? = state == :error
       def invalid_decision? = state == :invalid_decision
       def candidate_ids = Array(candidates).map(&:id)
-
-      # Creation may proceed either because the search turned nothing up or because staff looked at
-      # what it did turn up and said those are different people.
       def permits_creation? = clear? || confirmed?
     end
-    # rubocop:enable Style/RedundantStructKeywordInit
 
-    # @param submitted_token [String, nil] the decision the request carried, if any. The preview
-    #   passes nothing; the writer passes what staff returned.
+    # rubocop:disable Metrics/ParameterLists -- identity facts, actor, context and explicit decision share one boundary
     def initialize(constituent_params:, admin:, contact_flag_params: nil, submitted_token: nil,
-                   context: :self_applicant, context_data: {})
+                   context: :self_applicant, context_data: {}, selected_candidate_id: nil, determination: nil)
       @constituent_params = constituent_params
       @admin = admin
       @contact_flag_params = contact_flag_params || constituent_params
@@ -62,54 +33,45 @@ module Applications
       @context_config = CONTEXTS.fetch(@context)
       @guardian = context_data[:guardian]
       @relationship_type = context_data[:relationship_type]
+      @selected_candidate_id = selected_candidate_id
+      @determination = determination
     end
 
-    def call
+    # rubocop:enable Metrics/ParameterLists
+
+    def call(lock: false)
       detection = detect
-      if detection.blank?
-        return Result.new(state: :error, candidates: [], selectable_candidates: [],
-                          presented_candidates: [], reasons: [],
-                          token: nil, decision_reason: nil, identity_facts: identity_facts)
-      end
+      return result(:error) unless detection
 
-      candidates = Array(detection.matched_users)
-      reasons = Array(detection.reasons)
-      return blocked_result(candidates, reasons) if detection.hard_block
+      detection = locked_detection(detection) if lock
+      return result(:error) unless detection
 
-      confirmed_or_pending(candidates, reasons)
+      candidates = detection.matched_users
+      allowed = detection.reasons.include?('email_phone_split') ? [] : selectable(candidates)
+      presented = presented_candidates(candidates, selectable_candidates: allowed)
+      facts = PaperIdentityReviewReceipt::Facts.new(decision_context, @admin, identity_facts, presented, detection.reasons)
+      valid = PaperIdentityReviewReceipt.verify(@submitted_token, facts).valid?
+      selected = allowed.find { |user| user.id.to_s == @selected_candidate_id.to_s }
+      state = decision_state(detection, selected, valid)
+      result(state, candidates: candidates, selectable_candidates: allowed, presented_candidates: presented,
+                    reasons: detection.reasons, selected_user: state == :selected ? selected : nil,
+                    token: candidates.any? ? PaperIdentityReviewReceipt.issue(facts) : nil,
+                    decision_reason: @submitted_token.present? && !valid ? :mismatched : nil)
     end
 
-    # The exact rows the browser renders. Owned here, not in the controller, for the same reason
-    # detection is: a decision is signed over what staff were shown, so if presentation lived on the
-    # endpoint side then the write boundary would be verifying a snapshot it never built.
-    #
-    # Enough for staff to tell two people apart, and no more. Contact details are deliberately
-    # excluded: a soft match is decided on identity, and an exact-contact conflict is described by
-    # its reason codes rather than by echoing the other record's email or phone back to the browser.
-    def presented_candidates(candidates, selectable_candidates: selectable(candidates))
-      selectable_ids = selectable_candidates.to_set(&:id)
-      Array(candidates).map do |candidate|
-        {
-          id: candidate.id,
-          name: candidate.full_name,
-          date_of_birth: candidate.date_of_birth&.to_fs(:long),
-          city: candidate.city,
-          state: candidate.state,
-          zip_code: candidate.zip_code,
-          selectable: selectable_ids.include?(candidate.id)
-        }
-      end
-    end
-
-    # The exact fact set detection sees, which is also the fact set a decision is signed over.
     def identity_facts
       @identity_facts ||= self.class.detection_facts(applicant_data)
     end
 
-    # Canonical detection facts. Owned here rather than in the writer so the preview and the write
-    # boundary cannot disagree about what "the same applicant" means. Email, phone and date of birth
-    # are canonicalized; names, address lines, city, state and ZIP pass through as submitted and are
-    # therefore compared strictly.
+    def presented_candidates(candidates, selectable_candidates: selectable(candidates))
+      selectable_ids = selectable_candidates.map(&:id)
+      candidates.map do |candidate|
+        { id: candidate.id, name: candidate.full_name, date_of_birth: candidate.date_of_birth&.to_fs(:long),
+          city: candidate.city, state: candidate.state, zip_code: candidate.zip_code,
+          selectable: selectable_ids.include?(candidate.id) }
+      end
+    end
+
     def self.detection_facts(attrs)
       data = if attrs.respond_to?(:to_unsafe_h)
                attrs.to_unsafe_h.with_indifferent_access
@@ -135,14 +97,48 @@ module Applications
 
     private
 
-    def detect
-      result = DuplicateDetectionService.new(context: @context_config.fetch(:detection), attrs: identity_facts).call
-      return result.data if result.success?
+    def locked_detection(detection)
+      return unless @admin&.persisted?
 
-      nil
+      participants = [@admin, @guardian, *detection.matched_users].compact
+      locked = User.lock_for_merge_integrity!(*participants)
+      @admin = locked.fetch(@admin.id)
+      @guardian = locked.fetch(@guardian.id) if @guardian
+      @identity_facts = nil
+      return unless @admin.admin? && @admin.public_login_active?
+      return if @context == :dependent && !@guardian&.paper_guardian_candidate?
+
+      refreshed = detect
+      return unless refreshed
+
+      if (refreshed.matched_users.map(&:id) - locked.keys).any?
+        # A new candidate requires a new review, without taking locks out of order.
+        @submitted_token = @selected_candidate_id = @determination = nil
+      end
+      refreshed
     end
 
-    # Flags applied first, exactly as the writer applies them, so preview and verification agree.
+    def decision_state(detection, selected, valid)
+      return :selected if selected && valid
+      return :blocked if detection.hard_block
+      return :invalid_decision if @selected_candidate_id.present? || (@submitted_token.present? && !valid)
+      return :clear if detection.matched_users.empty? && @submitted_token.blank?
+      return :invalid_decision if detection.matched_users.empty?
+      return :confirmed if valid && @determination == 'keep_separate'
+
+      :needs_confirmation
+    end
+
+    def result(state, **attributes)
+      Result.new(state: state, candidates: [], selectable_candidates: [], presented_candidates: [],
+                 reasons: [], identity_facts: identity_facts, context: @context, **attributes)
+    end
+
+    def detect
+      detection = DuplicateDetectionService.new(context: @context_config.fetch(:detection), attrs: identity_facts).call
+      detection.data if detection.success?
+    end
+
     def applicant_data
       return dependent_applicant_data if @context == :dependent
 
@@ -150,54 +146,6 @@ module Applications
         @contact_flag_params,
         scope: @context_config.fetch(:contact_scope)
       ).apply_to(@constituent_params)
-    end
-
-    # A hard block is not a decision staff may take, so no token is issued: there is nothing to
-    # present, replay, or acknowledge away. The reasons are preserved -- exact_email, exact_phone, a
-    # split-contact conflict -- because they are the only thing that lets the endpoint explain what
-    # happened, particularly when the matched record is not selectable.
-    def blocked_result(candidates, reasons)
-      blocked_selectable = reasons.include?('email_phone_split') ? [] : selectable(candidates)
-      Result.new(state: :blocked, candidates: candidates,
-                 selectable_candidates: blocked_selectable,
-                 presented_candidates: presented_candidates(candidates, selectable_candidates: blocked_selectable), reasons: reasons,
-                 token: nil, decision_reason: nil, identity_facts: identity_facts)
-    end
-
-    # Nothing surfaced, so there is nothing for staff to decide. Requiring a click here would be
-    # friction that proves nothing: it is the server's search -- run against the completed applicant
-    # immediately before the write -- that establishes no match, not a second confirmation of it.
-    # A decision is only meaningful when staff are overriding something the computer surfaced.
-    def confirmed_or_pending(candidates, reasons)
-      if candidates.empty?
-        if @submitted_token.present?
-          facts = PaperIdentityDecision::Facts.new(decision_context, @admin, identity_facts, [], reasons)
-          decision = PaperIdentityDecision.verify(@submitted_token, facts)
-          return Result.new(state: :invalid_decision, candidates: [], selectable_candidates: [],
-                            presented_candidates: [], reasons: reasons,
-                            token: nil, decision_reason: decision.reason, identity_facts: identity_facts)
-        end
-
-        return Result.new(state: :clear, candidates: [], selectable_candidates: [],
-                          presented_candidates: [], reasons: reasons,
-                          token: nil, decision_reason: nil, identity_facts: identity_facts)
-      end
-
-      presented = presented_candidates(candidates)
-      facts = PaperIdentityDecision::Facts.new(decision_context, @admin, identity_facts,
-                                               presented, reasons)
-      decision = PaperIdentityDecision.verify(@submitted_token, facts)
-
-      if decision.valid?
-        Result.new(state: :confirmed, candidates: candidates,
-                   selectable_candidates: selectable(candidates), presented_candidates: presented,
-                   reasons: reasons, token: nil, decision_reason: nil, identity_facts: identity_facts)
-      else
-        Result.new(state: :needs_confirmation, candidates: candidates,
-                   selectable_candidates: selectable(candidates), presented_candidates: presented,
-                   reasons: reasons, token: PaperIdentityDecision.issue(facts),
-                   decision_reason: decision.reason, identity_facts: identity_facts)
-      end
     end
 
     def selectable(candidates)
@@ -212,7 +160,8 @@ module Applications
         candidate.respond_to?(:paper_dependent_candidate?) && candidate.paper_dependent_candidate? &&
           PaperApplicationEligibility.call(candidate).eligible? && guardian_relationship_exists?(candidate)
       else
-        candidate.respond_to?(:paper_applicant_candidate?) && candidate.paper_applicant_candidate?
+        candidate.respond_to?(:paper_applicant_candidate?) && candidate.paper_applicant_candidate? &&
+          PaperApplicationEligibility.call(candidate).eligible?
       end
     end
 

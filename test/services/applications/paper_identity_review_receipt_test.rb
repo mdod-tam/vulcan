@@ -5,7 +5,7 @@ require 'test_helper'
 module Applications
   # A decision that survives a change to the identity it was made about is worse than no decision at
   # all: it launders "I checked" from one applicant onto another. These pin what invalidates it.
-  class PaperIdentityDecisionTest < ActiveSupport::TestCase
+  class PaperIdentityReviewReceiptTest < ActiveSupport::TestCase
     setup do
       @admin = create(:admin)
       @other_admin = create(:admin)
@@ -158,22 +158,21 @@ module Applications
       result = verify(token)
 
       assert_not result.valid?
-      assert_equal :expired, result.reason
+      assert_equal :mismatched, result.reason
     end
 
     test 'a decision just inside the window still verifies' do
-      assert verify(issue(issued_at: (PaperIdentityDecision::MAX_AGE - 1.minute).ago)).valid?
+      assert verify(issue(issued_at: (PaperIdentityReviewReceipt::MAX_AGE - 1.minute).ago)).valid?
     end
 
-    # The expiry reported to the browser and the expiry the server enforces must be the same instant,
-    # or a countdown shows time remaining on a token that has already stopped working.
-    test 'the reported expiry is the first instant verification rejects' do
-      issued_at = Time.current
-      token = issue(issued_at: issued_at)
-      expires_at = PaperIdentityDecision.expires_at(token)
-
-      assert verify(token, now: expires_at - 1.second).valid?, 'still valid one second before'
-      assert_not verify(token, now: expires_at).valid?, 'rejected at the reported instant'
+    test 'a receipt expires at its Rails verifier deadline' do
+      freeze_time do
+        token = issue
+        travel PaperIdentityReviewReceipt::MAX_AGE - 1.second
+        assert verify(token).valid?
+        travel 1.second
+        assert_not verify(token).valid?
+      end
     end
 
     test 'malformed and forged decisions are rejected rather than raising' do
@@ -189,7 +188,7 @@ module Applications
     test 'no identity facts travel in the token' do
       token = issue
 
-      assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, token)
+      assert_match(/\A[a-f0-9]{64}\z/, Rails.application.message_verifier(PaperIdentityReviewReceipt::PURPOSE).verified(token, purpose: PaperIdentityReviewReceipt::PURPOSE))
       %w[John Smith 1990-04-02 john.smith@example.com 5555550100 21201 Baltimore].each do |secret|
         assert_not_includes token, secret
       end
@@ -199,15 +198,15 @@ module Applications
 
     def facts(context: :self_applicant, admin: @admin, identity: @identity,
               candidates: @candidates, reasons: @reasons)
-      PaperIdentityDecision::Facts.new(context, admin, identity, candidates, reasons)
+      PaperIdentityReviewReceipt::Facts.new(context, admin, identity, candidates, reasons)
     end
 
     def issue(issued_at: Time.current, **overrides)
-      PaperIdentityDecision.issue(facts(**overrides), issued_at: issued_at)
+      PaperIdentityReviewReceipt.issue(facts(**overrides), issued_at: issued_at)
     end
 
-    def verify(token, now: Time.current, **overrides)
-      PaperIdentityDecision.verify(token, facts(**overrides), now: now)
+    def verify(token, **overrides)
+      PaperIdentityReviewReceipt.verify(token, facts(**overrides))
     end
   end
 end

@@ -12,7 +12,7 @@ module Applications
     # after its transaction has rolled back, when PostgreSQL permits a fresh identity query.
     class DependentCreationConflict < StandardError; end
 
-    attr_reader :params, :guardian_user, :dependent_user, :errors
+    attr_reader :params, :guardian_user, :dependent_user, :errors, :identity_review
 
     def initialize(params = nil, actor: nil, guardian_user: nil, dependent_user: nil,
                    preallocated_synthetic_phone: nil, **keyword_params)
@@ -120,7 +120,7 @@ module Applications
     def setup_guardian(guardian_id)
       return add_error?('Guardian information missing') if guardian_id.blank?
 
-      @guardian_user = User.lock.find_by(id: guardian_id)
+      @guardian_user = User.find_by(id: guardian_id)
       return add_error?('Guardian not found') unless @guardian_user
       return add_error?('Selected guardian is not an eligible active constituent') unless @guardian_user.paper_guardian_candidate?
 
@@ -133,7 +133,6 @@ module Applications
 
       @dependent_user = result.data[:user]
       track_email_backed_portal_created_user_id(result.data[:email_backed_portal_created_user_id])
-      record_no_match_confirmation(@dependent_user)
 
       true
     rescue ActiveRecord::RecordNotUnique
@@ -145,22 +144,22 @@ module Applications
         constituent_params: applicant_data,
         contact_flag_params: params,
         admin: @actor,
-        submitted_token: params[:identity_decision],
+        submitted_token: params[:identity_review_receipt],
+        determination: params[:identity_determination],
         context: :dependent,
         context_data: { guardian: @guardian_user, relationship_type: relationship_type }
       )
       Applications::PaperIdentityCreationLock.lock!(review_owner.identity_facts)
-      @identity_review = review_owner.call
+      @identity_review = review_owner.call(lock: true)
+      @guardian_user.reload
 
       return add_error?('Duplicate detection failed. Try again.') if @identity_review.error?
       return add_error?(dependent_decision_error(@identity_review)) if @identity_review.invalid_decision?
       return add_error?(DEPENDENT_CONTACT_COLLISION_MESSAGE) if @identity_review.blocked?
 
       if @identity_review.confirmed?
-        @confirmed_no_match = {
-          candidate_ids: @identity_review.candidate_ids,
-          reason_codes: @identity_review.reasons
-        }
+        return add_error?('Explain the identity decision before continuing.') if params[:identity_rationale].blank?
+
         return true
       end
       return true if @identity_review.clear?
@@ -317,25 +316,6 @@ module Applications
         'Select an eligible existing dependent or confirm these are different people.'
     end
 
-    def record_no_match_confirmation(user)
-      return if @confirmed_no_match.blank?
-
-      AuditEventService.log(
-        action: 'paper_identity_no_match_confirmed',
-        actor: @actor,
-        auditable: user,
-        metadata: {
-          decision_context: 'paper_new_dependent',
-          role: 'dependent',
-          guardian_id: @guardian_user.id,
-          relationship_type: params[:relationship_type],
-          candidate_ids: @confirmed_no_match[:candidate_ids],
-          candidate_count: @confirmed_no_match[:candidate_ids].size,
-          reason_codes: @confirmed_no_match[:reason_codes]
-        }
-      )
-    end
-
     def track_email_backed_portal_created_user_id(user_id)
       @email_backed_portal_created_user_ids << user_id.to_s if user_id.present?
     end
@@ -350,7 +330,7 @@ module Applications
     end
 
     def failure(message, data = nil)
-      add_error?(message)
+      add_error?(message) if @errors.empty?
       Result.new(success: false, message: message, data: data || { errors: @errors })
     end
   end

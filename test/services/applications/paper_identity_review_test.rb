@@ -33,19 +33,20 @@ module Applications
 
       assert result.needs_confirmation?, "expected a decide-between review, got #{result.state}"
       assert_not result.permits_creation?
-      assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, result.token)
+      assert result.token.present?
       assert_equal [existing.id], result.candidates.map(&:id)
       assert_includes result.reasons, 'name_dob'
     end
 
     # A hard block is not a decision staff may take, so there must be nothing to acknowledge away.
-    test 'an exact contact collision is blocked and issues no token' do
+    test 'an exact contact collision issues a receipt for selection only' do
       existing = create(:constituent, email: "collide-#{SecureRandom.hex(3)}@example.com")
 
       result = review(@facts.merge(email: existing.email))
 
       assert result.blocked?
-      assert_nil result.token
+      assert result.token.present?
+      assert_not review_object(@facts.merge(email: existing.email), submitted_token: result.token, determination: 'keep_separate').call.permits_creation?
     end
 
     # The endpoint depends on these fields to say anything useful, so they are pinned here rather
@@ -148,7 +149,7 @@ module Applications
       assert preview.needs_confirmation?, "expected a decision to be required, got #{preview.state}"
 
       service = Applications::PaperApplicationService.new(
-        params: params.merge(identity_decision: preview.token), admin: @admin, skip_proof_processing: true
+        params: params.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: preview.token), admin: @admin, skip_proof_processing: true
       )
 
       assert service.create, "the writer rejected a token this review issued: #{service.errors.inspect}"
@@ -162,7 +163,7 @@ module Applications
       # Same constituent hash, flag dropped: detection now sees an email it did not see before, so
       # the facts the token was signed over no longer describe this submission.
       service = Applications::PaperApplicationService.new(
-        params: params.except(:no_email_address).merge(identity_decision: preview.token),
+        params: params.except(:no_email_address).merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: preview.token),
         admin: @admin, skip_proof_processing: true
       )
 
@@ -182,6 +183,35 @@ module Applications
       assert_not changed.permits_creation?
       assert_equal :mismatched, changed.decision_reason
       assert_empty changed.candidates
+    end
+
+    test 'dependent decisions recheck guardian address after acquiring current rows' do
+      guardian = create(:constituent)
+      create(:constituent, first_name: 'Review', last_name: 'Subject', date_of_birth: Date.new(1990, 4, 2))
+      options = { constituent_params: @facts, admin: @admin, context: :dependent,
+                  contact_flag_params: { address_strategy: 'guardian' },
+                  context_data: { guardian: guardian, relationship_type: 'Parent' } }
+      receipt = PaperIdentityReview.new(**options).call.token
+      review = PaperIdentityReview.new(**options, submitted_token: receipt, determination: 'keep_separate')
+      review.identity_facts
+      User.find(guardian.id).update!(city: 'Changed after the form loaded')
+
+      assert review.call(lock: true).invalid_decision?
+    end
+
+    test 'dependent selection requires a current relationship and application eligibility' do
+      guardian = create(:constituent)
+      candidate = create(:constituent, first_name: 'Review', last_name: 'Subject', date_of_birth: Date.new(1990, 4, 2))
+      options = { constituent_params: @facts, admin: @admin, context: :dependent,
+                  context_data: { guardian: guardian, relationship_type: 'Parent' } }
+      assert_empty PaperIdentityReview.new(**options).call.selectable_candidates
+      relationship = create(:guardian_relationship, guardian_id: guardian.id, dependent_id: candidate.id)
+      initial = PaperIdentityReview.new(**options).call
+      assert_includes initial.selectable_candidates, candidate
+      choice = { submitted_token: initial.token, selected_candidate_id: candidate.id }
+      assert PaperIdentityReview.new(**options, **choice).call(lock: true).selected?
+      relationship.destroy!
+      assert_not PaperIdentityReview.new(**options, **choice).call(lock: true).selected?
     end
 
     private
@@ -205,9 +235,10 @@ module Applications
       }.merge(extra)
     end
 
-    def review_object(facts, contact_flag_params: nil, submitted_token: nil)
+    def review_object(facts, contact_flag_params: nil, submitted_token: nil, determination: nil)
       PaperIdentityReview.new(constituent_params: facts, admin: @admin,
-                              contact_flag_params: contact_flag_params, submitted_token: submitted_token)
+                              contact_flag_params: contact_flag_params, submitted_token: submitted_token,
+                              determination: determination)
     end
 
     def review(facts, contact_flag_params: nil)

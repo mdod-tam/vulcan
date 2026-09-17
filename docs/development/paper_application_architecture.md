@@ -56,7 +56,7 @@ after a rollback restores the record, true after a commit whose callback then ra
 
 ### What a re-rendered form restores
 
-Everything submitted except the files, on the paths listed below. This is a real contract, not an
+Submitted fields and available direct uploads are restored on the paths listed below. This is a real contract, not an
 aspiration: a field accepted for processing but missing from `build_submitted_params`, or rendered
 from the record rather than the submission, is silently dropped on a retry. Both mistakes have
 happened here.
@@ -69,14 +69,17 @@ entirely, and a disabled control is not submitted, neither of which a request te
 
 The existing-dependent branch is covered end to end in that system test -- selecting an on-file
 dependent, failing, and retrying to success. Guardian quick-create identity decisions are exercised
-through the browser in `test/system/admin/paper_application_dependent_guardian_test.rb`; dependent
-preflight, correction, override, and on-file selection are exercised in
-`test/system/admin/paper_identity_review_test.rb`. Request tests still own server-rendered retry
+through the browser in `test/system/admin/paper_identity_review_test.rb`, alongside self selection,
+keep-separate decisions, stale review, replacement, removal, and dependent review. Request tests own server-rendered retry
 bindings. Together those paths cover applicant and application fields, disability selections and
 self-certification, attestations, contact strategies, applicant-type branch, guardian/dependent
-selection, all four proof dispositions, and their rejection reasons. The four native file inputs
-cannot be repopulated by a server render, so staff reselect only the documents their restored
-dispositions still require — a rejected proof needs none.
+selection, all four proof dispositions, and their rejection reasons. Native file inputs remain
+empty; validated signed blob IDs and filenames represent documents already uploaded. Staff can
+replace or remove them. Invalid, expired, or already-attached blobs must be uploaded again.
+
+Unattached uploads remain available for seven days. `CleanupUnattachedUploadsJob` purges older
+unattached blobs daily, rechecking attachments under a blob lock. Intake takes the same lock and
+refuses expired unattached blobs. Attached application documents are not subject to this cleanup.
 
 The retry-field allowlist lives in `build_submitted_params`. A field that is accepted for processing
 but missing from that list will be silently dropped on a retry.
@@ -124,18 +127,43 @@ write. A new guardian runs the same review before its separate JSON quick-create
 or phone collisions hard-block new-record creation so paper intake cannot silently attach an
 unrelated user.
 
-Soft name+DOB/address matches are handled differently by branch:
+All three paper roles use one identity boundary. `PaperIdentityReview` normalizes facts and requalifies candidates under the name/DOB advisory lock and ordered participant locks. The create endpoint renders possible matches after direct uploads; staff explicitly select an existing person or confirm a different person with a rationale.
 
-- **New self applicant or dependent** — adjudicated inline, not queued. `Applications::PaperIdentityReview` is the single owner of normalized facts, candidate presentation, role-specific selectability, and signed decisions. The form calls the read-only review before native multipart submission; the canonical writer recomputes it under `PaperIdentityCreationLock` inside the application transaction. A dependent decision is additionally bound to the selected guardian, relationship, and contact strategies. A valid different-person override logs exactly one bounded `paper_identity_no_match_confirmed` event; a clear result logs none. Neither branch opens `paper_intake` cases.
-- **Guardian** — the visible `Save Guardian` JSON step is the only new-guardian writer. `PaperGuardianQuickCreateService` applies guardian contact flags, recomputes review under the shared identity lock, and returns clear, candidate, exact-contact, selected-existing, or confirmed-override outcomes. Final paper submission requires its returned `guardian_id` (or an existing selection); it never creates from inline `guardian_attributes`. No `admin_create` or `paper_intake` case is opened.
+`DuplicateReviewCases::CreateService.record_paper_decision!` records completed decisions through the existing case lifecycle. Keep-separate records one resolved paper case per actual new-person/candidate pair. Existing selection uses `resolved_selected` / `existing_person_selected`, a proposed-identity fingerprint, and the selected candidate, without creating a second user. The case, evidence, and resolution commit with the application and proofs, or with the separately saved guardian. Clear creation requires no identity case.
+
+The Rails-verifier receipt expires after 30 minutes and binds actor, role, guardian/relationship context, normalized identity, displayed candidates, selectability, and reasons. It contains keyed digests, not identity facts. Case deduplication preserves a completed decision across retries; application eligibility and fresh recomputation still guard duplicate applications.
+
+Validated paper keep-separate pairs settle the same pair for reconciliation and flag projection. Existing-person selection does not settle unrelated pairs. Historical cases and audit-only decisions remain historical evidence; this change does not infer missing pair decisions or bulk-close legacy cases.
 
 The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
 
 Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
 
+## Deployment and recovery
+
+Migration `20260917004500` is intentionally irreversible: a completed existing-person selection
+has no truthful equivalent among the previous statuses. Its `down` raises before changing any
+constraint or index, even when no selection has yet been recorded. Apply the migration before
+starting this application's new workers. Once deployed, recover by rolling forward with a corrected
+release that understands status `5`; do not redeploy a version that lacks `resolved_selected`, run
+`db:rollback`, or rewrite completed decisions. During an incident, pause paper intake at the load
+balancer, retain the database and audit history, deploy the correction, and verify an existing
+selection and a new intake before reopening.
+
+Already-open PR 205 forms may still call `POST /admin/paper_applications/identity_review`.
+Its authenticated, uncached compatibility response only resumes their native multipart submission;
+it performs no identity lookup and issues no decision receipt. The canonical create action ignores
+legacy decisions and recomputes identity. If it refuses the submission, it saves each multipart
+document as an unattached blob and renders the current form with signed IDs, just like direct
+uploads. These blobs use the same seven-day cleanup policy.
+
+Keep this adapter until all pre-consolidation intake tabs have been closed and access logs show no
+calls to the legacy route for seven consecutive days. Remove the route and action together in a
+later release. The multipart retry preservation remains useful independently of the adapter.
+
 ## Account-Created Notices And Quick-Create Markers
 
-Paper intake routes are `new`, `create`, and the read-only `identity_review` collection POST (`config/routes.rb`). The admin form calls `identity_review` before new-self and new-dependent submission; existing-record branches are requalified by the writer instead. The endpoint detects, describes and signs, and never writes. Quick-created **email-backed** portal user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
+Paper identity review uses the normal `new`/`create` intake routes. Quick-created **email-backed** portal user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
 
 When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for email-backed portal users created in the same submission or quick-created in the same browser session. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
 

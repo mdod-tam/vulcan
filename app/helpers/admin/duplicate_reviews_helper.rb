@@ -23,9 +23,8 @@ module Admin
       'manual_review' => 'Manual review'
     }.freeze
 
-    # `resolved_ignored` is the status every non-merge resolution records, so its label has to be
-    # true for the decision staff actually made: they kept the records separate. Labelling it
-    # "Ignored" contradicted the determination shown beside it on the resolution summary.
+    # `resolved_ignored` records keep-separate decisions. Calling it "Ignored" contradicted
+    # the determination shown beside it on the resolution summary.
     # "Resolved without merge" is accurate for both the current outcome and any legacy row.
     #
     # `resolved_approved` keeps its own label: nothing writes that status any more, but existing
@@ -35,7 +34,8 @@ module Admin
       'resolved_approved' => 'Approved',
       'resolved_ignored' => 'Resolved without merge',
       'resolved_merged' => 'Merged',
-      'resolved_superseded' => 'Superseded by merge'
+      'resolved_superseded' => 'Superseded by merge',
+      'resolved_selected' => 'Existing person selected'
     }.freeze
 
     PHONE_TYPE_LABELS = {

@@ -225,7 +225,8 @@ export default class extends Controller {
       const currentIsDependentSelected = this.isDependentRadioChecked(); // Re-check after potential selectRadio call
       const stateChanged = !this._lastState ||
         this._lastState.isDependentSelected !== currentIsDependentSelected ||
-        this._lastState.guardianChosen !== guardianChosen;
+        this._lastState.guardianChosen !== guardianChosen ||
+        this._lastState.showCommon !== showCommon;
 
       if (stateChanged) {
         if (process.env.NODE_ENV !== 'production') {
@@ -234,7 +235,7 @@ export default class extends Controller {
         this.dispatch("applicantTypeChanged", { detail: { isDependentSelected: currentIsDependentSelected } });
 
         // Update last state
-        this._lastState = { isDependentSelected: currentIsDependentSelected, guardianChosen };
+        this._lastState = { isDependentSelected: currentIsDependentSelected, guardianChosen, showCommon };
       }
 
     } catch (error) {

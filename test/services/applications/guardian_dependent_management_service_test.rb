@@ -11,6 +11,7 @@ module Applications
 
     test 'process_guardian_scenario returns failure result when guardian information is missing' do
       service = GuardianDependentManagementService.new(
+        actor: @admin,
         email_strategy: 'guardian',
         phone_strategy: 'guardian',
         address_strategy: 'dependent'
@@ -30,6 +31,7 @@ module Applications
 
     test 'process_guardian_scenario returns failure result when guardian id is invalid' do
       service = GuardianDependentManagementService.new(
+        actor: @admin,
         email_strategy: 'guardian',
         phone_strategy: 'guardian',
         address_strategy: 'dependent'
@@ -48,6 +50,7 @@ module Applications
 
     test 'process_guardian_scenario returns failure result when relationship type is missing' do
       service = GuardianDependentManagementService.new(
+        actor: @admin,
         email_strategy: 'guardian',
         phone_strategy: 'guardian',
         address_strategy: 'dependent'
@@ -71,6 +74,7 @@ module Applications
         .returns(42)
 
       service = GuardianDependentManagementService.new(
+        actor: @admin,
         email_strategy: 'guardian',
         phone_strategy: 'guardian',
         address_strategy: 'dependent'
@@ -171,6 +175,7 @@ module Applications
         .returns(0, 1)
 
       service = GuardianDependentManagementService.new(
+        actor: @admin,
         email_strategy: 'guardian',
         phone_strategy: 'guardian',
         address_strategy: 'dependent'
@@ -194,6 +199,7 @@ module Applications
         .returns(*Array.new(GuardianDependentManagementService::SYNTHETIC_PHONE_MAX_ATTEMPTS, 0))
 
       service = GuardianDependentManagementService.new(
+        actor: @admin,
         email_strategy: 'guardian',
         phone_strategy: 'guardian',
         address_strategy: 'dependent'
@@ -220,6 +226,7 @@ module Applications
       )
 
       service = GuardianDependentManagementService.new(
+        actor: @admin,
         email_strategy: 'dependent',
         phone_strategy: 'dependent',
         address_strategy: 'dependent'
@@ -241,6 +248,7 @@ module Applications
 
         assert_not result.success?
         assert_equal 'Dependent identity review refused the write', result.message
+        assert_not_includes result.data[:errors], result.message
         assert_not_equal existing_dependent, service.dependent_user
       end
     end
@@ -313,7 +321,8 @@ module Applications
             phone_strategy: 'dependent',
             address_strategy: 'dependent',
             relationship_type: relationship_type,
-            identity_decision: decision
+            identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different dependents.',
+            identity_review_receipt: decision
           },
           actor: @admin
         )
@@ -345,7 +354,7 @@ module Applications
       assert_difference 'User.count', 1 do
         assert_difference 'GuardianRelationship.count', 1 do
           assert_no_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'] do
-            assert_difference -> { Event.where(action: 'paper_identity_no_match_confirmed').count }, 1 do
+            assert_no_difference -> { Event.where(action: 'paper_identity_no_match_confirmed').count } do
               result = service.process_guardian_scenario(@guardian.id, attrs, 'Parent')
               assert result.success?, "Expected dependent creation to succeed: #{service.errors.inspect}"
             end
@@ -356,10 +365,9 @@ module Applications
       subject = service.dependent_user.reload
       assert_not subject.needs_duplicate_review
 
-      event = Event.find_by!(action: 'paper_identity_no_match_confirmed', auditable: subject)
-      assert_equal @admin.id, event.user_id
-      assert_equal 'paper_new_dependent', event.metadata['decision_context']
-      assert_equal [existing_dependent.id], event.metadata['candidate_ids']
+      assert service.identity_review.confirmed?
+      assert_equal [existing_dependent.id], service.identity_review.candidate_ids
+      # PaperApplicationService commits the case with the application and its proofs.
     end
 
     test 'new dependent own-contact strategies refuse blank email and phone independently' do

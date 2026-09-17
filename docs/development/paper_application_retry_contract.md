@@ -16,13 +16,14 @@ Two allowlists exist in `Admin::PaperApplicationsController`:
 - **retry** — `build_submitted_params`, what the re-render may put back.
 
 Every field in *processing* is either in *retry* or deliberately excluded for a stated reason. There
-are two standing exclusions, eight fields in total:
+is one standing exclusion, four fields in total:
 
 - The four native file inputs (`income_proof`, `residency_proof`, `id_proof`,
   `medical_certification`), which no server render can repopulate.
-- The four matching `*_signed_id` fields, which are processing-only: each names a blob already
-  uploaded directly to storage. Echoing one back would claim an attachment the form cannot show and
-  staff cannot verify, and reattaching the file mints a new signed id anyway.
+
+The four matching `*_signed_id` fields are restored after checking the blob exists, is unattached,
+and is less than seven days old. The form displays its escaped filename. Replacement leaves one
+current signed ID; removal or rejection clears it. Failed replacement retains the previous ID.
 
 A field in processing but not in retry is a silent data-loss bug. That is exactly how the proof
 actions, the two no-information flags, and the guardian/dependent selection were each lost.
@@ -47,7 +48,8 @@ actions, the two no-information flags, and the guardian/dependent selection were
 | Relationship type | `submitted_params[:relationship_type]` | `options_for_select` ignores the bound object | system |
 | Alternate contact relationship | rebuilt `Application` | same `options_for_select` trap | request |
 | State fields | rebuilt record | hardcoded `"MD"` overrode submissions | request |
-| Four file inputs | **not restorable** | — | asserted empty, then reselected |
+| Four file inputs and signed IDs | Empty native controls; validated signed IDs and filenames | Never describe unavailable or attached blobs as restored | request + `paper_identity_review_test` |
+| Identity review | Fresh server review, receipt, rationale, selected candidate | Stale facts require renewed review; selected self applicant requires contact verification | request + system |
 
 ## Which layer proves what
 
@@ -124,9 +126,9 @@ condition: `hasCommonSectionsTarget: false` alongside `showCommonWouldBe: true` 
 nesting rather than logic. Both branches of that partial now render balanced markup, asserted by
 rendering each and counting tags.
 
-Guardian retry behavior is split across its two live boundaries. The JSON `Save Guardian` step
+Guardian retry behavior is split across its two live boundaries. The `Save Guardian` step
 keeps identity-review refusal and correction inside the existing page. Final paper submission
 requires a saved or selected `guardian_id`; if a direct request carries only unsaved guardian
 fields, the server refuses it and rebuilds those non-file values so staff can complete `Save
 Guardian` or select an on-file guardian. Request tests cover that rebuild, and the guardian browser
-matrix covers JSON refusal, refreshed review, and successful selection or creation.
+matrix covers the HTML review fragment and successful creation; request tests cover selection.

@@ -58,15 +58,16 @@ The paper application controller derives contact strategy parameters (`email_str
   - If a recognized strategy is not supplied, the service defaults to guardian strategy with fallback logic. Nil strategy values are handled before this defaulting so callers can preserve existing data when appropriate.
 - **Address Strategy**: Also handles address information copying from guardian to dependent.
 - **Own-Contact Consistency**: `Applications::PaperDependentContactChoice` is the paper-only owner
-  for the rule that selecting the dependent's own email or phone requires that value. The read-only
-  identity preflight, new-dependent writer, and existing-dependent writer all call it. For an
+  for the rule that selecting the dependent's own email or phone requires that value. The shared
+  identity review, new-dependent writer, and existing-dependent writer all call it. For an
   existing dependent, an omitted field keeps a real on-file dependent-owned value while a submitted
   blank is refused. An explicitly selected guardian-contact strategy still permits a blank
   dependent-owned value.
-- **Identity and Contact Collisions**: New-dependent preflight uses `PaperIdentityReview`, and the
-  canonical writer recomputes that review under `PaperIdentityCreationLock` before creating the
+- **Identity and Contact Collisions**: The canonical writer uses `PaperIdentityReview` and
+  recomputes the review under `PaperIdentityCreationLock` before creating the
   user. Exact email or phone collisions are hard refusals; name/date-of-birth candidates require an
-  eligible on-file selection or a valid signed different-person decision.
+  eligible on-file selection or an explicit different-person decision bound to a current receipt.
+  Completed decisions persist as resolved paper `DuplicateReviewCase` records.
 - **Concurrent Unique Contact**: A unique-index collision around the dependent `User` insert aborts
   the application transaction. After rollback, `PaperApplicationService` recomputes the identity
   review and returns an actionable contact refusal; it never retries the write inside the aborted

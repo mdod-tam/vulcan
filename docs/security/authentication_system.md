@@ -180,9 +180,11 @@ nothing it could act on.
 wrong the instant the user signs back in. The body carries no user data — only the fact and where to
 go — so it is safe to return to a caller that is by definition unauthenticated.
 
-Clients should treat 401 as "reauthenticate, then retry", not as a transient error. The paper
-identity preflight and the adult-applicant eligibility lookup both do, and both tell staff to sign in
-in another tab rather than reloading, because reloading discards selected file inputs.
+Clients should treat 401 as "reauthenticate, then retry", not as a transient error. Paper guardian
+quick-create handles this response without clearing the entered guardian fields. Current paper
+identity decisions use the authenticated create action and server-rendered review, with signed
+uploads retained across validation responses. There is no browser identity preflight or second
+eligibility-fetch protocol in the current form.
 
 ---
 

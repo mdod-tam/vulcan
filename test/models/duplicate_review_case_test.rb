@@ -58,7 +58,8 @@ class DuplicateReviewCaseTest < ActiveSupport::TestCase
         'resolved_approved' => 1,
         'resolved_ignored' => 2,
         'resolved_merged' => 3,
-        'resolved_superseded' => 4
+        'resolved_superseded' => 4,
+        'resolved_selected' => 5
       },
       DuplicateReviewCase.statuses
     )

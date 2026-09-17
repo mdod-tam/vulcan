@@ -30,7 +30,7 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
         'email' => 'jane@example.com', 'phone' => '555-000-0000',
         'physical_address_1' => '1 Main St', 'city' => 'Baltimore', 'zip_code' => '21201'
       },
-      'identity_decision' => "v1:#{Time.current.to_i}:#{'a' * 64}",
+      'identity_review_receipt' => "v1:#{Time.current.to_i}:#{'a' * 64}",
       'controller' => 'admin/paper_applications',
       'action' => 'identity_review'
     )
@@ -38,7 +38,7 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     %w[first_name last_name date_of_birth email phone physical_address_1 city zip_code].each do |field|
       assert_equal '[FILTERED]', filtered['constituent'][field], "#{field} must not reach the log"
     end
-    assert_equal '[FILTERED]', filtered['identity_decision'],
+    assert_equal '[FILTERED]', filtered['identity_review_receipt'],
                  'the decision token authorizes a creation and must not outlive its request in a log'
     assert_equal 'identity_review', filtered['action']
   end

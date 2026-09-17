@@ -15,15 +15,6 @@ module Admin
       preferred_means_of_communication referral_source newsletter_signup
     ].freeze
 
-    # Only facts that determine the ten scored identity values. Dependent contact is carried under
-    # its paper field names and mapped by PaperIdentityReview according to the selected strategy.
-    # Application answers, proof files, and provider details must never be uploaded to this check.
-    IDENTITY_REVIEW_FIELDS = %i[
-      first_name last_name date_of_birth email phone
-      physical_address_1 physical_address_2 city state zip_code
-      dependent_email dependent_phone
-    ].freeze
-
     USER_DISABILITY_FIELDS = %i[
       self_certify_disability hearing_disability vision_disability speech_disability
       mobility_disability cognition_disability
@@ -65,53 +56,6 @@ module Admin
       alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
     ].freeze
 
-    # Read-only identity check the admin form runs before it submits.
-    #
-    # POST keeps the applicant's facts out of the URL; keeping them out of the *logs* is the
-    # parameter filtering in config/initializers/filter_parameter_logging.rb, which covers the
-    # names, contact, date of birth, address and the decision token.
-    #
-    # Every submission calls this, including the ordinary case where nothing matches: the browser
-    # cannot know which outcome applies until it asks, and submitting first would mean discovering a
-    # soft match or contact conflict only through a server-rendered failure -- which discards the
-    # four selected proof files, since these are native file inputs with no direct upload.
-    #
-    # So the form sends *only* identity facts here, never the files. A `clear` answer submits
-    # natively straight afterwards; the other answers put a decision in front of staff while the
-    # completed form, and its file selections, stay untouched in the DOM.
-    #
-    # Nothing here writes, and the answer is advisory: PaperApplicationService recomputes the same
-    # review at the write boundary and that recomputation decides.
-    def identity_review
-      context = params[:identity_context].presence_in(%w[self_applicant dependent]) || 'self_applicant'
-      guardian = identity_review_guardian(context)
-      if context == 'dependent' && guardian.blank?
-        response.headers['Cache-Control'] = 'no-store'
-        return render json: { state: :error, reasons: [], candidates: [] }, status: :unprocessable_content
-      end
-
-      facts = identity_review_facts
-      flags = identity_review_flags
-      contact_refusal = if context == 'dependent'
-                          Applications::PaperDependentContactChoice.new(
-                            applicant_data: facts, strategy_params: flags
-                          ).call.identity_review_payload
-                        end
-
-      response.headers['Cache-Control'] = 'no-store'
-      return render json: contact_refusal if contact_refusal
-
-      review = Applications::PaperIdentityReview.new(
-        constituent_params: facts,
-        admin: current_user,
-        contact_flag_params: flags,
-        context: context,
-        context_data: { guardian: guardian, relationship_type: params[:relationship_type] }
-      ).call
-
-      render json: identity_review_payload(review)
-    end
-
     def new
       @paper_application = {
         application: Application.new,
@@ -129,6 +73,13 @@ module Admin
       @restored_from_submission = false
       @selected_guardian = nil
       @selected_dependent = nil
+    end
+
+    # PR 205 pages interpret clear as permission to submit their native form.
+    # Only create adjudicates identity; this compatibility response grants no decision.
+    def identity_review
+      response.headers['Cache-Control'] = 'no-store'
+      render json: { state: 'clear' }
     end
 
     def create
@@ -415,6 +366,7 @@ module Admin
       operation_context = Rails.env.test? ? '[TEST_BUSINESS_LOGIC] ' : '[ADMIN_OPERATION] '
       Rails.logger.error "#{operation_context}Paper application operation failed: #{error_msg}"
 
+      preserve_multipart_uploads
       repopulate_form_data(service, existing_application)
 
       handle_error_response(
@@ -423,8 +375,24 @@ module Admin
       )
     end
 
+    def preserve_multipart_uploads
+      PROOF_FILE_GROUPS.each_key do |action|
+        key = action.to_s.delete_suffix('_action')
+        upload = params[key]
+        next unless upload.is_a?(ActionDispatch::Http::UploadedFile)
+
+        upload.rewind
+        blob = ActiveStorage::Blob.create_and_upload!(
+          io: upload.tempfile, filename: upload.original_filename, content_type: upload.content_type
+        )
+        params["#{key}_signed_id"] = blob.signed_id
+      end
+    end
+
     def repopulate_form_data(service, existing_application)
       submitted_params = build_submitted_params
+      @identity_review = service.identity_review
+      @uploaded_proofs = restored_uploads(submitted_params)
 
       constituent = rebuilt_constituent(service, existing_application, submitted_params)
       application = rebuilt_application(service, existing_application, submitted_params)
@@ -503,13 +471,27 @@ module Admin
       @proofs_needing_reattachment = proof_groups_needing_reattachment(submitted_params)
     end
 
-    # No browser repopulates a file input, so a restored retry always needs its documents attached
-    # again. Which ones depends on the disposition that came back: accepting or uploading a proof
-    # needs the file, rejecting it does not. Named rather than counted, because the submit button
-    # goes disabled with no visible reason on a form this long.
+    # Preserve available direct uploads across validation and identity review.
+    def restored_uploads(submitted)
+      %w[income_proof residency_proof id_proof medical_certification].each_with_object({}) do |key, uploads|
+        signed_id = submitted["#{key}_signed_id"]
+        next submitted.delete("#{key}_signed_id") unless signed_id.is_a?(String) && signed_id.present?
+
+        blob = ActiveStorage::Blob.find_signed(signed_id)
+        if blob && blob.created_at > CleanupUnattachedUploadsJob::RETENTION.ago && !blob.attachments.exists?
+          uploads[key] = blob
+        else
+          submitted.delete("#{key}_signed_id")
+        end
+      rescue ActiveSupport::MessageVerifier::InvalidSignature
+        submitted.delete("#{key}_signed_id")
+      end
+    end
+
     def proof_groups_needing_reattachment(submitted_params)
       PROOF_FILE_GROUPS.filter_map do |field, label|
-        label if ACTIONS_NEEDING_A_FILE.include?(submitted_params[field])
+        key = field.to_s.delete_suffix('_action')
+        label if ACTIONS_NEEDING_A_FILE.include?(submitted_params[field]) && !@uploaded_proofs&.key?(key)
       end
     end
 
@@ -539,7 +521,8 @@ module Admin
     def build_submitted_params
       params.permit(
         :applicant_type, :relationship_type, :guardian_id, :dependent_id,
-        :existing_constituent_id, :identity_decision, :contact_info_mode, :contact_info_verified,
+        :existing_constituent_id, :identity_review_receipt, :identity_candidate_id, :identity_determination,
+        :identity_rationale, :contact_info_mode, :contact_info_verified,
         :no_email_address, :no_phone_number,
         :guardian_no_email_address, :guardian_no_phone_number,
         :email_strategy, :phone_strategy, :address_strategy,
@@ -548,6 +531,7 @@ module Admin
         # else carries them back into a re-rendered form. All three parts are needed together: the
         # action alone restores "Reject" while losing the reason that made it meaningful.
         *PROOF_WORKFLOW_FIELDS,
+        :income_proof_signed_id, :residency_proof_signed_id, :id_proof_signed_id, :medical_certification_signed_id,
         # These two switch whole sections off. Losing them on a retry does not merely blank a field:
         # the JavaScript re-imposes the provider and income requirements they were suppressing, so an
         # otherwise unchanged retry becomes unsubmittable.
@@ -612,7 +596,7 @@ module Admin
     def permitted_paper_params
       params.permit(
         :relationship_type, :guardian_id, :dependent_id, :applicant_type, :existing_constituent_id,
-        :identity_decision, :contact_info_mode, :contact_info_verified,
+        :identity_review_receipt, :identity_candidate_id, :identity_determination, :identity_rationale, :contact_info_mode, :contact_info_verified,
         :email_strategy, :phone_strategy, :address_strategy,
         :use_guardian_email, :use_guardian_phone, :use_guardian_address,
         :no_email_address,
@@ -635,44 +619,11 @@ module Admin
       ).to_h.with_indifferent_access
     end
 
-    def identity_review_facts
-      params.expect(constituent: IDENTITY_REVIEW_FIELDS)
-    end
-
-    # The no-contact flags live outside the constituent hash but change the facts before detection,
-    # so the check has to see them or it would review a different applicant than the writer verifies.
-    def identity_review_flags
-      params.permit(:no_email_address, :no_phone_number,
-                    :email_strategy, :phone_strategy, :address_strategy)
-    end
-
-    def identity_review_guardian(context)
-      return unless context == 'dependent'
-
-      guardian = User.find_by(id: params[:guardian_id])
-      guardian if guardian&.paper_guardian_candidate?
-    end
-
-    # Built field by field rather than serializing the review result. The result carries
-    # `identity_facts` and whole candidate records; rendering it wholesale would ship far more PII to
-    # the browser than a decision needs -- and would quietly grow whenever the result gains a field.
-    # The candidate rows are rendered exactly as the review presented them, never rebuilt here. The
-    # decision token is signed over that snapshot, so a second serializer on this side would be a
-    # second definition of "what staff were shown" and could drift out of agreement with the one the
-    # write boundary verifies against.
-    def identity_review_payload(review)
-      payload = { state: review.state, reasons: review.reasons, candidates: review.presented_candidates }
-      if review.token.present?
-        payload[:token] = review.token
-        payload[:expires_at] = Applications::PaperIdentityDecision.expires_at(review.token)&.iso8601
-      end
-      payload
-    end
-
     def base_params_from(permitted)
       base = permitted.slice(
         :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
-        :existing_constituent_id, :identity_decision, :contact_info_mode, :contact_info_verified,
+        :existing_constituent_id, :identity_review_receipt, :identity_candidate_id, :identity_determination,
+        :identity_rationale, :contact_info_mode, :contact_info_verified,
         :no_email_address, :no_phone_number,
         :guardian_no_email_address, :guardian_no_phone_number
       )
