@@ -67,12 +67,10 @@
       turbo: false,
       controller: "paper-application applicant-type income-validation",
       action: "submit->paper-application#beforeSubmit " \
+             "applicant-type:applicantTypeChanged->paper-application#syncFormState " \
              "adult-picker:selectionChange->paper-application#syncAdultVerificationGate " \
              "adult-picker:verificationChange->paper-application#syncAdultVerificationGate " \
-             "adult-picker:createNew->paper-application#syncAdultVerificationGate " \
-             "adult-picker:selectionChange->paper-application#invalidateIdentityReview " \
-             "adult-picker:createNew->paper-application#invalidateIdentityReview",
-      "paper-application-identity-review-url-value": identity_review_admin_paper_applications_path,
+             "adult-picker:createNew->paper-application#syncAdultVerificationGate",
       "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
       "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
       "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']"
@@ -88,17 +86,11 @@
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
       data: paper_form_data) do |form| %>
 
-      <%# The one thing a retry cannot restore. Everything else staff typed is back in place, but no
-          browser repopulates a file input, so the submit button stays disabled until the documents
-          are attached again -- and on a form this long the reason is off-screen. The sr-only live
-          region below announces the gate to screen readers; this says the same thing visibly, and
-          names the groups so staff are not hunting for which upload is missing. %>
       <% if @restored_from_submission %>
         <div class="rounded-md bg-amber-50 border border-amber-300 p-4" role="status">
-          <h2 class="text-sm font-semibold text-amber-900">Your entries were restored -- documents need reattaching</h2>
+          <h2 class="text-sm font-semibold text-amber-900">Your entries were restored</h2>
           <p class="mt-1 text-sm text-amber-800">
-            Everything you entered has been put back. Files cannot be restored by the browser, so any
-            document you had attached must be selected again before this can be submitted.
+            Review the message above, make any corrections, and submit again. Uploaded documents are listed by filename below.
           </p>
           <% if @proofs_needing_reattachment.present? %>
             <p class="mt-2 text-sm text-amber-800">
@@ -718,13 +710,7 @@
                 <%# Upload Field %>
                 <div id="medical_certification_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
                   <label for="medical_certification" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Medical Certification</label>
-                  <input type="file"
-                         name="medical_certification"
-                         id="medical_certification"
-                         class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                         accept="<%= proof_upload_accept_attribute %>"
-                         aria-describedby="medical_certification_help"
-                         data-document-proof-handler-target="fileInput">
+                  <%= render 'proof_upload', form: form, key: 'medical_certification', blob: @uploaded_proofs&.dig('medical_certification') %>
                   <p id="medical_certification_help" class="mt-1 text-xs text-gray-500">
                     Upload documentation verifying the disability certification.
                     Accepted formats: <%= proof_upload_formats_label %>.
@@ -912,13 +898,7 @@
               <%# Upload Field %>
               <div id="income_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
                 <label for="income_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Income Proof Document</label>
-                <input type="file"
-                       name="income_proof"
-                       id="income_proof"
-                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                       accept="<%= proof_upload_accept_attribute %>"
-                       aria-describedby="income_proof_help"
-                       data-document-proof-handler-target="fileInput">
+                <%= render 'proof_upload', form: form, key: 'income_proof', blob: @uploaded_proofs&.dig('income_proof') %>
                 <p id="income_proof_help" class="mt-1 text-xs text-gray-500">
                   Upload documents verifying income eligibility: recent tax return (1040), Social Security award letter,
                   SSI/SSDI benefits statement, pension statement, pay stubs, or other income verification.
@@ -1100,13 +1080,7 @@
               <%# Upload Field %>
               <div id="residency_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
                 <label for="residency_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Residency Proof Document</label>
-                <input type="file"
-                       name="residency_proof"
-                       id="residency_proof"
-                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                       accept="<%= proof_upload_accept_attribute %>"
-                       aria-describedby="residency_proof_help"
-                       data-document-proof-handler-target="fileInput">
+                <%= render 'proof_upload', form: form, key: 'residency_proof', blob: @uploaded_proofs&.dig('residency_proof') %>
                 <p id="residency_proof_help" class="mt-1 text-xs text-gray-500">
                   Upload documents verifying Maryland residency: utility bill, mortgage statement, lease agreement,
                   bank statement, or government-issued ID showing the same physical address provided in this application.
@@ -1222,13 +1196,7 @@
             <%# Upload Field %>
             <div id="id_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
               <label for="id_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload ID Proof Document</label>
-              <input type="file"
-                     name="id_proof"
-                     id="id_proof"
-                     class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                     accept="<%= proof_upload_accept_attribute %>"
-                     aria-describedby="id_proof_help"
-                     data-document-proof-handler-target="fileInput">
+              <%= render 'proof_upload', form: form, key: 'id_proof', blob: @uploaded_proofs&.dig('id_proof') %>
               <p id="id_proof_help" class="mt-1 text-xs text-gray-500">
                 Upload documents verifying identity: driver's license, state ID, identification card, passport,
                 or other government-issued photo ID. Accepted formats: <%= proof_upload_formats_label %>.
@@ -1291,36 +1259,7 @@
             </label>
           </div>
         <% end %>
-        <%# Identity review. Hidden until the server reports something staff must decide about, so the
-            ordinary application -- where the search surfaces nothing -- never sees it. The token is
-            written into the hidden field only by the explicit override action, never merely because
-            the endpoint returned one. %>
-        <%# `hidden` class, not the native attribute: setVisible toggles the class and an inline
-            display fallback, so a native attribute would never be removed and the panel could never
-            appear. %>
-        <section class="hidden mb-4 rounded-md border border-amber-300 bg-amber-50 p-4"
-                 style="display: none;"
-                 aria-labelledby="identity-review-heading"
-                 data-paper-application-target="identityReviewPanel">
-          <h3 id="identity-review-heading" tabindex="-1"
-              class="text-base font-semibold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              data-paper-application-target="identityReviewHeading"></h3>
-          <p class="mt-1 text-sm text-amber-900" data-paper-application-target="identityReviewBody"></p>
-          <ul class="mt-3 divide-y divide-amber-200" data-paper-application-target="identityReviewCandidates"></ul>
-          <p class="hidden mt-2 text-sm font-medium text-amber-900" style="display: none;"
-             tabindex="-1" data-paper-application-target="identityReviewNotice"></p>
-          <div class="hidden mt-3" style="display: none;" data-paper-application-target="identityReviewOverride">
-            <%= button_tag type: "button",
-                class: "inline-flex items-center px-3 py-2 border border-amber-400 rounded-md text-sm font-medium text-amber-900 bg-white hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500",
-                data: {
-                  action: "click->paper-application#overrideIdentityReview",
-                  "paper-application-target": "identityReviewOverrideButton"
-                } do %>
-              These are different people — create a new constituent
-            <% end %>
-          </div>
-        </section>
-        <%= hidden_field_tag :identity_decision, nil, data: { "paper-application-target": "identityDecision" } %>
+        <%= render 'identity_review', review: @identity_review, submitted: submitted_params, guardian: false %>
         <p id="paper-submit-gate-status" class="sr-only" aria-live="polite" data-paper-application-target="status"></p>
         <div class="flex flex-col sm:flex-row justify-end gap-3">
           <%= link_to "Cancel", admin_applications_path,
@@ -1338,7 +1277,10 @@
           <% end %>
           <% end %>
 
-          <%= form.submit "Submit Paper Application",
+          <%= button_tag "Submit Paper Application",
+              type: "submit",
+              name: @identity_review&.selected? ? :identity_candidate_id : :commit,
+              value: @identity_review&.selected? ? @identity_review.selected_user.id : "Submit Paper Application",
               id: "submit-button",
               disabled: true,
               class: "inline-flex justify-center items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed",

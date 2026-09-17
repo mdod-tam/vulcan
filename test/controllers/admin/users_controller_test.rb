@@ -322,12 +322,10 @@ module Admin
       end
 
       assert_response :unprocessable_content
-      json_response = response.parsed_body
-      assert_not json_response['success']
-      assert json_response['errors'].present?
+      assert_select '[role=alert]', text: /Failed|invalid|required/i
     end
 
-    test 'admin quick create soft duplicate requires selection or a signed override and opens no case' do
+    test 'admin quick create soft duplicate records selection and keep-separate in resolved cases' do
       existing_user = Users::Constituent.create!(
         first_name: 'Test',
         last_name: 'Duplicate',
@@ -374,14 +372,18 @@ module Admin
         post admin_users_path, params: create_params, as: :json
       end
       assert_response :unprocessable_content
-      review = response.parsed_body
+      receipt = css_select('input[name=guardian_identity_review_receipt]').sole['value']
       assert_equal 'no-store', response.headers['Cache-Control']
-      assert_equal 'needs_confirmation', review['state']
-      assert_equal [existing_user.id], review['candidates'].pluck('id')
-      assert review['token'].present?
+      assert_select 'button[name=selected_candidate_id][value=?]', existing_user.id
+      assert receipt.present?
 
-      assert_no_difference ['User.count', 'DuplicateReviewCase.count', 'Event.count'] do
-        post admin_users_path, params: create_params.merge(selected_candidate_id: existing_user.id), as: :json
+      assert_no_difference 'User.count' do
+        assert_difference 'DuplicateReviewCase.count', 1 do
+          post admin_users_path, params: create_params.merge(
+            selected_candidate_id: existing_user.id, identity_review_receipt: receipt,
+            identity_rationale: 'Staff confirmed the existing guardian.'
+          ), as: :json
+        end
       end
       assert_response :success
       selected = response.parsed_body
@@ -389,9 +391,12 @@ module Admin
       assert_equal existing_user.id, selected.dig('user', 'id')
 
       assert_difference 'User.count', 1 do
-        assert_difference -> { Event.where(action: 'paper_identity_no_match_confirmed').count }, 1 do
-          assert_no_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'] do
-            post admin_users_path, params: create_params.merge(identity_decision: review['token']), as: :json
+        assert_difference -> { Event.where(action: 'duplicate_review_case_resolved').count }, 1 do
+          assert_difference ['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'], 1 do
+            post admin_users_path, params: create_params.merge(
+              identity_review_receipt: receipt, identity_determination: 'keep_separate',
+              identity_rationale: 'Staff confirmed a different guardian.'
+            ), as: :json
           end
         end
       end
@@ -400,11 +405,11 @@ module Admin
       assert_equal create_params[:email], created.email
       assert_not created.needs_duplicate_review
 
-      event = Event.find_by!(action: 'paper_identity_no_match_confirmed', auditable: created)
-      assert_equal @admin.id, event.user_id
-      assert_equal 'guardian_quick_create', event.metadata['decision_context']
-      assert_equal 'guardian', event.metadata['role']
-      assert_equal [existing_user.id], event.metadata['candidate_ids']
+      review_case = DuplicateReviewCase.find_by!(subject_user: created)
+      assert review_case.resolved_ignored?
+      assert_equal @admin.id, review_case.resolved_by_id
+      assert_equal 'guardian', review_case.metadata['intake_role']
+      assert_equal [existing_user.id], review_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
       historical_cases.each do |review_case|
         assert_equal historical_snapshots.fetch(review_case.id), review_case.reload.attributes,
                      "A2 must not mutate historical #{review_case.source} evidence"
@@ -430,9 +435,7 @@ module Admin
       end
 
       assert_response :unprocessable_content
-      body = response.parsed_body
-      assert_not body['success']
-      assert(body['errors'].values.join(' ').match?(/email|phone|already exists/i))
+      assert_select '[role=alert]', text: /email|phone|already exists/i
       assert_not existing.reload.needs_duplicate_review
     end
 
@@ -465,9 +468,8 @@ module Admin
       end
 
       assert_response :unprocessable_content
-      assert_equal 'blocked', response.parsed_body['state']
-      assert_equal [contact_owner.id], response.parsed_body['candidates'].pluck('id')
-      assert_match(/already exists/i, response.parsed_body['errors'].values.join(' '))
+      assert_select 'button[name=selected_candidate_id][value=?]', contact_owner.id
+      assert_select '[role=alert]', text: /changed while saving/i
     end
 
     test 'admin quick create split exact contacts cannot select either owner' do
@@ -487,15 +489,14 @@ module Admin
         post admin_users_path, params: attrs, as: :json
       end
       assert_response :unprocessable_content
-      assert_equal 'blocked', response.parsed_body['state']
-      assert_includes response.parsed_body['reasons'], 'email_phone_split'
-      assert(response.parsed_body['candidates'].none? { |candidate| candidate['selectable'] })
+      assert_select 'button[name=selected_candidate_id]', count: 0
+      assert_select 'button[name=identity_determination]', count: 0
 
       assert_no_difference refused_writes do
         post admin_users_path, params: attrs.merge(selected_candidate_id: email_owner.id), as: :json
       end
       assert_response :unprocessable_content
-      assert_equal 'invalid_selection', response.parsed_body['state']
+      assert_select '[role=alert]'
     end
 
     test 'quick create rejects tampered decisions and revalidates selected guardians under lock' do
@@ -510,28 +511,28 @@ module Admin
       }
 
       post admin_users_path, params: attrs, as: :json
-      token = response.parsed_body['token']
+      token = css_select('input[name=guardian_identity_review_receipt]').sole['value']
       assert token.present?
 
       assert_no_difference ['User.count', 'DuplicateReviewCase.count', 'Event.count'] do
-        post admin_users_path, params: attrs.merge(identity_decision: "#{token}tampered"), as: :json
+        post admin_users_path, params: attrs.merge(identity_review_receipt: "#{token}tampered"), as: :json
       end
       assert_response :unprocessable_content
-      assert_equal 'needs_confirmation', response.parsed_body['state']
+      assert_select '#guardian-review-heading'
 
       assert_no_difference ['User.count', 'DuplicateReviewCase.count', 'Event.count'] do
         post admin_users_path,
-             params: attrs.merge(last_name: 'Changed', identity_decision: token), as: :json
+             params: attrs.merge(last_name: 'Changed', identity_review_receipt: token), as: :json
       end
       assert_response :unprocessable_content
-      assert_equal 'invalid_decision', response.parsed_body['state']
+      assert_select '[role=alert]', text: /changed|Review again/i
 
       existing.update!(merged_into_user: survivor)
       assert_no_difference ['User.count', 'DuplicateReviewCase.count', 'Event.count'] do
         post admin_users_path, params: attrs.merge(selected_candidate_id: existing.id), as: :json
       end
       assert_response :unprocessable_content
-      assert_equal 'invalid_selection', response.parsed_body['state']
+      assert_select '[role=alert]'
     end
 
     test 'quick create guardian without email or phone succeeds for address-only intake' do

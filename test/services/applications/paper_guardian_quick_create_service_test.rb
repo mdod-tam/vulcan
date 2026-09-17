@@ -39,7 +39,7 @@ module Applications
 
       service = PaperGuardianQuickCreateService.new(
         attrs: @attrs,
-        request_params: @attrs,
+        request_params: @attrs.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed a different guardian.'),
         admin: @admin,
         submitted_token: review.token
       )

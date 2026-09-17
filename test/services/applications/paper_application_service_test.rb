@@ -876,11 +876,8 @@ module Applications
       assert_not existing.needs_duplicate_review
     end
 
-    # Previously this asserted that a paper soft match persisted the user and opened a
-    # `paper_intake` review case. That contract is retired: staff now review the candidates and
-    # attest that none is this applicant, so queuing the same decision for someone to make again is
-    # redundant -- and those cases are resolvable but never mergeable, so the entry could be closed
-    # without ever remediating anything.
+    # Inline adjudication records a resolved paper case with the application.
+    # An unreviewed soft match must not create a person or an open queue item.
     test 'paper self soft match is decided by staff rather than queued for review' do
       existing = create(
         :constituent,
@@ -913,15 +910,15 @@ module Applications
       assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'] do
         assert_not first.create
       end
-      assert_equal [existing.id], first.pending_identity_decision[:candidates].map(&:id)
+      assert_equal [existing.id], first.identity_review[:candidates].map(&:id)
 
-      # With it: the constituent is created and no review case is opened.
-      decided = service_params.merge(identity_decision: first.pending_identity_decision[:token])
+      # The decision resolves its case inside the application transaction.
+      decided = service_params.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: first.identity_review[:token])
       second = PaperApplicationService.new(params: decided, admin: @admin, skip_proof_processing: true)
 
       assert_difference ['User.count', 'Application.count'], 1 do
-        assert_no_difference ['DuplicateReviewCase.count',
-                              %(Event.where(action: 'duplicate_review_case_opened').count)] do
+        assert_difference ['DuplicateReviewCase.count',
+                           %(Event.where(action: 'duplicate_review_case_opened').count)], 1 do
           assert second.create, "Service creation failed: #{second.errors.inspect}"
         end
       end
@@ -1369,25 +1366,25 @@ module Applications
 
       service = paper_service(soft_match_params(existing))
       service.create
-      pending = service.pending_identity_decision
+      pending = service.identity_review
 
       assert pending.present?, 'staff must be shown what they are deciding about'
       assert_includes pending[:candidates].map(&:id), existing.id
-      assert_match(/\Av1:\d+:[a-f0-9]{64}\z/, pending[:token])
+      assert pending.token.present?
     end
 
-    test 'a valid decision creates the constituent and opens no paper_intake case' do
+    test 'a valid decision creates the constituent and resolves a paper intake case' do
       existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
                                       date_of_birth: Date.new(1990, 4, 2))
       params = soft_match_params(existing)
 
       first = paper_service(params)
       first.create
-      token = first.pending_identity_decision[:token]
+      token = first.identity_review[:token]
 
-      second = paper_service(params.merge(identity_decision: token))
+      second = paper_service(params.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: token))
       assert_difference 'User.count', 1 do
-        assert_no_difference 'DuplicateReviewCase.count' do
+        assert_difference 'DuplicateReviewCase.count', 1 do
           assert second.create, second.errors.inspect
         end
       end
@@ -1404,11 +1401,11 @@ module Applications
 
       first = paper_service(params)
       first.create
-      token = first.pending_identity_decision[:token]
+      token = first.identity_review[:token]
 
       # The second applicant has candidates of their own, so a decision *is* required here -- which
       # is what makes carrying the first one over an actual bypass attempt rather than a no-op.
-      other = soft_match_params(other_existing).merge(identity_decision: token)
+      other = soft_match_params(other_existing).merge(identity_review_receipt: token)
 
       assert_no_difference 'User.count' do
         assert_not paper_service(other).create
@@ -1418,7 +1415,7 @@ module Applications
     test 'a forged decision is refused' do
       existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
                                       date_of_birth: Date.new(1990, 4, 2))
-      params = soft_match_params(existing).merge(identity_decision: "v1:#{Time.current.to_i}:#{'0' * 64}")
+      params = soft_match_params(existing).merge(identity_review_receipt: "v1:#{Time.current.to_i}:#{'0' * 64}")
 
       assert_no_difference 'User.count' do
         assert_not paper_service(params).create
@@ -1440,7 +1437,7 @@ module Applications
     # Evidence records a decision. With nothing to decide there is nothing to record, and logging it
     # anyway would make the audit trail claim staff adjudicated something they were never shown.
     test 'an application with no possible matches records no confirmation evidence' do
-      assert_no_difference "Event.where(action: 'paper_identity_no_match_confirmed').count" do
+      assert_no_difference "Event.where(action: 'duplicate_review_case_resolved').count" do
         assert paper_service(base_paper_params).create
       end
     end
@@ -1456,8 +1453,7 @@ module Applications
         assert_not service.create
       end
       assert_match(/already exists/i, service.errors.join(' '))
-      assert_nil service.pending_identity_decision,
-                 'a hard block is not a reviewable decision'
+      assert service.identity_review.blocked?
     end
 
     test 'a dependent unique-contact race is reclassified after rollback without leaking database details' do
@@ -1506,16 +1502,17 @@ module Applications
       params = soft_match_params(existing)
       first = paper_service(params)
       first.create
-      confirmed = params.merge(identity_decision: first.pending_identity_decision[:token])
+      confirmed = params.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: first.identity_review[:token])
 
-      assert_difference "Event.where(action: 'paper_identity_no_match_confirmed').count", 1 do
+      assert_difference "Event.where(action: 'duplicate_review_case_resolved').count", 1 do
         assert paper_service(confirmed).create
       end
 
-      event = Event.where(action: 'paper_identity_no_match_confirmed').order(:id).last
+      event = Event.where(action: 'duplicate_review_case_resolved').order(:id).last
       assert_equal @admin.id, event.user_id
-      assert_equal [existing.id], event.metadata['candidate_ids']
-      assert_equal 1, event.metadata['candidate_count']
+      review_case = DuplicateReviewCase.find(event.metadata.fetch('duplicate_review_case_id'))
+      assert_equal [existing.id], review_case.duplicate_review_case_candidates.pluck(:candidate_user_id)
+      assert review_case.resolved_ignored?
       assert_equal ['name_dob'], event.metadata['reason_codes']
     end
 
@@ -1536,14 +1533,14 @@ module Applications
       params = soft_match_params(existing)
       first = paper_service(params)
       first.create
-      token = first.pending_identity_decision[:token]
+      token = first.identity_review[:token]
       assert token.present?, 'the test needs a real decision to invalidate'
 
       existing.update!(city: 'Annapolis')
 
-      confirmed = params.merge(identity_decision: token)
+      confirmed = params.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: token)
       counters = ['User.count', 'Application.count', 'DuplicateReviewCase.count',
-                  "Event.where(action: 'paper_identity_no_match_confirmed').count"]
+                  "Event.where(action: 'duplicate_review_case_resolved').count"]
       assert_no_difference counters do
         service = paper_service(confirmed)
 
@@ -1860,10 +1857,10 @@ module Applications
       params = soft_match_params(existing)
       first = paper_service(params)
       first.create
-      token = first.pending_identity_decision[:token]
+      token = first.identity_review[:token]
 
-      paper_service(params.merge(identity_decision: token)).create
-      event = Event.where(action: 'paper_identity_no_match_confirmed').order(:id).last
+      paper_service(params.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: token)).create
+      event = Event.where(action: 'duplicate_review_case_resolved').order(:id).last
 
       serialized = event.metadata.to_json
       assert_not_includes serialized, token
@@ -1884,13 +1881,13 @@ module Applications
       params = soft_match_params(existing)
       first = paper_service(params)
       first.create
-      confirmed = params.merge(identity_decision: first.pending_identity_decision[:token])
+      confirmed = params.merge(identity_determination: 'keep_separate', identity_rationale: 'Staff confirmed different people.', identity_review_receipt: first.identity_review[:token])
 
       service = paper_service(confirmed)
       service.stubs(:create_application).returns(false)
 
       assert_no_difference ['User.count', 'Application.count',
-                            "Event.where(action: 'paper_identity_no_match_confirmed').count"] do
+                            "Event.where(action: 'duplicate_review_case_resolved').count"] do
         assert_not service.create
       end
     end
@@ -1899,9 +1896,9 @@ module Applications
       existing = create(:constituent, first_name: 'Soft', last_name: 'Match',
                                       date_of_birth: Date.new(1990, 4, 2))
 
-      assert_no_difference "Event.where(action: 'paper_identity_no_match_confirmed').count" do
+      assert_no_difference "Event.where(action: 'duplicate_review_case_resolved').count" do
         paper_service(soft_match_params(existing)).create
-        paper_service(soft_match_params(existing).merge(identity_decision: "v1:#{Time.current.to_i}:#{'0' * 64}")).create
+        paper_service(soft_match_params(existing).merge(identity_review_receipt: "v1:#{Time.current.to_i}:#{'0' * 64}")).create
       end
     end
 

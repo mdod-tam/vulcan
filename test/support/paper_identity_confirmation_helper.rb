@@ -31,7 +31,8 @@ module PaperIdentityConfirmationHelper
     # own behaviour rather than a confirmation that papers over it.
     return service_params if review.token.blank?
 
-    service_params.merge(identity_decision: review.token)
+    service_params.merge(identity_review_receipt: review.token, identity_determination: 'keep_separate',
+                         identity_rationale: 'Staff compared the paper applicant with each possible match.')
   end
 
   private

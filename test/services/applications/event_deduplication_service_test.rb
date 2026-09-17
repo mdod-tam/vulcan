@@ -11,6 +11,14 @@ module Applications
       @admin = create(:admin)
     end
 
+    test 'retains distinct identity cases resolved in the same minute' do
+      events = [101, 102].map do |case_id|
+        Event.create!(user: @admin, auditable: @application, action: 'duplicate_review_case_resolved',
+                      metadata: { duplicate_review_case_id: case_id }, created_at: Time.current.beginning_of_minute)
+      end
+      assert_equal events.map(&:id).sort, EventDeduplicationService.new.deduplicate(events).map(&:id).sort
+    end
+
     test 'correctly deduplicates events with different priorities' do
       service = EventDeduplicationService.new
       time = Time.current

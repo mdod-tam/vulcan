@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_11_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_004500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -206,11 +206,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_120000) do
     t.bigint "subject_user_id"
     t.datetime "updated_at", null: false
     t.index ["deduplication_key"], name: "index_duplicate_review_cases_open_deduplication_key", unique: true, where: "(status = 0)"
+    t.index ["deduplication_key"], name: "index_inline_paper_review_decisions_unique", unique: true, where: "((source = 1) AND ((metadata ->> 'intake_context'::text) = ANY (ARRAY['paper_inline_keep_separate'::text, 'paper_inline_selection'::text])))"
     t.index ["resolved_by_id"], name: "index_duplicate_review_cases_on_resolved_by_id"
     t.index ["source"], name: "index_duplicate_review_cases_on_source"
     t.index ["status"], name: "index_duplicate_review_cases_on_status"
     t.index ["subject_user_id"], name: "index_duplicate_review_cases_on_subject_user_id"
-    t.check_constraint "status = ANY (ARRAY[0, 1, 2, 3, 4])", name: "duplicate_review_cases_status_check"
+    t.check_constraint "status = ANY (ARRAY[0, 1, 2, 3, 4, 5])", name: "duplicate_review_cases_status_check"
   end
 
   create_table "email_templates", force: :cascade do |t|

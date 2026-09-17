@@ -1,62 +1,18 @@
 # frozen_string_literal: true
 
 module DuplicateReviewCases
-  # Resolves an open duplicate review case without moving any data. There is exactly one such
-  # outcome: staff decided the records are different people. It records the admin actor, that fixed
-  # determination, and a required rationale, then reprojects every constituent participant's review
-  # flag from remaining open cases and unresolved post-import pairs. Same-person merges are handled
-  # by Users::DuplicateMergeService.
+  # Resolves keep-separate cases and intake selections; stored-person merges retain their owner.
   class ResolutionService < BaseService
     class StaleCaseError < StandardError; end
 
-    # The status every non-merge resolution records, server-owned like the determination beside it.
-    # There is one non-merge outcome, so there is one status; the durable semantics live in
-    # `resolution_determination`, not in a separate staff-selected action.
-    #
-    # `resolved_approved` remains mapped on the model as a legacy **readable** status so existing
-    # rows keep rendering, but nothing writes it. Do not remove that mapping: the schema's
-    # `status = ANY (ARRAY[0, 1, 2, 3])` check constraint means unmapping the Rails key would load
-    # those rows as `nil` rather than removing the state.
     NON_MERGE_STATUS = :resolved_ignored
-
-    # The only determination this service may record, and it is server-owned rather than selected.
-    #
-    # Resolving a case is not a neutral bookkeeping act. It recomputes two *independent* effects
-    # from the cases that remain open:
-    #
-    # - the PR5a submission gate is released when no open `registration_soft_match` case remains
-    #   for the subject (the gate filters on that source);
-    # - `needs_duplicate_review` is reprojected for every constituent participant from open cases of
-    #   *any* source plus unresolved post-import pairs; resolving one pair cannot clear unrelated
-    #   work.
-    #
-    # They can diverge: a participant with another open case or unresolved pair keeps the flag while
-    # the subject-only registration gate releases. So only a *completed identity decision* may
-    # close a case, and "these are different people" is the only such decision that does not move
-    # data.
-    #
-    # The rest of the matrix is deliberately unreachable from here:
-    #
-    # - `same_person_confirmed` means two records are one identity. Closing without consolidating
-    #   would release submission while knowingly keeping the duplicate, so it is reserved to
-    #   Users::DuplicateMergeService and written atomically with the merge itself. If the merge
-    #   cannot complete, the case stays open.
-    # - `needs_more_information` and `fraud_or_security_review` are not decisions at all. The
-    #   duplicate-review queue is the only durable queue that exists; closing either would remove
-    #   the work item *and* its staff visibility at the moment the risk materializes.
-    # - `authorized_relationship_confirmed` needs server-verifiable evidence, and there is nowhere
-    #   to verify it against yet: this service receives no selected candidate, and
-    #   `guardian_relationships` has no active/revoked state.
-    #
-    # This is an allowlist of one, not a denylist. A denylist fails open for anything not yet
-    # listed, which is how a determination nobody had triaged could terminate a case.
     NON_MERGE_DETERMINATION = 'keep_separate'
 
-    # Neither `determination` nor `action` is a parameter: a non-merge resolution has exactly one
-    # outcome and one status, so the server owns both rather than accepting them as input. A
-    # submitted value is not silently ignored either -- Admin::DuplicateReviewsController rejects a
-    # conflicting `determination` or `resolution_action` before calling this service, so a stale
-    # page cannot resolve a case under an intent the server would otherwise reinterpret.
+    def select_existing(candidate)
+      @selected_user = candidate
+      call
+    end
+
     def initialize(duplicate_review_case:, actor:, rationale:, reason_codes: [])
       super()
       @duplicate_review_case = duplicate_review_case
@@ -97,12 +53,20 @@ module DuplicateReviewCases
       return 'Case is not open' unless @duplicate_review_case.open?
       return 'An admin actor is required' unless admin_actor?
       return 'A rationale is required' if @rationale.blank?
-      return 'Post-import reconciliation requires at least one reason/evidence code' if
-        @duplicate_review_case.post_import_reconciliation? && @reason_codes.empty?
-      return 'Post-import reconciliation case must identify exactly one canonical pair' if
-        @duplicate_review_case.post_import_reconciliation? && post_import_pair_ids.blank?
+      return 'Invalid existing-person selection' if @selected_user && !valid_selection?
+      if !@selected_user && @duplicate_review_case.subject_user_id.blank? && @duplicate_review_case.inline_intake?
+        return 'A proposed identity requires an existing-person selection'
+      end
 
-      reason_code_error
+      post_import_validation_error || reason_code_error
+    end
+
+    def post_import_validation_error
+      return unless @duplicate_review_case.post_import_reconciliation?
+      return 'Post-import reconciliation requires at least one reason/evidence code' if @reason_codes.empty?
+      return 'Post-import reconciliation case must identify exactly one canonical pair' if post_import_pair_ids.blank?
+
+      nil
     end
 
     # Reason codes become immutable resolution metadata and audit evidence, so they are checked
@@ -144,6 +108,7 @@ module DuplicateReviewCases
       raise StaleCaseError, 'Case participants changed while the resolution was being prepared' unless
         locked_participant_ids.sort == case_participant_ids.sort
 
+      requalify_selected_person! if @selected_user
       return unless @duplicate_review_case.post_import_reconciliation?
 
       @locked_pair_users = post_import_pair_ids.map { |id| @locked_users.fetch(id) }
@@ -162,10 +127,31 @@ module DuplicateReviewCases
       raise StaleCaseError, 'The records no longer form a supported name-and-date-of-birth pair'
     end
 
+    def valid_selection?
+      @duplicate_review_case.inline_intake? &&
+        @duplicate_review_case.metadata['intake_context'] == 'paper_inline_selection' &&
+        @duplicate_review_case.subject_user_id.nil? &&
+        @duplicate_review_case.duplicate_review_case_candidates.exists?(candidate_user_id: @selected_user.id)
+    end
+
+    def requalify_selected_person!
+      selected = @locked_users[@selected_user.id]
+      eligible = if @duplicate_review_case.metadata['intake_role'] == 'guardian'
+                   selected&.paper_guardian_candidate?
+                 else
+                   selected&.paper_applicant_candidate?
+                 end
+      raise StaleCaseError, 'Selected person is no longer eligible' unless valid_selection? && eligible
+    end
+
+    def determination
+      @selected_user ? 'existing_person_selected' : NON_MERGE_DETERMINATION
+    end
+
     def resolve_case!
       @duplicate_review_case.update!(
-        status: NON_MERGE_STATUS,
-        resolution_determination: NON_MERGE_DETERMINATION,
+        status: @selected_user ? :resolved_selected : NON_MERGE_STATUS,
+        resolution_determination: determination,
         resolution_rationale: @rationale,
         resolution_metadata: resolution_metadata,
         resolved_by: @actor,
@@ -175,6 +161,7 @@ module DuplicateReviewCases
 
     def resolution_metadata
       metadata = {}
+      metadata['selected_user_id'] = @selected_user.id if @selected_user
       metadata['reason_codes'] = @reason_codes if @reason_codes.any?
       metadata
     end
@@ -201,10 +188,11 @@ module DuplicateReviewCases
       AuditEventService.log(
         action: 'duplicate_review_case_resolved',
         actor: @actor,
-        auditable: @locked_subject || @duplicate_review_case.subject_user,
+        auditable: @locked_subject || @selected_user || @duplicate_review_case,
         metadata: {
           duplicate_review_case_id: @duplicate_review_case.id,
-          resolution_determination: NON_MERGE_DETERMINATION,
+          application_id: @duplicate_review_case.metadata['application_id'],
+          resolution_determination: determination,
           rationale: @rationale,
           reason_codes: @reason_codes
         }

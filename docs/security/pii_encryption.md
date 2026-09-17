@@ -117,8 +117,8 @@ Currently filtered categories include:
 - applicant names (`first_name`, `middle_initial`, `last_name`) — filtered because paper identity
   review posts them alongside a date of birth and an address, and that combination is what
   identifies a person
-- `identity_decision`, the paper identity decision token, which authorizes a creation and must not
-  outlive its request in a log
+- `identity_review_receipt`, identity rationale, and upload `*_signed_id` parameters; legacy
+  `identity_decision` remains filtered for requests from old pages
 
 Do not add new PII fields without updating both encryption declarations and parameter filtering.
 

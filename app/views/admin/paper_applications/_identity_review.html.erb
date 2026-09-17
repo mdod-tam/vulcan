@@ -1,0 +1,55 @@
+<%# locals: (review:, submitted:, guardian: false) %>
+<% if review && review.candidates.any? %>
+  <section class="rounded-md border border-amber-300 bg-amber-50 p-4 my-4" aria-labelledby="<%= guardian ? 'guardian-review-heading' : 'identity-review-heading' %>">
+    <h3 id="<%= guardian ? 'guardian-review-heading' : 'identity-review-heading' %>" class="font-semibold" tabindex="-1">Review possible matches</h3>
+    <p class="mt-2">Select the existing person, or explain why these are different people.</p>
+    <% if review.blocked? %>
+      <p role="alert">An existing record uses this contact information. Creating another person with it is not allowed.</p>
+    <% end %>
+    <%= hidden_field_tag guardian ? :guardian_identity_review_receipt : :identity_review_receipt, review.token %>
+    <% if review.confirmed? %>
+      <%= hidden_field_tag guardian ? :guardian_identity_determination : :identity_determination, 'keep_separate' %>
+    <% end %>
+    <ul class="divide-y divide-amber-200">
+      <% review.presented_candidates.each do |candidate| %>
+        <li class="py-3">
+          <span class="font-medium"><%= candidate[:name] %></span>
+          <span><%= [candidate[:date_of_birth], candidate[:city], candidate[:state], candidate[:zip_code]].compact.join(' · ') %></span>
+          <% if candidate[:selectable] %>
+            <%= button_tag(
+                  'Select this person',
+                  name: guardian ? :selected_candidate_id : :identity_candidate_id, value: candidate[:id],
+                  type: guardian ? 'button' : 'submit', class: 'ml-3 text-indigo-700 underline',
+                  data: (guardian ? { action: 'click->admin-user-search#createGuardian' } : {})
+                ) %>
+          <% else %>
+            <span class="block text-sm">This person cannot be selected for this intake.</span>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+    <%= label_tag guardian ? :guardian_identity_rationale : :identity_rationale, 'Reason for this identity decision', class: 'block mt-3 font-medium' %>
+    <%= text_area_tag(
+          guardian ? :guardian_identity_rationale : :identity_rationale, submitted[:identity_rationale],
+          id: guardian ? :guardian_identity_rationale : :identity_rationale,
+          class: 'block w-full rounded-md border-gray-300', required: true
+        ) %>
+    <% if review.selected? && !guardian && review.context == :self_applicant %>
+      <div class="mt-3">
+        <p>The selected person's on-file identity and contact information will be used. The entries above are the paper details being compared.</p>
+        <%= render 'admin/duplicate_reviews/record_facts', user: review.selected_user, role_label: 'Selected person', comparison_user: nil %>
+        <%= hidden_field_tag :contact_info_mode, 'on_file' %>
+        <%= check_box_tag :contact_info_verified, '1', submitted[:contact_info_verified] == '1', id: :review_contact_verified, required: true %>
+        <%= label_tag :review_contact_verified, 'I verified this person and their on-file contact information against the paper application.' %>
+      </div>
+    <% end %>
+    <% unless review.blocked? %>
+      <%= button_tag(
+            'These are different people — create a new person',
+            name: :identity_determination, value: 'keep_separate',
+            type: guardian ? 'button' : 'submit', class: 'mt-3 rounded border border-amber-400 bg-white px-3 py-2',
+            data: (guardian ? { action: 'click->admin-user-search#createGuardian' } : {})
+          ) %>
+    <% end %>
+  </section>
+<% end %>

@@ -161,7 +161,6 @@ Rails.application.routes.draw do
         # carries the applicant's identity facts, which must stay out of URLs -- and therefore out of
         # browser history, Referer headers, and proxy access logs. Keeping them out of Rails' own
         # request logs is a separate mechanism: config.filter_parameters.
-        post :identity_review
       end
     end
 

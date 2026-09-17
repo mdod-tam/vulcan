@@ -50,42 +50,16 @@ module Applications
       assert service.create, "Paper application creation failed with errors: #{service.errors.join(', ')}"
     end
 
-    test 'can attach proofs using GlobalID::Locator.locate_signed' do
+    test 'a signed GlobalID is not accepted as an Active Storage upload reference' do
       income_blob, residency_blob = create_blobs
-      income_signed_gid = income_blob.to_signed_global_id.to_s
-      residency_signed_gid = residency_blob.to_signed_global_id.to_s
-      params = globalid_upload_params(income_signed_gid, residency_signed_gid)
+      params = direct_upload_params(income_blob.to_signed_global_id.to_s, residency_blob.to_signed_global_id.to_s)
       mock_policy
-
-      # Verify we have valid GIDs
-      assert_not_nil income_signed_gid, 'Income signed GID is nil'
-      assert_not_nil residency_signed_gid, 'Residency signed GID is nil'
-      # GIDs are base64 encoded, so we can't directly check their content
-      assert income_signed_gid.start_with?('eyJ'), 'Income GID should be a base64 encoded string'
-      assert residency_signed_gid.start_with?('eyJ'), 'Residency GID should be a base64 encoded string'
-
-      # Mock ProofAttachmentService for testing
-      ProofAttachmentService.expects(:attach_proof).with(
-        has_entries(
-          proof_type: :income,
-          status: :approved,
-          submission_method: :paper
-        )
-      ).returns({ success: true })
-
-      ProofAttachmentService.expects(:attach_proof).with(
-        has_entries(
-          proof_type: :residency,
-          status: :approved,
-          submission_method: :paper
-        )
-      ).returns({ success: true })
-
       service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
-      assert service.create, "Paper application creation failed with errors: #{service.errors.join(', ')}"
 
-      # Since we're mocking the attachment service, we can't assert on actual attachments
-      assert service.application.present?, 'Application was not created'
+      assert_no_difference ['User.count', 'Application.count', 'ActiveStorage::Attachment.count'] do
+        assert_not service.create
+      end
+      assert_match(/no longer available/, service.errors.join(' '))
     end
 
     private
@@ -131,43 +105,6 @@ module Applications
         residency_proof_action: 'accept',
         residency_proof: residency_blob_signed_id
       }
-    end
-
-    def globalid_upload_params(income_signed_gid, residency_signed_gid)
-      {
-        constituent: {
-          first_name: 'John',
-          last_name: 'Smith',
-          email: "john.smith.#{@timestamp}@example.com",
-          phone: "301555#{@timestamp[-4..]}",
-          physical_address_1: '456 Oak St',
-          city: 'Baltimore',
-          state: 'MD',
-          zip_code: '21201',
-          cognition_disability: '1'
-        },
-        application: {
-          household_size: 1,
-          annual_income: '18000',
-          maryland_resident: true,
-          self_certify_disability: true,
-          medical_provider_name: 'Dr. Jones',
-          medical_provider_phone: '301-555-1313',
-          medical_provider_email: 'dr.jones@example.com'
-        },
-        income_proof_action: 'accept',
-        income_proof: income_signed_gid,
-        residency_proof_action: 'accept',
-        residency_proof: residency_signed_gid
-      }
-    end
-
-    def assert_attachments(application, income_blob, residency_blob)
-      assert application.present?, 'Application was not created'
-      assert application.income_proof.attached?, 'Income proof was not attached'
-      assert application.residency_proof.attached?, 'Residency proof was not attached'
-      assert_equal income_blob.id, application.income_proof.blob.id, 'Income proof blob mismatch'
-      assert_equal residency_blob.id, application.residency_proof.blob.id, 'Residency proof blob mismatch'
     end
 
     def mock_policy

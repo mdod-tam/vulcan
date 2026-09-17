@@ -1,0 +1,22 @@
+<%# locals: (form:, key:, blob:) %>
+<%= form.file_field(
+      "#{key}_signed_id",
+      id: key, direct_upload: true, accept: proof_upload_accept_attribute,
+      aria: { describedby: "#{key}_help" }, class: 'block w-full text-sm text-gray-700',
+      data: {
+        document_proof_handler_target: 'fileInput',
+        action: [
+          'direct-upload:initialize->document-proof-handler#uploadStarted',
+          'direct-upload:before-blob-request->document-proof-handler#rememberUploadRequest',
+          'direct-upload:before-storage-request->document-proof-handler#rememberUploadRequest',
+          'direct-upload:end->document-proof-handler#uploadFinished',
+          'direct-upload:error->document-proof-handler#uploadFailed'
+        ].join(' ')
+      }
+    ) %>
+<% if blob %>
+  <%= hidden_field_tag "#{key}_signed_id", blob.signed_id %>
+<% end %>
+<p role="status" class="mt-2 text-sm" data-document-proof-handler-target="savedUpload"><%= "Uploaded: #{blob.filename}" if blob %></p>
+<button type="button" class="mt-2 text-sm text-indigo-700 underline" data-action="document-proof-handler#removeUpload" data-document-proof-handler-target="removeUpload">Remove document</button>
+<button type="button" hidden class="mt-2 text-sm text-indigo-700 underline" data-action="document-proof-handler#cancelUpload" data-document-proof-handler-target="cancelUpload">Cancel upload</button>

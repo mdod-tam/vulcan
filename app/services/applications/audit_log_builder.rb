@@ -170,6 +170,7 @@ module Applications
           %w[
             voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
             application_created application_post_creation_step_failed
+            duplicate_review_case_resolved
             evaluator_assigned trainer_assigned
             medical_certification_requested medical_certification_status_changed
             alternate_contact_updated

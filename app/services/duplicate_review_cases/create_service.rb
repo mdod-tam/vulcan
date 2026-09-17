@@ -6,6 +6,44 @@ module DuplicateReviewCases
 
     CandidateInput = Struct.new(:user, :match_reason, :snapshot)
 
+    # The intake writer supplies a freshly verified review inside its business transaction.
+    # Cases, candidate evidence and resolution commit with the person/application they describe.
+    # rubocop:disable Metrics/PerceivedComplexity -- keep the atomic composition of the existing writers together
+    def self.record_paper_decision!(review:, user:, actor:, rationale:, receipt:, application: nil)
+      return [] unless review.confirmed? || review.selected?
+      raise ArgumentError, 'An open intake transaction is required' unless ActiveRecord::Base.connection.transaction_open?
+      raise ArgumentError, 'Explain the identity decision before continuing.' if rationale.to_s.strip.blank?
+
+      selection = review.selected?
+      candidates = Array(review.selected_user || review.candidates)
+      candidates.map do |candidate|
+        result = new(
+          source: :paper_intake, subject_user: selection ? nil : user, actor: actor,
+          reason_codes: review.reasons,
+          candidates: [CandidateInput.new(candidate, review.reasons.first)],
+          subject_fingerprint: Applications::PaperIdentityReviewReceipt.identity_fingerprint(review.identity_facts),
+          metadata: {
+            intake_context: selection ? 'paper_inline_selection' : 'paper_inline_keep_separate',
+            intake_role: review.context.to_s, receipt_digest: Digest::SHA256.hexdigest(receipt.to_s),
+            application_id: application&.id
+          }.compact
+        ).call
+        raise IneligibleParticipantError, result.message unless result.success?
+
+        review_case = result.data.fetch(:duplicate_review_case)
+        next review_case if review_case.resolved?
+
+        resolver = ResolutionService.new(duplicate_review_case: review_case, actor: actor,
+                                         rationale: rationale, reason_codes: review.reasons)
+        resolution = selection ? resolver.select_existing(candidate) : resolver.call
+        raise IneligibleParticipantError, resolution.message unless resolution.success?
+
+        review_case
+      end
+    end
+
+    # rubocop:enable Metrics/PerceivedComplexity
+
     def self.deduplication_key_for(source:, subject_user_id:, reason_codes:, candidate_user_ids:)
       Digest::SHA256.hexdigest(
         [source, subject_user_id, Array(reason_codes).map(&:to_s).sort.join(','),
@@ -14,8 +52,10 @@ module DuplicateReviewCases
     end
 
     # rubocop:disable Metrics/ParameterLists -- explicit service contract for atomic case creation
-    def initialize(source:, subject_user:, actor:, reason_codes:, candidates: [], metadata: {}, audit_action: 'duplicate_review_case_opened')
+    def initialize(source:, subject_user:, actor:, reason_codes:, candidates: [], metadata: {}, audit_action: 'duplicate_review_case_opened',
+                   subject_fingerprint: nil)
       super()
+      @subject_fingerprint = subject_fingerprint
       @source = source.to_sym
       @subject_user = subject_user
       @actor = actor
@@ -27,11 +67,8 @@ module DuplicateReviewCases
     # rubocop:enable Metrics/ParameterLists
 
     def call
-      return failure('Subject user is required for duplicate review case') if @subject_user.blank?
-      return failure('Subject user must be persisted before opening a duplicate review case') unless @subject_user.persisted?
-      return failure('Actor is required for duplicate review case') if @actor.blank?
-      return failure('Actor must be persisted before opening a duplicate review case') unless @actor.persisted?
-      return failure('Reason codes are required') if @reason_codes.empty?
+      validation_error = preflight
+      return failure(validation_error) if validation_error
 
       duplicate_review_case = nil
       idempotent = false
@@ -51,9 +88,10 @@ module DuplicateReviewCases
         ineligibility_error = participant_ineligibility_error
         raise IneligibleParticipantError, ineligibility_error if ineligibility_error
 
-        existing = DuplicateReviewCase.open_cases.find_by(deduplication_key: deduplication_key)
+        scope = inline_intake? ? DuplicateReviewCase.all : DuplicateReviewCase.open_cases
+        existing = scope.find_by(deduplication_key: deduplication_key)
         if existing
-          sync_subject_review_flag!(existing)
+          sync_subject_review_flag!(existing) unless existing.resolved?
           duplicate_review_case = existing
           idempotent = true
         else
@@ -71,13 +109,32 @@ module DuplicateReviewCases
 
     private
 
+    def preflight
+      return 'Subject user is required for duplicate review case' if @subject_user.blank? && !inline_selection?
+      return 'Subject user must be persisted before opening a duplicate review case' if @subject_user && !@subject_user.persisted?
+      return 'Actor is required for duplicate review case' if @actor.blank?
+      return 'Actor must be persisted before opening a duplicate review case' unless @actor.persisted?
+      return 'An admin actor is required' if inline_intake? && !@actor.admin?
+      return 'Reason codes are required' if @reason_codes.empty?
+
+      nil
+    end
+
+    def inline_intake?
+      @source == :paper_intake && @metadata[:intake_context].in?(%w[paper_inline_keep_separate paper_inline_selection])
+    end
+
+    def inline_selection?
+      inline_intake? && @metadata[:intake_context] == 'paper_inline_selection' && @subject_fingerprint.present?
+    end
+
     # Locks the persisted subject and candidates, then swaps in the freshly locked/reloaded
     # rows (not the pre-lock instances this service was constructed with) for every
     # subsequent read in this transaction.
     def lock_subject_and_candidates!
-      persisted_users = ([@subject_user, @actor] + @candidates.filter_map(&:user)).select(&:persisted?)
+      persisted_users = ([@subject_user, @actor] + @candidates.filter_map(&:user)).compact.select(&:persisted?)
       locked = User.lock_for_merge_integrity!(*persisted_users)
-      @subject_user = locked.fetch(@subject_user.id)
+      @subject_user = locked.fetch(@subject_user.id) if @subject_user
       @actor = locked.fetch(@actor.id)
       @candidates = @candidates.map do |candidate_input|
         next candidate_input if candidate_input.user.blank? || !candidate_input.user.persisted?
@@ -88,7 +145,15 @@ module DuplicateReviewCases
 
     def participant_ineligibility_error
       return 'The actor is no longer an eligible active record' unless @actor.public_login_active?
-      return 'The subject is no longer an eligible active record' unless @subject_user.public_login_active?
+
+      if inline_intake?
+        participants = [@subject_user, *@candidates.filter_map(&:user)].compact
+        return 'A reviewed person was merged; review the current records.' if participants.any?(&:merged?)
+
+        return
+      end
+
+      return 'The subject is no longer an eligible active record' if @subject_user && !@subject_user.public_login_active?
 
       ineligible = @candidates.find { |candidate_input| candidate_input.user.present? && !candidate_input.user.public_login_active? }
       return 'A candidate is no longer an eligible active record' if ineligible
@@ -100,6 +165,7 @@ module DuplicateReviewCases
       DuplicateReviewCase.create!(
         source: @source,
         subject_user: @subject_user,
+        subject_fingerprint: @subject_fingerprint,
         deduplication_key: deduplication_key,
         metadata: case_metadata,
         opened_at: Time.current,
@@ -139,6 +205,13 @@ module DuplicateReviewCases
     end
 
     def deduplication_key
+      if inline_intake?
+        return Digest::SHA256.hexdigest([
+          @metadata[:intake_context], @metadata[:intake_role], @metadata[:receipt_digest], @actor.id,
+          @subject_fingerprint, @subject_user&.id, *@candidates.filter_map { |candidate| candidate.user&.id }.sort
+        ].join(':'))
+      end
+
       self.class.deduplication_key_for(
         source: @source,
         subject_user_id: @subject_user.id,
@@ -148,12 +221,14 @@ module DuplicateReviewCases
     end
 
     def case_metadata
-      MetadataSanitizer.build(
+      metadata = MetadataSanitizer.build(
         reason_codes: @reason_codes,
         submitted_contact_digest: @metadata[:submitted_contact_digest],
         intake_context: @metadata[:intake_context],
         subject_snapshot: @metadata[:subject_snapshot]
       )
+      metadata.merge!(@metadata.slice(:intake_role, :receipt_digest, :application_id).compact) if inline_intake?
+      metadata
     end
 
     def default_snapshot_for(user)

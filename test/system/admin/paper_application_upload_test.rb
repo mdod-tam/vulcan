@@ -221,17 +221,17 @@ module Admin
       # Test file input disabling when reject is selected
       # First for income proof
       find("input[id='reject_income_proof']", visible: :all).click
-      assert find("input[name='income_proof']", visible: :all).disabled?,
+      assert find("input[type='file'][name='income_proof_signed_id']", visible: :all).disabled?,
              'Income proof file input should be disabled when reject is selected'
 
       # Then for residency proof
       find("input[id='reject_residency_proof']", visible: :all).click
-      assert find("input[name='residency_proof']", visible: :all).disabled?,
+      assert find("input[type='file'][name='residency_proof_signed_id']", visible: :all).disabled?,
              'Residency proof file input should be disabled when reject is selected'
 
       # Test file input enabling when accept is selected
       find("input[id='accept_income_proof']", visible: :all).click
-      assert_not find("input[name='income_proof']", visible: :all).disabled?,
+      assert_not find("input[type='file'][name='income_proof_signed_id']", visible: :all).disabled?,
                  'Income proof file input should be enabled when accept is selected'
 
       # Test file clearing when switching to reject after uploading
@@ -244,7 +244,7 @@ module Admin
       find("input[id='reject_income_proof']", visible: :all).click
 
       # The file input should be empty
-      file_input = find("input[name='income_proof']", visible: :all)
+      file_input = find("input[type='file'][name='income_proof_signed_id']", visible: :all)
       assert_empty file_input.value, 'File input should be cleared when switching to reject'
 
       # Signed ID hidden field may not exist in JS-less test environment; skip strict check
@@ -272,14 +272,14 @@ module Admin
       attach_file 'income_proof', Rails.root.join('test/fixtures/files/sample.pdf')
 
       # Wait for the file field to have a value (simple poll instead of JS injection)
-      assert find('input[name="income_proof"]', visible: :all).value.present?
+      assert find('input[type="file"][name="income_proof_signed_id"]', visible: :all).value.present?
 
       # Residency proof accept with file
       find("input[id='accept_residency_proof']", visible: :all).click
       attach_file 'residency_proof', Rails.root.join('test/fixtures/files/sample.pdf')
 
       # Wait for the file field to have a value (simple poll instead of JS injection)
-      assert find('input[name="residency_proof"]', visible: :all).value.present?
+      assert find('input[type="file"][name="residency_proof_signed_id"]', visible: :all).value.present?
 
       # Submit the form
       click_on 'Submit Paper Application'

@@ -14,6 +14,19 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     @test_file = fixture_file_upload('medical_certification_valid.pdf', 'application/pdf')
   end
 
+  test 'normalizing direct uploads does not log upload references or blob contents' do
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('proof'), filename: 'private-proof.pdf', content_type: 'application/pdf')
+    messages = []
+    Rails.logger.stub(:info, ->(message) { messages << message }) do
+      [blob, blob.signed_id].each do |input|
+        assert_equal blob.signed_id, MedicalCertificationAttachmentService.process_attachment_param(input)
+      end
+    end
+    [blob.signed_id, blob.key, blob.filename.to_s].each do |private_value|
+      assert_not_includes messages.join, private_value
+    end
+  end
+
   test 'attaches medical certification with ActionDispatch::Http::UploadedFile' do
     assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
       assert_difference 'ActiveStorage::Attachment.count' do

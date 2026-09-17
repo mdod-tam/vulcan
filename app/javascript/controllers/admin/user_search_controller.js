@@ -1,5 +1,4 @@
 import BaseFormController from "../base/form_controller"
-import { railsRequest } from "../../services/rails_request"
 import { setVisible } from "../../utils/visibility"
 import { simpleDebounce } from "../../utils/debounce"
 
@@ -11,12 +10,7 @@ class UserSearchController extends BaseFormController {
     "createButton",
     "guardianFormField",
     "clearSearchButton",
-    "identityReviewPanel",
-    "identityReviewHeading",
-    "identityReviewBody",
-    "identityReviewCandidates",
-    "identityReviewOverride",
-    "identityReviewStatus"
+    "guardianReview"
   ]
 
   static outlets = ["guardian-picker", "adult-picker"]
@@ -29,13 +23,6 @@ class UserSearchController extends BaseFormController {
 
   connect() {
     super.connect()
-
-    this._guardianReviewData = null
-    this._guardianReviewToken = null
-    this._guardianReviewExpiresAt = null
-    this._boundGuardianReviewInvalidation = this._invalidateGuardianReviewFromEdit.bind(this)
-    this.element.addEventListener('input', this._boundGuardianReviewInvalidation)
-    this.element.addEventListener('change', this._boundGuardianReviewInvalidation)
 
     // Add debounced search listener using our new pattern
     if (this.hasSearchInputTarget) {
@@ -180,217 +167,35 @@ class UserSearchController extends BaseFormController {
       return
     }
 
-    // Keep the exact reviewed facts available across a 422 response. The request service raises
-    // for non-2xx responses, so building this inside the try block would leave the identity-review
-    // catch path with nothing it can safely resubmit.
-    const userData = {}
-    for (const [key, value] of formData.entries()) {
-      userData[key] = value
-    }
-
+    this.element.querySelectorAll('[name^="guardian_identity_"]').forEach(field => {
+      formData.set(field.name.replace("guardian_identity_", "identity_"), field.value)
+    })
+    const button = event.currentTarget
+    if (button.name) formData.set(button.name, button.value)
+    const originalText = button.textContent
+    button.disabled = true
     try {
-      // Show loading state on the button
-      const button = event.target
-      const originalText = button.textContent
-      button.disabled = true
-      button.textContent = 'Creating...'
-
-      const result = await railsRequest.perform({
-        method: 'post',
-        url: this.hasCreateUserUrlValue ? this.createUserUrlValue : '/admin/users',
-        body: userData,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        key: 'create-guardian'
+      const response = await fetch(this.hasCreateUserUrlValue ? this.createUserUrlValue : '/admin/users', {
+        method: 'POST', body: formData, credentials: 'same-origin',
+        headers: { Accept: 'application/json, text/html', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }
       })
-
-      if (result.success) {
-        await this.handleSuccess(result.data)
-        // Restore button state after success
-        button.disabled = false
-        button.textContent = originalText
+      if (response.redirected || response.status === 401) {
+        this.showGeneralError('Your session expired. Sign in again before saving the guardian.')
+      } else if (response.ok) {
+        this.guardianReviewTarget.replaceChildren()
+        await this.handleSuccess(await response.json())
+      } else if (response.status === 422) {
+        this.guardianReviewTarget.innerHTML = await response.text()
+        this.guardianReviewTarget.querySelector('[tabindex="-1"]')?.focus()
       } else {
-        if (["needs_confirmation", "blocked", "error", "invalid_decision"].includes(result.data?.state)) {
-          this._guardianReviewData = userData
-          this._renderGuardianIdentityReview(result.data)
-          button.disabled = false
-          button.textContent = originalText
-          return
-        }
-        // Handle validation errors from server
-        if (result.data && result.data.errors) {
-          this.handleValidationErrors(result.data.errors)
-        } else {
-          throw new Error(result.data?.message || 'Guardian creation failed')
-        }
-        // Restore button state on error
-        button.disabled = false
-        button.textContent = 'Save Guardian'
+        this.showGeneralError('Unable to save the guardian. Please try again.')
       }
-
     } catch (error) {
-      // Restore button state on error
-      const button = event.target
+      this.showGeneralError('Guardian could not be saved. Check your connection and try again.')
+    } finally {
       button.disabled = false
-      button.textContent = 'Save Guardian'
-
-      if (["needs_confirmation", "blocked", "error", "invalid_decision"].includes(error.data?.state)) {
-        this._guardianReviewData = userData
-        this._renderGuardianIdentityReview(error.data)
-      } else if (error.data && error.data.errors) {
-        this.handleValidationErrors(error.data.errors)
-      } else {
-        this.showGeneralError(error.message || 'Guardian creation failed. Please try again.')
-      }
+      button.textContent = originalText
     }
-  }
-
-  _renderGuardianIdentityReview(payload) {
-    const splitContactConflict = (payload.reasons || []).includes('email_phone_split')
-    this._guardianReviewToken = payload.token || null
-    this._guardianReviewExpiresAt = payload.expires_at ? Date.parse(payload.expires_at) : null
-    if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren()
-
-    ;(payload.candidates || []).forEach((candidate) => {
-      const row = document.createElement('li')
-      row.className = 'flex items-center justify-between gap-4 py-2'
-      const facts = document.createElement('div')
-      ;[candidate.name, candidate.date_of_birth,
-        [candidate.city, candidate.state, candidate.zip_code].filter(Boolean).join(' ')]
-        .filter(Boolean).forEach((value) => {
-          const line = document.createElement('div')
-          line.textContent = String(value)
-          facts.appendChild(line)
-        })
-      row.appendChild(facts)
-
-      if (candidate.selectable) {
-        const button = document.createElement('button')
-        button.type = 'button'
-        button.className = 'px-3 py-1 border rounded text-sm bg-white'
-        button.textContent = 'Use this guardian'
-        button.setAttribute('aria-label', `Use this guardian: ${String(candidate.name || '')}`)
-        button.addEventListener('click', () => this._submitGuardianIdentityChoice({ selected_candidate_id: candidate.id }))
-        row.appendChild(button)
-      } else {
-        const note = document.createElement('span')
-        note.className = 'text-sm text-gray-600'
-        note.textContent = splitContactConflict
-          ? 'Cannot resolve both contact conflicts'
-          : 'Not eligible as a guardian'
-        row.appendChild(note)
-      }
-      if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.appendChild(row)
-    })
-
-    const blocked = payload.state === 'blocked'
-    const error = ['error', 'invalid_decision', 'invalid_selection'].includes(payload.state)
-    if (this.hasIdentityReviewHeadingTarget) {
-      this.identityReviewHeadingTarget.textContent = blocked ? 'Existing contact information' :
-        (error ? 'Identity review unavailable' : 'Possible matching guardians')
-    }
-    if (this.hasIdentityReviewBodyTarget) {
-      this.identityReviewBodyTarget.textContent = blocked
-        ? (splitContactConflict
-          ? 'The email and phone belong to different existing records. Selecting either record cannot resolve the other conflict. Correct the contact information or contact the MAT Team.'
-          : 'Select the existing guardian, correct the email or phone, or contact the MAT Team. An exact contact match cannot be overridden.')
-        : (error
-          ? 'No guardian was created. Try the review again.'
-          : 'Select the existing guardian, or confirm that the people shown are different from this guardian.')
-    }
-    if (this.hasIdentityReviewOverrideTarget) {
-      setVisible(this.identityReviewOverrideTarget, payload.state === 'needs_confirmation')
-    }
-    if (this.hasIdentityReviewPanelTarget) setVisible(this.identityReviewPanelTarget, true)
-    if (this.hasIdentityReviewStatusTarget) {
-      this.identityReviewStatusTarget.textContent = blocked
-        ? 'Guardian creation blocked by existing contact information.'
-        : (error ? 'Guardian identity review must be run again.' : 'Guardian identity review requires a decision.')
-    }
-    if (this.hasIdentityReviewHeadingTarget) this.identityReviewHeadingTarget.focus()
-  }
-
-  async overrideGuardianIdentityReview() {
-    if (!this._guardianReviewToken ||
-        (this._guardianReviewExpiresAt && Date.now() >= this._guardianReviewExpiresAt)) {
-      this._invalidateGuardianIdentityReview({
-        heading: 'Review expired',
-        message: 'This review expired. Save Guardian to review again.',
-        focus: true
-      })
-      return
-    }
-
-    await this._submitGuardianIdentityChoice({ identity_decision: this._guardianReviewToken })
-  }
-
-  async _submitGuardianIdentityChoice(choice) {
-    if (!this._guardianReviewData) return
-    const body = { ...this._guardianReviewData, ...choice }
-    try {
-      const result = await railsRequest.perform({
-        method: 'post',
-        url: this.hasCreateUserUrlValue ? this.createUserUrlValue : '/admin/users',
-        body,
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        key: 'create-guardian'
-      })
-
-      if (result.success) {
-        this._clearGuardianIdentityReview()
-        await this.handleSuccess(result.data)
-      } else {
-        this._renderGuardianIdentityReview(result.data || { state: 'error', candidates: [] })
-      }
-    } catch (error) {
-      if (['needs_confirmation', 'blocked', 'error', 'invalid_decision', 'invalid_selection'].includes(error.data?.state)) {
-        this._renderGuardianIdentityReview(error.data)
-      } else {
-        if (this.hasIdentityReviewStatusTarget) {
-          this.identityReviewStatusTarget.textContent = 'Guardian identity review could not finish. Try again.'
-        }
-        this.showGeneralError(error.message || 'Guardian identity review failed. Please try again.')
-      }
-    }
-  }
-
-  _invalidateGuardianReviewFromEdit(event) {
-    const name = String(event?.target?.name || '')
-    if (!name.startsWith('guardian_attributes[') &&
-        name !== 'guardian_no_email_address' && name !== 'guardian_no_phone_number') return
-    if (!this._guardianReviewData) return
-
-    this._invalidateGuardianIdentityReview({
-      heading: 'Guardian details changed',
-      message: 'Save Guardian to review again.'
-    })
-  }
-
-  _resetGuardianIdentityReviewState() {
-    this._guardianReviewData = null
-    this._guardianReviewToken = null
-    this._guardianReviewExpiresAt = null
-    if (this.hasIdentityReviewCandidatesTarget) this.identityReviewCandidatesTarget.replaceChildren()
-    if (this.hasIdentityReviewOverrideTarget) setVisible(this.identityReviewOverrideTarget, false)
-  }
-
-  _invalidateGuardianIdentityReview({ heading, message, focus = false }) {
-    this._resetGuardianIdentityReviewState()
-    if (this.hasIdentityReviewHeadingTarget) this.identityReviewHeadingTarget.textContent = heading
-    if (this.hasIdentityReviewBodyTarget) this.identityReviewBodyTarget.textContent = message
-    if (this.hasIdentityReviewPanelTarget) setVisible(this.identityReviewPanelTarget, true)
-    if (this.hasIdentityReviewStatusTarget) {
-      this.identityReviewStatusTarget.textContent = `${heading}. ${message}`
-    }
-    if (focus && this.hasIdentityReviewHeadingTarget) this.identityReviewHeadingTarget.focus()
-  }
-
-  _clearGuardianIdentityReview() {
-    this._resetGuardianIdentityReviewState()
-    if (this.hasIdentityReviewPanelTarget) setVisible(this.identityReviewPanelTarget, false)
-    if (this.hasIdentityReviewStatusTarget) this.identityReviewStatusTarget.textContent = ''
   }
 
   selectUser(event) {
@@ -648,10 +453,6 @@ class UserSearchController extends BaseFormController {
 
   // Override disconnect to add event handler cleanup
   disconnect() {
-    if (this._boundGuardianReviewInvalidation) {
-      this.element.removeEventListener('input', this._boundGuardianReviewInvalidation)
-      this.element.removeEventListener('change', this._boundGuardianReviewInvalidation)
-    }
     // Clean up managed event listeners
     this.cleanupAllEventHandlers()
 

@@ -107,17 +107,10 @@ describe("UserSearchController", () => {
       configurable: true
     })
 
-    ;['Panel', 'Heading', 'Body', 'Candidates', 'Override', 'Status'].forEach((suffix) => {
-      Object.defineProperty(controller, `identityReview${suffix}Target`, {
-        value: fixture.querySelector(`#identityReview${suffix}`),
-        configurable: true
-      })
-      Object.defineProperty(controller, `hasIdentityReview${suffix}Target`, {
-        value: true,
-        configurable: true
-      })
+    Object.defineProperty(controller, 'guardianReviewTarget', {
+      value: fixture.querySelector('#identityReviewPanel'), configurable: true
     })
-    
+
     Object.defineProperty(controller, 'clearSearchButtonTarget', {
       value: fixture.querySelector('#clearSearchButton'),
       writable: false,
@@ -262,257 +255,48 @@ describe("UserSearchController", () => {
       fixture.querySelector('[name="guardian_attributes[date_of_birth]"]').value = "1980-01-01"
     })
     
-    it("collects form data correctly", async () => {
-      // Mock successful API response
-      railsRequest.perform.mockResolvedValue({
-        success: true,
-        data: {
-          success: true,
-          user: {
-            id: 123,
-            first_name: "John",
-            last_name: "Doe",
-            email: "john@example.com",
-            phone: "555-1234",
-            physical_address_1: "123 Main St",
-            city: "Baltimore",
-            state: "MD",
-            zip_code: "21201"
-          }
-        }
-      })
-      
-      // Mock validation to pass
-      controller.validateBeforeSubmit = jest.fn().mockResolvedValue({ valid: true })
+    it("posts the current guardian fields and uses the successful server selection", async () => {
+      const data = { user: { id: 123, first_name: "John", last_name: "Doe" } }
+      global.fetch.mockResolvedValue({ ok: true, json: async () => data })
       controller.handleSuccess = jest.fn()
-      
-      const createButton = fixture.querySelector('#createButton')
-      const event = { target: createButton, preventDefault: jest.fn() }
-      
-      await controller.createGuardian(event)
-      
-      expect(railsRequest.perform).toHaveBeenCalledWith({
-        method: 'post',
-        url: '/admin/users',
-        body: expect.objectContaining({
-          first_name: "John",
-          last_name: "Doe",
-          email: "john@example.com"
-        }),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        key: 'create-guardian'
-      })
+      await controller.createGuardian({ currentTarget: fixture.querySelector('#createButton'), preventDefault: jest.fn() })
+      const [url, request] = global.fetch.mock.calls[0]
+      expect(url).toBe('/admin/users')
+      expect(request.body.get('first_name')).toBe('John')
+      expect(request.body.get('email')).toBe('john@example.com')
+      expect(controller.handleSuccess).toHaveBeenCalledWith(data)
     })
-    
-    it("handles successful guardian creation", async () => {
-      const mockUserData = {
-        id: 123,
-        first_name: "John",
-        last_name: "Doe",
-        email: "john@example.com"
-      }
-      
-      railsRequest.perform.mockResolvedValue({
-        success: true,
-        data: { user: mockUserData }
+
+    it("renders the server review and returns the explicit choice with the current form", async () => {
+      global.fetch.mockResolvedValue({
+        ok: false, status: 422, text: async () =>
+          '<h4 tabindex="-1">Review possible matches</h4><input name="guardian_identity_review_receipt" value="receipt"><textarea name="guardian_identity_rationale">Different guardian</textarea><button name="identity_determination" value="keep_separate">Create new guardian</button>'
       })
-      
-      controller.validateBeforeSubmit = jest.fn().mockResolvedValue({ valid: true })
+      await controller.createGuardian({ currentTarget: fixture.querySelector('#createButton'), preventDefault: jest.fn() })
+      expect(document.activeElement.textContent).toBe('Review possible matches')
+      expect(fixture.querySelector('[name="guardian_attributes[first_name]"]').value).toBe('John')
+      global.fetch.mockResolvedValue({ ok: true, json: async () => ({ user: { id: 123 } }) })
       controller.handleSuccess = jest.fn()
-      
-      const createButton = fixture.querySelector('#createButton')
-      const event = { target: createButton, preventDefault: jest.fn() }
-      
-      await controller.createGuardian(event)
-      
-      expect(controller.handleSuccess).toHaveBeenCalledWith({ user: mockUserData })
-    })
-    
-        it("shows loading state during creation", async () => {
-      // Make sure form data is filled in so validation passes
-      fixture.querySelector('[name="guardian_attributes[first_name]"]').value = "John"
-      fixture.querySelector('[name="guardian_attributes[last_name]"]').value = "Doe"
-      fixture.querySelector('[name="guardian_attributes[email]"]').value = "john@example.com"
-
-      // Mock validation to always pass
-      controller.validateBeforeSubmit = jest.fn().mockResolvedValue({ valid: true })
-
-      // Mock a delayed API response
-      let resolveRequest
-      const requestPromise = new Promise(resolve => {
-        resolveRequest = resolve
-      })
-      railsRequest.perform.mockReturnValue(requestPromise)
-
-      controller.handleSuccess = jest.fn()
-
-      const createButton = fixture.querySelector('#createButton')
-
-      // Set up button properties for testing
-      createButton.disabled = false
-      createButton.textContent = 'Save Guardian'
-
-      const event = { target: createButton, preventDefault: jest.fn() }
-
-      // Start the creation process (don't await yet)
-      const createPromise = controller.createGuardian(event)
-
-      // Wait for validation to complete and button state to be set
-      await new Promise(resolve => setTimeout(resolve, 0))
-      
-      expect(createButton.disabled).toBe(true)
-      expect(createButton.textContent).toBe('Creating...')
-
-      // Now resolve the request and wait for completion
-      resolveRequest({ success: true, data: { user: {} } })
-      await createPromise
-
-      // Check restored state
-      expect(createButton.disabled).toBe(false)
-      expect(createButton.textContent).toBe('Save Guardian')
-    })
-    
-    it("handles validation errors", async () => {
-      const validationErrors = {
-        first_name: "First name is required",
-        email: "Email is required"
-      }
-      
-      controller.validateBeforeSubmit = jest.fn().mockResolvedValue({
-        valid: false,
-        errors: validationErrors
-      })
-      controller.handleValidationErrors = jest.fn()
-      
-      const createButton = fixture.querySelector('#createButton')
-      const event = { target: createButton, preventDefault: jest.fn() }
-      
-      await controller.createGuardian(event)
-      
-      expect(controller.handleValidationErrors).toHaveBeenCalledWith(validationErrors)
-      expect(railsRequest.perform).not.toHaveBeenCalled()
-    })
-    
-    it("handles API errors gracefully", async () => {
-      railsRequest.perform.mockRejectedValue(new Error('Network error'))
-      
-      controller.validateBeforeSubmit = jest.fn().mockResolvedValue({ valid: true })
-      
-      const createButton = fixture.querySelector('#createButton')
-      const event = { target: createButton, preventDefault: jest.fn() }
-      
-      await controller.createGuardian(event)
-      
-      // Button should be restored after error
-      expect(createButton.disabled).toBe(false)
+      const choice = controller.guardianReviewTarget.querySelector('button')
+      await controller.createGuardian({ currentTarget: choice, preventDefault: jest.fn() })
+      const request = global.fetch.mock.calls[1][1]
+      expect(request.body.get('identity_review_receipt')).toBe('receipt')
+      expect(request.body.get('identity_determination')).toBe('keep_separate')
+      expect(request.body.get('identity_rationale')).toBe('Different guardian')
+      expect(controller.guardianReviewTarget.children).toHaveLength(0)
     })
 
-    it("renders a 422 identity decision without losing the reviewed guardian facts", async () => {
-      railsRequest.perform.mockRejectedValue({
-        data: {
-          state: 'needs_confirmation',
-          candidates: [{
-            id: 17,
-            name: '<img src=x onerror=alert(1)>',
-            date_of_birth: 'January 15, 1980',
-            selectable: true
-          }],
-          token: 'signed-review',
-          expires_at: new Date(Date.now() + 60000).toISOString()
-        }
-      })
-      controller.validateBeforeSubmit = jest.fn().mockResolvedValue({ valid: true })
-
-      await controller.createGuardian({ target: fixture.querySelector('#createButton'), preventDefault: jest.fn() })
-
-      expect(controller._guardianReviewData.first_name).toBe('John')
-      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
-      expect(controller.identityReviewCandidatesTarget.querySelector('img')).toBeNull()
-      expect(controller.identityReviewCandidatesTarget.textContent).toContain('<img src=x onerror=alert(1)>')
-      expect(document.activeElement).toBe(controller.identityReviewHeadingTarget)
+    it("restores the clicked button after a transport error", async () => {
+      global.fetch.mockRejectedValue(new Error('offline'))
+      controller.showGeneralError = jest.fn()
+      const button = fixture.querySelector('#createButton')
+      const text = button.textContent
+      await controller.createGuardian({ currentTarget: button, preventDefault: jest.fn() })
+      expect(button.disabled).toBe(false)
+      expect(button.textContent).toBe(text)
+      expect(controller.showGeneralError).toHaveBeenCalled()
     })
 
-    it("renders a stale selected-guardian 422 and keeps the reviewed facts for a fresh review", async () => {
-      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
-      railsRequest.perform.mockRejectedValue({
-        data: { state: 'invalid_selection', candidates: [] }
-      })
-
-      await controller._submitGuardianIdentityChoice({ selected_candidate_id: 17 })
-
-      expect(controller._guardianReviewData).toEqual({ first_name: 'John', last_name: 'Doe' })
-      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
-      expect(controller.identityReviewHeadingTarget.textContent).toBe('Identity review unavailable')
-      expect(controller.identityReviewStatusTarget.textContent).toBe('Guardian identity review must be run again.')
-    })
-
-    it("keeps edit invalidation visible without moving focus from the changed field", () => {
-      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
-      controller._renderGuardianIdentityReview({
-        state: 'needs_confirmation',
-        candidates: [{ id: 17, name: 'John Doe', selectable: true }],
-        token: 'signed-review',
-        expires_at: new Date(Date.now() + 60000).toISOString()
-      })
-
-      const firstName = fixture.querySelector('[name="guardian_attributes[first_name]"]')
-      firstName.focus()
-      firstName.value = 'Jonathan'
-      firstName.dispatchEvent(new Event('input', { bubbles: true }))
-
-      expect(controller._guardianReviewData).toBeNull()
-      expect(controller._guardianReviewToken).toBeNull()
-      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
-      expect(controller.identityReviewHeadingTarget.textContent).toBe('Guardian details changed')
-      expect(controller.identityReviewBodyTarget.textContent).toBe('Save Guardian to review again.')
-      expect(controller.identityReviewCandidatesTarget.children).toHaveLength(0)
-      expect(controller.identityReviewOverrideTarget.classList.contains('hidden')).toBe(true)
-      expect(controller.identityReviewStatusTarget.textContent).toContain('Guardian details changed')
-      expect(document.activeElement).toBe(firstName)
-    })
-
-    it("shows an expired review visibly and moves focus from the removed override action", async () => {
-      controller._guardianReviewData = { first_name: 'John', last_name: 'Doe' }
-      controller._guardianReviewToken = 'signed-review'
-      controller._guardianReviewExpiresAt = Date.now() - 1000
-      const overrideButton = fixture.querySelector('#identityReviewOverrideButton')
-      overrideButton.focus()
-
-      await controller.overrideGuardianIdentityReview()
-
-      expect(railsRequest.perform).not.toHaveBeenCalled()
-      expect(controller._guardianReviewData).toBeNull()
-      expect(controller._guardianReviewToken).toBeNull()
-      expect(controller.identityReviewPanelTarget.classList.contains('hidden')).toBe(false)
-      expect(controller.identityReviewHeadingTarget.textContent).toBe('Review expired')
-      expect(controller.identityReviewBodyTarget.textContent).toBe(
-        'This review expired. Save Guardian to review again.'
-      )
-      expect(controller.identityReviewOverrideTarget.classList.contains('hidden')).toBe(true)
-      expect(document.activeElement).toBe(controller.identityReviewHeadingTarget)
-    })
-
-    it("explains a split contact conflict without calling either guardian ineligible", () => {
-      controller._renderGuardianIdentityReview({
-        state: 'blocked',
-        reasons: ['exact_email', 'exact_phone', 'email_phone_split'],
-        candidates: [
-          { id: 17, name: 'Email Owner', selectable: false },
-          { id: 18, name: 'Phone Owner', selectable: false }
-        ]
-      })
-
-      expect(controller.identityReviewBodyTarget.textContent).toContain(
-        'The email and phone belong to different existing records.'
-      )
-      expect(controller.identityReviewCandidatesTarget.textContent).toContain('Cannot resolve both contact conflicts')
-      expect(controller.identityReviewCandidatesTarget.textContent).not.toContain('Not eligible as a guardian')
-      expect(controller.identityReviewCandidatesTarget.querySelector('button')).toBeNull()
-    })
-    
     it("builds correct user display HTML", () => {
       const userData = {
         userEmail: "john@example.com",

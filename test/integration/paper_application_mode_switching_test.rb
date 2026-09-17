@@ -148,7 +148,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
 
     # Should fail gracefully without stranding a user or partially persisted application.
     assert_response :unprocessable_content
-    assert_match(/mismatched digest|Error processing proof|Proof upload failed/i, response.body)
+    assert_select '[role=alert]', text: /The uploaded income proof is no longer available. Upload it again./
     assert_nil User.find_by(email: contact[:email])
   end
 end

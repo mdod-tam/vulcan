@@ -24,6 +24,8 @@ describe("DocumentProofHandlerController", () => {
 
     controller = new DocumentProofHandlerController()
     form = document.querySelector("form")
+    Object.defineProperty(controller, "element", { value: form, configurable: true })
+    Object.defineProperty(controller, "hasSavedUploadTarget", { value: false, configurable: true })
     fileInput = document.querySelector('input[type="file"]')
     rejectionReasonSelect = document.querySelector("select")
 

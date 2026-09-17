@@ -205,6 +205,10 @@
                     end
                   when log.is_a?(Event)
                     case log.action
+                    when "duplicate_review_case_resolved"
+                      link_to "Identity review: #{log.metadata['resolution_determination'].to_s.humanize}",
+                              admin_duplicate_review_path(log.metadata['duplicate_review_case_id']),
+                              class: "text-indigo-700 underline"
                     when "application_created"
                       method = log.metadata['submission_method']&.titleize || "Unknown"
                       initial_status = log.metadata['initial_status']&.titleize || "Unknown"

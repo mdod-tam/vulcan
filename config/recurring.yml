@@ -2,6 +2,11 @@
 # Format: https://github.com/rails/solid_queue#recurring-tasks
 
 production:
+  cleanup_unattached_uploads:
+    class: CleanupUnattachedUploadsJob
+    schedule: "0 4 * * *"
+    description: "Purge unattached direct uploads after seven days"
+
   generate_vendor_invoices:
     class: GenerateVendorInvoicesJob
     schedule: "0 0 */14 * *"

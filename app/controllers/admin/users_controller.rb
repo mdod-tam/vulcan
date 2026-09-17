@@ -218,7 +218,7 @@ module Admin
         attrs: user_create_params.to_h,
         request_params: params,
         admin: current_user,
-        submitted_token: params[:identity_decision],
+        submitted_token: params[:identity_review_receipt],
         selected_candidate_id: params[:selected_candidate_id]
       )
       result = service.call
@@ -229,7 +229,9 @@ module Admin
         return render json: guardian_quick_create_success_payload(user, result.data[:state])
       end
 
-      render json: guardian_quick_create_failure_payload(result), status: :unprocessable_content
+      render partial: 'admin/paper_applications/guardian_review', formats: [:html], content_type: 'text/html',
+             locals: { review: service.review, message: result.message, submitted: params },
+             status: :unprocessable_content
     ensure
       Current.reset
     end
@@ -672,24 +674,6 @@ module Admin
         user: user.as_json(only: %i[id first_name last_name email phone
                                     physical_address_1 physical_address_2 city state zip_code])
       }
-    end
-
-    def guardian_quick_create_failure_payload(result)
-      review = result.data[:review]
-      payload = {
-        success: false,
-        state: result.data[:state],
-        errors: format_validation_errors(result.data[:errors].presence || [result.message])
-      }
-      return payload if review.blank?
-
-      payload[:reasons] = review.reasons
-      payload[:candidates] = review.presented_candidates
-      if review.token.present?
-        payload[:token] = review.token
-        payload[:expires_at] = Applications::PaperIdentityDecision.expires_at(review.token)&.iso8601
-      end
-      payload
     end
 
     # Build DependentSummary objects for a guardian's dependents

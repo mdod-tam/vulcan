@@ -90,6 +90,8 @@ module Applications
       metadata = event.metadata.is_a?(Hash) ? event.metadata.stringify_keys : {}
 
       case event.action
+      when 'duplicate_review_case_opened', 'duplicate_review_case_resolved', 'duplicate_review_case_resumed'
+        metadata['duplicate_review_case_id'].to_s
       when 'provider_info_request_revoked', 'proof_resubmission_request_revoked'
         [metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
       when 'cert_upload_request_revoked'

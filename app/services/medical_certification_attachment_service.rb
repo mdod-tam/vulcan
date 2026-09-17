@@ -88,9 +88,9 @@ class MedicalCertificationAttachmentService
   def self.process_attachment_param(blob_or_file)
     log_input_details(blob_or_file)
 
-    return process_string_input(blob_or_file) if blob_or_file.is_a?(String) && blob_or_file.present?
+    return blob_or_file if blob_or_file.is_a?(String) && blob_or_file.present?
     return process_parameters(blob_or_file) if action_controller_parameters?(blob_or_file)
-    return process_blob(blob_or_file) if blob_or_file.is_a?(ActiveStorage::Blob)
+    return blob_or_file.signed_id if blob_or_file.is_a?(ActiveStorage::Blob)
     return process_uploaded_file(blob_or_file) if uploaded_file?(blob_or_file)
 
     # Fallback for other types
@@ -383,30 +383,6 @@ class MedicalCertificationAttachmentService
   # Input processing helper methods
   def self.log_input_details(blob_or_file)
     Rails.logger.info "DISABILITY CERTIFICATION ATTACHMENT INPUT: Type=#{blob_or_file.class.name}"
-    Rails.logger.info "DISABILITY CERTIFICATION BLOB OR FILE VALUE: #{blob_or_file.to_s[0..100]}" if blob_or_file.respond_to?(:to_s)
-    safe_inspect(blob_or_file)
-  end
-
-  def self.safe_inspect(blob_or_file)
-    return unless blob_or_file.respond_to?(:inspect)
-
-    inspection = blob_or_file.inspect[0..200]
-    Rails.logger.info "DISABILITY CERTIFICATION ATTACHMENT INSPECTION: #{inspection}"
-  rescue StandardError => e
-    Rails.logger.info "Could not inspect input: #{e.message}"
-  end
-
-  def self.process_string_input(blob_or_file)
-    Rails.logger.info "Processing string input as potential SignedID: #{blob_or_file[0..20]}..."
-    validate_signed_id_for_logging(blob_or_file)
-    blob_or_file
-  end
-
-  def self.validate_signed_id_for_logging(blob_or_file)
-    blob = ActiveStorage::Blob.find_signed(blob_or_file)
-    Rails.logger.info "Confirmed string is a valid signed ID: blob_id=#{blob.id}, filename=#{blob.filename}" if blob.present?
-  rescue StandardError => e
-    Rails.logger.info "Note: String parameter validation error: #{e.message}"
   end
 
   def self.process_parameters(blob_or_file)
@@ -423,26 +399,16 @@ class MedicalCertificationAttachmentService
   end
 
   def self.find_signed_id_in_parameters(params)
-    return nil unless params.respond_to?(:each)
+    return nil unless params.respond_to?(:each_value)
 
-    params.each do |key, value|
+    params.each_value do |value|
       next unless value.is_a?(String) && value.start_with?('eyJf')
 
-      Rails.logger.info "Found potential signed_id in field '#{key}': #{value[0..20]}..."
       return value
     end
 
     Rails.logger.info 'Could not find signed_id in parameters, using as-is'
     nil
-  end
-
-  def self.process_blob(blob_or_file)
-    Rails.logger.info 'Converting blob to signed_id for medical certification attachment'
-    Rails.logger.info "BLOB INFO: ID=#{blob_or_file.id}, Key=#{blob_or_file.key}, Content-Type=#{blob_or_file.content_type}, Size=#{blob_or_file.byte_size}"
-
-    signed_id = blob_or_file.signed_id
-    Rails.logger.info "Using signed_id: #{signed_id || '[nil]'}"
-    signed_id
   end
 
   def self.process_uploaded_file(blob_or_file)
