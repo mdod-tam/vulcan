@@ -164,10 +164,7 @@ module Users
       return unless @duplicate_review_case.post_import_reconciliation?
 
       expected_ids = [@canonical_user.id, @duplicate_user.id].sort
-      actual_ids = DuplicateReconciliation::Population.strict_case_pair_ids(
-        @duplicate_review_case,
-        candidates: @locked_candidate_rows
-      )
+      actual_ids = @duplicate_review_case.strict_post_import_pair_ids
       return 'The post-import reconciliation case no longer identifies this exact pair' unless actual_ids == expected_ids
       return if DuplicateReconciliation::Population.new.current_match?(@canonical_user, @duplicate_user)
 
@@ -469,9 +466,6 @@ module Users
                                     .order(:duplicate_review_case_id, :id)
                                     .lock('FOR UPDATE')
                                     .to_a
-      @locked_candidate_rows = @locked_case_candidate_rows.select do |candidate|
-        candidate.duplicate_review_case_id == @duplicate_review_case.id
-      end
     end
 
     def related_open_case_ids

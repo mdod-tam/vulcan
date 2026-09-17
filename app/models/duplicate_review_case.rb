@@ -102,6 +102,42 @@ class DuplicateReviewCase < ApplicationRecord
     )
   }
 
+  # Candidate cardinality includes missing/deleted candidates, so malformed history
+  # cannot become an exact-pair decision merely because one candidate still exists.
+  scope :single_candidate_pairs, lambda {
+    joins(:duplicate_review_case_candidates)
+      .where('duplicate_review_cases.subject_user_id <> duplicate_review_case_candidates.candidate_user_id')
+      .where(<<~SQL.squish)
+        NOT EXISTS (
+          SELECT 1 FROM duplicate_review_case_candidates other_candidates
+          WHERE other_candidates.duplicate_review_case_id = duplicate_review_cases.id
+            AND other_candidates.id <> duplicate_review_case_candidates.id
+        )
+      SQL
+  }
+  scope :strict_post_import_pairs, lambda {
+    single_candidate_pairs.where(source: :post_import_reconciliation)
+                          .where("duplicate_review_cases.metadata->'reason_codes' = ?::jsonb", ['name_dob'].to_json)
+                          .where(duplicate_review_case_candidates: { match_reason: 'name_dob' })
+                          .where('duplicate_review_cases.subject_user_id < duplicate_review_case_candidates.candidate_user_id')
+  }
+  scope :inline_paper_decision_pairs, lambda {
+    single_candidate_pairs.resolved_cases
+                          .where(source: :paper_intake, resolution_determination: :keep_separate)
+                          .where("duplicate_review_cases.metadata->>'intake_context' = ?", 'paper_inline_keep_separate')
+                          .where("duplicate_review_cases.metadata->'reason_codes' @> ?::jsonb", ['name_dob'].to_json)
+  }
+  scope :reconciliation_pairs, -> { strict_post_import_pairs.or(inline_paper_decision_pairs) }
+
+  # Mutation workflows recheck this persisted shape after locking case/candidates.
+  # Paper adjudications do not broaden post-import merge authority.
+  def strict_post_import_pair_ids
+    self.class.uncached do
+      self.class.strict_post_import_pairs.where(id: id)
+          .pick(:subject_user_id, 'duplicate_review_case_candidates.candidate_user_id')
+    end
+  end
+
   def open?
     status == 'open'
   end

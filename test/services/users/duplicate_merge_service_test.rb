@@ -621,7 +621,7 @@ module Users
       assert selected_case.reload.resolved_merged?
       assert related_case.reload.open?
       assert_equal [second.id, third.id].sort,
-                   DuplicateReconciliation::Population.strict_case_pair_ids(related_case)
+                   related_case.strict_post_import_pair_ids
       assert_equal 1, result.data[:summary][:related_post_import_cases_repointed]
       assert_equal 1, Event.where(action: 'duplicate_review_case_pair_repointed').count
       assert second.reload.needs_duplicate_review?

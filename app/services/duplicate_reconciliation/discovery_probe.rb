@@ -16,86 +16,10 @@ module DuplicateReconciliation
   # 4. Total task deadline actively enforced via dynamic per-query statement timeouts.
   # 5. Default output is strictly aggregate, with zero PII, topology masking, and HMAC-keyed pseudonyms.
   # 6. Correct flag-drift definition: counts constituents with needs_duplicate_review = true
-  #    who have NEITHER an open case NOR a current active Name+DOB match.
+  #    who have neither an open case nor an unresolved current Name+DOB pair.
   # 7. Fails closed if invoked within an open transaction to preserve top-level repeatable-read guarantees.
   # SQL queries and CTE definitions for DiscoveryProbe
   module DiscoveryQueries
-    STRICT_CONDITION_SQL = <<~SQL.squish
-      drc.metadata->'reason_codes' = '["name_dob"]'::jsonb
-      AND drc.subject_user_id IS NOT NULL
-      AND (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id) = 1
-      AND (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id AND c.match_reason = 'name_dob' AND c.candidate_user_id IS NOT NULL AND drc.subject_user_id < c.candidate_user_id) = 1
-    SQL
-
-    STRICT_COUNT_SQL = "SELECT COUNT(*) FROM duplicate_review_cases drc WHERE drc.source = 5 AND (#{STRICT_CONDITION_SQL})".freeze
-
-    MALFORMED_SAMPLES_SQL = <<~SQL.squish
-      SELECT drc.id, drc.status, drc.subject_user_id,
-             (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id) AS candidate_count,
-             drc.metadata->'reason_codes' AS reason_codes
-      FROM duplicate_review_cases drc
-      WHERE drc.source = 5
-        AND (#{STRICT_CONDITION_SQL}) IS NOT TRUE
-      ORDER BY drc.id
-      LIMIT $1
-    SQL
-
-    MULTI_CASE_PAIRS_SQL = <<~SQL.squish
-      WITH strict_cases AS (
-        SELECT drc.id, drc.subject_user_id AS u1
-        FROM duplicate_review_cases drc
-        WHERE drc.source = 5 AND (#{STRICT_CONDITION_SQL})
-      ),
-      strict_pairs AS (
-        SELECT sc.u1, c.candidate_user_id AS u2
-        FROM strict_cases sc
-        JOIN duplicate_review_case_candidates c ON c.duplicate_review_case_id = sc.id
-      ),
-      multi_pairs AS (
-        SELECT u1, u2, COUNT(*) AS case_count
-        FROM strict_pairs
-        GROUP BY u1, u2
-        HAVING COUNT(*) > 1
-      )
-      SELECT u1, u2, case_count, COUNT(*) OVER () AS full_count
-      FROM multi_pairs
-      ORDER BY u1, u2
-      LIMIT $1
-    SQL
-
-    ACTIVE_DYNAMIC_MATCH_SQL = <<~SQL.squish
-      users.merged_into_user_id IS NULL
-      AND (users.status IS NULL OR users.status = 1)
-      AND users.first_name IS NOT NULL AND users.first_name != ''
-      AND users.last_name IS NOT NULL AND users.last_name != ''
-      AND users.date_of_birth IS NOT NULL
-      AND EXISTS (
-        SELECT 1 FROM users u2
-        WHERE u2.id != users.id
-          AND u2.type = 'Users::Constituent'
-          AND u2.merged_into_user_id IS NULL
-          AND (u2.status IS NULL OR u2.status = 1)
-          AND u2.first_name IS NOT NULL AND u2.first_name != ''
-          AND u2.last_name IS NOT NULL AND u2.last_name != ''
-          AND u2.date_of_birth IS NOT NULL
-          AND LOWER(u2.first_name) = LOWER(users.first_name)
-          AND LOWER(u2.last_name) = LOWER(users.last_name)
-          AND u2.date_of_birth = users.date_of_birth
-          AND NOT EXISTS (
-            SELECT 1 FROM duplicate_review_cases drc
-            JOIN duplicate_review_case_candidates drcc ON drcc.duplicate_review_case_id = drc.id
-            WHERE drc.source = 5
-              AND drc.status != 0
-              AND drc.resolution_determination = 'keep_separate'
-              AND drc.metadata->'reason_codes' = '["name_dob"]'::jsonb
-              AND drc.subject_user_id = LEAST(users.id, u2.id)
-              AND drcc.candidate_user_id = GREATEST(users.id, u2.id)
-              AND drcc.match_reason = 'name_dob'
-              AND (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id) = 1
-          )
-      )
-    SQL
-
     NO_OPEN_CASE_SQL = <<~SQL.squish
       users.type = 'Users::Constituent'
       AND users.needs_duplicate_review = true
@@ -108,14 +32,6 @@ module DuplicateReconciliation
         JOIN duplicate_review_cases drc ON drc.id = drcc.duplicate_review_case_id
         WHERE drc.status = 0 AND drcc.candidate_user_id = users.id
       )
-    SQL
-
-    TRUE_DRIFT_WHERE_SQL = "#{NO_OPEN_CASE_SQL} AND NOT (#{ACTIVE_DYNAMIC_MATCH_SQL})".freeze
-    TRUE_DRIFT_COUNT_SQL = "SELECT COUNT(*) FROM users WHERE #{TRUE_DRIFT_WHERE_SQL}".freeze
-    DRIFT_CANDIDATES_WITH_SQL_MATCH_SQL = <<~SQL.squish
-      SELECT users.id, users.date_of_birth FROM users
-      WHERE #{NO_OPEN_CASE_SQL} AND #{ACTIVE_DYNAMIC_MATCH_SQL}
-      ORDER BY users.id LIMIT $1
     SQL
 
     WITHOUT_OPEN_CASE_COUNT_SQL = "SELECT COUNT(*) FROM users WHERE #{NO_OPEN_CASE_SQL}".freeze
@@ -134,24 +50,6 @@ module DuplicateReconciliation
           )
         )
     SQL
-
-    MALFORMED_OPEN_PARTICIPANTS_SQL = <<~SQL.squish
-      WITH malformed_open_cases AS (
-        SELECT drc.id, drc.subject_user_id
-        FROM duplicate_review_cases drc
-        WHERE drc.source = 5 AND drc.status = 0
-          AND (#{STRICT_CONDITION_SQL}) IS NOT TRUE
-      )
-      SELECT COUNT(DISTINCT participant_id)
-      FROM (
-        SELECT subject_user_id AS participant_id FROM malformed_open_cases WHERE subject_user_id IS NOT NULL
-        UNION
-        SELECT candidate_user_id AS participant_id FROM duplicate_review_case_candidates
-        WHERE duplicate_review_case_id IN (SELECT id FROM malformed_open_cases) AND candidate_user_id IS NOT NULL
-      ) p
-    SQL
-
-    DRIFT_SAMPLES_SQL = "SELECT users.id FROM users WHERE #{TRUE_DRIFT_WHERE_SQL} ORDER BY users.id LIMIT $1".freeze
 
     CLUSTERS_BASE_SQL = <<~SQL.squish
       FROM users
@@ -199,6 +97,121 @@ module DuplicateReconciliation
       ORDER BY dependent_id
       LIMIT $1
     SQL
+
+    private
+
+    def strict_case_ids_sql
+      DuplicateReviewCase.strict_post_import_pairs.select(:id).to_sql
+    end
+
+    def malformed_samples_sql
+      <<~SQL.squish
+        SELECT drc.id, drc.status, drc.subject_user_id,
+               (SELECT COUNT(*) FROM duplicate_review_case_candidates c WHERE c.duplicate_review_case_id = drc.id) AS candidate_count,
+               drc.metadata->'reason_codes' AS reason_codes
+        FROM duplicate_review_cases drc
+        WHERE drc.source = 5
+          AND drc.id NOT IN (#{strict_case_ids_sql})
+        ORDER BY drc.id
+        LIMIT $1
+      SQL
+    end
+
+    def multi_case_pairs_sql
+      <<~SQL.squish
+        WITH strict_cases AS (
+          SELECT drc.id, drc.subject_user_id AS u1
+          FROM duplicate_review_cases drc
+          WHERE drc.id IN (#{strict_case_ids_sql})
+        ),
+        strict_pairs AS (
+          SELECT sc.u1, c.candidate_user_id AS u2
+          FROM strict_cases sc
+          JOIN duplicate_review_case_candidates c ON c.duplicate_review_case_id = sc.id
+        ),
+        multi_pairs AS (
+          SELECT u1, u2, COUNT(*) AS case_count
+          FROM strict_pairs
+          GROUP BY u1, u2
+          HAVING COUNT(*) > 1
+        )
+        SELECT u1, u2, case_count, COUNT(*) OVER () AS full_count
+        FROM multi_pairs
+        ORDER BY u1, u2
+        LIMIT $1
+      SQL
+    end
+
+    # NO_OPEN_CASE_SQL excludes participants with pending work. Remaining recognized
+    # terminal pair evidence is resolved or stale in Population, not unreviewed.
+    def unresolved_match_sql
+      <<~SQL.squish
+        users.merged_into_user_id IS NULL
+        AND (users.status IS NULL OR users.status = 1)
+        AND users.first_name IS NOT NULL AND users.first_name != ''
+        AND users.last_name IS NOT NULL AND users.last_name != ''
+        AND users.date_of_birth IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM users u2
+          WHERE u2.id != users.id
+            AND u2.type = 'Users::Constituent'
+            AND u2.merged_into_user_id IS NULL
+            AND (u2.status IS NULL OR u2.status = 1)
+            AND u2.first_name IS NOT NULL AND u2.first_name != ''
+            AND u2.last_name IS NOT NULL AND u2.last_name != ''
+            AND u2.date_of_birth IS NOT NULL
+            AND LOWER(u2.first_name) = LOWER(users.first_name)
+            AND LOWER(u2.last_name) = LOWER(users.last_name)
+            AND u2.date_of_birth = users.date_of_birth
+            AND NOT EXISTS (
+              SELECT 1 FROM (
+                #{DuplicateReviewCase.reconciliation_pairs.resolved_cases
+                                     .select(:subject_user_id, 'duplicate_review_case_candidates.candidate_user_id').to_sql}
+              ) pair_cases
+              WHERE (pair_cases.subject_user_id = users.id AND pair_cases.candidate_user_id = u2.id)
+                 OR (pair_cases.subject_user_id = u2.id AND pair_cases.candidate_user_id = users.id)
+            )
+        )
+      SQL
+    end
+
+    def true_drift_where_sql
+      "#{NO_OPEN_CASE_SQL} AND NOT (#{unresolved_match_sql})"
+    end
+
+    def true_drift_count_sql
+      "SELECT COUNT(*) FROM users WHERE #{true_drift_where_sql}"
+    end
+
+    def drift_candidates_with_sql_match_sql
+      <<~SQL.squish
+        SELECT users.id, users.date_of_birth FROM users
+        WHERE #{NO_OPEN_CASE_SQL} AND #{unresolved_match_sql}
+        ORDER BY users.id LIMIT $1
+      SQL
+    end
+
+    def malformed_open_participants_sql
+      <<~SQL.squish
+        WITH malformed_open_cases AS (
+          SELECT drc.id, drc.subject_user_id
+          FROM duplicate_review_cases drc
+          WHERE drc.source = 5 AND drc.status = 0
+            AND drc.id NOT IN (#{strict_case_ids_sql})
+        )
+        SELECT COUNT(DISTINCT participant_id)
+        FROM (
+          SELECT subject_user_id AS participant_id FROM malformed_open_cases WHERE subject_user_id IS NOT NULL
+          UNION
+          SELECT candidate_user_id AS participant_id FROM duplicate_review_case_candidates
+          WHERE duplicate_review_case_id IN (SELECT id FROM malformed_open_cases) AND candidate_user_id IS NOT NULL
+        ) p
+      SQL
+    end
+
+    def drift_samples_sql
+      "SELECT users.id FROM users WHERE #{true_drift_where_sql} ORDER BY users.id LIMIT $1"
+    end
   end
 
   class DiscoveryProbe
@@ -356,11 +369,11 @@ module DuplicateReconciliation
       lines << "Constituents with needs_duplicate_review = true: #{result.flag_metrics[:total_flagged_constituents]}"
       if result.flag_metrics[:drift_dob_audit_truncated]
         fm = result.flag_metrics
-        lines << "  Flagged but NO open case and NO dynamic match:  >= #{fm[:flagged_without_open_case_or_match]} (true flag drift, lower bound; audit truncated)"
+        lines << "  Flagged but NO open case and NO unresolved pair: >= #{fm[:flagged_without_open_case_or_match]} (true flag drift, lower bound; audit truncated)"
         lines << "  NOTE: Drift candidate DOB audit was bounded to #{fm[:audited_drift_candidates]} of #{fm[:total_drift_candidates]} candidates; " \
                  'additional corrupt matches may exist'
       else
-        lines << "  Flagged but NO open case and NO dynamic match:  #{result.flag_metrics[:flagged_without_open_case_or_match]} (true flag drift)"
+        lines << "  Flagged but NO open case and NO unresolved pair: #{result.flag_metrics[:flagged_without_open_case_or_match]} (true flag drift)"
       end
       lines << "  Flagged but NO open case (may have match):      #{result.flag_metrics[:flagged_without_open_case]}"
       lines << "Constituents in open cases with flag = false:     #{result.flag_metrics[:open_case_constituents_unflagged]}"
@@ -574,7 +587,7 @@ module DuplicateReconciliation
       total_cases = counts.values.sum
       post_import_total = query_with_timeout { DuplicateReviewCase.where(source: :post_import_reconciliation).count }
 
-      strict_count = query_with_timeout { ActiveRecord::Base.connection.select_value(STRICT_COUNT_SQL).to_i }
+      strict_count = query_with_timeout { DuplicateReviewCase.strict_post_import_pairs.count }
       malformed_count = post_import_total - strict_count
 
       malformed_samples = query_malformed_case_samples(malformed_count, detailed_pii: detailed_pii)
@@ -596,7 +609,7 @@ module DuplicateReconciliation
       return [] unless malformed_count.positive?
 
       rows = query_with_timeout do
-        ActiveRecord::Base.connection.exec_query(MALFORMED_SAMPLES_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+        ActiveRecord::Base.connection.exec_query(malformed_samples_sql, 'SQL', [integer_bind('limit', @sample_limit)])
       end
       rows.map do |row|
         {
@@ -612,7 +625,7 @@ module DuplicateReconciliation
 
     def query_multi_case_pairs(detailed_pii:)
       rows = query_with_timeout do
-        ActiveRecord::Base.connection.exec_query(MULTI_CASE_PAIRS_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+        ActiveRecord::Base.connection.exec_query(multi_case_pairs_sql, 'SQL', [integer_bind('limit', @sample_limit)])
       end
       total_count = rows.empty? ? 0 : rows.first['full_count'].to_i
       samples = rows.map do |row|
@@ -628,10 +641,10 @@ module DuplicateReconciliation
     def collect_flag_metrics(detailed_pii: false)
       total_flagged = query_with_timeout { Users::Constituent.where(needs_duplicate_review: true).count }
 
-      sql_true_drift_count = query_with_timeout { ActiveRecord::Base.connection.select_value(TRUE_DRIFT_COUNT_SQL).to_i }
+      sql_true_drift_count = query_with_timeout { ActiveRecord::Base.connection.select_value(true_drift_count_sql).to_i }
       without_open_case_count = query_with_timeout { ActiveRecord::Base.connection.select_value(WITHOUT_OPEN_CASE_COUNT_SQL).to_i }
       open_case_unflagged_count = query_with_timeout { ActiveRecord::Base.connection.select_value(OPEN_CASE_UNFLAGGED_COUNT_SQL).to_i }
-      malformed_open_participants_count = query_with_timeout { ActiveRecord::Base.connection.select_value(MALFORMED_OPEN_PARTICIPANTS_SQL).to_i }
+      malformed_open_participants_count = query_with_timeout { ActiveRecord::Base.connection.select_value(malformed_open_participants_sql).to_i }
 
       candidates_with_sql_match_count = without_open_case_count - sql_true_drift_count
       corrupt_dob_drift_ids, drift_truncated, audited_candidates_count = audit_sql_match_dob_drift(candidates_with_sql_match_count)
@@ -662,7 +675,7 @@ module DuplicateReconciliation
 
       candidate_rows = query_with_timeout do
         ActiveRecord::Base.connection.exec_query(
-          DRIFT_CANDIDATES_WITH_SQL_MATCH_SQL,
+          drift_candidates_with_sql_match_sql,
           'SQL',
           [integer_bind('limit', @cluster_limit)]
         )
@@ -680,7 +693,7 @@ module DuplicateReconciliation
       samples = []
       if sql_true_drift_count.positive?
         rows = query_with_timeout do
-          ActiveRecord::Base.connection.exec_query(DRIFT_SAMPLES_SQL, 'SQL', [integer_bind('limit', @sample_limit)])
+          ActiveRecord::Base.connection.exec_query(drift_samples_sql, 'SQL', [integer_bind('limit', @sample_limit)])
         end
         samples = rows.rows.flatten.map do |uid|
           {
