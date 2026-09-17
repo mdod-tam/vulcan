@@ -116,12 +116,8 @@ module DuplicateReviewCases
         raise StaleCaseError, 'Pair participants are no longer eligible active constituents'
       end
 
-      unless DuplicateReconciliation::Population.strict_case_pair_ids(
-        @duplicate_review_case,
-        candidates: locked_candidates
-      ) == post_import_pair_ids
-        raise StaleCaseError, 'Post-import reconciliation pair is no longer valid'
-      end
+      raise StaleCaseError, 'Post-import reconciliation pair is no longer valid' unless
+        @duplicate_review_case.strict_post_import_pair_ids == post_import_pair_ids
       return if DuplicateReconciliation::Population.new.current_match?(*@locked_pair_users)
 
       raise StaleCaseError, 'The records no longer form a supported name-and-date-of-birth pair'
@@ -181,7 +177,7 @@ module DuplicateReviewCases
     end
 
     def post_import_pair_ids
-      @post_import_pair_ids ||= DuplicateReconciliation::Population.strict_case_pair_ids(@duplicate_review_case)
+      @post_import_pair_ids ||= @duplicate_review_case.strict_post_import_pair_ids
     end
 
     def log_resolution!

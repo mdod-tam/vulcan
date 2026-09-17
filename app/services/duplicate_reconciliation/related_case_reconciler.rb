@@ -120,10 +120,12 @@ module DuplicateReconciliation
     end
 
     def strict_pair_ids(review_case)
-      DuplicateReconciliation::Population.strict_case_pair_ids(
-        review_case,
-        candidates: @candidate_rows_by_case_id.fetch(review_case.id, [])
-      )
+      @strict_pair_ids_by_case ||= DuplicateReviewCase.uncached do
+        DuplicateReviewCase.strict_post_import_pairs.where(id: @cases.map(&:id))
+                           .pluck(:id, :subject_user_id, 'duplicate_review_case_candidates.candidate_user_id')
+                           .to_h { |id, subject_id, candidate_id| [id, [subject_id, candidate_id]] }
+      end
+      @strict_pair_ids_by_case[review_case.id]
     end
 
     def participant_ids(review_case)

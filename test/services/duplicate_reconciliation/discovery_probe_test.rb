@@ -455,6 +455,40 @@ module DuplicateReconciliation
       assert_equal 2, res_after.flag_metrics[:flagged_without_open_case_or_match]
     end
 
+    test 'inline paper decisions settle flag drift without changing post-import inventory or raw matches' do
+      before = @probe.call
+      admin = create(:admin)
+      candidate = create(:constituent, first_name: 'Paper', last_name: 'Decision', date_of_birth: Date.new(1980, 2, 3))
+      attrs = candidate.attributes.symbolize_keys.slice(:first_name, :last_name, :date_of_birth, :city, :state, :zip_code)
+      preview = Applications::PaperIdentityReview.new(constituent_params: attrs, admin: admin).call
+      review = Applications::PaperIdentityReview.new(
+        constituent_params: attrs, admin: admin, submitted_token: preview.token, determination: 'keep_separate'
+      ).call
+      assert review.confirmed?
+
+      subject = nil
+      ApplicationRecord.transaction do
+        subject = create(:constituent, **attrs)
+        DuplicateReviewCases::CreateService.record_paper_decision!(
+          review: review, user: subject, actor: admin,
+          rationale: 'Paper identifies a different person.', receipt: preview.token
+        )
+      end
+      assert_equal :confirmed_different, Population.new.pair_for_ids(subject.id, candidate.id).state
+      projection = ReviewFlagProjection.new
+      assert_not projection.required_for?(subject)
+      assert_not projection.required_for?(candidate)
+
+      # Simulate stale operational flags without changing the adjudication.
+      User.where(id: [subject.id, candidate.id]).update_all(needs_duplicate_review: true)
+      result = @probe.call
+      assert_equal before.flag_metrics[:flagged_without_open_case_or_match] + 2, result.flag_metrics[:flagged_without_open_case_or_match]
+      %i[post_import_total post_import_strict_shape post_import_malformed].each do |metric|
+        assert_equal before.case_metrics[metric], result.case_metrics[metric], metric.to_s
+      end
+      assert_equal before.matching_metrics[:total_dynamic_pairs] + 1, result.matching_metrics[:total_dynamic_pairs]
+    end
+
     test 'dynamic matching and drift metrics handle JSON-shaped undecryptable ciphertext' do
       initial_cluster_count = @probe.call.matching_metrics[:cluster_count]
       initial_dynamic_pairs = @probe.call.matching_metrics[:total_dynamic_pairs]
@@ -543,7 +577,7 @@ module DuplicateReconciliation
       assert_equal 0, res.flag_metrics[:flagged_without_open_case_or_match]
 
       rendered = bounded_probe.render_summary(res)
-      assert_includes rendered, 'Flagged but NO open case and NO dynamic match:  >= 0 (true flag drift, lower bound; audit truncated)'
+      assert_includes rendered, 'Flagged but NO open case and NO unresolved pair: >= 0 (true flag drift, lower bound; audit truncated)'
       assert_includes rendered, "NOTE: Drift candidate DOB audit was bounded to 1 of #{res.flag_metrics[:total_drift_candidates]} candidates; " \
                                 'additional corrupt matches may exist'
     end

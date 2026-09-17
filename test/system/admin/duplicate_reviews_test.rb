@@ -491,7 +491,7 @@ module Admin
       assert selected_case.reload.resolved_merged?
       assert related_case.reload.open?
       assert_equal [second.id, third.id].sort,
-                   DuplicateReconciliation::Population.strict_case_pair_ids(related_case)
+                   related_case.strict_post_import_pair_ids
 
       visit admin_duplicate_reviews_path
       assert_no_text 'Another open duplicate review case references one of these records'
@@ -571,7 +571,7 @@ module Admin
 
       review_case = DuplicateReviewCase.where(source: :post_import_reconciliation).order(:id).last
       assert_current_path admin_duplicate_review_path(review_case)
-      assert_equal selected_ids, DuplicateReconciliation::Population.strict_case_pair_ids(review_case)
+      assert_equal selected_ids, review_case.strict_post_import_pair_ids
       assert_text 'Post-import reconciliation'
       take_evidence_screenshot('duplicate-post-import-three-record-selected-pair', full: true, html: true)
 
