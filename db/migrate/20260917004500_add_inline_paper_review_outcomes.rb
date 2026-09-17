@@ -11,8 +11,7 @@ class AddInlinePaperReviewOutcomes < ActiveRecord::Migration[8.0]
   end
 
   def down
-    remove_index :duplicate_review_cases, name: 'index_inline_paper_review_decisions_unique'
-    remove_check_constraint :duplicate_review_cases, name: 'duplicate_review_cases_status_check'
-    add_check_constraint :duplicate_review_cases, 'status IN (0, 1, 2, 3, 4)', name: 'duplicate_review_cases_status_check'
+    raise ActiveRecord::IrreversibleMigration,
+          'Paper selection decisions cannot be downgraded. Roll forward; see docs/development/paper_application_architecture.md.'
   end
 end

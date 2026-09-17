@@ -75,6 +75,13 @@ module Admin
       @selected_dependent = nil
     end
 
+    # PR 205 pages interpret clear as permission to submit their native form.
+    # Only create adjudicates identity; this compatibility response grants no decision.
+    def identity_review
+      response.headers['Cache-Control'] = 'no-store'
+      render json: { state: 'clear' }
+    end
+
     def create
       log_file_and_form_params
       service_params = paper_application_processing_params # Use the new method
@@ -359,12 +366,27 @@ module Admin
       operation_context = Rails.env.test? ? '[TEST_BUSINESS_LOGIC] ' : '[ADMIN_OPERATION] '
       Rails.logger.error "#{operation_context}Paper application operation failed: #{error_msg}"
 
+      preserve_multipart_uploads
       repopulate_form_data(service, existing_application)
 
       handle_error_response(
         html_render_action: (existing_application ? :edit : :new),
         error_message: error_msg
       )
+    end
+
+    def preserve_multipart_uploads
+      PROOF_FILE_GROUPS.each_key do |action|
+        key = action.to_s.delete_suffix('_action')
+        upload = params[key]
+        next unless upload.is_a?(ActionDispatch::Http::UploadedFile)
+
+        upload.rewind
+        blob = ActiveStorage::Blob.create_and_upload!(
+          io: upload.tempfile, filename: upload.original_filename, content_type: upload.content_type
+        )
+        params["#{key}_signed_id"] = blob.signed_id
+      end
     end
 
     def repopulate_form_data(service, existing_application)

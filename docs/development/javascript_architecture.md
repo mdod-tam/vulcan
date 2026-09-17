@@ -33,7 +33,7 @@ Relevant routes:
 | `PATCH /constituent_portal/applications/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
 | `PATCH /constituent_portal/applications/:id/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
 | `GET /admin/paper_applications/recipient_preference` | `Admin::PaperApplicationsController#recipient_preference` | `forms/paper_application_controller.js` |
-| `POST /admin/paper_applications/identity_review` | `Admin::PaperApplicationsController#identity_review` | `forms/paper_application_controller.js` (submit-time preflight) |
+| `POST /admin/paper_applications/identity_review` | `Admin::PaperApplicationsController#identity_review` | Already-open PR 205 pages only; resumes normal submission without adjudicating identity |
 | `POST /admin/users` | `Admin::UsersController#create` | `admin/user_search_controller.js` (paper guardian quick-create review, selection, or override) |
 | `GET /admin/users/:id/adult_application_context` | `Admin::UsersController#adult_application_context` | `users/adult_picker_controller.js` |
 | `GET /admin/applications/charts` | `Admin::ApplicationsController#charts` | Lazy Turbo frame that mounts `reports-chart` |
@@ -120,7 +120,7 @@ const overLimit = exceeds({
 | `autosave` | `app/javascript/controllers/forms/autosave_controller.js` | Saves individual fields on blur through the constituent autosave route. Updates form URLs after a new draft is created. |
 | `income-validation` | `app/javascript/controllers/forms/income_validation_controller.js` | Calculates FPL threshold state, owns the warning container, updates the income field group styling, and dispatches validation events. |
 | `final-submit-gate` | `app/javascript/controllers/forms/final_submit_gate_controller.js` | Gates constituent final submit buttons from required checkboxes, required visible non-file fields, checkbox groups, and income validation events. Admin secure-request recipient forms opt into conditional channel restoration through this same controller. Also honors a server-set hard block — see below. |
-| `paper-application` | `app/javascript/controllers/forms/paper_application_controller.js` | Gates admin paper submit from income state, existing-adult verification, required attestations, visible required fields, required proof radio groups, checkbox groups, and medical provider requirements. Also runs the identity review preflight (see below) and populates the income-rejection dialog. |
+| `paper-application` | `app/javascript/controllers/forms/paper_application_controller.js` | Gates admin paper submit from income state, existing-adult verification, required attestations, visible required fields, required proof radio groups, checkbox groups, and medical provider requirements. Tracks direct-upload progress and populates the income-rejection dialog. Identity review uses normal form submission. |
 | `adult-picker` | `app/javascript/controllers/users/adult_picker_controller.js` | Searches for and selects an existing adult applicant, applies the returned eligibility context, and renders the selected-applicant summary. Inline identity decisions return through the paper form's normal POST. |
 | `optional-phone-type` | `app/javascript/controllers/forms/optional_phone_type_controller.js` | Reveals the self-registration phone-type radio group only when a phone number is present and keeps radio disabled, required, and ARIA state aligned with the visible field. |
 | `applicant-type` | `app/javascript/controllers/users/applicant_type_controller.js` | Shows the adult or dependent-with-guardian path and dispatches `applicant-type:applicantTypeChanged`. |
@@ -156,7 +156,7 @@ behavior, including constituent application forms.
 
 ### Paper identity review and uploads
 
-The paper form uses Rails automatic direct uploads for all four documents. Each field submits its `*_signed_id`; ordinary `POST /admin/paper_applications` returns the server-rendered review or validation form with saved filenames and signed IDs. No identity preview endpoint or second eligibility fetch is used.
+The paper form uses Rails automatic direct uploads for all four documents. Each field submits its `*_signed_id`; ordinary `POST /admin/paper_applications` returns the server-rendered review or validation form with saved filenames and signed IDs. Current pages make no identity preflight or second eligibility fetch. The legacy preview route only lets already-open PR 205 pages submit to this same create action; see [deployment and recovery](paper_application_architecture.md#deployment-and-recovery).
 
 `paper-application` combines upload progress with the existing income, required-field, guardian-selection, and contact-verification gates. `document-proof-handler` shows saved uploads, replaces a reference only after a successful upload, and removes references on explicit removal or rejection. Failed or canceled replacements retain the prior upload. Proof actions are locked while their upload is pending. Rails owns the form-wide upload lifecycle.
 

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'test_helper'
+require Rails.root.join('db/migrate/20260917004500_add_inline_paper_review_outcomes')
 
 module DuplicateReviewCases
   class PaperIntakeTest < ActiveSupport::TestCase
@@ -41,6 +42,19 @@ module DuplicateReviewCases
         assert_not @candidate.reload.merged?
         assert_not review_case.update(resolution_rationale: 'Rewrite')
       end
+    end
+
+    test 'rollback is explicitly refused without changing schema or recorded selections' do
+      review_case = record(decision(selected_candidate_id: @candidate.id), @candidate).sole
+      connection = ActiveRecord::Base.connection
+      constraints = connection.check_constraints(:duplicate_review_cases)
+
+      assert_raises(ActiveRecord::IrreversibleMigration) { AddInlinePaperReviewOutcomes.new.down }
+
+      assert review_case.reload.resolved_selected?
+      assert_equal constraints, connection.check_constraints(:duplicate_review_cases)
+      assert connection.index_exists?(:duplicate_review_cases, :deduplication_key,
+                                      name: 'index_inline_paper_review_decisions_unique', unique: true)
     end
 
     test 'replaying a completed selection returns the same case without a second audit' do

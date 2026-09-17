@@ -72,6 +72,53 @@ module Admin
       assert_equal application.id, review_case.metadata['application_id']
     end
 
+    test 'old pages reach canonical review without losing multipart documents or authorizing a legacy decision' do
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
+        post identity_review_admin_paper_applications_path, params: { constituent: @params[:constituent] }, as: :json
+      end
+      assert_response :success
+      assert_equal({ 'state' => 'clear' }, response.parsed_body)
+      assert_equal 'no-store', response.headers['Cache-Control']
+
+      legacy = @params.merge(identity_decision: 'obsolete-decision')
+      @blobs.each_key do |key|
+        legacy.delete("#{key}_signed_id")
+        legacy[key] = fixture_file_upload('income_proof.pdf', 'application/pdf')
+      end
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
+        post admin_paper_applications_path, params: legacy
+      end
+      assert_response :unprocessable_content
+      assert_select '#identity-review-heading'
+      retained = @blobs.keys.to_h do |key|
+        signed_id = css_select("input[type=hidden][name='#{key}_signed_id']").sole['value']
+        blob = ActiveStorage::Blob.find_signed!(signed_id)
+        assert_equal file_fixture('income_proof.pdf').binread, blob.download
+        assert_empty blob.attachments
+        ["#{key}_signed_id", signed_id]
+      end
+
+      assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'], 1 do
+        post admin_paper_applications_path, params: @params.merge(retained).merge(
+          identity_review_receipt: css_select('input[name=identity_review_receipt]').sole['value'],
+          identity_determination: 'keep_separate', identity_rationale: 'Paper identifies a different person.'
+        )
+      end
+      assert_response :redirect
+      application = Application.order(:id).last
+      @blobs.each_key { |key| assert_equal retained["#{key}_signed_id"], application.public_send(key).blob.signed_id }
+    end
+
+    test 'legacy preview still requires an authenticated admin' do
+      sign_out
+      post identity_review_admin_paper_applications_path, as: :json
+      assert_response :unauthorized
+
+      sign_in_for_integration_test(create(:constituent))
+      post identity_review_admin_paper_applications_path, as: :json
+      assert_redirected_to root_path
+    end
+
     test 'selecting a related dependent reuses the person and relationship and records the case with the application' do
       guardian = create(:constituent)
       create(:guardian_relationship, guardian_user: guardian, dependent_user: @candidate)

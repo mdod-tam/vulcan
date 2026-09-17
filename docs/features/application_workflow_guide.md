@@ -48,9 +48,9 @@ All flows converge on **one Application record**, so every downstream service (e
 ### 2.2 Paper (Admin)
 
 1. **Admin → Paper Apps → New**
-2. For a dependent application, staff first select an on-file guardian or use **Save Guardian**. Quick-create is a JSON `POST /admin/users`: it performs guardian identity review, then returns the selected or newly created `guardian_id`; the final multipart submit does not create an inline guardian.
-3. Before a new self-applicant or dependent is submitted, the browser sends the context-scoped identity facts — never proofs or other application answers — to the read-only JSON `POST /admin/paper_applications/identity_review`. Staff either choose an eligible on-file record or explicitly confirm that the people are different; a clear response resumes submission automatically.
-4. The final multipart submit runs through `Applications::PaperApplicationService`. The service owns the scoped `Current.paper_context`, locks and requalifies any selected record or new-person decision, writes the application and proofs, and records the audit event.
+2. For a dependent application, staff first select an on-file guardian or use **Save Guardian**. `POST /admin/users` returns an HTML review fragment on refusal, or the selected/new guardian as JSON on success. The guardian decision is recorded in the same transaction as that separate save; final submission requires the saved `guardian_id`.
+3. The four documents upload directly to Active Storage. Normal `POST /admin/paper_applications` renders identity review or validation errors with retained signed upload IDs. Staff select an eligible existing person or explicitly confirm different people, provide a rationale, and resubmit. Old-page multipart submissions use the same review and retain uploaded documents on refusal.
+4. `Applications::PaperApplicationService` owns the scoped `Current.paper_context`, locks and freshly requalifies identities, then commits the application, proofs, resolved `DuplicateReviewCase` records, and audit events together. Guardian, self-applicant, and dependent decisions share this case lifecycle; no audit-only identity path remains.
 5. The resulting Application then uses the same downstream lifecycle, proof, event, and notification services as the portal flow.
 
 ---

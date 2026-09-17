@@ -139,6 +139,28 @@ The admin search/decorated candidate payload exposes whether a candidate is bloc
 
 Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
 
+## Deployment and recovery
+
+Migration `20260917004500` is intentionally irreversible: a completed existing-person selection
+has no truthful equivalent among the previous statuses. Its `down` raises before changing any
+constraint or index, even when no selection has yet been recorded. Apply the migration before
+starting this application's new workers. Once deployed, recover by rolling forward with a corrected
+release that understands status `5`; do not redeploy a version that lacks `resolved_selected`, run
+`db:rollback`, or rewrite completed decisions. During an incident, pause paper intake at the load
+balancer, retain the database and audit history, deploy the correction, and verify an existing
+selection and a new intake before reopening.
+
+Already-open PR 205 forms may still call `POST /admin/paper_applications/identity_review`.
+Its authenticated, uncached compatibility response only resumes their native multipart submission;
+it performs no identity lookup and issues no decision receipt. The canonical create action ignores
+legacy decisions and recomputes identity. If it refuses the submission, it saves each multipart
+document as an unattached blob and renders the current form with signed IDs, just like direct
+uploads. These blobs use the same seven-day cleanup policy.
+
+Keep this adapter until all pre-consolidation intake tabs have been closed and access logs show no
+calls to the legacy route for seven consecutive days. Remove the route and action together in a
+later release. The multipart retry preservation remains useful independently of the adapter.
+
 ## Account-Created Notices And Quick-Create Markers
 
 Paper identity review uses the normal `new`/`create` intake routes. Quick-created **email-backed** portal user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
