@@ -1,250 +1,94 @@
-# Authentication And MFA
+# Authentication and MFA
 
-This guide describes the current sign-in and multi-factor authentication behavior in MAT Vulcan. It is not a general WebAuthn/TOTP/SMS tutorial; it is a map of the repo's current ownership boundaries.
+Password sign-in, then a second factor that some roles must have and others may.
 
----
+A database-backed session identifies every request after that.
 
-## 1. Sign-In Flow
+Password reset and lost-security-key recovery are separate flows with their own rules.
 
-Password sign-in starts in `SessionsController#create`.
+## Who can sign in
 
-The controller:
+[`User.find_by_login_identifier`](../../app/models/user.rb) accepts an email or a real phone, but resolves only to an **email-backed account**. Phone-only paper records, address-only records, and synthetic dependent contacts are not login identities, and a guardian's shared contact does not give a dependent one. The account must also pass `public_login_active?`, which excludes merged, inactive, and suspended records; legacy rows with no status remain eligible. Account creation and the contact rules behind this live in [user management](../development/user_management_features.md).
 
-- looks up users through `User.find_by_login_identifier`, which accepts email or phone for **email-backed portal accounts** (`real_email?` required; phone match also requires `real_phone?` on the same user), normalizes input, rejects malformed `@` input, rejects synthetic dependent emails and placeholder phones, and works with encrypted email storage
-- **does not** treat phone-only or address-only records as portal accounts — those truthful paper/admin records do not match public sign-in, account access, or WebAuthn recovery
-- public self-registration requires a real email address; phone is optional, requires an explicit phone type when present, and adds an alternate login identifier only when it can be stored on the new email-backed portal account; `DuplicateDetectionService` uses context `:public_registration` so duplicate email redirects to sign-in without authenticating or exposing the submitted email, while duplicate phone/non-portal contact collisions render support-only copy and must not reveal whether the match was email-backed, phone-only, paper/admin-created, text-capable, or delivery-capable
-- checks sign-in throttling through `AuthRateLimit` action `:sign_in_attempt` and scope `:ip`; denied public attempts are audited through `PublicAuditActor` with digest metadata rather than raw submitted contact or IP values
-- checks account lock state before password authentication
-- records failed password attempts
-- signs the user in immediately when no second factor is enabled
-- starts the MFA flow when the user has any second factor
+## Sign-in
 
-User password/session behavior lives in `UserAuthentication`.
+[`HomeController#index`](../../app/controllers/home_controller.rb) redirects `/` to sign-in for visitors or the signed-in user's dashboard. Administrators, constituents, vendors, evaluators, and trainers each have a dashboard; other user types fall back to profile editing through `ApplicationController#_dashboard_for`. There is no separate introductory homepage.
 
-Account access (the “Forgot password?” / send reset link flow) lives in `PasswordsController#create`. It uses `User.find_for_account_access`, which delegates identity lookup to `find_by_login_identifier` and selects delivery separately: email for email-shaped contact on an email-backed account, SMS only when the same account has `sms_capable_phone?` and phone-shaped contact was entered. Email and SMS reset links are built from configured canonical URL options, not the inbound request host, and production refuses the unsafe `example.com` fallback. Every outcome returns the same public confirmation; delivery attempts, including matched accounts with no available delivery route, are recorded in audit logs only after the account-access rate-limit gate. `AuthRateLimit` owns the account-access `:ip`, `:contact_ip`, and matched `:user_ip` throttles.
+Required password changes and MFA enrollment take priority. Pending MFA verification is not a completed sign-in. Registration, password/account recovery, help pages, and token-based document tasks keep their own public entry points.
 
-Reset-link authority is bound to contact state, not only to the password. The `:password_reset` token (20-minute expiry) carries an HMAC fingerprint of the password digest plus the normalized login email **and** the normalized phone — every route a reset link can be delivered to. Changing a password, a login email, or a phone therefore invalidates every outstanding link for the remainder of its life, and redemption re-derives the fingerprint from the locked user row (`PasswordsController#update_password_from_token`). The phone half exists because reset links are also delivered by SMS: a same-person merge that replaces a survivor's phone is the admin asserting that number is not this person's, so a link already texted there must stop working. This is a *revocation* property, not an issuance-ordering one — a link sent moments before such a change was legitimate when issued, so locking the account-access lookup would not make it safe; invalidating the token does. Cosmetic reformatting is not a change of authority, since the stored column and the fingerprint both normalize through `User.normalize_phone` / `User.normalize_email`.
+[`SessionsController#create`](../../app/controllers/sessions_controller.rb) resolves the identifier, checks for a lockout, verifies the password — failed attempts feed both the shared IP rate limit and that user's failure count — and then either creates the session or stashes temporary MFA state and redirects to verification.
 
-WebAuthn recovery in `AccountRecoveryController` uses the same email-backed login lookup via a contact field. `AuthRateLimit` owns the account-recovery `:ip`, `:contact_ip`, and matched `:user_ip` throttles. Throttling keys and unmatched rate-limit audit metadata use digests of submitted contacts rather than raw identifiers, and denied public recovery/account-access attempts are logged through `PublicAuditActor`.
+Session creation itself is [`ApplicationController#_create_and_set_session_cookie`](../../app/controllers/application_controller.rb), which locks the user and rechecks them before writing a [`Session`](../../app/models/session.rb); password-only sign-in also re-verifies the submitted identifier and password inside that lock, so a merge or credential change landing mid-request cannot be accepted on stale reads. Registration creates its first session by a separate path.
 
-Current account-lock behavior:
+The signed `session_token` cookie identifies the row; [`Authentication`](../../app/controllers/concerns/authentication.rb) resolves it thereafter, and sign-out deletes session, cookie, and any pending MFA state.
 
-- maximum failed login attempts: 5
-- lock duration: 1 hour
-- password reset tokens expire after 20 minutes and are invalidated by either a successful password change or a normalized login-email change because token generation is bound to both authorities
-- reset-token consumption locks and reloads the base `User` row, then resolves the exact submitted token again against that locked password/email authority before changing the password
+Five failed attempts lock the account for an hour ([`UserAuthentication`](../../app/models/concerns/user_authentication.rb)) — separate from request throttling.
 
-Recovery requests are durable and idempotent: a partial unique index allows only one pending request per user, duplicate pending submissions coalesce into the same public confirmation, and a new pending request is allowed after the previous request is resolved. The index migration assumes alpha/shared environments do not already contain duplicate pending recovery requests for the same user; resolve any such rows before migrating. Admin approval removes WebAuthn credentials only if the approval notification record can be created and queued without a synchronous delivery error.
+## Second factors
 
-There is no live email-verification link flow in the current code. Public signup sends `ApplicationNotificationsMailer.registration_confirmation`; any future email-verification work should add a deliberate caller, query-parameter bearer token handling, and end-to-end tests instead of relying on the historical `user_mailer_email_verification` template seeds.
+Administrators, evaluators, trainers, and vendors must enroll; constituents may. [`ApplicationController#enforce_required_mfa_enrollment`](../../app/controllers/application_controller.rb) redirects a required role with no enabled factor into setup. `second_factor_enabled?` counts a WebAuthn credential, a TOTP credential, or a **verified** SMS credential — an unverified SMS credential is why an account can loop back to setup.
 
-Session records are stored through the `Session` model, and the signed session cookie contains the session token.
-
----
-
-## 2. MFA Enrollment Policy
-
-`ApplicationController#enforce_required_mfa_enrollment` requires MFA enrollment for these roles:
-
-- administrators
-- evaluators
-- trainers
-- vendors
-
-Constituents may use MFA, but the current enforcement hook does not require it for them.
-
-When a required user is authenticated but has no second factor, the app redirects them to `setup_two_factor_authentication_path`.
-
-`User#second_factor_enabled?` is true when the user has at least one of:
-
-- WebAuthn credential
-- TOTP credential
-- verified SMS credential
-
----
-
-## 3. MFA Owners
-
-| Area | Current owner |
+| Factor | Stored and verified |
 | --- | --- |
-| Password sign-in and MFA handoff | `SessionsController` |
-| MFA verification flow | `TwoFactorAuthenticationsController` |
-| MFA credential setup/removal | `TwoFactorCredentialsController` |
-| Shared verification helpers | `TwoFactorVerification` |
-| Session key/challenge helpers | `TwoFactorAuth` in `config/initializers/two_factor_auth.rb` |
-| WebAuthn credentials | `WebauthnCredential` |
-| Authenticator app credentials | `TotpCredential` |
-| SMS credentials | `SmsCredential` |
-| SMS login challenge state | `TwoFactor::SmsLoginChallenge` |
-| Twilio Verify API wrapper | `TwilioVerifyService` |
+| WebAuthn | [`WebauthnCredential`](../../app/models/webauthn_credential.rb): credential ID, encrypted public key, sign count. Verification checks the session challenge and updates the count. |
+| TOTP | [`TotpCredential`](../../app/models/totp_credential.rb): encrypted secret, Base32-validated before QR generation or save. Verification allows 30 seconds of drift either way. |
+| SMS | [`SmsCredential`](../../app/models/sms_credential.rb): phone and verification state. Twilio Verify checks the code; only challenge metadata is stored here. Login challenges last 10 minutes, with a 30-second resend cooldown and a short duplicate-send lock. |
 
-Keep new MFA behavior inside these owners so setup, verification, logging, and session cleanup stay consistent.
+Registration and verification are split across [`TwoFactorCredentialsController`](../../app/controllers/two_factor_credentials_controller.rb), [`TwoFactorAuthenticationsController`](../../app/controllers/two_factor_authentications_controller.rb), the shared [`TwoFactorVerification`](../../app/controllers/concerns/two_factor_verification.rb) concern, and [`TwoFactorAuth`](../../config/initializers/two_factor_auth.rb), which holds the temporary user, challenge, return path, and completion state. SMS send/resend lifetimes are in [`TwoFactor::SmsLoginChallenge`](../../app/services/two_factor/sms_login_challenge.rb) and [`TwilioVerifyService`](../../app/services/twilio_verify_service.rb).
 
----
+Two ordering details matter: JSON and WebAuthn completion must create the session before clearing the challenge, and resolving the temporary MFA user rechecks `public_login_active?`, so an account retired mid-sign-in cannot finish verifying.
 
-## 4. Shared MFA Session State
+TOTP provisioning URIs retain `MatVulcan` as the issuer, a deliberate exception to the public program name. The issuer labels new enrollments; changing it does not rename existing authenticator entries or alter TOTP codes.
 
-`TwoFactorAuth` defines the session keys used across MFA flows.
+## Password reset and account access
 
-Current temporary state includes:
+[`PasswordsController#create`](../../app/controllers/passwords_controller.rb) resolves account and delivery route together through `User.find_for_account_access`: an email selects email delivery; a phone selects SMS only when that same email-backed account has an SMS-capable number. Matched, unmatched, undeliverable, and throttled requests all produce the same public confirmation.
 
-- the user ID currently completing MFA
-- the selected or active MFA type
-- the current challenge
-- metadata for the challenge
-- return path after successful authentication
-- verified timestamp after MFA completion
+Links are built against the [configured public host](../../app/services/canonical_public_url_options.rb) rather than the request host, and production refuses the `example.com` placeholder.
 
-`TwoFactorAuth.abort_authentication` clears temporary MFA state. Sign-out calls it before removing the normal session cookie.
+The `:password_reset` token expires in **20 minutes** and is derived from the password digest, normalized login email, and normalized phone — so changing any of those invalidates outstanding links, including one already texted to a number a merge later removed. Reformatting a phone or email cosmetically does not, since normalization absorbs it. Redemption re-resolves the token under lock before writing the password. Signed-in and forced changes go through [`Users::PasswordUpdateService`](../../app/services/users/password_update_service.rb).
 
-The challenge is not always cleared at the exact same moment as successful verification because JSON/WebAuthn completion needs to create the final application session first. Do not add manual session cleanup in a controller without checking the existing flow.
+Issuing a reset link deliberately sits outside the merge lock, so a racing contact change can send a now-dead link to an old destination. Token invalidation and locked redemption are what make that safe; see the [merge integrity boundary](../development/service_architecture.md#merge-integrity-lock-boundary).
 
-`User#public_login_active?` rejects merged, inactive, and suspended records (legacy NULL status is treated as active). It gates every point that resolves the in-progress MFA user — `ApplicationController#find_user_for_two_factor` and `TwoFactorAuthenticationsController#find_user_for_two_factor` both return `nil` for a record that fails this check, so a record retired by an admin merge mid-login cannot reach method selection, verification options, SMS resend, or credential updates; it fails closed to sign-in instead of only being caught at final session creation. `ApplicationController#_create_and_set_session_cookie` also re-checks `public_login_active?` and is the single chokepoint for both password sign-in and 2FA completion, so a record retired between password entry and MFA completion still cannot finish authenticating, and `TwoFactorAuth.abort_authentication` clears the temporary MFA state (including the challenge) on that failure so nothing can be replayed. Brand-new self-registration creates its initial session separately after the new user and duplicate-review outcome are persisted; it does not pass through this existing-account authentication chokepoint.
+## Lost security keys
 
----
+[`AccountRecoveryController`](../../app/controllers/account_recovery_controller.rb) accepts the same eligible identifiers and files a request for staff. A partial unique index allows one pending [`RecoveryRequest`](../../app/models/recovery_request.rb) per user; repeat submissions return the same public confirmation and reuse the pending request.
 
-## 5. WebAuthn
+[`Admin::RecoveryRequestsController`](../../app/controllers/admin/recovery_requests_controller.rb) approves it and removes **WebAuthn credentials only** — TOTP and SMS survive. Approval rolls back if the notification record cannot be created or reports an immediate delivery error, though a successfully enqueued email still proves nothing about later delivery. The admin **Delete MFA tokens** action is the broader one: all factor types plus sessions ([admin tools](../development/user_management_features.md#admin-tools)).
 
-WebAuthn is configured in `config/initializers/webauthn.rb`.
+## Public copy constraints
 
-Current configuration behavior:
+[Registration](../../app/controllers/registrations_controller.rb) routes an exact email-backed match to sign-in and gives every other hard contact collision the same support-only message. That message must not reveal whether the matched record is email-backed, phone-only, admin-created, SMS-capable, or reachable at all, must not echo the submitted email, and must not offer a sign-in or account-access call to action — those would each answer, by implication, a question about someone else's record. The form may keep the person's own entered values for correction. Account-access requests hold the same line, with one confirmation for matched, unmatched, undeliverable, and throttled alike.
 
-- relying party name is `MAT Vulcan`
-- production requires `APPLICATION_HOST`
-- production origin is derived as `https://APPLICATION_HOST`
-- development allows `http://localhost:3000`
-- development relying party ID is `localhost`
-- production relying party ID comes from `WEBAUTHN_RP_ID` when present, otherwise the application host
-- credential option timeout is 120 seconds
+The constraint lives in translated copy as much as in the controllers. [Registration response tests](../../test/controllers/registrations_controller_test.rb) and [account-access tests](../../test/controllers/passwords_controller_test.rb) cover it.
 
-Credential setup is handled by `TwoFactorCredentialsController`. The controller generates a WebAuthn user handle if missing, stores the challenge in session, verifies the browser response, and saves `external_id`, encrypted `public_key`, nickname, sign count, and authenticator type metadata.
+## Unauthenticated requests
 
-Verification is handled by `TwoFactorAuthenticationsController` through `TwoFactorVerification`. It checks the stored challenge, verifies the credential, updates sign count, and marks the MFA step complete.
+[`Authentication#authenticate_user!`](../../app/controllers/concerns/authentication.rb) answers by format: JSON gets a 401 with `Cache-Control: no-store` and `{ "error": "authentication_required", "sign_in_path": "/sign_in" }`; HTML and Turbo get a redirect to sign-in, with the attempted GET or HEAD path stored for the return trip. A JSON caller that silently retries will just fail again — and if the page holds selected files, reloading it loses them, so the sign-in prompt belongs in the existing page.
 
----
+[`AuthRateLimit`](../../app/services/auth_rate_limit.rb) owns failed sign-in, account-access, and recovery throttles, with policy-backed limits and identifier digests in both keys and audit metadata. [`PublicAuditActor`](../../app/services/public_audit_actor.rb) attributes unauthenticated events to the configured system user, or skips the event with a warning when that user is missing.
 
-## 6. TOTP
+MFA verification mostly writes Rails logs through `TwoFactorAuth` rather than `Event` rows, so attempt history is not in the audit trail.
 
-TOTP setup is handled by `TwoFactorCredentialsController`.
+## Troubleshooting
 
-Current behavior:
+| Symptom | Likely cause |
+| --- | --- |
+| Loops back to MFA setup | Role requires a factor and `second_factor_enabled?` is false — commonly an unverified SMS credential. |
+| WebAuthn fails on a deployed host | [WebAuthn config](../../config/initializers/webauthn.rb): production needs `APPLICATION_HOST` and uses its HTTPS origin; `WEBAUTHN_RP_ID` overrides; development is `localhost`. |
+| SMS not sent | [Twilio config](../../config/initializers/twilio.rb): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`, phone format, resend cooldown. |
+| TOTP code rejected | Missing credential, secret decryption, or clock drift beyond 30 seconds. |
+| Reset link stopped working | Expiry, a changed password/email/phone, or an account no longer login-active. |
 
-- the setup flow stores a generated secret in MFA challenge metadata
-- secrets are validated as Base32 before use
-- QR-code generation uses the validated secret only
-- the saved `TotpCredential#secret` is encrypted
-- login verification accepts a 30-second drift behind and ahead
-- successful verification updates `last_used_at`
+Tests simulate Twilio Verify and accept `123456`, and development falls back to the same simulation when Verify is unconfigured — neither says anything about production SMS working.
 
-Do not pass raw secret params directly into QR generation or credential creation. The existing helper validates secrets to avoid XSS-prone setup flows.
+## Tests
 
----
+- [Root redirects](../../test/controllers/home_controller_test.rb) — role destinations, expired sessions, password/MFA gates, and public sign-in links.
+- [Sessions](../../test/controllers/sessions_controller_test.rb), [enrollment policy](../../test/controllers/mfa_enrollment_policy_test.rb)
+- [WebAuthn verification](../../test/controllers/two_factor_authentication_webauthn_test.rb), [SMS selection](../../test/controllers/two_factor_authentication_sms_selection_test.rb)
+- [Password reset](../../test/controllers/passwords_controller_test.rb), [concurrent resets](../../test/controllers/passwords_controller_concurrency_test.rb)
+- [Recovery requests](../../test/controllers/account_recovery_controller_test.rb), [admin approval](../../test/controllers/admin/recovery_requests_controller_test.rb)
+- [Twilio Verify](../../test/services/twilio_verify_service_test.rb)
 
-## 7. SMS
-
-SMS setup and login use Twilio Verify through `TwilioVerifyService`.
-
-Important pieces:
-
-- `SmsCredential` stores a normalized phone number and `verified_at`
-- only verified SMS credentials count as enabled
-- setup stores pending phone/challenge state before creating a confirmed credential
-- login SMS challenges live in `TwoFactor::SmsLoginChallenge`
-- challenge TTL is 10 minutes
-- resend cooldown is 30 seconds
-- a short cache lock prevents duplicate SMS sends for the same credential
-- test mode accepts `123456`; development without Twilio config simulates sends
-
-The app does not store plain SMS codes. It stores Twilio Verify metadata such as verification SID and checks the submitted code through Twilio Verify.
-
----
-
-## 7b. Unauthenticated Responses By Format
-
-`Authentication#authenticate_user!` answers an unauthenticated request differently depending on what
-the caller can actually read. This is application-wide, not specific to any one controller.
-
-| Request format | Response |
-|----------------|----------|
-| JSON (`request.format.json?`) | **401 Unauthorized**, `Cache-Control: no-store`, body `{ "error": "authentication_required", "sign_in_path": "/sign_in" }` |
-| HTML | 302 redirect to `sign_in_path` with the "Please sign in to continue" alert, and the attempted GET/HEAD path stored in `session[:return_to]` |
-| Turbo / other XHR | Unchanged — still redirected, because `SessionsController#new` renders a turbo_stream |
-
-The JSON case is deliberately keyed on format rather than on `request.xhr?`: Turbo requests are also
-XHR, and redirecting those is correct. Redirecting a JSON request is not — `SessionsController#new`
-has no JSON responder, so the redirect raised `ActionController::UnknownFormat` and turned an
-ordinary expired session into a server exception on every such request, while telling the caller
-nothing it could act on.
-
-`no-store` because the body describes one session at one moment; a cached "your session ended" is
-wrong the instant the user signs back in. The body carries no user data — only the fact and where to
-go — so it is safe to return to a caller that is by definition unauthenticated.
-
-Clients should treat 401 as "reauthenticate, then retry", not as a transient error. Paper guardian
-quick-create handles this response without clearing the entered guardian fields. Current paper
-identity decisions use the authenticated create action and server-rendered review, with signed
-uploads retained across validation responses. There is no browser identity preflight or second
-eligibility-fetch protocol in the current form.
-
----
-
-## 8. Logging And Audit Notes
-
-MFA success and failure are logged through Rails logs via `TwoFactorAuth.log_verification_success` and `log_verification_failure`.
-
-Password failures update counters on the user. Account recovery and password reset flows create their own events where needed.
-
-Do not assume every MFA attempt creates an `Event` row. The current MFA flow primarily uses application logs for MFA verification attempts.
-
----
-
-## 9. Testing Guidance
-
-Use the tests that match the layer you are changing:
-
-- `test/controllers/sessions_controller_test.rb` for password-to-MFA handoff
-- `test/controllers/mfa_enrollment_policy_test.rb` for role-based enrollment enforcement
-- `test/controllers/two_factor_authentication_webauthn_test.rb` for WebAuthn verification routing
-- `test/controllers/two_factor_authentication_sms_selection_test.rb` for SMS method selection/resend behavior
-- `test/services/twilio_verify_service_test.rb` for Twilio Verify wrapper behavior
-- `test/services/two_factor/challenge_hydration_test.rb` for SMS challenge hydration
-- `test/system/webauthn_sign_in_test.rb` and `test/system/two_factor_authentication_flow_test.rb` for end-to-end browser coverage
-
-Test mode has deliberate shortcuts, especially SMS code acceptance. Keep production behavior in mind when writing assertions.
-
----
-
-## 10. Troubleshooting
-
-### User keeps landing on MFA setup
-
-Check the user role and `User#second_factor_enabled?`. Required roles must have WebAuthn, TOTP, or a verified SMS credential.
-
-### WebAuthn fails in production
-
-Check `APPLICATION_HOST`, `WEBAUTHN_RP_ID`, HTTPS origin, and whether the browser origin matches the configured allowed origins.
-
-### SMS code cannot be sent
-
-Check Twilio account SID, auth token, Verify service SID, phone formatting, and whether a duplicate send is already in progress.
-
-### TOTP code fails
-
-Check that the credential exists, the secret decrypts, and client/server clocks are reasonably close.
-
----
-
-## 11. Change Rules
-
-When changing authentication:
-
-- Keep password sign-in and MFA handoff in `SessionsController`.
-- Keep MFA setup/removal in `TwoFactorCredentialsController`.
-- Keep MFA verification in `TwoFactorAuthenticationsController` and `TwoFactorVerification`.
-- Use `TwoFactorAuth` session keys instead of inventing new session state.
-- Do not count unverified SMS credentials as enabled.
-- Do not store SMS codes in our database.
-- Use `User.find_by_login_identifier` for password sign-in lookup instead of calling `User.find_by_email` or `User.find_by_phone` directly.
-- Delegate account-access identity lookup and delivery selection to `User.find_for_account_access` from `PasswordsController#create`; do not reimplement parallel lookup rules in the controller.
-- Do not add role-based MFA exceptions without updating tests.
-- Be careful with direct column writes in auth bookkeeping; the existing uses are narrow and documented in code.
+The authentication test helpers bypass parts of sign-in and MFA, so tests of those boundaries have to drive the real flow ([testing and debugging](../development/testing_and_debugging_guide.md)).

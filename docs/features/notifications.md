@@ -1,298 +1,71 @@
-# Notification System
+# Notifications
 
-This guide explains how MAT Vulcan creates notification records, sends email or printable letters, tracks delivery status, and keeps notification behavior separate from audit history.
+A notification records what this application tried to tell someone. It can appear in the notification list, trigger an email or printable letter, or simply preserve communication history.
 
-It is intentionally higher level than the implementation. Use it to understand ownership, current behavior, and extension rules. For exact method bodies, follow the code paths listed near the end.
+Audit events record what happened.
 
----
+Rails flash messages give immediate request feedback.
 
-## 1. What Notifications Are For
+## The normal flow
 
-Notifications are user-facing communication records. They can also provide persistent history for staff and constituents, even when no message is delivered.
+1. The workflow calls `NotificationService.create_and_deliver!` with an action, recipient, and related record.
+2. The service creates a `Notification`. With `deliver: true`, it attempts the mapped delivery; `deliver: false` creates history only.
+3. The mailer builds the message and resolves its destination. Preference-sensitive messages can become letters in the print queue.
+4. Routing metadata records the actual channel and reason. A queued message is not proof that the recipient received it.
 
-Use the notification system for:
+The requested channel is `:email` or `:letter`, and what happened instead is recorded in `actual_delivery_channel` and `delivery_route_reason` — the requested channel alone will not explain a message that became a letter. SMS never comes from here; specific workflows send it through `SmsService`.
 
-- email or letter delivery
-- persistent notification rows shown in `/notifications`
-- communication history tied to an application, proof review, training session, vendor, or security workflow
-- delivery metadata such as route, failure reason, Postmark message ID, and bounce details
+## Which workflow owns delivery?
 
-Do not use notifications as a replacement for audit events. Audit events answer "what happened?" Notifications answer "what did we record or try to tell someone?"
-
-Some workflows create both. For example, proof approval logs `proof_approved` as an audit event and creates a record-only `proof_approved` notification.
-
----
-
-## 2. System Shape
-
-| Area | Current owner |
+| Communication | Owner and behavior |
 | --- | --- |
-| Notification creation and delivery routing | `NotificationService` |
-| Persistent notification state | `Notification` |
-| Human-readable notification text | `NotificationComposer` |
-| Application and proof mail | `ApplicationNotificationsMailer` |
-| Provider certification mail | `MedicalProviderMailer` and certification services |
-| Vendor mail | `VendorNotificationsMailer` |
-| Training mail | `TrainingSessionNotificationsMailer` |
-| Printable letters | recipient-facing mailers and `PrintQueueItem` |
-| Email delivery/open tracking | `UpdateEmailStatusJob` and `PostmarkEmailTracker` |
-| Bounce/spam webhooks | `Webhooks::EmailEventsController` and `EmailEventHandler` |
+| Ordinary notification | [NotificationService](../../app/services/notification_service.rb) creates the row and calls the mapped mailer. |
+| Proof approval | `ProofReview` records the audit event and a notification without sending a message. |
+| Proof rejection | [RequestProofResubmission](../../app/services/applications/request_proof_resubmission.rb) issues the secure upload request. A failed delivery leaves the review saved and lets staff see a warning. |
+| Request for provider details | [RequestProviderInfo](../../app/services/applications/request_provider_info.rb) owns the secure request and delivery. |
+| Disability certification | [MedicalCertificationService](../../app/services/applications/medical_certification_service.rb) and [MedicalCertificationReviewer](../../app/services/applications/medical_certification_reviewer.rb) own provider requests and follow-up. Provider delivery can include fax; DocuSeal signing has separate tracking. |
+| Security-key recovery approval | Always email, including for users who prefer letters. |
+| Account-access SMS | [PasswordsController](../../app/controllers/passwords_controller.rb) sends through `SmsService` and records the outcome in audit events. |
 
-Two secure-request issuance services are deliberate exceptions to the `NotificationService` routing row: `Applications::RequestProviderInfo` and `Applications::RequestProofResubmission` route constituent delivery through `Applications::SecureRequestRecipientResolver` plus `ApplicationNotificationsMailer` for email and postal letters (via `PrintQueueItem`); their SMS goes through `SmsService` directly, since SMS is not a `NotificationService` channel (see the SMS notes below). Routing depends on resolver-selected channels, contact owners, and delivery-owner eligibility rather than a stored notification preference alone.
+Proof rejection is fenced off: `NotificationService` refuses ordinary `proof_rejected` delivery unless the caller marks itself a legacy path, because the secure-request flow is what actually gives the constituent a way to replace the document. Provider rejection is fenced the same way by omission — there is no generic `medical_certification_rejected` entry in the mailer map, and certification services own that message.
 
-Every newly issued application secure request persists the resolver-selected delivery
-owner and source. Those facts belong to that bearer link and are not recomputed while
-the form is used. A resend resolves current eligible contact into its replacement form
-without rewriting the old form's provenance. Historical rows may lack both; they retain
-an explicit logical-recipient fallback rather than an inferred guardian.
+### Record-only actions
 
-The normal entry point is `NotificationService.create_and_deliver!`. It creates a `Notification` row, records delivery intent in metadata, and attempts delivery when `deliver: true`.
+`proof_approved`, `medical_certification_received`, `medical_certification_approved`, and `documents_requested` intentionally send nothing. The first three reflect status visible in the portal; `documents_requested` has no delivery mailer.
 
-`NotificationService.build` also exists for fluent call sites, but most new code should prefer the direct service call unless a builder makes the caller clearer.
+When delivery is requested for these actions, routing metadata records `none` / `no_email_action`. This is expected behavior.
 
----
+### Secure-request recipients
 
-## 3. Records, Delivery, And Channels
+[SecureRequestRecipientResolver](../../app/services/applications/secure_request_recipient_resolver.rb) selects the contact owner and channel for provider-info and proof requests. Each new form stores its delivery owner and source, so the issued link retains that history. Resending creates a replacement using current eligible contact details.
 
-Every notification row has:
+The stored owner's supported locale controls messages and public form responses, with a default-locale fallback. Older forms without an owner fall back to the logical recipient; they do not infer a guardian. Letters have no historical address snapshot.
 
-- a recipient
-- an optional actor
-- an optional notifiable record
-- an action
-- metadata
-- read status
-- optional delivery status and message ID
+Automatic proof-rejection delivery does not select SMS. Staff can select it from the application detail page when retrying.
 
-The service accepts `:email` and `:letter` as requested channels. That requested channel is not always the final route. Recipient-facing mailers may route a preference-sensitive message to a printable letter when the recipient prefers postal communication.
+## Message content and delivery tracking
 
-Important channel details:
+[NotificationComposer](../../app/services/notification_composer.rb) supplies short in-app text. Mailers supply full email and letter bodies using [EmailTemplate](../../app/models/email_template.rb). Each template's `syntax` selects `legacy_percent` placeholders or `liquid` with declared variable paths and restricted syntax. Preserve recipient and locale behavior when changing a template.
 
-- `deliver: false` creates history only. No mailer is enqueued.
-- Record-only actions are valid and intentional.
-- Email delivery uses ActionMailer jobs for mapped actions.
-- `security_key_recovery_approved` is email-only even for letter-preferring users; routing metadata records `actual_delivery_channel: "email"` and `delivery_route_reason: "email_only"` because the recovery approval mailer contains account-access instructions and has no printed-letter path.
-- Printable letters are represented through the letter/print queue flow.
-- SMS is not a general `NotificationService` channel. Selected secure-request services can send SMS through `SmsService`.
-- Account-access SMS is a narrow public auth exception owned by `PasswordsController`, not `NotificationService`; it sends through `SmsService` with sensitive logging and records the outcome through audit events.
+[UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) polls Postmark only for `medical_certification_requested` notifications with a message ID. The webhook handler targets `MedicalProviderEmail`, not `Notification`; see the [email guide](../infrastructure/email_system.md) for that integration's limits. Do not assume every email has delivery or open tracking.
 
----
+Notification auditing is opt-in through `audit: true`. Normally, leave the domain event with its workflow owner so a single action does not generate duplicate audit history.
 
-## 4. Record-Only Notifications
+## Adding to this
 
-Some actions are intentionally stored without email delivery:
+A new mapped action is three things, not one: a recipient contract, a template, and tests that assert what actually went out. Skipping the first produces a mailer that works for the case it was written against and picks the wrong person for dependent applications.
 
-| Action | Why it is record-only |
+Reset, verification, and upload links are bearer credentials — anything that stores them durably turns a notification row into a way in. [SecureErrorSanitizer](../../app/services/concerns/secure_error_sanitizer.rb) exists because delivery failures otherwise carry the link into the error message, and `sensitive: true` keeps their SMS out of logs.
+
+Recipient, channel, locale, and history are each independently wrong-able, and intentional non-delivery looks identical to broken delivery unless a test distinguishes them. [Notification service tests](../../test/services/notification_service_test.rb), [secure proof-request tests](../../test/services/applications/request_proof_resubmission_test.rb), [delivery locale tests](../../test/services/applications/secure_request_delivery_locale_test.rb), and [webhook tests](../../test/controllers/webhooks/email_events_controller_test.rb) show the shapes.
+
+## Troubleshooting
+
+| Symptom | Check first |
 | --- | --- |
-| `proof_approved` | Constituents can see status in the portal; staff need history. |
-| `medical_certification_received` | Status is visible in application/certification history. |
-| `medical_certification_approved` | Status is visible in application/certification history. |
-| `documents_requested` | No mailer delivery path is currently configured. |
-
-For these actions, the service stores routing metadata such as `actual_delivery_channel: "none"` and a reason like `no_email_action`.
-
-Do not treat record-only notifications as failed delivery. They are expected behavior.
-
----
-
-## 5. Proof Review Communications
-
-Reviewable proof types are income, residency, and ID.
-
-Proof approval behavior:
-
-- `ProofReview` logs `proof_approved`.
-- `ProofReview` creates a record-only `proof_approved` notification.
-- Individual proof approval email/letter delivery is suppressed today.
-
-Proof rejection behavior:
-
-- `ProofReview` logs the generic `proof_rejected` audit event.
-- `Applications::RequestProofResubmission` creates secure upload request tracking.
-- Delivery is attempted through the secure request flow, not by sending a bare proof-rejected notification through `NotificationService`.
-- If request delivery fails, the proof review remains saved and the admin workflow can show a delivery warning.
-
-`NotificationService` still has legacy proof-rejection action names such as `income_proof_rejected`, `residency_proof_rejected`, and `id_proof_rejected`. Normal code should not use them for reviewable proof rejection delivery. The service blocks those deliveries unless metadata explicitly marks the path as legacy.
-
----
-
-## 6. Disability Certification Communications
-
-User-facing prose should say disability certification, even though code identifiers still use `medical_certification_*`.
-
-Current certification communication paths include:
-
-| Path | Current behavior |
-| --- | --- |
-| Provider request email | Certification services create a request notification and enqueue provider email delivery. |
-| Secure provider upload request | Tokenized upload services create tracking records and delivery attempts. |
-| DocuSeal request | Document signing services and webhooks track signing state separately. |
-| Provider rejection follow-up | Certification reviewer and provider notifier handle provider delivery, including fax-first behavior where configured. |
-| Printable DCF forms | Admin print queue paths create printable output. |
-
-Provider rejection delivery should stay in the certification-specific services. Do not add a generic `medical_certification_rejected` route to `NotificationService::MAILER_MAP` unless the workflow is deliberately redesigned.
-
----
-
-## 7. Templates And Message Text
-
-Email templates are stored in the database through `EmailTemplate`.
-
-Template rendering supports:
-
-- `legacy_percent` syntax, such as `%{application_id}`
-- `liquid` syntax, such as `{{ application.id }}`, when the `email_template_liquid` flag is enabled
-
-Liquid rendering is intentionally strict. Templates can only reference declared required or optional variable paths. Arbitrary tags and filters are rejected.
-
-`NotificationComposer` generates short human-readable messages for notification rows. Mailers are responsible for full email/letter bodies and template variables.
-
-When adding or changing templates:
-
-- keep the template name aligned with the mailer action
-- declare variables explicitly
-- preserve locale fallback behavior
-- avoid putting sensitive values in long-lived metadata unless they are redacted after delivery
-- treat reset URLs, verification URLs, and secure upload links as delivery artifacts; sanitize them from mailer/SMS failure logs and never persist raw bearer links in notification metadata
-
----
-
-Secure provider-info and proof requests use the persisted secure form's delivery owner
-for message language across email, SMS, letters, public form/resend pages, validation
-errors, and success responses, with a supported-locale check and default-locale fallback.
-Historical ownerless forms use the logical recipient's effective message locale.
-Staff can explicitly select proof SMS from the application detail page after automatic
-delivery fails; automatic rejection callbacks do not select SMS. Issued-link rows show
-stable constituent IDs and original delivery ownership, with “Postal mail” for letters
-because no historical address snapshot is stored.
-
-## 8. Delivery Tracking
-
-Delivery tracking exists at two levels:
-
-| Tracking type | Current behavior |
-| --- | --- |
-| Notification routing metadata | Stored after delivery routing, including actual route and reason. |
-| Delivery status | Stored on the notification when delivery fails or tracking updates arrive. |
-| Postmark polling | `UpdateEmailStatusJob` polls Postmark for `medical_certification_requested` notifications with a `message_id`. |
-| Webhooks | Bounce and spam events update matched notification records; matched provider bounces can also create audit events. |
-
-`UpdateEmailStatusJob` only applies to `medical_certification_requested` notifications today. It should not be assumed to track every email sent through the system.
-
----
-
-## 9. Flash Messages Are Separate
-
-Rails flash messages are request feedback, not persistent notifications.
-
-Use flash messages for:
-
-- form success or failure
-- immediate admin feedback
-- redirect messages
-- validation or workflow warnings shown in the current request
-
-Use `NotificationService` when the system needs a durable communication record or an email/letter delivery attempt.
-
-The older JavaScript toast infrastructure has been removed. Prefer accessible Rails flash behavior for in-app request feedback.
-
----
-
-## 10. Audit Boundary
-
-`NotificationService` does not create audit events by default.
-
-When callers pass `audit: true`, the service can create notification-level audit events such as notification-created, notification-sent, or notification-failed records. Most domain workflows should leave `audit: false` and let the owning service create the domain audit event.
-
-Examples:
-
-| Workflow | Audit owner | Notification owner |
-| --- | --- | --- |
-| Proof approval | `ProofReview` logs `proof_approved`. | `ProofReview` creates record-only approval notification. |
-| Proof rejection | `ProofReview` logs `proof_rejected`. | Secure resubmission request service creates tracking/delivery records. |
-| Application status change | `Application#transition_status!` logs `application_status_changed`. | Notification only if a communication is needed. |
-| Medical certification request | Certification service logs certification request/status history. | Notification row and provider mail delivery are request-owned. |
-
-One logical event should have one audit owner and, if needed, one notification owner.
-
----
-
-## 11. Testing Guidance
-
-Use tests that exercise the workflow owner:
-
-- `NotificationService` tests for service contracts, delivery routing, record-only actions, and legacy proof-rejection blocking
-- mailer tests for rendered templates, locale behavior, recipient selection, and letter routing
-- controller/service tests for workflows that create notifications as side effects
-- webhook/job tests for delivery status updates
-
-Prefer asserting behavior rather than copying implementation internals. Useful assertions include:
-
-- a notification row was created with the expected action and recipient
-- `deliver: false` did not enqueue mail
-- a record-only action stores `actual_delivery_channel: "none"`
-- proof rejection goes through secure proof resubmission instead of bare `NotificationService` delivery
-- temporary secrets are redacted after delivery
-- sensitive SMS delivery tests assert the message body, reset URL, and token are absent from logs even on provider failures
-
----
-
-## 12. Troubleshooting
-
-### Notification row exists but no email was sent
-
-Check whether the action is record-only, whether `deliver: false` was used, whether the recipient routes to letter, and whether the mailer map contains the action.
-
-### Proof rejection did not send a normal proof email
-
-That is expected for current reviewable proof rejection. Check secure request forms, delivery result data, and request revocation metadata instead.
-
-### Delivery failed
-
-Check `notification.delivery_status`, `notification.metadata["delivery_error"]`, routing metadata, ActionMailer job logs, and Postmark/webhook logs when the notification has a `message_id`.
-
-### Template rendering failed
-
-Check the template name, format, locale fallback, syntax mode, and declared variables. Liquid templates are strict by design.
-
----
-
-## 13. Change Rules
-
-When changing notifications:
-
-- Use `NotificationService` for durable notification rows and mapped email/letter delivery.
-- Keep proof rejection delivery in `Applications::RequestProofResubmission`.
-- Keep disability certification provider delivery in certification-specific services.
-- Use `deliver: false` for intentional history-only notifications.
-- Leave `audit: false` unless the notification itself is the event being audited.
-- Do not add SMS as a generic notification channel without designing a real channel contract.
-- Do not add a mailer map entry without a template, recipient contract, and tests.
-- Keep secrets out of durable metadata or redact them immediately after delivery.
-- Use `sensitive: true` and `SecureErrorSanitizer` for SMS paths carrying reset, verification, or secure-upload links.
-
----
-
-## 14. Where To Look
-
-| Need | Start here |
-| --- | --- |
-| Notification service behavior | `app/services/notification_service.rb` |
-| Notification record behavior | `app/models/notification.rb` |
-| In-app notification list | `app/controllers/notifications_controller.rb` |
-| Application/proof mail | `app/mailers/application_notifications_mailer.rb` |
-| Provider mail | `app/mailers/medical_provider_mailer.rb` |
-| Template rendering | `app/models/email_template.rb`, `app/services/email_templates/` |
-| Delivery polling | `app/jobs/update_email_status_job.rb`, `app/services/postmark_email_tracker.rb` |
-| Bounce/spam handling | `app/controllers/webhooks/email_events_controller.rb`, `app/services/email_event_handler.rb` |
-| Proof resubmission delivery | `app/services/applications/request_proof_resubmission.rb` |
-| Provider-info request delivery | `app/services/applications/request_provider_info.rb` |
-| Secure-request recipient/channel routing | `app/services/applications/secure_request_recipient_resolver.rb` |
-| Certification delivery | `app/services/applications/medical_certification_service.rb`, `app/services/applications/medical_certification_reviewer.rb` |
-
-Related docs:
-
-- [Audit Event Tracking](audit_event_tracking.md)
-- [Proof Review Process Guide](proof_review_process_guide.md)
-- [Application Workflow Guide](application_workflow_guide.md)
-- [Email System](../infrastructure/email_system.md)
+| Row exists, no email | Record-only action, `deliver: false`, letter routing, then the mailer map. |
+| Proof rejection sent no ordinary email | The secure request and its delivery result; this workflow bypasses ordinary notification delivery. |
+| Delivery failed | Delivery status/error metadata, actual route, queued mail job, and provider logs when a message ID exists. |
+| Template failed | Template name, format, locale fallback, syntax mode, and declared variables. |
+
+See [proof review](proof_review_process_guide.md), [audit events](audit_event_tracking.md), and the [email system](../infrastructure/email_system.md) for the surrounding workflows.

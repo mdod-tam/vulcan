@@ -1,312 +1,114 @@
-# Vulcan: Maryland Accessible Telecommunications CRM
+# "Vulcan": Maryland Accessible Telecommunications CRM
 
-Vulcan is a Ruby on Rails application that powers the Maryland Accessible Telecommunications (MAT) program. The platform bridges the communication gap for Maryland residents who have difficulty using standard telephones by connecting them with accessible telecommunications equipment and program support services.
+Vulcan is a Ruby on Rails application that helps the Maryland Accessible Telecommunications (MAT) program connect Maryland residents with the accessible telecommunications equipment they need. It gives residents a way to apply for assistance and staff one place to manage applications and ongoing support.
 
-At its core, Vulcan manages a comprehensive application workflow to verify constituent eligibility. Approved applicants can move through voucher or equipment-fulfillment workflows, redeem vouchers through authorized vendors, and receive supplementary services such as training and evaluation.
+Residents can apply online, guardians can apply on behalf of dependents, and staff can enter applications received on paper. Staff use Vulcan to review eligibility documents and disability certification, arrange equipment or vouchers for approved applicants, and coordinate evaluations and training. It also keeps track of benefit limits and when participants can apply again.
 
-To ensure participants maintain access to modern technology as their needs evolve, the MAT program operates on a three-year lifecycle. Once an application cycle concludes, constituents may reapply to qualify for a new voucher, equipment support, and further training services.
+“Vulcan” and “MAT Vulcan” are internal project names. Public pages and messages use **Maryland Accessible Telecommunications**. The existing TOTP issuer remains `MatVulcan`; it is intentionally excluded from cosmetic naming changes. See [the story behind the name](docs/future_work/mat_vulcan_todos.md#why-mat-vulcan).
 
-## Table of Contents
+## Start here to:
 
-- [Features](#features)
-- [Technical Stack](#technical-stack)
-- [Architecture](#architecture)
-- [Documentation](#documentation)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Database and Seeding](#database-and-seeding)
-- [Running the App](#running-the-app)
-- [Default Development Users](#default-development-users)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Maintenance Tasks](#maintenance-tasks)
-- [Contributing](#contributing)
+- **Understand the product:** [current features](docs/current_application_features.md) and [application workflow](docs/features/application_workflow_guide.md).
+- **Review the code:** follow the [architecture map](#architecture), then the relevant guide in the [documentation hub](docs/README.md).
+- **Run it locally:** [installation](#installation), [database setup](#database-and-seeding), and [development users](#default-development-users).
+- **Check a change:** [testing](#testing) and the [testing and debugging guide](docs/development/testing_and_debugging_guide.md).
+- **Operate a deployment:** [configuration](#configuration), [deployment](#deployment), and [maintenance tasks](#maintenance-tasks).
 
 ## Features
 
-### Application Lifecycle
+Vulcan supports portal and paper intake, guardian/dependent relationships, proof review and resubmission, disability certification with DocuSeal or staff uploads, voucher redemption, vendor W9 review and invoicing, and evaluation/training scheduling. Staff also manage policies, notifications, printable letters, and audit history.
 
-- Constituent portal applications with autosave, inline validation, proof upload, and status tracking.
-- Admin paper-intake workflow guarded by `Current.paper_context`, with paper-specific validation and side-effect behavior.
-- Application statuses for draft, in-progress, proof collection, disability certification, approval, rejection, and archival.
-- Explicit status transition history through `ApplicationStatusChange` and `AuditEventService`.
-- Eligibility rules for income proof, residency proof, ID proof, disability certification, and voucher/equipment fulfillment.
-- Policy-driven three-year service window and training-session limits.
-
-### Guardian and Dependent Management
-
-- Many-to-many guardian/dependent relationships through `GuardianRelationship`.
-- Managing guardian assignment for dependent applications.
-- Communication routing to the managing guardian when a dependent should not receive direct messages.
-- Authorization scopes for viewing, editing, and managing applications across constituent, guardian, and admin contexts.
-
-### Proof Management
-
-- Income, residency, and ID proof uploads with independent status tracking.
-- `ProofAttachmentService` as the shared attachment entry point across portal, admin, paper, and secure-form submissions.
-- Admin review through `ProofReview`, `Applications::ProofReviewer`, and proof-specific rejection reasons.
-- Secure proof resubmission links for rejected or missing proof, including first rejection and re-rejection paths.
-- Rate limits, validation, audit logging, and admin visibility for proof submission and review activity.
-
-### Secure Public Forms
-
-Secure public forms are tokenized, unauthenticated, time-boxed forms for a specific task. They are not portal sessions.
-
-- Provider-info collection through `SecureRequestForm`.
-- Proof resubmission through `SecureProofFormsController`.
-- Disability certification upload through `MedicalProviderSecureRequestForm`.
-- Vendor W9 resubmission through `VendorSecureRequestForm`.
-- Token digests are stored instead of raw bearer tokens.
-- Revoked, expired, submitted, and invalid links render neutral public responses.
-- Expiration activity is recorded by `RecordSecureFormExpirationsJob`.
-
-### Disability Certification
-
-- Disability certification status tracking from request through receipt, approval, or rejection.
-- DocuSeal digital signing through `DocumentSigning::SubmissionService` and the DocuSeal webhook.
-- Secure certification upload links for provider corrections or fallback upload.
-- Staff-managed fax, mail, and admin upload workflows.
-- Additional certification artifacts can be retained for review when a later DocuSeal or upload result arrives after a primary artifact.
-
-### Voucher and Equipment Fulfillment
-
-- Snapshot fields on applications for fulfillment type and income-proof requirement.
-- Voucher issuance for eligible voucher-fulfillment applications.
-- Policy-driven voucher values by disability type and voucher validity period.
-- Voucher status tracking for issued, active, redeemed, expired, and cancelled vouchers.
-- Vendor redemption workflow with transaction records and audit history.
-- Equipment-fulfillment paths with evaluation/training support where applicable.
-
-### Vendor Portal, W9 Review, and Invoicing
-
-- Vendor portal for voucher verification, redemption, transaction history, and authenticated W9 uploads.
-- Admin W9 review and rejection workflow.
-- Secure W9 resubmission links for rejected W9s.
-- Vendor invoices generated from completed voucher transactions.
-- Vendor-facing notifications for W9, invoice, payment, and voucher events.
-
-### Training and Evaluation
-
-- Trainer assignment, scheduling, completion, cancellation, and follow-up handling.
-- Trainer dashboard and trainer session history.
-- Evaluator assignment, scheduling, rescheduling, completion, and report submission.
-- Evaluator dashboard with status filters.
-- Activity history on training and evaluation records, including schedule and completion events.
-- Training request queues driven by `applications.training_requested_at`.
-
-### Administration
-
-- Admin application dashboard with filters, search, proof queues, provider-info queues, training queues, and status views.
-- Application detail pages for proof review, disability certification, secure request forms, training/evaluation status, vouchers, notes, and audit history.
-- User management for constituents, guardians, administrators, trainers, evaluators, and vendors.
-- Vendor management, W9 review, invoice review, and voucher administration.
-- Policy and feature-flag management.
-- Print queue support for paper correspondence.
-- Draft pain-point analysis for application drop-off review.
-
-### Notifications, Audit, and Activity History
-
-- Database-backed email templates with English and Spanish seed data.
-- Email delivery through Postmark.
-- SMS and fax integrations through Twilio where configured.
-- Paper letters through `PrintQueueItem`.
-- `NotificationService` for delivery records and notification workflows.
-- `AuditEventService` for domain audit events.
-- `Applications::EventDeduplicationService` for readable application timelines.
-- Application, proof, certification, secure-form, voucher, training, evaluation, vendor, and W9 history views.
-
-### Security and Authentication
-
-- Session-based authentication with secure password handling.
-- Two-factor authentication by WebAuthn, TOTP, and SMS.
-- Account recovery workflow with admin review.
-- PII filtering and Active Record encryption for sensitive fields.
-- Request-scoped public secure forms that do not create user sessions or expose unrelated account data.
-- Voucher redemption controls and audit trails.
-
-### Background Jobs and Recurring Work
-
-- Solid Queue-backed jobs for email status updates, voucher expiration, vendor invoices, proof metrics, admin notifications, and secure form expiration events.
-- Solid Cache and Solid Cable are configured through Rails 8 database-backed infrastructure.
-
-## Technical Stack
-
-- Ruby 4.0.2
-- Rails 8.1.3
-- PostgreSQL 17+
-- Tailwind CSS
-- Propshaft
-- Stimulus and Turbo
-- Solid Queue, Solid Cache, and Solid Cable
-- Postmark for outbound email
-- Twilio for SMS and fax status integrations
-- DocuSeal for document signing
-- Active Storage with local disk in development/test and S3-compatible storage in production
-- Minitest with FactoryBot
+Authentication is implemented in this application with sessions and MFA. Time-limited public links let recipients complete a specific document task without a portal account. Constituent-facing content supports English and Spanish; admin-only screens may be English-only. See the [feature overview](docs/current_application_features.md) for details and implementation boundaries.
 
 ## Architecture
 
-- Service-oriented business logic with `BaseService` and structured result objects.
-- STI user model for authenticating roles: `Users::Constituent`, `Users::Administrator`, `Users::Vendor`, `Users::Evaluator`, and `Users::Trainer`.
-- Request-scoped state through `Current.user` and `Current.paper_context`.
-- Explicit lifecycle transitions through `Application#transition_status!` and workflow reconciliation helpers.
-- Separate delivery records, audit records, and status-change records.
-- Secure public request models for unauthenticated, bounded collection tasks.
-- Stimulus controllers and Turbo for progressive frontend behavior.
-- Minitest test coverage for models, services, controllers, jobs, mailers, and system flows.
+The root URL (`/`) opens sign-in for visitors and the appropriate dashboard for signed-in users. There is no introductory homepage; program information belongs on the surrounding MAT website. [HomeController](app/controllers/home_controller.rb) handles this redirect, with password-change and MFA requirements checked first.
+
+Vulcan uses Rails' MVC structure: controllers handle requests, Active Record models manage database records and validations, and ERB views render pages. Turbo and Stimulus add interactive behavior, while form objects and services coordinate application workflows.
+
+Active Storage manages uploaded documents, Action Mailer handles email, and Active Job queues background work through Solid Queue, including email delivery and voucher issuance.
+
+### Where to look
+
+| Area | Starting point |
+| --- | --- |
+| URLs and portal boundaries | [Routes](config/routes.rb): `Admin::`, `ConstituentPortal::`, `VendorPortal::`, `Evaluators::`, `Trainers::`, and `Webhooks::`. |
+| Portal application submission | [ApplicationsController](app/controllers/constituent_portal/applications_controller.rb) → [ApplicationCreator](app/services/applications/application_creator.rb). |
+| Staff paper intake | [PaperApplicationsController](app/controllers/admin/paper_applications_controller.rb) → [PaperApplicationService](app/services/applications/paper_application_service.rb). |
+| Application lifecycle | [Application](app/models/application.rb) and [ApplicationStatusManagement](app/models/concerns/application_status_management.rb). |
+| Business operations and their contracts | [Services](app/services) and the [service architecture guide](docs/development/service_architecture.md). |
+| Browser behavior and rendered pages | [Views](app/views), [Stimulus registration](app/javascript/controllers/index.js), and [JavaScript architecture](docs/development/javascript_architecture.md). |
+| Messages, templates, and background work | [Mailers](app/mailers), [template seeds](db/seeds/email_templates), [jobs](app/jobs), and [recurring schedules](config/recurring.yml). |
+| Database shape and changes | [Schema](db/schema.rb) and [migrations](db/migrate). |
+| Tests and sample data | [Tests](test), [factories](test/factories), and the [fixture guide](test/fixtures/README.md). |
+
+The workflow guides link to focused tests and explain the boundaries shared by portal and paper intake.
+
+### Domain rules worth knowing
+
+- **A user and an application are different records.** A user is a person/account; an application is one request for assistance. Roles share the `users` table through STI: `Users::Constituent`, `Users::Administrator`, `Users::Vendor`, `Users::Evaluator`, `Users::Trainer`, and `Users::MedicalProvider`.
+- **Applicant, guardian, and message recipient can differ.** A guardian relationship is distinct from an application's managing guardian. Contact ownership and public-login eligibility have separate rules; see [guardian relationships](docs/development/guardian_relationship_system.md) and [authentication](docs/security/authentication_system.md).
+- **Lifecycle changes have side effects.** Use `Application#transition_status!` and `Application#reconcile_workflow_state!` to preserve status history and associated work. Application status, individual proof decisions, and disability certification are separate states.
+- **Fulfillment is saved on each application.** At creation, `vouchers_enabled` determines voucher versus equipment fulfillment and whether income proof is required. Changing the flag does not rewrite existing applications; see [fulfillment settings](docs/features/application_workflow_guide.md#fulfillment-settings).
+- **History has several owners.** `Event`, `ApplicationStatusChange`, `ProofReview`, and `Notification` answer different questions. Use the [audit guide](docs/features/audit_event_tracking.md) and [notification guide](docs/features/notifications.md) when tracing an outcome.
+- **Paper context changes validation behavior.** `Current.paper_context` is scoped by paper-intake entry points. See [paper intake](docs/development/paper_application_architecture.md) before reusing that context.
 
 ## Documentation
 
-The links below point to tracked repository documentation intended to be available on GitHub.
+The [documentation hub](docs/README.md) is the guide index. It covers workflows, architecture, testing, integrations, security, and operational reviews. Planned work is labeled separately from descriptions of current behavior.
 
-### Current Feature Map
+## Technical Stack
 
-- [Current Application Features](docs/current_application_features.md)
+Ruby 4.0.2 and Rails 8.1.3; PostgreSQL; ERB, Turbo, Stimulus, Tailwind, esbuild, and Propshaft; Solid Queue, Solid Cache, and Solid Cable; Active Storage; Minitest/FactoryBot, Cuprite, and Jest.
 
-### Development Guides
-
-- [Testing and Debugging Guide](docs/development/testing_and_debugging_guide.md)
-- [Service Architecture](docs/development/service_architecture.md)
-- [JavaScript Architecture](docs/development/javascript_architecture.md)
-- [Guardian Relationship System](docs/development/guardian_relationship_system.md)
-- [Paper Application Architecture](docs/development/paper_application_architecture.md)
-- [User Management Features](docs/development/user_management_features.md)
-- [DocuSeal Integration Guide](docs/development/docuseal_integration_guide.md)
-
-### Feature Documentation
-
-- [Application Workflow Guide](docs/features/application_workflow_guide.md)
-- [Proof Review Process Guide](docs/features/proof_review_process_guide.md)
-- [Notification System](docs/features/notifications.md)
-- [Audit and Event Tracking](docs/features/audit_event_tracking.md)
-- [Pain Point Tracking](docs/features/application_pain_point_tracking.md)
-
-### Infrastructure, Security, and Compliance
-
-- [Email System](docs/infrastructure/email_system.md)
-- [Active Storage S3 Setup](docs/infrastructure/active_storage_s3_setup.md)
-- [Authentication System](docs/security/authentication_system.md)
-- [PII Encryption](docs/security/pii_encryption.md)
-- [Voucher Security Controls](docs/security/voucher_security_controls.md)
-- [Required Reports and Audits](docs/compliance/required_reports_audits.md)
+External integrations are Postmark for email, Twilio for SMS/fax status handling, DocuSeal for signing, and S3-compatible storage in production. Development uses local file storage and Letter Opener for email.
 
 ## Prerequisites
 
-- Ruby 4.0.2
-- Bundler
-- PostgreSQL 17 or newer
-- Node.js 24.x
-- Yarn
-- A Rails master key for shared credentials, or permission to generate local credentials for development
+- Ruby from [`.ruby-version`](.ruby-version) and Bundler.
+- PostgreSQL running locally; CI uses PostgreSQL 17.
+- Node.js 24.x and Yarn 4.12.0, pinned by [`.yarnrc.yml`](.yarnrc.yml) and `packageManager` in [package.json](package.json). The older `engines.yarn` entry still says 1.22.x.
+- Chrome or Chromium when running browser tests.
+- The team credentials key, or an isolated development/test credentials setup as described below.
 
 ## Installation
 
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/mdod-tam/vulcan.git
-   cd vulcan
-   ```
-
-2. Install Ruby dependencies:
-
-   ```bash
-   bundle install
-   ```
-
-3. Install JavaScript dependencies:
-
-   ```bash
-   yarn install
-   ```
-
-4. Prepare credentials:
-
-   If you have the team master key, place it in `config/master.key`.
-
-   For an isolated local setup, generate local credentials:
-
-   ```bash
-   EDITOR="vim" bin/rails credentials:edit
-   bin/rails db:encryption:init
-   EDITOR="vim" bin/rails credentials:edit
-   ```
-
-   Add the generated Active Record encryption keys under `active_record_encryption`. Do not commit `config/master.key`.
-
-## Configuration
-
-### Required Local Configuration
-
-The default development database expects PostgreSQL on localhost with username `postgres`. Override with environment variables when needed:
-
 ```bash
-DATABASE_USERNAME=postgres
-DATABASE_PASSWORD=your_password
+git clone https://github.com/mdod-tam/vulcan.git
+cd vulcan
+bundle install
+yarn install
 ```
 
-Development and test use local Active Storage by default.
+Use the checked-in Yarn release if your global launcher selects a different version: `node .yarn/releases/yarn-4.12.0.cjs install`.
 
-### Production Environment Variables
+### Credentials
 
-Set these in production:
+For shared credentials, obtain the matching key from a maintainer and place it in `config/master.key` or export `RAILS_MASTER_KEY`. Generating a new key will not decrypt the existing `config/credentials.yml.enc`.
 
-```bash
-RAILS_MASTER_KEY=...
-DATABASE_URL=postgres://...
-APPLICATION_HOST=your-host.example
-```
-
-Optional production database URLs:
+For an isolated local setup, create environment-specific credentials without replacing the shared encrypted file:
 
 ```bash
-QUEUE_DATABASE_URL=postgres://...
-CACHE_DATABASE_URL=postgres://...
-CABLE_DATABASE_URL=postgres://...
+EDITOR="vim" bin/rails credentials:edit --environment development
+EDITOR="vim" bin/rails credentials:edit --environment test
 ```
 
-Optional runtime settings:
+Use `bin/rails db:encryption:init` to generate the `active_record_encryption` entries, then add stable keys to each local credentials file before saving data. Keep local keys and credentials out of your change. Missing encryption configuration falls back to temporary keys, which cannot reliably read saved records after a restart. See [PII encryption](docs/security/pii_encryption.md).
+
+### Local environment
+
+[Database configuration](config/database.yml) defaults to PostgreSQL at `localhost:5432` with username `postgres`. Export overrides in the shell that starts Rails:
 
 ```bash
-RAILS_MAX_THREADS=10
-SOLID_QUEUE_POOL_SIZE=10
-WEB_CONCURRENCY=2
-SOLID_QUEUE_IN_PUMA=true
-WEBAUTHN_RP_ID=your-host.example
+export DATABASE_USERNAME=postgres
+export DATABASE_PASSWORD=your_password
 ```
 
-### Production Credentials and Integrations
-
-Configure these through Rails credentials or environment variables, depending on the integration:
-
-- Postmark API token for outbound email.
-- DocuSeal API key and optional base URL.
-- Twilio account settings for SMS and fax status integrations.
-- Webhook secret for signed webhooks.
-- S3-compatible storage:
-
-  ```bash
-  S3_ACCESS_KEY_ID=...
-  S3_SECRET_ACCESS_KEY=...
-  S3_REGION=us-east-1
-  S3_BUCKET=...
-  ```
-
-  Bucketeer-compatible alternatives are also supported:
-
-  ```bash
-  BUCKETEER_AWS_ACCESS_KEY_ID=...
-  BUCKETEER_AWS_SECRET_ACCESS_KEY=...
-  BUCKETEER_AWS_REGION=...
-  BUCKETEER_BUCKET_NAME=...
-  ```
+`bin/dev` starts Foreman with `--env /dev/null`; it does not load a project `.env` file. Development has separate primary, queue, and cable databases. The database tasks below use those configured connections; your PostgreSQL user needs permission to create the local databases.
 
 ## Database and Seeding
 
-### Development Database
-
-Create, migrate, and seed a local development database:
+On a fresh local database:
 
 ```bash
 bin/rails db:create
@@ -314,33 +116,22 @@ bin/rails db:migrate
 bin/rails db:seed
 ```
 
-`db:seed` is for local development data. It clears existing local records, uses FactoryBot, loads products from `test/fixtures/products.yml`, creates demo users/applications/invoices, seeds policies, feature flags, email templates, rejection reasons, and attaches sample files. In production it intentionally skips the seed body.
+**The demo seed clears existing records.** Use it only with disposable local data. [db/seeds.rb](db/seeds.rb) creates users through factories, loads selected YAML data, seeds policies/templates, and attaches sample files. The test helper also uses it to prepare test data; see the [fixture guide](test/fixtures/README.md).
 
-Targeted seed tasks:
+### Targeted seeds
 
-| Task | Use it for | Notes |
-| --- | --- | --- |
-| `bin/rails db:seed_policies` | Policy rows for FPL, proof limits, waiting period, training limits, secure form timing, and voucher values. | Production-safe. Updates existing rows when values differ. |
-| `bin/rails db:seed_feature_flags` | Default feature flags. | Currently seeds `vouchers_enabled` as disabled when the row is missing. |
-| `bin/rails db:seed_manual_email_templates` | Database-backed email templates from `db/seeds/email_templates/`. | Deletes existing `EmailTemplate` rows first, then reloads text/HTML templates. |
-| `bin/rails db:seed_rejection_reasons` | Rejection reasons for proof and disability certification review. | Uses `find_or_create_by!`; safe to rerun for missing rows. |
+| Task | Effect |
+| --- | --- |
+| `bin/rails db:seed_policies` | Creates policy rows and overwrites differing values with the defaults in [the task](lib/tasks/seed_policies.rake). |
+| `bin/rails db:seed_feature_flags` | Creates missing flags; `vouchers_enabled` defaults to disabled. |
+| `bin/rails db:seed_manual_email_templates` | Deletes existing `EmailTemplate` rows and reloads the checked-in templates. |
+| `bin/rails db:seed_rejection_reasons` | Adds missing proof/certification rejection reasons. |
 
-There is no standalone product seed task. Products are loaded by the development seed from fixtures; production product data should be entered through the product admin workflow or a purpose-built import if one is added.
+Use these targeted tasks for a new production environment. Review policy defaults first, and rerun the template task only when you intend to replace edited templates. The general `db:seed` task is for development/test, depends on FactoryBot, and skips its main seed body in production.
 
-### Production Seeding
+Products come from [products.yml](test/fixtures/products.yml) in the demo seed. There is no standalone product seed task; production products can be entered through the admin product workflow.
 
-Do not use `bin/rails db:seed` for production setup. It is a development/demo seed and is written to avoid overwriting production data.
-
-For a new production environment, run the targeted seeds below. Re-run `db:seed_manual_email_templates` only when you mean to replace the current template rows with the seeded versions.
-
-```bash
-bin/rails db:seed_policies
-bin/rails db:seed_feature_flags
-bin/rails db:seed_manual_email_templates
-bin/rails db:seed_rejection_reasons
-```
-
-Create the first admin user through the Rails console:
+For the first production administrator, use the Rails console:
 
 ```ruby
 Users::Administrator.create!(
@@ -354,214 +145,106 @@ Users::Administrator.create!(
 
 ## Running the App
 
-Start the full development stack:
-
 ```bash
-./bin/dev
+bin/dev
 ```
 
-This starts the Rails web process, JavaScript build watcher, Tailwind build watcher, and Solid Queue worker through `Procfile.dev`.
+Open [localhost:3000](http://localhost:3000). [Procfile.dev](Procfile.dev) starts Rails, JavaScript and CSS watchers, and a Solid Queue worker. Development email opens through Letter Opener. DocuSeal signing and Twilio delivery need their own configuration when exercising those integrations.
 
-To run Rails only:
-
-```bash
-bin/rails server
-```
-
-The default local URL is:
-
-```text
-http://localhost:3000
-```
+`bin/rails server` starts only the web process. If you use it, build assets with `yarn build` and `yarn build:css`, and run `bin/rails solid_queue:start` separately for queued work. A successful page load does not mean background deliveries or recurring jobs are running.
 
 ## Default Development Users
 
-After `bin/rails db:seed`, these development users are available:
+After the demo seed, these accounts use `password123`:
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@example.com` | `password123` |
-| Constituent | `user@example.com` | `password123` |
-| Constituent | `user2@example.com` | `password123` |
-| Trainer | `trainer@example.com` | `password123` |
-| Evaluator | `evaluator@example.com` | `password123` |
-| Vendor | `ray@testemail.com` | `password123` |
-| Vendor | `teltex@testemail.com` | `password123` |
-| Legacy medical-provider fixture | `medical@example.com` | `password123` |
+| Role | Email |
+| --- | --- |
+| Administrator | `admin@example.com` |
+| Constituents | `user@example.com`, `user2@example.com` |
+| Trainer | `trainer@example.com` |
+| Evaluator | `evaluator@example.com` |
+| Vendors | `ray@testemail.com`, `teltex@testemail.com` |
+| Legacy medical-provider seed | `medical@example.com` |
 
-Providers do not need portal accounts for the current secure certification upload workflow; the medical-provider seed is retained as fixture data.
+Providers use secure certification links in the current workflow; they do not need a portal account.
 
 ## Testing
 
-Run the full test suite:
+Start with a focused test, then expand to the affected area:
 
 ```bash
-bin/rails test
+bin/rails test test/models/user_contact_predicates_test.rb
+yarn test test/javascript/controllers/upload_controller_test.js --runInBand
+bin/rubocop --cache false app/models/user.rb
 ```
 
-Run system tests:
+`bin/rails test` runs the non-system Ruby suite; `yarn test` runs Jest. For a browser change, build assets and run one relevant system test:
 
 ```bash
-bin/rails test:system
+yarn build
+yarn build:css
+SYSTEM_TEST_WORKERS=1 bin/rails test test/system/registrations_test.rb
 ```
 
-Run all configured tests:
+The [CI workflow](.github/workflows/ci.yml) runs Brakeman, RuboCop, and `bin/rails test:all`, including the full browser suite. Keep local browser runs focused and avoid concurrent suites sharing the test database. See [testing and debugging](docs/development/testing_and_debugging_guide.md) for authentication helpers, data setup, and failure diagnosis.
 
-```bash
-bin/rails test:all
-```
+## Configuration
 
-Run a focused test file:
+### Production essentials
 
-```bash
-bin/rails test test/models/application_test.rb
-```
+Set `RAILS_MASTER_KEY`, `DATABASE_URL`, and `APPLICATION_HOST` (the public hostname used in generated links and WebAuthn). Use stable Active Record encryption keys in credentials. Production uses HTTPS and S3-backed uploads.
 
-Run a focused test line:
+`QUEUE_DATABASE_URL`, `CACHE_DATABASE_URL`, and `CABLE_DATABASE_URL` can override the auxiliary database connections; each otherwise falls back to `DATABASE_URL`. See [database.yml](config/database.yml), [Puma configuration](config/puma.rb), and [queue configuration](config/queue.yml) for connection pools and worker sizing.
 
-```bash
-bin/rails test test/models/application_test.rb:42
-```
+### Integrations
 
-Run RuboCop on touched Ruby files:
-
-```bash
-bin/rubocop app/models/application.rb
-```
-
-Run pre-deploy checks:
-
-```bash
-ruby bin/pre-deploy-checks
-```
+| Integration | Configuration owner |
+| --- | --- |
+| Postmark | `postmark_api_token` in Rails credentials; [email and letters guide](docs/infrastructure/email_system.md). |
+| DocuSeal | `docuseal.api_key`, optional `docuseal.base_url`, and signing setup in the [DocuSeal guide](docs/development/docuseal_integration_guide.md). |
+| Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM_NUMBER`, `TWILIO_VERIFY_SERVICE_SID`, and `TWILIO_FAX_FROM_NUMBER` as needed; [initializer](config/initializers/twilio.rb). |
+| Webhooks | Rails credentials `webhook_secret` for the shared signature verifier; Twilio fax callbacks use Twilio's signature. See [webhook controllers](app/controllers/webhooks). |
+| S3 uploads | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET`, or their Bucketeer alternatives; [storage guide](docs/infrastructure/active_storage_s3_setup.md). |
 
 ## Deployment
 
-### Heroku-Style Deployment
+### Heroku-style deployment
 
-1. Set required configuration:
-
-   ```bash
-   heroku config:set RAILS_MASTER_KEY=... --app your-app-name
-   heroku config:set APPLICATION_HOST=your-app-name.herokuapp.com --app your-app-name
-   ```
-
-2. Configure production database, Postmark, S3-compatible storage, DocuSeal, Twilio, and webhook secrets.
-
-3. Deploy and migrate:
-
-   ```bash
-   git push heroku main
-   heroku run bin/rails db:migrate --app your-app-name
-   ```
-
-4. Seed baseline records:
-
-   ```bash
-   heroku run bin/rails db:seed_policies --app your-app-name
-   heroku run bin/rails db:seed_feature_flags --app your-app-name
-   heroku run bin/rails db:seed_manual_email_templates --app your-app-name
-   heroku run bin/rails db:seed_rejection_reasons --app your-app-name
-   ```
-
-5. Create an admin user through `heroku run bin/rails console`.
-
-6. Ensure a worker process is running for Solid Queue, or set `SOLID_QUEUE_IN_PUMA=true` when intentionally running jobs in Puma.
-
-### Kamal Deployment
-
-The repository includes `config/deploy.yml` for Kamal-based deployment. Update these before use:
-
-- `service`
-- `image`
-- `servers`
-- `proxy.host`
-- registry credentials
-- production secrets, especially `RAILS_MASTER_KEY`
-- database, storage, and integration settings
-
-Then deploy with:
+The checked-in [Procfile](Procfile) defines web, worker, and release processes. Set the production configuration above, then deploy:
 
 ```bash
-bin/kamal deploy
+heroku config:set RAILS_MASTER_KEY=... --app your-app-name
+heroku config:set APPLICATION_HOST=your-app-name.herokuapp.com --app your-app-name
+git push heroku main
 ```
 
-Use the configured aliases for console, logs, shell, and database console:
+The release process runs `bin/rails db:migrate`. For an initial environment, run the [targeted seeds](#targeted-seeds) through `heroku run` and create an administrator through `heroku run bin/rails console`.
 
-```bash
-bin/kamal console
-bin/kamal logs
-bin/kamal shell
-bin/kamal dbc
-```
+Run a Solid Queue worker, or intentionally enable the Puma integration with `SOLID_QUEUE_IN_PUMA=true`. Check job processing as well as the web process after deployment.
+
+### Kamal deployment
+
+[config/deploy.yml](config/deploy.yml) is a starting configuration with placeholder server, host, image, and registry values. Set those and the production database, storage, credentials, and integrations before using `bin/kamal deploy`.
+
+The [Dockerfile](Dockerfile) still defaults to Node 22.12.0 and Yarn 1.22.22, while the local frontend setup pins Node 24 and Yarn 4.12.0. Align the container's JavaScript setup before relying on this deployment path.
+
+The configuration enables jobs inside Puma. Its aliases provide `bin/kamal console`, `logs`, `shell`, and `dbc`.
 
 ## Maintenance Tasks
 
-These are the custom tasks in this app. Run `bin/rails -T` when you need the full Rails task list.
+Use `bin/rails -T` to discover tasks and read the relevant [task implementation](lib/tasks) before running a data repair.
 
-### Seeds
+| Need | Starting point |
+| --- | --- |
+| View or change fulfillment defaults | `bin/rails features:list`; [fulfillment settings](docs/features/application_workflow_guide.md#fulfillment-settings). |
+| Investigate duplicate identities | [User management](docs/development/user_management_features.md) and [duplicate reporting tasks](lib/tasks/duplicates.rake). |
+| Diagnose mail or letter problems | [Email and letters](docs/infrastructure/email_system.md); `email_templates:audit` and `letters:check_consistency`. |
+| Diagnose certification delivery history | [Notification tracking tasks](lib/tasks/notification_tracking.rake). Backfill and duplicate-fix tasks can change records. |
+| Find approved voucher applications without vouchers | `bin/rails vouchers:report_missing`. |
+| Review scheduled work | [Recurring configuration](config/recurring.yml), [proof monitoring limitations](docs/features/proof_review_process_guide.md), and [operational review schedule](docs/compliance/required_reports_audits.md). |
 
-```bash
-bin/rails db:seed_policies
-bin/rails db:seed_feature_flags
-bin/rails db:seed_manual_email_templates
-bin/rails db:seed_rejection_reasons
-```
-
-### Feature Flags
-
-```bash
-bin/rails features:list
-bin/rails 'features:enable[vouchers_enabled]'
-bin/rails 'features:disable[vouchers_enabled]'
-```
-
-### Data Checks and Cleanup
-
-```bash
-bin/rails data_integrity:find_orphaned_applications
-bin/rails 'data_integrity:fix_orphaned_applications[report]'
-bin/rails 'data_integrity:fix_orphaned_applications[assign,admin@example.org]'
-bin/rails 'data_integrity:fix_orphaned_applications[delete]'
-bin/rails data:update_status_names
-bin/rails 'maintenance:void_duplicate_phone[443-653-1927]'
-```
-
-Use the `delete` orphan cleanup only after reviewing the report. The phone cleanup keeps the lowest-ID user for the supplied phone number and clears that phone number from the rest.
-
-### Email, Letters, and Notifications
-
-```bash
-bin/rails email_templates:audit
-bin/rails letters:check_consistency
-bin/rails letters:check_email_letter_consistency
-bin/rails notification_tracking:check_all
-bin/rails 'notification_tracking:analyze[123]'
-bin/rails 'notification_tracking:fix_duplicates[123]'
-DRY_RUN=true bin/rails notification_tracking:backfill
-bin/rails 'notification_tracking:backfill[true,123]'
-```
-
-`notification_tracking:backfill` works on disability certification request notifications. Pass `DRY_RUN=true` to inspect duplicate candidates without writing changes.
-
-### Vouchers
-
-```bash
-bin/rails vouchers:report_missing
-```
-
-Recurring work is configured in `config/recurring.yml` and processed by Solid Queue.
+`ruby bin/pre-deploy-checks` prints database/proof diagnostics. It catches errors and reports them in output, so a zero exit status is not a release-readiness gate.
 
 ## Contributing
 
-1. Create a feature branch.
-2. Make the smallest coherent change.
-3. Run focused tests for the changed behavior.
-4. Run RuboCop on touched Ruby files.
-5. Update documentation when behavior or setup changes.
-6. Open a pull request with the behavior change, verification performed, and any remaining risks.
-
-## Acknowledgments
-
-- Maryland Accessible Telecommunications Program
-- Contributors and maintainers
+Make a focused change, test the affected behavior, and update the relevant guide when setup or behavior changes. A pull request should explain the result, verification performed, and remaining limitations. Start with the [security baseline](docs/security/baseline_policy.md) when changing access, personal data, or public links.

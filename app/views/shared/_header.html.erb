@@ -32,9 +32,9 @@
     # Check if user has any enrolled 2FA method set up
     has_second_factor = user.second_factor_enabled?
   else
-    logo_link_path = root_path
-    logo_aria_label = t("shared.header.return_home")
-    logo_sr_text = t("shared.header.logo_return_home")
+    logo_link_path = sign_in_path(locale: public_request_locale_param)
+    logo_aria_label = t('shared.header.sign_in_aria')
+    logo_sr_text = t('shared.header.logo_sign_in')
   end
 %>
 

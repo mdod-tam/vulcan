@@ -1,208 +1,86 @@
-# MAT Vulcan Application Workflow Guide
+# Application Workflow
 
----
+An `Application` holds one constituent's application to receive accessible telecommunications equipment and/or a voucher.
 
-## Quick Map
+After submission, staff review the proofs and disability certification that came with it.
 
-```text
-Portal User ─────▶ Applications::ApplicationCreator ──────┐
-                                                          │        ▾
-Admin  ──▶ Applications::PaperApplicationService ──▶ App   │  Applications::EventDeduplicationService
-                                                          │        ▾
-                       ProofAttachmentService ←───────────┘  AuditEventService & NotificationService
-                            ▲     ▲         ▲
-                            │     │         └─ Applications::MedicalCertificationService
-                            │     └── VoucherManagement (concern)
-                            └── GuardianRelationship
-```
+Approval then moves the application toward issuance of equipment or of a voucher.
 
-All flows converge on **one Application record**, so every downstream service (events, proofs, notifications, vouchers) works the same no matter how the app started.
+Portal and paper intake share the same application model and lifecycle methods, but differ in their identity checks, form behavior, and follow-up messages.
 
----
+## How applications enter the system
 
-## 1 · Core Building Blocks
+| Path | Owner and behavior |
+| --- | --- |
+| Portal draft/autosave | [AutosaveService](../../app/services/applications/autosave_service.rb) saves individual non-file fields and can create a draft. |
+| Portal save/submission | [ApplicationCreator](../../app/services/applications/application_creator.rb) validates the form, locks/rechecks participants and eligibility, saves applicant/application changes and attachments, then records history. Final submission moves the draft to `in_progress`. |
+| Staff paper intake | [PaperApplicationService](../../app/services/applications/paper_application_service.rb) coordinates applicant selection/creation, proofs, the application write, and follow-up. Guardian quick-create is a separate step; see [paper intake](../development/paper_application_architecture.md). |
 
-| Component | Purpose | Notes |
-|-----------|---------|-------|
-| **Applications::ApplicationCreator** | Portal self-service "happy path" | Runs in DB TX; writes the application, its status history, and audit events. It sends **no** notifications and enqueues no delivery of its own — recipient messaging is triggered by later workflow steps, and its tests assert a zero notification delta. Refuses final submission while the applicant is the subject of an open `registration_soft_match` duplicate-review case; draft saves and autosave are unaffected |
-| **Applications::PaperApplicationService** | Final multipart writer for admin paper applications | Owns the scoped `Current.paper_context`, locked identity requalification, application write, proofs, and audit events; guardian JSON quick-create is a separate pre-submit step |
-| **Applications::EventDeduplicationService** | 1-min window, priority pick | Used by audit views, dashboards, certification timelines |
-| **NotificationService** | Email notifications | Postmark integration; uses MAILER_MAP for routing |
-| **ProofAttachmentService** | Upload / approve / reject | Unified for portal, secure form, and paper proof handling; handles blob validation |
-| **Applications::MedicalCertificationService** | Request and track disability certifications | Updates status and sends provider emails |
-| **VoucherManagement** | Issue & redeem vouchers | Model concern used by `IssueInitialVoucherJob` after approval commits |
+Portal final submission is blocked while the applicant is the subject of an open `registration_soft_match` review case. Draft saves and autosave can continue. The submission gate runs before applicant/application mutation; draft ownership, waiting-period rules, and conflicting applications are also checked under lock.
 
----
+`ApplicationCreator` does not send its own notifications. Paper intake has explicit post-save communications and warns when they fail. Avoid assuming the two entry points have identical side effects.
 
-## 2 · Creation Flows
+## Draft autosave and reporting
 
-### 2.1 Portal (Constituent)
+[AutosaveService](../../app/services/applications/autosave_service.rb) saves allowlisted fields and records the last successful field in `applications.last_visited_step`. Despite its name, this is an attribute such as `household_size`, not a form page. The marker uses `update_column`, so its write skips model validations and callbacks. Failed or unsupported field saves do not advance it; file uploads use a separate flow.
 
-1. **Auth → Dashboard → "Create Application"**  
-2. **Form-based application** with autosave functionality.  
-3. **Autosave**: UI changes trigger `app/javascript/controllers/forms/autosave_controller.js` which calls the backend `Applications::AutosaveService` via `constituent_portal/applications_controller#autosave_field`. This flow saves individual fields (excluding file inputs), returns validation errors inline, and updates the form action/URLs when a new draft `Application` is created.  
-4. `Applications::ApplicationCreator` service. The pipeline below is the **successful** path; every step after the eligibility gate is skipped entirely on a refusal:
-   * Uses `ApplicationForm` for validation → **locks the participants and evaluates eligibility** (requalification, the sibling/waiting-period policy, and — for a final submission — the identity-review gate) → updates user attributes → creates/updates Application → attaches file uploads → logs events via `Applications::EventService`.
-   * The gate deliberately sits before the first mutation, so a refused submission leaves no application, lifecycle change, attachment, audit event, notification, or queued delivery behind, and the applicant's own attributes are untouched. See [Current Application Features §1](../current_application_features.md#1-application-lifecycle).
+The admin **Pain Point Analysis** report at `/admin/application_analytics/pain_points` uses [Application.pain_point_analysis](../../app/models/application.rb) to count current drafts by that attribute, excluding blank markers. These counts are a clue for investigation: there is no inactivity cutoff, and they do not prove abandonment or explain why someone stopped.
 
-### 2.2 Paper (Admin)
+The [autosave controller tests](../../test/controllers/constituent_portal/applications_controller_autosave_test.rb) and [report tests](../../test/controllers/admin/application_analytics_controller_test.rb) cover the server side; browser behavior is in [JavaScript architecture](../development/javascript_architecture.md#autosave-as-a-representative-interaction).
 
-1. **Admin → Paper Apps → New**
-2. For a dependent application, staff first select an on-file guardian or use **Save Guardian**. `POST /admin/users` returns an HTML review fragment on refusal, or the selected/new guardian as JSON on success. The guardian decision is recorded in the same transaction as that separate save; final submission requires the saved `guardian_id`.
-3. The four documents upload directly to Active Storage. Normal `POST /admin/paper_applications` renders identity review or validation errors with retained signed upload IDs. Staff select an eligible existing person or explicitly confirm different people, provide a rationale, and resubmit. Old-page multipart submissions use the same review and retain uploaded documents on refusal.
-4. `Applications::PaperApplicationService` owns the scoped `Current.paper_context`, locks and freshly requalifies identities, then commits the application, proofs, resolved `DuplicateReviewCase` records, and audit events together. Guardian, self-applicant, and dependent decisions share this case lifecycle; no audit-only identity path remains.
-5. The resulting Application then uses the same downstream lifecycle, proof, event, and notification services as the portal flow.
+## Status and approval
 
----
+[Application#transition_status!](../../app/models/application.rb) owns lifecycle changes: the status update, the status-history row, and the `application_status_changed` audit call happen together in one transaction. Transitioning to the status the application already has returns early and writes nothing.
 
-## 3 · Event System (Why you care)
+| Status | Meaning |
+| --- | --- |
+| `draft` | The constituent is still preparing the application. |
+| `in_progress` | Submitted and being processed. |
+| `awaiting_proof`, `reminder_sent` | Waiting for documents or recording a reminder. |
+| `awaiting_dcf` | Waiting for the disability certification form. |
+| `approved`, `rejected`, `archived` | Approved, declined, or retained as historical work. |
 
-* Admin timelines, user “Activity” tab, and disability certification dashboard all pull from **deduped event lists**.
-* Dedup key: `[fingerprint, minute_bucket]` → pick highest priority (StatusChange > Event > Notification).
+These are available states, not a promise that every transition between them is allowed by every workflow.
 
-```ruby
-service = Applications::EventDeduplicationService.new
-events  = service.deduplicate(raw_events)
-```
+[Application#reconcile_workflow_state!](../../app/models/concerns/application_status_management.rb) reevaluates progress after document work:
 
-When adding a new event type, **just log it**—the service handles dedup for you.
+- Approved residency and ID proofs, plus income proof when required, satisfy the regular proof requirements.
+- When those proofs are approved and certification is outstanding, reconciliation can move the application to `awaiting_dcf` and request certification.
+- When required proofs and disability certification are approved, reconciliation can approve the application.
+- Already approved, rejected, or archived applications are left alone.
 
----
+Fulfillment type and whether income proof is required are stamped at creation from feature settings. Use the application's stored requirements for its subsequent review.
 
-## 4 · Notifications in Plain English
+## Documents have two review paths
 
-| Channel | Stack | Typical Use |
-|---------|-------|-------------|
-| Email   | Postmark + ActionMailer | Account creation, status notifications, certification requests |
-| Letter  | Text templates + print queue | Account creation and certification requests when postal delivery is selected |
+**Income, residency, and ID:** [ProofAttachmentService](../../app/services/proof_attachment_service.rb) and [ProofReview](../../app/models/proof_review.rb) own attachment/review behavior. Approval requires a file; rejection can record a missing document. Rejection delivery goes through `Applications::RequestProofResubmission`, which issues a secure upload request. A delivery failure does not erase the saved review.
 
-**Note:** Proof rejection delivery uses secure proof resubmission request services. Those services create tracking records and then attempt delivery through the selected contact channel; if delivery fails, the review can still persist and the admin is alerted.
+**Disability certification:** provider requests, secure uploads, staff uploads, and DocuSeal have their own services. Certification progresses through `not_requested`, `requested`, `received`, `approved`, or `rejected`. Receipt or a completed signature is separate from approval. Incoming fax/postal documents require staff upload.
 
-Create and deliver:
+See [proof review](proof_review_process_guide.md) and [DocuSeal integration](../development/docuseal_integration_guide.md) for those workflows.
 
-```ruby
-NotificationService.create_and_deliver!(
-  type: 'proof_rejected',
-  recipient: application.user,
-  actor: admin,
-  notifiable: review,
-  metadata: { template_variables: { ... } }
-)
-```
+## Guardians, communication, and history
 
-Delivery metadata (bounce, spam status) is stored for audit & retries via Postmark webhooks.
+For a dependent application, `application.user` is the dependent and `managing_guardian` identifies the responsible guardian. A submitted ID alone does not authorize a relationship. Contact ownership determines where a message can go; see [guardian relationships](../development/guardian_relationship_system.md).
 
----
+Communications may create notification history, email, printable letters, or workflow-specific SMS. Some actions, including individual proof approval, are intentionally record-only. Start with [notifications](notifications.md) rather than adding a mailer call at each lifecycle step.
 
-## 5 · Proof Review in 3 Calls
+The application timeline combines several record types. It filters and deduplicates them for display; it is not the complete raw audit dataset. See [audit events](audit_event_tracking.md).
 
-```ruby
-# Upload (user or admin)
-ProofAttachmentService.attach_proof(...)
-# Review (approve or reject) - handled by ProofReview model callbacks
-ProofReview.create!(application: app, admin: admin, proof_type: :income, status: :approved)
-# Or use the service for rejection without attachment
-ProofAttachmentService.reject_proof_without_attachment(...)
-```
+## Fulfillment settings
 
-Approvals require an attachment; only rejections may proceed without a file. The ProofReview model handles post-review actions via callbacks.
+At creation, [Application#stamp_workflow_defaults!](../../app/models/application.rb) saves the fulfillment type and income-proof requirement. With `vouchers_enabled` on, it selects voucher fulfillment and no income-proof requirement; with it off, it selects equipment fulfillment and requires income proof.
 
----
+[FeatureFlag.income_proof_required?](../../app/models/feature_flag.rb) is the inverse of `vouchers_enabled`, not a separate feature-flag row. Approval uses the application's saved requirement, so changing the flag does not rewrite existing applications.
 
-## 6 · Disability Certification Flow
+## Voucher fulfillment
 
-**Requirements:** reviewable proofs are `income` when required, `residency`, and `id`. Disability certification is tracked separately through `medical_certification_status`.
+An approved transition for a voucher application queues [IssueInitialVoucherJob](../../app/jobs/issue_initial_voucher_job.rb) after commit. [VoucherManagement](../../app/models/concerns/voucher_management.rb) checks the feature flag, eligibility, and existing voucher before issuance.
 
-1. `Applications::MedicalCertificationService.new(application:, actor:).request_certification`  
-   * Updates `medical_certification_status` to `requested`, increments counters, creates audit events, and sends the provider request through the configured delivery path.
-2. Provider certification is received via **multiple channels**:
-   * **Secure upload link** → `Applications::RequestCertificationUpload` issues a `MedicalProviderSecureRequestForm`; `Applications::SubmitCertificationUpload` attaches the file and updates status to 'received'
-   * **DocuSeal** → `DocumentSigning::SubmissionService` manages the e-signature flow and webhook completion
-   * **Fax** → **PARTIALLY IMPLEMENTED**: Outbound sending works (`FaxService` + `MedicalProviderNotifier`), but received faxes require manual admin scan/upload via admin interface → updates status to 'received'
-   * **Snail Mail** → Admin scans and uploads via admin interface → updates status to 'received'
-3. Admin can **approve/reject** via UI; workflow reconciliation checks that required proofs and disability certification are approved before the application can finish approval.
+Equipment applications do not create vouchers. Vendor redemption is a separate workflow through `Vouchers::RedemptionService`; see [voucher controls](../security/voucher_security_controls.md).
 
-**Key Difference:** Disability certification has its own workflow separate from income, residency, and ID proof review, with statuses: `not_requested`, `requested`, `received`, `approved`, `rejected`.
+## Two things that bite
 
----
+A status written directly leaves no `ApplicationStatusChange` row and fires none of the transition's follow-up work, so the application ends up in a state its own history cannot explain. Timeline deduplication does not compensate: it hides duplicate events from the display while both rows remain stored.
 
-## 7 · Status Machine (Lite)
-
-```
-draft ─▶ in_progress ─▶ approved ─▶ (IssueInitialVoucherJob auto-issues voucher when eligible)
-      └▶ rejected
-      └▶ awaiting_proof
-      └▶ reminder_sent
-      └▶ awaiting_dcf
-      └▶ archived
-```
-
-*`approved` can be manual (admin) or automatic (via `ApplicationStatusManagement` concern when all requirements met).*  
-All transitions create **ApplicationStatusChange** + audit events. Voucher auto-issuance is enqueued after an approved transition commits.
-
----
-
-## 8 · Guardian / Dependent Cheat Sheet
-
-```ruby
-GuardianRelationship.create!(
-  guardian_user:  guardian,
-  dependent_user: dependent,
-  relationship_type: 'Parent'
-)
-application.user              = dependent
-application.managing_guardian = guardian
-```
-
-* Notifications for dependent apps use the effective contact strategy for the dependent/guardian relationship.
-* Paper intake already supports `email_strategy`, `phone_strategy`, and `address_strategy` for dependent contact handling.
-
----
-
-## 9 · Vouchers
-
-* Only voucher-fulfillment applications auto-issue vouchers. `IssueInitialVoucherJob` runs after a real `transition_status!(:approved)` commit when `FeatureFlag.enabled?(:vouchers_enabled)`, `fulfillment_type: voucher`, required proofs, and disability certification are all approved. Equipment-fulfillment applications do not create vouchers.
-* Stored in `vouchers` table with configurable expiry period (Policy-based).  
-* Vendor portal handles voucher redemption which creates `VoucherTransaction` records.  
-* Value calculated based on constituent's disability types and stored in `initial_value` field.
-
----
-
-## 10 · Admin Toolkit Highlights
-
-* **Applications::FilterService** handles index search & facets.  
-* Dashboard metrics loaded via `DashboardMetricsLoading` concern with optimized queries.  
-* Bulk ops (`batch_approve`, `batch_reject`) are handled by `admin/applications_controller#batch_approve` and `admin/applications_controller#batch_reject`.  
-* **Applications::AuditLogBuilder** + **Applications::EventDeduplicationService** = fast, deduped history for show view.
-
----
-
-## 11 · Integration Hooks
-
-| Service | Endpoint / Job | Purpose |
-|---------|----------------|---------|
-| Postmark | `/webhooks/email_events` | Delivery / bounce / spam tracking |
-| Secure certification upload | `SecureCertificationFormsController` | Provider certification file upload |
-| Secure proof resubmission | `SecureProofFormsController` | Constituent proof resubmission upload |
-| DocuSeal | `Webhooks::DocusealController` | Document signing completion |
-| ActiveStorage   | background processing | File validation, metadata |
-
----
-
-## 12 · How to Extend
-
-* **New proof type?** Add enum to Application model, extend `ProofAttachmentService`, add the secure form/request path if constituents must resubmit it, and add ActiveStorage attachment.
-* **New notification?** Add to `NotificationService::MAILER_MAP` + template; call `NotificationService.create_and_deliver!`.  
-* **New status?** Update enum in Application model, update auto-approval logic in `ApplicationStatusManagement`, add to front-end filters.  
-* **New event?** Just log it with `AuditEventService.log`; `Applications::EventDeduplicationService` handles deduplication automatically.
-* **Disability certification channel?** Prefer a typed secure upload or provider integration path; for manual processing, enhance admin upload interface in `admin/applications#show`.
-
----
-
-## 13 · Gotchas & Tips
-
-1. **Always set `Current.paper_context`** in paper tests—or validations will fail.  
-2. **Use `rails_request` keys** in JS to prevent duplicate AJAX hits on forms.  
-3. **Phone numbers** must be normalised (`555-123-4567`) *before* uniqueness check.  
-4. **Event floods** – if you log many similar events in <60 s, the dedup window ensures dashboards stay sane.  
-5. **Voucher auto-issue** runs in `IssueInitialVoucherJob` after approval commits—don’t forget when stubbing in specs.
+Portal and paper intake share the lifecycle but not the surrounding behavior, so a rule changed in one place is only half changed. [Portal creator tests](../../test/services/applications/application_creator_test.rb), [paper service tests](../../test/services/applications/paper_application_service_test.rb), [status-history tests](../../test/models/application_status_change_lifecycle_test.rb), and [voucher issuance tests](../../test/jobs/issue_initial_voucher_job_test.rb) cover the shared ground between them.

@@ -1,264 +1,79 @@
-# Email System Guide
+# Email and Letters
 
-MAT Vulcan sends email and generates printable letter content from shared templates. This doc explains **where templates live, how Liquid rendering works, how secure temporary forms collect documents, how letters are generated, and how Postmark is wired up**.
+Message templates live in the database, not in `app/views`.
 
----
+Mailers fill them with workflow data and either send through Postmark or render a PDF for staff to print.
 
-## 1 · Template Management
+Which workflow owns a given communication is decided in [notifications](../features/notifications.md).
 
-| Aspect | Details |
-|--------|---------|
-| Storage | `email_templates` DB table |
-| Format | Records with `name`, `format` (`:html` / `:text`), `syntax` (`legacy_percent` / `liquid`), `subject`, `body`, `description`, `version` |
-| Placeholders | Legacy: `%{first_name}` or `%<first_name>s`. Liquid: `{{ exact.path }}` or trim output tags like `{{- exact.path -}}`. |
-| Validation | Required and optional variables are stored in each template's `variables` JSON. Subject/body variables must match those exact paths. Liquid templates may only reference required variables; optional variables remain Standard-only because Liquid rendering is strict. |
-| Versioning | `version` increments on subject/body/syntax edits. Subject/body edits store the prior content in `previous_subject`/`previous_body` for the show-page Previous Version panel. |
-| Locale sync | `locale_needs_sync` flags counterpart locales out of date; admin UI uses `locale_out_of_sync?` |
-| Liquid availability | Liquid syntax is available for text templates. |
+## Templates
 
-Seed/update:
+Staff edit, preview, and test-send at `/admin/email_templates`. An [`EmailTemplate`](../../app/models/email_template.rb) is identified by name, format, and locale; [`EmailTemplates::Renderer`](../../app/services/email_templates/renderer.rb) renders subject and body in one of two syntaxes:
 
-```bash
-bin/rails db:seed:email_templates   # or rake db:seed_manual_email_templates
-bin/rails email_templates:audit   # read-only: seeds + MAILER_MAP vs DB
-```
+| Syntax | What authors get |
+| --- | --- |
+| `legacy_percent` | Declared required and optional placeholders — `%{first_name}`, `%<first_name>s`. |
+| `liquid` | Exact required-variable paths such as `{{ application.id }}`. No optional variables, filters, or control tags. |
 
-**Mailer pattern**
+A variable has to be both declared and supplied by the sending workflow: editing template text never adds data the mailer does not pass. Subject, body, and syntax edits bump the version; subject and body edits keep the prior content for the Previous Version panel. These content changes flag counterpart locales for review, except when updating an already out-of-sync translation. Description-only edits do not flag other locales.
 
-```ruby
-tpl = EmailTemplate.find_by!(name: 'user_mailer_password_reset', format: :text)
-subj, body = tpl.render(user_email: @user.email, reset_url: ...)
-mail(to: @user.email, subject: subj) { format.text { render plain: body } }
-```
+`bin/rails email_templates:audit` compares expected seed and mailer keys against the database, read-only. A missing-template error is usually a name, format, or locale mismatch rather than a missing row. The [template seeds](../../lib/tasks/seed_manual_email_templates.rake) will overwrite staff-edited copy if applied carelessly.
 
-Password-reset links are bearer links. `UserMailer` builds them with
-`CanonicalPublicUrlOptions` so outbound email uses the configured public
-host/protocol instead of an inbound request host or the unsafe `example.com`
-production fallback. There is no live email-verification link flow in the
-current code; public signup currently sends
-`ApplicationNotificationsMailer.registration_confirmation`.
+## Sending and printing
 
-**Alternative using class method:**
+[`ApplicationMailer`](../../app/mailers/application_mailer.rb) provides shared rendering and delivery; workflow mailers choose recipients, variables, and whether postal preference applies.
 
-```ruby
-subj, body = EmailTemplate.render('user_mailer_password_reset',
-                                  user_email: @user.email,
-                                  reset_url: ...)
-```
+Provider certification requests are queued by [`MedicalCertificationService`](../../app/services/applications/medical_certification_service.rb) as [`MedicalCertificationEmailJob`](../../app/jobs/medical_certification_email_job.rb), which sends via `MedicalProviderMailer` and records delivery errors on the notification when there is one ([job tests](../../test/jobs/medical_certification_email_job_test.rb)).
 
-Admin UI lets staff **edit, preview, and send test mails** — no code deploys for copy changes.
+The job configures three total attempts, including the initial execution. Its `wait: :exponentially_longer` setting is unsupported by Rails 8.1, so an SMTP failure currently raises during retry scheduling instead of queuing the next attempt.
 
-**Available Services:**
+Letters are the same templates rendered to PDF: [`TextTemplateToPdfService`](../../app/services/letters/text_template_to_pdf_service.rb) produces a Prawn document attached to a `PrintQueueItem`, which staff print from `/admin/print_queue`. Template validation and locale fallback are shared with the email path.
 
-* `EmailTemplates::Renderer.render(template:, variables:)` - Shared strict renderer used by `EmailTemplate#render`.
-  * `legacy_percent` preserves `%{key}` and `%<key>s` interpolation.
-  * `liquid` supports output tags only, rejects `{% %}` tags and filters, and renders only exact allowlisted required paths.
-* `EmailTemplate.render_with_tracking(variables, current_user)` - Instance method with audit logging.
-* Admin helper: `sample_data_for_template(template_name)` - Provides realistic sample data; Liquid previews omit optional variables so admins see strict-send failures before production.
+Password-reset mail builds links from [`CanonicalPublicUrlOptions`](../../app/services/canonical_public_url_options.rb) rather than the request host. Those links are bearer credentials: they stay out of stored notification metadata, and delivery errors are sanitized. Registration confirmation is a plain message, not an email-verification flow.
 
----
+## Collecting documents
 
-## 2 · Secure Temporary Forms
+Documents arrive through secure forms or staff upload. No live Action Mailbox implementation collects proofs or certifications in this checkout, and two leftover scripts imply otherwise: [`bin/test-inbound-email`](../../bin/test-inbound-email) calls the missing `MatVulcan::InboundEmailConfig`, and [`bin/test-inbound-emails`](../../bin/test-inbound-emails) targets a removed test file.
 
-Incoming document collection now uses secure temporary forms, not inbound email routing.
+| Request | Issuing / submitting |
+| --- | --- |
+| Missing or rejected income, residency, ID proof | [`RequestProofResubmission`](../../app/services/applications/request_proof_resubmission.rb) / [`SubmitProofResubmission`](../../app/services/applications/submit_proof_resubmission.rb) |
+| Provider certification upload | [`RequestCertificationUpload`](../../app/services/applications/request_certification_upload.rb) / [`SubmitCertificationUpload`](../../app/services/applications/submit_certification_upload.rb) |
 
-| Need | Current path |
-|------|--------------|
-| Rejected or missing income/residency/ID proof | `Applications::RequestProofResubmission` creates a `SecureRequestForm` and delivery is attempted through the selected contact channel. |
-| Public proof upload | `Applications::SubmitProofResubmission` validates the token and file, then attaches the document through `ProofAttachmentService`. |
-| Disability certification upload option | `Applications::RequestCertificationUpload` creates a provider secure request form. |
-| Public disability certification upload | `Applications::SubmitCertificationUpload` validates the token and file, then attaches it through `MedicalCertificationAttachmentService`. |
+These own the form and token lifecycle, delivery result, attachment validation, and history — an ordinary mailer call produces a message without any of it.
 
-There is no live `ApplicationMailbox`, `ProofSubmissionMailbox`, or `MedicalCertificationMailbox` path in this checkout. Do not document users, providers, or admins as routing incoming emails for proof or disability certification collection unless those classes and routes are restored.
+Recipient and channel for constituent-facing requests come from [`SecureRequestRecipientResolver`](../../app/services/applications/secure_request_recipient_resolver.rb); provider certification requests address the recorded provider contact instead. The routing rules behind it:
 
-Secure temporary forms centralize:
+- An explicit channel choice must have usable contact details and an eligible recipient and owner. An invalid choice fails rather than quietly falling back to another channel.
+- SMS is only ever an explicit selection with a real text-capable phone. Automatic proof-rejection delivery never picks it.
+- Letters can serve address-only recipients. Guardian and dependent contact ownership is field-by-field ([guardian relationships](../development/guardian_relationship_system.md)).
+- Every new form stores its delivery owner and source. Email and phone snapshots describe the destination as issued; letter rows have no address snapshot. The stored owner controls message language.
+- A resend revalidates the original channel against current eligible contact and creates a replacement form. It neither rewrites the old form's history nor redirects a merged recipient to the survivor.
 
-* signed token lookup and expiration checks
-* revocation of superseded forms
-* upload validation through `ProofAttachmentValidator`
-* audit events for request, submission, revocation, and expiration
-* delivery failure reporting back to the calling workflow
+[Merge checks](../../app/services/users/duplicate_merge_service.rb) read that ownership history, and active forms missing owner or source data currently block merges globally. Ownership cannot be inferred backwards from present-day contact data, so legacy links have to expire or be revoked:
 
-**Delivery routing (`Applications::SecureRequestRecipientResolver`):** for
-constituent-facing secure-request issuance (`Applications::RequestProviderInfo` and
-`Applications::RequestProofResubmission`), the resolver selects the logical recipient,
-channel, and secure-form provenance. It consumes the field-specific persisted ownership
-policy in [`UserGuardianship`](../development/guardian_relationship_system.md#canonical-stored-contact-ownership)
-instead of interpreting dependent and guardian fields itself. Callers own form creation,
-tokens, notifications, and retry; the resolver never creates portal/login eligibility or
-stores fallback contact on the constituent. Certification-upload flows
-(`Applications::RequestCertificationUpload`, `MedicalCertificationService`) are outside
-this routing: they deliver to the medical provider's recorded email address directly and
-consult the resolver only for the internal tracking-notification recipient.
+1. `SecureRequestForm.active.with_incomplete_delivery_provenance.count` inventories them; the [scope](../../app/models/secure_request_form.rb) catches rows missing either field.
+2. Let them expire, or revoke them through the request workflow.
+3. Recheck, and issue fresh requests to current eligible recipients where the documents are still needed.
 
-* **Strict channel overrides.** An admin-selected channel is honored only when the
-  contact for it currently exists on the recipient's resolved records. A forged, stale,
-  or contact-less override fails with `invalid_channel_override` and creates nothing —
-  there is no silent fallback to another channel. An override naming a route whose
-  contact exists but whose delivery owner is no longer eligible passes this
-  contact-availability check and then fails the locked delivery-participant recheck with
-  `recipient_no_longer_eligible` instead.
-* **Staff proof delivery.** Income, residency, and ID proof controls use the same
-  recipient/channel chooser as provider-info requests, including when provider data
-  is complete. Automatic rejection delivery does not select SMS; after a delivery
-  warning staff can explicitly choose SMS. Partial-batch recovery offers revoked
-  recipients without resending successful active links.
-* **Message language.** A form with a persisted delivery owner uses that owner's
-  supported locale for email, SMS, and letters. Unsupported or missing owner locales
-  use `I18n.default_locale`. Legacy forms retain the recipient/explicit print-owner
-  fallback. The logical recipient still identifies whose request is being completed.
-* **Issued-link history.** Both admin tables identify recipients by role, relationship,
-  constituent ID, and profile link, and name a differing original delivery owner.
-  Email/phone destinations use encrypted issuance snapshots. Letter rows say
-  “Postal mail”: no immutable address snapshot is stored, so current addresses must
-  not be displayed as historical destinations. Chooser options describe current routes.
-* **SMS capability.** SMS is only ever an explicit selection, never a default. It
-  requires the selected contact owner's real phone with `phone_type` of `text`; voice,
-  videophone, synthetic, or malformed phones fail server-side. Phone ownership is
-  resolved independently from email ownership.
-* **Delivery-owner eligibility.** The selected channel's delivery owner — contact owner
-  for email/SMS, address owner for letters — must satisfy the same delivery-eligibility
-  rule as the logical recipient. An active dependent's request never routes through a
-  suspended, inactive, or merged guardian's email, phone, or household address.
-* **Address-only letters.** A constituent with a complete mailing address and no real
-  digital contact still resolves to postal letter when the action permits it; blank
-  email/phone does not block the request. Letter content is printed to the
-  resolver-selected address owner. A dependent's complete address is used when the
-  managing guardian has no complete mailing address; otherwise the guardian remains the
-  address owner. Template selection and translated instructions use that owner's locale.
-* **Resend revalidation.** Resending an issued link revalidates the stored channel
-  against the recipient's *current* contact information. A channel that is no longer
-  deliverable fails closed (the original form stays untouched); a successful resend
-  snapshots the current contact while keeping the original channel. Merged, suspended,
-  or inactive recipients are rejected, never redirected to a merge survivor.
-* **No route is not a delivery failure.** When no permissible route exists, the caller
-  fails before creating any form, token, notification, or audit event.
+Two resolver reasons explain most delivery refusals: `invalid_channel_override` (the selected channel has no usable contact — SMS also needs a text-capable number) and `recipient_no_longer_eligible` (actor, recipient, delivery owner, or required relationship failed the locked eligibility check).
 
-### Delivery-provenance rollout and merge gate
+## Postmark
 
-PR4c (#209) makes `Applications::RequestProviderInfo` and
-`Applications::RequestProofResubmission` the only production writers of application
-secure forms and requires every new row to persist both `delivery_owner_id` and
-`delivery_source`. The columns remain nullable so historical ownership is not invented.
-The PR4b stack (#192–#194) owns the merge blocker that consumes this provenance.
+| Concern | Where |
+| --- | --- |
+| Adapter and credential | [Application config](../../config/application.rb), `credentials.postmark_api_token` |
+| Message stream | `ApplicationMailer` defaults to `notifications`; [`UserMailer`](../../app/mailers/user_mailer.rb) uses `outbound` for password resets |
+| Tracking | [postmark_format.rb](../../config/initializers/postmark_format.rb) — open tracking on, link tracking off |
+| Stored status | [`UpdateEmailStatusJob`](../../app/jobs/update_email_status_job.rb) polls only `medical_certification_requested` notifications that have a message ID |
+| Bounce/complaint webhook | [`EmailEventsController`](../../app/controllers/webhooks/email_events_controller.rb) → [`EmailEventHandler`](../../app/services/email_event_handler.rb) |
 
-Before enabling owner-complete protection in production, operators must record:
+The webhook path is incomplete: it references `MedicalProviderEmail`, which has no model in this repository, and never updates `Notification` rows. Delivery and open tracking therefore exist for one notification type, not generally.
 
-- active ownerless rows, grouped by channel and kind, with maximum `expires_at`;
-- rows where owner/source presence does not match;
-- confirmation that no other production writer creates application secure forms.
+[`PostmarkDebugger`](../../config/initializers/postmark_debugger.rb) logs redacted payloads under `POSTMARK_DEBUG_PAYLOADS=true`, with bodies, contact values, URLs, and token fields removed — worth reaching for after the queued job, stream, template, and provider result have been ruled out.
 
-Existing active ownerless links should expire or be revoked through the normal secure
-request lifecycle. Until their count reaches zero, the bounded single-deploy guard blocks
-all merges whenever any active incomplete-provenance row exists. That zero count is the
-guard's exit condition; it is not evidence that historical rows acquired an owner.
+## Tests
 
-The `delivery_owner_id` index is retained because PostgreSQL does not automatically
-index foreign keys and merge performs a reverse lookup across active recipient/owner
-forms. The index decision must be confirmed with a representative `EXPLAIN` using
-realistic active/expired proportions. Do not add a composite or partial index without
-evidence that the observed bitmap/index plan needs it. Production table size, form
-distribution, and merge-query frequency remain operator-owned rollout evidence.
+[Renderer](../../test/services/email_templates/renderer_test.rb) · [locale](../../test/models/admin/email_templates_locale_test.rb) · [letter PDF](../../test/services/letters/text_template_to_pdf_service_test.rb) · [redaction](../../test/initializers/postmark_debugger_test.rb)
 
----
-
-## 3 · Letter Generation
-
-Some users choose *physical mail*. The same template renders to PDF using Prawn.
-
-```ruby
-Letters::TextTemplateToPdfService
-  .new(template_name: 'application_notifications_account_created',
-       recipient: user,
-       variables: { first_name: user.first_name })
-  .queue_for_printing
-```
-
-* Uses `EmailTemplate.find_by(name: template_name, format: :text)` for content.
-* Renders through `EmailTemplate#render`, so printed letters share the same legacy/Liquid syntax behavior as email.
-* Creates `PrintQueueItem` → admin prints from `/admin/print_queue`.
-* PDF includes header, date, address, body content, and footer.
-
----
-
-## 4 · Postmark Setup
-
-### 4.1 Message Streams
-
-| Stream | Purpose |
-|--------|---------|
-| `outbound` | Auth & transactional (password reset) |
-| `notifications` | Status updates, voucher assigned |
-
-Use in mailer:
-
-```ruby
-mail(to: user.email, subject: 'Hi', message_stream: 'notifications')
-```
-
-### 4.2 Tracking & Webhooks
-
-* `track_opens: true` configured globally in `postmark_format.rb`.
-* `UpdateEmailStatusJob` polls Postmark only for `medical_certification_requested` notifications with a `message_id`; do not assume it updates every email-backed `Notification`.
-* Bounce events handled by `EmailEventHandler` → creates audit events.
-* Webhook endpoint: `/webhooks/email_events` for bounce/complaint notifications.
-
-### 4.3 Debug Logs
-
-```
-POSTMARK PAYLOAD (ORIGINAL) # only when POSTMARK_DEBUG_PAYLOADS=true; redacted
-POSTMARK PAYLOAD (MODIFIED) # only when POSTMARK_DEBUG_PAYLOADS=true; redacted
-POSTMARK SUCCESS / POSTMARK ERROR
-```
-
-`config/initializers/postmark_debugger.rb` never logs raw payloads by default.
-When payload logging is explicitly enabled, bodies, URLs, and token-bearing
-fields are redacted before writing to Rails logs.
-
----
-
-## 5 · Testing
-
-| Topic | How |
-|-------|-----|
-| Template render | Mock template → `template.render(**vars)` |
-| Secure form flow | Request-service tests plus token submission controller/service tests |
-| Letter PDF | Specs for `TextTemplateToPdfService` + `PrintQueueItem` |
-| Smoke send | Admin UI “Send test email” |
-
-Example mock (from test helpers):
-
-```ruby
-def mock_template(subject_format, body_format)
-  template = EmailTemplate.new(
-    name: 'test_template',
-    format: :text,
-    subject: subject_format,
-    body: body_format
-  )
-  template.stubs(:render).returns([subject_format, body_format])
-  template
-end
-
-tpl = mock_template('Hello %{first_name}', 'Welcome %{first_name}!')
-subj, body = tpl.render(first_name: 'Ada')
-```
-
----
-
-## 6 · Troubleshooting Cheatsheet
-
-| Symptom | Check |
-|---------|-------|
-| **"Template not found"** | Name/format mismatch in DB, run `rake db:seed_manual_email_templates` |
-| **Secure form link rejected** | Token expired, revoked, already used, or not active for public use |
-| **Secure form upload rejected** | File type/size/content validation in `ProofAttachmentValidator` |
-| **Letter generation fails** | Text template exists? all variables supplied? `PrintQueueItem` created? |
-| **Wrong stream** | `message_stream` param in mailer (`outbound` vs `notifications`) |
-| **Email tracking issues** | `POSTMARK_API_TOKEN`, `UpdateEmailStatusJob` logs, `Notification` records with `action: "medical_certification_requested"` and a `message_id` |
-| **Variable validation fails** | Check the template `variables` JSON, exact required/optional paths, and syntax. Liquid placeholders must come from required variables. |
-
-**Tools:**
-* Postmark dashboard (delivery & webhooks)
-* `/admin/print_queue` (letter generation)
-* `/admin/email_templates` (template management and testing)
+A change is covered when the resulting recipient, variables, letter routing, and failure handling are all asserted against the real template and locale. A queued job or a 200 from Postmark is not receipt.

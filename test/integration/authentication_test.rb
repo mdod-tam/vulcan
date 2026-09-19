@@ -127,7 +127,7 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
 
     # Verify we're authenticated
     get root_path
-    assert_response :success
+    assert_redirected_to constituent_portal_dashboard_path
 
     # Store the original cookie value (optional, might be nil here in integration tests)
     # original_token = cookies[:session_token]
@@ -187,7 +187,7 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
     assert_response :success
 
     get root_path
-    assert_response :success
+    assert_redirected_to constituent_portal_dashboard_path
 
     # Verify we're still authenticated
     verify_authentication_state(@user)
