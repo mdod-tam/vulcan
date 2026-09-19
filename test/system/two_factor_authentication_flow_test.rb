@@ -159,12 +159,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     # Wait for the redirect and flash message to appear, which confirms sign-in.
     assert_text 'Signed in successfully'
 
-    # Should be redirected to dashboard/root - check for constituent dashboard first
-    if current_path == constituent_portal_dashboard_path
-      assert_current_path constituent_portal_dashboard_path
-    else
-      assert_current_path root_path
-    end
+    assert_current_path constituent_portal_dashboard_path
     assert page.has_button?('Sign Out') # Check for signed-in state indicator
     take_screenshot('2fa-8-totp-login-success')
   end

@@ -3,8 +3,7 @@ es:
     header:
       main_navigation: "Navegación principal"
       primary_navigation: "Navegación primaria"
-      return_home: "Volver a la página principal"
-      logo_return_home: "Logotipo de TAM - Volver a la página principal"
+      logo_sign_in: "Logotipo de TAM - Iniciar sesión"
       toggle_navigation: "Alternar menú de navegación"
       sign_in: "Iniciar sesión"
       sign_in_aria: "Iniciar sesión en su cuenta"

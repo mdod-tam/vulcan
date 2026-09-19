@@ -1,53 +1,26 @@
-# Test Fixtures
+# Test Data and Fixtures
 
-This directory contains fixture data used for testing purposes. This document outlines the structure, dependencies, and naming conventions to help developers understand how fixtures are organized and how they should be used.
+This directory contains YAML sample data and files for upload tests. New scenarios generally use [FactoryBot factories](../factories); the suite also loads shared seed data. See [testing and debugging](../../docs/development/testing_and_debugging_guide.md) for test commands and helpers, or the [project README](../../README.md) for local setup.
 
-## General Guidelines
+## How data gets loaded
 
-- **When to use fixtures**: Use fixtures for simple, static lookup data that doesn't change between tests.
-- **When to use factories**: Use FactoryBot factories (in `test/factories/`) for models with complex associations, validations, or varying states.
+[test_helper.rb](../test_helper.rb) cleans the test database and runs [db/seeds.rb](../../db/seeds.rb) once at suite startup. There is no blanket `fixtures :all` declaration.
 
-## Key Dependencies Between Fixtures
+The seed creates users through factories, then reads [products.yml](products.yml), [applications.yml](applications.yml), and [invoices.yml](invoices.yml). Application and invoice loaders translate named user/vendor references to IDs. Editing `users.yml` or another YAML file does not automatically change the seeded users or load that file into the suite.
 
-### Users → Applications
+Browser tests also have `SeedLookupHelpers` in [ApplicationSystemTestCase](../application_system_test_case.rb). Calls such as `users(:admin)` use that helper's lookup/creation rules; they are not standard Rails fixture lookups. Its application lookups can fall back to another record, so create a specific factory record when a test depends on an exact state.
 
-- Applications depend on users through the `user` attribute (e.g., `application.user: confirmed_user`).
-- Users of different types (`Users::Administrator`, `Users::Constituent`, etc.) are referenced by applications for different purposes.
+## Choosing data for a test
 
-### Applications → Evaluations
+- Use a factory to make the relevant user role, associations, and application state explicit. Start with [user factories](../factories/users.rb) and [application factories](../factories/applications.rb).
+- Update shared YAML only when the shared seed data itself needs to change. Follow the existing loader and reference names.
+- Treat seeded records as setup conveniences. Some application seeds bypass validations while loading historical states; they do not prove that normal intake can create the same state.
+- Let the shared test base manage transactions and cleanup. Browser tests use a different cleaning strategy; do not add a second one to an individual test.
 
-- Evaluations depend on applications through the `application_id` attribute.
-- An evaluation is typically associated with a specific application.
+## Upload files
 
-### Applications → Vouchers
+[files/](files) holds PDFs, images, and deliberately invalid samples. Use real files for upload, download, rendering, or file-validation behavior.
 
-- Vouchers depend on applications through the `application_id` attribute.
-- Vouchers represent approved benefits tied to a specific application.
+The application factory's `:with_income_proof`, `:with_residency_proof`, `:with_id_proof`, and `:with_medical_certification` traits attach real fixture PDFs. For a test that depends on a particular file format or invalid content, choose the file explicitly.
 
-### Users → Evaluations
-
-- Evaluations may be associated with both a constituent (the applicant) and an evaluator (the person performing the evaluation).
-
-## Naming Conventions
-
-- Use descriptive names that indicate the purpose or state of the fixture (e.g., `active`, `approved`, `rejected`).
-- For fixtures with similar purposes but different states, use consistent prefixes (e.g., `in_progress_with_approved_proofs`, `in_progress_with_rejected_proofs`).
-- For user fixtures, indicate the type or role (e.g., `admin_david`, `constituent_john`).
-
-## Special Considerations
-
-### ActiveStorage Attachments
-
-- Fixtures for models with ActiveStorage attachments (like `Application`) might not include the attachment references directly.
-- For testing with attachments, consider using factories with the `:with_mocked_income_proof`, `:with_real_income_proof`, etc. traits.
-
-### STI (Single Table Inheritance)
-
-- User fixtures use the `type` attribute to determine the specific class (e.g., `Users::Administrator`, `Users::Constituent`).
-- Ensure the `type` value matches a valid class name.
-
-## Recommended Approach
-
-1. For simple tests with static data, use fixtures.
-2. For complex models or scenarios, especially those involving validations, callbacks, or varying states, use factories.
-3. When creating new tests, prefer factories over fixtures for better isolation and improved readability.
+File fixtures are separate from YAML records: an approved proof status alone does not attach a file. Check both the attachment and the status when setting up proof-review scenarios.

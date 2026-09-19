@@ -1,329 +1,138 @@
 # Guardian Relationship System
 
-Explicit `GuardianRelationship` records replace the old boolean flags, allowing each guardian to manage many dependents and vice-versa while preserving data integrity.
+A guardian and a dependent are both users.
 
----
+A `GuardianRelationship` connects them.
 
-## 1 · Data Model
+An application's `managing_guardian` records who manages that particular application.
 
-| Table | Key Columns | Notes |
-|-------|-------------|-------|
-| **guardian_relationships** | `guardian_id`, `dependent_id`, `relationship_type`, `portal_creation_key`, `portal_creation_fingerprint` | Unique index on `[guardian_id, dependent_id]`. The replay pair is nullable and originates only from portal dependent creation; a duplicate merge may preserve it on the retained relationship row. A **partial composite** unique index on `[guardian_id, portal_creation_key]` (`WHERE portal_creation_key IS NOT NULL`) and a check constraint keep the pair scoped and both halves present or absent together. |
-| **applications** | `user_id`, `managing_guardian_id` | `user_id` = applicant; `managing_guardian_id` set only for dependents. |
-| **users** (associations) | see below | |
+One guardian can have several dependents, and one dependent can have several guardians.
 
+## The data model
 
-## Portal dependent creation: replay and admission
-
-Portal creation answers two independent questions inside the guardian lock, before any write. They
-are separate mechanisms because they answer different things, and neither can answer the other's
-question.
-
-**Request replay** — *is this the same request the server already completed?* Answered by
-`portal_creation_key`, a per-form value carried in a hidden field and persisted atomically with the
-relationship by `Applications::GuardianDependentManagementService`. A replay returns the original
-successful outcome with zero writes. Only a request key can distinguish a retransmission (double
-click, lost response, browser retry) from a guardian deliberately adding another person; identity
-comparison cannot, because those two look identical.
-
-Replay identity is `(authenticated guardian, request key)`, and the index is scoped to match. A key
-is one guardian's request namespace rather than a global value, so the same raw key held by another
-guardian is simply a different request: independently spendable, with no coupling between accounts
-and nothing that could surface their record. A global index would let one guardian's creation be
-refused — or raise `RecordNotUnique` under concurrency — because of a random value an unrelated
-account happens to hold.
-
-The key is paired with `portal_creation_fingerprint`, a versioned server-keyed HMAC over everything
-semantically submitted: names, normalized date of birth, contact strategy choices, dependent-owned
-contact when the dependent owns it, phone type, every disability selection, newsletter consent, and
-relationship type. Transport and derived values are excluded — CSRF tokens, submit labels, the key
-itself, synthetic contact values, guardian contact snapshots, and contact fields a guardian strategy
-ignores. It is an HMAC rather than a plain digest because the inputs are partly low-entropy PII and
-a bare SHA of them would be a searchable index into that data.
-
-| Submitted | Outcome |
-|---|---|
-| unspent key | normal creation |
-| spent key, matching fingerprint | original outcome returned, zero writes |
-| spent key, different fingerprint | stale-form refusal, zero writes |
-
-The strict form is deliberate: a replay key means "repeat this creation operation", so any change to
-what would be persisted must refuse rather than be silently discarded. It costs no normal-path
-friction, because a *failed* submission persists nothing and leaves the key unspent — fields stay
-freely editable until that key has actually completed an operation.
-
-`Users::DuplicateMergeService` accommodates the scoped index rather than dictating a global one, and
-its two repoints are asymmetric: retiring a **guardian** ends that request namespace, so the pair is
-cleared as the rows move; retiring a **dependent** leaves the guardian intact, so the pair is
-preserved.
-
-Because a replay resends the contact details of the record it already created, exact-contact
-duplicate detection sees a hard block against that record. That check runs *before* the lock, so a
-submission that resolves to a replay is allowed past it; the in-transaction check remains
-authoritative and the pre-lock read is advisory only.
-
-**Admission** — *may this guardian hold this dependent at all?* One dependent per guardian per
-canonical name and date of birth. Equivalence is delegated to `Users::Constituent.find_duplicates`,
-the single definition of "same person" in the application, which lower-cases names in SQL and
-handles the encrypted `date_of_birth` column. A refusal names the existing dependent and points at
-MAT support, because a guardian who genuinely has two different people with the same name and
-birthdate cannot resolve it themselves.
-
-This is a portal-side admission rule, not a system-wide invariant: it reads relationships written by
-paper and admin intake, but it does not constrain those writers, and a concurrent sibling write is
-not serialized by this lock.
-
-```ruby
-# Implemented in UserGuardianship concern (app/models/concerns/user_guardianship.rb)
-has_many :guardian_relationships_as_guardian,
-         class_name: 'GuardianRelationship',
-         foreign_key: 'guardian_id',
-         dependent: :destroy,
-         inverse_of: :guardian_user
-has_many :dependents, through: :guardian_relationships_as_guardian, source: :dependent_user
-
-has_many :guardian_relationships_as_dependent,
-         class_name: 'GuardianRelationship',
-         foreign_key: 'dependent_id',
-         dependent: :destroy,
-         inverse_of: :dependent_user
-has_many :guardians, through: :guardian_relationships_as_dependent, source: :guardian_user
-
-has_many :managed_applications,
-         class_name: 'Application',
-         foreign_key: 'managing_guardian_id',
-         inverse_of: :managing_guardian,
-         dependent: :nullify
+```mermaid
+flowchart LR
+  G["Guardian (User)"] --> R["GuardianRelationship"]
+  R --> D["Dependent (User)"]
+  A["Application"] -->|"user_id: applicant"| D
+  A -->|"managing_guardian_id"| G
 ```
 
----
+[`GuardianRelationship`](../../app/models/guardian_relationship.rb) stores `guardian_id`, `dependent_id`, and `relationship_type`. Guardian and dependent are relationship roles, not separate user subclasses.
 
-## 2 · Dependent Contact Strategy
+The [schema](../../db/schema.rb) enforces a unique guardian/dependent pair and foreign keys to users. The model rejects self-guardianship; there is no database check constraint for that rule. `applications.managing_guardian_id` is optional.
 
-| Field | Purpose |
-|-------|---------|
-| `dependent_email` | Encrypted, optional e-mail for dependent |
-| `dependent_phone` | Encrypted, optional phone |
+[`UserGuardianship`](../../app/models/concerns/user_guardianship.rb) provides `guardians`, `dependents`, and `managed_applications`, plus access and contact helpers. [Application scopes](../../app/models/application.rb) such as `managed_by`, `for_dependents_of`, and `related_to_guardian` support the corresponding application queries.
 
-**Own contact info**
+## Adding a dependent in the portal
+
+A guardian adds a dependent from their own dashboard, before applying for anyone. The dashboard offers **Add a Dependent**, or **Add Another Dependent** once they have one, which opens the form at `/constituent_portal/dependents/new`. The [form](../../app/views/constituent_portal/dependents/_form.html.erb) asks for three things:
+
+- **Dependent information** — first and last name, date of birth, and contact details. *Use my email address* and *Use my phone number* are checked by default; clearing either reveals a field for the dependent's own address or number, plus the phone type (voice, videophone, or text).
+- **Disability information** — at least one of hearing, vision, speech, mobility, or cognition. The form will not save without one.
+- **Relationship information** — how the guardian is related: parent, grandparent, foster parent, legal guardian, relative caregiver, power of attorney, or other.
+
+**Add Dependent** returns them to the dashboard with "Dependent was successfully created." The dependent now appears under *My dependents* with View and Edit links and an **Apply for …** button. Adding someone does not start an application; that is a separate step.
+
+Behind the button, [`ConstituentPortal::DependentsController#create`](../../app/controllers/constituent_portal/dependents_controller.rb) checks the submitted contact details against existing records, locks the guardian and any candidates a review case would name, derives shared contact from that locked guardian, and then writes the dependent, the relationship, and any review case in one transaction. Nothing is written unless all of it succeeds.
+
+Four things a guardian can see instead of that success message:
+
+| What happened | What they see |
+| --- | --- |
+| The email or phone already belongs to someone on file | "Unable to complete dependent creation. Please contact the MAT Team for assistance." The wording is deliberately vague: it must not reveal whose record matched. |
+| They already have a dependent with this name and date of birth | A message naming that dependent, with the MAT Team's email and phone. Each guardian gets one dependent per name-and-birthdate pair, so genuinely different people who share both are sorted out by staff. |
+| They double-clicked, or the browser retried the request | "… was already added to your account." No second person is created — see [Repeated submissions](#repeated-submissions). |
+| They submitted a stale page after changing the details | "This form was out of date, so nothing was changed. Please reload the page and try again." |
+
+A fifth case is invisible to the guardian. When the new dependent's name and date of birth resemble an unrelated person already on file, creation succeeds with the ordinary message and staff get a `portal_dependent` review case to look at. The dependent is not reused, the guardian is not told, and the new dependent can still apply — only an open `registration_soft_match` case blocks submission.
+
+### Doing it from the console
+
+Nothing exposes the portal's sequence as a single call, so from `bin/rails console` you create the two records yourself. This shares the guardian's email, which is what the *Use my email address* checkbox does:
 
 ```ruby
-dependent = User.create!(
-  email:            'child@example.com',
-  phone:            '555-0001',
-  dependent_email:  'child@example.com',
-  dependent_phone:  '555-0001'
+guardian  = Users::Constituent.find_by(email: 'guardian@example.com')
+dependent = Users::Constituent.create!(
+  first_name: 'Ada', last_name: 'Lovelace',
+  date_of_birth: Date.new(2015, 3, 2),
+  hearing_disability: true,
+  password: SecureRandom.hex(12),
+  email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local",
+  dependent_email: guardian.email
 )
+GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
+                             relationship_type: 'Parent')
 ```
 
-**Shared contact info**
+`User` requires a password even for a dependent who will never sign in, and the synthetic primary email is what keeps the shared address from colliding with the guardian's on the unique index. The model's [`UserProfile`](../../app/models/concerns/user_profile.rb) concern requires a disability when the constituent has applications or validation is explicitly requested. Portal creation enables that check; a new console-created record without it can save with none.
 
-Guardian-contact sharing snapshots guardian contact into dependent fields plus
-system-generated primary email and `000-` phone values when needed.
+This skips everything the form does around the write: duplicate detection, the replay key, the one-per-name-and-birthdate rule, and the review case. That is fine for local setup and fixing data by hand, and wrong as a way to import people. In tests, use `create(:guardian_relationship)` instead.
 
-```ruby
-dependent = User.create!(
-  email:            'dependent-abc123@system.matvulcan.local', # system-generated unique
-  phone:            '000-000-0042',
-  dependent_email:  'guardian@example.com',
-  dependent_phone:  '555-0002'
-)
-```
+### Repeated submissions
 
-### Canonical stored-contact ownership
+Each form carries a `portal_creation_key`. The relationship stores that key and a [server-keyed fingerprint](../../app/services/constituent_portal/dependent_request_fingerprint.rb) of the submitted choices.
 
-`Applications::GuardianDependentManagementService` writes the strategy shapes above.
-`UserGuardianship` is the sole interpreter of those persisted shapes:
+| Request | Result |
+| --- | --- |
+| Unused key for this guardian | Continue through normal creation checks. |
+| Used key with the same submitted choices | Return the original dependent without new writes. |
+| Used key with changed choices | Refuse the stale form without changing either record. |
 
-* `dependent_email_contact` and `dependent_phone_contact` return the usable value,
-  owning record, and stored-field source independently. The dependent's relationships
-  provide the default guardian scope, while callers with a preloaded scope can supply it
-  explicitly. Another guardian's value is never labeled as dependent-owned.
-* Rows that predate strategy snapshots can have no `dependent_email` or
-  `dependent_phone`. Their compatibility stays explicit: delivery and effective email
-  retain the contact-guardian fallback, while a usable primary phone remains
-  dependent-owned. Paper intake preserves a usable primary email or phone when staff
-  edit an existing dependent without resubmitting contact fields. All paths use the
-  same ownership interpreter; only the declared legacy fallback differs. Canonical
-  dependent-owned rows are unambiguous because the writer mirrors the dependent's
-  value into the corresponding `dependent_*` field.
-* `dependent_mailing_address_owner` makes only the inference supported without a stored
-  address strategy: it selects the dependent when the dependent address is complete and
-  the contact guardian's is incomplete. Otherwise it conservatively selects the guardian.
-* Delivery services consume these answers; they do not compare contact values again.
+Keys are scoped to the authenticated guardian, so one guardian's key cannot retrieve another's dependent. The database enforces uniqueness on `(guardian_id, portal_creation_key)` when a key is present, and requires the key and fingerprint to be stored together. Failed creation leaves the key available for a corrected submission.
 
-Other guardian/dependent helpers:
+This replay check is separate from the portal's name/date-of-birth rule: a guardian cannot add another dependent matching one they already hold. [`Users::Constituent.find_duplicates`](../../app/models/users/constituent.rb) defines that comparison. It is a portal admission rule, not a database uniqueness rule shared by all intake channels.
 
-```ruby
-dependent.effective_email  # resolves through the canonical email ownership policy
-dependent.effective_phone  # resolves through the canonical phone ownership policy
-dependent.effective_phone_type  # uses the selected phone owner's type
-dependent.effective_communication_preference  # uses guardian's preference if dependent
-dependent.effective_locale  # uses the selected email owner's locale; see below
-dependent.effective_message_locale  # see below
-dependent.guardian_for_contact  # returns primary guardian for contact purposes
-```
+During a duplicate merge, moving a guardian's relationships clears their creation keys because the guardian's request scope has ended. Moving a dependent's relationships preserves the surviving guardian's keys.
 
-**Locale resolution.** `effective_locale` follows the contact path rather than the record: a dependent whose `effective_email` is the guardian's email is reached *through* the guardian, so the guardian's `locale` is the one that matters. A dependent with their own `dependent_email` keeps their own `locale`. Getting this backwards writes messages in a language the actual reader does not use.
+## Paper and admin intake
 
-`effective_message_locale` narrows that to something `I18n` will accept, returning `nil` when the user has no locale set or carries a value the app no longer ships. Stored locales are **not** validated against `I18n.available_locales`, so any caller passing one to `I18n.t` or `I18n.with_locale` must go through this method and supply its own fallback — an unsupported value otherwise raises `I18n::InvalidLocale` rather than rendering a message. `ApplicationForm#message_locale` composes it: the submitted locale (allowlisted the same way) first, then the applicant's, then the actor's, then `I18n.default_locale`.
+[`PaperApplicationService`](../../app/services/applications/paper_application_service.rb) owns the paper application transaction. Staff select a saved guardian; [guardian quick-create](../../app/services/applications/paper_guardian_quick_create_service.rb) creates new guardians before final submission.
 
-For a **persisted** application the form takes its applicant from `application.user` — the owner the actor was already authorized to open — never from a submitted `user_id`. The edit form posts no such field, so deriving it from params made every update resolve to the acting adult and rendered refusals in the guardian's language on a dependent's draft.
+For a new dependent, [`GuardianDependentManagementService`](../../app/services/applications/guardian_dependent_management_service.rb) applies contact choices, checks identity, and saves the dependent and relationship within that transaction. For an existing dependent, the writer requires an on-file relationship to the selected guardian and rechecks [paper application eligibility](../../app/services/applications/paper_application_eligibility.rb). A submitted dependent ID alone does not authorize reuse.
 
-These effective-contact helpers are for communication, display, and notification routing. They are not login identifiers. Public portal auth and recovery require an email-backed account (`real_email?` via `User.find_by_login_identifier`); phone is an alternate identifier only when the same user also has `real_phone?`.
+Paper identity decisions use [`PaperIdentityReview`](../../app/services/applications/paper_identity_review.rb) and record applicable keep-separate or existing-person selections in `paper_intake` cases. The new application explicitly identifies its applicant and managing guardian.
 
-*Avoids uniqueness violations and supports real-world family setups.*
+Admin relationship creation goes through [`Admin::GuardianRelationshipsController`](../../app/controllers/admin/guardian_relationships_controller.rb) and the shared relationship service, which locks and rechecks both users before inserting the link.
 
----
+## Canonical stored-contact ownership
 
-## 3 · Key Methods & Scopes
+Email, phone, and address choices are independent. A dependent might use their own email and their guardian's phone.
 
-| Model | Method | Purpose |
-|-------|--------|---------|
-| **User** | `guardian?`, `dependent?` | Quick role checks (implemented in UserGuardianship) |
-|  | `dependent_applications` | All apps for dependents (implemented in UserGuardianship) |
-|  | `relationship_types_for_dependent(user)` | Returns relationship strings (implemented in UserGuardianship) |
-|  | `effective_email`, `effective_phone` | Contact info with guardian fallback |
-|  | `guardian_for_contact` | Primary guardian for contact purposes |
-| **Application** | `for_dependent?` | Returns true if managing_guardian_id present |
-|  | `guardian_relationship_type` | Returns relationship_type from GuardianRelationship |
-|  | `ensure_managing_guardian_set` | Callback for safety (before_save and before_create) |
+[`GuardianDependentManagementService`](../../app/services/applications/guardian_dependent_management_service.rb) writes the contact choices; [`UserGuardianship`](../../app/models/concerns/user_guardianship.rb) interprets the saved fields.
 
-```ruby
-# Application scopes (implemented in app/models/application.rb)
-scope :managed_by, lambda { |guardian_user|
-  where(managing_guardian_id: guardian_user.id)
-}
+| Choice | Stored representation |
+| --- | --- |
+| Dependent's own email or phone | The value is mirrored into the primary field and the corresponding `dependent_email` or `dependent_phone` field. |
+| Guardian's email or phone | Guardian contact is copied into the corresponding dependent field. Primary fields can contain unique synthetic values to avoid contact-uniqueness collisions. |
+| Mailing address | Address fields are copied or retained according to the selected strategy; the strategy itself is not stored. |
 
-scope :for_dependents_of, lambda { |guardian_user|
-  if guardian_user
-    joins('INNER JOIN guardian_relationships ON applications.user_id = guardian_relationships.dependent_id')
-      .where(guardian_relationships: { guardian_id: guardian_user.id })
-  else
-    none
-  end
-}
+Synthetic emails ending in `@system.matvulcan.local` and `000-` phone placeholders are internal values, not delivery destinations. The primary email and phone have unique database indexes; the dependent contact fields allow shared guardian values. See [PII encryption](../security/pii_encryption.md) for field storage and contact lookup.
 
-scope :related_to_guardian, lambda { |guardian_user|
-  managed_by(guardian_user).or(for_dependents_of(guardian_user))
-}
+In paper intake, choosing the dependent's own email or phone requires a usable value. For an existing dependent, omitting the field can retain their real on-file contact; explicitly submitting a blank is refused. Selecting guardian contact does not require a dependent-owned value. [PaperDependentContactChoice](../../app/services/applications/paper_dependent_contact_choice.rb) applies this rule to identity preview and both new- and existing-dependent writes.
 
-# User scopes (implemented in UserGuardianship concern)
-scope :with_dependents, -> { joins(:guardian_relationships_as_guardian).distinct }
-scope :with_guardians, -> { joins(:guardian_relationships_as_dependent).distinct }
-```
+`dependent_email_contact` and `dependent_phone_contact` return the **value, owner, and source** together, each field resolved independently within the relevant guardian scope. That is the answer delivery services need — comparing contact values by hand reconstructs it badly, since an address shared between guardian and dependent is ambiguous on its own.
 
----
+Older rows can lack the dependent contact fields, and the fallback is deliberately asymmetric: email falls back to the contact guardian, while a usable primary phone stays dependent-owned. Paper edits preserve usable primary contacts that staff did not submit replacements for.
 
-## 4 · User Flows
+Address ownership is conservative because no strategy is persisted: `dependent_mailing_address_owner` chooses the dependent only when their address is complete and the contact guardian's is incomplete; otherwise, with a contact guardian present, it chooses the guardian.
 
-### 4.1 · Web-Created Dependent (Constituent Portal)
+## Delivery, locale, and access
 
-1. Guardian uses `ConstituentPortal::DependentsController#create`
-2. Applies dependent contact strategies, then checks `DuplicateDetectionService` with context `:portal_new_dependent`
-3. Exact contact collisions block before persistence — **except for a resolved replay**, which legitimately carries the contact details of the record it already created, and would otherwise be refused with a support-contact dead end before its key was ever read. The pre-lock replay lookup used for that exception is advisory; step 6 repeats replay resolution under the lock and is authoritative
-4. Before writing, locks the guardian plus every candidate needed by a soft-match review case in one ascending-ID `User.lock_for_merge_integrity!` call
-5. Requalifies the locked guardian as an active constituent and re-derives guardian contact snapshots from that locked row
-6. **Resolves the replay key under that lock.** A `portal_creation_key` already spent by this guardian with a matching `portal_creation_fingerprint` returns the original outcome with zero writes; the same key with a different fingerprint is a stale form and is refused without mutation. A key belonging to another guardian is simply a different request and resolves to nothing here
-7. **Applies the guardian-scoped identity rule.** A soft name+DOB match against a dependent *this guardian already holds* is refused, naming that dependent and pointing at MAT support. Soft matches against unrelated records are not refused — they continue into dependent creation and open the review case in the step below
-8. Uses `UserServiceIntegration` for `create_user_with_service(params, is_managing_adult: false, skip_user_lookup: true, require_disability_validation: true)` — which handles password generation, requires the disability validation, and always creates a new dependent rather than reusing a lookup hit — and then `create_guardian_relationship_with_service(guardian, dependent, relationship_type)`
-9. The whole review bundle commits or rolls back together: the dependent `User`, the `GuardianRelationship` (with the replay pair when a key was submitted), and — for a soft match — the `DuplicateReviewCase` with source `:portal_dependent`, its `DuplicateReviewCaseCandidate` rows, the subject's `needs_duplicate_review` flag, and the `duplicate_review_case_opened` audit event. No compensating delete is used; a failure at any step leaves nothing behind
-10. A participant deleted between duplicate detection and the lock fails closed with the ordinary retry response rather than a server error
-11. Application creation happens separately when the dependent applies
+`effective_email`, `effective_phone`, and `effective_phone_type` resolve contact details. Their fallback runs through `guardian_for_contact`, which is simply the dependent's first related guardian — not necessarily the guardian managing a given application, so application-specific delivery uses its own workflow's recipient selection. [`SecureRequestRecipientResolver`](../../app/services/applications/secure_request_recipient_resolver.rb) supplies the managing-guardian context for secure requests.
 
-**The `:portal_dependent` review case opened in step 9 does not gate that later application.** It is staff review work, not a submission blocker. What gates is an open case with source `:registration_soft_match` whose **subject is the applicant** — so a dependent who registered their own account and was soft-matched cannot have an application finally submitted for them until staff resolve it, whether the guardian or the dependent presses the button. The acting guardian's own open case never gates a dependent's application, and a dependent named only as a *candidate* on someone else's case is never gated for being matched. Draft creation, editing, autosave, and draft saves stay available throughout. See [User Management Features §3.2](user_management_features.md#32-name-and-dob-review-flag).
+`effective_locale` follows the owner of the selected email contact. Stored locales are not validated against the locales the app actually ships, so passing one straight to I18n can raise `I18n::InvalidLocale`; `effective_message_locale` narrows it to a supported value or `nil`, leaving the caller to supply the fallback. [`ApplicationForm#message_locale`](../../app/forms/application_form.rb) prefers the submitted locale, then the applicant, then the actor, then the default — and for an existing application the applicant locale comes from its saved applicant.
 
-Because the gate follows the applicant rather than the actor, the refusal copy is owner-neutral: a guardian reading it is not the account under review.
+Contact sharing does not grant login access. Public sign-in requires the user's own eligible email-backed account; see [authentication](../security/authentication_system.md). Portal edits also recheck the guardian, dependent, and relationship under lock so a stale page cannot edit a retired or no-longer-related record.
 
-### 4.2 · Admin Paper Application
+A `portal_dependent` review case does not block a later application. Only an open `registration_soft_match` case whose subject is the applicant blocks final portal submission. Drafting and editing remain available; a guardian's own review case does not block their dependent by association. See [duplicate review](user_management_features.md#duplicate-review).
 
-Handled by `Applications::PaperApplicationService` with `GuardianDependentManagementService`:
+## Tests
 
-```ruby
-Current.paper_context = true
-begin
-  # PaperApplicationService.process_guardian_dependent calls:
-  # GuardianDependentManagementService.process_guardian_scenario
-  # - Requalifies the saved/selected guardian
-  # - Creates a new dependent with contact strategies
-  # - Creates GuardianRelationship
-  # PaperApplicationService then creates Application with managing_guardian_id set
-ensure
-  Current.paper_context = nil
-end
-```
+- [Relationship model](../../test/models/guardian_relationship_test.rb) — pair validation and associations.
+- [Portal controller](../../test/controllers/constituent_portal/dependents_controller_test.rb) and [concurrency tests](../../test/controllers/constituent_portal/dependents_controller_concurrency_test.rb) — creation, replay, authorization, competing writes.
+- [Guardian/dependent service](../../test/services/applications/guardian_dependent_management_service_test.rb) — contact choices and relationship creation.
+- [Secure-request resolver](../../test/services/applications/secure_request_recipient_resolver_test.rb) — recipient and contact ownership.
+- [Guardian application flow](../../test/integration/guardian_application_flow_test.rb) — applicant versus managing guardian.
 
-Supports saved/selected guardians, new dependents, and on-file existing dependents selected with `dependent_id`. New guardians are created only by the paper form's JSON quick-create writer; final submit requires `guardian_id`. `PaperApplicationService` owns the outer transaction, application eligibility, and locked requalification of direct ids. `GuardianDependentManagementService` owns dependent contact-strategy snapshots (`email_strategy`, `phone_strategy`, `address_strategy`), new-dependent identity verification under the shared creation lock, creation, and relationship persistence. Adjudicated paper writers open no automatic duplicate-review case. Existing enum values and historical cases remain readable.
-
-Existing dependent reuse should preserve the current relationship when possible, set `managing_guardian_id` explicitly on the new application, and still respect waiting-period or `blocking_new_submission` checks from the paper applicant lookup.
-
----
-
-## 5 · Database Constraints
-
-* Unique composite index on `(guardian_id, dependent_id)`
-* FK constraints on both IDs with proper inverse-of associations
-* Guardian and dependent equality is rejected by `GuardianRelationship#guardian_and_dependent_must_be_different`; there is no database `CHECK` constraint for that invariant
-* `managing_guardian_id` nullable in applications table
-* Proper dependent: :destroy and dependent: :nullify for data integrity
-
-## 6 · Service Integration
-
-### UserServiceIntegration Concern
-
-Controllers use `UserServiceIntegration` concern for consistent user and relationship creation:
-
-```ruby
-# Used in ConstituentPortal::DependentsController and Admin::GuardianRelationshipsController
-create_user_with_service(user_params, is_managing_adult: false)
-create_guardian_relationship_with_service(guardian, dependent, relationship_type)
-```
-
-### GuardianDependentManagementService
-
-Handles complex guardian/dependent scenarios in paper applications:
-
-```ruby
-# Contact strategies determine how dependent contact info is handled
-service = GuardianDependentManagementService.new(params)
-service.process_guardian_scenario(guardian_id, applicant_data, relationship_type)
-```
-
----
-
-## 7 · Testing Patterns
-
-```ruby
-# Factory patterns (test/factories/guardian_relationships.rb)
-create(:guardian_relationship)                    # Basic relationship
-create(:guardian_relationship, :legal_guardian)   # Specific relationship type
-create(:guardian_relationship, :dependent_shares_contact)  # Shared contact info
-
-# User factory traits
-create(:constituent, :with_dependents)           # Guardian with dependents
-create(:constituent, :with_guardian)             # Dependent with a guardian
-```
-
-`User.with_guardians` is a model scope for querying dependent users with guardians; it is not a FactoryBot trait.
-
-*Always*:
-
-1. Build `GuardianRelationship` before dependent apps
-2. Set `Current.paper_context = true` in paper-flow tests
-3. Assert both `user_id` and `managing_guardian_id`
-4. Use appropriate factory traits for different contact scenarios
-5. Cover existing dependent reuse, waiting-period blocking, and explicit managing guardian assignment
-
-Example:
-
-```ruby
-test 'dependent app sets guardian' do
-  service = PaperApplicationService.new(params:, admin: @admin)
-  assert_difference ['GuardianRelationship.count', 'Application.count'] do
-    assert service.create
-  end
-  app = service.application
-  assert app.for_dependent?
-  assert_equal service.guardian_user_for_app.id, app.managing_guardian_id
-end
-```
+[Relationship factories](../../test/factories/guardian_relationships.rb) build both users by default. A dependent application needs its relationship to exist first, and asserting only `user_id` will pass for a self application too — both it and `managing_guardian_id` have to be checked to prove the dependent case.

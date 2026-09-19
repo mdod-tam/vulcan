@@ -1,527 +1,76 @@
-# Testing and Debugging Guide
+# Testing and Debugging
 
-## 1. Core Testing Concepts
-### Test Suite Overview
-- Shared helper modules to reduce duplication
-- Standardized authentication patterns
+Minitest for Ruby, Jest for JavaScript, Capybara with Cuprite for the browser.
 
-### Quick Start
+What follows is the repository-specific part: shared setup that changes behavior, helpers that are easy to pick wrong, and the switches worth knowing when something fails.
+
 ```bash
-# Minimal output
-rails test test/system/some_test.rb
-./bin/test-quiet test/system/some_test.rb
-
-# Full debugging
-VERBOSE_TESTS=1 rails test test/system/some_test.rb
-./bin/test-verbose test/system/some_test.rb
-
-# Special cases
-USE_TRUNCATION=1 rails test        # Force truncation
-HEADLESS=false rails test          # Visual debugging
-DEBUG_AUTH=true rails test         # Auth debug info
+bin/rails test test/models/user_contact_predicates_test.rb
+bin/rails test test/models/user_contact_predicates_test.rb -n /real_email/
+SYSTEM_TEST_WORKERS=1 bin/rails test test/system/registrations_test.rb
+yarn test test/javascript/controllers/upload_controller_test.js --runInBand
 ```
 
-## 2. Configuration & Setup
-### Environment Configuration
-- **Log Level**: `:warn` (default), `:debug` (with VERBOSE_TESTS=1)
-- **Database Strategy**: `transaction` (default), `truncation` (with USE_TRUNCATION=1)
-- **Seeding**: Only shows errors unless verbose mode
-- **Auto-loading**: Support files from `test/support/`
+CI runs the full system suite. Locally, browser runs share the test database, so two suites at once will interfere, and browser tests exercise built assets — `yarn build` and `yarn build:css` after frontend changes.
 
-### Browser Configuration
-- **Driver**: Cuprite with Chrome, configured through Rails' `driven_by` options; a separate `:cuprite` registration would be replaced by Rails
-- **JavaScript failures**: `js_errors: true` enforces uncaught errors and rejected promises. A small hook rethrows Stimulus-reported errors. Runtime errors and missing declared controllers invalidate screenshot sidecars.
-- **Headless Mode**: Controlled by `HEADLESS` env var
+## Shared setup that changes behavior
 
-### Log Noise Reduction
-- Default log level: `:warn`
-- Verbose mode: `VERBOSE_TESTS=1` sets `:debug`
-- Database strategy optimized for speed
-- Browser settings minimize unnecessary output
+[`test_helper.rb`](../../test/test_helper.rb) loads factories and support helpers, seeds shared data, configures mail and job adapters, and resets request state between tests. Ordinary tests run in transactions; [`ApplicationSystemTestCase`](../../test/application_system_test_case.rb) truncates instead, which is why adding a cleaning strategy to an individual test causes trouble rather than fixing it.
 
-## 3. Authentication Patterns
-### Test Type-Specific Methods
-```ruby
-# Unit/Controller tests
-sign_in_for_controller_test(user)  # or sign_in_as(user)
+Four pieces of that setup surprise people:
 
-# Integration tests
-sign_in_for_integration_test(user) # or sign_in_with_headers(user)
+- **The waiting-period validation is disabled globally** (`Application.skip_wait_period_validation = true`). Testing that rule means enabling it deliberately and restoring the prior value.
+- **[Paper application context](../../test/support/paper_application_context_helpers.rb) changes validation.** It belongs to paper-intake scenarios; used in a portal test it can hide the defect under test.
+- **Income eligibility needs [`setup_fpl_policies`](../../test/support/fpl_policy_helpers.rb)** — thresholds come from policy rows, not constants.
+- **Transaction races need [`ConcurrencyTestHelper`](../../test/support/concurrency_test_helper.rb)**, because a second database connection cannot see uncommitted setup data.
 
-# Unit tests
-sign_in_for_unit_test(user)        # or update_current_user(user)
+Factories are in [users](../../test/factories/users.rb) and [applications](../../test/factories/applications.rb); traits like `:with_income_proof` attach real fixture files, which matters when the test covers upload, download, rendering, or validation rather than mere attachment presence.
 
-# System tests
-system_test_sign_in(user)
-with_authenticated_user(user) { ... }
+## Sign-in helpers are per base class
+
+Choosing by directory rather than by base class is the usual cause of a session that does not stick.
+
+| Base class | Helper |
+| --- | --- |
+| `ActionController::TestCase` | `sign_in_for_controller_test(user)` |
+| `ActionDispatch::IntegrationTest` | `sign_in_for_integration_test(user)` |
+| Model or service needing an actor | `sign_in_for_unit_test(user)` |
+| `ApplicationSystemTestCase` | `system_test_sign_in(user)` |
+
+The [request helpers](../../test/support/authentication_test_helper.rb) arrange cookies, headers, and `Current.user` — setting `Current.user` alone does not create a browser session — and the [browser helper](../../test/support/system_test_authentication.rb) manages its own. All of them bypass MFA enrollment by default; `bypass_mfa_enrollment: false` turns that off for the controller and integration helpers. Tests of sign-in, recovery, or MFA itself have to drive the real flow, since the helpers skip the thing under test.
+
+## Browser tests
+
+[`ApplicationSystemTestCase`](../../test/application_system_test_case.rb) holds driver configuration and cleanup. Locators favor labels, button text, and scoped sections, falling back to a stable ID or `data-testid` where no semantic locator is unambiguous.
+
+The [browser helpers](../../test/support/system_test_helpers.rb) cover the recurring waits — `wait_for_turbo`, `wait_for_stimulus_controller`, modal open and close. A page going idle is not proof the operation succeeded, so the wait goes before the assertion, not instead of it. After a Turbo replacement, an element captured earlier is detached.
+
+`js_errors: true` fails browser tests on uncaught errors and rejected promises; a small hook rethrows Stimulus-reported errors. Runtime errors and missing declared controllers invalidate screenshot sidecars.
+
+Screenshots taken in system tests write a JSON sidecar alongside the image recording whether the capture is usable — a blank page or an `about:blank` URL is flagged with its reasons rather than being saved as apparent evidence.
+
+## When something fails
+
+Reproduce the single file or test name first; for order-dependent failures, keep the reported seed and rerun the group with `--seed`. `log/test.log` and, for browser failures, the screenshot and saved HTML under `tmp/capybara/` show what the test actually reached — often a different page than assumed. Setup is worth checking before timeouts: the right user, the required policy rows, current assets, the expected frame or modal.
+
+| Switch | Effect |
+| --- | --- |
+| `bin/test-quiet <file>` | Reduced logging (the default). |
+| `bin/test-verbose <file>` | Verbose output. |
+| `bin/run-test <file>` | Authentication diagnostics plus failure screenshot/HTML settings. |
+| `HEADLESS=false` | Show the Cuprite browser. |
+| `SLOWMO=0.5` | Slow Cuprite actions down. |
+| `DEBUG_AUTH=true` | Authentication helper diagnostics. |
+| `SYSTEM_TEST_WORKERS=1` | One browser worker, for isolating interference. |
+
+```bash
+HEADLESS=false SLOWMO=0.5 SYSTEM_TEST_WORKERS=1 bin/run-test test/system/registrations_test.rb
 ```
 
-### Authentication Core
-- Uses `Thread.current[:test_user_id]` consistently
-- Shared `AuthenticationCore` module
-- Automatic session cleanup
-- Explicit methods prevent context detection issues
+`debugger` works in the failing path when the focused test runs in a terminal.
 
-## 4. Helper Utilities
-### Shared Helpers
-```ruby
-# FPL policy setup (400% modifier)
-setup_fpl_policies
+## Where tests live
 
-# Paper application context
-setup_paper_application_context
-teardown_paper_application_context
-```
+`test/models` for model rules, `test/services` for workflow state and side effects, `test/controllers` and `test/integration` for access and responses, `test/system` for tasks a person completes in a browser, `test/javascript` for Stimulus controllers. Assertions target the observable result — saved state, response, audit event, queued delivery, visible behavior — and a regression test carries the condition that caused it, including what the unsuccessful attempt left behind.
 
-### Attachment Handling
-```ruby
-# Mocked attachments
-mock_attached_file(filename: 'doc.pdf', ...)
-create(:application, :with_mocked_income_proof)
-
-# Real attachments (integration tests)
-create(:application, :with_real_income_proof)
-
-# Waiting period handling
-create(:application, :old_enough_for_new_application)
-```
-
-### System Test Helpers
-```ruby
-# Synchronization (these wait internally)
-wait_for_page_stable(timeout: 10)  # Waits for Turbo + body selector
-wait_for_turbo(timeout: 5)         # Waits for Turbo progress bar to disappear
-
-# Modal helpers
-wait_for_modal_open('modalId', timeout: 15)
-wait_for_modal_close('modalId', timeout: 10)
-click_modal_trigger_and_wait('button[data-modal-id="x"]', 'modalId')
-
-# Form helpers
-safe_fill_in('Field Label', with: 'value')  # Clears field before filling
-
-# Debugging
-assert_notification(text, type: nil)
-take_screenshot
-```
-
-## 5. Common Issues & Solutions
-### Authentication Issues
-- Use appropriate sign-in helpers per test type
-- Verify with `assert_authenticated_as(user)`
-- Add `wait_for_turbo` after navigation
-- Handle waiting period conflicts with `:old_enough_for_new_application`
-
-### Element Not Found / NodeNotFoundError
-- Use stable selectors (IDs, data attributes)
-- `visible: :all` for conditionally hidden elements
-- Explicit waits: `assert_selector 'selector', wait: 5`
-- **Avoid holding node references** - re-find elements immediately before acting
-- Use `safe_fill_in` for forms (clears field before filling)
-
-### JavaScript/Stimulus Issues
-- Verify controller registration
-- Check `data-controller` and `data-target`
-- Add waits after JS actions
-- `wait_for_stimulus_controller(controller_name)`
-
-### Timing Issues
-- Wait for Turbo navigation completion
-- Ensure background jobs complete
-- Avoid arbitrary sleeps
-- **Avoid hold node references** across async operations
-- Pattern for state transitions:
-  ```ruby
-  # Atomic click (don't store node reference)
-  find('#element').click
-  
-  # Wait for state changes
-  assert_no_selector('#element.old-state', wait: 5)
-  assert_selector('#element.new-state', wait: 5)
-  ```
-
-### Database/Backend Errors
-- Verify test data setup
-- Use shared helpers: `setup_fpl_policies`
-- Handle waiting period conflicts
-- Check Current attributes context
-
-## 6. Advanced Testing Topics
-### 6.5 Capybara Advanced Waiting Strategies
-
-Capybara provides sophisticated tools for avoiding race conditions in JavaScript-heavy applications:
-
-**Count Expectations for Dynamic Content:**
-```ruby
-# Wait for exactly the expected number of elements
-all '.notification', count: 2
-
-# Wait for at least one element to appear
-all '.search-result', minimum: 1
-
-# Wait for at most one modal to be visible
-all '.modal.visible', maximum: 1
-
-# Wait for elements within a range
-all '.item', between: 3..5
-```
-
-**Configurable Wait Times:**
-```ruby
-# Global wait time configuration (in test setup)
-Capybara.default_max_wait_time = 5 # Seconds
-
-# Per-operation wait time for slow operations
-find('.slow-loading-content', wait: 15)
-all '.ajax-content', count: 1, wait: 10
-```
-
-**Critical Understanding: DOM vs AJAX:**
-Capybara doesn't wait for AJAX requests to complete - it waits for DOM elements to appear or change. This means you should wait for the visual result of AJAX, not the AJAX call itself.
-
-**Element State Transition Pattern:**
-For complex interactions where elements change state:
-
-```ruby
-submit_button = find('#submit-button')
-submit_button.click  # DOM may change after this!
-# submit_button is now potentially stale - NodeNotFoundError
-
-# ✅ Atomic find-and-click, then wait for result
-find('#submit-button').click
-
-# Wait for old state to disappear
-assert_no_selector('#submit-button.enabled', wait: 5)
-
-# Wait for new state to appear  
-assert_selector('#submit-button.disabled', wait: 5)
-```
-
-**Race Condition Prevention Pattern:**
-The most common JavaScript timing issue:
-
-1. **Trigger Action**: JavaScript starts asynchronous operation
-2. **Premature Check**: Test immediately checks for result (fails)
-3. **Late Completion**: JavaScript finishes after test has failed
-
-**Solution:**
-```ruby
-# 1. Trigger the JavaScript action
-click_button 'Submit Form'
-
-# 2. Wait for intermediate state that proves JS is working
-assert_selector('.processing-indicator', wait: 5)
-
-# 3. Wait for completion indicator
-assert_no_selector('.processing-indicator', wait: 10)
-
-# 4. Now assert final result (JS has definitely completed)
-assert_selector('.success-message', wait: 5)
-```
-
-**Selector Reliability Hierarchy:**
-```ruby
-# ❌ Worst: Generic selectors prone to conflicts
-find('button').click
-
-# ✅ Better: Type-specific selectors
-find('button[type=submit]').click
-
-# ✅ Best: Unique identifiers
-find('#unique-submit-button').click
-find('[data-testid="submit-btn"]').click
-```
-
-### 6.6 Cuprite-Specific Configuration Flags
-
-Essential Chrome flags for stability:
-```ruby
-# Essential Chrome flags for test stability
-browser_options: {
-  'smooth-scrolling' => false,                    # Prevent scrolling timing issues
-  'disable-background-animations' => nil,          # Reduce animation interference  
-  'disable-renderer-backgrounding' => nil,        # Prevent background tab issues
-  'disable-backgrounding-occluded-windows' => nil
-}
-```
-
-### Secure Temporary Form Testing
-```ruby
-# Issue a secure proof resubmission request.
-result = Applications::RequestProofResubmission.new(
-  application: application,
-  actor: admin,
-  proof_type: :income,
-  deliver_request: false
-).call
-form = result.data.fetch(:secure_request_forms).first
-
-# Submit through the same service used by the public controller.
-submit_result = Applications::SubmitProofResubmission.new(
-  application: application,
-  secure_request_form: form,
-  file: fixture_file_upload('test_proof.pdf', 'application/pdf')
-).call
-
-assert submit_result.success?
-assert form.reload.submitted?
-assert application.reload.income_proof.attached?
-```
-
-For disability certification uploads, use `Applications::RequestCertificationUpload` with `deliver_email: false`, then submit through `Applications::SubmitCertificationUpload`:
-
-```ruby
-request = Applications::RequestCertificationUpload.new(
-  application: application,
-  actor: admin,
-  deliver_email: false
-).call
-form = request.data.fetch(:medical_provider_secure_request_form)
-
-submit = Applications::SubmitCertificationUpload.new(
-  application: application,
-  medical_provider_secure_request_form: form,
-  file: fixture_file_upload('medical_certification.pdf', 'application/pdf')
-).call
-
-assert submit.success?
-assert form.reload.submitted?
-assert application.reload.medical_certification.attached?
-```
-
-### Service Testing Patterns
-**Return Value Handling:**
-```ruby
-# ServiceResult pattern
-result = SomeService.new(...).call
-if result.success?
-  data = result.data
-end
-
-# Direct return
-data = SomeService.new(...).call
-
-# Best practices:
-test 'service returns expected interface' do
-  result = SomeService.new(...).call
-  assert_respond_to result, :expected_method
-end
-```
-
-### Event Deduplication
-**Solutions:**
-```ruby
-# Remove duplicate callbacks
-after_save :log_changes # instead of after_update + after_save
-
-# Context guards
-return if Current.paper_context?
-
-# Centralize logging
-AuditEventService.log(...)
-NotificationService.create_and_deliver!(...)
-```
-
-### Cuprite & Docker Setup
-```yaml
-# docker-compose.yml
-dev-chrome:
-  image: browserless/chrome:latest
-  ports: ["3333:3333"]
-  environment:
-    PORT: 3333
-    CONNECTION_TIMEOUT: 600000
-```
-
-```ruby
-# Capybara configuration
-Capybara.register_driver(:better_cuprite) do |app|
-  # Custom configuration
-end
-```
-
-## 7. Architectural Patterns
-### Policy System
-- `Policy.get('key')` performs real database queries
-- Create real records instead of stubbing:
-  ```ruby
-  Policy.find_or_create_by!(key: 'max_proof_rejections', value: 3)
-  ```
-
-### Proof Attachment
-- Service-based architecture:
-  ```ruby
-  ProofAttachmentService.attach_proof({
-    application: @application,
-    proof_type: params[:proof_type],
-    blob_or_file: params[:proof_upload]
-  })
-  ```
-- Avoid stubbing core business logic
-
-### Audit Logging
-- Two-call pattern:
-  ```ruby
-  AuditEventService.log(action: "proof_submitted")
-  NotificationService.create_and_deliver!(type: "proof_attached")
-  ```
-
-## 8. Best Practices & Workflows
-### Test Structure
-```ruby
-class MySystemTest < ApplicationSystemTestCase
-  def setup
-    @user = create(:user)
-  end
-
-  def test_feature
-    system_test_sign_in(@user)
-    visit feature_path
-    wait_for_turbo
-    
-    # Use safe_fill_in for text inputs (clears before filling)
-    safe_fill_in('Input Label', with: 'value')
-    
-    # Use atomic find-and-click (don't hold node reference)
-    find('#submit').click
-    
-    assert_text 'Success'
-    assert_current_path success_path
-  end
-end
-```
-
-### Debugging Workflow
-1. Run tests in isolation
-2. Enable verbose mode (`VERBOSE_TESTS=1`)
-3. Use visual browser (`HEADLESS=false`)
-4. Add screenshots before assertions
-5. Verify authentication state
-6. Check browser dev tools for JS errors
-
-### Expected Error Logging in Tests
-When a test intentionally triggers a rescue path, assert logging behavior so output stays clean and behavior is verified:
-
-```ruby
-Rails.logger.stubs(:error) # silence noisy output for this test
-Rails.logger.expects(:error).with(regexp_matches(/expected failure context/)).once
-
-result = service.call
-assert result.failure?
-```
-
-Use this for stimulated failures (validation failures, simulated API failures, fault-tolerant audit failures). Prefer matching a stable message fragment instead of full dynamic strings.
-
-### Anti-Patterns to Avoid
-- Over-stubbing database queries
-- Stubbing core business services
-- Duplicate audit logging
-- Mixing DirectUpload implementations
-- Ignoring missing Policy records
-- Holding node references across async ops ( NodeNotFoundError)
-- Wrapping assert_selector in using_wait_time (double-waiting)
-- Using Timeout.timeout with sleep loops (use Capybara's waiting)
-- Complex teardown and UI interactions (use `Capybara.reset_sessions!`)
-
-### Environment Variables
-| Variable | Purpose | Values |
-|----------|---------|--------|
-| `VERBOSE_TESTS` | Debug output | `1` (enable) |
-| `USE_TRUNCATION` | DB strategy | `1` (force truncation) |
-| `HEADLESS` | Browser visibility | `false` (visible) |
-| `SLOWMO` | Debug delays | `1.0` (1 second delay) |
-| `DEBUG_AUTH` | Auth debug | `true` (enable) |
-
-## 9. Cuprite/Ferrum Anti-Patterns (NodeNotFoundError Prevention)
-
-The "Could not find node with given id" error is the most common cause of test flakiness. It occurs when the test holds a reference to a DOM node that becomes invalid.
-
-### Critical Anti-Patterns to Avoid
-
-**❌ Double-Waiting Anti-Pattern:**
-```ruby
-# WRONG: assert_selector already waits - using_wait_time is redundant
-using_wait_time(timeout) do
-  assert_selector 'body', wait: timeout
-end
-
-# CORRECT: Just use the wait parameter directly
-assert_selector 'body', wait: timeout
-```
-
-**❌ Holding Stale Node References:**
-```ruby
-# WRONG: Node reference captured, then used after async operation
-el = find('#button')
-page.execute_script('scrollIntoView...', el)  # DOM may change
-el.click  # NodeNotFoundError!
-
-# CORRECT: Atomic operations or re-find
-find('#button').click  # Atomic find-and-click
-
-# Or use JS for scroll + click
-page.execute_script("document.querySelector('#button').scrollIntoView()")
-find('#button').click  # Fresh find
-```
-
-**❌ Timeout.timeout with Sleep Loops:**
-```ruby
-# WRONG: Ruby Timeout can interrupt at unsafe points
-Timeout.timeout(5) do
-  loop do
-    break if page.evaluate_script('...') == 'expected'
-    sleep 0.1
-  end
-end
-
-# CORRECT: Use Capybara's has_* methods which wait internally
-page.has_selector?('.expected-element', wait: 5)
-
-# Or single JS evaluation
-page.evaluate_script('return checkCondition()')
-```
-
-**❌ Assertions in Teardown:**
-```ruby
-# WRONG: Clicking during teardown can cause hangs
-teardown do
-  within('#modal') { click_button 'Close' } if has_selector?('#modal')
-end
-
-# CORRECT: Just reset sessions
-teardown do
-  Capybara.reset_sessions!
-end
-```
-
-### Boolean vs Assertion Methods
-
-| Method Type | Behavior | Use Case |
-|-------------|----------|----------|
-| `has_selector?` | Waits, returns boolean | Conditional logic |
-| `assert_selector` | Waits, raises on failure | Test assertions |
-| `find` | Raises immediately if not found | When element must exist |
-
-```ruby
-# Conditions: use boolean methods
-if page.has_selector?('.modal', wait: 5)
-  # modal is present
-end
-
-# Assertions: use assert methods
-assert_selector '.success-message', wait: 5
-```
-
-## 10. Element Finding Patterns
-
-When tests start failing intermittently, try these solutions in order:
-
-**❌ Unstable Patterns:**
-- `first('button', text: 'Review Proof').click` - prone to stale references
-- `page.all('selector')[index].click` - position-dependent, unreliable
-- `find('button').click` without waiting - races with DOM changes
-
-**✅ Stable Patterns:**
-- `find('button[data-modal-id="incomeProofReviewModal"]').click` - attribute-based, stable
-- `click_button 'Specific Text', match: :first` - Rails-style, waits properly
-- `find('[data-testid="element-id"]').click` - if data-testid attributes are available
+Related: [proof review](../features/proof_review_process_guide.md) · [service architecture](service_architecture.md) · [test support helpers](../../test/support)

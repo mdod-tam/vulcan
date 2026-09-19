@@ -1,244 +1,78 @@
 # Current Application Features
 
-This guide maps MAT Vulcan's current, verified Rails feature paths for application intake, review, notifications, and fulfillment.
+This Ruby on Rails application manages the lifecycle of applications submitted for accessible telecommunications assistance.
 
----
+That lifecycle runs from intake through document review, disability certification, fulfillment, and any related training or evaluation.
 
-## 1. Application Lifecycle
+This page is a feature map.
 
-Applications start as drafts, are submitted for review, move through proof and disability certification review, and may issue a voucher after approval.
+The linked guides explain how each workflow works.
 
-```text
-draft
-  -> in_progress
-  -> awaiting_proof or awaiting_dcf
-  -> approved or rejected
-  -> archived when retained as history
-```
+## Applications and identity
 
-| Status | Verified meaning | Common next step |
-| --- | --- | --- |
-| `draft` | Constituent or managing guardian is still editing. | Submit application. |
-| `in_progress` | Submitted and ready for staff workflow. | Review income, residency, and ID proofs. |
-| `awaiting_proof` | Waiting for required constituent proof uploads. | Constituent or secure form recipient submits proof. |
-| `reminder_sent` | Reminder state for pending proof follow-up. | Constituent submits missing proof. |
-| `awaiting_dcf` | Required proofs are approved and disability certification is pending. | Request or review DCF. |
-| `approved` | Application requirements are met. | Issue equipment workflow or voucher. |
-| `rejected` | Application was denied. | Constituent may reapply where policy allows. |
-| `archived` | Historical record. | No active workflow. |
+Constituents can prepare drafts, autosave form fields, submit applications, upload proofs, and follow their status. Guardians can act for dependents they manage. Staff can enter paper applications, review documents, and handle follow-up.
 
-Beyond the ordinary submission validations and the locked sibling/eligibility checks, `draft -> in_progress` carries one additional identity-review admission rule. `Applications::ApplicationCreator` refuses final submission while the **applicant** is the subject of an open `registration_soft_match` duplicate-review case, so an account whose identity is still being sorted out cannot submit an application that bypasses the canonical record's history. The refusal happens before any write, so the draft, its audit trail, and its notifications are untouched, and drafting, editing, autosave, and draft saves all stay available while the case is open. The portal asks the same question on GET (`Application.identity_review_pending_for?`) so it can show the notice and hold "Submit Application" disabled before the constituent selects documents — a refused submission cannot repopulate a file input, so warning only at submit would cost them that work. The unlocked read is advisory; the locked one in the service still decides, which is what covers a case that opens after the form was rendered. Only a **terminal** resolution can release the gate, and there are exactly two: staff keep the records separate, or a merge completes. Even then release is conditional — the gate reads *open* cases, so it lifts only when no open `registration_soft_match` case remains for that applicant. Resolving one of two open `registration_soft_match` cases leaves them blocked; a case of another source does not hold the gate, though it does keep the `needs_duplicate_review` flag set. Nothing else closes a case — needing more information, a fraud/security review, and an unverified authorized relationship all leave it open and submission blocked, because only a completed identity decision may end the block. See [User Management Features §3.2](development/user_management_features.md#32-name-and-dob-review-flag) for the case model, the sources that do not gate, and the full determination contract.
+[The application workflow](features/application_workflow_guide.md) explains the shared lifecycle. [Paper intake](development/paper_application_architecture.md) covers staff-assisted creation, identity decisions, direct uploads, and recovery when a save or follow-up step fails.
 
-The gate reads the **applicant** and never the acting guardian, and that is **ratified policy rather than an omission**. A managing guardian who is themselves the subject of an open case may still submit on a dependent's behalf: the guardian's unresolved identity question does not put the dependent's identity in doubt, and blocking would penalize a dependent whose record was never in question. The converse also holds — a dependent applicant with an open case is refused even when the guardian submitting for them has none, because the gate follows the applicant. Both directions are pinned by tests in `test/services/applications/application_creator_test.rb`.
+Two rules shape submission:
 
-Auto-approval runs through `Application#reconcile_workflow_state!` when all current requirements are met:
+- Eligibility checks cover the applicant, application ownership, conflicting applications, and the waiting-period policy.
+- An open `registration_soft_match` case blocks the **applicant's final submission**, while drafting and autosave remain available. The block follows the dependent applicant, not the guardian acting for them, and remains until no matching open case remains. Other case sources and the review badge alone do not control this gate.
 
-- Residency proof is approved.
-- ID proof is approved.
-- Income proof is approved when `income_proof_required` is true for the application.
-- Disability certification is approved.
+The portal displays the restriction, but the writer rechecks under lock. See [user management](development/user_management_features.md#what-blocks-application-submission) for identity-review decisions and account/contact rules.
 
-Key implementation owners are the constituent portal application controller, `ApplicationForm`, `Applications::ApplicationCreator`, `Application`, `ApplicationStatusManagement`, and the admin paper application controller. See `docs/development/paper_application_architecture.md` for paper intake details.
+## Documents and approval
 
----
-
-## 2. Proof Management
-
-Reviewable proof types are income, residency, and ID. Disability certification has its own workflow in section 3.
-
-| Type | Status enum | Attachment | Reviewable by `ProofReview` |
-| --- | --- | --- | --- |
-| Income | `income_proof_status` | `income_proof` | Yes, when income proof is required. |
-| Residency | `residency_proof_status` | `residency_proof` | Yes. |
-| ID | `id_proof_status` | `id_proof` | Yes. |
-
-`ProofAttachmentService` is the shared attachment service for portal proof resubmissions, admin scanned proof upload, paper intake, and secure proof form submissions. It handles uploaded files, signed blob IDs, and existing blobs; writes attachment audit events unless the caller opts out; updates proof status; and records review timing metadata when needed.
-
-Paper rejection without a file is also routed through the shared proof attachment/review path so rejection history, audit events, and resubmission follow-up stay consistent.
-
-`ProofReviewService` is the admin-facing review entry point. It delegates to `Applications::ProofReviewer`, which updates the proof status column and creates or updates the canonical `ProofReview` record. Approved income, residency, and ID reviews log `proof_approved` and create record-only approval notifications. Rejections log a generic `proof_rejected` event and use `Applications::RequestProofResubmission` for constituent-facing resubmission delivery.
-
-If a rejection is saved but secure upload request delivery fails, the review remains recorded and admins receive an alert that the review succeeded but the secure upload request was not delivered.
-
-Start with `docs/features/proof_review_process_guide.md` for the current proof-review map. The main implementation owners are `ProofAttachmentService`, `ProofReviewService`, `Applications::ProofReviewer`, `ProofReview`, the constituent proof controller, scanned proof intake, and secure proof forms.
-
----
-
-## 3. Disability Certification
-
-Disability certification status is separate from reviewable proof status. The code still uses identifiers such as `medical_certification_status`, but user-facing documentation should describe the requirement as disability certification.
-
-```text
-not_requested -> requested -> received -> approved
-                                \-> rejected
-```
-
-| Channel | Current behavior | Main entry point |
-| --- | --- | --- |
-| Provider request email | Admin requests a DCF by email; the app records a request notification and enqueues mail delivery. | `Applications::MedicalCertificationService`, `MedicalCertificationEmailJob` |
-| Secure upload form | Admin sends a tokenized certification upload request; provider submits through a secure public form. | `Applications::RequestCertificationUpload`, `Applications::SubmitCertificationUpload` |
-| DocuSeal | Admin sends a DocuSeal request; webhooks update document-signing state and attach completed PDFs as received unless an existing secure-uploaded certification must be preserved. | `DocumentSigning::SubmissionService`, `Webhooks::DocusealController` |
-| Manual upload/status review | Admin uploads or updates certification status from the application show page. | `Admin::ApplicationsController`, `MedicalCertificationAttachmentService` |
-| Provider rejection notice | Rejections create certification audit/status records and try provider email/fax delivery. | `Applications::MedicalCertificationReviewer`, `MedicalProviderNotifier`, `FaxService` |
-| Print DCF | Admin queues a DCF PDF for printing. | `Applications::MedicalCertificationPdfService`, `PrintQueueItem` |
-
-There is no current `MedicalCertificationMailbox`, `ProofSubmissionMailbox`, or `ApplicationMailbox` class in `app/`; inbound email processing is not a live entry point. Proofs and optional provider certification uploads use secure temporary forms.
-
-DocuSeal uses its own status column:
-
-| `document_signing_status` | Meaning |
+| Feature | What people can do |
 | --- | --- |
-| `not_sent` | No signing request has been sent. |
-| `sent` | Request sent to provider. |
-| `opened` | Provider opened the signing link. |
-| `signed` | Provider completed signing. |
-| `declined` | Provider declined signing. |
+| Income, residency, and ID proofs | Submit files; staff approve or reject them and request replacements through secure upload links. Income proof is conditional on the application's stored requirement. |
+| Disability certification | Request provider documentation, collect it through secure upload or DocuSeal, upload scanned documents, review the result, or print a DCF. |
+| Automatic approval | Reconcile the application after document work: approved residency, ID, required income proof, and disability certification can lead to approval. |
 
-Important distinction: DocuSeal `signed` means the provider completed the signing flow. The application still needs admin review before `medical_certification_status` becomes `approved`.
+Proof review and disability certification are separate workflows. DocuSeal completion means a document was signed, not that staff approved the certification. Incoming fax/postal documents require staff upload; inbound email is not a live collection path.
 
----
+A saved proof rejection survives a failed resubmission-request delivery, with a warning for staff. See [proof review](features/proof_review_process_guide.md) and [DocuSeal integration](development/docuseal_integration_guide.md).
 
-## 4. Guardian and Dependent Applications
+## Guardians and dependents
 
-A managing guardian is the adult user responsible for a dependent's application. The relationship is stored in `GuardianRelationship`; the specific application owner is still the dependent constituent.
+The dependent owns the application; its managing guardian has responsibility for managing it. Existing relationships and application ownership control access. Email, phone, and postal delivery can have different contact owners.
 
-| Helper or scope | Meaning |
+[Guardian relationships](development/guardian_relationship_system.md) explains those boundaries and how contact strategies affect intake and messages.
+
+## Fulfillment, training, and evaluation
+
+| Feature | Current behavior and owner |
 | --- | --- |
-| `application.for_dependent?` | True when `managing_guardian_id` is present. |
-| `application.managing_guardian` | Adult user managing this application. |
-| `application.editable_by?(user)` | True for the applicant on self applications, or the managing guardian on dependent applications. |
-| `application.guardian_relationship_type` | Relationship type from `GuardianRelationship`. |
-| `Application.editable_by(user)` | Applications the user may edit. |
-| `Application.accessible_by(user)` | Currently the same strict ownership set as editable applications. |
-| `Application.managed_by(guardian)` | Applications whose `managing_guardian_id` is the guardian. |
+| Equipment or voucher fulfillment | The voucher flag selects both fulfillment type and the inverse income-proof requirement at creation; see [fulfillment settings](features/application_workflow_guide.md#fulfillment-settings). |
+| Vouchers | When enabled, approval of a voucher application queues issuance after commit. Issuance rechecks eligibility and existing vouchers. Vendors verify the applicant and redeem value; see [voucher controls](security/voucher_security_controls.md). |
+| Vendor invoices | [Invoice generation](../app/services/invoices/generation_service.rb) groups completed, uninvoiced voucher transactions into vendor invoices. |
+| Training | Staff assign trainers within the service window and session quota. Trainers schedule, complete, cancel, or arrange follow-up through [training services](../app/services/training_sessions). |
+| Evaluation | Staff assign evaluators within the service window; evaluators schedule visits and submit reports through [evaluation services](../app/services/evaluations). |
 
-Portal submissions use `ApplicationForm` to verify that the selected dependent belongs to the current guardian, and `Applications::ApplicationCreator` sets `managing_guardian_id` for dependent applications.
+[TrainingManagement](../app/models/concerns/training_management.rb) and [EvaluationManagement](../app/models/concerns/evaluation_management.rb) own assignment rules. Equipment applications do not automatically receive vouchers.
 
-The pending-review submission gate described in [Section 1](#1-application-lifecycle) follows the applicant, not the actor. A guardian-managed application is refused when the **dependent** is the subject of an open `registration_soft_match` case, and is not refused merely because the acting guardian is. The guardian still sees the refusal, so its wording names the application rather than the reader's own account.
+Training sessions and evaluations share the [status vocabulary](../app/models/concerns/status_management.rb): `requested`, `scheduled`, `confirmed`, `completed`, `cancelled`, and `no_show`. `rescheduled` remains for legacy/display compatibility; current rescheduling services set `scheduled` and record a reschedule event.
 
-Related doc: `docs/development/guardian_relationship_system.md`.
+## Communication and history
 
----
+[Notifications](features/notifications.md) record communication and may send email or create printable letters. Some actions, including individual proof approval, are intentionally record-only. Rails flash messages provide immediate feedback; selected workflows send SMS directly.
 
-## 5. Voucher System
+Staff can edit localized templates and manage the print queue. [Email and letters](infrastructure/email_system.md) covers template syntax, secure-request delivery, Postmark, and tracking limits.
 
-Voucher assignment is optional and depends on `FeatureFlag.enabled?(:vouchers_enabled)` and `Application#fulfillment_type`.
+[Audit history](features/audit_event_tracking.md) records business actions separately from communications. Application timelines combine several record types and deduplicate their display, so the timeline is not the complete raw audit dataset.
 
-When an application transitions to `approved` through `Application#transition_status!`, voucher applications enqueue `IssueInitialVoucherJob` after commit. The job calls `Application#maybe_assign_initial_voucher!`, which creates a voucher only when the application is still eligible:
+## Main work areas
 
-- Application fulfillment type is `voucher`.
-- Application status is `approved`.
-- Required proofs are approved.
-- Disability certification is approved.
-- No voucher already exists.
-
-Voucher states are:
-
-```text
-active -> redeemed
-active -> expired
-active -> cancelled
-```
-
-Vendor redemption flow:
-
-1. Vendor enters a voucher code under `/vendor_portal/vouchers`.
-2. `VoucherVerificationService` verifies the constituent date of birth and stores verification in the session.
-3. `Vouchers::RedemptionService` processes redemption.
-4. `Voucher#redeem!` creates a `VoucherTransaction`, updates remaining value, and logs `voucher_redeemed`.
-5. Invoice generation uses completed, uninvoiced voucher transactions.
-
-Key implementation owners are `VoucherManagement`, `IssueInitialVoucherJob`, `Voucher`, `VoucherTransaction`, and the vendor portal voucher controller.
-
----
-
-## 6. Training and Evaluation
-
-Training and evaluation records share the `StatusManagement` concern.
-
-| Status | Used by | Meaning |
-| --- | --- | --- |
-| `requested` | Training, evaluation | Assigned/requested but not scheduled. |
-| `scheduled` | Training, evaluation | Date/time set. |
-| `confirmed` | Training, evaluation | Confirmed session. |
-| `completed` | Training, evaluation | Session or evaluation completed. |
-| `cancelled` | Training, evaluation | Cancelled record; considered follow-up state. |
-| `rescheduled` | Legacy/display compatibility | Current reschedules usually keep `scheduled` and log a reschedule event. |
-| `no_show` | Training, evaluation | Missed session/evaluation; considered follow-up state. |
-
-Training assignment is admin-driven from an approved application. `Application#assign_trainer!` creates a `TrainingSession` in `requested` status after checking the service window, quota, and existing open sessions. Trainers then schedule, reschedule, complete, cancel, or create follow-up sessions through `TrainingSessions::*` services.
-
-Evaluation assignment is also admin-driven from an approved application. `Application#request_evaluation!` marks an application as needing evaluation; `Application#assign_evaluator!` creates an `Evaluation`. Evaluators schedule, reschedule, and submit reports through `Evaluations::ScheduleService`, `Evaluations::RescheduleService`, and `Evaluations::SubmissionService`.
-
-Key implementation owners are `TrainingSession`, `Evaluation`, `StatusManagement`, `TrainingManagement`, `EvaluationManagement`, and the `TrainingSessions::*` and `Evaluations::*` service namespaces.
-
----
-
-## 7. Notifications and Letters
-
-`NotificationService` creates `Notification` rows and, when delivery is enabled, routes configured actions to mailers. The requested channel is `:email` or `:letter`; recipient-facing mailers can route letter-preference recipients into `PrintQueueItem`.
-
-Important distinctions:
-
-- In-app notifications are `Notification` records rendered at `/notifications`; Rails flash messages are request feedback, not persistent in-app notifications.
-- `NotificationService` writes audit `Event` rows only when callers pass `audit: true`.
-- Reviewable proof rejection delivery uses `Applications::RequestProofResubmission`; bare `NotificationService` calls for those actions are blocked unless marked as legacy delivery.
-- Email templates support `legacy_percent` and `liquid` syntax through `EmailTemplates::Renderer`; Liquid templates use exact required/optional variable paths and are gated by `email_template_liquid`.
-- `UpdateEmailStatusJob` only polls Postmark for `medical_certification_requested` notifications with a `message_id`.
-
-Related docs: `docs/features/notifications.md` and `docs/infrastructure/email_system.md`.
-
----
-
-## 8. Audit and Events
-
-Business events are stored as `Event` rows through `AuditEventService.log`.
-
-Common event families:
-
-| Family | Example actions |
+| Area | Starting route |
 | --- | --- |
-| Application lifecycle | `application_created`, `application_updated`, `application_status_changed`, `application_approved` |
-| Paper follow-up | `application_post_creation_step_failed` — one per follow-up step that failed after the application committed |
-| Proofs | `income_proof_attached`, `id_proof_attached`, `proof_submitted`, `proof_approved`, `proof_rejected` |
-| Disability certification | `medical_certification_requested`, `medical_certification_status_changed` |
-| DocuSeal | `document_signing_request_sent`, `document_signing_started`, `document_signing_viewed`, `document_signing_completed`, `document_signing_declined`, `document_signing_attachment_failed` |
-| Secure requests | `provider_info_requested`, `proof_resubmission_requested`, `cert_upload_requested` |
-| Vouchers | `voucher_assigned`, `voucher_redeemed`, `voucher_expired`, `voucher_cancelled` |
-| Training/evaluation | `trainer_assigned`, `training_scheduled`, `evaluation_requested`, `evaluation_scheduled`, `evaluation_completed` |
+| Staff application queues and review | `/admin/applications` |
+| Paper intake | `/admin/paper_applications/new` |
+| Users and duplicate review | `/admin/users`, `/admin/duplicate_reviews` |
+| Templates and printable documents | `/admin/email_templates`, `/admin/print_queue` |
+| Vendors, vouchers, and invoices | `/admin/vendors`, `/admin/vouchers`, `/admin/invoices` |
+| Constituent applications | `/constituent_portal/applications` |
+| Vendor redemption and invoices | `/vendor_portal/vouchers`, `/vendor_portal/invoices` |
+| Evaluator and trainer work | `/evaluators/evaluations`, `/trainers/training_sessions` |
+| Draft drop-off analysis | `/admin/application_analytics/pain_points` |
 
-`Applications::EventDeduplicationService` is used by audit-log and timeline builders to keep displays readable by grouping near-duplicate records.
-
-Related doc: `docs/features/audit_event_tracking.md`.
-
----
-
-## 9. Admin and Portal Entry Points
-
-| Surface | Route | Main use |
-| --- | --- | --- |
-| Admin applications | `/admin/applications` | Application queues, proof review, disability certification review, assignment, fulfillment, and vouchers when enabled. |
-| Admin paper intake | `/admin/paper_applications/new` | Paper application creation. |
-| Admin print queue | `/admin/print_queue` | Printable letters and DCF forms. |
-| Admin email templates | `/admin/email_templates` | Template review and syncing. |
-| Admin users | `/admin/users` | User management and capability assignment. |
-| Admin vouchers | `/admin/vouchers` | Voucher management and cancellation. |
-| Admin vendors | `/admin/vendors` | Vendor and W-9 management. |
-| Pain point analysis | `/admin/application_analytics/pain_points` | Draft drop-off analysis by last visited step. |
-| Constituent portal | `/constituent_portal/applications` | Application drafts, submissions, proof uploads, status tracking. |
-| Vendor portal | `/vendor_portal/vouchers` | Voucher lookup, DOB verification, redemption. |
-| Evaluator portal | `/evaluators/evaluations` | Evaluation scheduling and report submission. |
-| Trainer portal | `/trainers/training_sessions` | Training scheduling, completion, cancellation, follow-up. |
-
----
-
-## 10. Background Jobs
-
-| Job | Purpose |
-| --- | --- |
-| `MedicalCertificationEmailJob` | Sends disability certification request email. |
-| `UpdateEmailStatusJob` | Polls Postmark delivery/open status for disability certification request notifications. |
-| `IssueInitialVoucherJob` | Issues the first voucher after an approved transition commits when the application is still eligible. |
-| `CheckVoucherExpirationJob` | Processes expired vouchers. |
-| `GenerateVendorInvoicesJob` | Creates vendor invoices from completed uninvoiced transactions. |
-| `ProofAttachmentMetricsJob` | Monitors proof attachment failures. |
+Routes depend on role and feature availability. For implementation work, continue with [service architecture](development/service_architecture.md), [JavaScript architecture](development/javascript_architecture.md), or [testing and debugging](development/testing_and_debugging_guide.md).

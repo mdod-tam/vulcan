@@ -1,246 +1,108 @@
-# Paper Application Architecture
+# Paper Application Intake
 
-This is the current admin-facing paper application flow.
+Staff use paper intake to enter an application, identify its applicant, and attach or review documents in one workflow.
 
-## Main Entry Points
+The resulting application then follows the shared approval and fulfillment rules.
 
-- Controller: `app/controllers/admin/paper_applications_controller.rb`
-- Service: `app/services/applications/paper_application_service.rb`
-- Related service: `app/services/applications/guardian_dependent_management_service.rb`
-- Related secure-request services:
-  - `app/services/applications/request_provider_info.rb`
-  - `app/services/applications/request_proof_resubmission.rb`
-  - `app/services/applications/request_certification_upload.rb`
-- Related proof services:
-  - `app/services/proof_attachment_service.rb`
-  - `app/services/medical_certification_attachment_service.rb`
+[PaperApplicationsController](../../app/controllers/admin/paper_applications_controller.rb) handles the form, parameter normalization, identity-review response, and retry restoration.
 
-## Core Flow
+[PaperApplicationService](../../app/services/applications/paper_application_service.rb) owns the final application write and its outcome.
 
-```text
-Admin::PaperApplicationsController
-  -> normalizes paper-form params
-  -> Applications::PaperApplicationService
-  -> constituent / guardian / dependent creation or reuse
-  -> Application write
-  -> proof and disability certification processing
-  -> notifications, audit events, and post-write reconciliation
-```
+## From form to saved application
 
-## Current.paper_context
+1. Select an existing applicant or enter a new one. For a dependent, first select a guardian or finish **Save Guardian**.
+2. Upload documents and submit. If identity needs review, the response retains uploads and presents the candidates. Select an eligible existing person or confirm different people with a rationale, then resubmit.
+3. The writer locks and rechecks identity, eligibility, and relationships before saving the applicant, application, proofs, and completed identity decisions together.
+4. After a confirmed save, run follow-up communications and workflow reconciliation. Failures here produce warnings rather than an invitation to create the same application again.
 
-`Applications::PaperApplicationService` activates `Current.paper_context` around the paper create/update work and re-enters that context around application/proof writes that need paper-specific validations or callbacks.
+Guardian quick-create is a separate JSON write through [PaperGuardianQuickCreateService](../../app/services/applications/paper_guardian_quick_create_service.rb). The final application submission requires its returned guardian ID or an existing selection. A later application rollback does not undo that earlier guardian save.
 
-That flag matters because downstream proof-review and validation behavior changes when paper intake is in progress. Do not assume after-write notification or reconciliation code still has paper context; the service clears the flag in `ensure` blocks around the write phases.
+## Applicants and identity review
 
-## Create Result Contract
+| Branch | Important boundary |
+| --- | --- |
+| Existing adult | Recheck application eligibility and the selected contact-verification/update choice before reuse. |
+| Existing dependent | Reuse only an eligible dependent already related to the chosen guardian. This flow does not edit the dependent's name or DOB. |
+| New adult | Create a new constituent; an exact email/phone collision must not silently select a different person. Phone-only and address-only intake are supported. |
+| New dependent | [GuardianDependentManagementService](../../app/services/applications/guardian_dependent_management_service.rb) creates the dependent and relationship, applying the chosen email, phone, and address strategies. |
 
-`PaperApplicationService#create` owns the transaction outcome, and the controller trusts it rather
-than inspecting the in-memory record:
+An existing dependent's name and DOB render as on-file text on both initial selection and retry. The form submits `dependent_id`, without hidden copies of those identity fields. Contact details, address, and preferences remain editable. Paper intake owns those updates; changing an existing person's identity needs a separate authorized workflow with duplicate checks and audit history.
 
-| Result | Meaning | Controller response |
-|--------|---------|---------------------|
-| `true`, no warning | Committed cleanly | Redirect to the application |
-| `true`, warning, `commit_confirmed?` | Committed, but a post-commit step failed — reconciliation, a named post-creation step, or a model `after_commit` | Redirect to the real application with the warning alongside the success notice |
-| `true`, warning, **not** `commit_confirmed?` | The write could not be verified — the callback raised *and* the confirming query failed | Redirect to the applications **list** with the warning. Never to the record's own page: if the row is not there, "application not found" replaces the guidance |
-| `false` | **Nothing committed** (a confirmed rollback) | Re-render the paper form with the original service error |
+[PaperIdentityReview](../../app/services/applications/paper_identity_review.rb) owns matching, candidate presentation, selectable roles, and signed decisions. Exact contact collisions block new-record creation; possible name/DOB/address matches require staff to choose an eligible existing person or confirm that they are different people.
 
-`false` unambiguously means nothing was written. That is not free: `after_commit` callbacks run as
-the transaction block exits, so a raise from one — `ProofReview#handle_post_review_actions` fires on
-every rejected proof — escapes *after* the data is durable. The service checks durable existence
-before classifying, so a committed application is never reported as a failure. Reporting it as one
-would invite the admin to submit again and create a duplicate.
+Writers recompute under [PaperIdentityCreationLock](../../app/services/applications/paper_identity_creation_lock.rb) and participant row locks. [PaperIdentityReviewReceipt](../../app/services/applications/paper_identity_review_receipt.rb) binds the actor, role/context, identity, and displayed candidates through keyed digests and expires after 30 minutes. Changed facts or an expired receipt require another review. Dependent decisions also depend on the guardian, relationship, and contact choices. Server-side eligibility checks still apply after a picker selection.
 
-Never infer commit state from `service.application.persisted?`. It is wrong in both directions: false
-after a rollback restores the record, true after a commit whose callback then raised.
+[CreateService.record_paper_decision!](../../app/services/duplicate_review_cases/create_service.rb) records completed `paper_intake` cases for all three roles. Keep-separate records one resolved case per new-person/candidate pair; existing selection records `resolved_selected` / `existing_person_selected` without a second user. Cases and their audit events commit with the application and proofs, or with the separate guardian save. Clear creation needs no identity case. `paper_identity_no_match_confirmed` is historical evidence with no new writer.
 
-### What a re-rendered form restores
+## Proof choices
 
-Submitted fields and available direct uploads are restored on the paths listed below. This is a real contract, not an
-aspiration: a field accepted for processing but missing from `build_submitted_params`, or rendered
-from the record rather than the submission, is silently dropped on a retry. Both mistakes have
-happened here.
+| Document | Form actions |
+| --- | --- |
+| Income, residency, ID | `upload_only`, `accept`, or `reject` |
+| Disability certification | `upload_only`, `approved`, or `rejected` |
 
-Coverage is split deliberately, and [`paper_application_retry_contract.md`](paper_application_retry_contract.md) records which field is
-proved where: request tests own value binding and the blank/false/absent distinctions, while the
-system matrix in `test/system/admin/paper_application_rollback_test.rb` owns picker behaviour, branch
-reveal, and the cases where the browser's own submission rules matter -- an unchecked box is omitted
-entirely, and a disabled control is not submitted, neither of which a request test can reproduce.
+Uploading or approving requires a document. Rejecting requires a reason, plus custom text for `other`, but no file. **None Provided** means rejection with the `none_provided` reason.
 
-The existing-dependent branch is covered end to end in that system test -- selecting an on-file
-dependent, failing, and retrying to success. Guardian quick-create identity decisions are exercised
-through the browser in `test/system/admin/paper_identity_review_test.rb`, alongside self selection,
-keep-separate decisions, stale review, replacement, removal, and dependent review. Request tests own server-rendered retry
-bindings. Together those paths cover applicant and application fields, disability selections and
-self-certification, attestations, contact strategies, applicant-type branch, guardian/dependent
-selection, all four proof dispositions, and their rejection reasons. Native file inputs remain
-empty; validated signed blob IDs and filenames represent documents already uploaded. Staff can
-replace or remove them. Invalid, expired, or already-attached blobs must be uploaded again.
+Regular proofs use [ProofAttachmentService](../../app/services/proof_attachment_service.rb). Disability certification uses [MedicalCertificationAttachmentService](../../app/services/medical_certification_attachment_service.rb), with provider rejection follow-up routed through the certification reviewer when provider contact is available. See [proof review](../features/proof_review_process_guide.md).
 
-Unattached uploads remain available for seven days. `CleanupUnattachedUploadsJob` purges older
-unattached blobs daily, rechecking attachments under a blob lock. Intake takes the same lock and
-refuses expired unattached blobs. Attached application documents are not subject to this cleanup.
+`PaperApplicationService` scopes `Current.paper_context` around its writes and clears it afterward; guardian quick-create sets it in [Admin::UsersController#create](../../app/controllers/admin/users_controller.rb) and resets `Current` in `ensure`. Both are entry points that genuinely own a paper-intake request. Set anywhere else, the flag relaxes profile and proof validation for whatever happens to run next — it is scoped state, not a validation or callback bypass.
 
-The retry-field allowlist lives in `build_submitted_params`. A field that is accepted for processing
-but missing from that list will be silently dropped on a retry.
+## Save outcomes and retries
 
-## What The Controller Owns
+The controller uses the service result and `commit_confirmed?`, not the in-memory record's `persisted?` flag.
 
-`Admin::PaperApplicationsController` currently:
+| Result | Response |
+| --- | --- |
+| `true`, confirmed commit | Open the application, including any follow-up warning. |
+| `true`, unconfirmed commit | Open the applications list with instructions to check before re-entering it. No further follow-up work runs against the uncertain record. |
+| `false` | The application transaction failed; re-render the form with the service error. |
 
-- casts complex boolean params before create and update
-- normalizes service params for create and update
-- derives `email_strategy`, `phone_strategy`, and `address_strategy`
-- supports dependent form and recipient-preference lookup endpoints
-- has separate rejection-notification actions for income-threshold workflows
+A callback can raise after the database commits. The create service checks durable existence before classifying that exception, and does not rerun a partly completed callback.
 
-The controller does not own the main paper-application side effects after create; those happen in `Applications::PaperApplicationService`.
+If a concurrent write causes a unique-contact collision while inserting a new dependent, the application transaction rolls back. `PaperApplicationService` then recomputes identity review and returns a contact refusal staff can act on, without retrying the insert or exposing database constraint text.
 
-## What The Service Owns
+### Retry restoration
 
-`Applications::PaperApplicationService` currently:
+Two allowlists define the contract: `permitted_paper_params` is what the controller accepts, `build_submitted_params` is what a re-render puts back. A field in the first and not the second is silent data loss on retry — accepted for processing, gone from the form — so each accepted field has either a restoration source or a stated reason for exclusion.
 
-- handles existing self-applicant, existing dependent, new dependent with a saved/selected guardian,
-  and new self-applicant scenarios
-- creates or updates the relevant users
-- creates or updates the `Application`
-- sets `submission_method` to `paper`
-- stamps `fulfillment_type` as `voucher` only when vouchers are enabled; otherwise paper applications remain equipment-fulfillment
-- processes income, residency, ID, and disability certification actions
-- sends account-creation notifications after a successful create for email-backed portal users only (`email_backed_public_portal_account?` / `real_email?`)
-- logs `application_created` after create
-- performs reconciliation after the transaction commits
+Three distinctions survive the round trip or the retry lies about what staff entered: a deliberate blank is not an omission, `false` is not absent, and a fresh-form default is not a submitted choice.
 
-## Applicant Matching And Dedup Branches
+| Field group | Restoration rule |
+| --- | --- |
+| Applicant, application, and guardian fields | Rebuild the appropriate records from submitted values, including address/state and alternate-contact relationship. Disabled duplicate fieldsets must not replace the active branch's values. |
+| Disability answers | Five disability flags belong to the applicant; `self_certify_disability` belongs to the application, although submitted under `applicant_attributes`. |
+| Applicant branch and selected people | Restore IDs, visible names, and existing/new mode together. Infer the branch when disabled radios are omitted; a selected dependent submits no name. |
+| Dependent contact and relationship choices | Restore own-contact fields, email/phone/address strategies, and relationship type. Preserve unchecked choices through their hidden false-value inputs. |
+| Proof instructions and section flags | Restore all four document actions, rejection reasons/custom text, `no_medical_provider_information`, and `no_income_information`. |
+| Uploads | Restore completed uploads through signed blob IDs and filenames in `PROOF_BLOB_FIELDS`. Native file inputs cannot be refilled; replace missing or invalid blobs when the restored action requires a file. |
 
-Paper intake deliberately branches before it writes the application:
+Retained blobs must exist, be unattached, and be less than seven days old. Successful replacement leaves one current signed ID; removal or rejection clears it, while failed replacement keeps the prior upload. [CleanupUnattachedUploadsJob](../../app/jobs/cleanup_unattached_uploads_job.rb) purges older unattached blobs daily, rechecking under the same blob lock used by intake. Attached application documents are outside that cleanup.
 
-| Branch | When it applies | Service behavior |
-|--------|-----------------|------------------|
-| Existing self applicant | Admin selects an existing adult constituent for their own application. | Requires contact verification, checks waiting-period eligibility, and blocks when `blocking_new_submission` is true. |
-| Existing dependent | Admin selects an existing dependent through `dependent_id`. | Reuses the dependent and relationship, verifies contact strategy, checks waiting-period eligibility, and writes the application for the dependent with the managing guardian. |
-| Guardian/dependent | Admin first saves or selects a guardian, then selects an on-file dependent or enters a new dependent. | `PaperGuardianQuickCreateService` owns new-guardian JSON creation. Final submission requires the saved/selected `guardian_id`; `PaperApplicationService` reuses only an eligible dependent already related to that guardian, while `GuardianDependentManagementService` creates one new dependent plus its relationship. Neither path manufactures a relationship to an unrelated existing record from a submitted id. |
-| New self applicant | No existing applicant is selected. | Always creates a new constituent through `Applications::UserCreationService` with `skip_user_lookup: true`. Duplicate email or phone fails validation instead of silently attaching an unrelated user. Supports phone-only and address-only adults with NULL stored contacts when appropriate. Email-backed portal users get internal forced-change account setup; phone-only and address-only users do not. No-phone intake sets `phone_type` to `email` when a real email remains, or `letter` when both contacts are absent. |
+Identity-review retries render the current candidates, receipt, rationale, and selected candidate. Stale facts require renewed review, and an existing self-applicant selection requires contact verification.
 
-New paper self and dependent records run through `DuplicateDetectionService` before the application
-write. A new guardian runs the same review before its separate JSON quick-create write. Exact email
-or phone collisions hard-block new-record creation so paper intake cannot silently attach an
-unrelated user.
+**Save Guardian** failures stay in the page's JSON flow. A final submission carrying unsaved guardian fields is refused and restores those non-file values so staff can save or select a guardian.
 
-All three paper roles use one identity boundary. `PaperIdentityReview` normalizes facts and requalifies candidates under the name/DOB advisory lock and ordered participant locks. The create endpoint renders possible matches after direct uploads; staff explicitly select an existing person or confirm a different person with a rationale.
+The two layers catch different failures. Request and view tests answer whether a value came back and whether blank, false, and absent stayed distinct. Browser tests are the only place picker changes, branch switching, unchecked and disabled controls, upload replacement, and Stimulus reconnection after a retry behave realistically — a request test posting an explicit `"0"` cannot reproduce a browser that omits the field entirely.
 
-`DuplicateReviewCases::CreateService.record_paper_decision!` records completed decisions through the existing case lifecycle. Keep-separate records one resolved paper case per actual new-person/candidate pair. Existing selection uses `resolved_selected` / `existing_person_selected`, a proposed-identity fingerprint, and the selected candidate, without creating a second user. The case, evidence, and resolution commit with the application and proofs, or with the separately saved guardian. Clear creation requires no identity case.
-
-The Rails-verifier receipt expires after 30 minutes and binds actor, role, guardian/relationship context, normalized identity, displayed candidates, selectability, and reasons. It contains keyed digests, not identity facts. Case deduplication preserves a completed decision across retries; application eligibility and fresh recomputation still guard duplicate applications.
-
-Validated paper keep-separate pairs settle the same pair for reconciliation and flag projection. Existing-person selection does not settle unrelated pairs. Historical cases and audit-only decisions remain historical evidence; this change does not infer missing pair decisions or bulk-close legacy cases.
-
-The admin search/decorated candidate payload exposes whether a candidate is blocked by a waiting period or other `blocking_new_submission` reason. The create path must honor those flags instead of relying only on UI hiding.
-
-Contact verification matters for existing adults because paper intake can change a user's reachable email, phone, or mailing address. The service should either verify that the submitted contact details match what is already on file or explicitly apply the chosen contact strategy before sending account-created or proof follow-up notices.
+Unbalanced markup in one branch of a conditional is worth watching for specifically: a stray closing tag lets the browser reparent everything after it, which can move a section outside the `<form>` and leave its controller unable to see its own targets, with no error anywhere.
 
 ## Deployment and recovery
 
-Migration `20260917004500` is intentionally irreversible: a completed existing-person selection
-has no truthful equivalent among the previous statuses. Its `down` raises before changing any
-constraint or index, even when no selection has yet been recorded. Apply the migration before
-starting this application's new workers. Once deployed, recover by rolling forward with a corrected
-release that understands status `5`; do not redeploy a version that lacks `resolved_selected`, run
-`db:rollback`, or rewrite completed decisions. During an incident, pause paper intake at the load
-balancer, retain the database and audit history, deploy the correction, and verify an existing
-selection and a new intake before reopening.
+[Migration 20260917004500](../../db/migrate/20260917004500_add_inline_paper_review_outcomes.rb) is irreversible, even before any selection is recorded. Apply it before starting the new workers. Recovery must roll forward with a release that understands `resolved_selected` (status `5`); do not roll back the migration, deploy an older status model, or rewrite completed decisions. During recovery, pause paper intake, preserve the database and audit history, and verify an existing selection and a new intake before reopening.
 
-Already-open PR 205 forms may still call `POST /admin/paper_applications/identity_review`.
-Its authenticated, uncached compatibility response only resumes their native multipart submission;
-it performs no identity lookup and issues no decision receipt. The canonical create action ignores
-legacy decisions and recomputes identity. If it refuses the submission, it saves each multipart
-document as an unattached blob and renders the current form with signed IDs, just like direct
-uploads. These blobs use the same seven-day cleanup policy.
+Older open forms may still call `POST /admin/paper_applications/identity_review`. Its authenticated, uncached response only resumes native submission: it does no lookup and issues no receipt. The create action ignores legacy decisions, recomputes identity, and preserves multipart uploads as unattached blobs on refusal, under the same seven-day retention policy. Keep the adapter until those tabs are closed and access logs show no calls for seven consecutive days; then remove its route and action together. Multipart retry preservation remains useful independently.
 
-Keep this adapter until all pre-consolidation intake tabs have been closed and access logs show no
-calls to the legacy route for seven consecutive days. Remove the route and action together in a
-later release. The multipart retry preservation remains useful independently of the adapter.
+## Follow-up and fulfillment
 
-## Account-Created Notices And Quick-Create Markers
+After a confirmed create, the service separately attempts the creation audit, notifications, proof-delivery checks, and a provider-info request when provider details are missing. A failed step produces a named warning and a best-effort `application_post_creation_step_failed` audit event. Reconciliation failures also surface to staff.
 
-Paper identity review uses the normal `new`/`create` intake routes. Quick-created **email-backed** portal user markers are wired through `PaperApplicationsController#create` and cleared after a successful create.
+Account-created notices apply to eligible email-backed users created during intake or marked by a recent quick-create. `send_account_created_notice?` checks the current `vouchers_enabled` flag; it does not check the application's saved fulfillment type. These notices confirm receipt; they contain no temporary password or sign-in link. Account help uses the existing account-access flow.
 
-When vouchers are enabled and the application is voucher scope, `PaperApplicationService` sends `account_created` notices for email-backed portal users created in the same submission or quick-created in the same browser session. The notice confirms application receipt; it does **not** include temporary passwords or sign-in links.
+Creation stamps fulfillment and income-proof requirements from the feature state. Approval reconciliation works for equipment and voucher applications; only voucher applications enter automatic voucher issuance. See the [application workflow](../features/application_workflow_guide.md).
 
-`Applications::UserCreationService` sets an internal initial password and `force_password_change` for email-backed portal users, but does not return the raw password. Quick-create markers store only email-backed portal user ids plus timestamps in the admin session (30-minute TTL):
+## Where to check changes
 
-- On create, quick-created email-backed portal user ids are passed into the service.
-- For marked users, the admin warning reminds staff that no temporary password is retained and account help should use the existing account access link flow.
-
-Equipment-fulfillment applications skip account-created messaging even when an email-backed portal user is created.
-
-## Provider-Info Follow-Up
-
-When `params[:no_medical_provider_information]` is present during create, the service currently attempts to auto-send a secure provider-info request by calling `Applications::RequestProviderInfo` after the application write succeeds.
-
-If that follow-up fails, the application still persists. The request runs as an isolated post-creation step, so its failure does not cancel the steps around it, and the admin gets a warning naming the step -- "the certifying provider request did not finish" -- rather than a generic reconciliation note. The same failure is written to the audit trail as an `application_post_creation_step_failed` event carrying the step name, so it is still visible after the flash is gone.
-
-## Proof Actions
-
-### Income, residency, and ID
-
-Current paper-proof actions, as posted by the form in `<proof>_proof_action`, are:
-
-- `upload_only` — attach now, review later
-- `accept` — attach and approve
-- `reject` — no attachment; requires `<proof>_proof_rejection_reason`, and `<proof>_proof_custom_rejection_reason` when that reason is `other`
-
-"None Provided" is not a fourth action: it is `reject` with the reason `none_provided`.
-
-Accepted and upload-only proofs go through `ProofAttachmentService`. Rejected proofs go through the
-explicit rejection path without requiring an attachment, and record a `ProofReview` carrying the
-resolved reason text and its `rejection_reason_code`.
-
-### Disability certification
-
-Current disability certification actions, posted in `medical_certification_action`, are:
-
-- `upload_only`
-- `approved` — the default on a *fresh* form only; a re-rendered retry never defaults it
-- `rejected` — requires `medical_certification_rejection_reason`, plus
-  `medical_certification_custom_rejection_reason` when that reason is `other`
-
-`not_requested` is not one of them.
-
-Disability certification attachments and rejection handling go through `MedicalCertificationAttachmentService`.
-
-If the rejected disability certification has certifying-professional contact information available, the service routes through `Applications::MedicalCertificationReviewer` so provider follow-up behavior stays centralized. Otherwise it directly calls `MedicalCertificationAttachmentService.reject_certification`.
-
-## Contact Strategy Notes
-
-For dependent intake, the controller/service pair currently works with:
-
-- `email_strategy`
-- `phone_strategy`
-- `address_strategy`
-
-Those strategies are applied by `Applications::GuardianDependentManagementService`. Existing dependent reuse runs the same strategy application through `PaperApplicationService#apply_dependent_contact_strategies!` before persisting contact updates so guardian/no-contact choices overwrite stale direct contact data.
-
-## Fulfillment Notes
-
-Paper application create stamps fulfillment from the current feature state:
-
-- `voucher` when `FeatureFlag.enabled?(:vouchers_enabled)` is true and the paper path is creating a voucher-fulfillment application
-- `equipment` when voucher fulfillment is disabled or not selected
-
-Voucher-only account-created messaging should not be sent for equipment-fulfillment applications. Approval reconciliation can approve either fulfillment type, but only voucher applications enqueue voucher issuance.
-
-## Good Starting Tests
-
-- `test/controllers/admin/paper_applications_controller_test.rb`
-- `test/services/applications/paper_application_service_test.rb`
-- `test/services/applications/dependent_email_handling_test.rb`
-- `test/system/admin/paper_applications_test.rb`
-- `test/system/admin/paper_application_dependent_guardian_test.rb`
-- Add focused cases for existing self applicants, existing dependents, waiting-period blocking, `blocking_new_submission`, contact verification, contact strategies, and fulfillment stamping.
-
-## Notes For Agents
-
-- Start with the exact controller action and service path the bug or change uses.
-- Keep `Current.paper_context` in mind before assuming proof-review callbacks behave like the portal flow.
-- Do not add parallel audit or notification paths when the service or downstream proof services already own them.
+- [Paper service tests](../../test/services/applications/paper_application_service_test.rb): transaction outcomes and follow-up failures.
+- [Controller tests](../../test/controllers/admin/paper_applications_controller_test.rb): parameter handling and restored values.
+- [Identity review tests](../../test/services/applications/paper_identity_review_test.rb): candidates and decisions.
+- [Paper rollback](../../test/system/admin/paper_application_rollback_test.rb) and [identity browser tests](../../test/system/admin/paper_identity_review_test.rb): retry interactions and review choices.

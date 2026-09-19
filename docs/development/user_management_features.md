@@ -1,391 +1,128 @@
-# User Management Features
+# User Management
 
-This document describes the current user creation, duplicate detection, admin user management, and test helper patterns.
+Applicants, guardians, and staff all live in the `users` table, separated by STI subclass.
 
-## 1 · High-Level Flow
+Role decides what someone can do.
 
-```text
-Public signup
-  -> RegistrationsController#create
-  -> DuplicateDetectionService
-  -> User / Users::Constituent
-  -> DuplicateReviewCases::CreateService when soft review is needed
-  -> UserProfile / UserAuthentication / UserGuardianship / UserEmailSearch
-  -> Users::RegistrationConfirmationService
+Stored contact decides how they can be reached.
 
-Admin user management
-  -> Admin::UsersController
-  -> Users::FilterService
-  -> admin/users views
-  -> AuditEventService for sensitive actions
+Neither one decides whether they can sign in.
 
-Post-import duplicate reconciliation & discovery
-  -> bin/rails duplicates:discovery (read-only architectural baseline probe with statement timeout & PII redaction)
-  -> bin/rails duplicates:report / duplicates:sync_review_flags
-  -> Admin::DuplicateReviewsController#review_pair
-  -> DuplicateReconciliation::ReviewPairService
-  -> DuplicateReviewCases::CreateService with post_import_reconciliation source
-  -> existing non-merge resolution or same-person merge
-```
+Duplicate review is the machinery for deciding whether two similar records are the same person.
 
-Admin user pages run through `Admin::BaseController`, which requires an authenticated administrator and sets `Current`.
+[`User`](../../app/models/user.rb) itself is thin; the behavior is in concerns:
 
-## 2 · Main Entry Points
-
-| Area | Path | Current behavior |
-|------|------|------------------|
-| Routes | `config/routes.rb` | Defines `sign_up`, profile/password routes, `admin/users`, and member routes such as `mfa_tokens_admin_user_path`, `update_role_admin_user_path`, and `history_admin_user_path`. |
-| Public signup | `app/controllers/registrations_controller.rb` | Builds a `Users::Constituent`, redirects exact email-backed account duplicates to sign-in, blocks stored-phone contact collisions with support-only copy, flags name+DOB matches for review, creates the session only when registration is safe, and sends registration confirmation. Phone-only and address-only paper records must not become public portal identities. |
-| Admin users | `app/controllers/admin/users_controller.rb` | Lists, filters, shows, edits, creates, role-converts, capability-updates, deletes MFA tokens, deletes users, and serves guardian/dependent helper endpoints. |
-| User model | `app/models/user.rb` | Base STI model. Includes authentication, roles/capabilities, profile validation, contact predicates, guardian/dependent logic, and email search tokens. |
-| Contact predicates | `app/models/concerns/user_contact_predicates.rb` | Canonical contact truth: `real_email?`, `real_phone?`, `sms_capable_phone?`, `portal_access_eligible?`, and `email_backed_public_portal_account?`. `portal_access_eligible?` is stored-contact truth; `email_backed_public_portal_account?` is the public self-service gate. |
-| Profile concern | `app/models/concerns/user_profile.rb` | Normalizes email and phone, declares encrypted fields, validates contact uniqueness and phone format, allows NULL email/phone in paper context, and logs profile changes. |
-| Authentication concern | `app/models/concerns/user_authentication.rb` | Owns password/session behavior and WebAuthn, TOTP, and SMS credential associations. |
-| Guardian concern | `app/models/concerns/user_guardianship.rb` | Owns guardian/dependent associations, effective contact methods, and guardian access checks. |
-| Email search concern | `app/models/concerns/user_email_search.rb` | Stores HMAC email-search tokens for admin search, including dependent email and guardian fallback email search. |
-| Constituent subclass | `app/models/users/constituent.rb` | Adds application/evaluation associations and exposes duplicate-query helpers used by `DuplicateDetectionService`. |
-| Portal dependent creation | `app/controllers/constituent_portal/dependents_controller.rb` | Blocks exact contact collisions before persistence — except for a resolved request replay, which those details legitimately match — then locks and requalifies the signed-in guardian plus any soft-match review candidates. Inside that lock it resolves the per-form `portal_creation_key` within that guardian's namespace and compares the stored request fingerprint (a matching replay returns the original outcome with no writes; a reused key with changed input is refused as a stale form) and applies the guardian-scoped name+DOB admission rule via `Users::Constituent.find_duplicates`. The new dependent, guardian relationship, and — for a soft match — the duplicate-review case with its candidate rows, subject review flag, and case-opened audit event all commit atomically, with no compensating delete; guardian contact snapshots come from the locked guardian. A failed attempt re-renders the submitted contact choice rather than the internal placeholder values it generated. |
-| Duplicate detection | `app/services/duplicate_detection_service.rb` | Owns exact contact and soft name+DOB/address signal evaluation. Public registration and portal dependent creation call it for their contexts; paper self, guardian quick-create, and dependent writers use it through `Applications::PaperIdentityReview`, which owns their facts and inline decisions. |
-| Duplicate review cases | `app/services/duplicate_review_cases/create_service.rb` | Opens idempotent deferred review cases, stores sanitized candidate/metadata snapshots, and owns case-opening flags and audit events. `record_paper_decision!` records and resolves inline paper decisions inside the intake transaction; selecting an existing person uses a proposed-identity fingerprint without creating a second user. |
-| Duplicate discovery probe | `app/services/duplicate_reconciliation/discovery_probe.rb`, `lib/tasks/duplicates.rake` | Bounded read-only architectural baseline probe (`bin/rails duplicates:discovery`). Executes inside a database-enforced `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY` transaction, failing closed if called within an open transaction. Dynamically sets `statement_timeout` before application queries to the remaining task budget. Computes database aggregates for cases, strict vs malformed post-import cases, true flag drift (users flagged with neither an open case nor an unresolved current pair), dynamic match clusters, and guardian relationship distributions. Default output is strictly PII-redacted and topology-masked (using an application-secret HMAC database fingerprint); detailed diagnostic mode is explicitly opt-in via `DETAILED_PII=true` and its output must be handled as sensitive evidence. |
-| Post-import pair population and report | `app/services/duplicate_reconciliation/population.rb`, `app/services/duplicate_reconciliation/report.rb`, `lib/tasks/duplicates.rake` | Derives stable unordered active-constituent pairs from normalized name plus deterministically encrypted DOB. `duplicates:report` is database-read-only, prints no raw contact or DOB values, and optionally writes the same bounded facts to `CSV_PATH`. |
-| Duplicate flag projection | `app/services/duplicate_reconciliation/review_flag_projection.rb`, `app/services/duplicate_reconciliation/review_flag_sync_service.rb` | Defines the review flag as participation in any open case of any source or an unresolved current name+DOB pair. `duplicates:sync_review_flags` creates no cases, events, or notifications and reports before/after/set/clear counts. |
-| Post-import pair entry | `app/services/duplicate_reconciliation/review_pair_service.rb` | Canonicalizes two untrusted IDs, locks and reloads both records, rechecks eligibility and the name+DOB signal, then creates or reuses one exact pair case with the non-gating `post_import_reconciliation` source. |
-| Admin filtering | `app/services/users/filter_service.rb` | Applies admin users search, role, needs-review, relationship, and sorting filters. |
-| User creation service | `app/services/applications/user_creation_service.rb` | Creates or reuses constituent users for paper/admin flows. Email-backed portal users (`email_backed_public_portal_account?`) get internal forced-change account setup, but raw passwords are not returned; phone-only and address-only users get internal passwords only and no email-backed portal setup. Phone-only lookup works when email is absent; phone lookup is skipped when primary email is system-generated. |
-| Admin views | `app/views/admin/users/index.html.erb`, `app/views/admin/users/_users_table.html.erb`, `app/views/admin/users/show.html.erb` | Render the user list, duplicate-review badge/filter, role/capability controls, guardian/dependent detail, MFA token deletion, and user deletion controls. |
-| Duplicate review workflow | `app/controllers/admin/duplicate_reviews_controller.rb`, `app/views/admin/duplicate_reviews/` | Existing queue and detail workflow, extended with unresolved current name+DOB pairs. The queue groups connected pair actions for scanning; groups of three or more offer the first stable pair as `Compare next` and progressively disclose every pair choice, but each action still opens exactly one pair-scoped case. The durable outcomes remain the non-merge resolution and same-person merge. |
-| Duplicate resolution service | `app/services/duplicate_review_cases/resolution_service.rb` | Admin `#call` records `resolved_ignored` / `keep_separate`; inline paper `#select_existing` records `resolved_selected` / `existing_person_selected`. Both outcomes are server-owned. The admin resolve action supplies a different-person rationale and the bounded `admin_reviewed` audit code. Resolution reprojects constituent participant flags; post-import cases must remain exact current pairs under lock. |
-| Same-person merge service | `app/services/users/duplicate_merge_service.rb` | Merges a duplicate constituent into a canonical survivor with explicit contact/delivery choices and one audit event. Merge authority admits only `registration_soft_match` and the strictly pair-scoped `post_import_reconciliation` source. |
-
-## 3 · Signup And Duplicate Handling
-
-### 3.1 Exact account matches
-
-Email and phone are stored with deterministic Rails encryption so exact lookups still work. Before validation, `UserProfile` normalizes email with `User.normalize_email` and formats 10-digit US phone numbers as `XXX-XXX-XXXX`.
-
-`RegistrationsController#create` calls `DuplicateDetectionService` with context `:public_registration` before saving. Exact contact matches are hard blockers:
-
-- matching email on an email-backed portal account redirects to sign-in with clear copy instead of creating another user; signup does not authenticate, create a session, send an account-access link, create a review case, set duplicate booleans, write audit rows, or include the submitted email in the redirect URL or flash copy
-- matching phone or matching a non-portal email contact renders the signup page with support-only copy and no sign-in CTA because the contact may belong to a phone-only or address-only paper/admin record
-- duplicate signup copy does not offer account-access delivery from the registration page and must not reveal whether a phone match was email-backed, phone-only, paper/admin-created, text-capable, or delivery-capable
-- `PasswordsController#create` uses the same email-backed resolver: SMS is sent only when the matched account has `real_email?` and `sms_capable_phone?`; all outcomes show the same public confirmation (delivery details stay in audit logs only)
-- conflicting matches, where submitted email and phone belong to different users, prioritize the email-backed sign-in redirect and save nothing from the attempted signup
-- phone matching a non-email-backed paper/admin record renders the same support-only panel as other phone contact collisions and creates no portal account. The submitted phone remains owned by the paper/admin record; public copy must not reveal that the match was phone-only, paper/admin-created, text-capable, or delivery-capable.
-
-All public registration hard blocks return before persistence, so they create no user, session, duplicate-review case, audit row, or duplicate-review boolean side effect.
-
-`UserProfile` also validates unique email and phone through `User.exists_with_email?` and `User.exists_with_phone?`. The database has unique indexes on `users.email` and on non-null `users.phone` values.
-
-Blank phone numbers are allowed. Non-blank phones must normalize to a 10-digit US number when the phone changes.
-
-### 3.1.1 Contact predicates and paper intake paths
-
-`UserContactPredicates` defines the shared vocabulary:
-
-| Method | Meaning |
-|--------|---------|
-| `real_email?` | Present, valid format, not `@system.matvulcan.local` |
-| `real_phone?` | Present, valid 10-digit US, not synthetic `000-…` prefix |
-| `sms_capable_phone?` | `real_phone?` and `phone_type == 'text'` |
-| `portal_access_eligible?` | `real_email?` or `real_phone?` for stored-contact truth |
-| `email_backed_public_portal_account?` | `real_email?` only — required for public portal sign-in, account access, and paper/admin portal setup markers |
-
-Paper/admin intake supports:
-
-- **Phone-only adults** — `no_email_address=1` strips email; user may still be `portal_access_eligible?` for record truth, but is **not** an email-backed portal account. No forced-change portal setup, quick-create markers, or account-created notices.
-- **Address-only adults** — `no_email_address=1` and `no_phone_number=1` store NULL email/phone, force letter delivery, set `phone_type` to `letter`, and create users without exposed/temp passwords or portal access.
-- **Dependents** — synthetic primary email/phone remain dependent-only placeholders; adults never receive synthetic contacts when NULL is valid. Notifications and display use **effective contact** helpers (`effective_email`, `effective_phone`, `effective_phone_type`, `effective_communication_preference`), which prefer dependent-owned contact fields and fall back to the managing guardian for communication only—not for portal login identifiers.
-
-Admin display helpers (`display_contact_email`, `display_contact_phone`) hide synthetic values and show “No email on file” / “No phone on file”.
-
-### 3.1.2 Contact concepts and account-created notices
-
-| Concept | Source of truth |
+| Concern | Owns |
 | --- | --- |
-| Stored contact truth | `portal_access_eligible?` from `real_email?` / `real_phone?` |
-| Email-backed portal account | `email_backed_public_portal_account?` (`real_email?`) for sign-in, account access, paper portal setup, and account-created notices |
-| Delivery route | `communication_preference` plus effective contact fallback for dependents |
-| Record truth | Stored email/phone values and explicit paper no-contact flags |
+| [`UserProfile`](../../app/models/concerns/user_profile.rb) | Contact normalization and validation, encrypted fields, profile-change history |
+| [`UserAuthentication`](../../app/models/concerns/user_authentication.rb) | Passwords, sessions, MFA credentials |
+| [`UserRolesAndCapabilities`](../../app/models/concerns/user_roles_and_capabilities.rb) | Roles, plus separately assigned capabilities such as training and evaluation |
+| [`UserGuardianship`](../../app/models/concerns/user_guardianship.rb) | Relationship queries and effective-contact resolution |
 
-Voucher-gated `account_created` notices are sent only when `FeatureFlag.enabled?(:vouchers_enabled)` and the paper application is voucher-fulfillment scope. Equipment-scope paper intake does not announce portal accounts the applicant cannot use.
+## Contact is not sign-in, and neither is delivery
 
-Email-backed portal users created during paper intake get an internal initial password and `force_password_change`, but the raw password is not returned, cached, or stored in session. When an admin quick-creates a guardian in the same browser session, the session stores only a short-lived quick-created **email-backed** portal user id marker. `PaperApplicationsController#create` passes those user ids into `PaperApplicationService`; if a constituent needs help signing in, staff should use the existing account access link flow.
+A paper applicant with a phone and no email is a real constituent who can be contacted and served, and who has no portal account. The [contact predicates](../../app/models/concerns/user_contact_predicates.rb) keep the three questions apart:
 
-Persisted address-only constituents remain editable in admin user edit (name, address, letter preference) without requiring email. Normal admin edit cannot clear all contact information or keep email delivery without a real email; those transitions are reserved for paper intake with explicit no-contact flags.
+| Method | Answers |
+| --- | --- |
+| `real_email?` / `real_phone?` | Is a usable value stored? Blank, invalid, and synthetic values are excluded. |
+| `sms_capable_phone?` | Real phone with `phone_type: text`. |
+| `portal_access_eligible?` | Whether either real contact exists. The name overpromises: it grants nothing. |
+| `email_backed_public_portal_account?` | Whether a real primary email exists, which public access requires. |
 
-Public portal self-registration requires a real email address. Phone remains optional; when supplied, the registrant must explicitly choose a phone type. The phone may serve as an alternate login identifier only if it can be stored on the email-backed portal account. If the submitted phone is already attached to another record, signup renders support-only copy and does not create a second portal user.
+Sign-in additionally requires `public_login_active?` — merged, suspended, and inactive records are out. [`User.find_by_login_identifier`](../../app/models/user.rb) will match on a real phone, but only for an account that also has a real email. Account-access delivery picks email or an SMS-capable phone independently of that.
 
-Signed-in portal constituents must keep a real email address on their profile. Phone-only and address-only records remain valid paper/admin records, but a public portal account cannot clear its email and become phone-only because public sign-in, account access, and recovery are email-backed.
+Synthetic values are internal, never destinations: dependent emails ending `@system.matvulcan.local`, phones beginning `000`. Paper intake can also leave contact fields genuinely blank for phone-only or address-only constituents, and address-only records need a complete mailing address because letters are the only way to reach them.
 
-### 3.2 Name and DOB review flag
+A dependent's effective contact may resolve to a guardian's. That routes messages; it does not make the guardian's email the dependent's login.
 
-Name+DOB and matching address/ZIP are soft duplicate signals, not signup blockers. Exact email and phone contact collisions are resolved by the `DuplicateDetectionService` hard-block outcomes above, not by setting `needs_duplicate_review`.
+### Editing contact later
 
-Soft duplicate handling is service-owned:
+[`UserProfile`](../../app/models/concerns/user_profile.rb) treats a profile edit differently from intake. A constituent editing their own portal profile keeps a real primary email. An ordinary admin edit cannot strip a constituent's last usable email or phone and turn them into an address-only record, though records already in that state stay editable with letter delivery and a full address. Email delivery needs a real email, and a dependent's valid delivery email satisfies that even when their primary is synthetic — again without granting portal access.
 
-- `DuplicateDetectionService` evaluates exact contact matches and soft name+DOB/address signals. Public signup uses context `:public_registration`.
-- Public registration defers soft matches through `DuplicateReviewCases::CreateService` with source `:registration_soft_match`. Paper self, guardian quick-create, and dependent intake adjudicate inline: `record_paper_decision!` commits resolved `paper_intake` cases with the business transaction. Keep-separate records one case per new-person/candidate pair; existing selection records `resolved_selected` / `existing_person_selected` with a proposed-identity fingerprint and the selected candidate. Clear creation requires no case. Receipts expire and bind the preview to the write boundary; cases own completed decisions.
-- `users.needs_duplicate_review` is a service-owned projection, not a controller-helper or model-callback decision. Case creation sets its subject signal; flag synchronization, resolution, and merge reproject every participant they own from durable open cases and unresolved pairs.
-- Portal dependent creation uses context `:portal_new_dependent` and source `:portal_dependent`.
-- Paper guardian quick-create and paper self/dependent creation use contexts `:paper_new_guardian`, `:paper_new_self`, and `:paper_new_dependent`. Their completed cases carry `paper_inline_keep_separate` or `paper_inline_selection` intake context. Historical queued cases and audit-only paper decisions remain historical evidence; they are not automatically reinterpreted or backfilled.
-- An open `registration_soft_match` case **gates final application submission for its subject**. `Applications::ApplicationCreator` refuses it inside the locked transaction it already opens, so a blocked attempt has zero lifecycle, audit, notification, or delivery side effects and the draft is untouched. The durable open case is the authority; `needs_duplicate_review` supports badges and queries but never decides eligibility by itself.
-- The rule itself lives on `Application.identity_review_pending_for?`. `ApplicationCreator` asks it under lock and decides; `ConstituentPortal::ApplicationsController` asks it on `new`/`edit` so the form can render the notice and hand the submit gate a hard block (`data-final-submit-gate-blocked-message`) before any document is selected. Draft saving stays enabled in that state.
-- The subject means the **applicant**, not the submitting actor. A guardian-managed application is refused when the dependent is the case subject, and is not refused merely because the acting guardian is. The refusal copy is therefore owner-neutral: the guardian reading it is not the account under review.
-- The gate is deliberately narrow. Only `registration_soft_match` gates — cases from `admin_create`, `portal_dependent`, `paper_intake`, `support_claim`, and `post_import_reconciliation` are staff review work rather than submission blockers, and the candidate account named by someone else's case is never gated merely for being matched. Sign-in, draft creation, editing, autosave, and draft saves all stay available while review is pending.
+Deliberate no-contact transitions belong to paper intake, which asks for them explicitly. The [admin contact-edit tests](../../test/controllers/admin/users_controller_test.rb) pin the distinctions.
 
-The flag is the real boolean column `users.needs_duplicate_review`, with default `false`.
+## How people get into the table
 
-The admin user index currently surfaces this flag in three ways:
+**Public registration.** [`RegistrationsController`](../../app/controllers/registrations_controller.rb) consults [`DuplicateDetectionService`](../../app/services/duplicate_detection_service.rb) before saving. An exact email match against an email-backed account sends the person to sign-in, and that outcome outranks a conflicting phone match; other exact collisions return a support-only message; a soft name/date-of-birth match registers the account and opens a review case in the same transaction. Registration requires a real email, and a phone, if given, must come with its type. Similarity is evidence for staff, never permission to take over an account.
 
-- a highlighted count/link in the stats bar when flagged users exist
-- a `Needs Review` filter backed by `Users::FilterService`
-- a `Needs Review` badge and row highlight in `_users_table.html.erb`
+**Paper and admin intake.** [`Applications::UserCreationService`](../../app/services/applications/user_creation_service.rb) creates constituents who may never use the portal. Email-backed accounts get an internal password plus a forced password change; no raw password is handed back for staff to read out. [`PaperIdentityReview`](../../app/services/applications/paper_identity_review.rb) separates contact collisions that block creation from candidates staff can judge, and the writers — [`PaperApplicationService`](../../app/services/applications/paper_application_service.rb), [guardian quick-create](../../app/services/applications/paper_guardian_quick_create_service.rb), [guardian/dependent management](../../app/services/applications/guardian_dependent_management_service.rb) — recheck the reviewed facts before saving and record decisions as `paper_intake` cases. Selecting an existing person reuses that record, which is not a merge. Retired duplicates cannot be selected, and guardian selection also requires an active account.
 
-### 3.2.1 Post-import duplicate reconciliation
+**Portal dependent creation.** The [dependent controller](../../app/controllers/constituent_portal/dependents_controller.rb) writes dependent, relationship, and any `portal_dependent` case together; see the [guardian relationship guide](guardian_relationship_system.md).
 
-Post-import reconciliation is explicit and admin-run. It does not change the importer and never makes identity decisions as a side effect of importing, reporting, or synchronizing flags.
+<a id="32-name-and-dob-review-flag"></a>
 
-- `bin/rails duplicates:report` scans active, non-merged `Users::Constituent` rows with usable first name, last name, and DOB. It groups by lowercase first and last name plus the exact deterministically encrypted stored DOB, then emits every sorted ID combination once. A three-member group therefore emits three pairs.
-- The report states each pair's durable state (`unreviewed`, `open_reconciliation`, `confirmed_different`, `merged_retired`, or `stale_ineligible`), IDs/names, real-contact presence, application summary, and current flag. It never prints email, phone, or DOB values. `CSV_PATH=/path/to/file.csv` writes the same bounded fields.
-- `post_import_reconciliation` is deliberately distinct from `registration_soft_match`, so it never participates in `Application.identity_review_pending_for?`. It also has no login effect. Report, synchronization, and pair population send no notifications and create no cases.
-- `DuplicateReviewCase.strict_post_import_pairs` owns the post-import shape: lower user ID as `subject_user`, higher user ID as the sole candidate, candidate `match_reason: name_dob`, and case `reason_codes: [name_dob]`. Reversed requests canonicalize to that shape. Multi-candidate, reversed-orientation, or otherwise malformed post-import cases cannot settle a pair. Merge and resolution recheck that persisted shape under their existing locks.
-- `DuplicateReviewCase.reconciliation_pairs` also includes terminal inline paper keep-separate decisions with exactly one distinct subject/candidate pair and `name_dob` among the case reasons. Paper orientation can run either way and additional reasons are permitted. Existing-person selection, address-only decisions, legacy paper cases, registration cases, and portal-dependent cases do not acquire pair-adjudication authority through this query. An open recognized pair case takes precedence over completed evidence; merge/supersession history retains its existing historical or stale meaning.
-- The queue presents connected unreviewed pairs as potential duplicate groups so each member's bounded facts and user-page link appear once. It displays record and dynamic comparisons-remaining counts. A two-record group has one direct comparison action. A group of three or more exposes its first stable ID-sorted pair as `Compare next`; `Show pairings` progressively discloses every exact pair choice without claiming a confidence ranking. The user-level `needs_duplicate_review` projection is intentionally omitted because it is not pair status. Every comparison action treats both hidden IDs as untrusted, locks and reloads the admin and both constituents, rechecks active/non-merged eligibility and the supported match, and only then creates or reuses the exact pair case. A forged, stale, retired, or changed pair creates no case, flag, or audit row.
-- Resolving different people uses `DuplicateReviewCases::ResolutionService` and stores immutable `keep_separate` evidence for that exact pair. Resolving A–B suppresses only A–B; A–C remains work. Same-person decisions use the existing locked merge transaction, which retires the duplicate so it no longer appears in current population results. If A is merged into C while an A–B review is open, that untouched decision is carried forward as C–B; if an equivalent C–B case already exists, A–B becomes `resolved_superseded` and points to the replacement rather than appearing as duplicate open work.
-- `bin/rails duplicates:sync_review_flags` projects the Boolean cache from durable state. A non-retired constituent requires the flag when they are subject or candidate in an open case of any source, or when they participate in an unresolved current name+DOB pair. It creates no case/audit/notification, preserves every source, clears only when neither authority remains, reports counts, and is idempotent.
-- `DuplicateReviewCases::ClearFlagService` remains only for genuine legacy/manual flags. It refuses any user who still participates in an open case or unresolved current pair.
+## Duplicate review
 
-Local development historical-case inventory was empty when this workflow was added. Production counts by source/status remain an operator-run read-only verification; development zero is not production evidence and historical paper/admin cases are not reinterpreted as post-import decisions.
+A match is a question, not a verdict. The case holds the evidence and the eventual decision. `users.needs_duplicate_review` is only a cached badge derived from open cases of any source and unresolved current name/date-of-birth pairs — clearing the boolean resolves nothing.
 
-### 3.2.2 Admin duplicate review and merge
+### What blocks application submission
 
-Flagged duplicates are resolved through an audited admin workflow. `DuplicateReviewCase` is the primary durable source when a case exists; a bare `users.needs_duplicate_review` row with no open case is treated as a manual/legacy fallback.
+One thing, narrowly: an **open `registration_soft_match` case whose subject is the applicant**. Sign-in, drafting, editing, and autosave stay available throughout.
 
-- Entry points: `app/controllers/admin/duplicate_reviews_controller.rb`, reachable from the admin user index badge, the user show page, and a `Duplicate review pending` badge on the application show page (`Admin::DuplicateReviewsHelper#duplicate_review_pending_badge`) for the applicant or managing guardian, since staff working from an application would otherwise have no on-page signal that a review is pending.
-- Queue (`index`): distinguishes reviews in progress from potential duplicate groups, which are a presentation-only grouping of unresolved current name+DOB pairs, and manual/legacy flagged users that have neither an open case nor a current unresolved pair. Each in-progress row is case-scoped: it shows the case ID, one case-level action, and every subject/candidate record together with explicit constituent IDs. Distinct pair cases that share one participant therefore remain separate durable decisions without looking like duplicated person rows.
-- Detail (`show`): presents each exact pair once in a side-by-side **Record comparison**, grouping each record's facts by login identity, delivery route, record truth, applications, relationships, and auth artifacts. It does not repeat the subject in a separate overview card. The merge form repeats the specific dependents/guardians affected, bounded dependent application links/statuses, and the projected relationship outcome next to the canonical-record choice so staff do not need to remember facts above the fold. Historical multi-candidate cases render one self-contained comparison per candidate and retain candidate link state (current, already merged, or record no longer exists).
+A guardian's own case does not block their dependent's application. Being named as a candidate on someone else's case blocks nothing. Cases from other sources do not gate at all. And resolving one qualifying case is not enough while another is still open.
 
-There are two distinct paths. `DuplicateReviewCases::ResolutionService` (controller `resolve` action) records a decision without moving any data. The determination and status are **server-owned, not admin-selected** — see below. The form asks only for the required different-person rationale; the controller supplies the bounded `admin_reviewed` reason code. The case's existing match reason remains case-opening context and is not presented as evidence that the records are different people:
+[`Application.identity_review_pending_for?`](../../app/models/concerns/application_submission_eligibility.rb) is the rule; [`ApplicationCreator`](../../app/services/applications/application_creator.rb) evaluates it under lock at submission, and the portal calls the same predicate to explain the restriction beforehand.
 
-| Server-owned outcome | Resulting status | Effect |
-|----------------------|------------------|--------|
-| Keep records separate | `resolved_ignored` | Records `keep_separate` with the admin rationale and server-owned `admin_reviewed` audit code, and moves no contact or ownership. `resolved_approved` remains readable only for historical rows. |
+### Resolutions
 
-Merge is a separate workflow, not a `ResolutionService` action: the controller `merge` action is shown only for a selected open case whose source is `registration_soft_match` or the strictly shaped `post_import_reconciliation`, and calls `Users::DuplicateMergeService` (see §3.2.3). The service enforces the same source and exact-pair boundaries, produces status `resolved_merged`, and records `same_person_confirmed`. Other open case sources can be resolved without moving data but are not merge-eligible. Merge requires the admin's explicit same-person confirmation and rationale; it does not consume a pre-set determination on the case.
+The [admin duplicate review controller](../../app/controllers/admin/duplicate_reviews_controller.rb) presents evidence and actions; [`ResolutionService`](../../app/services/duplicate_review_cases/resolution_service.rb) records the decision with its actor and rationale.
 
-Resolution state lives on `DuplicateReviewCase`: `resolution_determination` (`same_person_confirmed`, `authorized_relationship_confirmed`, `keep_separate`, `existing_person_selected`, `superseded_by_merge`, `needs_more_information`, `fraud_or_security_review`), `resolution_rationale`, and `resolution_metadata`. The coarse `status` enum is `open`, `resolved_approved`, `resolved_ignored`, `resolved_merged`, `resolved_superseded`, or `resolved_selected`. Selection records `existing_person_selected` and moves no ownership. `resolved_superseded` is not an identity decision: it preserves why an open exact-pair case ceased to be independently actionable after one participant was merged and, when present, points to the replacement case.
+| Outcome | Meaning |
+| --- | --- |
+| `keep_separate` | Different people. Nothing is combined. |
+| `existing_person_selected` | Paper intake chose an existing candidate for the proposed identity. |
+| `same_person_confirmed` | A merge completed through the merge service. |
+| `superseded_by_merge` | A related post-import case became moot because of a merge — not an identity finding of its own. |
 
-**Only a completed identity decision may resolve a live pair as same or different people.** The narrow `resolved_superseded` lifecycle state is the exception for a pair made obsolete by a merge; it records no same/different determination for the untouched pair and cannot suppress a still-current replacement pair. Resolving is not neutral bookkeeping. The review flag is reprojected for every constituent participant from open-case participation plus unresolved current name+DOB pairs. The final-submission gate is separate: it reads only open `registration_soft_match` cases whose subject is the applicant. A remaining case of any source or unresolved pair can therefore keep the review flag set without gating submission, and a `post_import_reconciliation` case never gates. The flag and gate are not synonyms, and neither implies the other.
+Existing-person selection is recorded only by inline paper intake through `ResolutionService#select_existing`, not by the admin queue resolve action.
 
-`DuplicateReviewCases::ResolutionService#call`, used by the admin resolve action, records only `keep_separate`. Inline paper intake also uses `#select_existing` to record `existing_person_selected`; that separate entrypoint validates the selected candidate and is not exposed as an admin queue resolution option.
+For a registration case, only keeping the records separate or completing a merge releases the submission gate. Needing more information, a security investigation, and an unverified relationship all leave the case open. Resolved cases keep their decision and evidence.
 
-| Determination | Reachable via admin `ResolutionService#call`? | Why |
-|---|---|---|
-| `keep_separate` | **Yes** — always recorded | The one completed decision that moves no data |
-| `same_person_confirmed` | No | Means two records are one identity. Closing without consolidating would release submission while knowingly keeping the duplicate. Reserved to `Users::DuplicateMergeService`, written atomically with the merge. If the merge cannot complete, the case stays open |
-| `needs_more_information` | No | Not a decision. Staff who need more information leave the case open; the open case in the queue is the record |
-| `fraud_or_security_review` | No | Not a decision. The duplicate-review queue is the only durable queue that exists, so closing removes the work item and its visibility together |
-| `authorized_relationship_confirmed` | No | Needs server-verifiable relationship evidence; the admin resolve action supplies none, and `guardian_relationships` has no active/revoked state |
-| `existing_person_selected` | No | Recorded only by inline paper intake through `select_existing`, without asserting that two persisted users are the same person |
+### Post-import pairs
 
-Consequences for the request contract:
+[`DuplicateReconciliation::Population`](../../app/services/duplicate_reconciliation/population.rb) derives candidate pairs from names and dates of birth, and [`ReviewPairService`](../../app/services/duplicate_reconciliation/review_pair_service.rb) rechecks a pair before opening or reusing a case. The queue may group connected pairs for browsing, but each decision covers exactly two people: keeping A and B separate says nothing about A and C.
 
-- the determination is **not** an accepted input — `ResolutionService` takes no `determination` parameter. The controller reads `params[:determination]` only as a rollover guard (see below), never to decide what is stored;
-- the admin form shows static text (*"Identity outcome: Keep records separate"*) rather than a control, since a select offering five values where one is legal presented a fake choice;
-- a request carrying a determination other than `keep_separate` is **rejected**, not ignored. Ignoring it would let an admin on a page rendered before this shipped choose "Needs more information", submit, and silently get a keep-separate resolution — the opposite of their intent;
-- every enum value is preserved so cases already resolved with them still render.
+[`DuplicateReviewCase.reconciliation_pairs`](../../app/models/duplicate_review_case.rb) recognizes strict post-import cases and terminal inline paper keep-separate cases with one distinct pair and a `name_dob` reason. Existing-person selection, address-only decisions, and historical audit-only records do not settle pairs. Open pair work takes precedence over completed evidence. Discovery and flag projection use the same case-owned rules; a different unresolved pair can still require a flag after one pair is settled.
 
+## Merging
 
-Flag/case sync is enforced in both directions: resolving reprojects every constituent case participant, merging reprojects the canonical survivor and clears the retired duplicate, and the explicit synchronization command repairs callback-bypassed or stale cache values across the population. A merge resolves its selected case; another strict post-import pair involving the retired record is repointed to the survivor when it remains actionable or superseded when it becomes obsolete. A related open case that cannot be represented safely as one strict post-import pair still blocks the merge. `ClearFlagService` locks and requalifies the user and actor, refuses open-case participation or an unresolved current pair, and logs `duplicate_review_flag_cleared` only for a genuine manual/legacy clear.
+[`Users::DuplicateMergeService`](../../app/services/users/duplicate_merge_service.rb) handles confirmed same-person merges from registration soft matches and valid post-import pairs. Staff pick the survivor, explain the decision, and settle conflicting contact and delivery details. Four boundaries hold:
 
-### 3.2.3 Same-person merge service
+- **Login stays with the survivor** — its password, MFA, and login email. When only one record is email-backed, that record has to be the survivor.
+- **Applications and relationships move with their history**, lifecycle intact.
+- **The duplicate is retired, not deleted.** It goes inactive, points at the survivor, loses its primary email, phone, and sessions, and remains as evidence.
+- **Live work can block the merge** — conflicting applications, a pending recovery request, incompatible guardian relationships, or secure requests whose delivery ownership would become invalid.
 
-`Users::DuplicateMergeService` performs a same-person merge of one constituent record into a canonical survivor. It requires an active admin actor, one selected open merge-eligible case (`registration_soft_match` or a strict exact-pair `post_import_reconciliation` case), explicit same-person confirmation, a rationale, bounded reason codes, and a bounded decision for every phone/address/delivery fact. The merge form renders the case's match reason as read-only case-opening evidence and asks the admin for the required explanation of what was verified beyond that match; reason codes are not editable controls. It shows an exact shared value once as **Both records agree** and asks the admin to choose only where values differ. Shared-value markers are untrusted input: the service reloads both users under the merge-integrity locks and refuses a stale or forged agreement before contact capture, mutation, or audit. Login email is not transferable: the selected canonical record keeps its own password, MFA, sessions, and login email authority. The canonical-record choices repeat each record's creation time and last successful login, and identify the newer record and most recently used login so the account-authority choice does not depend on facts scrolled out of view. The service performs all mutations with bang persistence inside one transaction, rolls back on failure, and emits exactly one `duplicate_user_merged` audit event.
+Hand-editing foreign keys or destroying the duplicate skips the eligibility rechecks the service performs under shared locks, and leaves no record of the decision. Writers that participate in merges follow the [merge integrity contract](service_architecture.md#merge-integrity-lock-boundary).
 
-The merge transaction locks the complete owned inventory in a deterministic order: base `User` rows for the actor, canonical user, duplicate user, family-link neighbors, and related-case participants in ascending id order; the selected and related open `DuplicateReviewCase` rows plus their candidates; every `Application` row owned or managed by either participant; then every `GuardianRelationship` touching either participant. Case creation, case resolution, flag clearing, application final submission/autosave, primary contact edits, guardian-managed dependent creation/profile edits and standalone relationship creation, sign-in, password-reset completion, signed-in and forced password changes, recovery creation, role conversion, and secure-request issuance use their documented subset of the same base-`User`-first coordination contract before locking their own dependent rows. These are the traced merge-adjacent writers and proven race boundaries; this is not a claim that every `User` mutation in the system serializes through one lock, or that unrelated code is globally deadlock-free. Account-access *issuance* remains the known exclusion — see the named exclusion in [`service_architecture.md`](service_architecture.md#merge-integrity-lock-boundary). Account-access issuance is safe by revocation rather than locking: retirement clears the duplicate's contact, and the `:password_reset` fingerprint covers normalized email and phone, so a merge that discards either contact route invalidates reset links already delivered to it — including on the canonical survivor.
+## Guardians
 
-A merged duplicate is deactivated (`status: inactive`) and points at its survivor through `users.merged_into_user_id`, with `merged_by_id` and `merged_at` recorded. It is never destroyed. Retirement always clears the duplicate row's primary `email`, `phone`, and `phone_type`, even when those values were not selected for the survivor. That releases uniqueness ownership, prevents public registration from treating the retired row as an existing contact account, and invalidates password-reset tokens bound to the normalized login email. `User#public_login_active?` rejects merged, inactive, and suspended records (treating legacy NULL status as active). It gates the auth-lookup helper (`find_by_login_identifier`), the password-reset token flows, and authenticated session creation, so a duplicate retired mid-login cannot finish authenticating.
+[`UserGuardianship`](../../app/models/concerns/user_guardianship.rb) owns relationship queries and effective-contact helpers. A guardian/dependent pair is unique, and nobody can be their own guardian.
 
-Merge inventory (decision per area):
+A relationship and an application's `managing_guardian` answer different questions: the relationship says these two people are connected, the application says who manages that application. Recipient selection belongs to each workflow — `application.user.email` is not a general answer. See [Guardian Relationship System](guardian_relationship_system.md), particularly [stored contact ownership](guardian_relationship_system.md#canonical-stored-contact-ownership).
 
-| Area | Decision |
-|------|----------|
-| Applications | Transfer all duplicate-owned applications to the canonical user by FK repoint, preserving status, history, and audit. There is no selectable subset: the locked complete inventory transfers atomically. If the canonical was the managing guardian of a transferred application, the managing guardian is cleared first so the merged record is never self-managed. Blocked if it would leave the canonical record with more than one active/blocking application. |
-| Managed applications | Repoint `managing_guardian_id` to the canonical user, except for applications the canonical already owns, where the managing guardian is cleared instead (a record cannot manage its own application). |
-| Guardian relationships (duplicate as guardian) | Preserve every distinct dependent on the canonical guardian. If both records already link to the exact same dependent, coalesce the redundant edge only when relationship type/replay evidence is compatible. A direct relationship between the two merged records is dissolved rather than becoming a self-link. A guardian merge never merges two different dependent records or their applications. |
-| Guardian relationships (duplicate as dependent) | Preserve every distinct guardian on the canonical dependent without copying effective guardian contact into stored record truth. If the same guardian links to both dependent records, coalesce only a compatible redundant edge. A later explicit dependent merge still uses the normal active-application conflict rule. |
-| Sessions | Duplicate sessions expire. |
-| WebAuthn / TOTP / SMS credentials | Never transferred; canonical auth state preserved. |
-| Password reset / recovery state | Legacy duplicate reset columns are cleared on retirement; generated password-reset tokens are invalidated by clearing the normalized login email. Merge is blocked if the duplicate has a pending recovery request; resolved recovery requests remain as retired-record history. |
-| Secure request forms | Active bearer-link forms are never transferred, repointed, or automatically revoked by merge. Merge is blocked when the retiring duplicate is the logical recipient or delivery owner; while any active historical row lacks complete owner/source provenance; or when an active form owned by the survivor would be stranded by the selected contact change. Email/SMS compare the issuance snapshot with the final selected contact. Letter delivery has no immutable address snapshot, so selecting the duplicate's address blocks a survivor-owned active letter. Unchanged relevant contact is allowed. Submitted, revoked, and expired forms remain history and do not block. Forms resolve through their own submission, revocation, or expiry lifecycle. |
-| Contact facts | Exact shared phone/address values are shown once as **Both records agree**; an exact shared phone type is shown in that same shared-facts table, while differing values require an explicit surviving-record choice. An agreement marker is rechecked against both locked records before mutation. Synthetic or effective fallback values never become stored record truth. A real surviving phone still requires a valid phone type: when the types differ, the admin must select it; choosing a blank phone clears phone type. Missing, invalid, stale, or forged decisions block the merge. The retired duplicate always releases primary email, phone, and phone type. |
-| Delivery route | Independent from login identity. An exact shared route is shown once and rechecked under lock; differing routes require an explicit choice. Missing, invalid, stale, or forged decisions block rather than silently defaulting to canonical. |
-| Login identity | Canonical-record selection displays each account's login email, creation time, and last successful login alongside it because password, MFA, sessions, and login email survive together. It also labels the newer record and the record with the most recent successful login when those facts distinguish the pair. Login email is not a transferable contact choice. The UI and service reject choosing a non-email record over the sole email-backed account. |
-| Duplicate review cases | Only the selected open `registration_soft_match` or strict exact-pair `post_import_reconciliation` case is merge-eligible and resolves to `resolved_merged`; candidate snapshots and evidence are retained. Another strict open post-import pair containing the retiring record is rekeyed to the canonical survivor without deciding it, or marked `resolved_superseded` if equivalent durable work already exists. A malformed or other-source open case containing the retiring record still blocks. A case involving only the survivor remains open unchanged. |
-| Evaluations / print queue | Evaluations follow their already-transferred application to the canonical user, so `evaluation.constituent` never drifts from `evaluation.application.user`. A still-pending print queue item transfers to the canonical user, since undelivered work needs a contactable owner; printed and canceled print queue items are historical and are never repointed. |
-| Events / notifications / audit | Historical records are preserved (notifications are never repointed to the canonical user); the merge adds one `duplicate_user_merged` event, fingerprinted per merged-user id so two merges into the same canonical within the audit dedup window each keep their own event, rather than rewriting history. |
+## Admin tools
 
-### 3.3 Paper applicant lookup and eligibility
+[`Admin::UsersController`](../../app/controllers/admin/users_controller.rb) covers lists, profile edits, roles, capabilities, and account actions, with search and filtering in [`Users::FilterService`](../../app/services/users/filter_service.rb). Because email is encrypted, email search goes through [HMAC search tokens](../../app/models/concerns/user_email_search.rb); a dependent with no email of their own can also be found by a linked guardian's.
 
-Admin paper intake uses user lookup results as submission candidates, not just identity matches. Existing adults and dependents can be reused when the candidate is eligible for a new paper application.
+Two destructive-sounding actions differ more than their names suggest. **Delete MFA tokens** removes WebAuthn, TOTP, and SMS credentials plus sessions, and is refused for the system user; approving a [security-key recovery request](../../app/controllers/admin/recovery_requests_controller.rb) removes only WebAuthn credentials. **Delete user** destroys the record and cascades per its associations, including constituent applications — it is blocked for the system user and for self-deletion, and is not the merge workflow.
 
-Current paper candidate behavior includes:
+### Duplicate maintenance tasks
 
-- `paper_applicant_candidate?` marks users that can be considered by the paper intake flow.
-- `paper_guardian_candidate?` is paper-domain authority for a managing guardian: the record must be
-  an active, non-merged constituent. Suspended and inactive records are not selectable; legacy NULL
-  status remains eligible. The predicate does not delegate to the public-login gate, and duplicate-
-  review flags or case sources are not inputs, so review visibility never becomes a paper gate.
-- Admin paper search decorates candidates with waiting-period and `blocking_new_submission` state so the UI and service can block ineligible submissions.
-- Existing adult self-applications require contact verification before the service writes a new application.
-- Existing dependent submissions reuse the dependent and guardian relationship, apply the selected contact strategies before persisting contact updates, and still check waiting-period eligibility and `blocking_new_submission`.
-- `adult_application_context` exposes on-file contact, eligibility, last application, income, and provider details so paper intake can prefill without silently changing verified contact information.
+Defined in [`lib/tasks/duplicates.rake`](../../lib/tasks/duplicates.rake):
 
-### 3.4 Operational duplicate discovery and reconciliation tasks
+| Task | Effect |
+| --- | --- |
+| `duplicates:discovery` | Bounded read-only diagnostic summary; personal details redacted by default. |
+| `duplicates:report` | Reads pair state and prints names and IDs — no raw contact values or dates of birth. `CSV_PATH` writes a file. |
+| `duplicates:sync_review_flags` | **Writes** the cached review flags from open cases and unresolved pairs. Creates no cases, events, or notifications. |
 
-| Task | Purpose | Safety and PII handling |
-|------|---------|-------------------------|
-| `bin/rails duplicates:discovery` | Production-safe read-only architectural baseline probe evaluating case counts, strict post-import shapes, malformed cases, true review-flag drift, dynamic match clusters, and multi-guardian dependent distributions. | Runs in a database-enforced `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY` transaction (ensuring a consistent snapshot across all queries). Fails closed if invoked within an open transaction. Dynamically sets PostgreSQL `statement_timeout` via `set_config` before application queries to the remaining time in the 15-second query budget (bounding database query duration, with deadline assertions evaluated between metric steps and upon completion). Executes inventory, distribution, and cluster metrics as database aggregates (`COUNT`, `GROUP BY`, `HAVING`, CTEs), and diagnostic samples and audits as strictly bounded row queries (`LIMIT`). Resolves release provenance (`code_sha`) from deployment environment variables (`COMMIT_SHA`, `HEROKU_BUILD_COMMIT`, `KAMAL_VERSION`, etc.) with git fallback (for Heroku deployments, runtime dyno metadata must be enabled via `heroku labs:enable runtime-dyno-metadata`; for manual Docker builds, pass `--build-arg COMMIT_SHA=$(git rev-parse HEAD)`). Evaluates logical date decryptability matching canonical Population using bounded cluster and candidate verification without unbounded array loading (treating bounded audits as incomplete rather than exact: separating raw SQL cluster totals from verified canonical totals, unpopulating canonical cluster metrics and omitting exclusion claims when cluster audit is truncated, and reporting flag drift as a verified lower bound with explicit truncation flags when drift candidate audit is truncated). Never logs stored date-of-birth values during validation. Supports both encrypted and legacy plaintext date-of-birth formats. Detailed mode bounds relationship samples per dependent and reports omitted counts. Default mode redacts all PII at the result-producing boundary and in output, omitting constituent names, gating raw malformed metadata (`reason_codes`), masking raw record identifiers using HMAC references keyed with a cryptographically secure per-run random salt, and masking database topology using an application-secret HMAC fingerprint. |
-| `DETAILED_PII=true bin/rails duplicates:discovery` | Explicit opt-in diagnostic mode that includes dependent and guardian names for multi-guardian sample dependents, malformed-case `reason_codes`, and raw record identifiers in both the structured service result and the rendered summary output (with control, formatting, and separator characters safely encoded to prevent terminal manipulation, bidi reordering, or report spoofing). Requires exact string `true` to enable detailed mode (runs in default redacted mode when `DETAILED_PII` is unset, empty, or `false`; any other value including `TRUE`, whitespace, or truthy aliases is rejected with an error). | **SENSITIVE OUTPUT:** Emits real constituent names and relationships. Detailed mode enforces an attached-only boundary: the rake task aborts if stdout is not an attached interactive terminal (`$stdout.tty?`), preventing sensitive PII from being piped or redirected. In production, operators must run exclusively via an attached interactive console: for Kamal deployments, use `kamal app exec -i "DETAILED_PII=true bin/rails duplicates:discovery"`; for Heroku deployments, use `heroku run "DETAILED_PII=true bin/rails duplicates:discovery"` (with `heroku labs:enable runtime-dyno-metadata` enabled). Operators must NEVER use detached dynos (`heroku run:detached`) or background jobs, as detached runs route stdout to application logs with CloudWatch/SumoLogic ingestion and 400-day retention (per `docs/security/baseline_policy.md`). Piped or automated test wrappers (such as `.cursor/bin/record-check`, shell redirection, or non-interactive subshells) run without an attached TTY (`$stdout.tty?` is false) and are deliberately rejected by design to prevent sensitive PII from leaking into logfiles or disk evidence records. Operators conducting local or staging investigations must execute the command directly in their attached terminal. Automated pipelines should execute and record the default redacted mode (`bin/rails duplicates:discovery`). |
-| `bin/rails duplicates:report` | Read-only scan of current dynamic active-constituent name+DOB pairs. | Database-read-only. Prints no raw contact or DOB values. Supports optional `CSV_PATH` output. |
-| `bin/rails duplicates:sync_review_flags` | Operational repair task that synchronizes `users.needs_duplicate_review` with open cases and current pairs. | Creates no cases, events, or notifications. Reports before/after/set/clear counts. Scheduled for retirement in Stage 5/6 when `needs_duplicate_review` is replaced by durable case queries. |
+`DETAILED_PII=true` on discovery exposes personal information and refuses to run without an attached terminal, specifically so it cannot be piped into a log or run detached. The ordinary report still contains names, so its output is sensitive too.
 
-Discovery and Population consume the case-owned pair queries. Review flags are required by any open case of any source or an unresolved current pair. In the absence of open work, recognized terminal pair evidence is resolved or stale in Population and does not justify a flag. Discovery therefore counts a leftover flag after an inline paper keep-separate decision as drift, just as it does for a strict post-import decision. A different unresolved pair involving the same person still requires review.
+## Tests
 
-The `post_import_*` shape metrics and multiple-case inventory remain scoped to post-import cases. Raw name+DOB cluster/pair totals include adjudicated matches; they measure candidate discovery volume, not outstanding review work. Truncated DOB audits leave canonical totals unknown or drift as a lower bound. A successful probe or a zero lower bound alone is not flag-retirement evidence.
-
-## 4 · Admin User Management
-
-The admin user index supports:
-
-- text search by first name, last name, full name, and email-search tokens
-- role filters for administrator, evaluator, constituent, vendor, and trainer
-- relationship filters for guardians and dependents
-- `needs_review=true` filtering
-- role conversion and explicit capability toggles from the users table
-
-Email search uses `UserEmailSearchToken` rows. The tokens are HMAC digests, not stored plaintext email fragments. Dependent users are also searchable by their own `dependent_email` and, when that is blank, by a linked guardian's email.
-
-The admin user show page displays:
-
-- basic encrypted profile fields
-- display contact email/phone (hides synthetic values)
-- guardian/dependent relationships
-- application history for the selected user
-- edit, delete MFA tokens, and delete user actions
-
-Admin-created users go through `UserServiceIntegration#create_user_with_service`, which calls `Applications::UserCreationService`. Email-backed portal constituents get internal forced-change account setup, `verified: true`, and `force_password_change: true`; raw passwords are not returned or stored for handoff. Address-only and phone-only users get internal passwords only and no email-backed portal account setup. Phone-only users may still be `portal_access_eligible?` for record truth but cannot use public portal sign-in or account access without a real email.
-
-The admin user show page displays contact through `display_contact_email` and `display_contact_phone`, which hide synthetic values and show “No email on file” / “No phone on file” when appropriate.
-
-## 5 · MFA And Destructive Admin Actions
-
-Admins can remove all MFA credentials for another user from the admin user show page.
-
-`Admin::UsersController#destroy_mfa_tokens` currently:
-
-- responds to `DELETE /admin/users/:id/mfa_tokens`
-- blocks the system user (`system@mdmat.org`)
-- deletes the user's WebAuthn credentials, TOTP credentials, verified or unverified SMS credentials, and sessions
-- logs `admin_user_mfa_tokens_deleted` with credential counts and deleted session count
-- logs `admin_user_mfa_tokens_blocked` when the system-user guard blocks the action
-
-This action is broader than security-key recovery. The recovery-request approval path in `Admin::RecoveryRequestsController#approve` only removes WebAuthn credentials for an approved recovery request.
-
-Admins can also delete users from the admin user show page.
-
-`Admin::UsersController#destroy` currently:
-
-- responds to `DELETE /admin/users/:id`
-- blocks deleting the system user
-- blocks an admin from deleting their own account
-- logs `admin_user_deletion_attempted` before deletion
-- calls `destroy!` on the target user
-- logs `admin_user_deleted` after success
-- logs `admin_user_deletion_blocked` or `admin_user_deletion_failed` when deletion is blocked or raises an Active Record error
-
-Deletion follows the model associations. For example, constituent applications are destroyed through `Users::Constituent`, while some foreign-key blockers can cause deletion to fail and redirect back with an alert.
-
-## 6 · Guardian And Dependent Relationships
-
-`GuardianRelationship` links one guardian user to one dependent user and requires `relationship_type`. A guardian/dependent pair can only have one relationship row, and a user cannot be their own guardian.
-
-`UserGuardianship` provides:
-
-- `guardian_relationships_as_guardian` and `dependents`
-- `guardian_relationships_as_dependent` and `guardians`
-- `managed_applications`
-- `guardian?` and `dependent?`
-- `editable_by_guardian`, `accessible_by_guardian`, and matching predicate helpers
-- effective contact helpers that prefer dependent contact fields, then guardian fallback, then the user's own fields. These helpers are for communication routing and display only; portal auth continues to use primary stored contacts with synthetic-value guards.
-
-Applications for dependents use `Application#managing_guardian_id` to record the managing guardian. Paper application details live in `docs/development/paper_application_architecture.md`.
-
-## 7 · Test Selectors
-
-The codebase uses `data-testid` attributes in selected views. There is not a global app-wide test-id contract for every form field.
-
-Verified current examples include:
-
-| Area | Example |
-|------|---------|
-| Flash messages | `app/views/shared/_flash.html.erb` renders `data-testid="flash-<type>"`. |
-| Admin application queues | Evaluation and training queue partials use queue-level test IDs. |
-| Medical certification panels | Admin application partials use IDs such as `medical-certification-section` and `medical-certification-upload-form`. |
-| Secure request panels | Proof secure-request panels use `<proof_type>-proof-secure-request-forms-panel`. |
-| Constituent dashboard | The training card uses `data-testid="training-card"`. |
-
-Prefer the selectors already present in the view under test. Add new test IDs only when the accessible label/text is not stable enough for the interaction being tested.
-
-## 8 · Factory Patterns
-
-Current user factories live in `test/factories/users.rb`.
-
-Common examples:
-
-```ruby
-create(:user)
-create(:constituent)
-create(:admin)
-create(:evaluator)
-create(:trainer)
-create(:vendor_user)
-
-guardian = create(:constituent, :with_dependent)
-guardian = create(:constituent, :with_dependents, dependents_count: 3)
-guardian = create(:constituent, :as_legal_guardian)
-dependent = create(:constituent, :with_guardian)
-
-create(:guardian_relationship,
-       guardian_user: guardian,
-       dependent_user: dependent,
-       relationship_type: 'Parent')
-
-create(:application, :for_dependent, guardian: guardian)
-create(:application, :for_dependent,
-       dependent_attrs: { first_name: 'John', last_name: 'Doe' })
-```
-
-Sequences cover normal email and phone uniqueness needs. When a test needs a specific contact value, keep email and phone unique unless the assertion is about uniqueness validation.
-
-## 9 · Tests To Check
-
-Focused test coverage for this area currently includes:
-
-| Behavior | Test path |
-|----------|-----------|
-| Encrypted email/phone lookup and uniqueness | `test/models/user_encrypted_validation_test.rb` |
-| User profile, guardian/dependent helpers, and contact validation | `test/models/user_test.rb` |
-| Public signup exact duplicate/account-access behavior | `test/controllers/registrations_controller_test.rb` |
-| Admin user show, MFA token deletion, user deletion, and admin JSON user creation | `test/controllers/admin/users_controller_test.rb` |
-| Admin user search tokens and filter service | `test/models/user_email_search_token_test.rb`, `test/services/users/filter_service_test.rb` |
-| Security-key recovery request approval | `test/controllers/admin/recovery_requests_controller_test.rb` |
-
-## 10 · Related Docs
-
-- `docs/security/authentication_system.md`
-- `docs/development/guardian_relationship_system.md`
-- `docs/development/paper_application_architecture.md`
-- `docs/features/notifications.md`
-- `docs/features/audit_event_tracking.md`
+- [Contact predicates](../../test/models/user_contact_predicates_test.rb) and [login identifiers](../../test/models/user_login_identifier_test.rb) — contact versus public access.
+- [Registration](../../test/controllers/registrations_controller_test.rb) — duplicate outcomes and account creation.
+- [Review resolution](../../test/services/duplicate_review_cases/resolution_service_test.rb) and [merge service](../../test/services/users/duplicate_merge_service_test.rb) — decisions and what survives.
+- [Admin users](../../test/controllers/admin/users_controller_test.rb) — profile and account actions.

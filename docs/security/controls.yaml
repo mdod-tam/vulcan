@@ -1,324 +1,194 @@
----
-version: "2.0"
-last_updated: "2025-05-31T00:00:00Z"
-application: "Mat Vulcan"
-schema: "https://raw.githubusercontent.com/mat-vulcan/security-schemas/main/controls.schema.v2.0.json"
+version: "3.0"
+last_updated: "2026-09-18"
+application: "MAT Vulcan"
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  Rails 8 defaults we rely on
-# ──────────────────────────────────────────────────────────────────────────────
-rails_version: "8.0"
-rails_defaults:
-  csrf_protection: true
-  session_fixation_reset: true
-  force_ssl: true
-  active_record_encryption: true
-  parameter_filtering: true
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  Priority taxonomy (single source of truth – no dup scalar)
-# ──────────────────────────────────────────────────────────────────────────────
+# Manual source catalog; no controls-YAML CI linter or schema validation is configured.
+# Framework mappings are retained from the older catalog and need current-policy review.
+# Implementation describes source, not deployment verification or an audit attestation.
 priority_levels:
   critical: { label: "Critical", value: 1 }
-  high:     { label: "High",     value: 2 }
-  medium:   { label: "Medium",   value: 3 }
-  low:      { label: "Low",      value: 4 }
+  high: { label: "High", value: 2 }
+  medium: { label: "Medium", value: 3 }
+  low: { label: "Low", value: 4 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  Common file anchors
-# ──────────────────────────────────────────────────────────────────────────────
-file_paths:
-  user_model:        { path: "app/models/user.rb",      purpose: "Core user model" }
-  session_model:     { path: "app/models/session.rb",   purpose: "Session model" }
-  auth_js:           { path: "app/javascript/auth.js",  purpose: "Auth JS" }
-  event_model:       { path: "app/models/event.rb",     purpose: "Security event model" }
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  Environment config
-# ──────────────────────────────────────────────────────────────────────────────
-environments:
-  production:  { enabled: true,  notes: "Full security controls enforced" }
-  staging:     { enabled: true,  notes: "Mirrors production" }
-  development: { enabled: false, notes: "Controls relaxed for local dev" }
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  CONTROLS
-# ──────────────────────────────────────────────────────────────────────────────
 controls:
-
-  # ── AUTHENTICATION ─────────────────────────────────────────────────────────
   authentication:
+    - id: "AUTH-001"
+      name: "User Authentication"
+      frameworks: { doit: ["IA-2", "PR.AC-1"], nist_csf: ["PR.AC-1", "PR.AC-7"], nist_800_53: ["IA-5", "AC-7"], rails: ["ActiveModel::SecurePassword"] }
+      priority: { label: "Critical", value: 1 }
+      owner: "@david"
+      implementation:
+        summary: "BCrypt via has_secure_password; lockout after five failed attempts."
+        files: ["app/models/concerns/user_authentication.rb", "app/controllers/sessions_controller.rb"]
+      verification_needed: "Verify the stated BCrypt cost target of at least 12 and review password-hashing policy."
+      audit: { report: null, coverage: null, next_review_due: null }
 
-  - id: "AUTH-001"
-    name: "User Authentication"
-    frameworks:
-      doit: ["IA-2", "PR.AC-1"]
-      nist_csf: ["PR.AC-1", "PR.AC-7"]
-      nist_800_53: ["IA-5", "AC-7"]
-      rails: ["ActiveModel::SecurePassword"]
-    priority: { label: "Critical", value: 1 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: true, rails_builtin: true }
-    threat: "Credential stuffing / brute-force"
-    implementation:
-      notes: "Spike Argon2id/PBKDF2 ≥ 310 k iter – due 2025-06-30"
-      files: [ { path: "app/models/user.rb", purpose: "Core user model" }, { path: "app/models/session.rb", purpose: "Session model" } ]
-      details:
-        - "bcrypt cost ≥ 12"
-        - "constant-time password check via `authenticate_by`"
-        - "session fixation reset on login"
-        - "account lock after 5 failed attempts"
-    audit:
-      report: "https://audit.example.com/reports/2024-Q1/AUTH-001.pdf"
-      coverage: 0.98
-      next_review_due: "2025-08-22"
+    - id: "AUTH-002"
+      name: "Multi-Factor Authentication"
+      frameworks: { doit: ["IA-2", "G21-1"], nist_csf: ["PR.AC-7"], nist_800_53: ["IA-2"] }
+      priority: { label: "Critical", value: 1 }
+      owner: "@david"
+      implementation:
+        summary: "WebAuthn, TOTP, and SMS; required for administrators, evaluators, trainers, and vendors. Optional for constituents."
+        files: ["app/controllers/application_controller.rb", "app/controllers/two_factor_authentications_controller.rb"]
+      verification_needed: "Confirm role coverage against applicable authentication requirements."
+      audit: { report: null, coverage: null, next_review_due: null }
 
-  - id: "AUTH-002"
-    name: "Multi-Factor Authentication"
-    frameworks:
-      doit: ["IA-2", "G21-1"]
-      nist_csf: ["PR.AC-7"]
-      nist_800_53: ["IA-2"]
-    priority: { label: "Critical", value: 1 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: true }
-    threat: "Account takeover via credential compromise"
-    implementation:
-      files: [ { path: "app/models/user.rb", purpose: "Core user model" }, { path: "app/javascript/auth.js", purpose: "Auth JS" } ]
-      details:
-        - "WebAuthn, TOTP & SMS supported"
-        - "MFA enforced for all external users & admins"
-    audit:
-      report: "https://audit.example.com/reports/2024-Q1/AUTH-002.pdf"
-      coverage: 0.95
-      next_review_due: "2025-08-22"
+    - id: "AUTH-003"
+      name: "Password Policy"
+      frameworks: { doit: ["PR.AC-1"] }
+      priority: { label: "High", value: 2 }
+      owner: "@david"
+      implementation:
+        summary: "Minimum password length is eight characters."
+        files: ["app/models/concerns/user_authentication.rb"]
+      verification_needed: "Resolve the difference from the cited external-user guidance; see baseline_policy.md."
 
-  - id: "AUTH-003"
-    name: "Password Policy"
-    frameworks: { doit: ["PR.AC-1"] }
-    priority: { label: "High", value: 2 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      files: [ { path: "app/models/user.rb", purpose: "Core user model" } ]
-      details:
-        - "Min length ≥ 8"
-        - "Complexity via custom validation (if enabled)"
-        - "Hash strength tracked under AUTH-001"
+    - id: "AUTH-004"
+      name: "Session Management"
+      frameworks: { doit: ["PR.AC-1"], nist_800_53: ["AC-12"] }
+      priority: { label: "High", value: 2 }
+      owner: "@david"
+      implementation:
+        summary: "Signed session token; HttpOnly cookie and Secure in production. Default absolute expiry is 24 hours."
+        files: ["app/models/session.rb", "app/controllers/concerns/authentication.rb", "app/controllers/application_controller.rb"]
+      verification_needed: "The stated 30-minute idle target and session-fixation reset are not established by absolute expiry."
 
-  - id: "AUTH-004"
-    name: "Session Management"
-    frameworks:
-      doit: ["PR.AC-1"]
-      nist_800_53: ["AC-12"]
-    priority: { label: "High", value: 2 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: true }
-    threat: "Session hijacking"
-    implementation:
-      files: [ { path: "app/models/session.rb", purpose: "Session model" }, { path: "app/controllers/application_controller.rb", purpose: "reset_session" } ]
-      details:
-        - "Idle timeout 30 min"
-        - "SameSite=Lax, Secure, HttpOnly cookies"
-
-  # ── DATA PROTECTION ────────────────────────────────────────────────────────
   data_protection:
+    - id: "DATA-001"
+      name: "Data Encryption"
+      frameworks: { doit: ["SC-13", "PR.DS-2"], nist_csf: ["PR.DS-1", "PR.DS-2"], rails: ["ActiveRecord::Encryption"] }
+      priority: { label: "Critical", value: 1 }
+      owner: "@david"
+      implementation:
+        summary: "Selected model attributes are encrypted; see pii_encryption.md for fields, lookup rules, and key constraints."
+        files: ["app/models/concerns/user_profile.rb", "config/initializers/active_record_encryption.rb"]
+      verification_needed: "Stable deployed keys, storage/backup encryption, TLS settings, and annual key-rotation evidence."
+      audit: { report: null, coverage: null, next_review_due: null }
 
-  - id: "DATA-001"
-    name: "Data Encryption"
-    frameworks:
-      doit: ["SC-13", "PR.DS-2"]
-      nist_csf: ["PR.DS-1", "PR.DS-2"]
-      rails: ["ActiveRecord::Encryption"]
-    priority: { label: "Critical", value: 1 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    key_management:
-      provider: "ActiveRecord::Encryption::EnvelopeEncryptionKeyProvider"
-      rotation: { enabled: true, cadence: "annual", next_rotation: "2026-05-31" }
-    implementation:
-      files:
-        - { path: "app/models/user.rb", purpose: "Core user model" }
-        - { path: "app/models/totp_credential.rb", purpose: "TOTP secrets encryption" }
-        - { path: "app/models/webauthn_credential.rb", purpose: "WebAuthn keys encryption" }
-        - { path: "config/initializers/active_record_encryption.rb", purpose: "Encryption configuration" }
-      details:
-        - "TLS 1.2+ enforced via `force_ssl`"
-        - "All sensitive PII is encrypted via ActiveRecord `encrypts`."
-        - "Deterministic encryption: email, phone, ssn_last4 (queryable)"
-        - "Non-deterministic encryption: addresses, password_digest, credential secrets"
-        - "Encrypted columns: users.password_digest, users.ssn_last4, users.email, users.phone, users.date_of_birth, users.physical_address_1, users.physical_address_2, users.city, users.state, users.zip_code, totp_credentials.secret, webauthn_credentials.public_key"
-    audit:
-      report: "https://audit.example.com/reports/2024-Q1/DATA-001.pdf"
-      coverage: 0.95
-      next_review_due: "2025-11-30"
+    - id: "DATA-002"
+      name: "Input Validation & Filtering"
+      frameworks: { doit: ["SC-13", "IA-7"] }
+      priority: { label: "High", value: 2 }
+      owner: "@david"
+      implementation:
+        summary: "Sensitive parameters are filtered; controller parameters and model validations remain specific to each workflow."
+        files: ["config/initializers/filter_parameter_logging.rb", "app/models/concerns/user_profile.rb"]
+      verification_needed: "Check new fields, named SQL binds, and error logs for personal data or bearer links."
 
-  - id: "DATA-002"
-    name: "Input Validation & Filtering"
-    frameworks: { doit: ["SC-13", "IA-7"] }
-    priority: { label: "High", value: 2 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      files:
-        - { path: "app/controllers/application_controller.rb", purpose: "Strong params" }
-        - { path: "config/initializers/filter_parameter_logging.rb", purpose: "Param filtering" }
-      details:
-        - "Strong params everywhere"
-        - "Sensitive attrs filtered from logs"
+    - id: "DATA-003"
+      name: "CSRF Protection"
+      frameworks: { doit: ["PR.IP-9"], rails: ["RequestForgeryProtection"] }
+      priority: { label: "High", value: 2 }
+      owner: "@david"
+      implementation:
+        summary: "ApplicationController uses protect_from_forgery with exception handling."
+        files: ["app/controllers/application_controller.rb"]
+      verification_needed: "Review exemptions and the authentication contract of each public endpoint."
 
-  - id: "DATA-003"
-    name: "CSRF Protection"
-    frameworks: { doit: ["PR.IP-9"], rails: ["RequestForgeryProtection"] }
-    priority: { label: "High", value: 2 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      files: [ { path: "app/controllers/application_controller.rb", purpose: "CSRF config" } ]
-      details: [ "`protect_from_forgery with: :exception`" ]
-
-  # ── ACCESS CONTROL / API ───────────────────────────────────────────────────
   access_control:
+    - id: "AUTHZ-002"
+      name: "Authorization Checks"
+      frameworks: { doit: ["PR.AC-4"] }
+      priority: { label: "Critical", value: 1 }
+      owner: "@david"
+      implementation:
+        summary: "Authentication helpers supply role checks; portal controllers own record-access scope."
+        files: ["app/controllers/concerns/authentication.rb"]
+      verification_needed: "Exercise unauthorized roles and cross-owner record access at the affected endpoint."
 
-  - id: "AUTHZ-002"
-    name: "Authorization Checks"
-    frameworks: { doit: ["PR.AC-4"] }
-    priority: { label: "Critical", value: 1 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      files: [ { path: "app/controllers/concerns/authentication.rb", purpose: "RBAC helpers" }, { path: "app/models/user.rb", purpose: "Core user model" } ]
+    - id: "AUTHZ-003"
+      name: "API Security"
+      frameworks: { doit: ["PR.AC-4"], rails: ["RateLimit", "AuthRateLimit"] }
+      priority: { label: "High", value: 2 }
+      owner: "@david"
+      implementation:
+        summary: "Policy-backed cache throttles for proofs/secure forms and digest-keyed public-auth limits."
+        files: ["app/services/rate_limit.rb", "app/services/auth_rate_limit.rb"]
+      verification_needed: "Review token audience, expiry, replay, and throttle behavior for each exposed path."
 
-  - id: "AUTHZ-003"
-    name: "API Security"
-    frameworks: { doit: ["PR.AC-4"], rails: ["RateLimit", "AuthRateLimit"] }
-    priority: { label: "High", value: 2 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: true }
-    implementation:
-      files:
-        - { path: "app/services/rate_limit.rb", purpose: "Proof and secure-form throttles" }
-        - { path: "app/services/auth_rate_limit.rb", purpose: "Public auth throttles" }
-      details:
-        - "Token auth"
-        - "Policy-backed Rails cache throttling"
-        - "Digest-keyed sign-in, account-access, and account-recovery throttles"
-
-  # ── HTTP / APP HARDENING ───────────────────────────────────────────────────
   http_security:
+    - id: "CONFIG-001"
+      name: "Application Hardening & Secure Configuration"
+      frameworks: { doit: ["SC-13", "IA-7"] }
+      priority: { label: "Critical", value: 1 }
+      owner: "@david"
+      implementation:
+        summary: "Production enables force_ssl and hides local exception details. The CSP initializer is commented out."
+        files: ["config/environments/production.rb", "config/initializers/content_security_policy.rb"]
+      verification_needed: "Confirm deployed TLS, HSTS and other headers, CSP, secret custody, and 90-day secret rotation."
 
-  - id: "CONFIG-001"
-    name: "Application Hardening & Secure Configuration"
-    frameworks: { doit: ["SC-13", "IA-7"] }
-    priority: { label: "Critical", value: 1 }
-    owner: "@david"
-    status: { implemented: true, tested: true, documented: true, audited: true }
-    implementation:
-      files:
-        - { path: "config/initializers/security_headers.rb",       purpose: "HSTS & default headers" }
-        - { path: "config/initializers/content_security_policy.rb", purpose: "CSP" }
-        - { path: "config/credentials.yml.enc",                    purpose: "Secrets" }
-      details:
-        - "force_ssl + HSTS 2y"
-        - "CSP with nonce rollout pending"
-        - "Permissions-Policy & Referrer-Policy set"
-
-  # ── AUDIT & LOGGING ────────────────────────────────────────────────────────
   audit_and_logging:
+    - id: "AUDIT-001"
+      name: "Security Logging"
+      frameworks: { doit: ["DE.AE-1/2"] }
+      priority: { label: "High", value: 2 }
+      implementation:
+        summary: "Production sends tagged application logs to stdout."
+        files: ["config/environments/production.rb"]
+      verification_needed: "Central collection, 400-day retention target, access controls, and authentication/privilege alerts."
 
-  - id: "AUDIT-001"
-    name: "Security Logging"
-    frameworks: { doit: ["DE.AE-1/2"] }
-    priority: { label: "High", value: 2 }
-    status: { implemented: true, tested: false, documented: true, audited: false }
-    implementation:
-      files: [ { path: "app/models/event.rb", purpose: "Security event model" }, { path: "config/application.rb", purpose: "Log config" } ]
-      details:
-        - "Logs → CloudWatch → SumoLogic"
-        - "Retention ≥ 1 yr; auth anomaly alerts"
+    - id: "AUDIT-002"
+      name: "Audit Trail"
+      frameworks: { doit: ["AU-3"] }
+      priority: { label: "Medium", value: 3 }
+      implementation:
+        summary: "Domain workflows record Event rows through AuditEventService; coverage depends on the workflow."
+        files: ["app/services/audit_event_service.rb", "app/models/event.rb"]
+      verification_needed: "Confirm actor, subject, event coverage, and retention without sensitive metadata."
 
-  - id: "AUDIT-002"
-    name: "Audit Trail"
-    frameworks: { doit: ["AU-3"] }
-    priority: { label: "Medium", value: 3 }
-    status: { implemented: true, tested: false, documented: true, audited: false }
-    implementation:
-      files: [ { path: "app/models/user.rb", purpose: "Core user model" } ]
-      details: ["PaperTrail or equivalent on sensitive models"]
-
-  # ── TESTING & VULN MGMT ────────────────────────────────────────────────────
   testing_and_vulnerability_management:
+    - id: "TEST-001"
+      name: "Security Testing & Assessment"
+      frameworks: { doit: ["CA-2.1", "RA-5", "SI-2"] }
+      priority: { label: "Critical", value: 1 }
+      implementation:
+        summary: "CI runs Brakeman."
+        files: [".github/workflows/ci.yml", ".github/workflows/main.yml"]
+      verification_needed: "Dated annual independent penetration test, quarterly vulnerability scans, and remediation evidence."
 
-  - id: "TEST-001"
-    name: "Security Testing & Assessment"
-    frameworks: { doit: ["CA-2.1", "RA-5", "SI-2"] }
-    priority: { label: "Critical", value: 1 }
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      tools: ["Brakeman", "bundler-audit", "Dependabot"]
-      details:
-        - "SAST & dep-scan on every PR"
-        - "Annual 3rd-party pen-test (next Q3-2025)"
-        - "Patch SLO ≤ 30 days"
+    - id: "SCA-001"
+      name: "Supply-Chain Security (SBOM & SCA)"
+      frameworks: { doit: ["SI-2", "RA-5"] }
+      priority: { label: "High", value: 2 }
+      implementation:
+        summary: "Dependabot checks Bundler and GitHub Actions daily."
+        files: [".github/dependabot.yml"]
+      verification_needed: "Required CI dependency scanning and SBOM generation are not present in the checked-in workflows."
 
-  - id: "SCA-001"
-    name: "Supply-Chain Security (SBOM & SCA)"
-    frameworks: { doit: ["SI-2", "RA-5"] }
-    priority: { label: "High", value: 2 }
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      tools: ["cyclonedx", "Dependabot"]
-      details: [ "SBOM generated in CI" ]
+    - id: "PATCH-001"
+      name: "Patch Management (Ruby/Rails)"
+      frameworks: { doit: ["RA-5"] }
+      priority: { label: "High", value: 2 }
+      implementation:
+        summary: "Dependabot provides dependency update proposals; deployment timing needs operational records."
+        files: [".github/dependabot.yml"]
+      verification_needed: "Weekly alert triage and Ruby/Rails security updates and critical fixes within 30 days, or stricter applicable deadlines."
 
-  - id: "PATCH-001"
-    name: "Patch Management (Ruby/Rails)"
-    frameworks: { doit: ["RA-5"] }
-    priority: { label: "High", value: 2 }
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      details:
-        - "Dependabot alerts triaged weekly"
-        - "Critical CVEs patched ≤ 30 days"
-
-  # ── ERROR HANDLING ─────────────────────────────────────────────────────────
   error_handling:
+    - id: "ERROR-001"
+      name: "Error Management & Exception Handling"
+      frameworks: { doit: ["PR.DS-6"] }
+      priority: { label: "High", value: 2 }
+      implementation:
+        summary: "Production disables local exception detail pages and provides a public error page."
+        files: ["config/environments/production.rb", "public/500.html"]
+      verification_needed: "Confirm deployed error reporting and redaction; no monitoring provider is certified here."
 
-  - id: "ERROR-001"
-    name: "Error Management & Exception Handling"
-    frameworks: { doit: ["PR.DS-6"] }
-    priority: { label: "High", value: 2 }
-    status: { implemented: true, tested: true, documented: true, audited: false }
-    implementation:
-      files:
-        - { path: "app/controllers/application_controller.rb", purpose: "Global rescue" }
-        - { path: "public/500.html", purpose: "Friendly error page" }
-      details:
-        - "Stack traces logged, not exposed"
-        - "Sentry in production"
-
-  # ── FILE SECURITY ──────────────────────────────────────────────────────────
   file_security:
+    - id: "FILE-SEC-001"
+      name: "Active Storage Validation"
+      frameworks: { doit: ["SC-13", "IA-7"], rails: ["ActiveStorage::Validations"] }
+      priority: { label: "High", value: 2 }
+      implementation:
+        summary: "Proof uploads are checked for allowed content types and size."
+        files: ["app/models/concerns/proof_manageable.rb"]
+      verification_needed: "Check each upload path, download authorization, and malware scanning; validation alone does not scan files."
 
-  - id: "FILE-SEC-001"
-    name: "Active Storage Validation"
-    frameworks: { doit: ["SC-13", "IA-7"], rails: ["ActiveStorage::Validations"] }
-    priority: { label: "High", value: 2 }
-    status: { implemented: true, tested: true, documented: true, audited: true }
-    implementation:
-      files: [ { path: "app/models/concerns/proof_manageable.rb", purpose: "Upload validation" } ]
-      details:
-        - "Content-type & size checks"
-        - "AV scan hook"
-
-# ──────────────────────────────────────────────────────────────────────────────
 metadata:
-  schema_version: "2.0"
   review_frequency: "Quarterly"
-  last_review_date: "2025-05-31"
   responsible_team: "Security Team"
-  validation:
-    bcrypt_minimum_cost: 12
-    required_test_coverage: 0.95
-    schema_validation: true
-    environment_validation: true
-...
+  last_audit_date: null
+  evidence_note: "Null audit values mean unverified. Add real reports, measured coverage, and assigned review dates after assessment."
+  policy: "docs/security/baseline_policy.md"

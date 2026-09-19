@@ -77,7 +77,7 @@ class AuthenticationVerificationTest < ActionDispatch::IntegrationTest
     assert_response :success, 'Second request failed'
 
     get root_path
-    assert_response :success, 'Third request failed'
+    assert_redirected_to constituent_portal_dashboard_path
   end
 
   # Test the checkbox_test approach
