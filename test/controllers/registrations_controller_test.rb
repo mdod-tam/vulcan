@@ -959,7 +959,11 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
   def assert_no_sign_in_cta
     assert_select 'footer.text-center', count: 0
-    assert_select 'a[href=?]', sign_in_path, count: 0
+    # Only the shared navigation logo links to sign-in; support offers no account handoff.
+    assert_select 'a[href=?]', sign_in_path, count: 1
+    assert_select 'body > header a[href=?]', sign_in_path, count: 1 do
+      assert_select 'img[alt=?]', 'TAM Logo', count: 1
+    end
     assert_select 'a[href=?]', sign_in_path(locale: 'en'), count: 0
     assert_select 'a', text: I18n.t('shared.header.sign_in'), count: 0
     assert_select 'a', text: I18n.t('portal_self_service.registrations.sign_in_link'), count: 0
