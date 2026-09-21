@@ -17,7 +17,15 @@ Staff edit, preview, and test-send at `/admin/email_templates`. An [`EmailTempla
 
 A variable has to be both declared and supplied by the sending workflow: editing template text never adds data the mailer does not pass. Subject, body, and syntax edits bump the version; subject and body edits keep the prior content for the Previous Version panel. These content changes flag counterpart locales for review, except when updating an already out-of-sync translation. Description-only edits do not flag other locales.
 
-`bin/rails email_templates:audit` compares expected seed and mailer keys against the database, read-only. A missing-template error is usually a name, format, or locale mismatch rather than a missing row. The [template seeds](../../lib/tasks/seed_manual_email_templates.rake) will overwrite staff-edited copy if applied carelessly.
+### Seed and audit tasks
+
+| Command | Effect |
+| --- | --- |
+| `bin/rails db:seed_manual_email_templates` | Initializes templates from the [checked-in files](../../lib/tasks/seed_manual_email_templates.rake); deletes existing templates first, including staff edits. |
+| `bin/rails email_templates:audit` | Read-only comparison of expected seed and `MAILER_MAP` keys against the database; does not seed or update templates. |
+| `bin/rails db:seed_policies` | Initializes the application's program policy defaults; see [baseline setup](setup_and_maintenance.md#baseline-seeds). |
+
+The seeds are initialization tasks. Policy seeding updates differing values if rows already exist; template seeding replaces existing copy. Use the audit on its own to investigate template mismatches. It exits nonzero for missing or unexpected template keys. [Heroku setup](setup_and_maintenance.md#heroku-deployment-and-operations) includes the remote commands.
 
 ## Sending and printing
 
@@ -67,6 +75,13 @@ Two resolver reasons explain most delivery refusals: `invalid_channel_override` 
 | Tracking | [postmark_format.rb](../../config/initializers/postmark_format.rb) — open tracking on, link tracking off |
 | Stored status | [`UpdateEmailStatusJob`](../../app/jobs/update_email_status_job.rb) polls only `medical_certification_requested` notifications that have a message ID |
 | Bounce/complaint webhook | [`EmailEventsController`](../../app/controllers/webhooks/email_events_controller.rb) → [`EmailEventHandler`](../../app/services/email_event_handler.rb) |
+
+For a new Postmark server:
+
+1. Configure its server API token in Rails credentials and authorize the configured sender, `no_reply@mdmat.org`, through a verified domain or confirmed sender signature. See [Postmark's sender setup](https://postmarkapp.com/support/article/adding-sender-signatures).
+2. Ensure the server has the `notifications` and `outbound` message streams used by the mailers.
+3. Run `bin/rails email_templates:audit`, then test both streams with controlled records and recipient addresses: a proof-resubmission request sent by email exercises `notifications`; a password reset exercises `outbound` and the generated public-host link. `/admin/email_templates` also supports queued test sends, but those use Postmark's default stream and do not verify the workflow's stream selection.
+4. Confirm the password-reset job runs and both messages arrive; proof-resubmission requests send synchronously. On Heroku, inspect `heroku ps --app your-app-name` and `heroku logs --tail --dyno worker --app your-app-name`; the [worker setup](setup_and_maintenance.md#heroku-deployment-and-operations) is separate from the token and template setup.
 
 The webhook path is incomplete: it references `MedicalProviderEmail`, which has no model in this repository, and never updates `Notification` rows. Delivery and open tracking therefore exist for one notification type, not generally.
 

@@ -4,6 +4,8 @@ These guides explain the main workflows, the constraints that matter, and where 
 
 For installation and a repository map, start with the [project README](../README.md).
 
+Setup shortcuts: [baseline seeds](infrastructure/setup_and_maintenance.md#baseline-seeds), [initial accounts](infrastructure/setup_and_maintenance.md#initial-accounts), and [Heroku deployment and operations](infrastructure/setup_and_maintenance.md#heroku-deployment-and-operations).
+
 ## First read
 
 1. [Current features](current_application_features.md) explains what the application does.

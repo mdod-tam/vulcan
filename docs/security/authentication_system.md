@@ -70,6 +70,8 @@ The constraint lives in translated copy as much as in the controllers. [Registra
 
 [`AuthRateLimit`](../../app/services/auth_rate_limit.rb) owns failed sign-in, account-access, and recovery throttles, with policy-backed limits and identifier digests in both keys and audit metadata. [`PublicAuditActor`](../../app/services/public_audit_actor.rb) attributes unauthenticated events to the configured system user, or skips the event with a warning when that user is missing.
 
+Provision `system@mdmat.org` during [initial account setup](../infrastructure/setup_and_maintenance.md#initial-accounts). Public requests do not create it. A registration that needs a duplicate-review case also depends on this actor and rolls back if it is absent.
+
 MFA verification mostly writes Rails logs through `TwoFactorAuth` rather than `Event` rows, so attempt history is not in the audit trail.
 
 ## Troubleshooting

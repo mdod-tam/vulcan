@@ -49,6 +49,8 @@ Action names are an interface: displays and reports match on them, so renaming o
 
 The actor is the authenticated person who performed the action. Public proof and provider-info submissions instead record [PublicAuditActor](../../app/services/public_audit_actor.rb), since holding a bearer link proves nothing about who is holding it; the person the submission was made for belongs in metadata rather than in the actor.
 
+`PublicAuditActor` resolves the administrator at `system@mdmat.org`, provisioned through [initial account setup](../infrastructure/setup_and_maintenance.md#initial-accounts). Missing that account skips public audit events; public registrations needing a duplicate-review case roll back. Creating a staff administrator alone does not satisfy this dependency.
+
 Metadata stays small and bounded — stable IDs, reason codes, status changes, channel, batch or form identifiers, the failed step. Raw tokens and bearer URLs are credentials and do not belong in a durable row, and personal information beyond what the event needs makes the audit trail itself a disclosure surface. Bounded generated events say nothing about the records around them: staff-written rationales and stored case snapshots carry their own privacy questions.
 
 The `Event` model reads request context from `Current`. Background work may have no request context, so pass the actor explicitly. Workflow flags such as `Current.paper_context` belong to their owning service and must be cleared when that scope ends.
@@ -57,7 +59,7 @@ The `Event` model reads request context from `Current`. Background work may have
 
 | Symptom | Check |
 | --- | --- |
-| Missing database event | Owning workflow, event validation, and the five-second creation fingerprint. |
+| Missing database event | Owning workflow, event validation, the five-second creation fingerprint, and the system audit account for public requests. |
 | Stored event missing from the screen | Builder inclusion rules, related-record lookup, and display fingerprint. |
 | Duplicate history | Multiple writers for the same business action before adjusting deduplication. |
 | Different actions collapsed together | The distinguishing metadata in both creation and display fingerprints. |

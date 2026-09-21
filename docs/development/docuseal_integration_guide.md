@@ -61,6 +61,13 @@ The receiver expects a SHA-256 HMAC of the raw request body, in either `X-Webhoo
 
 The outbound payload is built in `SubmissionService#create_submission!`, and the automated tests stub the provider API — a live account's template and submission setup, and its webhook authentication, need verifying against the real service.
 
+### Go-live check
+
+1. Configure the credentials above and apply migrations in the target environment. On Heroku, the release process migrates; inspect with `heroku run bin/rails db:migrate:status --app your-app-name`.
+2. Register `https://your-public-host/webhooks/docuseal/medical_certification` in DocuSeal for `form.viewed`, `form.started`, `form.completed`, and `form.declined`. Verify that delivery satisfies this application's signature contract; registering the URL alone does not establish compatibility.
+3. Send a request for a fresh, controlled application and provider address, complete signing, and confirm the callback attaches the PDF with certification status `received`.
+4. Review that PDF through the normal admin certification controls. If signing is complete but the attachment is missing, inspect `document_signing_attachment_failed` and the target environment's logs before retrying.
+
 ## Where changes go
 
 | Concern | File |

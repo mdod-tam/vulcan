@@ -27,7 +27,7 @@ The `s3` entry in [`config/storage.yml`](../../config/storage.yml) reads direct 
 | Region | `S3_REGION` | `BUCKETEER_AWS_REGION` | `us-east-1` |
 | Bucket | `S3_BUCKET` | `BUCKETEER_BUCKET_NAME` | — |
 
-On Heroku, `heroku addons:create bucketeer:hobbyist` sets its four variables itself and needs nothing further. Anywhere else, set the `S3_*` four.
+On Heroku, a Bucketeer add-on supplies its four variables; direct S3 uses the `S3_*` settings above. Bucket access and CORS still need verification before accepting uploads.
 
 `storage.yml` also carries commented templates for GCS, Azure, and a mirror service; using one means adding its case to the initializer as well.
 
@@ -46,3 +46,14 @@ USE_S3=true S3_BUCKET=… S3_ACCESS_KEY_ID=… S3_SECRET_ACCESS_KEY=… bin/dev
 Paper intake, portal proof submission, and vendor W-9 upload all use Active Storage direct upload: the browser `PUT`s the file to the bucket itself, and only the signed blob ID reaches Rails. The bucket therefore needs a CORS rule allowing `PUT` from the application's origin, which nothing in this repository can set — it is bucket-side configuration. A direct upload that fails only in the browser, with the Rails log showing nothing after the `/rails/active_storage/direct_uploads` call, is the usual sign that the rule is missing or does not cover the origin.
 
 These documents contain personal information, so keep the bucket private. The app serves attachments through [Rails proxy URLs](../../config/initializers/active_storage.rb) with signed blob IDs and no default expiry. S3 service URL expiry does not make those Rails links expire.
+
+## Verify upload and retrieval
+
+Inspect the selected service in the target environment without printing credentials:
+
+```bash
+bin/rails runner 'puts Rails.application.config.active_storage.service'
+heroku run --app your-app-name "bin/rails runner 'puts Rails.application.config.active_storage.service'"
+```
+
+Using a designated verification record and a nonsensitive PDF, upload through a portal proof form or vendor W-9 form, submit, then reopen the saved attachment. Confirm the object exists in the intended bucket and downloads through the application. This exercises browser CORS, storage access, and attachment persistence; a server-side upload alone does not cover the direct-upload path.

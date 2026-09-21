@@ -67,11 +67,25 @@ Communications may create notification history, email, printable letters, or wor
 
 The application timeline combines several record types. It filters and deduplicates them for display; it is not the complete raw audit dataset. See [audit events](audit_event_tracking.md).
 
+## Program policies
+
+[`Policy`](../../app/models/policy.rb) stores income thresholds, waiting periods, training limits, request throttles, secure-link timing, and voucher amounts. Initialize these with `bin/rails db:seed_policies` as part of [baseline setup](../infrastructure/setup_and_maintenance.md#baseline-seeds). The task applies the checked-in defaults, including updates when existing values differ.
+
+Inspect the configured values from the command line:
+
+```bash
+bin/rails runner 'pp Policy.order(:key).pluck(:key, :value).to_h'
+```
+
+Routine changes go through `/admin/policies`. For a console update, set `policy.updated_by` to the responsible administrator before `policy.update!(value: ...)` so the `PolicyChange` records the operator. When changing initialization defaults, keep [the production task](../../lib/tasks/seed_policies.rake) and `create_policies` in [the demo seed](../../db/seeds.rb) aligned.
+
 ## Fulfillment settings
 
 At creation, [Application#stamp_workflow_defaults!](../../app/models/application.rb) saves the fulfillment type and income-proof requirement. With `vouchers_enabled` on, it selects voucher fulfillment and no income-proof requirement; with it off, it selects equipment fulfillment and requires income proof.
 
 [FeatureFlag.income_proof_required?](../../app/models/feature_flag.rb) is the inverse of `vouchers_enabled`, not a separate feature-flag row. Approval uses the application's saved requirement, so changing the flag does not rewrite existing applications.
+
+`bin/rails db:seed_feature_flags` initializes a missing `vouchers_enabled` flag to disabled. Inspect it with `bin/rails features:list`; use `bin/rails 'features:enable[vouchers_enabled]'` or `bin/rails 'features:disable[vouchers_enabled]'` when deliberately changing fulfillment mode.
 
 ## Voucher fulfillment
 
