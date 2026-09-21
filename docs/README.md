@@ -53,6 +53,7 @@ Use the source and test links in the workflow guides to trace the current path. 
 | --- | --- |
 | [Email and letters](infrastructure/email_system.md) | Templates, Postmark, printable letters, and delivery tracking. |
 | [Active Storage and S3](infrastructure/active_storage_s3_setup.md) | File-storage configuration and deployment options. |
+| [Backup and recovery](infrastructure/backup_and_recovery.md) | Required keys/files, settings that must match, and Heroku backup schedules and restores. |
 | [Authentication and MFA](security/authentication_system.md) | Sign-in, sessions, factors, password reset, and recovery. |
 | [PII encryption](security/pii_encryption.md) | Encrypted fields, contact lookup, stable keys, and logging. |
 | [Voucher controls](security/voucher_security_controls.md) | Issuance, vendor verification, redemption, and history. |

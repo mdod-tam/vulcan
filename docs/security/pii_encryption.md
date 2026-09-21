@@ -36,6 +36,10 @@ SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently r
 
 **Persistent environments need stable keys.** Missing credentials trigger temporary random keys; the fallback is not restricted to development. Losing the matching keys makes encrypted records unreadable, including restored backups.
 
+`RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too: besides signed cookies/links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
+
+Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery. The [planned startup guard](../future_work/mat_vulcan_todos.md#encryption-startup-validation) will reject missing runtime encryption configuration; it is not yet implemented.
+
 Two settings matter during migrations:
 
 - `support_unencrypted_data: true` allows existing plaintext values to be read.

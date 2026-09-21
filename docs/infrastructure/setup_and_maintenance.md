@@ -86,4 +86,4 @@ For ongoing operations, keep `MAT_APP` set to the intended app:
 | Database status | `heroku pg:info --app "$MAT_APP"` |
 | Capture a database backup | `heroku pg:backups:capture DATABASE_URL --app "$MAT_APP"` |
 
-Capture a backup before data repairs or a deliberate template replacement. [PGBackups](https://devcenter.heroku.com/articles/heroku-postgres-backups) covers restore and scheduling; a database backup does not include S3 objects or the encryption keys needed to read encrypted columns.
+Capture a backup before data repairs or a deliberate template replacement. The [backup and recovery guide](backup_and_recovery.md) covers scheduling, retention, restoration on Heroku, and which secrets/settings must match. A database dump excludes uploaded files and encryption keys. Restoring an existing environment does not require initialization seeds; rerunning them can replace recovered policies and edited templates.

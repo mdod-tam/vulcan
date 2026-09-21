@@ -57,3 +57,9 @@ heroku run --app your-app-name "bin/rails runner 'puts Rails.application.config.
 ```
 
 Using a designated verification record and a nonsensitive PDF, upload through a portal proof form or vendor W-9 form, submit, then reopen the saved attachment. Confirm the object exists in the intended bucket and downloads through the application. This exercises browser CORS, storage access, and attachment persistence; a server-side upload alone does not cover the direct-upload path.
+
+## Backup and recovery
+
+PostgreSQL stores blob/attachment metadata, not file bodies. Back up S3 objects separately and retain their object keys. A replacement bucket may use different credentials and a different region, but the Active Storage service named by existing blob records must reach those objects. Changing the default service does not migrate existing blobs.
+
+For disk storage, preserve the configured storage directory. Verify both an old attachment and a new upload after recovery. Use a separate bucket for restore rehearsals; see the [recovery checklist](backup_and_recovery.md#recovery-checklist).

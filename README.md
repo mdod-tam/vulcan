@@ -13,6 +13,7 @@ Residents can apply online, guardians can apply on behalf of dependents, and sta
 - **Run it locally:** [installation](#installation), [database setup](#database-and-seeding), and [development users](#default-development-users).
 - **Check a change:** [testing](#testing) and the [testing and debugging guide](docs/development/testing_and_debugging_guide.md).
 - **Operate a deployment:** [configuration](#configuration), [deployment](#deployment), and [maintenance tasks](#maintenance-tasks).
+- **Back up or restore:** [recovery checklist, matching keys, and Heroku commands](docs/infrastructure/backup_and_recovery.md).
 
 ## Features
 
@@ -267,7 +268,13 @@ For ongoing operations, keep `MAT_APP` set to the intended app:
 | Database status | `heroku pg:info --app "$MAT_APP"` |
 | Capture a database backup | `heroku pg:backups:capture DATABASE_URL --app "$MAT_APP"` |
 
-Capture a backup before data repairs or a deliberate template replacement. [PGBackups](https://devcenter.heroku.com/articles/heroku-postgres-backups) covers restore and scheduling; a database backup does not include S3 objects or the encryption keys needed to read encrypted columns.
+Capture a backup before data repairs or a deliberate template replacement. Use the [backup and recovery guide](docs/infrastructure/backup_and_recovery.md) to configure schedules, retain copies, and restore on Heroku.
+
+### Backup and recovery
+
+A database dump alone is insufficient: retain uploaded files, the production credentials file and its decryption key, and the effective `secret_key_base`. The Active Record encryption keys and salt must match the restored data. `RAILS_MASTER_KEY` may differ only if the credentials are re-encrypted under it while preserving those underlying keys.
+
+Follow the [settings comparison and recovery checklist](docs/infrastructure/backup_and_recovery.md#must-settings-match-the-original-instance). Stop jobs during recovery, validate existing encrypted records and attachments, and do not rerun initialization seeds. Keep secret values, database dumps, and config exports out of Git.
 
 ### Kamal deployment
 
