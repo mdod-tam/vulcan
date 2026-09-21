@@ -12,7 +12,7 @@
     the dependent's own contact values, and the relationship select -- reads one source. %>
 <% on_file_dependent = defined?(on_file_dependent) ? on_file_dependent : nil %>
 <%# An existing dependent's identity is on-file fact, not paper-intake input. See
-    docs/development/paper_application_retry_contract.md for why this is read-only. %>
+    docs/development/paper_application_architecture.md#applicants-and-identity-review for why this is read-only. %>
 <% identity_record = on_file_dependent || dependent %>
 <% identity_read_only = mode == :edit && identity_record.present? %>
 <% submitted_dependent_params = (@paper_application.is_a?(Hash) ? @paper_application[:submitted_params] : nil).to_h.with_indifferent_access %>

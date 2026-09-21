@@ -85,14 +85,12 @@ if ENV['CI']
       # Sign in using the integration helper
       sign_in_for_integration_test(user)
 
-      # Make a real request and verify it succeeds
-      get '/'
+      # Follow the root redirect and verify the authenticated user's profile.
+      get root_path
+      assert_redirected_to edit_profile_path
+      follow_redirect!
       assert_response :success
-
-      # In integration tests, Current.user gets reset with each request
-      # Instead, we can test for a successfully authenticated response
-      # or access the session to verify authentication worked
-      assert_not_includes response.body, 'Sign in'
+      assert_select 'input[name=?][value=?]', 'user[email]', user.email
 
       # Thread.current might not be reliable in all test environments
       # Just verify the authentication worked by checking the response
@@ -102,9 +100,8 @@ if ENV['CI']
       sign_out
 
       # Make another request to verify we're signed out
-      get '/'
-      # Either redirected to sign in or showing sign in link
-      assert(response.redirect? || response.body.include?('Sign in'))
+      get root_path
+      assert_redirected_to sign_in_path
     end
 
     # Test authentication session isolation
@@ -119,14 +116,20 @@ if ENV['CI']
       assert_equal user1.id.to_s, Thread.current[:test_user_id].to_s if Thread.current[:test_user_id].present?
 
       # Make a request to verify authentication
-      get '/'
+      get root_path
+      assert_redirected_to edit_profile_path
+      follow_redirect!
       assert_response :success
+      assert_select 'input[name=?][value=?]', 'user[email]', user1.email
 
       # Sign out
       sign_out
 
       # Verify thread-local is cleared (if it was set)
       assert_nil Thread.current[:test_user_id]
+
+      get root_path
+      assert_redirected_to sign_in_path
 
       # Sign in as second user
       sign_in_for_integration_test(user2)
@@ -138,8 +141,11 @@ if ENV['CI']
       end
 
       # Make another request
-      get '/'
+      get root_path
+      assert_redirected_to edit_profile_path
+      follow_redirect!
       assert_response :success
+      assert_select 'input[name=?][value=?]', 'user[email]', user2.email
 
       # Clean up
       sign_out

@@ -1,280 +1,91 @@
 # JavaScript Architecture
 
-A concise reference for the Stimulus, Rails request, form-gating, and Chart.js layer used by MAT Vulcan.
-
----
-
-## High-Level Flow
-
-1. Rails renders pages with Stimulus `data-controller`, `data-*-target`, and `data-*-value` attributes.
-2. Stimulus controllers read server-rendered values, attach DOM listeners, and update local UI state.
-3. Controllers use custom events for cross-controller state changes.
-4. JSON requests use `rails_request` where the response contract matches that service. Some controllers use direct `fetch` for small endpoint-specific lookups or WebAuthn flows.
-5. User-visible page feedback comes from Rails flash rendering, usually through `shared/flash`.
-
----
-
-## Main Entry Points
-
-| Area | Entry Point | Notes |
-|------|-------------|-------|
-| Bundle | `app/javascript/application.js` | Loads Turbo, Active Storage, WebAuthn helpers, Chart.js registration, and Stimulus controllers. |
-| Stimulus registry | `app/javascript/controllers/index.js` | Imports and registers every production controller. Dynamically registers `debug` only when `NODE_ENV=development`. |
-| Request service | `app/javascript/services/rails_request.js` | Wraps `@rails/request.js` for JSON-style requests, cancellation, and response parsing. |
-| Constituent application forms | `app/views/constituent_portal/applications/new.html.erb`, `edit.html.erb` | Attach `autosave`, `currency-formatter`, `final-submit-gate`, and conditionally `income-validation` and `dependent-fields`. |
-| Admin paper application form | `app/views/admin/paper_applications/new.html.erb` | Attaches `paper-application`, `applicant-type`, and conditionally `income-validation`. |
-| Charts | `app/views/admin/applications/_charts_section.html.erb`, `app/views/admin/reports/index.html.erb`, `app/views/vendor_portal/dashboard/show.html.erb` | Use `reports-chart`, `chart`, and `chart-toggle` controllers. |
-| Flash | `app/views/layouts/application.html.erb`, `app/views/shared/_flash.html.erb` | Layout renders `#flash`; Turbo helpers update it with `shared/flash`. |
-
-Relevant routes:
-
-| Route | Controller Action | JS Caller |
-|-------|-------------------|-----------|
-| `PATCH /constituent_portal/applications/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
-| `PATCH /constituent_portal/applications/:id/autosave_field` | `ConstituentPortal::ApplicationsController#autosave_field` | `forms/autosave_controller.js` |
-| `GET /admin/paper_applications/recipient_preference` | `Admin::PaperApplicationsController#recipient_preference` | `forms/paper_application_controller.js` |
-| `POST /admin/paper_applications/identity_review` | `Admin::PaperApplicationsController#identity_review` | Already-open PR 205 pages only; resumes normal submission without adjudicating identity |
-| `POST /admin/users` | `Admin::UsersController#create` | `admin/user_search_controller.js` (paper guardian quick-create review, selection, or override) |
-| `GET /admin/users/:id/adult_application_context` | `Admin::UsersController#adult_application_context` | `users/adult_picker_controller.js` |
-| `GET /admin/applications/charts` | `Admin::ApplicationsController#charts` | Lazy Turbo frame that mounts `reports-chart` |
-
----
-
-## Core Services
-
-### `rails_request`
-
-```javascript
-// app/javascript/services/rails_request.js
-const result = await railsRequest.perform({
-  method: "patch",
-  url: "/constituent_portal/applications/123/autosave_field",
-  body: { field_name: "application[household_size]", field_value: "3" },
-  key: "autosave-application"
-})
-
-if (result.success) {
-  // result.data is parsed from JSON, HTML, Turbo Stream, or text response bodies.
-}
-```
-
-Behavior:
-
-- Exports `RailsRequestService`, `RequestError`, and the singleton `railsRequest`.
-- Tracks active requests by optional `key`; a duplicate key cancels the earlier request.
-- Supports `cancel(key)` and `cancelAll()`.
-- Serializes object bodies as JSON strings; string bodies pass through unchanged.
-- Parses JSON, HTML, Turbo Stream, and fallback text from a cloned response when possible.
-- Returns `{ success: false, aborted: true }` for `AbortError`.
-- Raises `RequestError` for non-OK HTTP responses.
-- In development, rejects requests whose `Accept` header asks for HTML. Use Turbo frames/streams for HTML responses.
-- `tryShowFlash` is a no-op. Rails-rendered flash remains the user-facing feedback path.
+Rails renders every page and the state it starts from.
 
-Use `railsRequest` for JSON-style Rails endpoints such as autosave, role updates, credential setup, and admin user search. Direct `fetch` handles flows that need a narrow response contract, such as WebAuthn options, adult/guardian picker lookups, address autocomplete, and paper rejection recipient preference.
+Stimulus controllers add per-element behavior.
 
-### `chart_config`
+Turbo handles navigation and partial updates.
 
-```javascript
-const config = chartConfig.getConfigForType("bar")
-const datasets = chartConfig.createDatasets([
-  { label: "Current FY", data: [1, 2, 3] }
-])
-```
+The server re-decides anything the browser decided.
 
-- Provides fixed-size Chart.js defaults: `responsive: false`, `maintainAspectRatio: false`.
-- Provides minimal per-type options for bar, line, and doughnut charts.
-- Creates one or more datasets with standard colors.
-- Provides a deep `mergeOptions` helper and a compact legend-free config.
-- Provides a currency formatter.
+## Conventions
 
-### `income_threshold`
+- **Registration is manual.** [`controllers/index.js`](../../app/javascript/controllers/index.js) imports and registers each controller explicitly; [`controllers/application.js`](../../app/javascript/controllers/application.js) registers nothing on purpose. An unregistered controller is inert, with no error.
+- **The identifier is the registered name, not the path.** `admin-user-search` lives at `admin/user_search_controller.js`.
+- **Assets are built, not served from source.** [esbuild](../../esbuild.config.js) bundles `app/javascript/application.js` into `app/assets/builds` (`yarn build`); Tailwind is `yarn build:css`.
+- **Views own URLs and copy.** Controllers read them from values rather than constructing paths, which is why templates pass `:id` placeholder routes for URLs a controller will need after a record exists.
+- **Both attachment syntaxes are in use** — literal `data-controller` attributes and ERB `data:` hashes — so a grep for one finds roughly half the call sites.
+- `debug` is dynamically imported in development only.
 
-```javascript
-import { calculateThreshold, exceeds } from "../services/income_threshold"
+## Autosave, as a representative interaction
 
-const threshold = calculateThreshold({
-  baseFplBySize: { "1": 15650, "2": 21150 },
-  modifierPercent: 400,
-  householdSize: 2
-})
+The constituent application form autosaves on blur: [`autosave_controller.js`](../../app/javascript/controllers/forms/autosave_controller.js) sends one `field_name`/`field_value` pair per save to `ConstituentPortal::ApplicationsController#autosave_field`, which delegates to [`Applications::AutosaveService`](../../app/services/applications/autosave_service.rb). File inputs and `data-no-autosave` fields are excluded; uploads go through direct upload instead.
 
-const overLimit = exceeds({
-  baseFplBySize: { "1": 15650, "2": 21150 },
-  modifierPercent: 400,
-  householdSize: 2,
-  income: 90000
-})
-```
+Two behaviors are not visible from the controller alone:
 
-- Pure DOM-free helper used by `forms/income_validation_controller.js`.
-- Uses server-rendered base FPL values and modifier values from `IncomeThresholdCalculationService`.
-- Caps household sizes above 8 to match the server-side FPL lookup.
+- **The first save may create the draft.** When the response carries an `applicationId` the form lacked, the controller rewrites the form `action`, switches its own URL to the member route, and injects `_method=patch`. The two `:id` placeholder values in [`applications/new.html.erb`](../../app/views/constituent_portal/applications/new.html.erb) exist for that substitution.
+- **Validation comes back per field**, rendered next to the offending input, with the outcome also announced through an `aria-live="polite"` status region that clears after three seconds.
 
----
+## rails_request
 
-## Form Controllers
+[`services/rails_request.js`](../../app/javascript/services/rails_request.js) wraps `@rails/request.js`. `perform()` has three outcomes, not two: `{ success: true, data, response }`, `{ success: false, aborted: true }` on cancellation, and a thrown `RequestError` carrying `status` and `data` for a non-OK response.
 
-| Controller | Path | Responsibility |
-|------------|------|------------------------|
-| `BaseFormController` | `app/javascript/controllers/base/form_controller.js` | Shared async form submit helper for controllers that opt into `railsRequest`; handles loading state, local status text, field errors, cancellation, and validation hooks. |
-| `autosave` | `app/javascript/controllers/forms/autosave_controller.js` | Saves individual fields on blur through the constituent autosave route. Updates form URLs after a new draft is created. |
-| `income-validation` | `app/javascript/controllers/forms/income_validation_controller.js` | Calculates FPL threshold state, owns the warning container, updates the income field group styling, and dispatches validation events. |
-| `final-submit-gate` | `app/javascript/controllers/forms/final_submit_gate_controller.js` | Gates constituent final submit buttons from required checkboxes, required visible non-file fields, checkbox groups, and income validation events. Admin secure-request recipient forms opt into conditional channel restoration through this same controller. Also honors a server-set hard block — see below. |
-| `paper-application` | `app/javascript/controllers/forms/paper_application_controller.js` | Gates admin paper submit from income state, existing-adult verification, required attestations, visible required fields, required proof radio groups, checkbox groups, and medical provider requirements. Tracks direct-upload progress and populates the income-rejection dialog. Identity review uses normal form submission. |
-| `adult-picker` | `app/javascript/controllers/users/adult_picker_controller.js` | Searches for and selects an existing adult applicant, applies the returned eligibility context, and renders the selected-applicant summary. Inline identity decisions return through the paper form's normal POST. |
-| `optional-phone-type` | `app/javascript/controllers/forms/optional_phone_type_controller.js` | Reveals the self-registration phone-type radio group only when a phone number is present and keeps radio disabled, required, and ARIA state aligned with the visible field. |
-| `applicant-type` | `app/javascript/controllers/users/applicant_type_controller.js` | Shows the adult or dependent-with-guardian path and dispatches `applicant-type:applicantTypeChanged`. |
-| `dependent-fields` | `app/javascript/controllers/forms/dependent_fields_controller.js` | Shows dependent fields and copies guardian address/email/phone values when requested. |
+Requests are tracked by `key`, and reusing an in-flight key cancels the earlier request — autosave uses a single key per form, so rapid edits collapse to the last one. Cancellation is client-side only; the server may have already committed, so ordering-sensitive controllers still need their own staleness check.
 
-### Server-set hard block on `final-submit-gate`
+`tryShowFlash` is a no-op that returns `false` — a leftover from a removed toast library. Failed requests need their own visible feedback, via the [flash container](../../app/views/shared/_flash.html.erb) or inline status text.
 
-`data-final-submit-gate-blocked-message` on the form element is a **hard block**: the gate keeps every `submitButton` target disabled no matter how completely the form is filled in, and announces the attribute's text through the `status` target instead of the usual incomplete/ready message.
+`BaseFormController#collectFormData` ([base/form_controller.js](../../app/javascript/controllers/base/form_controller.js)) flattens `FormData` into literal keys: `constituent[email]` stays that string rather than nesting. Names ending in `[]` become arrays under the unbracketed name.
 
-The contract:
+Server-rendered HTML goes through Turbo frames and streams. Authentication and a few lookups still call `fetch` directly and keep their own response contracts.
 
-- **Presence decides, not truthiness of the form.** Completeness checks only ever ask whether the person supplied everything; a hard block expresses a reason they cannot act on at all. An empty attribute is *not* a block, so a nil-rendered value cannot silently disable the control.
-- **The message is rendered server-side and localized there.** The gate never composes user-facing text — it is shared with the constituent portal, where an English string built in JavaScript would bypass the view's own localization.
-- **Only final submission is gated.** Draft-save controls are separate submit buttons and are not `submitButton` targets, so they stay live.
-- **It is not the authority.** The server re-checks under lock and refuses independently; the attribute exists so a constituent is not invited to do work — notably selecting file uploads, which no re-render can restore — that a refusal would discard.
+## Submit gating
 
-Current producer: `ConstituentPortal::ApplicationsController` sets `@submission_blocked_message` when the applicant is the subject of an open `registration_soft_match` duplicate-review case, and `new.html.erb` / `edit.html.erb` pass it into the form's data hash.
+| Controller | Responsibility |
+| --- | --- |
+| [final-submit-gate](../../app/javascript/controllers/forms/final_submit_gate_controller.js) | Final submit button state from required fields, radio and checkbox groups, income state, and a server-supplied block |
+| [income-validation](../../app/javascript/controllers/forms/income_validation_controller.js) | Displayed threshold, and whether entered income exceeds it |
+| [paper-application](../../app/javascript/controllers/forms/paper_application_controller.js) | Staff intake readiness, applicant verification, proof choices, upload progress |
+| [adult-picker](../../app/javascript/controllers/users/adult_picker_controller.js) / [guardian-picker](../../app/javascript/controllers/users/guardian_picker_controller.js) | Existing-person selection plus the eligibility and relationship context the server returns |
+| [applicant-type](../../app/javascript/controllers/users/applicant_type_controller.js) / [dependent-fields](../../app/javascript/controllers/forms/dependent_fields_controller.js) | Self/dependent branch switching and dependent contact choices |
+| [upload](../../app/javascript/controllers/ui/upload_controller.js) | Direct upload, progress, replacement, removal |
 
-### Secure-request conditional channel restoration
+These coordinate by event, not by reference: `income-validation` dispatches `income-validation:validated` with `{ exceedsThreshold, income, threshold, householdSize }` and the gate recomputes.
 
-The provider-information and proof-resubmission recipient chooser opts into
-`data-final-submit-gate-restore-conditional-values="true"`. Each channel select records
-its resolver-selected server default in `data-final-submit-gate-restore-value`.
+Constraints that are easy to break:
 
-- Controller connection preserves the server-rendered selection.
-- Unchecking a recipient clears and disables that channel, excluding it from submission.
-- Rechecking an email or letter recipient restores the resolver-selected default.
-- SMS has an empty restore value, so staff must select SMS explicitly after every check or
-  recheck; the submit button remains disabled while the prompt is selected.
+- `@submission_blocked_message` renders as `data-final-submit-gate-blocked-message`; any non-empty value disables final submit regardless of field completeness, and an empty value blocks nothing. The authoritative check is Rails' own, under lock at save time.
+- The gate recomputes on every `input`/`change`, so an externally set `disabled` does not survive. New conditions belong in the gate.
+- Blank, unchecked, disabled, and absent are four distinct submissions — browsers drop unchecked boxes and disabled controls entirely, hence the hidden `"0"` companions. [Paper intake retry](paper_application_architecture.md#retry-restoration) depends on the distinction.
+- Secure-request recipient forms are the only conditional-channel case: unchecking a recipient clears and disables its channel, re-checking restores the server's email/letter default, and SMS stays explicit.
 
-Forms without the opt-in keep the shared controller's previous clear-on-source-change
-behavior, including constituent application forms.
+## Paper identity review and uploads
 
-### Paper identity review and uploads
+The paper form uses Rails automatic direct uploads for its four documents. Normal `POST /admin/paper_applications` returns a server-rendered identity review or validation form with retained signed IDs and filenames. Current pages make no identity preflight or second eligibility fetch. The legacy preview route only resumes submission from older open forms; see [deployment and recovery](paper_application_architecture.md#deployment-and-recovery).
 
-The paper form uses Rails automatic direct uploads for all four documents. Each field submits its `*_signed_id`; ordinary `POST /admin/paper_applications` returns the server-rendered review or validation form with saved filenames and signed IDs. Current pages make no identity preflight or second eligibility fetch. The legacy preview route only lets already-open PR 205 pages submit to this same create action; see [deployment and recovery](paper_application_architecture.md#deployment-and-recovery).
+Review choices use normal submit buttons, a rationale, and a short-lived `identity_review_receipt`. Rails locks and recomputes the facts at the write; changed or expired facts require a fresh review. Guardian quick-create posts through `admin-user-search`, receiving an HTML review fragment on refusal or the saved/selected guardian as JSON on success.
 
-`paper-application` combines upload progress with the existing income, required-field, guardian-selection, and contact-verification gates. `document-proof-handler` shows saved uploads, replaces a reference only after a successful upload, and removes references on explicit removal or rejection. Failed or canceled replacements retain the prior upload. Proof actions are locked while their upload is pending. Rails owns the form-wide upload lifecycle.
+[`document-proof-handler`](../../app/javascript/controllers/users/document_proof_handler_controller.js) displays saved paper uploads, replaces a reference only after a successful upload, and clears it on explicit removal or rejection. Failed or canceled replacements retain the prior upload. Proof actions are locked while an upload is pending; Rails owns the form-wide upload lifecycle. Native file inputs cannot be repopulated.
 
-Identity decisions use normal submit buttons and a required rationale. Existing-person selection is requalified at the server; self-applicant selection requires contact verification. A short-lived `identity_review_receipt` binds the current review facts. Changed or expired facts return a fresh review on submission.
+## Password visibility
 
-Guardian quick-create still posts to `POST /admin/users` through `admin-user-search`. Success returns the selected/created guardian as JSON; a 422 returns an escaped Rails review fragment. The client bridge posts current guardian fields, the receipt, and the explicit choice. The server recomputes before saving or selecting.
+[`PasswordFieldHelper#password_visibility_data`](../../app/helpers/password_field_helper.rb) wires the [`visibility` controller](../../app/javascript/controllers/ui/visibility_controller.js) and supplies translated labels; `password_field_with_toggle` generates the full field. Revealed passwords re-hide after five seconds (`timeout: 10000` for ten), and the toggle maintains `aria-pressed`, its label, and live status text.
 
-`BaseFormController#collectFormData` returns a flat object. It supports array fields named `field[]`, but it does not parse Rails nested parameter names into nested objects. A field named `guardian_attributes[name]` remains the key `"guardian_attributes[name]"`.
+Form length hints should track [the server validation](../../app/models/concerns/user_authentication.rb), currently eight characters.
 
----
+## Charts
 
-## Income Validation Flow
+Chart.js is tree-shaken and registered in [`application.js`](../../app/javascript/application.js), exposed as `window.Chart`, with animation, responsiveness, and aspect-ratio maintenance disabled globally. [`ChartBaseController`](../../app/javascript/controllers/charts/base_controller.js) sets explicit canvas dimensions from the container, falling back to the parent and then 400×300, and destroys instances on disconnect.
 
-`income-validation` has one source of truth for threshold display state. Submit button state is owned by form-specific gate controllers.
-
-1. Rails renders `data-income-validation-fpl-thresholds-value` and `data-income-validation-modifier-value` from `fpl_thresholds_json` and `fpl_modifier_value`.
-2. `income-validation` parses those values on connect, marks the element with `data-fpl-loaded="true"`, and validates the initial state.
-3. It listens to household size, annual income, and currency formatter events.
-4. It calls `income_threshold.calculateThreshold`.
-5. It shows or hides `[data-income-validation-target="warningContainer"]`, including the HTML `hidden` attribute and `role="alert"` state.
-6. It dispatches `income-validation:validated` with `{ exceedsThreshold, income, threshold, householdSize }`.
-7. `final-submit-gate` and `paper-application` listen to that event and combine it with their other submit-gating rules.
-
-Form wiring:
-
-| Form | Income Controller Wiring |
-|------|--------------------------|
-| Constituent new application | Includes `income-validation` when `FeatureFlag.income_proof_required?` is true. That predicate derives from `vouchers_enabled`; there is no separate `income_proof_required` feature-flag row. |
-| Constituent edit application | Includes `income-validation` when `@application.income_collection_enabled?` is true. |
-| Admin paper application | Includes `income-validation` when `FeatureFlag.income_proof_required?` is true. |
-
-Warning containers render hidden by default. The constituent form uses `#income-threshold-warning`; the admin paper form uses `#admin-income-threshold-warning`. Tests should prefer `[data-income-validation-target="warningContainer"]` when the specific ID is not part of the behavior under test.
-
----
-
-## Event-Driven Workflows
-
-Stimulus `dispatch("name")` prefixes events with the controller identifier. For example, `this.dispatch("validated")` in `income-validation` emits `income-validation:validated`.
-
-```javascript
-// Dispatch
-this.dispatch("selectionChange", { detail: { guardianId: 123 } })
-
-// Listen
-this.element.addEventListener(
-  "guardian-picker:selectionChange",
-  this.handleGuardianSelection.bind(this)
-)
-```
-
-Event paths:
-
-| Event | Dispatcher | Listener |
-|-------|------------|----------|
-| `income-validation:validated` | `income-validation` | `paper-application`, `final-submit-gate` |
-| `income-validation:fpl-data-loaded` | `income-validation` | System/helper checks use it as a loaded signal. |
-| `applicant-type:applicantTypeChanged` | `applicant-type` | `dependent-fields` |
-| `guardian-picker:selectionChange` | `guardian-picker` | `applicant-type`; admin paper form also wires it through data actions. |
-| `adult-picker:selectionChange`, `adult-picker:verificationChange`, `adult-picker:createNew` | `adult-picker` | `applicant-type`, `paper-application` |
-| `visibility-changed` | `chart-toggle` | Nested `chart` controllers |
-
----
-
-## Flash Feedback
-
-Use Rails flash for transient page messages.
-
-- `ApplicationController` adds `info`, `error`, `success`, and `warning` flash types.
-- `app/views/layouts/application.html.erb` renders `<div id="flash">`.
-- `app/views/shared/_flash.html.erb` renders messages with `role="alert"` and `aria-live="polite"`.
-- `TurboStreamResponseHandling` updates `#flash` with `shared/flash` for Turbo Stream responses.
-- JavaScript should not create a separate toast layer. Dynamic client flows that need a user-visible message should update server-rendered flash or local inline status text.
-
----
-
-## Chart.js Integration
-
-`app/javascript/application.js` imports Chart.js modules, registers the controllers/elements/scales/plugins in use, disables animation and responsive resizing globally, and exposes `window.Chart` for Stimulus controllers.
-
-Chart behavior:
-
-- Charts use explicit canvas dimensions from `ChartBaseController#applyContainerDimensions`.
-- `Chart.defaults.responsive` is `false`; controller configs keep `responsive: false`.
-- The app does not patch `window.getComputedStyle`. Comments in `application.js` explicitly avoid that patch because Chart.js uses computed style during interactions.
-- `reports-chart` serializes initialization through `ReportsChartController.initQueue`, waits for `requestAnimationFrame`, and reschedules if the container is still hidden.
-- `reports-chart` disables Chart.js pointer events with `options.events = []`.
-- `chart-toggle` dispatches `visibility-changed` when revealing nested `chart` controllers.
-- Chart containers should have real dimensions in ERB/CSS before the controller initializes.
-
----
-
-## Controller Organization
-
-```text
-app/javascript/controllers/
-|-- admin/
-|-- auth/
-|-- base/
-|-- charts/
-|-- forms/
-|-- reviews/
-|-- ui/
-`-- users/
-```
-
-All production controllers are registered explicitly in `app/javascript/controllers/index.js`. New controller files require a matching import and `application.register(...)` entry.
-
----
+The reason for the fixed sizing is that a chart in a hidden container measures zero: [`reports-chart`](../../app/javascript/controllers/charts/reports_chart_controller.js) queues initialization across animation frames until measurable, and [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) announces visibility changes. Patching `getComputedStyle` is a known dead end — Chart.js also calls it for tooltip and hover positioning.
 
 ## Tests
 
-Frontend tests use Jest with jsdom.
+Jest on jsdom ([jest.config.js](../../jest.config.js)), with `@rails/request.js` mapped to a [mock](../../test/javascript/mocks/rails_request.js) and `controllers/*` resolving into `app/javascript/controllers`.
 
-- Config: `jest.config.js`
-- Setup: `test/javascript/setup.js`
-- Command: `yarn test`
-- Test roots: `test/javascript`
+```bash
+yarn test test/javascript/controllers/final_submit_gate_controller_test.js
+```
 
-Test coverage includes services (`rails_request`, `chart_config`), utilities (`visibility`, `debounce`), and key controllers such as base form, chart/report rendering, chart toggle, paper application gating, final submit gating, upload, admin user search, applicant type, adult picker, guardian picker, contact feedback, rejection form, and visibility.
+[Request-service tests](../../test/javascript/services/rails_request_service_test.js) cover the three `perform()` outcomes; [upload](../../test/javascript/controllers/upload_controller_test.js) and [paper-form](../../test/javascript/controllers/paper_application_controller_test.js) tests cover the more stateful controllers.
 
-Rails/system coverage also exercises JS-wired flows, including admin paper applications, constituent income threshold behavior, dashboard charts, proof uploads, and vendor chart toggles.
+Native form submission, focus, layout, and Turbo frame replacement are not real under jsdom — those belong in system tests ([testing and debugging](testing_and_debugging_guide.md)).

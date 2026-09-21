@@ -520,8 +520,7 @@ en:
     header:
       main_navigation: "Main Navigation"
       primary_navigation: "Primary Navigation"
-      return_home: "Return to homepage"
-      logo_return_home: "TAM Logo - Return to Homepage"
+      logo_sign_in: "TAM Logo - Sign In"
       toggle_navigation: "Toggle navigation menu"
       sign_in: "Sign In"
       sign_in_aria: "Sign in to your account"

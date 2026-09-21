@@ -85,7 +85,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     # Test the "Skip for now" option
     click_link 'Skip and Continue to Dashboard'
-    assert_current_path root_path
+    assert_current_path constituent_portal_dashboard_path
 
     # Header should show the security reminder
     assert_selector '.bg-amber-100', text: /Secure Account/i

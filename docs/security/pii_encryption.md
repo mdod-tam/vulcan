@@ -1,202 +1,62 @@
 # PII Encryption
 
-MAT Vulcan uses Rails Active Record Encryption for sensitive user and credential data. This guide explains what is encrypted, how lookups should work, and what not to break.
+Rails encrypts selected attributes before storing them and decrypts them when models read them.
 
----
+Values stay in their normal columns; there are no separate `_encrypted` columns for current user-profile fields.
 
-## 1. Current Encryption Model
+Encryption covers the declarations below, not every piece of personal information in the database.
 
-Rails stores encrypted values in the normal logical columns. There are no separate `_encrypted` columns for the current user-profile fields.
+## What is encrypted?
 
-Encryption is configured in `config/initializers/active_record_encryption.rb`:
-
-- keys are read from `Rails.application.credentials.active_record_encryption`
-- `extend_queries` is disabled
-- `support_unencrypted_data` is enabled for transition compatibility
-- fixtures are encrypted
-- key references are stored
-- encrypted attributes are added to parameter filtering
-
-The initializer falls back to temporary keys when credentials are missing. That is useful for development/test, but persistent environments need stable credentials or encrypted data will not survive key changes.
-
----
-
-## 2. User Fields
-
-User-profile encryption is declared in `UserProfile`.
-
-| Field | Mode | Why |
+| Owner | Deterministic fields | Other encrypted fields |
 | --- | --- | --- |
-| `email` | deterministic | Login and uniqueness lookup. |
-| `phone` | deterministic | Contact lookup and uniqueness validation. |
-| `dependent_email` | deterministic | Dependent contact lookup. |
-| `dependent_phone` | deterministic | Dependent contact lookup. |
-| `ssn_last4` | deterministic | Stored sensitive identifier fragment. |
-| `date_of_birth` | deterministic | DOB checks and voucher verification. |
-| `password_digest` | non-deterministic | Password hash is already one-way, but still stored encrypted. |
-| `physical_address_1` | non-deterministic | Sensitive address data; not used for equality lookup. |
-| `physical_address_2` | non-deterministic | Sensitive address data; not used for equality lookup. |
-| `city` | non-deterministic | Address data. |
-| `state` | non-deterministic | Address data. |
-| `zip_code` | non-deterministic | Address data. |
+| [UserProfile](../../app/models/concerns/user_profile.rb) | `email`, `phone`, `dependent_email`, `dependent_phone`, `ssn_last4`, `date_of_birth` | `password_digest`, `physical_address_1`, `physical_address_2`, `city`, `state`, `zip_code` |
+| [TotpCredential](../../app/models/totp_credential.rb) | — | `secret` |
+| [WebauthnCredential](../../app/models/webauthn_credential.rb) | — | `public_key` |
+| [SecureRequestForm](../../app/models/secure_request_form.rb) | `recipient_email`, `recipient_phone` | — |
+| [MedicalProviderSecureRequestForm](../../app/models/medical_provider_secure_request_form.rb) | `provider_email` | — |
+| [VendorSecureRequestForm](../../app/models/vendor_secure_request_form.rb) | `recipient_email` | — |
+| [Application](../../app/models/application.rb) | — | `document_signing_audit_url`, `document_signing_document_url` |
 
-Deterministic encryption means the same plaintext produces the same ciphertext. That makes equality queries and unique indexes possible, but it leaks equality. Use it only where the application needs lookup or uniqueness behavior.
+Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. This supports equality queries and unique indexes, but reveals equality patterns. Use it only when lookup or uniqueness requires it.
 
----
+The password digest is a BCrypt hash that is also encrypted at rest. A WebAuthn public key is not a cryptographic secret, though this application encrypts its stored value.
 
-## 3. Credential And Secure Request Fields
+## Looking up encrypted contacts
 
-Other encrypted fields include:
+`User.find_by_email`, `find_by_phone`, `exists_with_email?`, and `exists_with_phone?` are the contact lookup and uniqueness path. They share one normalization — lowercased email, and `XXX-XXX-XXXX` formatting for valid US numbers — which is what makes a deterministic match possible at all, since the ciphertext of an unnormalized value differs. Database unique indexes back the same two columns.
 
-| Model | Field | Mode |
-| --- | --- | --- |
-| `TotpCredential` | `secret` | non-deterministic |
-| `WebauthnCredential` | `public_key` | non-deterministic |
-| `SecureRequestForm` | `recipient_email`, `recipient_phone` | deterministic |
-| `MedicalProviderSecureRequestForm` | `provider_email` | deterministic |
-| `VendorSecureRequestForm` | `recipient_email` | deterministic |
-| `Application` | `document_signing_audit_url`, `document_signing_document_url` | non-deterministic |
+Public sign-in and recovery use `find_by_login_identifier`; account-access requests use `find_for_account_access`. These enforce eligibility beyond a matching contact value. A phone-only paper record must not become a public login account through a generic contact lookup. See [authentication](authentication_system.md) and [user management](../development/user_management_features.md).
 
-The WebAuthn public key is not secret in the cryptographic sense, but the model encrypts it at rest. The parameter filter intentionally omits `public_key` while still filtering credential secrets such as TOTP secrets.
+SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently return nothing useful. Admin email search works around that with the separate HMAC search tokens in [UserEmailSearch](../../app/models/concerns/user_email_search.rb).
 
----
+## Keys and existing data
 
-## 4. Query Rules
+[The initializer](../../config/initializers/active_record_encryption.rb) reads `primary_key`, `deterministic_key`, and `key_derivation_salt` from `Rails.application.credentials.active_record_encryption`.
 
-Use the helper methods on `User` for contact lookup:
+**Persistent environments need stable keys.** Missing credentials trigger temporary random keys; the fallback is not restricted to development. Losing the matching keys makes encrypted records unreadable, including restored backups.
 
-- `User.find_by_email(value)`
-- `User.find_by_phone(value)`
-- `User.find_by_login_identifier(value)` — public sign-in, account recovery, and other login-identity lookups. Email-shaped input is normalized and matched only to an email-backed public portal account; malformed `@` input is rejected without falling back to phone. Phone-shaped input is normalized and matched only when the same stored user is email-backed and has a real phone (`real_email?` and `real_phone?`). Phone-only paper/admin records and synthetic dependent contacts do not match public login lookup.
-- `User.exists_with_email?(value, excluding_id: nil)`
-- `User.exists_with_phone?(value, excluding_id: nil)`
+`RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too: besides signed cookies/links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
 
-These helpers normalize email and phone values before querying and rescue lookup failures with a warning.
+Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery. The [planned startup guard](../future_work/mat_vulcan_todos.md#encryption-startup-validation) will reject missing runtime encryption configuration; it is not yet implemented.
 
-Current adoption by path:
+Two settings matter during migrations:
 
-- `User.find_by_login_identifier` — public sign-in and account recovery (email-backed portal accounts only; phone lookup requires `real_email?` and `real_phone?` on the matched user)
-- `User.find_by_email` / `User.find_by_phone` — exact contact lookup helpers used by `DuplicateDetectionService`. Public registration and portal dependent creation call it for their contexts; paper self, guardian quick-create, and paper-dependent writers reach it through `Applications::PaperIdentityReview`. Public registration uses context `:public_registration`: duplicate email-backed account matches redirect to sign-in without authenticating or exposing the submitted email, while duplicate phone/non-portal contact collisions render support-only copy, create no portal account, and do not set `needs_duplicate_review`. Public registration and portal-dependent soft matches remain deferred through `DuplicateReviewCases::CreateService`; paper writers adjudicate surfaced soft candidates inline with a scoped signed decision and open no automatic case. A phone-only paper/admin match must not become a public login identity.
-- `User.find_for_account_access` — account-access identity lookup plus separate delivery selection in `PasswordsController#create`
+- `support_unencrypted_data: true` allows existing plaintext values to be read.
+- `extend_queries: false` means equality searches do not automatically cover both plaintext and encrypted representations.
 
-Direct Rails equality queries on deterministic encrypted fields can work, but new code should use the helpers where contact lookup or uniqueness is the point. That keeps normalization and failure behavior consistent.
+Fixtures are encrypted and key references are stored. These settings do not establish automated key rotation. Plan rotation with previous-key support, deterministic lookup and uniqueness checks, data migration, and a tested restore before retiring old keys.
 
-Do not use fuzzy SQL matching, lower/LIKE queries, or partial matching against encrypted fields. Those patterns do not work reliably against encrypted values.
+## Keep personal data out of logs
 
----
+[Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB, password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered, as is the legacy `identity_decision` parameter from older forms. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
 
-## 5. Validation And Uniqueness
+SQL binds need names for filtering to work. A hash condition carries its column name; a positional value in `where('LOWER(first_name) = ?', value)` does not. [Constituent duplicate matching](../../app/models/users/constituent.rb) uses named query attributes for this reason.
 
-`UserProfile` validates email and phone uniqueness through the helper methods.
+Reset, verification, and secure-upload links are bearer credentials: anything holding one durably — notification metadata, an unsanitized delivery error — is a second copy of the credential. [SecureErrorSanitizer](../../app/services/concerns/secure_error_sanitizer.rb) strips them from mailer and SMS failures, and SMS carrying one is sent with `sensitive: true`.
 
-Important behavior:
+## What breaks when a field changes
 
-- email is normalized to lowercase before validation
-- phone is normalized to `XXX-XXX-XXXX` when it has a valid 10-digit US shape
-- email is required unless paper context allows a no-email paper flow, the user is a persisted phone-only record (`email_optional?` — NULL email with `real_phone?`, not an email-backed portal account), or the user is a persisted address-only constituent (`real_email?` and `real_phone?` both false with letter delivery)
-- phone and dependent phone must be valid 10-digit US numbers when present
-- dependent email/phone are encrypted too
+An encrypted field has four surfaces that fail independently: the model's own reads and writes, the raw stored value, the normalized lookup and uniqueness path where one applies, and request and query-log filtering. A field can round-trip correctly through the model while its plaintext still reaches the logs, and a deterministic field can encrypt correctly while its uniqueness check quietly stops matching.
 
-The users table also has unique indexes for email and phone, so validation is not the only protection against duplicate contacts.
-
----
-
-## 6. Logging And Filtering
-
-Sensitive request parameters are filtered in `config/initializers/filter_parameter_logging.rb`.
-
-Currently filtered categories include:
-
-- password fields
-- user contact and address fields, including unified auth `contact` and account-recovery `details`
-- date of birth and SSN fields
-- SMS phone number params
-- medical provider contact fields
-- encrypted-column suffixes
-- TOTP secrets and broad token/key/certificate patterns
-- applicant names (`first_name`, `middle_initial`, `last_name`) — filtered because paper identity
-  review posts them alongside a date of birth and an address, and that combination is what
-  identifies a person
-- `identity_review_receipt`, identity rationale, and upload `*_signed_id` parameters; legacy
-  `identity_decision` remains filtered for requests from old pages
-
-Do not add new PII fields without updating both encryption declarations and parameter filtering.
-
-### Filtering covers query binds too, but only named ones
-
-`filter_parameters` matches on an attribute name, and Active Record logs a *positional* bind as
-`[nil, "smith"]` — no name, nothing to match, value written to the query log in the clear. A hash
-condition (`where(date_of_birth: value)`) carries its column name and is filtered; a string
-condition (`where('LOWER(first_name) = ?', value)`) is not.
-
-Any query that compares a filtered column must therefore bind by name. `Users::Constituent.find_duplicates`
-builds its case-insensitive name comparison through Arel with an explicit
-`ActiveRecord::Relation::QueryAttribute` for exactly this reason, and
-`test/config/filter_parameter_logging_test.rb` asserts the names do not reach the query log.
-
-Reset URLs, verification URLs, and secure upload URLs are bearer delivery artifacts, not durable record truth. Mailer and SMS failure logs must pass exception messages and backtraces through `SecureErrorSanitizer`; SMS paths carrying those links must also use `sensitive: true` so message bodies and full phone numbers are not written to logs.
-
----
-
-## 7. Testing
-
-Main coverage lives in `test/models/user_encrypted_validation_test.rb`.
-
-The tests check:
-
-- encrypted attributes are declared
-- encrypted values remain readable through Rails models
-- raw database values differ from plaintext for encrypted user contact fields
-- email and phone uniqueness work
-- helper methods work with encrypted contact fields
-- encryption config has `extend_queries: false` and `support_unencrypted_data: true`
-
-When adding a new encrypted field, add coverage for:
-
-- model declaration
-- normal read/write behavior
-- query helper behavior if the field is deterministic
-- parameter filtering if the field can arrive in request params
-
----
-
-## 8. Operational Notes
-
-Keep these constraints in mind:
-
-- Production credentials must be stable. Temporary fallback keys are not safe for persistent encrypted data.
-- Database backups require the matching encryption keys to restore useful data.
-- Deterministic fields are queryable but reveal equality patterns.
-- Encrypted data takes more space than plaintext; column lengths were widened where needed.
-- `support_unencrypted_data` is still enabled, so transition-era plaintext rows may still be readable.
-- `extend_queries` is disabled, so avoid relying on Rails to search multiple encrypted/plain forms of a value.
-
-Key rotation is not automated in this doc. If rotation is needed, plan it as an operational task: configure previous keys, verify decryptability, re-save affected records, and remove old keys only after validation.
-
----
-
-## 9. Change Rules
-
-When changing PII storage:
-
-- Add encryption in the owning model or concern.
-- Use deterministic encryption only when equality lookup or uniqueness is required.
-- Add or update helper methods for normalized lookup fields.
-- Update parameter filtering for fields that can appear in request params.
-- Keep tests close to the model behavior.
-- Avoid raw SQL against encrypted values except for narrow verification or data repair.
-- Do not log plaintext values while debugging encryption issues.
-
-Primary code paths:
-
-- `app/models/concerns/user_profile.rb`
-- `app/models/user.rb`
-- `app/models/totp_credential.rb`
-- `app/models/webauthn_credential.rb`
-- `app/models/secure_request_form.rb`
-- `app/models/medical_provider_secure_request_form.rb`
-- `app/models/vendor_secure_request_form.rb`
-- `app/models/application.rb`
-- `config/initializers/active_record_encryption.rb`
-- `config/initializers/filter_parameter_logging.rb`
-- `test/models/user_encrypted_validation_test.rb`
+[Encrypted validation tests](../../test/models/user_encrypted_validation_test.rb) and [parameter filtering tests](../../test/config/filter_parameter_logging_test.rb) cover the first and last of those. Operational requirements are in the [security baseline](baseline_policy.md).

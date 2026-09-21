@@ -1,294 +1,69 @@
-# Audit And Event Tracking System
+# Audit and Event Tracking
 
-This guide explains how MAT Vulcan records business events, displays application history, and avoids duplicate audit noise.
+Audit history answers which actor did what, to which record, and when.
 
-It is meant to describe behavior and ownership. For exact implementation details, follow the code paths listed near the end.
+An audit event should clearly describe the business action even when no message is sent.
 
----
+Notifications record communication.
 
-## 1. What Audit Events Are For
+## How history is built
 
-Audit events answer "what happened?"
-
-Use audit events for:
-
-- application lifecycle changes
-- proof uploads and proof review outcomes
-- disability certification requests and review outcomes
-- secure request creation, submission, expiration, and revocation
-- voucher, training, evaluation, vendor, account, and admin actions
-- compliance and debugging history
-
-Do not use audit events as user communications. Notifications handle communication records and email/letter delivery.
-
-Some workflows create both an audit event and a notification. They should still have separate owners and separate purposes.
-
----
-
-## 2. System Shape
-
-| Area | Current owner |
+| Responsibility | Owner |
 | --- | --- |
-| Canonical event creation | `AuditEventService` |
-| Event storage | `Event` |
-| Application status transition history | `ApplicationStatusChange` |
-| Proof review history | `ProofReview` |
-| Notification history in timelines | `Notification` |
-| Admin application history display | `Applications::AuditLogBuilder` |
-| Timeline display deduplication | `Applications::EventDeduplicationService` |
+| Write a business event | [AuditEventService.log](../../app/services/audit_event_service.rb) |
+| Store action, actor, related record, metadata, and request context | [Event](../../app/models/event.rb) |
+| Record application status transitions | [Application#transition_status!](../../app/models/application.rb), with `ApplicationStatusChange` history |
+| Record proof review outcomes | [ProofReview](../../app/models/proof_review.rb) |
+| Assemble application history | [Applications::AuditLogBuilder](../../app/services/applications/audit_log_builder.rb) |
+| Combine repeated timeline entries | [Applications::EventDeduplicationService](../../app/services/applications/event_deduplication_service.rb) |
 
-`AuditEventService.log` is the normal way to create an `Event` row. It stores the action, actor, optional auditable record, metadata, and request context.
+The application timeline combines events, status changes, proof reviews, selected notifications, and related profile changes. It can also synthesize a creation entry for older applications without a stored creation event. A visible timeline entry therefore does not prove that a matching `Event` row exists.
 
-Application history screens do not show only `Event` rows. They combine events, status changes, proof reviews, and selected notifications into one readable timeline.
+## Two different kinds of deduplication
 
----
+**At creation:** `AuditEventService` checks the previous five seconds for the same action, auditable record, and action-specific fingerprint. It returns `nil` when suppressing a duplicate and raises if the new event fails validation. It skips this check for `application_created` and events without an auditable record.
 
-## 3. Audit Vs Notification
+**At display:** the timeline groups matching fingerprints into one-minute buckets and chooses a representative. It favors creation events, then status changes, then proof reviews/events, then notifications. This changes the display without deleting stored records.
 
-| System | Purpose | Examples |
-| --- | --- | --- |
-| Audit events | Permanent record of system/user actions. | `proof_approved`, `proof_rejected`, `application_status_changed` |
-| Notifications | Communication or persistent communication history. | `proof_approved` record-only notification, `proof_resubmission_requested` tracking notification |
+Each business event still needs a single owner. Neither layer substitutes for that: creation-time deduplication is a five-second window, not a concurrency guarantee, and display deduplication only hides what two writers already stored.
 
-Key examples:
+Fingerprints are what separate a legitimate repeated action from a duplicate — the blob for an attachment, the case ID for duplicate review, the retired user ID for a merge, the step name for a paper follow-up failure. The creation and display fingerprints are computed separately, so a new action can be distinguished in one layer and collapsed in the other.
 
-- Proof approval logs `proof_approved` and creates a record-only `proof_approved` notification.
-- Proof rejection logs `proof_rejected` and then uses secure proof resubmission services for delivery/tracking.
-- Application approval is represented by `application_status_changed` with metadata. The current code does not emit `application_auto_approved`.
+## Event ownership
 
----
-
-## 4. Creation Deduplication
-
-`AuditEventService` suppresses recent duplicate event creation for the same auditable record. The creation window is 5 seconds.
-
-Current creation deduplication:
-
-- does not run when there is no auditable record
-- never suppresses `application_created`
-- uses action plus selected metadata for proof submissions, proof attachments, profile updates, feature flag toggles, secure-request revocation/expiration events, duplicate user merges, and duplicate review case events
-- returns `nil` when a duplicate is suppressed
-- raises validation errors when an event cannot be saved
-
-`duplicate_review_case_opened` and `duplicate_review_case_resolved` are fingerprinted by `duplicate_review_case_id`. One subject can hold several open cases at once — `DuplicateReviewCases::CreateService` keys deduplication on `(source, subject, reason_codes, candidate_ids)`, so cases from different sources or with different candidate sets coexist by design. Without the case id in the fingerprint, both events collapse to the bare action name for the same auditable, and a second case event for that subject inside the five-second window is silently suppressed even though the open or resolution itself succeeded. `duplicate_user_merged` carries the merged user id for the same reason.
-
-The general rule: when one auditable record can legitimately produce several distinct events of the same action in quick succession, the fingerprint must carry whatever distinguishes them, or the audit timeline loses events that the underlying operation actually performed.
-
-This layer protects the database from obvious duplicate writes. It is separate from display deduplication.
-
----
-
-## 5. Display Deduplication
-
-`Applications::EventDeduplicationService` keeps timelines readable after different sources report the same logical action.
-
-It groups timeline items in 1-minute buckets by fingerprint and picks the best representative. Current priority is:
-
-1. `application_created`
-2. `ApplicationStatusChange`
-3. `ProofReview` or `Event`
-4. `Notification`
-
-This is display behavior only. It does not delete records and should not be used as a substitute for choosing one event owner.
-
----
-
-## 6. Main Event Families
-
-| Family | Common actions or records | Notes |
-| --- | --- | --- |
-| Application lifecycle | `application_created`, `application_updated`, `application_status_changed` | Status changes should go through `Application#transition_status!`. |
-| Proof attachment | `<proof_type>_proof_attached`, `<proof_type>_proof_submitted`, `<proof_type>_proof_attachment_failed`, `proof_submitted` | Attachment services and intake flows own these. |
-| Proof review | `proof_approved`, `proof_rejected` | `ProofReview` owns approval/rejection audit events. |
-| Proof secure requests | `proof_resubmission_requested`, `proof_submitted_via_secure_form`, request revoked/expired events | Secure request services own these. Bearer submissions use the configured public/system actor, not the logical recipient. |
-| Disability certification | `medical_certification_requested`, `medical_certification_received`, approved/rejected/status events, secure upload and DocuSeal events | Code names still use `medical_certification_*`; user-facing prose should say disability certification. |
-| Duplicate review | `duplicate_review_case_opened`, `duplicate_review_case_resolved`, `duplicate_review_case_pair_repointed`, `duplicate_review_case_superseded`, `duplicate_user_merged`, `duplicate_review_flag_cleared` | `DuplicateReviewCases::CreateService` owns case-opened rows, including admin-initiated exact `post_import_reconciliation` pairs; `DuplicateReviewCases::ResolutionService` owns non-merge resolutions and records the server-owned determination without a `resolution_action` key; merge-time related-case reconciliation records bounded old/new pair IDs when an untouched open post-import pair follows the survivor, or case IDs when obsolete work is superseded; `Users::DuplicateMergeService` emits exactly one `duplicate_user_merged` per merge; `DuplicateReviewCases::ClearFlagService` logs only genuine case-less/pair-less legacy clears. Population reporting and flag synchronization emit no audit events. |
-| Paper follow-up failure | `application_post_creation_step_failed` | `Applications::PaperApplicationService` writes one per follow-up step that failed *after* the application committed. The `step` values are `the creation audit event`, `notifications`, `proof delivery checks`, `the certifying provider request`, and `a post-commit callback` -- the last covering a callback that raised once the data was already durable, which is deliberately not retried because it may have completed some of its side effects. Metadata carries `step`, `error_class`, and `submission_method`. Fingerprinted by step, so two different failures on one application are two events rather than one deduplicated record. Shown on the application timeline. Best effort: a failure to write this event is logged and must never turn a committed application into an error. |
-| Paper identity decision | `duplicate_review_case_opened`, `duplicate_review_case_resolved` | The existing case services own paper decisions for self applicants, guardians and dependents. Keep-separate records one case per actual pair; existing-person selection records `existing_person_selected` without a new user. Both require a rationale. Cases and events commit with the business transaction. No raw receipt is logged. |
-| Notifications | `notification_<action>_created`, `notification_<action>_sent`, `notification_<action>_failed` when notification auditing is enabled | Domain workflows usually leave `audit: false`. |
-| Email provider webhooks | `email_bounced` for matched provider outbound emails | Spam complaints update notification delivery state without a separate audit event today. |
-| Vouchers | `voucher_assigned`, `voucher_redeemed`, `voucher_expired`, `voucher_cancelled` | Voucher model and services own these. |
-| Training/evaluation | assignment, schedule, reschedule, completion, cancellation, no-show events | Lifecycle services own these. |
-| Admin/account changes | user changes, feature flag toggles, notes, security events | Owning controller/service/model logs the event. |
-
-Treat event action names as API. Before adding a new one, search for existing events and displays that already cover the same logical action.
-
-Duplicate-review case audit actor selection is flow-specific: public registration uses `PublicAuditActor` and rolls back account creation if no system actor can open the required case; portal dependent creation uses the signed-in guardian; post-import pair entry uses the active administrator who started the exact pair comparison. Historical `admin_create` and `paper_intake` cases retain their original current-admin/operator attribution. System-generated post-import case and event metadata contain IDs, source, and bounded reason codes, never raw email, phone, or DOB values. Staff-supplied resolution rationales are stored verbatim and are outside that generated-metadata guarantee. The detail UI presents case-opening match reasons as read-only context. A keep-separate resolution records the admin's required rationale with the server-owned bounded code `admin_reviewed`; a same-person merge carries the case's bounded match reasons plus the admin's required explanation, so neither form asks staff to select or restate audit codes.
-
-Paper **self-applicant, guardian quick-create, and dependent** decisions use terminal `paper_intake` cases. `paper_identity_no_match_confirmed` remains readable as historical audit evidence and has no new writer. Historical audit-only rows do not automatically become pair decisions. Clear creation has no identity decision to record.
-
----
-
-## 7. Proof Review Audit Rules
-
-Reviewable proof types are income, residency, and ID.
-
-Current proof review audit behavior:
-
-- `ProofAttachmentService` owns typed attachment/submission events unless the caller opts out.
-- Portal, scanned, and paper flows can also write generic `proof_submitted` history for application-level displays.
-- `ProofReview` owns `proof_approved` and `proof_rejected`.
-- The canonical proof-rejection event is generic `proof_rejected` with proof-type metadata.
-- Legacy typed notification actions like `income_proof_rejected` are not canonical audit events.
-- Secure proof resubmission request creation, submission, expiration, and revocation are tracked by secure-request services.
-
-If rejected proof request delivery fails, the review remains recorded. The secure request service can revoke active forms and return failure data so the admin workflow can alert staff.
-
----
-
-## 8. Disability Certification Audit Rules
-
-Disability certification is not just another income/residency/ID proof type.
-
-Current certification-related audit behavior covers:
-
-- provider request email
-- tokenized provider upload request
-- tokenized provider upload submission
-- DocuSeal request and webhook outcomes
-- manual/admin upload or status review
-- provider rejection follow-up
-- printable DCF request paths
-
-Certification request metadata commonly includes the delivery channel, such as email, secure form, mail, or document signing. This lets admin history show how the request was made.
-
-Keep certification audit behavior in certification-specific services unless the product intentionally merges it with the regular proof-review flow.
-
----
-
-## 9. Context And Metadata
-
-Events capture request context from `Current`, including user agent and IP address when available.
-
-Metadata should be useful, small, and stable. Prefer keys that help staff understand the event and help developers debug it later.
-
-Good metadata usually answers:
-
-- what proof or requirement changed
-- which channel or submission method was used
-- which secure request or batch was involved
-- what status changed from and to
-- whether a background delivery failed and why
-
-Bearer provider-information and proof submissions are not authenticated user actions:
-possession of the link does not prove who submitted it. Their audit actor is therefore
-`PublicAuditActor`'s configured system user. Metadata identifies the represented logical
-recipient and role, delivery owner and source, channel, request batch, and secure form.
-It must not include the raw bearer token or unredacted contact values.
-
-Avoid storing sensitive data unless there is a specific operational reason and retention is acceptable.
-
-`Current` flags such as `paper_context`, `resubmitting_proof`, `reviewing_single_proof`, and `proof_attachment_service_context` are used to keep callbacks and side effects consistent in specific flows. They should be scoped and reset with `ensure`.
-
----
-
-## 10. Timeline Display
-
-Application audit timelines are assembled by `Applications::AuditLogBuilder`.
-
-The builder combines:
-
-- direct `Event` rows
-- `ApplicationStatusChange` rows
-- `ProofReview` rows
-- selected `Notification` rows
-- profile or related records when relevant
-
-The display layer can include synthetic or transformed entries. That is why a timeline item may not map one-to-one to a single `Event` row.
-
-When troubleshooting a missing timeline item, check both the source record and the builder/deduplication rules.
-
----
-
-## 11. Querying And Reporting
-
-For support and reporting, start with the normal Rails models:
-
-- `Event` for direct audit rows
-- `ApplicationStatusChange` for status history
-- `ProofReview` for proof review outcomes
-- `Notification` for communication history and selected timeline entries
-
-Prefer scoped, indexed queries by auditable record, action, user, created time, or specific metadata keys. For large exports or reporting jobs, batch records instead of loading entire histories into memory.
-
-The current schema already includes indexes for common event lookups, including auditable records, action plus auditable, user, and JSONB metadata. Add indexes only after confirming a real query is hot.
-
----
-
-## 12. Testing Guidance
-
-Use focused tests for the event owner:
-
-- service tests for service-owned audit events
-- model tests for callback-owned events
-- controller/integration tests for full workflow history
-- audit log builder tests for timeline aggregation and display deduplication
-
-Prefer behavior assertions:
-
-- the expected action exists for the auditable record
-- metadata includes the fields needed by the UI or support workflow
-- duplicate creation is suppressed only when it should be
-- display deduplication picks the most useful representative
-- direct column writes do not silently bypass required audit behavior
-
-Use real workflow paths when possible. Tests that bypass callbacks with `update_column`, `update_columns`, or `save(validate: false)` can hide missing audit records unless the bypass is the subject of the test.
-
----
-
-## 13. Troubleshooting
-
-### Expected event is missing
-
-Check that the workflow used the owning service or model method, that `AuditEventService.log` was actually reached, and that the event was not suppressed by the 5-second creation deduplication window.
-
-### Timeline is missing an item
-
-Check the underlying source records first. Then check `Applications::AuditLogBuilder` and `Applications::EventDeduplicationService`, because the timeline combines and deduplicates multiple record types.
-
-### Duplicate events appear
-
-Look for multiple owners creating the same logical event, such as a service and a callback both logging the same action. Fix ownership instead of relying on deduplication to hide the issue.
-
-### Event metadata is not useful
-
-Update the event owner to include stable operational metadata. Avoid ad hoc keys that only one view or one test understands.
-
----
-
-## 14. Change Rules
-
-When changing audit behavior:
-
-- Use `AuditEventService.log` for normal audit row creation.
-- Keep one logical event in one owner.
-- Do not manually recreate events after bypassing callbacks.
-- Use `Application#transition_status!` for application status changes.
-- Use proof services and `ProofReview` for proof events.
-- Use certification-specific services for disability certification events.
-- Keep notification auditing separate from domain audit events.
-- Keep metadata stable enough for support, reporting, and UI display.
-- Add or update tests where the event is owned, not only where it is displayed.
-
----
-
-## 15. Where To Look
-
-| Need | Start here |
+| Workflow | Where its history belongs |
 | --- | --- |
-| Create direct audit events | `app/services/audit_event_service.rb` |
-| Event model behavior | `app/models/event.rb` |
-| Application status changes | `app/models/concerns/application_status_management.rb`, `app/models/application_status_change.rb` |
-| Proof review events | `app/models/proof_review.rb`, `app/services/proof_review_service.rb` |
-| Proof attachment events | `app/services/proof_attachment_service.rb` |
-| Secure request events | `app/models/concerns/secure_tokenizable.rb`, `app/services/secure_form_expiration_recorder.rb` |
-| Application audit timeline | `app/services/applications/audit_log_builder.rb` |
-| Timeline deduplication | `app/services/applications/event_deduplication_service.rb` |
-| Notification delivery/history | `docs/features/notifications.md` |
+| Application lifecycle | Creation services log creation; `transition_status!` records real status changes as `application_status_changed`. Automatic approval uses that action with trigger metadata. |
+| Proof intake and review | Attachment services own upload history; `ProofReview` owns `proof_approved` and `proof_rejected`. Rejection delivery belongs to secure-request services. |
+| Disability certification | Certification and document-signing services own provider requests, received documents, review, and signing outcomes. |
+| Duplicate review and merging | [CreateService](../../app/services/duplicate_review_cases/create_service.rb), [ResolutionService](../../app/services/duplicate_review_cases/resolution_service.rb), and [DuplicateMergeService](../../app/services/users/duplicate_merge_service.rb) own their respective case/merge events. |
+| Paper identity decisions | Case services record `duplicate_review_case_opened` and `duplicate_review_case_resolved` for self-applicant, guardian, and dependent decisions, in the business transaction. Keep-separate records one case per actual pair; existing-person selection creates no second user. See [paper intake](../development/paper_application_architecture.md). |
+| Paper follow-up failure | `PaperApplicationService` attempts an `application_post_creation_step_failed` event after a confirmed commit, identifying the failed step and error class. Failure to record this warning must not invite duplicate intake. |
+| Communication | `NotificationService` audits notification creation/delivery only when `audit: true`; most callers leave the domain event with its workflow owner. |
 
-Related docs:
+`paper_identity_no_match_confirmed` remains readable as historical evidence and has no new writer. Historical audit-only rows are not automatically treated as pair decisions.
 
-- [Notification System](notifications.md)
-- [Proof Review Process Guide](proof_review_process_guide.md)
-- [Application Workflow Guide](application_workflow_guide.md)
-- [Service Architecture](../development/service_architecture.md)
+Action names are an interface: displays and reports match on them, so renaming one silently changes what those surfaces find, and a near-duplicate name splits a history that used to be whole. Adding an event does not put it on any timeline either — the builder decides which records to load.
+
+## Actors and metadata
+
+The actor is the authenticated person who performed the action. Public proof and provider-info submissions instead record [PublicAuditActor](../../app/services/public_audit_actor.rb), since holding a bearer link proves nothing about who is holding it; the person the submission was made for belongs in metadata rather than in the actor.
+
+`PublicAuditActor` resolves the administrator at `system@mdmat.org`, provisioned through [initial account setup](../infrastructure/setup_and_maintenance.md#initial-accounts). Missing that account skips public audit events; public registrations needing a duplicate-review case roll back. Creating a staff administrator alone does not satisfy this dependency.
+
+Metadata stays small and bounded — stable IDs, reason codes, status changes, channel, batch or form identifiers, the failed step. Raw tokens and bearer URLs are credentials and do not belong in a durable row, and personal information beyond what the event needs makes the audit trail itself a disclosure surface. Bounded generated events say nothing about the records around them: staff-written rationales and stored case snapshots carry their own privacy questions.
+
+The `Event` model reads request context from `Current`. Background work may have no request context, so pass the actor explicitly. Workflow flags such as `Current.paper_context` belong to their owning service and must be cleared when that scope ends.
+
+## Troubleshooting and changes
+
+| Symptom | Check |
+| --- | --- |
+| Missing database event | Owning workflow, event validation, the five-second creation fingerprint, and the system audit account for public requests. |
+| Stored event missing from the screen | Builder inclusion rules, related-record lookup, and display fingerprint. |
+| Duplicate history | Multiple writers for the same business action before adjusting deduplication. |
+| Different actions collapsed together | The distinguishing metadata in both creation and display fingerprints. |
+
+The interesting assertion is rarely that an event exists — it is that a genuinely repeated action produces two rows while a retried one produces a single row, which only shows up in a test that exercises the owner rather than `AuditEventService` directly. An export built from the timeline is not an audit dataset either; the underlying models, queried in batches, are.
+
+[Timeline builder tests](../../test/services/applications/audit_log_builder_test.rb), [display deduplication tests](../../test/services/applications/event_deduplication_service_test.rb), and [status-history tests](../../test/models/application_status_change_lifecycle_test.rb) are the references. [Notifications](notifications.md) and [proof review](proof_review_process_guide.md) own their own histories.

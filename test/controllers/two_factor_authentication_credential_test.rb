@@ -89,6 +89,23 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_equal :webauthn, session[TwoFactorAuth::SESSION_KEYS[:type]], 'Session should record we are using WebAuthn'
   end
 
+  %w[platform cross-platform].each do |authenticator_type|
+    test "#{authenticator_type} enrollment uses the public program name and configured RP ID" do
+      original_rp_id = WebAuthn.configuration.rp_id
+      WebAuthn.configuration.rp_id = 'example.com'
+
+      post webauthn_creation_options_two_factor_authentication_path,
+           params: { authenticator_type: authenticator_type }, as: :json
+
+      assert_response :success
+      assert_equal 'application/json', response.media_type
+      assert_equal 'Maryland Accessible Telecommunications', response.parsed_body.dig('rp', 'name')
+      assert_equal 'example.com', response.parsed_body.dig('rp', 'id')
+    ensure
+      WebAuthn.configuration.rp_id = original_rp_id
+    end
+  end
+
   test 'should create credential with valid attestation' do
     # Step 1: Test successful WebAuthn credential creation
     # Following WebAuthn documentation recommendations, focus on verifying

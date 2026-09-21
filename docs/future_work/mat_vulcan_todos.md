@@ -3,6 +3,8 @@
 This document lists only remaining work. Tasks are small, explicit, and testable. Control IDs in brackets map to `docs/security/controls.yaml`.
 
 ## Table of Contents
+
+- [Encryption startup validation](#encryption-startup-validation)
 - [Application & Dependent Contact Management](#application--dependent-contact-management)
 - [JavaScript Architecture & Frontend Tests](#javascript-architecture--frontend-tests)
 - [Registration & Account Integrity](#registration--account-integrity)
@@ -15,6 +17,13 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 - [Proofs, Statuses, Templates (Tech Debt)](#proofs-statuses-templates-tech-debt)
 - [Mobile Proofs Workflow](#mobile-proofs-workflow)
 - [Optional / Larger Architectural Work](#optional--larger-architectural-work)
+
+## Encryption startup validation
+
+- [ ] In [the encryption initializer](../../config/initializers/active_record_encryption.rb), reject an absent credentials section or missing/blank `primary_key`, `deterministic_key`, or `key_derivation_salt` outside development/test. Fail before serving requests, running jobs, or executing database tasks. Report missing setting names only, never values. Preserve configured keys and current encryption behavior; no key rotation or data migration is needed.
+- [ ] Restrict any temporary-key fallback to disposable development/test use. Keep the [Docker asset build](../../Dockerfile) working without production secrets through a narrowly scoped asset-precompilation path; `SECRET_KEY_BASE_DUMMY` alone must not bypass runtime validation or leave reusable dummy keys in the image.
+- [ ] Add isolated initializer/boot tests for an absent section, each absent/blank entry, configured startup with an existing encrypted-value round trip, and the development/test fallback. Cover asset compilation separately and prove server/worker/console/release startup cannot use the build exception. Use generated test material without production credentials or database access.
+- [ ] Run focused tests, changed-file RuboCop, and Brakeman. Update the [PII encryption guide](../security/pii_encryption.md) and [recovery guide](../infrastructure/backup_and_recovery.md) when the guard ships; a presence check still cannot prove that supplied keys match a restored database.
 
 ## Application & Dependent Contact Management  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 
@@ -256,3 +265,9 @@ Consolidated `Proof` model  [FILE-SEC-001][DATA-001][AUDIT-002]
 - [ ] UI/mailboxes: read/write `Proof` records
 - [ ] Audit/events: include `proof_id` and `kind`  [AUDIT-002]
 - [ ] Tests: backfill correctness, services, UI reads
+
+## Why “MAT Vulcan”?
+
+MAT stands for Maryland Accessible Telecommunications. Vulcan is the Roman god of the forge—a maker of equipment. Since MAT helps people get accessible telecommunications equipment, the name is a playful nod to that connection. A little mythology, a little wordplay; no relation to the Vulcans from Star Trek.
+
+“Vulcan” is an internal nickname. Public-facing pages and messages use Maryland Accessible Telecommunications. Internal module, database, deployment, and synthetic-email identifiers retain their existing names; they are not display labels. The existing TOTP issuer also remains `MatVulcan`.

@@ -1,112 +1,65 @@
-# Active Storage S3 Setup
+# Active Storage and S3
 
-This document provides instructions for setting up Active Storage with Amazon S3 using either Bucketeer or direct S3 credentials.
+Uploaded files — proofs, disability certifications, vendor W-9s — are Active Storage attachments.
 
-## Configuration
+Tests and development default to disk storage. Development can opt into S3; other environments use S3.
 
-The application has been configured to use S3 for file storage in production and optionally in development. This setup provides flexibility to work with either the Bucketeer Heroku add-on or direct AWS S3 credentials.
+One S3 configuration serves both a Bucketeer add-on and direct AWS credentials.
 
-### Environment Variables
+## Which service is used
 
-The following environment variables can be used to configure S3:
+[`config/initializers/storage.rb`](../../config/initializers/storage.rb) decides in a `to_prepare` block, which runs after the environment files and therefore wins over the `config.active_storage.service` lines in them:
 
-#### Direct S3 Configuration
-```
-S3_ACCESS_KEY_ID=your_access_key
-S3_SECRET_ACCESS_KEY=your_secret_key
-S3_REGION=us-east-1
-S3_BUCKET=your-bucket-name
-```
+| Environment | Service | Where files go |
+| --- | --- | --- |
+| test | `:test` | `tmp/storage` |
+| development | `:local`, or `:s3` when `USE_S3=true` | `storage/`, or the bucket when `USE_S3=true` |
+| everything else | `:s3` | the bucket |
 
-#### Bucketeer Configuration (Set automatically by the Bucketeer add-on)
-```
-BUCKETEER_AWS_ACCESS_KEY_ID=bucketeer_provided_key
-BUCKETEER_AWS_SECRET_ACCESS_KEY=bucketeer_provided_secret
-BUCKETEER_AWS_REGION=bucketeer_region
-BUCKETEER_BUCKET_NAME=bucketeer_bucket
-```
+## Credentials
 
-#### Development Options
-```
-USE_S3=true  # Set to use S3 in development environment (optional)
-```
+The `s3` entry in [`config/storage.yml`](../../config/storage.yml) reads direct credentials first and falls back to Bucketeer's, so the same deployment works either way and switching providers is an environment-variable change rather than a code change:
 
-## How It Works
+| Setting | Direct | Bucketeer fallback | Default |
+| --- | --- | --- | --- |
+| Access key | `S3_ACCESS_KEY_ID` | `BUCKETEER_AWS_ACCESS_KEY_ID` | — |
+| Secret | `S3_SECRET_ACCESS_KEY` | `BUCKETEER_AWS_SECRET_ACCESS_KEY` | — |
+| Region | `S3_REGION` | `BUCKETEER_AWS_REGION` | `us-east-1` |
+| Bucket | `S3_BUCKET` | `BUCKETEER_BUCKET_NAME` | — |
 
-The `config/storage.yml` file contains a flexible S3 configuration that checks for both direct S3 and Bucketeer environment variables:
+On Heroku, a Bucketeer add-on supplies its four variables; direct S3 uses the `S3_*` settings above. Bucket access and CORS still need verification before accepting uploads.
 
-```yaml
-s3:
-  service: S3
-  access_key_id: <%= ENV['S3_ACCESS_KEY_ID'] || ENV['BUCKETEER_AWS_ACCESS_KEY_ID'] %>
-  secret_access_key: <%= ENV['S3_SECRET_ACCESS_KEY'] || ENV['BUCKETEER_AWS_SECRET_ACCESS_KEY'] %>
-  region: <%= ENV['S3_REGION'] || ENV['BUCKETEER_AWS_REGION'] || 'us-east-1' %>
-  bucket: <%= ENV['S3_BUCKET'] || ENV['BUCKETEER_BUCKET_NAME'] %>
+`storage.yml` also carries commented templates for GCS, Azure, and a mirror service; using one means adding its case to the initializer as well.
+
+## Local development against S3
+
+`.env` is not loaded. `.env.example` exists, but there is no `dotenv-rails` in the Gemfile — the `dotenv` in `Gemfile.lock` arrives only as a Kamal dependency — and [`bin/dev`](../../bin/dev) starts foreman with `--env /dev/null`, which disables foreman's own `.env` handling. Export the variables or put them on the command line:
+
+```bash
+USE_S3=true S3_BUCKET=… S3_ACCESS_KEY_ID=… S3_SECRET_ACCESS_KEY=… bin/dev
 ```
 
-The `config/initializers/storage.rb` file sets the Active Storage service based on the environment:
+`USE_S3=true` with an incomplete set fails at boot inside the AWS SDK rather than in application code. A missing bucket surfaces as `missing required option :name` from `aws-sdk-s3`, usually preceded by a timeout against `169.254.169.254` as the SDK tries for EC2 instance-profile credentials.
 
-```ruby
-Rails.application.config.to_prepare do
-  Rails.application.config.active_storage.service = 
-    case Rails.env
-    when 'test'
-      :test
-    when 'development'
-      ENV['USE_S3'] == 'true' ? :s3 : :local
-    else
-      :s3
-    end
-end
+## Direct uploads need bucket CORS
+
+Paper intake, portal proof submission, and vendor W-9 upload all use Active Storage direct upload: the browser `PUT`s the file to the bucket itself, and only the signed blob ID reaches Rails. The bucket therefore needs a CORS rule allowing `PUT` from the application's origin, which nothing in this repository can set — it is bucket-side configuration. A direct upload that fails only in the browser, with the Rails log showing nothing after the `/rails/active_storage/direct_uploads` call, is the usual sign that the rule is missing or does not cover the origin.
+
+These documents contain personal information, so keep the bucket private. The app serves attachments through [Rails proxy URLs](../../config/initializers/active_storage.rb) with signed blob IDs and no default expiry. S3 service URL expiry does not make those Rails links expire.
+
+## Verify upload and retrieval
+
+Inspect the selected service in the target environment without printing credentials:
+
+```bash
+bin/rails runner 'puts Rails.application.config.active_storage.service'
+heroku run --app your-app-name "bin/rails runner 'puts Rails.application.config.active_storage.service'"
 ```
 
-## Deployment Options
+Using a designated verification record and a nonsensitive PDF, upload through a portal proof form or vendor W-9 form, submit, then reopen the saved attachment. Confirm the object exists in the intended bucket and downloads through the application. This exercises browser CORS, storage access, and attachment persistence; a server-side upload alone does not cover the direct-upload path.
 
-### Heroku with Bucketeer
+## Backup and recovery
 
-1. Install the Bucketeer add-on:
+PostgreSQL stores blob/attachment metadata, not file bodies. Back up S3 objects separately and retain their object keys. A replacement bucket may use different credentials and a different region, but the Active Storage service named by existing blob records must reach those objects. Changing the default service does not migrate existing blobs.
 
-```
-heroku addons:create bucketeer:hobbyist
-```
-
-2. No additional configuration is needed as Bucketeer will automatically set the necessary environment variables.
-
-3. The setup is already configured to use S3 in production. Production environment settings are explicitly set in:
-   - config/environments/production.rb: `config.active_storage.service = :s3`
-   - config/initializers/storage.rb: Environment-based configuration
-
-### Heroku without Bucketeer or Other Hosting Platforms
-
-Set the required environment variables:
-
-```
-S3_ACCESS_KEY_ID=your_access_key
-S3_SECRET_ACCESS_KEY=your_secret_key
-S3_REGION=us-east-1
-S3_BUCKET=your-bucket-name
-```
-
-### Local Development
-
-To use S3 in development:
-
-1. Copy `.env.example` to `.env`
-2. Fill in your S3 credentials
-3. Set `USE_S3=true`
-4. Load the environment variables (depending on your setup, you might use `dotenv` or similar)
-
-## Verifying Configuration
-
-To verify your S3 configuration is working correctly:
-
-1. Upload a file using Active Storage
-2. Check if the file is accessible
-3. Look for any errors in the Rails logs
-
-## Switching Storage Services
-
-The code is designed to make it easy to switch between storage services:
-
-- To change from Bucketeer to direct S3: Simply set the S3_* environment variables
-- To switch to a different storage service: Update the storage.yml file and the storage.rb initializer
+For disk storage, preserve the configured storage directory. Verify both an old attachment and a new upload after recovery. Use a separate bucket for restore rehearsals; see the [recovery checklist](backup_and_recovery.md#recovery-checklist).
