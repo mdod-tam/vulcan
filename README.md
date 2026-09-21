@@ -286,8 +286,8 @@ Use `bin/rails -T` to discover tasks and read the relevant [task implementation]
 | Inspect program policies | `bin/rails runner 'pp Policy.order(:key).pluck(:key, :value).to_h'`; [policy management](docs/features/application_workflow_guide.md#program-policies). |
 | View or change fulfillment defaults | `bin/rails features:list`; [fulfillment settings](docs/features/application_workflow_guide.md#fulfillment-settings). |
 | Investigate duplicate identities | [User management](docs/development/user_management_features.md) and [duplicate reporting tasks](lib/tasks/duplicates.rake). |
-| Diagnose mail or letter problems | [Email and letters](docs/infrastructure/email_system.md); `email_templates:audit` and `letters:check_consistency`. |
-| Diagnose certification delivery history | [Notification tracking tasks](lib/tasks/notification_tracking.rake). Backfill and duplicate-fix tasks can change records. |
+| Check database templates | `bin/rails email_templates:audit`; [email and letter commands](docs/infrastructure/email_system.md#seed-and-audit-tasks). |
+| Refresh certification delivery status | [Delivery tracking](docs/infrastructure/email_system.md#delivery-tracking). |
 | Find approved voucher applications without vouchers | `bin/rails vouchers:report_missing`. |
 | Review scheduled work | [Recurring configuration](config/recurring.yml), [proof monitoring limitations](docs/features/proof_review_process_guide.md), and [operational review schedule](docs/compliance/required_reports_audits.md). |
 

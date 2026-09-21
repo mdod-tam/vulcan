@@ -87,6 +87,16 @@ The webhook path is incomplete: it references `MedicalProviderEmail`, which has 
 
 [`PostmarkDebugger`](../../config/initializers/postmark_debugger.rb) logs redacted payloads under `POSTMARK_DEBUG_PAYLOADS=true`, with bodies, contact values, URLs, and token fields removed — worth reaching for after the queued job, stream, template, and provider result have been ruled out.
 
+## Delivery tracking
+
+To refresh stored delivery status for medical-certification emails:
+
+```bash
+bin/rails notification_tracking:check_all
+```
+
+This queues `UpdateEmailStatusJob` for notifications with non-placeholder message IDs. A worker must process the jobs, which query Postmark and update notification records. Notifications without message IDs are skipped.
+
 ## Tests
 
 [Renderer](../../test/services/email_templates/renderer_test.rb) · [locale](../../test/models/admin/email_templates_locale_test.rb) · [letter PDF](../../test/services/letters/text_template_to_pdf_service_test.rb) · [redaction](../../test/initializers/postmark_debugger_test.rb)
