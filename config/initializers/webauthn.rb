@@ -4,7 +4,7 @@ require 'uri'
 
 WebAuthn.configure do |config|
   # Relying Party name
-  config.rp_name = 'MAT Vulcan'
+  config.rp_name = 'Maryland Accessible Telecommunications'
 
   application_host = ENV['APPLICATION_HOST'].to_s.strip.sub(%r{\Ahttps?://}i, '').split('/').first
   application_origin = nil

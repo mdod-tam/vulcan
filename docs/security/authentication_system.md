@@ -16,13 +16,13 @@ Password reset and lost-security-key recovery are separate flows with their own 
 
 Required password changes and MFA enrollment take priority. Pending MFA verification is not a completed sign-in. Registration, password/account recovery, help pages, and token-based document tasks keep their own public entry points.
 
-[`SessionsController#create`](../../app/controllers/sessions_controller.rb) resolves the identifier, checks for a lockout, verifies the password — failed attempts feed both the shared IP rate limit and that user's failure count — and then either creates the session or stashes temporary MFA state and redirects to verification.
+[`SessionsController#create`](../../app/controllers/sessions_controller.rb) resolves the identifier and rejects locked accounts before checking the password or updating either failure counter. An unknown account or wrong password goes through the shared IP rate limiter first; only requests it allows increment a matched account's failure count. Valid credentials bypass that limiter and either create a session or start MFA verification.
 
 Session creation itself is [`ApplicationController#_create_and_set_session_cookie`](../../app/controllers/application_controller.rb), which locks the user and rechecks them before writing a [`Session`](../../app/models/session.rb); password-only sign-in also re-verifies the submitted identifier and password inside that lock, so a merge or credential change landing mid-request cannot be accepted on stale reads. Registration creates its first session by a separate path.
 
 The signed `session_token` cookie identifies the row; [`Authentication`](../../app/controllers/concerns/authentication.rb) resolves it thereafter, and sign-out deletes session, cookie, and any pending MFA state.
 
-Five failed attempts lock the account for an hour ([`UserAuthentication`](../../app/models/concerns/user_authentication.rb)) — separate from request throttling.
+Five recorded password failures lock the account for an hour ([`UserAuthentication`](../../app/models/concerns/user_authentication.rb)) — separate from request throttling.
 
 ## Second factors
 
@@ -37,6 +37,8 @@ Administrators, evaluators, trainers, and vendors must enroll; constituents may.
 Registration and verification are split across [`TwoFactorCredentialsController`](../../app/controllers/two_factor_credentials_controller.rb), [`TwoFactorAuthenticationsController`](../../app/controllers/two_factor_authentications_controller.rb), the shared [`TwoFactorVerification`](../../app/controllers/concerns/two_factor_verification.rb) concern, and [`TwoFactorAuth`](../../config/initializers/two_factor_auth.rb), which holds the temporary user, challenge, return path, and completion state. SMS send/resend lifetimes are in [`TwoFactor::SmsLoginChallenge`](../../app/services/two_factor/sms_login_challenge.rb) and [`TwilioVerifyService`](../../app/services/twilio_verify_service.rb).
 
 Two ordering details matter: JSON and WebAuthn completion must create the session before clearing the challenge, and resolving the temporary MFA user rechecks `public_login_active?`, so an account retired mid-sign-in cannot finish verifying.
+
+WebAuthn enrollment uses **Maryland Accessible Telecommunications** as its display name. The [WebAuthn initializer](../../config/initializers/webauthn.rb) configures the RP ID and allowed origins separately; these define the credential scope and accepted origins.
 
 TOTP provisioning URIs retain `MatVulcan` as the issuer, a deliberate exception to the public program name. The issuer labels new enrollments; changing it does not rename existing authenticator entries or alter TOTP codes.
 
