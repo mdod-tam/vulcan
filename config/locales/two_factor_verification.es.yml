@@ -1,5 +1,6 @@
 es:
   two_factor_verification:
+    already_secured: "Su cuenta ya está protegida con autenticación de dos factores."
     common:
       code_label: "Código de verificación"
       submit: "Verificar"
@@ -35,6 +36,10 @@ es:
       sign_in_send_failed: "No se pudo enviar el código de verificación. Inténtelo de nuevo."
       wait: "Espere %{seconds} segundos antes de solicitar otro código."
     errors:
+      key_unavailable: "No tiene llaves de seguridad registradas. Primero configure una llave de seguridad."
+      totp_unavailable: "No tiene una aplicación de autenticación configurada. Primero configure la autenticación TOTP."
+      invalid_method: "El método de verificación no es válido"
+      invalid_type: "El tipo de credencial no es válido"
       no_code: "No se proporcionó un código"
       user_session: "No se encontró la sesión. Vuelva a iniciar sesión."
       invalid_code: "El código de verificación no es válido. Inténtelo de nuevo."

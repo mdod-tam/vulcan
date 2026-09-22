@@ -44,6 +44,8 @@ WebAuthn enrollment uses **Maryland Accessible Telecommunications** as its displ
 
 TOTP provisioning URIs retain `MatVulcan` as the issuer, a deliberate exception to the public program name. The issuer labels new enrollments; changing it does not rename existing authenticator entries or alter TOTP codes.
 
+The request-locale wrapper covers public sign-in and MFA verification, not setup or credential enrollment. Those screens retain their existing English/default-locale behavior. Enrollment and verification share the code-error translations in `two_factor_verification` rather than duplicate English constants. Authenticated dashboards do not consume the public request locale.
+
 ## Password reset and account access
 
 [`PasswordsController#create`](../../app/controllers/passwords_controller.rb) resolves account and delivery route together through `User.find_for_account_access`: an email selects email delivery; a phone selects SMS only when that same email-backed account has an SMS-capable number. Matched, unmatched, undeliverable, and throttled requests all produce the same public confirmation.

@@ -141,6 +141,19 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
   end
 
   %i[en es].each do |locale|
+    test "unavailable verification methods use #{locale} feedback" do
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      get verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
+      assert_redirected_to setup_two_factor_authentication_path(locale: locale)
+      assert_equal I18n.t('two_factor_verification.errors.key_unavailable', locale: locale), flash[:alert]
+      @user.totp_credentials.destroy_all
+      get verify_method_two_factor_authentication_path(type: 'totp', locale: locale)
+      assert_equal I18n.t('two_factor_verification.errors.totp_unavailable', locale: locale), flash[:alert]
+      get verify_method_two_factor_authentication_path(type: 'unknown', locale: locale)
+      assert_redirected_to verify_two_factor_authentication_path(locale: locale)
+      assert_equal I18n.t('two_factor_verification.errors.invalid_method', locale: locale), flash[:alert]
+    end
+
     test "TOTP and SMS keep #{locale} through forms, errors, resend and verification" do
       post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
       assert_redirected_to verify_two_factor_authentication_path(locale: locale)

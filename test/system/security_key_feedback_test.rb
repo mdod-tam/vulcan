@@ -96,6 +96,39 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
     end
   end
 
+  test 'public locale stays on verification while setup retains its default language' do
+    @locale = :es
+    user = create(:constituent, email_verified: true, verified: true)
+    visit sign_in_path(locale: :es)
+    fill_in 'contact-input', with: user.email
+    fill_in 'password-input', with: 'password123'
+    click_button I18n.t('sessions.form.submit', locale: :es)
+    assert_current_path constituent_portal_dashboard_path(locale: :es)
+    visit setup_two_factor_authentication_path(locale: :es)
+    assert_selector 'html[lang=en]', visible: :all
+    assert_selector 'h1', text: 'Secure Your Account'
+    capture('mfa-setup-default-language')
+
+    user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    user.sms_credentials.create!(phone_number: '410-555-1234', verified_at: Time.current)
+    visit setup_two_factor_authentication_path(locale: :es)
+    assert_text I18n.t('two_factor_verification.already_secured', locale: :en)
+    capture('mfa-already-secured-default-language')
+
+    click_button 'Sign Out', match: :first
+    assert_current_path sign_in_path
+    visit sign_in_path(locale: :es)
+    fill_in 'contact-input', with: user.email
+    fill_in 'password-input', with: 'password123'
+    click_button I18n.t('sessions.form.submit', locale: :es)
+    assert_current_path verify_two_factor_authentication_path(locale: :es)
+    visit verify_method_two_factor_authentication_path(type: 'unknown', locale: :es)
+    assert_selector 'html[lang=es]', visible: :all
+    assert_text I18n.t('two_factor_verification.errors.invalid_method', locale: :es)
+    page.current_window.resize_to(390, 844)
+    capture('mfa-invalid-method-narrow')
+  end
+
   private
 
   def exercise_code_methods(credential)

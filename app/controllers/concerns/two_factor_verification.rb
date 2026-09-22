@@ -54,7 +54,7 @@ module TwoFactorVerification
     when :sms
       verify_sms_credential(params[:code], params[:credential_id])
     else
-      [false, 'Invalid credential type']
+      [false, t('two_factor_verification.errors.invalid_type')]
     end
   end
 

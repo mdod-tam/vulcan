@@ -1,5 +1,6 @@
 en:
   two_factor_verification:
+    already_secured: "Your account is already secured with two-factor authentication."
     common:
       code_label: "Verification Code"
       submit: "Verify"
@@ -35,6 +36,10 @@ en:
       sign_in_send_failed: "Could not send verification code. Please try again."
       wait: "Please wait %{seconds} seconds before requesting another code."
     errors:
+      key_unavailable: "No security keys are registered. Please set up a security key first."
+      totp_unavailable: "No authenticator app is set up. Please set up TOTP authentication first."
+      invalid_method: "Invalid verification method"
+      invalid_type: "Invalid credential type"
       no_code: "No code provided"
       user_session: "User session not found"
       invalid_code: "Invalid verification code. Please try again."

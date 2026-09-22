@@ -289,7 +289,7 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def handle_totp_verification_failure
-    message = TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
+    message = t('two_factor_verification.errors.invalid_code')
     log_totp_setup_failure(message)
 
     # Regenerate the QR code so the user can try again without losing the setup flow.
@@ -406,7 +406,7 @@ class TwoFactorCredentialsController < ApplicationController
   def handle_totp_html_failure
     handle_error_response(
       html_redirect_path: new_credential_two_factor_authentication_path(type: 'totp', secret: @secret),
-      error_message: TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
+      error_message: t('two_factor_verification.errors.invalid_code')
     )
   end
 
@@ -484,11 +484,11 @@ class TwoFactorCredentialsController < ApplicationController
   def sms_setup_error_message(result)
     return sms_verification_error_message(result[:status]) if result[:success]
 
-    TwoFactorAuth::ERROR_MESSAGES[:verification_service_unavailable]
+    t('two_factor_verification.errors.verification_service_unavailable')
   end
 
   def pending_sms_error_message
-    @pending_sms_error_message || TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
+    @pending_sms_error_message || t('two_factor_verification.errors.invalid_code')
   end
 
   def clear_pending_sms_challenge_if_terminal(challenge, result)

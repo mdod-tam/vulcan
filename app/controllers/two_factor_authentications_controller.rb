@@ -13,7 +13,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   include TwoFactorVerification
   include TurboStreamResponseHandling
 
-  around_action :with_public_request_locale
+  around_action :with_public_request_locale, except: :setup
 
   before_action :ensure_two_factor_initiated_unless_skipped, except: %i[setup resend_sms_verification]
   before_action :authenticate_user!, only: %i[setup]
@@ -119,7 +119,7 @@ class TwoFactorAuthenticationsController < ApplicationController
       else
         handle_error_response(
           html_redirect_path: setup_two_factor_authentication_path,
-          error_message: 'No security keys are registered. Please set up a security key first.'
+          error_message: t('two_factor_verification.errors.key_unavailable')
         )
       end
     when 'totp'
@@ -128,7 +128,7 @@ class TwoFactorAuthenticationsController < ApplicationController
       else
         handle_error_response(
           html_redirect_path: setup_two_factor_authentication_path,
-          error_message: 'No authenticator app is set up. Please set up TOTP authentication first.'
+          error_message: t('two_factor_verification.errors.totp_unavailable')
         )
       end
     when 'sms'
@@ -136,7 +136,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     else
       handle_error_response(
         html_redirect_path: verify_two_factor_authentication_path,
-        error_message: 'Invalid verification method'
+        error_message: t('two_factor_verification.errors.invalid_method')
       )
     end
   end
@@ -165,7 +165,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     success, message = if @type.present?
                          verify_credential(@type, verification_params)
                        else
-                         [false, 'Invalid credential type']
+                         [false, t('two_factor_verification.errors.invalid_type')]
                        end
 
     respond_to do |format|
@@ -288,7 +288,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   # Redirect authenticated user to profile with notice
   def redirect_to_authenticated_user_profile
     redirect_to edit_profile_path,
-                notice: 'Your account is already secured with two-factor authentication.'
+                notice: t('two_factor_verification.already_secured')
   end
 
   # Redirect to appropriate verification method based on available credentials

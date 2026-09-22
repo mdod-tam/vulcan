@@ -54,12 +54,12 @@ export default class extends Controller {
         tooltip: { callbacks: { label: context => `${context.dataset.label}: ${format(context.raw)}` } }
       },
       scales: {
-        [valueAxis]: { beginAtZero: true, ticks: { callback: format } }
+        [valueAxis]: {
+          beginAtZero: true,
+          ticks: { callback: format },
+          title: { display: !!this.yAxisLabelValue, text: this.yAxisLabelValue }
+        }
       }
-    }
-    options.scales.y = {
-      ...options.scales.y,
-      title: { display: !!this.yAxisLabelValue, text: this.yAxisLabelValue }
     }
     this.chart = new Chart(this.canvasTarget, { type: "bar", data: { labels, datasets }, options })
   }

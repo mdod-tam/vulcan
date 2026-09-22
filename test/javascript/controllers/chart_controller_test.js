@@ -59,10 +59,11 @@ test('aligns comparison values by category and retains all-zero comparisons', as
 })
 
 test('formats currency for the numeric horizontal axis and tooltip', async () => {
-  const config = await mount('data-chart-index-axis-value="y" data-chart-format-value="currency" data-chart-y-axis-label-value="Category"')
+  const config = await mount('data-chart-index-axis-value="y" data-chart-format-value="currency" data-chart-y-axis-label-value="Amount in USD"')
   expect(config.options.indexAxis).toBe('y')
   expect(config.options.scales.x.ticks.callback(1200)).toBe('$1,200')
-  expect(config.options.scales.y.title).toEqual({ display: true, text: 'Category' })
+  expect(config.options.scales.x.title).toEqual({ display: true, text: 'Amount in USD' })
+  expect(config.options.scales.y?.title).toBeUndefined()
   expect(config.options.plugins.tooltip.callbacks.label({ dataset: { label: 'Total' }, raw: 1200 })).toBe('Total: $1,200')
 })
 
