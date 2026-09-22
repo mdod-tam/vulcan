@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
-import { createFormChangeDebounce } from "../../utils/debounce"
+import { debounce } from "../../utils/debounce"
 import { setVisible } from "../../utils/visibility"
 
 class AutosaveController extends Controller {
@@ -15,7 +15,7 @@ class AutosaveController extends Controller {
 
   connect() {
     // Use our tested debounce utility
-    this.debouncedSave = createFormChangeDebounce(() => this.executeFieldSave())
+    this.debouncedSave = debounce(() => this.executeFieldSave(), 20)
 
     // Request key for tracking
     this.requestKey = `autosave-${this.identifier}-${Date.now()}`

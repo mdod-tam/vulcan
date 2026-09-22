@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { setVisible } from "../../utils/visibility";
-import { createVeryShortDebounce } from "../../utils/debounce";
+import { debounce } from "../../utils/debounce";
 
 export default class extends Controller {
   static targets = ["radio", "adultSection", "adultSearchSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField", "stepNumber"];
@@ -15,7 +15,7 @@ export default class extends Controller {
     this._connected = true;
 
     this._lastState = null; // Track last state to prevent unnecessary dispatches
-    this.debouncedRefresh = createVeryShortDebounce(() => this.executeRefresh());
+    this.debouncedRefresh = debounce(() => this.executeRefresh(), 10);
 
     this._boundGuardianPickerSelectionChange = this.guardianPickerSelectionChange.bind(this);
     this._boundAdultPickerSelectionChange = this.adultPickerSelectionChange.bind(this);

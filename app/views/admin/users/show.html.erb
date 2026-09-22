@@ -320,7 +320,7 @@
     </section>
 
     <!-- Applications Section with Modal Controller -->
-    <div data-controller="application-modal">
+    <div data-controller="application-modal" data-action="turbo:submit-end->application-modal#handleFormSubmit">
       <section aria-labelledby="applications-heading" class="bg-white rounded-lg shadow p-6 mb-6">
         <h2 id="applications-heading" class="text-xl font-semibold text-gray-900 mb-4"><%= @user.first_name %>'s Applications</h2>
         <div class="space-y-4">

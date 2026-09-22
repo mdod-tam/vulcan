@@ -189,6 +189,8 @@
         <h2 id="monthly-totals-heading" class="text-lg font-medium text-gray-900">Monthly Totals</h2>
         <button type="button" 
                 data-chart-toggle-target="button"
+                aria-expanded="false"
+                aria-controls="monthly-totals-chart"
                 data-action="chart-toggle#toggle" 
                 class="text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
           Show Chart
@@ -246,9 +248,11 @@
       <div id="monthly-totals-chart" data-chart-toggle-target="chart" class="hidden p-6 border-t border-gray-200">
         <div data-controller="chart"
              data-chart-data-value="<%= @monthly_totals_chart.to_json %>"
-             data-chart-type-value="bar"
              data-chart-format-value="currency"
-             style="height: 300px; width: 100%;">
+             data-chart-dataset-label-value="Monthly Total"
+             data-chart-y-axis-label-value="Amount in USD"
+             class="relative h-[300px] w-full">
+          <canvas data-chart-target="canvas" role="img" aria-label="Monthly voucher totals" aria-describedby="chart-description"></canvas>
         </div>
       </div>
     </div>

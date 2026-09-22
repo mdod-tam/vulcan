@@ -107,8 +107,9 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
     # Go to the recovery request details page
     visit admin_recovery_request_path(request)
 
-    # Approve the request (confirmation dialog removed in UI)
-    click_button 'Approve Security Key Reset'
+    accept_confirm do
+      click_button 'Approve Security Key Reset'
+    end
     wait_for_turbo
 
     # Verify success message

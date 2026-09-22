@@ -1,188 +1,71 @@
-// chart_controller.js
+import { Controller } from "@hotwired/stimulus"
+import {
+  Chart, BarController, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend
+} from "chart.js"
 
-import ChartBaseController from "./base_controller"
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend)
 
-/**
- * Chart Controller (v3)
- *
- * Builds on ChartBaseController; charts use fixed sizing (responsive: false) and
- * lazy-init via visibility-changed when nested inside chart-toggle.
- */
-export default class extends ChartBaseController {
+export default class extends Controller {
+  static targets = ["canvas"]
   static values = {
     data: Object,
-    type: { type: String, default: "bar" },
+    comparisonData: Object,
+    datasetLabel: { type: String, default: "Current Fiscal Year" },
+    comparisonLabel: { type: String, default: "Previous Fiscal Year" },
+    title: String,
+    compact: Boolean,
+    yAxisLabel: String,
     format: { type: String, default: "number" },
-    ariaLabel: { type: String, default: "Chart visualization" },
-    ariaDescription: { type: String, default: "Chart data is available in the table above" },
-    datasetLabel: { type: String, default: "Monthly Total" }
+    indexAxis: { type: String, default: "x" }
   }
 
   connect() {
-    super.connect()
-
-    this.onVisibilityChange = this.onVisibilityChange.bind(this)
-    this.element.addEventListener("visibility-changed", this.onVisibilityChange)
-
-    const Chart = this.getChart()
-    if (!Chart) {
-      return this.handleUnavailable()
+    const labels = Object.keys(this.dataValue)
+    const datasets = [{
+      label: this.datasetLabelValue,
+      data: labels.map(label => Number(this.dataValue[label]) || 0),
+      backgroundColor: "rgba(79, 70, 229, 0.8)",
+      borderColor: "rgb(79, 70, 229)",
+      borderWidth: 2
+    }]
+    if (Object.keys(this.comparisonDataValue).length) {
+      datasets.push({
+        label: this.comparisonLabelValue,
+        data: labels.map(label => Number(this.comparisonDataValue[label]) || 0),
+        backgroundColor: "rgba(156, 163, 175, 0.8)",
+        borderColor: "rgb(156, 163, 175)",
+        borderWidth: 2
+      })
     }
 
-    if (!this.isVisible()) {
-      return
+    const format = value => {
+      const number = Number(value).toLocaleString()
+      return this.formatValue === "currency" ? `$${number}` : number
     }
-
-    if (!this.validateData(this.dataValue)) {
-      return
+    const valueAxis = this.indexAxisValue === "y" ? "x" : "y"
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      indexAxis: this.indexAxisValue,
+      plugins: {
+        legend: { display: !this.compactValue },
+        title: { display: !this.compactValue && !!this.titleValue, text: this.titleValue },
+        tooltip: { callbacks: { label: context => `${context.dataset.label}: ${format(context.raw)}` } }
+      },
+      scales: {
+        [valueAxis]: { beginAtZero: true, ticks: { callback: format } }
+      }
     }
-
-    try {
-      this.createChart()
-    } catch (error) {
-      this.handleError("Error initializing chart", error)
+    options.scales.y = {
+      ...options.scales.y,
+      title: { display: !!this.yAxisLabelValue, text: this.yAxisLabelValue }
     }
+    this.chart = new Chart(this.canvasTarget, { type: "bar", data: { labels, datasets }, options })
   }
 
   disconnect() {
-    this.element.removeEventListener("visibility-changed", this.onVisibilityChange)
-    super.disconnect()
-  }
-
-  onVisibilityChange(event) {
-    if (event.detail?.visible && !this.chartInstance && this.validateData(this.dataValue)) {
-      this.createChart()
-    }
-  }
-
-  // When the dataValue changes, destroy/recreate the chart
-  dataValueChanged() {
-    if (this.chartInstance && this.validateData(this.dataValue)) {
-      this.cleanupExistingChart()
-      this.createChart()
-    }
-  }
-
-  // Called by the base‐controller's debounced resize handler
-  recreateChart() {
-    if (this.validateData(this.dataValue)) {
-      // Destroy first to avoid overflows, then redraw at new width
-      this.cleanupExistingChart()
-      this.createChart()
-    }
-  }
-
-  createChart() {
-    const Chart = this.getChart()
-
-    // 1) Create a new <canvas> (sized to the current container)
-    // 2) Mount it (wipes any previous chart + description)
-    const describedById = this.externalDescriptionId()
-    const { canvas, desc } = this.createCanvas(
-      this.ariaLabelValue,
-      this.ariaDescriptionValue,
-      { describedById }
-    )
-
-    // IMPORTANT: Mount the canvas FIRST, before creating the chart
-    // This ensures the canvas is in the DOM when Chart.js initializes
-    this.mountCanvas(canvas, desc)
-    this.applyContainerDimensions(canvas)
-
-    // 3) Grab the 2D drawing context
-    const ctx = this.getCtx(canvas)
-    if (!ctx) {
-      return
-    }
-
-    // 4) Turn string values into numbers (with fallback to 0)
-    const numericData = this.prepareChartData()
-
-    const currencyFormat = this.formatValue === "currency"
-    const formatValue = (value) => {
-      const n = Number(value)
-      if (currencyFormat) return "$" + n.toLocaleString()
-      return n.toLocaleString()
-    }
-
-    const customOptions = {
-      responsive: false,
-      maintainAspectRatio: false,
-      animation: false,
-      plugins: {
-        legend: {
-          display: true,
-          labels: { font: { size: 14 } }
-        },
-        tooltip: {
-          enabled: true,
-          callbacks: {
-            label: (context) => formatValue(context.raw)
-          },
-          bodyFont: { size: 14 },
-          titleFont: { size: 16 }
-        }
-      }
-    }
-
-    if (this.typeValue === "bar" || this.typeValue === "line") {
-      customOptions.scales = {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: (value) => formatValue(value),
-            font: { size: 14 }
-          },
-          title: currencyFormat ? {
-            display: true,
-            text: "Amount in USD",
-            font: { size: 16, weight: "bold" }
-          } : { display: false }
-        },
-        x: {
-          ticks: { font: { size: 14 } },
-          title: { display: false }
-        }
-      }
-    }
-
-    // 6) Merge with base options
-    const baseOptions = this.getDefaultOptions()
-    const finalOptions = this.mergeOptions(baseOptions, customOptions)
-
-    // 7) Finally instantiate the Chart
-    try {
-      this.chartInstance = new Chart(ctx, {
-        type: this.typeValue,
-        data: {
-          labels: Object.keys(numericData),
-          datasets: [
-            {
-              label: this.datasetLabelValue,
-              data: Object.values(numericData),
-              backgroundColor: "rgba(79, 70, 229, 0.7)",
-              borderColor: "rgba(79, 70, 229, 1)",
-              borderWidth: 2
-            }
-          ]
-        },
-        options: finalOptions
-      })
-    } catch (error) {
-      console.error("Failed to create chart instance:", error)
-      this.handleError("Failed to create chart", error)
-    }
-  }
-
-  prepareChartData() {
-    const data = this.dataValue || {}
-    const numericData = {}
-
-    Object.keys(data).forEach((key) => {
-      const parsed = parseFloat(data[key])
-      numericData[key] = isNaN(parsed) ? 0 : parsed
-    })
-
-    return numericData
+    this.chart.destroy()
+    this.chart = null
   }
 }

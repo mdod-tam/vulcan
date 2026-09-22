@@ -35,14 +35,14 @@
     <p id="status-chart-desc" class="sr-only">
       Chart showing the same status counts as the table above for <%= @metrics[:current_fy_range_label] %>.
     </p>
-    <div data-controller="reports-chart"
-         data-reports-chart-current-data-value="<%= @metrics[:status_chart_data].to_json %>"
-         data-reports-chart-previous-data-value="{}"
-         data-reports-chart-current-dataset-label-value="<%= @metrics[:current_fy_label] %>"
-         data-reports-chart-type-value="bar"
-         data-reports-chart-title-value="<%= @metrics[:current_fy_label] %> Application Status Snapshot"
+    <div data-controller="chart"
+         data-chart-data-value="<%= @metrics[:status_chart_data].to_json %>"
+         data-chart-comparison-data-value="{}"
+         data-chart-dataset-label-value="<%= @metrics[:current_fy_label] %>"
+         data-chart-title-value="<%= @metrics[:current_fy_label] %> Application Status Snapshot"
          class="relative w-full h-[300px]"
          aria-describedby="status-chart-desc">
+      <canvas data-chart-target="canvas" role="img" aria-labelledby="status-breakdown-heading" aria-describedby="status-chart-desc"></canvas>
     </div>
   </div>
 </section>

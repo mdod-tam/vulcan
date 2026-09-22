@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import { debounce } from "../../utils/debounce";
 
 export default class extends Controller {
   static values = {
@@ -6,10 +7,14 @@ export default class extends Controller {
   };
 
   connect() {
-    this.debouncedSubmit = this.debounce(
+    this.debouncedSubmit = debounce(
       this.submit.bind(this),
       this.delayValue
     );
+  }
+
+  disconnect() {
+    this.debouncedSubmit.cancel();
   }
 
   search() {
@@ -20,15 +25,4 @@ export default class extends Controller {
     this.element.requestSubmit();
   }
 
-  debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func.apply(this, args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
 }

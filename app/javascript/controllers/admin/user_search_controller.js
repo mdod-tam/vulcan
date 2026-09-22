@@ -1,6 +1,6 @@
 import BaseFormController from "../base/form_controller"
 import { setVisible } from "../../utils/visibility"
-import { simpleDebounce } from "../../utils/debounce"
+import { debounce } from "../../utils/debounce"
 
 class UserSearchController extends BaseFormController {
   static targets = [
@@ -464,7 +464,7 @@ class UserSearchController extends BaseFormController {
   addDebouncedListener(element, event, handler, wait = 300) {
     if (!element) return
 
-    const debounced = simpleDebounce(handler.bind(this), wait)
+    const debounced = debounce(handler.bind(this), wait)
     element.addEventListener(event, debounced)
 
     this._managedListeners = this._managedListeners || []

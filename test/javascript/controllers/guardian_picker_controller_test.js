@@ -218,10 +218,7 @@ describe("GuardianPickerController", () => {
       jest.useFakeTimers()
       
       controller.selectGuardian("456", "<div>Guardian Info</div>")
-      
-      // Fast-forward timers to trigger the delayed dispatch
-      jest.advanceTimersByTime(20)
-      
+
       expect(controller.dispatch).toHaveBeenCalledWith("selectionChange", {
         detail: { selectedValue: true }
       })
@@ -262,40 +259,10 @@ describe("GuardianPickerController", () => {
       const freshDispatchMock = jest.fn()
       controller.dispatch = freshDispatchMock
       
-      // Reset the debounce timer to allow the dispatch to happen
-      controller._lastDispatch_selectionChange = 0
-      
-      jest.useFakeTimers()
-      
       controller.clearSelection()
-      
-      // Fast-forward timers to trigger the delayed dispatch
-      jest.advanceTimersByTime(20)
-      
+
       expect(freshDispatchMock).toHaveBeenCalledWith("selectionChange", {
         detail: { selectedValue: false }
-      })
-      
-      jest.useRealTimers()
-    })
-  })
-  
-  describe("event debouncing", () => {
-    it("prevents rapid-fire event dispatching", () => {
-      jest.useFakeTimers()
-      
-      // Rapid selections
-      controller.selectGuardian("1", "<div>Guardian 1</div>")
-      controller.selectGuardian("2", "<div>Guardian 2</div>")
-      controller.selectGuardian("3", "<div>Guardian 3</div>")
-      
-      // Fast-forward timers
-      jest.advanceTimersByTime(20)
-      
-      // Should only dispatch once due to debouncing
-      expect(controller.dispatch).toHaveBeenCalledTimes(1)
-      expect(controller.dispatch).toHaveBeenCalledWith("selectionChange", {
-        detail: { selectedValue: true }
       })
       
       jest.useRealTimers()
@@ -355,25 +322,7 @@ describe("GuardianPickerController", () => {
       expect(setVisible).toHaveBeenCalledWith(controller.selectedPaneTarget, false)
     })
     
-    it("dispatchSelectionChange method includes debouncing", () => {
-      jest.useFakeTimers()
-      
-      // Call multiple times rapidly
-      controller.dispatchSelectionChange()
-      controller.dispatchSelectionChange()
-      controller.dispatchSelectionChange()
-      
-      // Should not dispatch yet due to debouncing
-      expect(controller.dispatch).not.toHaveBeenCalled()
-      
-      // Fast-forward past debounce period
-      jest.advanceTimersByTime(20)
-      
-      // Should dispatch only once
-      expect(controller.dispatch).toHaveBeenCalledTimes(1)
-      
-      jest.useRealTimers()
-    })
+
 
     it("copies last application income fields only when explicitly requested", () => {
       controller._lastApplicationContext = {

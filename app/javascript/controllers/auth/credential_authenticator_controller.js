@@ -7,20 +7,6 @@ class CredentialAuthenticatorController extends Controller {
     "verificationButton"
   ]
 
-
-
-  connect() {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("CredentialAuthenticatorController connected")
-    }
-  }
-
-  disconnect() {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("CredentialAuthenticatorController disconnected")
-    }
-  }
-
   // Fired when "Verify with Security Key" is clicked
   async startVerification(event) {
     event.preventDefault()
@@ -46,9 +32,6 @@ class CredentialAuthenticatorController extends Controller {
 
     // If no challenge in form, fetch it dynamically (old controller pattern)
     if (!challenge) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("No challenge in form, fetching dynamically...")
-      }
       
       try {
         const optionsUrl = form.action || '/two_factor_authentication/verification_options/webauthn'
@@ -68,22 +51,13 @@ class CredentialAuthenticatorController extends Controller {
         rpId = options.rpId
         allowCredentials = options.allowCredentials || []
         
-        if (process.env.NODE_ENV !== 'production') {
-          console.log("Fetched WebAuthn options:", options)
-        }
       } catch (error) {
         console.error("Failed to fetch WebAuthn options:", error)
-        if (error.message.includes('404')) {
-          console.error("No security keys are registered for this account.")
-        } else {
-          console.error("Failed to get verification options. Please try again.")
-        }
         return
       }
     }
 
     if (!challenge) {
-      console.error("No challenge found after fetching")
       console.error("Verification failed: No challenge provided.")
       return
     }
@@ -107,20 +81,11 @@ class CredentialAuthenticatorController extends Controller {
         null
       )
 
-      if (result.success) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log("WebAuthn verification successful")
-        }
-        console.log("Security key verified successfully!")
-      } else {
+      if (!result.success) {
         console.error(result.message || "Security key verification failed")
-        if (process.env.NODE_ENV !== 'production') {
-          console.error("WebAuthn verification failed:", result.details)
-        }
       }
     } catch (error) {
       console.error("WebAuthn verification error:", error)
-      console.error(`Error: ${error.message || "Something went wrong."}`)
     }
   }
 
@@ -135,18 +100,13 @@ class CredentialAuthenticatorController extends Controller {
           button.textContent = "Verified"
           button.disabled = true
         }
-        console.log("Security key verified successfully!")
       } else {
         console.error(result.message || "Security key verification failed")
-        if (process.env.NODE_ENV !== 'production') {
-          console.error("Key verification error:", result.details)
-        }
       }
 
       return result
     } catch (error) {
       console.error("Key verification error:", error)
-      console.error(`Error: ${error.message || "Something went wrong."}`)
       return { success: false, message: error.message }
     }
   }

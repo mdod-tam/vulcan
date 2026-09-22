@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
-import { createFormChangeDebounce } from "../../utils/debounce"
+import { debounce } from "../../utils/debounce"
 
 /**
  * Controller for managing dependent-related fields
@@ -44,7 +44,7 @@ class DependentFieldsController extends Controller {
     this._boundHandleApplicantTypeChange = this.handleApplicantTypeChange.bind(this)
 
     // Set up debounced applicant type change handler
-    this.debouncedApplicantTypeChange = createFormChangeDebounce(() => this.executeApplicantTypeChange())
+    this.debouncedApplicantTypeChange = debounce(() => this.executeApplicantTypeChange(), 20)
 
     // Set initial state based on checkboxes if available - use target safety
     if (this.hasSameAddressCheckboxTarget) {

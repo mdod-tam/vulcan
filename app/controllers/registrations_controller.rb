@@ -6,8 +6,6 @@ class RegistrationsController < ApplicationController
   # Require authentication for all actions except new and create
   skip_before_action :authenticate_user!, only: %i[new create]
 
-  # Set the current user for actions that require authentication
-  before_action :set_user, only: %i[edit update destroy]
   around_action :with_public_request_locale, only: %i[new create]
 
   # GET /sign_up
@@ -15,12 +13,6 @@ class RegistrationsController < ApplicationController
     @user = User.new
     @user.portal_self_registration = true
     @user.phone_type = :contact_email
-  end
-
-  # GET /edit_registration
-  def edit
-    @user = current_user
-    redirect_to sign_in_path, alert: 'You need to sign in to access this page.' unless @user
   end
 
   def create
@@ -48,33 +40,7 @@ class RegistrationsController < ApplicationController
     end
   end
 
-  # PATCH/PUT /update_registration
-  def update
-    if @user.update(registration_params)
-      redirect_to root_path, notice: 'Your account was successfully updated.'
-    else
-      flash.now[:alert] = 'There was a problem updating your account.'
-      render :edit
-    end
-  end
-
-  # DELETE /delete_account
-  def destroy
-    if @user.destroy
-      session[:user_id] = nil
-      redirect_to sign_in_path, notice: 'Your account has been deleted.'
-    else
-      redirect_to edit_registration_path, alert: 'There was a problem deleting your account.'
-    end
-  end
-
   private
-
-  # Use callbacks to share common setup or constraints between actions.
-  def set_user
-    @user = current_user
-    redirect_to sign_in_path, alert: 'You need to sign in to access this page.' unless @user
-  end
 
   def build_user
     @user = User.new(registration_params)

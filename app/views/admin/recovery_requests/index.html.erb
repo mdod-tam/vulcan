@@ -31,7 +31,7 @@
                               approve_admin_recovery_request_path(request), 
                               method: :post,
                               class: "bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded text-xs",
-                              data: { confirm: "This will remove all security keys for this user. They will need to re-register. Continue?" } %>
+                              data: { turbo_confirm: "This will remove all security keys for this user. They will need to re-register. Continue?" } %>
                 </div>
               </div>
             </div>

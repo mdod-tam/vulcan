@@ -15,7 +15,6 @@ The server re-decides anything the browser decided.
 - **Assets are built, not served from source.** [esbuild](../../esbuild.config.js) bundles `app/javascript/application.js` into `app/assets/builds` (`yarn build`); Tailwind is `yarn build:css`.
 - **Views own URLs and copy.** Controllers read them from values rather than constructing paths, which is why templates pass `:id` placeholder routes for URLs a controller will need after a record exists.
 - **Both attachment syntaxes are in use** — literal `data-controller` attributes and ERB `data:` hashes — so a grep for one finds roughly half the call sites.
-- `debug` is dynamically imported in development only.
 
 ## Autosave, as a representative interaction
 
@@ -74,9 +73,13 @@ Form length hints should track [the server validation](../../app/models/concerns
 
 ## Charts
 
-Chart.js is tree-shaken and registered in [`application.js`](../../app/javascript/application.js), exposed as `window.Chart`, with animation, responsiveness, and aspect-ratio maintenance disabled globally. [`ChartBaseController`](../../app/javascript/controllers/charts/base_controller.js) sets explicit canvas dimensions from the container, falling back to the parent and then 400×300, and destroys instances on disconnect.
+[`chart_controller.js`](../../app/javascript/controllers/charts/chart_controller.js) imports Chart.js and registers only bar-chart components. It remains part of the single application bundle. Views provide a canvas inside a relatively positioned container with a fixed height, plus stable accessible labels and text descriptions.
 
-The reason for the fixed sizing is that a chart in a hidden container measures zero: [`reports-chart`](../../app/javascript/controllers/charts/reports_chart_controller.js) queues initialization across animation frames until measurable, and [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) announces visibility changes. Patching `getComputedStyle` is a known dead end — Chart.js also calls it for tooltip and hover positioning.
+`connect()` constructs one responsive chart from the primary and optional comparison data. `disconnect()` destroys it. Chart.js handles container resizing and device-pixel-ratio changes; the controller does not measure, replace, defer, or poll canvases. Horizontal bars use `indexAxis: "y"`. Tooltips and normal Chart.js interactions remain enabled.
+
+The vendor chart is constructed while hidden. [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) only toggles its region and button state; Chart.js resizes the canvas when revealed. Reports retain the numeric cards and consolidated comparisons without the six duplicate compact charts.
+
+Production builds are minified and omit source maps; development builds retain them. Production also excludes the unused Turbo and Stimulus gem assets, including their source maps, because esbuild bundles these libraries. The shared debounce utility provides trailing calls and cancellation for controller teardown.
 
 ## Tests
 

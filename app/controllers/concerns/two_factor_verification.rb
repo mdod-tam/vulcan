@@ -7,7 +7,7 @@
 #
 # The module integrates with the TwoFactorAuth service module for logging
 # and session management, ensuring consistent behavior across the application.
-module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
+module TwoFactorVerification
   extend ActiveSupport::Concern
 
   protected
@@ -182,37 +182,6 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   end
 
   protected
-
-  # Error handling methods
-  def handle_verification_error(error, type, format = :html)
-    error_message = get_friendly_error_message(error, type)
-    log_verification_failure(current_user.id, type, error_message)
-
-    if format == :json || request.xhr?
-      render json: { error: error_message, details: error.message }, status: :unprocessable_content
-    else
-      flash.now[:alert] = error_message
-      render :new
-    end
-  end
-
-  def get_friendly_error_message(error, type)
-    case type
-    when :webauthn
-      case error.message
-      when /challenge/i
-        TwoFactorAuth::ERROR_MESSAGES[:webauthn_challenge_mismatch]
-      when /already registered/i
-        'This security key is already registered with your account.'
-      when /user verification/i
-        'Your device rejected the verification. Please ensure your fingerprint or PIN is set up correctly.'
-      else
-        "Verification failed: #{error.message}"
-      end
-    else
-      TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
-    end
-  end
 
   # Shared helper methods for credential management
 

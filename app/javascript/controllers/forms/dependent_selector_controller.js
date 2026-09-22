@@ -21,15 +21,6 @@ export default class extends Controller {
   }
 
   connect() {
-    console.log("DependentSelectorController connected - ALWAYS LOG THIS")
-    console.log("Available targets:", this.constructor.targets)
-    console.log("Form title target exists:", this.hasFormTitleTarget)
-    console.log("Apply self radio target exists:", this.hasApplySelfRadioTarget)
-    console.log("Apply dependent radio target exists:", this.hasApplyDependentRadioTarget)
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("DependentSelectorController connected")
-    }
 
     // Guard against multiple connections
     if (this._initialized) return;
@@ -54,9 +45,6 @@ export default class extends Controller {
 
   // Toggle dependent selection visibility based on radio button selection
   toggleDependentSelection(event) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("toggleDependentSelection:", event.target.value)
-    }
 
     if (!this.hasDependentSectionTarget) {
       return;
@@ -86,13 +74,11 @@ export default class extends Controller {
 
   // Alias for updateDependentName to match the action name in the view
   selectDependentAction(event) {
-    console.log("selectDependentAction called");
     this.updateDependentName();
   }
 
   // Update form title when dependent selection changes
   updateDependentName() {
-    console.log("updateDependentName called");
     this.updateFormTitleFromSelection();
 
     // Dispatch event with selected dependent info
@@ -143,16 +129,13 @@ export default class extends Controller {
   }
 
   updateFormTitleFromSelection() {
-    console.log("updateFormTitleFromSelection called");
     if (!this.hasDependentSelectTarget) {
-      console.log("No dependentSelectTarget found");
       return;
     }
 
     if (this.dependentSelectTarget.value) {
       const selectedOption = this.dependentSelectTarget.options[this.dependentSelectTarget.selectedIndex]
       const dependentName = selectedOption.text
-      console.log("Selected dependent name:", dependentName);
       this.updateFormTitle(`New Application for ${dependentName}`)
     } else {
       this.updateFormTitle("New Application")
@@ -164,7 +147,6 @@ export default class extends Controller {
       console.warn("Missing formTitle target - check HTML structure");
       return;
     }
-    console.log("Updating form title to:", title);
     this.formTitleTarget.textContent = title;
   }
 

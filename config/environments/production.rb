@@ -23,6 +23,12 @@ Rails.application.configure do
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"
 
+  # Turbo and Stimulus are bundled by esbuild; omit duplicate gem assets and maps.
+  config.assets.excluded_paths += [
+    Turbo::Engine.root.join('app/assets/javascripts'),
+    Stimulus::Engine.root.join('app/assets/javascripts')
+  ]
+
   # Store uploaded files on Amazon S3 via Bucketeer (see config/storage.yml for options).
   config.active_storage.service = :s3
 
