@@ -1,0 +1,14 @@
+es:
+  security_key_verification:
+    feedback:
+      preparing: "Preparando la verificación. Siga las instrucciones de su dispositivo o llave de seguridad."
+      verified: "Llave de seguridad verificada. Iniciando sesión…"
+      optionsError: "No se pudo iniciar la verificación. Inténtelo de nuevo o use otro método de verificación."
+      failed: "La verificación falló. Inténtelo de nuevo o use otro método de verificación."
+      timedOut: "Se agotó el tiempo de verificación. Inténtelo de nuevo."
+      networkError: "No se pudo conectar. Revise su conexión e inténtelo de nuevo."
+      NotAllowedError: "La verificación se canceló o se agotó el tiempo. Inténtelo de nuevo."
+      NotSupportedError: "Su navegador o dispositivo no admite esta llave de seguridad. Use otro método de verificación."
+      SecurityError: "Su navegador bloqueó la verificación. Use otro método de verificación."
+      AbortError: "La verificación se interrumpió. Inténtelo de nuevo."
+      InvalidStateError: "Su llave de seguridad no está lista. Vuelva a conectarla e inténtelo de nuevo, o use otro método de verificación."

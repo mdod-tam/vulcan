@@ -42,7 +42,8 @@
       </div>
     </div>
 
-    <div data-controller="credential-authenticator">
+    <div data-controller="credential-authenticator"
+         data-credential-authenticator-messages-value="<%= t('security_key_verification.feedback', locale: public_request_locale_param || I18n.default_locale).to_json %>">
       <%= form_with url: verification_options_two_factor_authentication_path(type: 'webauthn'),
         method: :get,
         local: true,
@@ -88,10 +89,16 @@
           <button type="button"
                   data-credential-authenticator-target="verificationButton"
                   data-action="click->credential-authenticator#startVerification"
-                  class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                  aria-describedby="security-key-feedback"
+                  aria-disabled="false"
+                  class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
             Verify with Device or Security Key
           </button>
         </div>
+        <p id="security-key-feedback"
+           data-credential-authenticator-target="feedback"
+           role="status" aria-live="polite" aria-atomic="true"
+           class="mt-4 text-sm text-gray-700"></p>
       </div>
       <% end %>
     </div>

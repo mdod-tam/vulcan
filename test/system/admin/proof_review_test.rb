@@ -127,7 +127,7 @@ module AdminTests
 
         # Approve the proof
         within('#incomeProofReviewModal') do
-          click_button 'Approve', wait: 5
+          accept_confirm { click_button 'Approve', wait: 5 }
         end
 
         # Wait for turbo to finish and attachments refresh
@@ -194,7 +194,7 @@ module AdminTests
 
       within '#incomeProofReviewModal' do
         assert_selector 'button', text: 'Approve', wait: 5
-        click_button 'Approve'
+        accept_confirm { click_button 'Approve' }
       end
 
       # Wait for turbo to finish and modal to close
@@ -258,7 +258,7 @@ module AdminTests
       click_review_proof_and_wait('income', timeout: 15)
 
       within '#incomeProofReviewModal' do
-        click_button 'Approve'
+        accept_confirm { click_button 'Approve' }
       end
 
       # Wait for Turbo Stream to complete and modal to close
@@ -303,7 +303,7 @@ module AdminTests
 
       # Approve the certification
       within '#medicalCertificationReviewModal' do
-        click_button 'Approve'
+        accept_confirm { click_button 'Approve' }
       end
 
       # Wait for Turbo Stream to complete; modal should close without full page reload

@@ -4,88 +4,71 @@ import { verifyWebAuthn } from "../../auth"
 class CredentialAuthenticatorController extends Controller {
   static targets = [
     "webauthnForm",
-    "verificationButton"
+    "verificationButton",
+    "feedback"
   ]
+  static values = { messages: Object }
 
-  // Fired when "Verify with Security Key" is clicked
   async startVerification(event) {
     event.preventDefault()
+    if (!this.hasWebauthnFormTarget) return
 
-    if (!this.hasWebauthnFormTarget) {
-      // If the form target is missing, bail out
-      return
-    }
+    const button = this.verificationButtonTarget
+    if (button.disabled) return
 
-    const form = this.webauthnFormTarget
-    const formData = new FormData(form)
-
-    let challenge = formData.get('challenge')
-    let timeout = parseInt(formData.get('timeout')) || 30000
-    let rpId = formData.get('rp_id')
-    let allowCredentials
+    button.disabled = true
+    button.setAttribute("aria-disabled", "true")
+    this.feedbackTarget.textContent = this.messagesValue.preparing
+    this.feedbackTarget.classList.remove("error")
 
     try {
-      allowCredentials = JSON.parse(formData.get('allow_credentials') || '[]')
-    } catch {
-      allowCredentials = []
-    }
+      const form = this.webauthnFormTarget
+      const formData = new FormData(form)
+      let challenge = formData.get('challenge')
+      let timeout = parseInt(formData.get('timeout')) || 30000
+      let rpId = formData.get('rp_id')
+      let allowCredentials
 
-    // If no challenge in form, fetch it dynamically (old controller pattern)
-    if (!challenge) {
-      
       try {
-        const optionsUrl = form.action || '/two_factor_authentication/verification_options/webauthn'
-        const response = await fetch(optionsUrl, {
+        allowCredentials = JSON.parse(formData.get('allow_credentials') || '[]')
+      } catch {
+        allowCredentials = []
+      }
+
+      if (!challenge) {
+        const response = await fetch(form.action || '/two_factor_authentication/verification_options/webauthn', {
           headers: { "Accept": "application/json" },
           credentials: "same-origin"
         })
-        
+        const options = await response.json()
         if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}`)
+          this.feedbackTarget.textContent = options.error || this.messagesValue.optionsError
+          return
         }
 
-        const options = await response.json()
-        
         challenge = options.challenge
         timeout = options.timeout || 30000
         rpId = options.rpId
         allowCredentials = options.allowCredentials || []
-        
-      } catch (error) {
-        console.error("Failed to fetch WebAuthn options:", error)
+      }
+
+      if (!challenge) {
+        this.feedbackTarget.textContent = this.messagesValue.optionsError
         return
       }
-    }
 
-    if (!challenge) {
-      console.error("Verification failed: No challenge provided.")
-      return
-    }
-
-    try {
-      const credentialOptions = {
-        challenge,
-        timeout,
-        rpId,
-        allowCredentials,
-        userVerification: "required"
-      }
-
-      // Use verification endpoint instead of options endpoint
-      const callbackUrl = '/two_factor_authentication/verify/webauthn'
-
-      // We pass `null` for the feedback element, since we now use the flash outlet
       const result = await verifyWebAuthn(
-        credentialOptions,
-        callbackUrl,
-        null
+        { challenge, timeout, rpId, allowCredentials, userVerification: "required" },
+        '/two_factor_authentication/verify/webauthn',
+        this.feedbackTarget,
+        this.messagesValue
       )
-
-      if (!result.success) {
-        console.error(result.message || "Security key verification failed")
-      }
-    } catch (error) {
-      console.error("WebAuthn verification error:", error)
+      if (result.success) this.feedbackTarget.textContent = this.messagesValue.verified
+    } catch {
+      this.feedbackTarget.textContent = this.messagesValue.optionsError
+    } finally {
+      button.disabled = false
+      button.setAttribute("aria-disabled", "false")
     }
   }
 

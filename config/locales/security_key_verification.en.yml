@@ -1,0 +1,14 @@
+en:
+  security_key_verification:
+    feedback:
+      preparing: "Preparing verification. Follow your device or security key prompt."
+      verified: "Security key verified. Signing you in…"
+      optionsError: "Could not start verification. Try again, or use another verification method."
+      failed: "Verification failed. Try again, or use another verification method."
+      timedOut: "Verification timed out. Please try again."
+      networkError: "Could not connect. Check your connection and try again."
+      NotAllowedError: "Verification was cancelled or timed out. Please try again."
+      NotSupportedError: "Your browser or device does not support this security key. Use another verification method."
+      SecurityError: "Your browser blocked verification. Use another verification method."
+      AbortError: "Verification was interrupted. Please try again."
+      InvalidStateError: "Your security key is not ready. Reconnect it and try again, or use another verification method."

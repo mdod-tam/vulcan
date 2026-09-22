@@ -79,7 +79,7 @@ module Admin
       # Approve the income proof within the modal
       within '#incomeProofReviewModal' do
         assert_selector 'button', text: 'Approve'
-        click_button 'Approve'
+        accept_confirm { click_button 'Approve' }
       end
 
       # Wait for success notification - implicit waiting

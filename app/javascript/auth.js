@@ -41,7 +41,7 @@ const Auth = {
   },
 
   // Core fetch with timeout and retries on 502/503
-  async sendRequest(url, method, body = null) {
+  async sendRequest(url, method, body = null, messages = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
@@ -74,24 +74,24 @@ const Auth = {
           continue;
         }
         clearTimeout(timeoutId);
-        return this.handleResponse(response);
+        return this.handleResponse(response, messages);
       } catch (error) {
         if (error.name === 'AbortError') {
           clearTimeout(timeoutId);
-          return this.formatError("Request timed out. Please try again.");
+          return this.formatError(messages.timedOut || "Request timed out. Please try again.");
         }
         clearTimeout(timeoutId);
         Logger.error(`Network error during ${method} to ${url}:`, error);
-        return this.formatError("Network error. Please check your connection and try again.");
+        return this.formatError(messages.networkError || "Network error. Please check your connection and try again.");
       }
     }
 
     clearTimeout(timeoutId);
-    return this.formatError("Operation failed after multiple attempts.");
+    return this.formatError(messages.failed || "Operation failed after multiple attempts.");
   },
 
   // Handle fetch response
-  async handleResponse(response) {
+  async handleResponse(response, messages = {}) {
     if (response.ok) {
       const data = await response.json();
       Logger.log("Operation successful:", data);
@@ -103,10 +103,11 @@ const Auth = {
         Logger.error(`Operation failed with status ${response.status}:`, errorData);
         return {
           success: false,
-          message: errorData.error || 'Operation failed',
+          message: errorData.error || messages.failed || 'Operation failed',
           details: errorData.details || ''
         };
       } catch (_) {
+        if (messages.failed) return this.formatError(messages.failed);
         const errorText = await response.text();
         Logger.error(`Operation failed with status ${response.status}:`, errorText);
         return {
@@ -182,8 +183,8 @@ const Auth = {
   },
 
   // WebAuthn verification
-  async verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback) {
-    this.updateFeedback(feedback, "Preparing to verify security key...", false);
+  async verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback, messages = {}) {
+    this.updateFeedback(feedback, messages.preparing || "Preparing to verify security key...", false);
     try {
       Logger.log("Requesting credential assertion with options:", credentialOptions);
       const credential = await WebAuthnJSON.get({ publicKey: credentialOptions });
@@ -191,12 +192,12 @@ const Auth = {
 
       const wrapped = { two_factor_authentication: credential };
       const url = callbackUrl || this.getEndpointUrl('verify', 'webauthn');
-      const result = await this.sendRequest(url, 'POST', wrapped);
+      const result = await this.sendRequest(url, 'POST', wrapped, messages);
       if (!result.success) this.updateFeedback(feedback, result.message);
       return result;
     } catch (error) {
       Logger.error("Verification failed:", error);
-      const msg = this.getErrorMessage(error);
+      const msg = messages[error.name] || messages.failed || this.getErrorMessage(error);
       this.updateFeedback(feedback, msg);
       return this.formatError(msg, error.message);
     }
@@ -217,8 +218,8 @@ const Auth = {
 const registerWebAuthn = (callbackUrl, credentialOptions, nickname, feedback) =>
   Auth.registerWebAuthnCredential(callbackUrl, credentialOptions, nickname, feedback);
 
-const verifyWebAuthn = (credentialOptions, callbackUrl, feedback) =>
-  Auth.verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback);
+const verifyWebAuthn = (credentialOptions, callbackUrl, feedback, messages) =>
+  Auth.verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback, messages);
 
 const verifyTotpCode = (code, callbackUrl, feedback) =>
   Auth.verifyCode('totp', code, callbackUrl, feedback);

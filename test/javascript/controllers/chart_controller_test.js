@@ -25,6 +25,17 @@ afterEach(async () => {
   document.body.innerHTML = ''
   await settle()
   application.stop()
+  jest.restoreAllMocks()
+})
+
+test('a construction failure does not cause a second error on disconnect', async () => {
+  const failure = new Error('Chart construction failed')
+  const handleError = jest.spyOn(Application.prototype, 'handleError').mockImplementation(() => {})
+  Chart.mockImplementationOnce(() => { throw failure })
+  await mount()
+  document.querySelector('[data-controller]').remove()
+  await settle()
+  expect(handleError.mock.calls.map(([error]) => error)).toEqual([failure])
 })
 
 test('connects to the view canvas without replacing accessible markup', async () => {
