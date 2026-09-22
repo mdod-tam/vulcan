@@ -120,3 +120,31 @@ test('existing helper callers without messages retain their feedback and result 
   expect(result).toEqual({ success: false, message: 'The operation was cancelled or timed out.', details: 'Cancelled' })
   expect(feedback).toHaveTextContent(result.message)
 })
+
+
+test('distinguishes a verified key from a failed sign-in session', async () => {
+  const session_failed = 'Your key was verified, but sign-in failed. Please sign in again.'
+  document.querySelector('div').dataset.credentialAuthenticatorMessagesValue = JSON.stringify({ ...messages, session_failed })
+  fetch.mockResolvedValueOnce(response(422, { error_code: 'session_failed', error: 'Unable to create session' }))
+  button.click()
+  await waitFor(() => expect(feedback).toHaveTextContent(session_failed))
+  expect(button).toBeEnabled()
+})
+
+test('logs non-JSON HTTP failures without exposing or rereading the response body', async () => {
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  log.mockClear()
+  const text = jest.fn().mockRejectedValue(new TypeError('Body has already been consumed'))
+  try {
+    const result = await Auth.handleResponse({
+      ok: false, status: 500, text,
+      json: async () => { throw new SyntaxError('Private proxy HTML') }
+    }, messages)
+    expect(result.message).toBe(messages.failed)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('500'))
+    expect(JSON.stringify(log.mock.calls)).not.toContain('Private')
+    expect(text).not.toHaveBeenCalled()
+  } finally {
+    log.mockRestore()
+  }
+})

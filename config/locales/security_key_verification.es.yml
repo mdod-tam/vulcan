@@ -13,6 +13,7 @@ es:
       AbortError: "La verificación se interrumpió. Inténtelo de nuevo."
       InvalidStateError: "Su llave de seguridad no está lista. Vuelva a conectarla e inténtelo de nuevo, o use otro método de verificación."
       verification_failed: *verification_failed
+      session_failed: "La verificación se completó correctamente, pero no se pudo iniciar sesión. Vuelva a iniciar sesión."
     page:
       heading: "Verificación con dispositivo o llave de seguridad"
       intro: "Use su dispositivo (huella digital o rostro) o una llave de seguridad física para completar el inicio de sesión."

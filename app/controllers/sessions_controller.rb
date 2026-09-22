@@ -60,11 +60,11 @@ class SessionsController < ApplicationController
     end
   end
 
+  private
+
   def default_url_options
     super.merge(locale: public_request_locale_param)
   end
-
-  private
 
   def login_contact_param
     params[:contact].presence || params[:email].presence
@@ -156,17 +156,17 @@ class SessionsController < ApplicationController
     case sms_challenge_result
     when :active
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: 'Enter the verification code we sent.'
+                  notice: t('two_factor_verification.sms.active')
     when :sent
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: 'A verification code has been sent.'
+                  notice: t('two_factor_verification.sms.sent')
     when :sending
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: TwoFactor::SmsLoginChallenge::DUPLICATE_SEND_MESSAGE
+                  notice: t('two_factor_verification.sms.sending')
     else
       TwoFactorAuth.abort_authentication(session)
       redirect_to sign_in_path,
-                  alert: 'Could not send verification code. Please try again.'
+                  alert: t('two_factor_verification.sms.sign_in_send_failed')
     end
   end
 end

@@ -65,7 +65,7 @@ module TwoFactorVerification
   end
 
   def verify_totp_credential(code)
-    return [false, 'No code provided'] if code.blank?
+    return [false, t('two_factor_verification.errors.no_code')] if code.blank?
 
     with_verified_user(:totp) do |user|
       verify_totp_code(code, user)
@@ -73,13 +73,13 @@ module TwoFactorVerification
   end
 
   def verify_sms_credential(code, credential_id)
-    return [false, 'No code provided'] if code.blank?
+    return [false, t('two_factor_verification.errors.no_code')] if code.blank?
 
     user = find_user_for_two_factor
-    return [false, 'User session not found'] unless user
+    return [false, t('two_factor_verification.errors.user_session')] unless user
 
     credential = sms_credential_from_active_challenge(user, credential_id)
-    return [false, TwoFactorAuth::ERROR_MESSAGES[:expired_code]] unless credential
+    return [false, t('two_factor_verification.errors.expired_code')] unless credential
 
     verify_sms_code(code, credential)
   end
@@ -89,7 +89,7 @@ module TwoFactorVerification
   # Base verification method with common user validation
   def with_verified_user(_credential_type)
     user_for_2fa = find_user_for_two_factor
-    return [false, 'User session not found'] unless user_for_2fa
+    return [false, t('two_factor_verification.errors.user_session')] unless user_for_2fa
 
     yield(user_for_2fa)
   end
@@ -134,7 +134,7 @@ module TwoFactorVerification
     end
 
     log_verification_failure(user.id, :totp, 'Invalid code', credential_ids: user.totp_credentials.pluck(:id))
-    [false, TwoFactorAuth::ERROR_MESSAGES[:invalid_code]]
+    [false, t('two_factor_verification.errors.invalid_code')]
   end
 
   def sms_credential_from_active_challenge(user, submitted_credential_id)
@@ -153,7 +153,7 @@ module TwoFactorVerification
   def verify_sms_code(code, credential)
     challenge = sms_login_challenge(credential)
     result = challenge.check(code)
-    return [false, TwoFactorAuth::ERROR_MESSAGES[:expired_code]] unless result
+    return [false, t('two_factor_verification.errors.expired_code')] unless result
 
     user_for_2fa = find_user_for_two_factor
 
@@ -169,18 +169,18 @@ module TwoFactorVerification
     else
       error_msg = result[:error] || 'Verification service unavailable'
       log_verification_failure(user_for_2fa.id, :sms, error_msg, credential_id: credential.id)
-      [false, TwoFactorAuth::ERROR_MESSAGES[:verification_service_unavailable]]
+      [false, t('two_factor_verification.errors.verification_service_unavailable')]
     end
   end
 
   def sms_verification_error_message(status)
     case status
     when 'expired', 'not_found'
-      TwoFactorAuth::ERROR_MESSAGES[:expired_code]
+      t('two_factor_verification.errors.expired_code')
     when 'max_attempts_reached'
-      TwoFactorAuth::ERROR_MESSAGES[:max_attempts_reached]
+      t('two_factor_verification.errors.max_attempts_reached')
     else
-      TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
+      t('two_factor_verification.errors.invalid_code')
     end
   end
 
@@ -251,7 +251,7 @@ module TwoFactorVerification
   end
 
   def sms_resend_wait_message(wait_seconds)
-    "Please wait #{wait_seconds} seconds before requesting another code."
+    t('two_factor_verification.sms.wait', seconds: wait_seconds)
   end
 
   def sms_login_challenge(credential)

@@ -20,20 +20,17 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
       credential = WebAuthn::Credential.from_create(registration)
       create(:webauthn_credential, user: user, external_id: credential.id, public_key: credential.public_key)
 
-      if locale == :es
-        user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
-        user.sms_credentials.create!(phone_number: '410-555-1234', verified_at: Time.current)
-      end
+      user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+      user.sms_credentials.create!(phone_number: '410-555-1234', verified_at: Time.current)
 
       fill_in 'contact-input', with: user.email
       fill_in 'password-input', with: 'password123'
       click_button I18n.t('sessions.form.submit', locale: locale)
-      if locale == :es
-        assert_current_path verify_two_factor_authentication_path(locale: locale)
-        assert_selector 'h1', text: I18n.t('security_key_verification.page.choice_heading', locale: locale)
-        capture('security-key-method-choice-spanish')
-        click_link I18n.t('security_key_verification.page.choice_key', locale: locale)
-      end
+      assert_current_path verify_two_factor_authentication_path(locale: locale)
+      assert_selector 'h1', text: I18n.t('security_key_verification.page.choice_heading', locale: locale)
+      capture('security-key-method-choice')
+      exercise_code_methods(user.totp_credentials.sole)
+      click_link I18n.t('two_factor_verification.common.use_key', locale: locale)
       assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
       assert_selector "html[lang='#{locale}']", visible: :all
       assert_selector 'h1', text: I18n.t('security_key_verification.page.heading', locale: locale)
@@ -74,11 +71,24 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
       page.current_window.resize_to(390, 844)
       capture('security-key-server-rejection-narrow')
 
+      TwoFactorAuthenticationsController.any_instance.expects(:_create_and_set_session_cookie).returns(nil)
       click_button verification_button
       finish_prompt(sign_assertion(client, origin.host))
+      assert_feedback(:session_failed)
+      capture('security-key-session-failure-narrow')
+      TwoFactorAuthenticationsController.any_instance.unstub(:_create_and_set_session_cookie)
+
+      visit sign_in_path(locale: locale)
+      fill_in 'contact-input', with: user.email
+      fill_in 'password-input', with: 'password123'
+      click_button I18n.t('sessions.form.submit', locale: locale)
+      click_link I18n.t('security_key_verification.page.choice_key', locale: locale)
+      install_authenticator_prompt
+      click_button verification_button
+      finish_prompt(sign_assertion(client, origin.host, sign_count: 2))
       assert_current_path constituent_portal_dashboard_path, ignore_query: true
       assert_selector 'h1', text: 'Dashboard'
-      assert_equal 1, user.webauthn_credentials.sole.reload.sign_count
+      assert_equal 2, user.webauthn_credentials.sole.reload.sign_count
       capture('security-key-retry-signed-in')
     ensure
       WebAuthn.configuration.allowed_origins = original_origins
@@ -87,6 +97,49 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
   end
 
   private
+
+  def exercise_code_methods(credential)
+    click_link I18n.t('security_key_verification.page.choice_totp', locale: @locale)
+    assert_current_path verify_method_two_factor_authentication_path(type: 'totp', locale: @locale)
+    assert_selector 'h1', text: code_copy('totp.heading')
+    capture('mfa-totp-ready')
+    totp = ROTP::TOTP.new(credential.secret)
+    invalid_code = (0..10).map { |n| format('%06d', n) }.find { |code| !totp.verify(code, drift_behind: 30, drift_ahead: 30) }
+    fill_in code_copy('common.code_label'), with: invalid_code
+    click_button code_copy('common.submit')
+    assert_text code_copy('errors.invalid_code')
+    assert_field code_copy('common.code_label')
+    page.current_window.resize_to(390, 844)
+    capture('mfa-totp-invalid-narrow')
+    page.current_window.resize_to(1200, 900)
+
+    TwilioVerifyService.stubs(:send_verification).returns(success: true, verification_sid: 'TEST_LOCALE_SMS', status: 'pending')
+    click_button code_copy('common.use_sms')
+    assert_current_path verify_method_two_factor_authentication_path(type: 'sms', locale: @locale)
+    assert_text code_copy('sms.sent')
+    assert_selector 'h1', text: code_copy('sms.heading')
+    capture('mfa-sms-sent')
+    click_link code_copy('sms.resend')
+    assert_selector '#sms_resend', text: /#{@locale == :es ? 'Espere' : 'Please wait'} \d+/
+    capture('mfa-sms-resend-wait')
+
+    TwilioVerifyService.stubs(:check_verification).returns(success: true, status: 'max_attempts_reached', valid: false)
+    fill_in code_copy('common.code_label'), with: '123456'
+    click_button code_copy('common.submit')
+    assert_text code_copy('errors.max_attempts_reached')
+    assert_button code_copy('sms.send')
+    page.current_window.resize_to(390, 844)
+    capture('mfa-sms-expired-narrow')
+    click_button code_copy('sms.send')
+    assert_field code_copy('common.code_label')
+    assert_button code_copy('common.submit')
+    capture('mfa-sms-retry-narrow')
+    page.current_window.resize_to(1200, 900)
+  end
+
+  def code_copy(key)
+    I18n.t("two_factor_verification.#{key}", locale: @locale)
+  end
 
   def verification_button
     I18n.t('security_key_verification.page.submit', locale: @locale)
@@ -116,10 +169,10 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
     JS
   end
 
-  def sign_assertion(client, rp_id)
+  def sign_assertion(client, rp_id, sign_count: 1)
     assert_selector 'html[data-key-prompt="ready"]', visible: :all
     challenge = page.evaluate_script('window.keyPrompt.challenge')
-    client.get(challenge: challenge, rp_id: rp_id, user_verified: true, sign_count: 1)
+    client.get(challenge: challenge, rp_id: rp_id, user_verified: true, sign_count: sign_count)
   end
 
   def finish_prompt(assertion)

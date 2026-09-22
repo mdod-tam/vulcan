@@ -107,6 +107,29 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
     assert_select 'h1', I18n.t('security_key_verification.page.heading', locale: :en)
   end
 
+  %i[en es].each do |locale|
+    test "verified key with session failure has a distinct localized response in #{locale}" do
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      assertion = assertion_for(locale)
+      TwoFactorAuthenticationsController.any_instance.expects(:_create_and_set_session_cookie).returns(nil)
+
+      assert_no_difference('Session.count') do
+        post process_verification_two_factor_authentication_path(type: 'webauthn', locale: locale),
+             params: { two_factor_authentication: assertion }, as: :json
+      end
+      assert_response :unprocessable_content
+      assert_equal 'session_failed', response.parsed_body['error_code']
+      assert_equal I18n.t('security_key_verification.feedback.session_failed', locale: locale), response.parsed_body['error']
+      assert_equal 1, @credential.reload.sign_count
+    end
+  end
+
+  test 'locale URL defaults are not routable controller actions' do
+    [SessionsController, TwoFactorAuthenticationsController].each do |controller|
+      assert_not_includes controller.action_methods, 'default_url_options'
+    end
+  end
+
   private
 
   def assertion_for(locale)

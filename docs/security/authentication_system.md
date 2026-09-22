@@ -38,7 +38,7 @@ Registration and verification are split across [`TwoFactorCredentialsController`
 
 Two ordering details matter: JSON and WebAuthn completion must create the session before clearing the challenge, and resolving the temporary MFA user rechecks `public_login_active?`, so an account retired mid-sign-in cannot finish verifying.
 
-The public sign-in locale is carried into MFA redirects and verification URLs; it does not come from the matched account. The security-key page and method chooser support English and Spanish. Credential lookup, challenge, and signature failures return the same JSON 422 response and `verification_failed` code with translated retry guidance. Server logs retain the failure category, without sending verifier details to the browser.
+The public sign-in locale is carried into MFA redirects and verification URLs; it does not come from the matched account. The method chooser and security-key, authenticator-app, and SMS verification pages support English and Spanish, including code errors and SMS send/resend feedback. Credential lookup, challenge, and signature failures return the same JSON 422 response and `verification_failed` code with translated retry guidance. Server logs retain the failure category, without sending verifier details to the browser. A verified key followed by a session creation failure returns `session_failed` with guidance to sign in again. Non-JSON HTTP failures produce a status-only console diagnostic and generic user feedback.
 
 WebAuthn enrollment uses **Maryland Accessible Telecommunications** as its display name. The [WebAuthn initializer](../../config/initializers/webauthn.rb) configures the RP ID and allowed origins separately; these define the credential scope and accepted origins.
 

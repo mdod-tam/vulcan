@@ -12,7 +12,9 @@ en:
       SecurityError: "Your browser blocked verification. Use another verification method."
       AbortError: "Verification was interrupted. Please try again."
       InvalidStateError: "Your security key is not ready. Reconnect it and try again, or use another verification method."
+      # These keys match server error_code values consumed by Auth.handleResponse.
       verification_failed: *verification_failed
+      session_failed: "Verification succeeded, but sign-in could not be completed. Please sign in again."
     page:
       heading: "Device or Security Key Verification"
       intro: "Use your device (fingerprint or face) or a physical security key to complete sign-in."

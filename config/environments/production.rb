@@ -23,8 +23,7 @@ Rails.application.configure do
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"
 
-  # Turbo and Stimulus are bundled by esbuild.
-  # Exclude duplicate gem assets and source maps.
+  # esbuild bundles Turbo and Stimulus, so their duplicate gem assets are excluded.
   config.assets.excluded_paths += [
     Turbo::Engine.root.join('app/assets/javascripts'),
     Stimulus::Engine.root.join('app/assets/javascripts')

@@ -150,7 +150,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     else
       handle_error_response(
         html_redirect_path: verify_two_factor_authentication_path,
-        error_message: 'SMS verification not available'
+        error_message: t('two_factor_verification.errors.sms_unavailable')
       )
     end
   end
@@ -183,25 +183,25 @@ class TwoFactorAuthenticationsController < ApplicationController
     return redirect_to sign_in_path, status: :see_other unless @user
 
     credential = resolve_sms_credential_for_resend(@user)
-    return redirect_to verify_two_factor_authentication_path, alert: 'SMS verification not available', status: :see_other unless credential
+    return redirect_to verify_two_factor_authentication_path, alert: t('two_factor_verification.errors.sms_unavailable'), status: :see_other unless credential
 
     sms_challenge_result = ensure_sms_challenge_for_user(credential, @user)
     case sms_challenge_result
     when :active
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: 'Enter the verification code we sent.',
+                  notice: t('two_factor_verification.sms.active'),
                   status: :see_other
     when :sent
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: 'A verification code has been sent.',
+                  notice: t('two_factor_verification.sms.sent'),
                   status: :see_other
     when :sending
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: TwoFactor::SmsLoginChallenge::DUPLICATE_SEND_MESSAGE,
+                  notice: t('two_factor_verification.sms.sending'),
                   status: :see_other
     else
       redirect_to verify_two_factor_authentication_path,
-                  alert: 'Could not send verification code.',
+                  alert: t('two_factor_verification.sms.send_failed'),
                   status: :see_other
     end
   end
@@ -212,7 +212,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     return redirect_to sign_in_path unless @user
 
     credential = resolve_sms_credential_for_resend(@user)
-    return handle_error_response(error_message: 'SMS verification not available') unless credential
+    return handle_error_response(error_message: t('two_factor_verification.errors.sms_unavailable')) unless credential
 
     sms_challenge_result = resend_sms_challenge_for_user(credential, @user)
     if sms_challenge_result == :waiting
@@ -248,11 +248,11 @@ class TwoFactorAuthenticationsController < ApplicationController
     handle_webauthn_verification_options
   end
 
+  private
+
   def default_url_options
     super.merge(locale: public_request_locale_param)
   end
-
-  private
 
   # Find user for setup flow (authenticated or in 2FA flow)
   def find_setup_user
@@ -342,7 +342,8 @@ class TwoFactorAuthenticationsController < ApplicationController
         return_to = stored_location || _dashboard_for(@user)
         render json: { status: 'success', redirect_url: return_to }
       else
-        render json: { error: 'Unable to create session' }, status: :unprocessable_content
+        render json: { error: t('security_key_verification.feedback.session_failed'), error_code: 'session_failed' },
+               status: :unprocessable_content
       end
     end
   end
@@ -492,7 +493,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   end
 
   def render_resend_success(credential)
-    message = 'A new verification code has been sent.'
+    message = t('two_factor_verification.sms.resent')
     respond_to do |format|
       format.html { redirect_to resend_sms_redirect_path(credential), notice: message }
       format.turbo_stream do
@@ -510,7 +511,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   end
 
   def render_resend_failure(credential)
-    message = 'Could not send verification code.'
+    message = t('two_factor_verification.sms.send_failed')
     respond_to do |format|
       format.html { redirect_to resend_sms_redirect_path(credential), alert: message }
       format.turbo_stream do

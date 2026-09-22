@@ -107,14 +107,8 @@ const Auth = {
           details: errorData.details || ''
         };
       } catch (_) {
-        if (messages.failed) return this.formatError(messages.failed);
-        const errorText = await response.text();
-        Logger.error(`Operation failed with status ${response.status}:`, errorText);
-        return {
-          success: false,
-          message: `Operation failed: ${errorText || 'Unknown error'}`,
-          details: ''
-        };
+        Logger.error(`Operation failed with status ${response.status}: invalid JSON response`);
+        return this.formatError(messages.failed || `Operation failed (HTTP ${response.status}). Please try again.`);
       }
     }
   },

@@ -61,7 +61,7 @@ export default class extends Controller {
     }
     
     if (!passwordField) {
-      console.error("Error: Password field not found for visibility toggle. Please contact support.")
+      console.error("Password visibility toggle has no input field.")
       return;
     }
 

@@ -77,6 +77,8 @@ Form length hints should track [the server validation](../../app/models/concerns
 
 `connect()` constructs one responsive chart from the primary and optional comparison data. `disconnect()` destroys it. Chart.js handles container resizing and device-pixel-ratio changes; the controller does not measure, replace, defer, or poll canvases. Horizontal bars use `indexAxis: "y"`. Tooltips and normal Chart.js interactions remain enabled.
 
+Do not patch `getComputedStyle`: Chart.js uses real element measurements for hover and tooltip positioning, so zero-size stubs can break interactions.
+
 The vendor chart is constructed while hidden. [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) only toggles its region and button state; Chart.js resizes the canvas when revealed. Reports retain the numeric cards and consolidated comparisons without the six duplicate compact charts.
 
 Production builds are minified and omit source maps; development builds retain them. Production also excludes the unused Turbo and Stimulus gem assets, including their source maps, because esbuild bundles these libraries. The shared debounce utility provides trailing calls and cancellation for controller teardown.
