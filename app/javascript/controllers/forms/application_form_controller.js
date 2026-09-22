@@ -7,7 +7,6 @@ import { Controller } from "@hotwired/stimulus"
  * Most functionality has been moved to:
  * - income-validation (FPL validation)
  * - currency-formatter (input formatting)  
- * - dependent-selector (dependent management)
  * - accessibility-announcer (screen reader support)
  */
 export default class extends Controller {
@@ -60,10 +59,6 @@ export default class extends Controller {
 
   formatCurrencyInput() {
     console.warn("formatCurrencyInput is deprecated. Use currency-formatter controller instead.")
-  }
-
-  toggleDependentSelection() {
-    console.warn("toggleDependentSelection is deprecated. Use dependent-selector controller instead.")
   }
 
   initiateDependentSubmission() {

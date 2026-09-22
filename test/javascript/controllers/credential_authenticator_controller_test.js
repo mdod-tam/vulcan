@@ -17,7 +17,7 @@ let application, button, feedback
 const originalFetch = global.fetch
 
 beforeEach(async () => {
-  document.body.innerHTML = `<div data-controller="credential-authenticator">
+  document.body.innerHTML = `<div data-controller="credential-authenticator" data-credential-authenticator-verification-url-value="/verify?locale=es">
     <form action="/options" data-credential-authenticator-target="webauthnForm">
       <button type="button" data-credential-authenticator-target="verificationButton"
         data-action="click->credential-authenticator#startVerification" aria-describedby="feedback">Verify</button>
@@ -59,14 +59,15 @@ test('shows pending state, prevents overlapping attempts, and permits retry afte
   button.click()
   await waitFor(() => expect(feedback).toHaveTextContent(messages.verified))
   expect(WebAuthnJSON.get.mock.calls[1][0].publicKey.challenge).toBe('new-challenge')
+  expect(fetch).toHaveBeenLastCalledWith('/verify?locale=es', expect.objectContaining({ method: 'POST' }))
 })
 
-test.each(['options', 'verification'])('renders the %s endpoint error as text', async (stage) => {
+test.each(['options', 'verification'])('hides internal %s endpoint errors behind localized feedback', async (stage) => {
   const error = '<img src=x onerror=alert(1)> Please sign in again.'
   if (stage === 'options') fetch.mockReset()
   fetch.mockResolvedValueOnce(response(422, { error, details: 'Private diagnostic' }))
   button.click()
-  await waitFor(() => expect(feedback.textContent).toBe(error))
+  await waitFor(() => expect(feedback.textContent).toBe(stage === 'options' ? messages.optionsError : messages.failed))
   expect(feedback.querySelector('img')).toBeNull()
   expect(feedback.textContent).not.toContain('Private diagnostic')
   expect(button).toBeEnabled()
@@ -101,6 +102,16 @@ test('uses the rendered locale for browser failures', async () => {
   WebAuthnJSON.get.mockRejectedValueOnce(new DOMException('Cancelled', 'NotAllowedError'))
   button.click()
   await waitFor(() => expect(feedback).toHaveTextContent('La verificación se canceló. Inténtelo de nuevo.'))
+})
+
+test.each(['verification_failed', 'unknown_code'])('maps server code %s without showing verifier details', async (error_code) => {
+  document.querySelector('div').dataset.credentialAuthenticatorMessagesValue = JSON.stringify({
+    ...messages, verification_failed: 'Translated failure'
+  })
+  fetch.mockResolvedValueOnce(response(422, { error_code, error: 'Credential not found', details: 'Internal verifier detail' }))
+  button.click()
+  await waitFor(() => expect(feedback).toHaveTextContent(error_code === 'verification_failed' ? 'Translated failure' : messages.failed))
+  expect(feedback.textContent).not.toContain('Credential')
 })
 
 test('existing helper callers without messages retain their feedback and result contract', async () => {

@@ -35,7 +35,7 @@ Requests are tracked by `key`, and reusing an in-flight key cancels the earlier 
 
 `BaseFormController#collectFormData` ([base/form_controller.js](../../app/javascript/controllers/base/form_controller.js)) flattens `FormData` into literal keys: `constituent[email]` stays that string rather than nesting. Names ending in `[]` become arrays under the unbracketed name.
 
-Server-rendered HTML goes through Turbo frames and streams. Authentication and a few lookups still call `fetch` directly and keep their own response contracts.
+Server-rendered HTML goes through Turbo frames and streams. Authentication and a few lookups still call `fetch` directly and keep their own response contracts. Security-key verification reads its URL and translated feedback from the view; recognized server error codes select local messages, and unknown failures use generic retry guidance. `Auth` and WebAuthn are module imports, not window globals.
 
 ## Submit gating
 

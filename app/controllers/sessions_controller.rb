@@ -60,6 +60,10 @@ class SessionsController < ApplicationController
     end
   end
 
+  def default_url_options
+    super.merge(locale: public_request_locale_param)
+  end
+
   private
 
   def login_contact_param

@@ -38,6 +38,8 @@ Registration and verification are split across [`TwoFactorCredentialsController`
 
 Two ordering details matter: JSON and WebAuthn completion must create the session before clearing the challenge, and resolving the temporary MFA user rechecks `public_login_active?`, so an account retired mid-sign-in cannot finish verifying.
 
+The public sign-in locale is carried into MFA redirects and verification URLs; it does not come from the matched account. The security-key page and method chooser support English and Spanish. Credential lookup, challenge, and signature failures return the same JSON 422 response and `verification_failed` code with translated retry guidance. Server logs retain the failure category, without sending verifier details to the browser.
+
 WebAuthn enrollment uses **Maryland Accessible Telecommunications** as its display name. The [WebAuthn initializer](../../config/initializers/webauthn.rb) configures the RP ID and allowed origins separately; these define the credential scope and accepted origins.
 
 TOTP provisioning URIs retain `MatVulcan` as the issuer, a deliberate exception to the public program name. The issuer labels new enrollments; changing it does not rename existing authenticator entries or alter TOTP codes.

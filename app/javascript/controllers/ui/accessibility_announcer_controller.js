@@ -18,7 +18,6 @@ export default class extends Controller {
     // Store bound method references for proper cleanup
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this)
     this._boundHandleCurrencyFormat = this.handleCurrencyFormat.bind(this)
-    this._boundHandleDependentSelection = this.handleDependentSelection.bind(this)
     
     this.setupEventListeners()
   }
@@ -32,13 +31,11 @@ export default class extends Controller {
     // Listen for custom events from other controllers
     this.element.addEventListener("income-validation:validated", this._boundHandleIncomeValidation)
     this.element.addEventListener("currency-formatter:formatted", this._boundHandleCurrencyFormat)
-    this.element.addEventListener("dependent-selector:selectionChanged", this._boundHandleDependentSelection)
   }
 
   teardownEventListeners() {
     this.element.removeEventListener("income-validation:validated", this._boundHandleIncomeValidation)
     this.element.removeEventListener("currency-formatter:formatted", this._boundHandleCurrencyFormat)
-    this.element.removeEventListener("dependent-selector:selectionChanged", this._boundHandleDependentSelection)
   }
 
   // Create or ensure the main announcer element exists
@@ -115,17 +112,6 @@ export default class extends Controller {
   handleCurrencyFormat(event) {
     const { formattedValue } = event.detail
     this.announce(`Annual income formatted as: ${formattedValue}`)
-  }
-
-  // Handle dependent selection announcements
-  handleDependentSelection(event) {
-    const { isForSelf } = event.detail
-    
-    if (isForSelf) {
-      this.announce('Application is now for yourself.')
-    } else {
-      this.announce('Application is now for a dependent. Please select which dependent.')
-    }
   }
 
   // Action methods for manual announcements

@@ -18,7 +18,7 @@ const buildOptions = {
   }
 }
 
-// Remove a previous development map before assets are published.
+// Remove a stale development source map from production builds.
 if (isProduction) {
   require('node:fs').rmSync('app/assets/builds/application.js.map', { force: true })
 }

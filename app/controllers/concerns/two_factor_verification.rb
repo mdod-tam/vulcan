@@ -98,9 +98,15 @@ module TwoFactorVerification
   def verify_webauthn_challenge(params, user)
     webauthn_credential = WebAuthn::Credential.from_get(params)
     stored_credential = user.webauthn_credentials.find_by(external_id: webauthn_credential.id)
-    return [false, 'Credential not found'] unless stored_credential
+    unless stored_credential
+      log_verification_failure(user.id, :webauthn, 'Credential not found')
+      return [false, :verification_failed]
+    end
 
     perform_webauthn_verification(webauthn_credential, stored_credential, user)
+  rescue WebAuthn::Error, OpenSSL::PKey::PKeyError => e
+    log_verification_failure(user.id, :webauthn, e.class.name, credential_id: stored_credential&.id)
+    [false, :verification_failed]
   end
 
   def perform_webauthn_verification(webauthn_credential, stored_credential, user)
@@ -114,9 +120,6 @@ module TwoFactorVerification
     stored_credential.update!(sign_count: webauthn_credential.sign_count)
     log_verification_success(user.id, :webauthn, credential_id: stored_credential.id)
     [true, 'Verification successful']
-  rescue WebAuthn::Error => e
-    log_verification_failure(user.id, :webauthn, e.message, credential_id: stored_credential&.id)
-    [false, "Verification failed: #{e.message}"]
   end
 
   # TOTP specific verification

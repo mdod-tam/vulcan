@@ -103,7 +103,7 @@ const Auth = {
         Logger.error(`Operation failed with status ${response.status}:`, errorData);
         return {
           success: false,
-          message: errorData.error || messages.failed || 'Operation failed',
+          message: messages[errorData.error_code] || messages.failed || errorData.error || 'Operation failed',
           details: errorData.details || ''
         };
       } catch (_) {

@@ -7,7 +7,7 @@ class CredentialAuthenticatorController extends Controller {
     "verificationButton",
     "feedback"
   ]
-  static values = { messages: Object }
+  static values = { messages: Object, verificationUrl: String }
 
   async startVerification(event) {
     event.preventDefault()
@@ -42,7 +42,7 @@ class CredentialAuthenticatorController extends Controller {
         })
         const options = await response.json()
         if (!response.ok) {
-          this.feedbackTarget.textContent = options.error || this.messagesValue.optionsError
+          this.feedbackTarget.textContent = this.messagesValue.optionsError
           return
         }
 
@@ -59,7 +59,7 @@ class CredentialAuthenticatorController extends Controller {
 
       const result = await verifyWebAuthn(
         { challenge, timeout, rpId, allowCredentials, userVerification: "required" },
-        '/two_factor_authentication/verify/webauthn',
+        this.verificationUrlValue,
         this.feedbackTarget,
         this.messagesValue
       )
@@ -72,29 +72,6 @@ class CredentialAuthenticatorController extends Controller {
     }
   }
 
-  // Alternate entry point if you want to verify a key outside of the form flow
-  async verifyKey(options) {
-    try {
-      const result = await verifyWebAuthn(options, null, null)
-
-      if (result.success) {
-        if (this.hasVerificationButtonTarget) {
-          const button = this.verificationButtonTarget
-          button.textContent = "Verified"
-          button.disabled = true
-        }
-      } else {
-        console.error(result.message || "Security key verification failed")
-      }
-
-      return result
-    } catch (error) {
-      console.error("Key verification error:", error)
-      return { success: false, message: error.message }
-    }
-  }
 }
-
-// Apply target safety mixin
 
 export default CredentialAuthenticatorController

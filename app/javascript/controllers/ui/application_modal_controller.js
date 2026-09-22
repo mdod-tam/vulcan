@@ -2,7 +2,6 @@ import { Controller } from "@hotwired/stimulus"
 
 class ApplicationModalController extends Controller {
   handleFormSubmit(event) {
-    // If form submission was successful, close the modal and refresh through Turbo
     if (event.detail.success) {
       const dialog = event.target.closest("dialog")
       if (dialog) {

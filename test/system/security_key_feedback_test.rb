@@ -4,87 +4,101 @@ require 'application_system_test_case'
 require 'webauthn/fake_client'
 
 class SecurityKeyFeedbackTest < ApplicationSystemTestCase
-  test 'security key failures remain visible and retry completes sign in' do
-    original_origins = WebAuthn.configuration.allowed_origins
-    original_rp_id = WebAuthn.configuration.rp_id
-    visit sign_in_path
-    origin = URI.parse(page.current_url)
-    WebAuthn.configuration.allowed_origins = ["#{origin.scheme}://#{origin.host}:#{origin.port}"]
-    WebAuthn.configuration.rp_id = origin.host
-    client = WebAuthn::FakeClient.new(WebAuthn.configuration.allowed_origins.first)
-    user = create(:constituent, email_verified: true, verified: true)
-    registration = client.create(challenge: SecureRandom.urlsafe_base64(32), rp_id: origin.host)
-    credential = WebAuthn::Credential.from_create(registration)
-    create(:webauthn_credential, user: user, external_id: credential.id, public_key: credential.public_key)
+  %i[en es].each do |locale|
+    test "security key failures remain private and retry completes sign in in #{locale}" do
+      @locale = locale
+      original_origins = WebAuthn.configuration.allowed_origins
+      original_rp_id = WebAuthn.configuration.rp_id
+      visit sign_in_path(locale: locale)
+      capture('security-key-sign-in')
+      origin = URI.parse(page.current_url)
+      WebAuthn.configuration.allowed_origins = ["#{origin.scheme}://#{origin.host}:#{origin.port}"]
+      WebAuthn.configuration.rp_id = origin.host
+      client = WebAuthn::FakeClient.new(WebAuthn.configuration.allowed_origins.first)
+      user = create(:constituent, email_verified: true, verified: true)
+      registration = client.create(challenge: SecureRandom.urlsafe_base64(32), rp_id: origin.host)
+      credential = WebAuthn::Credential.from_create(registration)
+      create(:webauthn_credential, user: user, external_id: credential.id, public_key: credential.public_key)
 
-    fill_in 'contact-input', with: user.email
-    fill_in 'password-input', with: 'password123'
-    click_button 'Sign In'
-    assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn')
-    assert_selector '#security-key-feedback[role="status"][aria-live="polite"][aria-atomic="true"]', visible: :all
-    assert_selector 'button[aria-describedby="security-key-feedback"]'
-    capture('security-key-ready')
+      if locale == :es
+        user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+        user.sms_credentials.create!(phone_number: '410-555-1234', verified_at: Time.current)
+      end
 
-    page.execute_script(<<~JS)
-      const originalFetch = window.fetch;
-      window.fetch = (...args) => {
-        window.fetch = originalFetch;
-        return Promise.reject(new TypeError('Simulated offline options request'));
-      };
-    JS
-    click_button 'Verify with Device or Security Key'
-    assert_feedback(:optionsError)
-    capture('security-key-options-failure')
+      fill_in 'contact-input', with: user.email
+      fill_in 'password-input', with: 'password123'
+      click_button I18n.t('sessions.form.submit', locale: locale)
+      if locale == :es
+        assert_current_path verify_two_factor_authentication_path(locale: locale)
+        assert_selector 'h1', text: I18n.t('security_key_verification.page.choice_heading', locale: locale)
+        capture('security-key-method-choice-spanish')
+        click_link I18n.t('security_key_verification.page.choice_key', locale: locale)
+      end
+      assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
+      assert_selector "html[lang='#{locale}']", visible: :all
+      assert_selector 'h1', text: I18n.t('security_key_verification.page.heading', locale: locale)
+      assert_selector '#security-key-feedback[role="status"][aria-live="polite"][aria-atomic="true"]', visible: :all
+      assert_selector 'button[aria-describedby="security-key-feedback"]'
+      capture('security-key-ready')
 
-    install_authenticator_prompt
-    click_button 'Verify with Device or Security Key'
-    assert_button 'Verify with Device or Security Key', disabled: true
-    assert_selector '#security-key-feedback', text: feedback(:preparing)
-    assert_selector 'button[aria-disabled="true"]'
-    assert_selector 'html[data-key-prompt="ready"]', visible: :all
-    capture('security-key-pending')
-    page.execute_script("window.keyPrompt.reject(new DOMException('User cancelled', 'NotAllowedError'))")
-    assert_feedback(:NotAllowedError)
-    capture('security-key-cancelled')
+      page.execute_script(<<~JS)
+        const originalFetch = window.fetch;
+        window.fetch = (...args) => {
+          window.fetch = originalFetch;
+          return Promise.reject(new TypeError('Simulated offline options request'));
+        };
+      JS
+      click_button verification_button
+      assert_feedback(:optionsError)
+      capture('security-key-options-failure')
 
-    click_button 'Verify with Device or Security Key'
-    assertion = sign_assertion(client, origin.host)
-    assertion['id'] = assertion['rawId'] = Base64.urlsafe_encode64('unknown-key', padding: false)
-    finish_prompt(assertion)
-    assert_selector '#security-key-feedback', text: 'Credential not found'
-    assert_button 'Verify with Device or Security Key', disabled: false
-    assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn')
-    page.current_window.resize_to(390, 844)
-    capture('security-key-server-rejection-narrow')
+      install_authenticator_prompt
+      click_button verification_button
+      assert_button verification_button, disabled: true
+      assert_selector '#security-key-feedback', text: feedback(:preparing)
+      assert_selector 'button[aria-disabled="true"]'
+      assert_selector 'html[data-key-prompt="ready"]', visible: :all
+      capture('security-key-pending')
+      page.execute_script("window.keyPrompt.reject(new DOMException('User cancelled', 'NotAllowedError'))")
+      assert_feedback(:NotAllowedError)
+      capture('security-key-cancelled')
 
-    visit verify_method_two_factor_authentication_path(type: 'webauthn', locale: :es)
-    install_authenticator_prompt
-    click_button 'Verify with Device or Security Key'
-    assert_selector 'html[data-key-prompt="ready"]', visible: :all
-    page.execute_script("window.keyPrompt.reject(new DOMException('User cancelled', 'NotAllowedError'))")
-    assert_feedback(:NotAllowedError, locale: :es)
-    capture('security-key-cancelled-spanish')
+      click_button verification_button
+      assertion = sign_assertion(client, origin.host)
+      assertion['id'] = assertion['rawId'] = Base64.urlsafe_encode64('unknown-key', padding: false)
+      finish_prompt(assertion)
+      assert_feedback(:failed)
+      assert_no_text 'Credential not found'
+      assert_button verification_button, disabled: false
+      assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
+      page.current_window.resize_to(390, 844)
+      capture('security-key-server-rejection-narrow')
 
-    click_button 'Verify with Device or Security Key'
-    finish_prompt(sign_assertion(client, origin.host))
-    assert_current_path constituent_portal_dashboard_path
-    assert_selector 'h1', text: 'Dashboard'
-    assert_equal 1, user.webauthn_credentials.sole.reload.sign_count
-    capture('security-key-retry-signed-in')
-  ensure
-    WebAuthn.configuration.allowed_origins = original_origins
-    WebAuthn.configuration.rp_id = original_rp_id
+      click_button verification_button
+      finish_prompt(sign_assertion(client, origin.host))
+      assert_current_path constituent_portal_dashboard_path, ignore_query: true
+      assert_selector 'h1', text: 'Dashboard'
+      assert_equal 1, user.webauthn_credentials.sole.reload.sign_count
+      capture('security-key-retry-signed-in')
+    ensure
+      WebAuthn.configuration.allowed_origins = original_origins
+      WebAuthn.configuration.rp_id = original_rp_id
+    end
   end
 
   private
 
-  def feedback(key, locale: :en)
+  def verification_button
+    I18n.t('security_key_verification.page.submit', locale: @locale)
+  end
+
+  def feedback(key, locale: @locale)
     I18n.t("security_key_verification.feedback.#{key}", locale: locale)
   end
 
-  def assert_feedback(key, locale: :en)
+  def assert_feedback(key, locale: @locale)
     assert_selector '#security-key-feedback', text: feedback(key, locale: locale)
-    assert_button 'Verify with Device or Security Key', disabled: false
+    assert_button verification_button, disabled: false
     assert_selector 'button[aria-disabled="false"]'
   end
 
@@ -124,6 +138,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
 
   def capture(label)
     assert_empty page.evaluate_script('window.__systemTestErrors')
+    label = "#{label}-#{@locale}"
     @screenshot_artifact_label = label
     increment_unique
     page.save_screenshot(image_path, full: true) # rubocop:disable Lint/Debugger -- Required authentication feedback evidence.

@@ -13,6 +13,8 @@ class TwoFactorAuthenticationsController < ApplicationController
   include TwoFactorVerification
   include TurboStreamResponseHandling
 
+  around_action :with_public_request_locale
+
   before_action :ensure_two_factor_initiated_unless_skipped, except: %i[setup resend_sms_verification]
   before_action :authenticate_user!, only: %i[setup]
   skip_before_action :authenticate_user!,
@@ -246,6 +248,10 @@ class TwoFactorAuthenticationsController < ApplicationController
     handle_webauthn_verification_options
   end
 
+  def default_url_options
+    super.merge(locale: public_request_locale_param)
+  end
+
   private
 
   # Find user for setup flow (authenticated or in 2FA flow)
@@ -343,7 +349,12 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   # Handle failed verification response
   def handle_failed_verification(format, message)
-    status = determine_error_status(message)
+    if @type == 'webauthn'
+      message = t('security_key_verification.feedback.failed')
+      status = :unprocessable_content
+    else
+      status = determine_error_status(message)
+    end
 
     format.html do
       if set_verification_context
@@ -371,7 +382,11 @@ class TwoFactorAuthenticationsController < ApplicationController
         redirect_to sign_in_path, alert: message
       end
     end
-    format.json { render json: { error: message }, status: status }
+    format.json do
+      error = { error: message }
+      error[:error_code] = 'verification_failed' if @type == 'webauthn'
+      render json: error, status: status
+    end
   end
 
   # Returns false (without rendering) when the session no longer resolves to a
