@@ -122,12 +122,14 @@ test('existing helper callers without messages retain their feedback and result 
 })
 
 
-test('distinguishes a verified key from a failed sign-in session', async () => {
-  const session_failed = 'Your key was verified, but sign-in failed. Please sign in again.'
-  document.querySelector('div').dataset.credentialAuthenticatorMessagesValue = JSON.stringify({ ...messages, session_failed })
-  fetch.mockResolvedValueOnce(response(422, { error_code: 'session_failed', error: 'Unable to create session' }))
+test.each([
+  ['session_failed', 'Your key was verified, but sign-in failed. Please sign in again.'],
+  ['user_session', 'User session not found. Please sign in again.']
+])('distinguishes %s from a failed security key', async (error_code, message) => {
+  document.querySelector('div').dataset.credentialAuthenticatorMessagesValue = JSON.stringify({ ...messages, [error_code]: message })
+  fetch.mockResolvedValueOnce(response(422, { error_code, error: 'Session diagnostic' }))
   button.click()
-  await waitFor(() => expect(feedback).toHaveTextContent(session_failed))
+  await waitFor(() => expect(feedback).toHaveTextContent(message))
   expect(button).toBeEnabled()
 })
 

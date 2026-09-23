@@ -350,12 +350,12 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   # Handle failed verification response
   def handle_failed_verification(format, message)
-    if @type == 'webauthn'
-      message = t('security_key_verification.feedback.failed')
-      status = :unprocessable_content
-    else
-      status = determine_error_status(message)
-    end
+    error_code = message if message.is_a?(Symbol)
+    message = case message
+              when :verification_failed then t('security_key_verification.feedback.failed')
+              when :user_session then t('two_factor_verification.errors.user_session')
+              else message
+              end
 
     format.html do
       if set_verification_context
@@ -363,7 +363,7 @@ class TwoFactorAuthenticationsController < ApplicationController
         handle_error_response(
           html_render_action: template,
           error_message: message,
-          status: status
+          status: :unprocessable_content
         )
       else
         redirect_to sign_in_path, alert: message
@@ -377,7 +377,7 @@ class TwoFactorAuthenticationsController < ApplicationController
       elsif set_verification_context
         handle_error_response(
           error_message: message,
-          status: status
+          status: :unprocessable_content
         )
       else
         redirect_to sign_in_path, alert: message
@@ -385,8 +385,8 @@ class TwoFactorAuthenticationsController < ApplicationController
     end
     format.json do
       error = { error: message }
-      error[:error_code] = 'verification_failed' if @type == 'webauthn'
-      render json: error, status: status
+      error[:error_code] = error_code if error_code
+      render json: error, status: :unprocessable_content
     end
   end
 
@@ -405,16 +405,6 @@ class TwoFactorAuthenticationsController < ApplicationController
     @sms_credential = resolve_sms_credential_for_resend(@user)
     @sms_code_sent = @sms_credential.present? && active_sms_challenge_for?(@sms_credential)
     true
-  end
-
-  # Determine appropriate HTTP status code based on error message
-  def determine_error_status(message)
-    case message
-    when /credential not found/i, /not found/i
-      :not_found
-    else
-      :unprocessable_content
-    end
   end
 
   # Get template name for verification type

@@ -14,10 +14,8 @@ class AutosaveController extends Controller {
   }
 
   connect() {
-    // Use our tested debounce utility
     this.debouncedSave = debounce(() => this.executeFieldSave(), 20)
 
-    // Request key for tracking
     this.requestKey = `autosave-${this.identifier}-${Date.now()}`
 
     this.setupFieldListeners()
@@ -70,12 +68,10 @@ class AutosaveController extends Controller {
   handleBlur(event) {
     // Store the element for the debounced save
     this._pendingElement = event.target
-    // Trigger debounced save
     this.debouncedSave()
   }
 
   executeFieldSave() {
-    // Execute the actual save with the stored element
     if (this._pendingElement) {
       this.saveField(this._pendingElement)
       this._pendingElement = null
@@ -86,7 +82,6 @@ class AutosaveController extends Controller {
     // Skip if no element, it's a file input, or has the 'data-no-autosave' attribute
     if (!element || element.type === 'file' || element.dataset.noAutosave) return
 
-    // Get field name and value
     const fieldName = element.name
     let fieldValue = element.value
 
@@ -269,6 +264,5 @@ class AutosaveController extends Controller {
   }
 }
 
-// Apply target safety mixin
 
 export default AutosaveController

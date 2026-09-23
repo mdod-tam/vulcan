@@ -12,7 +12,6 @@ module TwoFactorVerification
 
   protected
 
-  # Challenge management methods (Now directly using TwoFactorAuth module)
   def store_challenge(type, challenge, metadata = {})
     TwoFactorAuth.store_challenge(session, type, challenge, metadata)
   end
@@ -25,17 +24,10 @@ module TwoFactorVerification
     TwoFactorAuth.clear_challenge(session)
   end
 
-  # Verification result methods
   def complete_verification(_user_id, _type)
-    # Log successful verification (using TwoFactorAuth module)
-    # Note: The log_verification_success/failure methods below already call the module
-    # TwoFactorAuth.log_verification_success(user_id, type) # Redundant call
-
-    # Complete the authentication process (using TwoFactorAuth module)
     TwoFactorAuth.complete_authentication(session)
   end
 
-  # Updated log calls within verification methods to pass context hash
   def log_verification_success(user_id, type, context = {})
     TwoFactorAuth.log_verification_success(user_id, type, context)
   end
@@ -76,7 +68,7 @@ module TwoFactorVerification
     return [false, t('two_factor_verification.errors.no_code')] if code.blank?
 
     user = find_user_for_two_factor
-    return [false, t('two_factor_verification.errors.user_session')] unless user
+    return [false, :user_session] unless user
 
     credential = sms_credential_from_active_challenge(user, credential_id)
     return [false, t('two_factor_verification.errors.expired_code')] unless credential
@@ -89,7 +81,7 @@ module TwoFactorVerification
   # Base verification method with common user validation
   def with_verified_user(_credential_type)
     user_for_2fa = find_user_for_two_factor
-    return [false, t('two_factor_verification.errors.user_session')] unless user_for_2fa
+    return [false, :user_session] unless user_for_2fa
 
     yield(user_for_2fa)
   end

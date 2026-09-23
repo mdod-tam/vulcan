@@ -108,6 +108,45 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
   end
 
   %i[en es].each do |locale|
+    test "missing MFA user returns localized code errors with status 422 in #{locale}" do
+      @user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+      @user.sms_credentials.create!(phone_number: '410-555-1234', verified_at: Time.current)
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      assert_redirected_to verify_two_factor_authentication_path(locale: locale)
+      @user.update!(status: :suspended)
+
+      %w[totp sms].each do |type|
+        assert_no_difference('Session.count') do
+          post process_verification_two_factor_authentication_path(type: type, locale: locale), params: { code: '123456' }, as: :json
+        end
+        assert_response :unprocessable_content
+        assert_equal({ 'error' => I18n.t('two_factor_verification.errors.user_session', locale: locale),
+                       'error_code' => 'user_session' }, response.parsed_body)
+      end
+    end
+
+    test "missing MFA user keeps sign-in guidance for WebAuthn responses in #{locale}" do
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      assertion = assertion_for(locale)
+      @user.update!(status: :suspended)
+      message = I18n.t('two_factor_verification.errors.user_session', locale: locale)
+
+      %w[application/json text/html text/vnd.turbo-stream.html].each do |format|
+        assert_no_difference('Session.count') do
+          post process_verification_two_factor_authentication_path(type: 'webauthn', locale: locale),
+               params: { two_factor_authentication: assertion }, headers: { 'Accept' => format }
+        end
+        if format == 'application/json'
+          assert_response :unprocessable_content
+          assert_equal({ 'error' => message, 'error_code' => 'user_session' }, response.parsed_body)
+        else
+          assert_redirected_to sign_in_path(locale: locale)
+          assert_equal message, flash[:alert]
+        end
+        assert_equal 0, @credential.reload.sign_count
+      end
+    end
+
     test "verified key with session failure has a distinct localized response in #{locale}" do
       post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
       assertion = assertion_for(locale)

@@ -71,6 +71,17 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
       page.current_window.resize_to(390, 844)
       capture('security-key-server-rejection-narrow')
 
+      click_button verification_button
+      assertion = sign_assertion(client, origin.host)
+      user.update!(status: :suspended)
+      finish_prompt(assertion)
+      assert_selector '#security-key-feedback', text: code_copy('errors.user_session')
+      assert_button verification_button, disabled: false
+      assert_equal 0, user.webauthn_credentials.sole.reload.sign_count
+      assert_empty user.sessions
+      capture('security-key-missing-session-narrow')
+      user.update!(status: :active)
+
       TwoFactorAuthenticationsController.any_instance.expects(:_create_and_set_session_cookie).returns(nil)
       click_button verification_button
       finish_prompt(sign_assertion(client, origin.host))

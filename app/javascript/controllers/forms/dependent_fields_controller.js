@@ -43,7 +43,6 @@ class DependentFieldsController extends Controller {
     // Store bound method reference for proper cleanup
     this._boundHandleApplicantTypeChange = this.handleApplicantTypeChange.bind(this)
 
-    // Set up debounced applicant type change handler
     this.debouncedApplicantTypeChange = debounce(() => this.executeApplicantTypeChange(), 20)
 
     // Set initial state based on checkboxes if available - use target safety

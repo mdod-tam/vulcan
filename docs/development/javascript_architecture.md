@@ -79,6 +79,8 @@ Form length hints should track [the server validation](../../app/models/concerns
 
 The optional `yAxisLabel` titles the numeric value axis: Y for vertical bars, X for horizontal bars.
 
+Comparison data must use the primary data's category keys; the controller derives labels from the primary data.
+
 Do not patch `getComputedStyle`: Chart.js uses real element measurements for hover and tooltip positioning, so zero-size stubs can break interactions.
 
 The vendor chart is constructed while hidden. [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) only toggles its region and button state; Chart.js resizes the canvas when revealed. Reports retain the numeric cards and consolidated comparisons without the six duplicate compact charts.

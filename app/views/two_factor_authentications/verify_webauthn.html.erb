@@ -44,7 +44,9 @@
 
     <div data-controller="credential-authenticator"
          data-credential-authenticator-verification-url-value="<%= process_verification_two_factor_authentication_path(type: 'webauthn') %>"
-         data-credential-authenticator-messages-value="<%= t('security_key_verification.feedback').to_json %>">
+         data-credential-authenticator-messages-value="<%= t('security_key_verification.feedback').merge(
+                                                             user_session: t('two_factor_verification.errors.user_session')
+                                                           ).to_json %>">
       <%= form_with url: verification_options_two_factor_authentication_path(type: 'webauthn'),
         method: :get,
         local: true,

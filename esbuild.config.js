@@ -19,7 +19,7 @@ const buildOptions = {
 }
 
 // esbuild leaves existing maps untouched when sourcemap is false.
-// This removes the map from a previous development build.
+// The removal deletes the map from a previous development build.
 if (isProduction) {
   require('node:fs').rmSync('app/assets/builds/application.js.map', { force: true })
 }

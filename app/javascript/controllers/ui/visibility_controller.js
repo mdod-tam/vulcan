@@ -1,4 +1,3 @@
-// app/javascript/controllers/visibility_controller.js
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
@@ -23,35 +22,25 @@ export default class extends Controller {
     
   }
   
-  // This is the method called from the HTML
   togglePassword(event) {
     
-    // Prevent the button from submitting the form
     event.preventDefault();
     
-    // Get the button
     const button = event.currentTarget;
     
-    // Get the container (parent with class "relative")
     const container = button.closest(".relative");
     
-    // Find the password field
     let passwordField;
     
-    // First try to find the field using Stimulus targets
     if (this.hasFieldTarget && container.contains(this.fieldTarget)) {
       passwordField = this.fieldTarget;
     } else if (this.hasFieldConfirmationTarget && container.contains(this.fieldConfirmationTarget)) {
       passwordField = this.fieldConfirmationTarget;
     } else {
-      // Fallback to direct DOM query within the container
       
-      // Find the input that's a direct child of the container
       const inputs = Array.from(container.querySelectorAll("input"));
       
-      // Find the input that's a direct child or closest to the button
       passwordField = inputs.find(input => {
-        // Check if it's a password field
         return input.type === 'password' || input.type === 'text';
       });
       
@@ -65,22 +54,17 @@ export default class extends Controller {
       return;
     }
 
-    // Determine current and new visibility state
     const isVisible = passwordField.type === "text";
     const newVisibility = !isVisible;
 
-    // Toggle the type
     passwordField.type = newVisibility ? "text" : "password";
     
-    // Update accessibility attributes
     button.setAttribute("aria-pressed", newVisibility);
     button.setAttribute("aria-label", newVisibility ? this.hideLabelValue : this.showLabelValue);
     
-    // Toggle icon class
     button.classList.toggle("eye-open", newVisibility);
     button.classList.toggle("eye-closed", !newVisibility);
     
-    // Update status for screen readers
     const statusElement = this.hasStatusTarget ? this.statusTarget : 
                           document.getElementById(passwordField.getAttribute("aria-describedby"));
     
@@ -98,7 +82,6 @@ export default class extends Controller {
         button.classList.remove("eye-open");
         button.classList.add("eye-closed");
         
-        // Update status for screen readers
         if (statusElement) {
           statusElement.textContent = this.hiddenStatusValue;
         }
@@ -109,7 +92,6 @@ export default class extends Controller {
   }
   
   disconnect() {
-    // Clean up timeout when controller is disconnected
     clearTimeout(this.visibilityTimeout);
   }
 }
