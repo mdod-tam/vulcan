@@ -161,6 +161,7 @@ class ChartLifecycleTest < ApplicationSystemTestCase
   end
 
   def capture(label)
+    assert_empty page.evaluate_script('window.__systemTestErrors')
     @screenshot_artifact_label = label
     increment_unique
     page.save_screenshot(image_path, full: true) # rubocop:disable Lint/Debugger -- Required chart render evidence.

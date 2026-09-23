@@ -100,6 +100,14 @@ Signed-in portal locale routing  [DATA-002]
   Surfaced while adding `constituent_portal.dependents.*`: the `es` entries are correct and
   unreachable.
 
+MFA enrollment localization
+
+- [ ] Apply the signed-in locale policy above to constituent-facing MFA setup and credential
+  enrollment. Translate the setup screens, WebAuthn/TOTP/SMS enrollment feedback in `auth.js`,
+  and the pending SMS enrollment service's duplicate-send message. Cover setup, validation
+  failures, retry, and completion for each factor in English and Spanish with system tests.
+  Keep public sign-in and MFA verification language tied to the request, not the matched account.
+
 Portal dependent creation: two separate outcomes  [DATA-002]
 
 These were previously tracked as one item called "idempotency", which conflated two different

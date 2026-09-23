@@ -36,7 +36,8 @@ module TwoFactorVerification
     TwoFactorAuth.log_verification_failure(user_id, type, error, context)
   end
 
-  # Unified verification methods that delegate to type-specific handlers
+  # Returns [success, message_or_error_code]. On failure, handle_failed_verification
+  # translates :user_session and :verification_failed or uses the localized message.
   def verify_credential(type, params)
     case type.to_sym
     when :webauthn
