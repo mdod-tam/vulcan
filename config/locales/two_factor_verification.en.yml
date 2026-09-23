@@ -8,6 +8,18 @@ en:
       use_totp: "Use Authenticator App Instead"
       use_sms: "Use Text Message Instead"
       trouble: "Having trouble?"
+    choice:
+      heading: "Two-Factor Authentication"
+      intro: "Choose a verification method to complete sign-in."
+      hint: "If you already use an authenticator app, choose “Authenticator App” below."
+      protection: "Your account is protected with two-factor authentication. Please choose a verification method below."
+      totp: "Authenticator App"
+      totp_description: "Use a 6-digit code from your authenticator app"
+      key: "Security Key"
+      key_description: "Use your device (fingerprint or face) or a physical security key"
+      sms: "Text Message"
+      sms_description: "Get a code by text message"
+      recovery_help: "If you've lost access to your verification methods, contact support for account recovery assistance."
     totp:
       heading: "Authenticator App Verification"
       intro: "Enter the code from your authenticator app to complete sign-in."

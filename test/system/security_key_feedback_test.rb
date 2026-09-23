@@ -27,7 +27,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
       fill_in 'password-input', with: 'password123'
       click_button I18n.t('sessions.form.submit', locale: locale)
       assert_current_path verify_two_factor_authentication_path(locale: locale)
-      assert_selector 'h1', text: I18n.t('security_key_verification.page.choice_heading', locale: locale)
+      assert_selector 'h1', text: I18n.t('two_factor_verification.choice.heading', locale: locale)
       capture('security-key-method-choice')
       exercise_code_methods(user.totp_credentials.sole)
       click_link I18n.t('two_factor_verification.common.use_key', locale: locale)
@@ -93,7 +93,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
       fill_in 'contact-input', with: user.email
       fill_in 'password-input', with: 'password123'
       click_button I18n.t('sessions.form.submit', locale: locale)
-      click_link I18n.t('security_key_verification.page.choice_key', locale: locale)
+      click_link I18n.t('two_factor_verification.choice.key', locale: locale)
       install_authenticator_prompt
       click_button verification_button
       finish_prompt(sign_assertion(client, origin.host, sign_count: 2))
@@ -143,7 +143,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
   private
 
   def exercise_code_methods(credential)
-    click_link I18n.t('security_key_verification.page.choice_totp', locale: @locale)
+    click_link I18n.t('two_factor_verification.choice.totp', locale: @locale)
     assert_current_path verify_method_two_factor_authentication_path(type: 'totp', locale: @locale)
     assert_selector 'h1', text: code_copy('totp.heading')
     capture('mfa-totp-ready')

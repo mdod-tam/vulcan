@@ -58,6 +58,21 @@
             </div>
           </dl>
 
+          <%# Current FY Applications Chart %>
+          <div class="mt-4">
+            <div style="position: relative; height: 200px; width: 100%;"
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Created' => @current_fy_applications, 'Draft' => @current_fy_draft_applications }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Current Fiscal Year"
+                 data-chart-title-value="Current FY Applications">
+              <canvas data-chart-target="canvas" role="img" aria-label="Current FY Applications" aria-describedby="current-fy-applications-desc"></canvas>
+              <div id="current-fy-applications-desc" class="sr-only">
+                Chart showing current fiscal year applications: <%= @current_fy_applications %> created and <%= @current_fy_draft_applications %> draft applications.
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <!-- Previous FY Applications -->
@@ -73,6 +88,21 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-heading"><%= @previous_fy_draft_applications %></dd>
             </div>
           </dl>
+
+          <%# Previous FY Applications Chart %>
+          <div class="mt-4">
+            <div style="position: relative; height: 200px; width: 100%;"
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Created' => @previous_fy_applications, 'Draft' => @previous_fy_draft_applications }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Previous Fiscal Year"
+                 data-chart-title-value="Previous FY Applications">
+              <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Applications" aria-describedby="previous-fy-applications-desc"></canvas>
+              <div id="previous-fy-applications-desc" class="sr-only">
+                Chart showing previous fiscal year applications: <%= @previous_fy_applications %> created and <%= @previous_fy_draft_applications %> draft applications.
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>
@@ -227,6 +257,27 @@
             </div>
           </dl>
 
+          <%# Current FY Vouchers Chart %>
+          <div class="mt-4">
+            <div style="position: relative; height: 200px; width: 100%;"
+                 data-controller="chart"
+                 data-chart-data-value="<%= {
+                   'Issued' => @current_fy_vouchers,
+                   'Active' => @current_fy_active_vouchers || 0,
+                   'Expired' => @current_fy_expired_vouchers || 0
+                 }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Current Fiscal Year"
+                 data-chart-title-value="Current FY Vouchers">
+              <canvas data-chart-target="canvas" role="img" aria-label="Current FY Vouchers" aria-describedby="current-fy-vouchers-desc"></canvas>
+              <div id="current-fy-vouchers-desc" class="sr-only">
+                Chart showing current fiscal year vouchers: <%= @current_fy_vouchers %> issued,
+                <%= @current_fy_active_vouchers || 0 %> active unredeemed, and
+                <%= @current_fy_expired_vouchers || 0 %> expired vouchers.
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <div class="bg-gray-50 rounded p-4">
@@ -249,6 +300,27 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= number_to_currency(@previous_fy_voucher_value) %></dd>
             </div>
           </dl>
+
+          <%# Previous FY Vouchers Chart %>
+          <div class="mt-4">
+            <div style="position: relative; height: 200px; width: 100%;"
+                 data-controller="chart"
+                 data-chart-data-value="<%= {
+                   'Issued' => @previous_fy_vouchers,
+                   'Active' => @previous_fy_active_vouchers || 0,
+                   'Expired' => @previous_fy_expired_vouchers || 0
+                 }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Previous Fiscal Year"
+                 data-chart-title-value="Previous FY Vouchers">
+              <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Vouchers" aria-describedby="previous-fy-vouchers-desc"></canvas>
+              <div id="previous-fy-vouchers-desc" class="sr-only">
+                Chart showing previous fiscal year vouchers: <%= @previous_fy_vouchers %> issued,
+                <%= @previous_fy_active_vouchers || 0 %> active unredeemed, and
+                <%= @previous_fy_expired_vouchers || 0 %> expired vouchers.
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>
@@ -312,6 +384,21 @@
             </div>
           </dl>
 
+          <%# Current FY Services Chart %>
+          <div class="mt-4">
+            <div style="position: relative; height: 200px; width: 100%;"
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Training' => @current_fy_trainings, 'Evaluation' => @current_fy_evaluations }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Current Fiscal Year"
+                 data-chart-title-value="Current FY Services">
+              <canvas data-chart-target="canvas" role="img" aria-label="Current FY Services" aria-describedby="current-fy-services-desc"></canvas>
+              <div id="current-fy-services-desc" class="sr-only">
+                Chart showing current fiscal year services: <%= @current_fy_trainings %> training sessions and <%= @current_fy_evaluations %> evaluation sessions.
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <div class="bg-gray-50 rounded p-4">
@@ -326,6 +413,21 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-services-heading"><%= @previous_fy_evaluations %></dd>
             </div>
           </dl>
+
+          <%# Previous FY Services Chart %>
+          <div class="mt-4">
+            <div style="position: relative; height: 200px; width: 100%;"
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Training' => @previous_fy_trainings, 'Evaluation' => @previous_fy_evaluations }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Previous Fiscal Year"
+                 data-chart-title-value="Previous FY Services">
+              <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Services" aria-describedby="previous-fy-services-desc"></canvas>
+              <div id="previous-fy-services-desc" class="sr-only">
+                Chart showing previous fiscal year services: <%= @previous_fy_trainings %> training sessions and <%= @previous_fy_evaluations %> evaluation sessions.
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>

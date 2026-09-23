@@ -264,5 +264,4 @@ class AutosaveController extends Controller {
   }
 }
 
-
 export default AutosaveController

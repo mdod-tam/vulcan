@@ -109,12 +109,12 @@
     <div class="mt-4 flex justify-between">
       <div>
         <% if @totp_enabled %>
-          <%= link_to t('security_key_verification.page.use_totp'), verify_method_two_factor_authentication_path(type: 'totp'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
+          <%= link_to t('two_factor_verification.common.use_totp'), verify_method_two_factor_authentication_path(type: 'totp'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
         <% end %>
       </div>
       <div>
         <% if @sms_enabled %>
-          <%= button_to t('security_key_verification.page.use_sms'),
+          <%= button_to t('two_factor_verification.common.use_sms'),
               select_sms_verification_two_factor_authentication_path,
               method: :post,
               form: { class: "inline" },

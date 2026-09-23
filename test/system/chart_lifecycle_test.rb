@@ -3,7 +3,7 @@
 require 'application_system_test_case'
 
 class ChartLifecycleTest < ApplicationSystemTestCase
-  test 'responsive charts survive hidden regions resizing and Turbo navigation' do
+  test 'all report charts and the lazy applications chart survive resizing and Turbo navigation' do
     FeatureFlag.enable!(:vouchers_enabled)
     product = create(:product, device_types: ['Tablet'])
     application = create(:application, skip_proofs: true, status: :in_progress)
@@ -13,48 +13,44 @@ class ChartLifecycleTest < ApplicationSystemTestCase
     application.update!(fulfillment_type: :equipment, equipment_po_sent_at: Time.current)
     system_test_sign_in(create(:admin))
     visit admin_reports_path
-    assert_selector 'canvas', count: 9
-    assert_charts_sized(9)
+    assert_selector 'canvas', count: 15
+    assert_charts_sized(15)
     capture('reports-vouchers-on-wide')
-    assert_no_selector '[data-chart-title-value="Current FY Applications"]'
+    %w[Current Previous].product(%w[Applications Vouchers Services]).each do |period, subject|
+      assert_selector "[data-chart-title-value='#{period} FY #{subject}'] canvas"
+    end
     assert_selector 'dt', text: 'Applications Created:', count: 2
     assert_selector 'dt', text: 'Vouchers Issued:', count: 2
     assert_selector '[data-chart-index-axis-value="y"] canvas'
     page.current_window.resize_to(390, 844)
-    assert_charts_sized(9)
+    assert_charts_sized(15)
     capture('reports-vouchers-on-narrow')
     page.current_window.resize_to(1200, 800)
     page.driver.browser.page.command('Emulation.setDeviceMetricsOverride', width: 1198, height: 800, deviceScaleFactor: 2, mobile: false)
-    assert_charts_sized(9, dpr: 2)
-    capture('reports-dpr-two')
+    assert_charts_sized(15, dpr: 2)
     page.driver.browser.page.command('Emulation.clearDeviceMetricsOverride')
     page.current_window.resize_to(1200, 800)
-    assert_charts_sized(9, dpr: 1)
+    assert_charts_sized(15, dpr: 1)
+    capture('reports-after-dpr-change')
 
-    page.driver.browser.page.command('Performance.enable')
-    samples = []
+    initial_controller_count = page.evaluate_script('Stimulus.controllers.length')
     5.times do
       turbo_visit(admin_applications_path)
       assert_selector 'h1', text: 'Applications'
       page.execute_script('document.getElementById("charts_section").scrollIntoView()')
       assert_selector '#charts_section canvas'
       turbo_visit(admin_reports_path)
-      assert_selector 'canvas', count: 9
-      assert_charts_sized(9)
-      page.driver.browser.page.command('HeapProfiler.collectGarbage')
-      samples << { metrics: page.driver.browser.page.command('Performance.getMetrics'),
-                   charts: chart_state.size, controllers: page.evaluate_script('Stimulus.controllers.length'),
-                   dpr: page.evaluate_script('window.devicePixelRatio'),
-                   viewport: page.evaluate_script('[innerWidth, innerHeight]') }
+      assert_selector 'canvas', count: 15
+      assert_charts_sized(15)
+      assert_equal initial_controller_count, page.evaluate_script('Stimulus.controllers.length')
     end
-    Rails.root.join('tmp/chart-browser-metrics.json').write(JSON.pretty_generate(samples))
 
     FeatureFlag.disable!(:vouchers_enabled)
     visit admin_reports_path
     assert_no_selector '#voucher-statistics-heading'
     assert_no_selector '#vendor-activity-heading'
-    assert_selector 'canvas', count: 6
-    assert_charts_sized(6)
+    assert_selector 'canvas', count: 10
+    assert_charts_sized(10)
     capture('reports-vouchers-off-wide')
 
     visit admin_applications_path
@@ -65,8 +61,11 @@ class ChartLifecycleTest < ApplicationSystemTestCase
     page.current_window.resize_to(390, 844)
     assert_charts_sized(1)
     capture('applications-lazy-chart-narrow')
-    page.current_window.resize_to(1200, 800)
+  end
 
+  test 'application modal submission closes the dialog and replaces the current page' do
+    application = create(:application, skip_proofs: true, status: :in_progress)
+    system_test_sign_in(create(:admin))
     visit admin_user_path(application.user)
     find('[data-controller="application-modal"] button[data-action="click->application-modal#open"]').click
     assert_selector '#application-modal[open]'
@@ -86,10 +85,10 @@ class ChartLifecycleTest < ApplicationSystemTestCase
     assert_equal 'replace', page.evaluate_script('window.__modalTurboVisits.at(-1).action')
     assert_empty page.evaluate_script('window.__systemTestErrors')
     capture('application-modal-saved')
+  end
 
+  test 'vendor chart resizes on every reveal without reconstruction' do
     FeatureFlag.enable!(:vouchers_enabled)
-    Capybara.reset_sessions!
-    install_stimulus_error_reporting
     vendor = create(:vendor, vendor_authorization_status: :approved, w9_status: :approved, terms_accepted_at: 1.day.ago)
     create(:voucher_transaction, vendor: vendor, amount: 125)
     system_test_sign_in(vendor)

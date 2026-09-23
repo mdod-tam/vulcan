@@ -16,12 +16,13 @@ class CredentialAuthenticatorController extends Controller {
     const button = this.verificationButtonTarget
     if (button.disabled) return
 
-    button.disabled = true
-    button.setAttribute("aria-disabled", "true")
-    this.feedbackTarget.textContent = this.messagesValue.preparing
-    this.feedbackTarget.classList.remove("error")
-
+    let failureMessage = this.messagesValue.optionsError
     try {
+      button.disabled = true
+      button.setAttribute("aria-disabled", "true")
+      this.feedbackTarget.textContent = this.messagesValue.preparing
+      this.feedbackTarget.classList.remove("error")
+
       const form = this.webauthnFormTarget
       const formData = new FormData(form)
       let challenge = formData.get('challenge')
@@ -40,11 +41,12 @@ class CredentialAuthenticatorController extends Controller {
           headers: { "Accept": "application/json" },
           credentials: "same-origin"
         })
-        const options = await response.json()
         if (!response.ok) {
+          console.error(`Security-key options request failed with status ${response.status}`)
           this.feedbackTarget.textContent = this.messagesValue.optionsError
           return
         }
+        const options = await response.json()
 
         challenge = options.challenge
         timeout = options.timeout || 30000
@@ -57,6 +59,7 @@ class CredentialAuthenticatorController extends Controller {
         return
       }
 
+      failureMessage = this.messagesValue.failed
       const result = await verifyWebAuthn(
         { challenge, timeout, rpId, allowCredentials, userVerification: "required" },
         this.verificationUrlValue,
@@ -64,8 +67,9 @@ class CredentialAuthenticatorController extends Controller {
         this.messagesValue
       )
       if (result.success) this.feedbackTarget.textContent = this.messagesValue.verified
-    } catch {
-      this.feedbackTarget.textContent = this.messagesValue.optionsError
+    } catch (error) {
+      console.error("Security-key verification could not be completed:", error)
+      if (this.hasFeedbackTarget) this.feedbackTarget.textContent = failureMessage
     } finally {
       button.disabled = false
       button.setAttribute("aria-disabled", "false")

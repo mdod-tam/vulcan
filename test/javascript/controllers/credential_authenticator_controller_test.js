@@ -34,9 +34,43 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  jest.restoreAllMocks()
   document.body.innerHTML = ''
   application.stop()
   global.fetch = originalFetch
+})
+
+test('restores the button and logs a missing feedback target', async () => {
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  feedback.remove()
+  await application.controllers[0].startVerification({ preventDefault: jest.fn() })
+  expect(button).toBeEnabled()
+  expect(button).toHaveAttribute('aria-disabled', 'false')
+  expect(log).toHaveBeenCalledWith(expect.any(String), expect.any(Error))
+  expect(fetch).not.toHaveBeenCalled()
+})
+
+test('logs unexpected failures after options load and reports verification failure', async () => {
+  const error = new TypeError('Unexpected verification error')
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  jest.spyOn(Auth, 'verifyWebAuthnCredential').mockRejectedValueOnce(error)
+  button.click()
+  await waitFor(() => expect(button).toBeEnabled())
+  expect(feedback).toHaveTextContent(messages.failed)
+  expect(log).toHaveBeenCalledWith(expect.any(String), error)
+})
+
+test('does not parse unsuccessful options responses and logs only their status', async () => {
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  log.mockClear()
+  const json = jest.fn().mockRejectedValue(new SyntaxError('Private proxy HTML'))
+  fetch.mockReset().mockResolvedValue({ ok: false, status: 503, json })
+  button.click()
+  await waitFor(() => expect(feedback).toHaveTextContent(messages.optionsError))
+  expect(button).toBeEnabled()
+  expect(json).not.toHaveBeenCalled()
+  expect(log).toHaveBeenCalledWith(expect.stringContaining('503'))
+  expect(JSON.stringify(log.mock.calls)).not.toContain('Private')
 })
 
 test('shows pending state, prevents overlapping attempts, and permits retry after cancellation', async () => {
@@ -77,7 +111,7 @@ test.each(['network', 'missing challenge', 'invalid JSON'])('options %s failure 
   fetch.mockReset()
   if (failure === 'network') fetch.mockRejectedValue(new TypeError('Failed to fetch'))
   if (failure === 'missing challenge') fetch.mockResolvedValue(response(200, {}))
-  if (failure === 'invalid JSON') fetch.mockResolvedValue({ ok: false, json: async () => { throw new SyntaxError('HTML') } })
+  if (failure === 'invalid JSON') fetch.mockResolvedValue({ ok: true, json: async () => { throw new SyntaxError('HTML') } })
   button.click()
   await waitFor(() => expect(feedback).toHaveTextContent(messages.optionsError))
   expect(button).toBeEnabled()
