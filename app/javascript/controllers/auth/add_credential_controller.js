@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
-import Auth, { registerWebAuthn } from "../../auth.js"
+import { registerWebAuthn } from "../../auth.js"
 
 class AddCredentialController extends Controller {
   // Define the expected value for the callback URL

@@ -18,6 +18,5 @@ class MobileMenuController extends Controller {
   }
 }
 
-// Apply target safety mixin
 
 export default MobileMenuController

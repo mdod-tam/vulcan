@@ -41,7 +41,6 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 
 - [ ] Choose JS test runner setup (Node + jsdom vs. headless browser) and mocking approach  [TEST-001]
 - [ ] rails_request.js tests: success (200 JSON), success (HTML), failure (4xx/5xx), network error, retry path  [TEST-001]
-- [ ] BaseFormController tests: field validation, error summary rendering, focus management  [TEST-001]
 - [ ] Autosave controller tests: debounce, pending/saved states, error state  [TEST-001]
 - [ ] Upload controller tests: file type/size validation, progress, error/retry  [TEST-001]
 - [ ] Extract shared validation utils and document usage (README in controllers/)

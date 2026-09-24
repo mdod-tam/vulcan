@@ -140,6 +140,53 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
     capture('mfa-invalid-method-narrow')
   end
 
+  test 'security key enrollment uses live options and persists the returned credential and nickname' do
+    @locale = :en
+    original_origins = WebAuthn.configuration.allowed_origins
+    original_rp_id = WebAuthn.configuration.rp_id
+    user = create(:constituent, email_verified: true, verified: true)
+    system_test_sign_in(user)
+    visit new_credential_two_factor_authentication_path(type: 'webauthn')
+    origin = URI.parse(page.current_url)
+    WebAuthn.configuration.allowed_origins = ["#{origin.scheme}://#{origin.host}:#{origin.port}"]
+    WebAuthn.configuration.rp_id = origin.host
+    client = WebAuthn::FakeClient.new(WebAuthn.configuration.allowed_origins.first)
+    page.execute_script(<<~'JS')
+      navigator.credentials.create = ({publicKey}) => new Promise(resolve => {
+        window.enrollmentPrompt = {
+          resolve,
+          challenge: btoa(String.fromCharCode(...new Uint8Array(publicKey.challenge)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+        };
+        document.documentElement.dataset.enrollmentPrompt = 'ready';
+      });
+    JS
+    fill_in 'webauthn_credential_nickname', with: 'Office key'
+    click_button 'Continue to Key Activation'
+    assert_selector 'html[data-enrollment-prompt="ready"]', visible: :all
+    assert_button 'Continue to Key Activation', disabled: true
+    capture('security-key-enrollment-pending')
+    registration = client.create(challenge: page.evaluate_script('window.enrollmentPrompt.challenge'), rp_id: origin.host)
+    assert_difference 'user.webauthn_credentials.count', 1 do
+      page.execute_script(<<~JS, registration)
+        const data = arguments[0];
+        const buffer = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)).buffer;
+        data.rawId = buffer(data.rawId);
+        for (const key of ['clientDataJSON', 'attestationObject']) data.response[key] = buffer(data.response[key]);
+        data.getClientExtensionResults = () => ({});
+        window.enrollmentPrompt.resolve(data);
+      JS
+      assert_current_path credential_success_two_factor_authentication_path(type: 'webauthn')
+    end
+    credential = user.webauthn_credentials.reload.sole
+    assert_equal 'Office key', credential.nickname
+    assert_equal registration.fetch('id'), credential.external_id
+    capture('security-key-enrollment-saved')
+  ensure
+    WebAuthn.configuration.allowed_origins = original_origins
+    WebAuthn.configuration.rp_id = original_rp_id
+  end
+
   private
 
   def exercise_code_methods(credential)

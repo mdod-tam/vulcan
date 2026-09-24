@@ -56,6 +56,5 @@ class W9ReviewController extends Controller {
   }
 }
 
-// Apply target safety mixin
 
 export default W9ReviewController

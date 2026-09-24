@@ -29,11 +29,13 @@ Two behaviors are not visible from the controller alone:
 
 [`services/rails_request.js`](../../app/javascript/services/rails_request.js) wraps `@rails/request.js`. `perform()` has three outcomes, not two: `{ success: true, data, response }`, `{ success: false, aborted: true }` on cancellation, and a thrown `RequestError` carrying `status` and `data` for a non-OK response.
 
-Requests are tracked by `key`, and reusing an in-flight key cancels the earlier request — autosave uses a single key per form, so rapid edits collapse to the last one. Cancellation is client-side only; the server may have already committed, so ordering-sensitive controllers still need their own staleness check.
+Requests with a `key` are tracked, and reusing an in-flight key cancels the earlier request. Autosave uses a single key per form, so overlapping saves cancel the earlier client request. Cancellation is client-side only; the server may have already committed, so ordering-sensitive controllers still own their ordering and stale-response checks.
 
-`tryShowFlash` is a no-op that returns `false` — a leftover from a removed toast library. Failed requests need their own visible feedback, via the [flash container](../../app/views/shared/_flash.html.erb) or inline status text.
+Failed requests need caller-owned visible feedback, via the [flash container](../../app/views/shared/_flash.html.erb) or inline status text. Parsing consumes the installed library’s `FetchResponse` status and cached JSON/text promises, including a Turbo Stream body already read by the library. Only the request that owns the current key may remove its cancellation handle.
 
-`BaseFormController#collectFormData` ([base/form_controller.js](../../app/javascript/controllers/base/form_controller.js)) flattens `FormData` into literal keys: `constituent[email]` stays that string rather than nesting. Names ending in `[]` become arrays under the unbracketed name.
+[`admin-user-search`](../../app/javascript/controllers/admin/user_search_controller.js) is a concrete Stimulus controller. Its input action schedules one trailing search after 300 ms; clearing results, selection, and disconnect cancel queued searches. Adult and guardian roles retain separate frames and picker outlets.
+
+Guardian creation collects the current `guardian_attributes` fields, no-contact flags, and review choice/receipt directly. It owns required-field feedback and retry controls. Rails returns a 422 HTML review fragment or JSON containing `user`; the controller selects that returned guardian. No generic form base intercepts the surrounding paper form.
 
 Server-rendered HTML goes through Turbo frames and streams. Authentication and a few lookups still call `fetch` directly and keep their own response contracts. Security-key verification reads its URL and translated feedback from the view; recognized server error codes select local messages, and unknown failures use generic retry guidance. `Auth` and WebAuthn are module imports, not window globals.
 
@@ -89,7 +91,7 @@ If either `RAILS_ENV` or `NODE_ENV` is `production`, builds are minified and omi
 
 ## Tests
 
-Jest on jsdom ([jest.config.js](../../jest.config.js)), with `@rails/request.js` mapped to a [mock](../../test/javascript/mocks/rails_request.js) and `controllers/*` resolving into `app/javascript/controllers`.
+Jest on jsdom ([jest.config.js](../../jest.config.js)), with `@rails/request.js` mapped to a [mock](../../test/javascript/mocks/rails_request.js) by default and `controllers/*` resolving into `app/javascript/controllers`. Request contract tests load the installed library directly and replace only network responses.
 
 ```bash
 yarn test test/javascript/controllers/final_submit_gate_controller_test.js

@@ -29,23 +29,21 @@ export default class extends Controller {
 
     this._initializeReasonButtons()
     this._syncGroupInteractivity()
-    
+
     if (this.hasProofTypeTarget && this.proofTypeTarget.value) {
       this._updateReasonGroupsVisibility(this.proofTypeTarget.value)
     }
-    
+
     this.element.addEventListener('proof-type-changed', this._boundProofTypeChanged)
   }
-  
+
   disconnect() {
     this.element.removeEventListener('proof-type-changed', this._boundProofTypeChanged)
   }
-  
+
   _handleProofTypeChanged(event) {
     const proofType = event.detail.proofType
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('RejectionForm: Received proof type changed event:', proofType)
-    }
+
     if (this.hasProofTypeTarget) {
       this.proofTypeTarget.value = proofType
       this._resetReasonCodeState()
@@ -68,18 +66,11 @@ export default class extends Controller {
       this._updateReasonGroupsVisibility(proofType)
     }
   }
-  
+
   // Private method for managing reason group visibility
   _updateReasonGroupsVisibility(proofType) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('RejectionForm: _updateReasonGroupsVisibility called with proof type:', proofType)
-    }
-
     // Early exit if no reason group targets exist
     if (!this.hasMedicalOnlyReasonsTarget && !this.hasGeneralReasonsTarget) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('RejectionForm: No reason group targets found')
-      }
       return
     }
 
@@ -93,10 +84,6 @@ export default class extends Controller {
     // Use symmetric logic for all reason groups
     const isMedical = proofType === 'medical'
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('RejectionForm: isMedical:', isMedical)
-    }
-
     const groups = [
       { target: this.hasMedicalOnlyReasonsTarget ? this.medicalOnlyReasonsTarget : null, show: isMedical, name: 'medical' },
       { target: this.hasGeneralReasonsTarget ? this.generalReasonsTarget : null, show: !isMedical, name: 'general' }
@@ -105,9 +92,6 @@ export default class extends Controller {
     // Apply visibility to groups
     groups.forEach(({ target, show, name }) => {
       if (target) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`RejectionForm: Setting ${name} group visibility to ${show}`)
-        }
         setVisible(target, show, { ariaHidden: !show, inlineStyleFallback: false })
       }
     })
@@ -142,10 +126,6 @@ export default class extends Controller {
         console.warn('Missing reason text in button data attribute')
       }
       return
-    }
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`RejectionForm: selectPredefinedReason called with reasonCode: ${reasonCode}`)
     }
 
     this.reasonFieldTarget.value = reasonText
@@ -212,10 +192,6 @@ export default class extends Controller {
         controller: this
       }
     }));
-    
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("Form submission validated, proceeding with submit");
-    }
   }
 
   _lockReasonField() {

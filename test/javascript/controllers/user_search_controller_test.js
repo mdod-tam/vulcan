@@ -179,7 +179,7 @@ describe("UserSearchController", () => {
       configurable: true
     })
     
-    // Mock inherited properties from BaseFormController
+    // Mock the registered controller identifier
     Object.defineProperty(controller, 'identifier', {
       value: 'admin--user-search',
       writable: false,
@@ -200,7 +200,6 @@ describe("UserSearchController", () => {
     // Mock the dispatch method
     controller.dispatch = jest.fn()
     
-    controller.addDebouncedListener = jest.fn()
     controller.showErrorNotification = jest.fn()
     controller.showSuccessNotification = jest.fn()
     
@@ -297,6 +296,52 @@ describe("UserSearchController", () => {
       expect(controller.showGeneralError).toHaveBeenCalled()
     })
 
+    it('validates required fields, then submits corrected inputs and selects the returned guardian', async () => {
+      Element.prototype.scrollIntoView = jest.fn()
+      const first = fixture.querySelector('[name="guardian_attributes[first_name]"]')
+      first.value = ''
+      const event = { currentTarget: fixture.querySelector('#createButton'), preventDefault: jest.fn() }
+      await controller.createGuardian(event)
+      expect(fetch).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(first)
+      expect(fixture.textContent).toContain('First name is required')
+      first.value = 'Corrected'
+      fetch.mockResolvedValue({ ok: true, json: async () => ({ user: { id: 45, first_name: 'Corrected', last_name: '<Guardian>' } }) })
+      await controller.createGuardian(event)
+      expect(fetch.mock.calls[0][1].body.get('first_name')).toBe('Corrected')
+      expect(fixture.textContent).not.toContain('First name is required')
+      expect(mockedOutlet.selectGuardian).toHaveBeenCalledWith('45', expect.stringContaining('Corrected &lt;Guardian&gt;'))
+      expect(mockedOutlet.clearSelection).not.toHaveBeenCalled()
+    })
+
+    it('submits no-contact flags without inventing contact values', async () => {
+      for (const [field, flag] of [['email', 'email_address'], ['phone', 'phone_number']]) {
+        fixture.querySelector(`[name="guardian_attributes[${field}]"]`).value = ''
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.name = `guardian_no_${flag}`
+        checkbox.checked = true
+        fixture.appendChild(checkbox)
+      }
+      fetch.mockResolvedValue({ ok: true, json: async () => ({ user: { id: 45, first_name: 'John', last_name: 'Doe' } }) })
+      await controller.createGuardian({ currentTarget: fixture.querySelector('#createButton'), preventDefault: jest.fn() })
+      const body = fetch.mock.calls[0][1].body
+      expect(body.get('guardian_no_email_address')).toBe('1')
+      expect(body.get('guardian_no_phone_number')).toBe('1')
+      expect(body.get('email')).toBeNull()
+      expect(body.get('phone')).toBeNull()
+    })
+
+    it.each([{ status: 401 }, { redirected: true }])('preserves inputs and restores the button on expired session %j', async response => {
+      fetch.mockResolvedValue(response)
+      const button = fixture.querySelector('#createButton')
+      await controller.createGuardian({ currentTarget: button, preventDefault: jest.fn() })
+      expect(fixture.textContent).toContain('Your session expired.')
+      expect(fixture.querySelector('[name="guardian_attributes[email]"]').value).toBe('john@example.com')
+      expect(button.disabled).toBe(false)
+      expect(mockedOutlet.selectGuardian).not.toHaveBeenCalled()
+    })
+
     it("builds correct user display HTML", () => {
       const userData = {
         userEmail: "john@example.com",
@@ -337,12 +382,15 @@ describe("UserSearchController", () => {
   })
   
   describe("search functionality", () => {
-    it("performs search with proper debouncing", async () => {
+    it("navigates after the search delay", async () => {
+      jest.useFakeTimers()
       const searchInput = fixture.querySelector('#searchInput')
       searchInput.value = "John"
       
       const event = { target: searchInput }
-      await controller.performSearch(event)
+      controller.performSearch(event)
+      jest.advanceTimersByTime(300)
+      jest.useRealTimers()
       
       // Verify that the turbo frame's src was set to trigger navigation
       // The controller uses the searchResultsTarget directly

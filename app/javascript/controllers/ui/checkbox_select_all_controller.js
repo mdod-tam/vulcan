@@ -95,6 +95,5 @@ class CheckboxSelectAllController extends Controller {
   }
 }
 
-// Apply target safety mixin
 
 export default CheckboxSelectAllController

@@ -281,6 +281,5 @@ class DependentFieldsController extends Controller {
   }
 }
 
-// Apply target safety mixin
 
 export default DependentFieldsController

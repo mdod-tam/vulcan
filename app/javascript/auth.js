@@ -142,15 +142,6 @@ const Auth = {
     return map[error.name] || "Failed to complete operation.";
   },
 
-  // Generic code verifier for TOTP/SMS
-  async verifyCode(method, code, callbackUrl, feedback) {
-    this.updateFeedback(feedback, `Verifying ${method.toUpperCase()} code...`, false);
-    Logger.log(`Verifying ${method.toUpperCase()} code`);
-    const result = await this.sendRequest(callbackUrl, 'POST', { code, method });
-    if (!result.success) this.updateFeedback(feedback, result.message);
-    return result;
-  },
-
   // WebAuthn registration
   async registerWebAuthnCredential(callbackUrl, credentialOptions, nickname, feedback) {
     this.updateFeedback(feedback, "Preparing to register security key...", false);
@@ -195,16 +186,6 @@ const Auth = {
       this.updateFeedback(feedback, msg);
       return this.formatError(msg, error.message);
     }
-  },
-
-  // Request SMS code
-  async requestSmsCode(url, feedback) {
-    this.updateFeedback(feedback, "Sending verification code...", false);
-    Logger.log("Requesting SMS code");
-    const result = await this.sendRequest(url, 'POST');
-    if (result.success) this.updateFeedback(feedback, "Verification code sent. Please check your phone.", false);
-    else this.updateFeedback(feedback, result.message);
-    return result;
   }
 };
 
@@ -215,20 +196,8 @@ const registerWebAuthn = (callbackUrl, credentialOptions, nickname, feedback) =>
 const verifyWebAuthn = (credentialOptions, callbackUrl, feedback, messages) =>
   Auth.verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback, messages);
 
-const verifyTotpCode = (code, callbackUrl, feedback) =>
-  Auth.verifyCode('totp', code, callbackUrl, feedback);
-
-const verifySmsCode = (code, callbackUrl, feedback) =>
-  Auth.verifyCode('sms', code, callbackUrl, feedback);
-
-const requestSmsCode = (url, feedback) =>
-  Auth.requestSmsCode(url, feedback);
-
 export {
   Auth as default,
   registerWebAuthn,
-  verifyWebAuthn,
-  verifyTotpCode,
-  verifySmsCode,
-  requestSmsCode
+  verifyWebAuthn
 };
